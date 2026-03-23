@@ -1,5 +1,6 @@
 ﻿// 路径：src/Shared/IIoT.Edge.UI.Shared/Modularity/INavigationService.cs
 using IIoT.Edge.UI.Shared.PluginSystem;
+using System.Windows;
 
 namespace IIoT.Edge.UI.Shared.Modularity
 {
@@ -17,5 +18,6 @@ namespace IIoT.Edge.UI.Shared.Modularity
 
         /// <summary>导航完成后触发，参数为新的 CurrentWidget</summary>
         event Action<WidgetBase?> Navigated;
+        FrameworkElement? CurrentView { get; }
     }
 }

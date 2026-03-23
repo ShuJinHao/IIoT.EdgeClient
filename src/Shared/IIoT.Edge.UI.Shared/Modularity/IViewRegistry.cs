@@ -23,5 +23,7 @@ namespace IIoT.Edge.UI.Shared.Modularity
 
         /// <summary>获取所有已注册的停靠面板</summary>
         IReadOnlyList<AnchorableInfo> GetAllAnchorables();
+
+        Type? GetViewType(string widgetId);
     }
 }

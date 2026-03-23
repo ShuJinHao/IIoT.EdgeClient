@@ -2,7 +2,6 @@
   <Folder Name="/src/" />
   <Folder Name="/src/Core/">
     <Project Path="src/Core/IIoT.Edge.Domain/IIoT.Edge.Domain.csproj" Id="bf1c5c1a-aed5-4685-bbce-2db4d59f6282" />
-    <Project Path="src/Core/IIoT.Edge.UseCases/IIoT.Edge.UseCases.csproj" Id="0334aa9e-0dec-4d4a-a1b5-859f3218fb5d" />
   </Folder>
   <Folder Name="/src/Edge/">
     <Project Path="src/Edge/IIoT.Edge.Shell/IIoT.Edge.Shell.csproj" Id="18446b65-38e5-4acb-a229-ba0f9d8a83cf" />

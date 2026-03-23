@@ -1,23 +1,26 @@
-<Window x:Class="IIoT.Edge.Shell.MainWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
-        xmlns:avalon="https://github.com/Dirkster99/AvalonDock"
-        xmlns:headerVM="clr-namespace:IIoT.Edge.UI.Shared.Widgets.SystemHeader;assembly=IIoT.Edge.UI.Shared"
-        xmlns:sysMenuVM="clr-namespace:IIoT.Edge.UI.Shared.Widgets.SysMenu;assembly=IIoT.Edge.UI.Shared"
-        xmlns:loginVM="clr-namespace:IIoT.Edge.UI.Shared.Widgets.Login;assembly=IIoT.Edge.UI.Shared"
-        xmlns:footerVM="clr-namespace:IIoT.Edge.UI.Shared.Widgets.Footer;assembly=IIoT.Edge.UI.Shared"
-        xmlns:shared="clr-namespace:IIoT.Edge.UI.Shared.Widgets;assembly=IIoT.Edge.UI.Shared"
-        xmlns:sysLog="clr-namespace:IIoT.Edge.Module.SysLog;assembly=IIoT.Edge.Module.SysLog"
-        xmlns:equipment="clr-namespace:IIoT.Edge.Module.Production.Equipment;assembly=IIoT.Edge.Module.Production"
-        Title="IIoT Edge Client"
-        Height="768" Width="1280"
-        MinHeight="600" MinWidth="900"
-        WindowStyle="None"
-        AllowsTransparency="True"
-        WindowStartupLocation="CenterScreen"
-        Background="#121212"
-        Foreground="#EAEAEA">
+<Window
+    x:Class="IIoT.Edge.Shell.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:avalon="https://github.com/Dirkster99/AvalonDock"
+    xmlns:equipment="clr-namespace:IIoT.Edge.Module.Production.Equipment;assembly=IIoT.Edge.Module.Production"
+    xmlns:footerVM="clr-namespace:IIoT.Edge.UI.Shared.Widgets.Footer;assembly=IIoT.Edge.UI.Shared"
+    xmlns:headerVM="clr-namespace:IIoT.Edge.UI.Shared.Widgets.SystemHeader;assembly=IIoT.Edge.UI.Shared"
+    xmlns:loginVM="clr-namespace:IIoT.Edge.UI.Shared.Widgets.Login;assembly=IIoT.Edge.UI.Shared"
+    xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+    xmlns:shared="clr-namespace:IIoT.Edge.UI.Shared.Widgets;assembly=IIoT.Edge.UI.Shared"
+    xmlns:sysLog="clr-namespace:IIoT.Edge.Module.SysLog;assembly=IIoT.Edge.Module.SysLog"
+    xmlns:sysMenuVM="clr-namespace:IIoT.Edge.UI.Shared.Widgets.SysMenu;assembly=IIoT.Edge.UI.Shared"
+    Title="IIoT Edge Client"
+    Width="1280"
+    Height="768"
+    MinWidth="900"
+    MinHeight="600"
+    AllowsTransparency="True"
+    Background="#121212"
+    Foreground="#EAEAEA"
+    WindowStartupLocation="CenterScreen"
+    WindowStyle="None">
 
     <Window.Resources>
         <ResourceDictionary>
@@ -27,12 +30,15 @@
         </ResourceDictionary>
     </Window.Resources>
 
-    <Border Background="#121212" CornerRadius="8"
-            materialDesign:ElevationAssist.Elevation="Dp8">
+    <Border
+        materialDesign:ElevationAssist.Elevation="Dp8"
+        Background="#121212"
+        CornerRadius="8">
 
-        <materialDesign:DialogHost Identifier="RootDialog"
-                                   DialogTheme="Dark"
-                                   CloseOnClickAway="True">
+        <materialDesign:DialogHost
+            CloseOnClickAway="True"
+            DialogTheme="Dark"
+            Identifier="RootDialog">
             <materialDesign:DialogHost.DialogContent>
                 <loginVM:LoginView DataContext="{Binding LoginViewModel}" />
             </materialDesign:DialogHost.DialogContent>
@@ -48,18 +54,23 @@
                     <RowDefinition Height="30" />
                 </Grid.RowDefinitions>
 
-                <!-- ① 左侧导航栏（跨三行） -->
-                <Border Grid.Row="0" Grid.RowSpan="3" Grid.Column="0"
-                        Background="#18181B"
-                        BorderBrush="#27272A"
-                        BorderThickness="0,0,1,0"
-                        CornerRadius="8,0,0,8">
+                <!--  ① 左侧导航栏（跨三行）  -->
+                <Border
+                    Grid.Row="0"
+                    Grid.RowSpan="3"
+                    Grid.Column="0"
+                    Background="#18181B"
+                    BorderBrush="#27272A"
+                    BorderThickness="0,0,1,0"
+                    CornerRadius="8,0,0,8">
                     <sysMenuVM:SysMenuView DataContext="{Binding SysMenuViewModel}" />
                 </Border>
 
-                <!-- ② 头部 -->
-                <ContentControl Grid.Row="0" Grid.Column="1"
-                                Content="{Binding HeaderViewModel}">
+                <!--  ② 头部  -->
+                <ContentControl
+                    Grid.Row="0"
+                    Grid.Column="1"
+                    Content="{Binding HeaderViewModel}">
                     <ContentControl.ContentTemplate>
                         <DataTemplate>
                             <headerVM:HeaderView />
@@ -67,51 +78,49 @@
                     </ContentControl.ContentTemplate>
                 </ContentControl>
 
-                <!-- ③ 主工作区：AvalonDock -->
-                <avalon:DockingManager Grid.Row="1" Grid.Column="1"
-                                       Background="#121212"
-                                       BorderThickness="0">
+                <!--  ③ 主工作区：AvalonDock  -->
+                <avalon:DockingManager
+                    Grid.Row="1"
+                    Grid.Column="1"
+                    Background="#121212"
+                    BorderThickness="0">
                     <avalon:LayoutRoot>
                         <avalon:LayoutPanel Orientation="Horizontal">
 
-                            <!-- 主内容区 -->
+                            <!--  主内容区  -->
                             <avalon:LayoutDocumentPane>
-                                <avalon:LayoutDocument Title="主工作区"
-                                                       CanClose="False"
-                                                       CanFloat="False">
-                                    <Border Background="#1E1E1E" Margin="-2">
-                                        <ContentControl Content="{Binding CurrentView}">
-                                            <ContentControl.ContentTemplate>
-                                                <DataTemplate>
-                                                    <shared:PlaceholderView />
-                                                </DataTemplate>
-                                            </ContentControl.ContentTemplate>
-                                        </ContentControl>
+                                <avalon:LayoutDocument
+                                    Title="主工作区"
+                                    CanClose="False"
+                                    CanFloat="False">
+                                    <Border Margin="-2" Background="#1E1E1E">
+                                        <ContentControl Content="{Binding CurrentView}" />
                                     </Border>
                                 </avalon:LayoutDocument>
                             </avalon:LayoutDocumentPane>
 
-                            <!-- 右侧常驻面板 -->
-                            <avalon:LayoutAnchorablePaneGroup Orientation="Vertical"
-                                                              DockWidth="320">
-                                <!-- 设备信息面板 -->
+                            <!--  右侧常驻面板  -->
+                            <avalon:LayoutAnchorablePaneGroup DockWidth="320" Orientation="Vertical">
+                                <!--  设备信息面板  -->
                                 <avalon:LayoutAnchorablePane>
-                                    <avalon:LayoutAnchorable Title="设备信息"
-                                                             CanClose="False"
-                                                             CanHide="False"
-                                                             CanAutoHide="False"
-                                                             CanFloat="False">
+                                    <avalon:LayoutAnchorable
+                                        Title="设备信息"
+                                        CanAutoHide="False"
+                                        CanClose="False"
+                                        CanFloat="False"
+                                        CanHide="False">
                                         <equipment:EquipmentView DataContext="{Binding EquipmentViewModel}" />
                                     </avalon:LayoutAnchorable>
                                 </avalon:LayoutAnchorablePane>
 
-                                <!-- 日志面板 -->
+                                <!--  日志面板  -->
                                 <avalon:LayoutAnchorablePane>
-                                    <avalon:LayoutAnchorable Title="系统日志"
-                                                             CanClose="False"
-                                                             CanHide="False"
-                                                             CanAutoHide="False"
-                                                             CanFloat="False">
+                                    <avalon:LayoutAnchorable
+                                        Title="系统日志"
+                                        CanAutoHide="False"
+                                        CanClose="False"
+                                        CanFloat="False"
+                                        CanHide="False">
                                         <sysLog:LogView DataContext="{Binding LogViewModel}" />
                                     </avalon:LayoutAnchorable>
                                 </avalon:LayoutAnchorablePane>
@@ -121,9 +130,11 @@
                     </avalon:LayoutRoot>
                 </avalon:DockingManager>
 
-                <!-- ④ Footer -->
-                <ContentControl Grid.Row="2" Grid.Column="1"
-                                Content="{Binding FooterViewModel}">
+                <!--  ④ Footer  -->
+                <ContentControl
+                    Grid.Row="2"
+                    Grid.Column="1"
+                    Content="{Binding FooterViewModel}">
                     <ContentControl.ContentTemplate>
                         <DataTemplate>
                             <footerVM:FooterView />

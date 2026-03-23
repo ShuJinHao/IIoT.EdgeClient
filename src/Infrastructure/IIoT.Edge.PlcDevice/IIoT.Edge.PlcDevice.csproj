@@ -7,7 +7,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Core\IIoT.Edge.UseCases\IIoT.Edge.UseCases.csproj" />
+    <PackageReference Include="MCProtocol" Version="1.2.5" />
+    <PackageReference Include="S7netplus" Version="0.20.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Shared\IIoT.Edge.Contracts\IIoT.Edge.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

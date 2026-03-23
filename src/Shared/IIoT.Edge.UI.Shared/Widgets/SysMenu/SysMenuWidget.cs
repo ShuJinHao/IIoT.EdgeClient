@@ -5,6 +5,7 @@ using IIoT.Edge.UI.Shared.Modularity;
 using IIoT.Edge.UI.Shared.PluginSystem;
 using MaterialDesignThemes.Wpf;
 using System.Collections.ObjectModel;
+using System.Windows;
 using System.Windows.Input;
 
 namespace IIoT.Edge.UI.Shared.Widgets.SysMenu
@@ -49,11 +50,14 @@ namespace IIoT.Edge.UI.Shared.Widgets.SysMenu
 
             _authService.AuthStateChanged += _ =>
             {
-                RefreshMenuPermissions();
-                OnPropertyChanged(nameof(LoginButtonText));
+                // 云端登录是异步回调，必须切回 UI 线程再刷新
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    RefreshMenuPermissions();
+                    OnPropertyChanged(nameof(LoginButtonText));
+                });
             };
 
-            // 从 ViewRegistry 动态加载菜单
             BuildMenuItemsFromRegistry(viewRegistry);
         }
 

@@ -39,6 +39,12 @@ namespace IIoT.Edge.Shell.Core
             return type;
         }
 
+        public Type? GetViewType(string widgetId)
+        {
+            _viewMap.TryGetValue(widgetId, out var type);
+            return type;
+        }
+
         public IReadOnlyList<MenuInfo> GetAllMenus()
             => _menus.AsReadOnly();
 
