@@ -128,27 +128,39 @@ public class ParamViewWidget : WidgetBase
 
     private async Task SaveAsync()
     {
-        // 通用参数：VM → Entity 走 AutoMapper
+        // 通用参数：手动组装 Entity（调用公开的有参构造函数）
         var sysEntities = GeneralParams
             .Select((vm, idx) =>
             {
-                var e = _mapper.Map<SystemConfigEntity>(vm);
+                var e = new SystemConfigEntity(
+                    key: vm.Name,
+                    value: vm.Value,
+                    description: vm.Description);
+
                 e.SortOrder = idx + 1;
                 return e;
             }).ToList();
+
         await _sysConfigService.SaveAsync(sysEntities);
 
-        // 设备参数：VM → Entity 走 AutoMapper
+        // 设备参数：手动组装 Entity（通过上下文 SelectedGroup 拿到 DeviceId 并传入构造函数）
         if (SelectedGroup != null)
         {
             var deviceEntities = SelectedGroup.Params
                 .Select((vm, idx) =>
                 {
-                    var e = _mapper.Map<DeviceParamEntity>(vm);
-                    e.NetworkDeviceId = SelectedGroup.DeviceId;
+                    var e = new DeviceParamEntity(
+                        networkDeviceId: SelectedGroup.DeviceId,
+                        name: vm.Name,
+                        value: vm.Value,
+                        unit: vm.Unit);
+
+                    e.MinValue = vm.Min;
+                    e.MaxValue = vm.Max;
                     e.SortOrder = idx + 1;
                     return e;
                 }).ToList();
+
             await _deviceParamService.SaveAsync(
                 SelectedGroup.DeviceId, deviceEntities);
         }
