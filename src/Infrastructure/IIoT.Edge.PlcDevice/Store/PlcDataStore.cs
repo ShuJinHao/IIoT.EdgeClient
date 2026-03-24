@@ -1,4 +1,5 @@
-﻿using IIoT.Edge.Contracts.Plc.Store;
+﻿// 路径：src/Infrastructure/IIoT.Edge.PlcDevice/Store/PlcDataStore.cs
+using IIoT.Edge.Contracts.Plc.Store;
 
 namespace IIoT.Edge.PlcDevice.Store;
 
@@ -12,7 +13,7 @@ public class PlcDataStore : IPlcDataStore
             _buffers[networkDeviceId] = new PlcBuffer(readSize, writeSize);
     }
 
-    public IPlcBuffer? GetBuffer(int networkDeviceId)
+    public IPlcBufferTransport? GetBuffer(int networkDeviceId)
         => _buffers.TryGetValue(networkDeviceId, out var buffer) ? buffer : null;
 
     public bool HasDevice(int networkDeviceId)

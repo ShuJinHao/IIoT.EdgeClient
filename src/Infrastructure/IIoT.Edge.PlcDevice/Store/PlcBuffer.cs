@@ -1,30 +1,35 @@
-﻿using IIoT.Edge.Contracts.Plc.Store;
+﻿// 路径：src/Infrastructure/IIoT.Edge.PlcDevice/Store/PlcBuffer.cs
+using IIoT.Edge.Contracts.Plc.Store;
 
 namespace IIoT.Edge.PlcDevice.Store;
 
-public class PlcBuffer: IPlcBuffer
+public class PlcBuffer : IPlcBufferTransport
 {
-    public ushort[] ReadBuffer { get; private set; }
-    public ushort[] WriteBuffer { get; private set; }
+    private readonly ushort[] _readBuffer;
+    private readonly ushort[] _writeBuffer;
 
     public PlcBuffer(int readSize, int writeSize)
     {
-        ReadBuffer = new ushort[readSize];
-        WriteBuffer = new ushort[writeSize];
+        _readBuffer = new ushort[readSize];
+        _writeBuffer = new ushort[writeSize];
     }
 
-    public void UpdateReadBuffer(ushort[] data)
-        => Array.Copy(data, ReadBuffer, Math.Min(data.Length, ReadBuffer.Length));
+    // ── IPlcBuffer（任务用）──
 
     public ushort GetReadValue(int index)
-        => index >= 0 && index < ReadBuffer.Length ? ReadBuffer[index] : (ushort)0;
+        => index >= 0 && index < _readBuffer.Length ? _readBuffer[index] : (ushort)0;
 
     public void SetWriteValue(int index, ushort value)
     {
-        if (index >= 0 && index < WriteBuffer.Length)
-            WriteBuffer[index] = value;
+        if (index >= 0 && index < _writeBuffer.Length)
+            _writeBuffer[index] = value;
     }
 
+    // ── IPlcBufferTransport（SignalInteraction用）──
+
+    public void UpdateReadBuffer(ushort[] data)
+        => Array.Copy(data, _readBuffer, Math.Min(data.Length, _readBuffer.Length));
+
     public ushort[] GetWriteBuffer()
-        => WriteBuffer;
+        => _writeBuffer;
 }

@@ -1,7 +1,9 @@
 ﻿// 路径：src/Infrastructure/IIoT.Edge.Task.Scan/IScanTask.cs
+
+// 路径：src/Infrastructure/IIoT.Edge.Task.Scan/IScanTask.cs
 using IIoT.Edge.Tasks.Abstractions;
 
-namespace IIoT.Edge.Task.Scan.Base;
+namespace IIoT.Edge.Tasks.Scan.Base;
 
 /// <summary>
 /// 扫码类任务能力接口

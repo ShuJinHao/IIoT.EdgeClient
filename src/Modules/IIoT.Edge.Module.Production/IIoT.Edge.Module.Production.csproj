@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Shared\IIoT.Edge.UI.Shared\IIoT.Edge.UI.Shared.csproj" />
+    <ProjectReference Include="..\..\Tasks\IIoT.Edge.Tasks\IIoT.Edge.Tasks.csproj" />
   </ItemGroup>
 
 </Project>

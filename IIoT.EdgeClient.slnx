@@ -24,7 +24,7 @@
     <Project Path="src/Shared/IIoT.Edge.UI.Shared/IIoT.Edge.UI.Shared.csproj" Id="2c8e15da-52ba-4d59-aced-196d42918475" />
   </Folder>
   <Folder Name="/src/Tasks/">
-    <Project Path="src/Tasks/IIoT.Edge.Task.Scan/IIoT.Edge.Task.Scan.csproj" Id="1b084c68-6e45-466a-8a98-438cf08eac27" />
+    <Project Path="src/Tasks/IIoT.Edge.Task.Scan/IIoT.Edge.Tasks.Scan.csproj" Id="1b084c68-6e45-466a-8a98-438cf08eac27" />
     <Project Path="src/Tasks/IIoT.Edge.Tasks/IIoT.Edge.Tasks.csproj" Id="0af2fc95-d944-481f-89e1-897ba043a59d" />
   </Folder>
 </Solution>

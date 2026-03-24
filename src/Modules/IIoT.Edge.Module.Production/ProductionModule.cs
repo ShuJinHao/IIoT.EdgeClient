@@ -1,7 +1,9 @@
-﻿using IIoT.Edge.Contracts.Model;
+﻿// 路径：src/Modules/IIoT.Edge.Module.Production/ProductionModule.cs
+using IIoT.Edge.Contracts.Model;
 using IIoT.Edge.Module.Production.CapacityView;
 using IIoT.Edge.Module.Production.DataView;
 using IIoT.Edge.Module.Production.Equipment;
+using IIoT.Edge.Module.Production.Monitor;
 using IIoT.Edge.UI.Shared.Modularity;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -21,6 +23,7 @@ namespace IIoT.Edge.Module.Production
                 typeof(DataViewPage), typeof(DataViewWidget));
             registry.RegisterRoute("Production.CapacityView",
                 typeof(CapacityViewPage), typeof(CapacityViewWidget));
+
             registry.RegisterAnchorable(
                 new AnchorableInfo
                 {
@@ -31,6 +34,18 @@ namespace IIoT.Edge.Module.Production
                 },
                 typeof(EquipmentView),
                 typeof(EquipmentWidget));
+
+            // 实时数据监控面板
+            registry.RegisterAnchorable(
+                new AnchorableInfo
+                {
+                    Title = "实时数据监控",
+                    ContentId = "Core.Monitor",
+                    InitialPosition = AnchorablePosition.Right,
+                    IsVisible = true
+                },
+                typeof(MonitorView),
+                typeof(MonitorWidget));
 
             registry.RegisterMenu(new MenuInfo
             {

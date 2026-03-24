@@ -1,5 +1,5 @@
 ﻿// 路径：src/Infrastructure/IIoT.Edge.Task.Scan/Keys/ScanKeys.cs
-namespace IIoT.Edge.Task.Scan.Keys;
+namespace IIoT.Edge.Tasks.Scan.Keys;
 
 /// <summary>
 /// 扫码服务写入 ProductionContext 的 Key 常量

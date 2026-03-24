@@ -1,3 +1,4 @@
+// 路径：src/Edge/IIoT.Edge.Shell/App.xaml.cs
 using IIoT.Edge.CloudSync;
 using IIoT.Edge.Infrastructure;
 using IIoT.Edge.PlcDevice;
@@ -7,8 +8,10 @@ using IIoT.Edge.Module.Config;
 using IIoT.Edge.Module.Formula;
 using IIoT.Edge.Module.SysLog;
 using IIoT.Edge.Shell.Core;
+using IIoT.Edge.Tasks.Context;
 using IIoT.Edge.UI.Shared;
 using IIoT.Edge.UI.Shared.Modularity;
+using IIoT.Edge.Module.Hardware.Plc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using System.IO;
@@ -19,6 +22,8 @@ namespace IIoT.Edge.Shell
     public partial class App : Application
     {
         public IServiceProvider ServiceProvider { get; private set; } = null!;
+
+        private CancellationTokenSource _appCts = new();
 
         public App()
         {
@@ -37,7 +42,7 @@ namespace IIoT.Edge.Shell
             var services = new ServiceCollection();
             var viewRegistry = new ViewRegistry();
 
-            // 1. 模块扫描（只做路由/菜单注册，不注册服务）
+            // 1. 模块扫描
             var machineModule = configuration["MachineModule"];
             IModuleLoader loader = new ModuleLoader(services, viewRegistry);
             loader.LoadFromDirectory(
@@ -61,45 +66,57 @@ namespace IIoT.Edge.Shell
             services.AddFormulaModule();
             services.AddSysLogModule();
 
-            // 已删除: services.AddAutoMapper(...)  → 移入 Shell DI
-            // 已删除: services.AddSingleton<IViewRegistry>(...)  → 移入 Shell DI
-            // 已删除: services.AddSingleton<INavigationService>(...)  → 移入 Shell DI
-
             // 3. 构建容器
             ServiceProvider = services.BuildServiceProvider();
             ServiceProvider.ApplyMigrations();
 
-            // 4. 启动主窗体
-            var mainWindow = ServiceProvider
-                .GetRequiredService<MainWindow>();
+            // 4. 恢复生产上下文
+            var contextStore = ServiceProvider.GetRequiredService<ProductionContextStore>();
+            contextStore.LoadFromFile();
+
+            // 5. 启动自动保存
+            _ = contextStore.StartAutoSaveAsync(_appCts.Token, intervalSeconds: 30);
+
+            // 6. 启动主窗体
+            var mainWindow = ServiceProvider.GetRequiredService<MainWindow>();
             mainWindow.Show();
 
-            // 5. 异步设备寻址
+            // 7. 异步设备寻址
             _ = IdentifyDeviceAsync();
+
+            // 8. PLC任务初始化（注册逻辑在DependencyInjection里）
+            _ = ServiceProvider.InitializePlcTasksAsync(_appCts.Token);
+        }
+
+        protected override void OnExit(ExitEventArgs e)
+        {
+            var contextStore = ServiceProvider.GetRequiredService<ProductionContextStore>();
+            contextStore.SaveToFile();
+
+            _appCts.Cancel();
+
+            var plcManager = ServiceProvider.GetRequiredService<PlcConnectionManager>();
+            plcManager.Dispose();
+
+            base.OnExit(e);
         }
 
         private async Task IdentifyDeviceAsync()
         {
             var deviceService = ServiceProvider
-                .GetRequiredService<
-                    IIoT.Edge.Contracts.Device.IDeviceService>();
+                .GetRequiredService<IIoT.Edge.Contracts.Device.IDeviceService>();
             var footerWidget = ServiceProvider
-                .GetRequiredService<
-                    IIoT.Edge.UI.Shared.Widgets.Footer.FooterWidget>();
+                .GetRequiredService<IIoT.Edge.UI.Shared.Widgets.Footer.FooterWidget>();
             var logService = ServiceProvider
-                .GetRequiredService<
-                    IIoT.Edge.Contracts.ILogService>();
+                .GetRequiredService<IIoT.Edge.Contracts.ILogService>();
 
             logService.Info("正在进行设备寻址...");
             var success = await deviceService.IdentifyAsync();
 
-            if (success
-                && deviceService.CurrentDevice is not null)
+            if (success && deviceService.CurrentDevice is not null)
             {
-                footerWidget.SetDeviceCode(
-                    deviceService.CurrentDevice.DeviceCode);
-                logService.Info(
-                    $"设备寻址成功：{deviceService.CurrentDevice.DeviceCode}");
+                footerWidget.SetDeviceCode(deviceService.CurrentDevice.DeviceCode);
+                logService.Info($"设备寻址成功：{deviceService.CurrentDevice.DeviceCode}");
             }
             else
             {
