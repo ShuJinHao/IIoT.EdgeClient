@@ -6,6 +6,9 @@
     xmlns:sharedViews="clr-namespace:IIoT.Edge.UI.Shared.Views;assembly=IIoT.Edge.UI.Shared"
     xmlns:sys="clr-namespace:System;assembly=mscorlib"
     Background="Transparent">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+    </UserControl.Resources>
     <sharedViews:PageActionShell>
 
     <sharedViews:PageActionShell.HeaderContent>
@@ -14,6 +17,17 @@
 
     <sharedViews:PageActionShell.ActionContent>
         <StackPanel Orientation="Horizontal">
+            <Button
+                Height="30"
+                Margin="0,0,8,0"
+                Padding="12,0"
+                Command="{Binding ApplyModuleTemplateCommand}"
+                Style="{StaticResource MaterialDesignOutlinedButton}">
+                <StackPanel Orientation="Horizontal">
+                    <materialDesign:PackIcon Width="14" Height="14" VerticalAlignment="Center" Kind="WrenchCog" />
+                    <TextBlock Margin="4,0,0,0" VerticalAlignment="Center" FontSize="12" Text="应用模板" />
+                </StackPanel>
+            </Button>
             <Button
                 Height="30"
                 Margin="0,0,8,0"
@@ -83,13 +97,38 @@
         <Grid Grid.Column="1">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
+            <Border
+                Grid.Row="0"
+                Margin="0,0,0,12"
+                Padding="12"
+                Background="#101114"
+                BorderBrush="#27272A"
+                BorderThickness="1"
+                CornerRadius="8"
+                Visibility="{Binding HasModuleTemplateSummary, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <StackPanel>
+                    <TextBlock
+                        FontSize="12"
+                        FontWeight="SemiBold"
+                        Foreground="#E4E4E7"
+                        Text="模块协议摘要" />
+                    <TextBlock
+                        Margin="0,8,0,0"
+                        FontSize="12"
+                        Foreground="#A1A1AA"
+                        Text="{Binding ModuleTemplateSummary}"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+
             <DataGrid
                 x:Name="IoGrid"
-                Grid.Row="0"
+                Grid.Row="1"
                 AlternatingRowBackground="#0F0F0F"
                 AutoGenerateColumns="False"
                 Background="Transparent"
@@ -149,7 +188,7 @@
             </DataGrid>
 
             <StackPanel
-                Grid.Row="1"
+                Grid.Row="2"
                 Margin="0,8,0,0"
                 HorizontalAlignment="Right"
                 Orientation="Horizontal">

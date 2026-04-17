@@ -3,6 +3,7 @@ using IIoT.Edge.UI.Shared.Mvvm;
 using IIoT.Edge.Application.Common.Crud;
 using IIoT.Edge.Application.Abstractions.Recipe;
 using IIoT.Edge.Application.Features.Formula.RecipeView;
+using IIoT.Edge.Presentation.Navigation;
 using IIoT.Edge.Presentation.Navigation.Common.Crud;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
@@ -15,7 +16,7 @@ namespace IIoT.Edge.Presentation.Navigation.Features.Formula.RecipeView;
 /// </summary>
 public class RecipeViewModel : CrudPageViewModelBase
 {
-    public override string ViewId => "Formula.RecipeView";
+    public override string ViewId => InjectionViewIds.RecipeView;
     public override string ViewTitle => "产品配方";
 
     private readonly IRecipeViewCrudService _crudService;

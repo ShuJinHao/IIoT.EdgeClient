@@ -3,9 +3,7 @@ using System;
 namespace IIoT.Edge.Infrastructure.Integration.Mappings.Cloud.Injection;
 
 /// <summary>
-/// 注液过站数据云端请求项
-/// 
-/// 对应 POST /api/v1/PassStation/injection/batch 的 items[]
+/// Cloud DTO item for POST /api/v1/edge/pass-stations/injection/batch.
 /// </summary>
 public class InjectionCloudDto
 {

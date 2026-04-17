@@ -10,7 +10,7 @@ namespace IIoT.Edge.NonUiRegressionTests;
 public sealed class CapacitySyncTaskBehaviorTests
 {
     [Fact]
-    public async Task RetryBuffer_WhenOnlineAndAllPostsSucceed_ShouldPostAllAndClearBuffer()
+    public async Task RetryBuffer_WhenOnlineAndAllPostsSucceed_ShouldPostAllAndDeleteClaimedSummaries()
     {
         var cloudHttp = new FakeCloudHttpClient();
         cloudHttp.EnqueuePostResult(true);
@@ -22,7 +22,7 @@ public sealed class CapacitySyncTaskBehaviorTests
         {
             DeviceId = deviceId,
             DeviceName = "PLC-A",
-            MacAddress = "00-11-22-33-44-55",
+            ClientCode = "CLIENT-01",
             ProcessId = Guid.NewGuid()
         });
 
@@ -56,7 +56,9 @@ public sealed class CapacitySyncTaskBehaviorTests
 
         Assert.True(result);
         Assert.Equal(2, cloudHttp.PostCallCount);
-        Assert.Equal(1, bufferStore.ClearAllCallCount);
+        Assert.Equal(2, bufferStore.DeletedSummaries.Count);
+        Assert.Empty(bufferStore.ReleasedClaimTokens);
+        Assert.Empty(bufferStore.HourlySummaries);
 
         var payload1 = ParsePayload(cloudHttp.PostPayloads[0]);
         Assert.Equal(deviceId, payload1.GetProperty("deviceId").GetGuid());
@@ -71,7 +73,7 @@ public sealed class CapacitySyncTaskBehaviorTests
     }
 
     [Fact]
-    public async Task RetryBuffer_WhenAnyPostFails_ShouldStopAndKeepBuffer()
+    public async Task RetryBuffer_WhenAnyPostFails_ShouldReleaseClaimAndKeepRemainingSummaries()
     {
         var cloudHttp = new FakeCloudHttpClient();
         cloudHttp.EnqueuePostResult(true);
@@ -82,7 +84,7 @@ public sealed class CapacitySyncTaskBehaviorTests
         {
             DeviceId = Guid.NewGuid(),
             DeviceName = "PLC-A",
-            MacAddress = "00-11-22-33-44-55",
+            ClientCode = "CLIENT-01",
             ProcessId = Guid.NewGuid()
         });
 
@@ -117,7 +119,10 @@ public sealed class CapacitySyncTaskBehaviorTests
 
         Assert.False(result);
         Assert.Equal(2, cloudHttp.PostCallCount);
-        Assert.Equal(0, bufferStore.ClearAllCallCount);
+        Assert.Single(bufferStore.DeletedSummaries);
+        Assert.Single(bufferStore.ReleasedClaimTokens);
+        Assert.Single(bufferStore.HourlySummaries);
+        Assert.Equal(30, bufferStore.HourlySummaries[0].MinuteBucket);
         Assert.Contains(logger.Entries, x => x.Message.Contains("[Retry-Cloud] Capacity retry failed", StringComparison.Ordinal));
     }
 
@@ -151,7 +156,8 @@ public sealed class CapacitySyncTaskBehaviorTests
 
         Assert.False(result);
         Assert.Equal(0, cloudHttp.PostCallCount);
-        Assert.Equal(0, bufferStore.ClearAllCallCount);
+        Assert.Empty(bufferStore.DeletedSummaries);
+        Assert.Empty(bufferStore.ReleasedClaimTokens);
     }
 
     private static CapacitySyncTask CreateTask(

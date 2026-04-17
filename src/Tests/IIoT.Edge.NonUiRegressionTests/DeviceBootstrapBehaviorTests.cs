@@ -1,0 +1,151 @@
+using System.Net;
+using System.Net.Http.Json;
+using IIoT.Edge.Infrastructure.Integration.Config;
+using IIoT.Edge.Infrastructure.Integration.Device;
+using IIoT.Edge.Infrastructure.Integration.Device.Cache;
+
+namespace IIoT.Edge.NonUiRegressionTests;
+
+public sealed class DeviceBootstrapBehaviorTests : IDisposable
+{
+    private readonly string _cacheFilePath = Path.Combine(
+        AppDomain.CurrentDomain.BaseDirectory,
+        "device_cache.json");
+
+    public DeviceBootstrapBehaviorTests()
+    {
+        DeleteCacheFile();
+    }
+
+    [Fact]
+    public async Task StartAsync_ShouldBootstrapByClientCodeOnly()
+    {
+        var deviceId = Guid.NewGuid();
+        var processId = Guid.NewGuid();
+        var handler = new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = JsonContent.Create(new
+            {
+                Id = deviceId,
+                DeviceName = "Test Device",
+                ProcessId = processId
+            })
+        });
+
+        var service = new DeviceService(
+            new HttpClient(handler),
+            new FakeEndpointProvider("LINE-A-01"),
+            new DeviceSessionFileCacheStore(),
+            new FakeLogService());
+
+        using var cts = new CancellationTokenSource();
+
+        await service.StartAsync(cts.Token);
+        var requestUri = await handler.WaitForRequestUriAsync();
+        await WaitForAsync(() => service.CurrentDevice is not null);
+        await service.StopAsync();
+
+        Assert.NotNull(service.CurrentDevice);
+        Assert.Equal(deviceId, service.CurrentDevice!.DeviceId);
+        Assert.Equal(processId, service.CurrentDevice.ProcessId);
+        Assert.Equal("LINE-A-01", service.CurrentDevice.ClientCode);
+        Assert.True(requestUri.Query.Contains("clientCode=LINE-A-01", StringComparison.Ordinal));
+        Assert.False(requestUri.Query.Contains("macAddress=", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void TryLoad_ShouldMapLegacyMacAddressCacheToRequestedClientCode()
+    {
+        var deviceId = Guid.NewGuid();
+        var processId = Guid.NewGuid();
+
+        File.WriteAllText(
+            _cacheFilePath,
+            $$"""
+            {
+              "DeviceId": "{{deviceId}}",
+              "DeviceName": "Cached Device",
+              "MacAddress": "HW1234567890",
+              "ProcessId": "{{processId}}"
+            }
+            """);
+
+        var store = new DeviceSessionFileCacheStore();
+
+        var session = store.TryLoad("LINE-B-02");
+
+        Assert.NotNull(session);
+        Assert.Equal(deviceId, session!.DeviceId);
+        Assert.Equal(processId, session.ProcessId);
+        Assert.Equal("Cached Device", session.DeviceName);
+        Assert.Equal("LINE-B-02", session.ClientCode);
+
+        var migrated = File.ReadAllText(_cacheFilePath);
+        Assert.True(migrated.Contains("\"ClientCode\":\"LINE-B-02\"", StringComparison.Ordinal));
+    }
+
+    public void Dispose()
+    {
+        DeleteCacheFile();
+    }
+
+    private void DeleteCacheFile()
+    {
+        if (File.Exists(_cacheFilePath))
+        {
+            File.Delete(_cacheFilePath);
+        }
+    }
+
+    private static async Task WaitForAsync(Func<bool> predicate)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(2);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (predicate())
+            {
+                return;
+            }
+
+            await Task.Delay(20);
+        }
+
+        Assert.True(predicate(), "Condition was not satisfied before timeout.");
+    }
+
+    private sealed class FakeEndpointProvider(string clientCode) : ICloudApiEndpointProvider
+    {
+        public string BuildUrl(string relativeOrAbsoluteUrl) => $"https://unit.test{relativeOrAbsoluteUrl}";
+        public string GetClientCode() => clientCode;
+        public string GetDeviceInstancePath() => "/api/v1/edge/bootstrap/device-instance";
+        public string GetIdentityDeviceLoginPath() => "/api/v1/human/identity/edge-login";
+        public string GetPassStationInjectionBatchPath() => "/api/v1/edge/pass-stations/injection/batch";
+        public string GetPassStationStackingPath() => "/api/v1/edge/pass-stations/stacking";
+        public string GetDeviceLogPath() => "/api/v1/edge/device-logs";
+        public string GetCapacityHourlyPath() => "/api/v1/edge/capacity/hourly";
+        public string GetCapacitySummaryPath() => "/api/v1/edge/capacity/summary";
+        public string GetCapacitySummaryRangePath() => "/api/v1/edge/capacity/summary/range";
+        public string BuildRecipeByDevicePath(Guid deviceId) => $"/api/v1/edge/recipes/device/{deviceId}";
+    }
+
+    private sealed class RecordingHttpMessageHandler(
+        Func<HttpRequestMessage, HttpResponseMessage> responseFactory) : HttpMessageHandler
+    {
+        private readonly TaskCompletionSource<Uri> _requestUriSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            _requestUriSource.TrySetResult(request.RequestUri!);
+            return Task.FromResult(responseFactory(request));
+        }
+
+        public async Task<Uri> WaitForRequestUriAsync()
+        {
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            using var registration = timeoutCts.Token.Register(() => _requestUriSource.TrySetCanceled(timeoutCts.Token));
+            return await _requestUriSource.Task;
+        }
+    }
+}

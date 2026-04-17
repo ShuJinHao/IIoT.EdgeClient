@@ -1,23 +1,16 @@
 using Dapper;
-using IIoT.Edge.SharedKernel.DataPipeline;
-using IIoT.Edge.SharedKernel.DataPipeline.CellData;
-using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
+using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Connection;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Repository;
+using IIoT.Edge.SharedKernel.DataPipeline;
 using System.Text.Json;
 
 namespace IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
 
-/// <summary>
-/// 失败记录的 SQLite 存储实现
-/// 
-/// 对应数据库：pipeline.db
-/// 对应表：failed_cell_records
-/// </summary>
 public class FailedRecordStore : DapperRepositoryBase<FailedCellRecord>, IFailedRecordStore
 {
-    private static readonly JsonSerializerOptions _jsonOptions = new()
+    private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
@@ -40,6 +33,8 @@ public class FailedRecordStore : DapperRepositoryBase<FailedCellRecord>, IFailed
 
         CREATE INDEX IF NOT EXISTS idx_failed_channel_retry
             ON failed_cell_records (Channel, NextRetryTime);
+        CREATE INDEX IF NOT EXISTS idx_failed_channel_target_retry
+            ON failed_cell_records (Channel, FailedTarget, NextRetryTime);
     ";
 
     public FailedRecordStore(
@@ -49,9 +44,6 @@ public class FailedRecordStore : DapperRepositoryBase<FailedCellRecord>, IFailed
     {
     }
 
-    /// <summary>
-    /// 保存失败记录
-    /// </summary>
     public async Task SaveAsync(
         CellCompletedRecord record,
         string failedTarget,
@@ -59,7 +51,7 @@ public class FailedRecordStore : DapperRepositoryBase<FailedCellRecord>, IFailed
         string channel)
     {
         var cellData = record.CellData;
-        var cellDataJson = JsonSerializer.Serialize(cellData, cellData.GetType(), _jsonOptions);
+        var cellDataJson = JsonSerializer.Serialize(cellData, cellData.GetType(), JsonOptions);
 
         const string sql = @"
             INSERT INTO failed_cell_records
@@ -69,7 +61,7 @@ public class FailedRecordStore : DapperRepositoryBase<FailedCellRecord>, IFailed
                 (@Channel, @ProcessType, @CellDataJson, @FailedTarget, @ErrorMessage,
                  0, @NextRetryTime, @CreatedAt)";
 
-        await SafeExecuteAsync(sql, new
+        var affectedRows = await SafeExecuteAsync(sql, new
         {
             Channel = channel,
             ProcessType = cellData.ProcessType,
@@ -79,11 +71,13 @@ public class FailedRecordStore : DapperRepositoryBase<FailedCellRecord>, IFailed
             NextRetryTime = DateTime.Now.AddSeconds(30).ToString("O"),
             CreatedAt = DateTime.Now.ToString("O")
         });
+
+        if (affectedRows <= 0)
+        {
+            throw new InvalidOperationException("Failed to persist the retry record.");
+        }
     }
 
-    /// <summary>
-    /// 获取待重传记录（按通道过滤）
-    /// </summary>
     public async Task<List<FailedCellRecord>> GetPendingAsync(string channel, int batchSize = 10)
     {
         const string sql = @"
@@ -103,9 +97,6 @@ public class FailedRecordStore : DapperRepositoryBase<FailedCellRecord>, IFailed
         return result.ToList();
     }
 
-    /// <summary>
-    /// 更新重试信息
-    /// </summary>
     public async Task UpdateRetryAsync(
         long id,
         int retryCount,
@@ -128,37 +119,26 @@ public class FailedRecordStore : DapperRepositoryBase<FailedCellRecord>, IFailed
         });
     }
 
-    /// <summary>
-    /// 删除已成功的记录
-    /// </summary>
     public async Task DeleteAsync(long id)
-    {
-        await SafeExecuteAsync(
-            $"DELETE FROM {TableName} WHERE Id = @Id",
-            new { Id = id });
-    }
+        => await SafeExecuteAsync($"DELETE FROM {TableName} WHERE Id = @Id", new { Id = id });
 
-    /// <summary>
-    /// 全部失败记录总数
-    /// </summary>
     public async Task<int> GetCountAsync()
-    {
-        return await SafeCountAsync($"SELECT COUNT(*) FROM {TableName}");
-    }
+        => await SafeCountAsync($"SELECT COUNT(*) FROM {TableName}");
 
-    /// <summary>
-    /// 按通道统计失败记录数
-    /// </summary>
     public async Task<int> GetCountAsync(string channel)
-    {
-        return await SafeCountAsync(
+        => await SafeCountAsync(
             $"SELECT COUNT(*) FROM {TableName} WHERE Channel = @Channel",
             new { Channel = channel });
-    }
 
-    /// <summary>
-    /// 重置所有 Abandoned 记录为可重试
-    /// </summary>
+    public async Task<int> GetCountAsync(string channel, string processType)
+        => await SafeCountAsync(
+            $"SELECT COUNT(*) FROM {TableName} WHERE Channel = @Channel AND ProcessType = @ProcessType",
+            new
+            {
+                Channel = channel,
+                ProcessType = processType
+            });
+
     public async Task ResetAllAbandonedAsync()
     {
         const string sql = @"

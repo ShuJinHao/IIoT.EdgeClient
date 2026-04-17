@@ -44,6 +44,11 @@ public interface IFailedRecordStore
     Task<int> GetCountAsync(string channel);
 
     /// <summary>
+    /// 按通道和工序获取失败记录总数。
+    /// </summary>
+    Task<int> GetCountAsync(string channel, string processType);
+
+    /// <summary>
     /// 将所有 Abandoned 记录重置为可重试，供界面“全部重传”操作使用。
     /// </summary>
     Task ResetAllAbandonedAsync();

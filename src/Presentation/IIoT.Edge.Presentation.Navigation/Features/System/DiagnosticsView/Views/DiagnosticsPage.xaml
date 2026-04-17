@@ -1,0 +1,108 @@
+<Page x:Class="IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView.DiagnosticsPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      mc:Ignorable="d"
+      d:DesignHeight="720"
+      d:DesignWidth="1280"
+      Title="DiagnosticsPage">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <Grid Margin="24">
+            <StackPanel>
+                <TextBlock Text="System Diagnostics"
+                           FontSize="24"
+                           FontWeight="Bold" />
+                <TextBlock Margin="0,8,0,0"
+                           Text="{Binding StatusMessage}"
+                           TextWrapping="Wrap" />
+                <TextBlock Margin="0,16,0,0"
+                           Text="{Binding DiscoveredModulesSummary}"
+                           TextWrapping="Wrap" />
+                <TextBlock Margin="0,4,0,0"
+                           Text="{Binding EnabledModulesSummary}"
+                           TextWrapping="Wrap" />
+                <TextBlock Margin="0,4,0,0"
+                           Text="{Binding LastUpdatedSummary}"
+                           TextWrapping="Wrap" />
+
+                <TextBlock Margin="0,24,0,8"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           Text="Module registrations" />
+                <DataGrid ItemsSource="{Binding ModuleRegistrations}"
+                          AutoGenerateColumns="False"
+                          HeadersVisibility="Column"
+                          IsReadOnly="True"
+                          CanUserAddRows="False"
+                          Margin="0,0,0,16">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Module" Binding="{Binding ModuleId}" />
+                        <DataGridTextColumn Header="ProcessType" Binding="{Binding ProcessType}" />
+                        <DataGridTextColumn Header="Assembly" Binding="{Binding AssemblyName}" />
+                        <DataGridCheckBoxColumn Header="Enabled" Binding="{Binding IsEnabled}" />
+                        <DataGridCheckBoxColumn Header="CellData" Binding="{Binding HasCellDataRegistration}" />
+                        <DataGridCheckBoxColumn Header="Runtime" Binding="{Binding HasRuntimeFactory}" />
+                        <DataGridCheckBoxColumn Header="Cloud" Binding="{Binding HasCloudUploader}" />
+                        <DataGridCheckBoxColumn Header="MES" Binding="{Binding HasMesUploader}" />
+                        <DataGridCheckBoxColumn Header="Hardware" Binding="{Binding HasHardwareProfile}" />
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <TextBlock Margin="0,8,0,8"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           Text="Device bindings" />
+                <DataGrid ItemsSource="{Binding DeviceBindings}"
+                          AutoGenerateColumns="False"
+                          HeadersVisibility="Column"
+                          IsReadOnly="True"
+                          CanUserAddRows="False"
+                          Margin="0,0,0,16">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Device" Binding="{Binding DeviceName}" />
+                        <DataGridTextColumn Header="ModuleId" Binding="{Binding ModuleId}" />
+                        <DataGridCheckBoxColumn Header="Exists" Binding="{Binding ModuleExists}" />
+                        <DataGridCheckBoxColumn Header="Enabled" Binding="{Binding ModuleEnabled}" />
+                        <DataGridCheckBoxColumn Header="Has IO" Binding="{Binding HasIoMappings}" />
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <TextBlock Margin="0,8,0,8"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           Text="Issues" />
+                <DataGrid ItemsSource="{Binding Issues}"
+                          AutoGenerateColumns="False"
+                          HeadersVisibility="Column"
+                          IsReadOnly="True"
+                          CanUserAddRows="False">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Code" Binding="{Binding Code}" />
+                        <DataGridTextColumn Header="Module" Binding="{Binding ModuleId}" />
+                        <DataGridTextColumn Header="Device" Binding="{Binding DeviceName}" />
+                        <DataGridTextColumn Header="Message" Binding="{Binding Message}" Width="*" />
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <TextBlock Margin="0,24,0,8"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           Text="MES upload diagnostics" />
+                <DataGrid ItemsSource="{Binding MesUploadDiagnostics}"
+                          AutoGenerateColumns="False"
+                          HeadersVisibility="Column"
+                          IsReadOnly="True"
+                          CanUserAddRows="False">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="ProcessType" Binding="{Binding ProcessType}" />
+                        <DataGridTextColumn Header="Last Result" Binding="{Binding LastResult}" />
+                        <DataGridTextColumn Header="Last Attempt" Binding="{Binding LastAttemptAt}" />
+                        <DataGridTextColumn Header="Last Success" Binding="{Binding LastSuccessAt}" />
+                        <DataGridTextColumn Header="Failure" Binding="{Binding LastFailureReason}" Width="*" />
+                    </DataGrid.Columns>
+                </DataGrid>
+            </StackPanel>
+        </Grid>
+    </ScrollViewer>
+</Page>

@@ -1,87 +1,137 @@
 namespace IIoT.Edge.SharedKernel.DataPipeline.Capacity;
 
-/// <summary>
-/// 当天产能快照。
-/// 跟随 <c>ProductionContext</c> 一起持久化，日期归属按生产日规则计算。
-/// </summary>
 public class TodayCapacity
 {
-    /// <summary>
-    /// 当前生产日日期，格式为 <c>yyyy-MM-dd</c>，用于跨天检测。
-    /// </summary>
-    public string Date { get; set; } = string.Empty;
+    private readonly object _sync = new();
 
+    public string Date { get; set; } = string.Empty;
     public ShiftCapacity DayShift { get; set; } = new("D");
     public ShiftCapacity NightShift { get; set; } = new("N");
-
-    /// <summary>
-    /// 半小时粒度的产能桶，覆盖 00:00-24:00 全时段。
-    /// </summary>
     public List<HalfHourCapacity> HalfHourly { get; set; } = CreateHalfHourBuckets();
 
-    // 汇总统计。
-    public int TotalAll => DayShift.Total + NightShift.Total;
-    public int OkAll => DayShift.OkCount + NightShift.OkCount;
-    public int NgAll => DayShift.NgCount + NightShift.NgCount;
-    public string YieldAll => TotalAll > 0
-        ? $"{OkAll * 100.0 / TotalAll:F1}%"
-        : "0%";
-
-    /// <summary>
-    /// 累加一次产能计数，并自动判定生产日与班次归属。
-    /// </summary>
-    /// <returns>本次归属的班次编码：D=白班，N=夜班。</returns>
-    public string Increment(DateTime completedTime, bool isOk,
-        TimeSpan dayStart, TimeSpan dayEnd)
+    public int TotalAll
     {
-        // 生产日归属：00:00-DayStart 归属前一自然日。
-        var productionDate = completedTime.TimeOfDay < dayStart
-            ? completedTime.Date.AddDays(-1)
-            : completedTime.Date;
-
-        var currentDate = productionDate.ToString("yyyy-MM-dd");
-
-        if (Date != currentDate)
+        get
         {
-            Reset();
-            Date = currentDate;
+            lock (_sync)
+            {
+                return DayShift.Total + NightShift.Total;
+            }
         }
-
-        // 班次判定：白班为 DayStart-DayEnd，其余归夜班。
-        var time = completedTime.TimeOfDay;
-        var isDayShift = time >= dayStart && time < dayEnd;
-        var shift = isDayShift ? DayShift : NightShift;
-
-        if (isOk)
-            shift.OkCount++;
-        else
-            shift.NgCount++;
-
-        // 半小时桶归档。
-        if (HalfHourly.Count == 0)
-            HalfHourly = CreateHalfHourBuckets();
-
-        var slotIndex = completedTime.Hour * 2 + (completedTime.Minute >= 30 ? 1 : 0);
-        var bucket = HalfHourly.FirstOrDefault(x => x.SlotIndex == slotIndex);
-        if (bucket is null)
-        {
-            bucket = CreateBucket(slotIndex);
-            HalfHourly.Add(bucket);
-            HalfHourly = HalfHourly.OrderBy(x => x.SlotIndex).ToList();
-        }
-
-        if (isOk)
-            bucket.OkCount++;
-        else
-            bucket.NgCount++;
-
-        return isDayShift ? "D" : "N";
     }
 
-    /// <summary>
-    /// 清零当前快照，用于跨生产日或手动重置。
-    /// </summary>
+    public int OkAll
+    {
+        get
+        {
+            lock (_sync)
+            {
+                return DayShift.OkCount + NightShift.OkCount;
+            }
+        }
+    }
+
+    public int NgAll
+    {
+        get
+        {
+            lock (_sync)
+            {
+                return DayShift.NgCount + NightShift.NgCount;
+            }
+        }
+    }
+
+    public string YieldAll
+    {
+        get
+        {
+            lock (_sync)
+            {
+                var total = DayShift.Total + NightShift.Total;
+                var ok = DayShift.OkCount + NightShift.OkCount;
+                return total > 0 ? $"{ok * 100.0 / total:F1}%" : "0%";
+            }
+        }
+    }
+
+    public string Increment(DateTime completedTime, bool isOk, TimeSpan dayStart, TimeSpan dayEnd)
+    {
+        lock (_sync)
+        {
+            var productionDate = completedTime.TimeOfDay < dayStart
+                ? completedTime.Date.AddDays(-1)
+                : completedTime.Date;
+
+            var currentDate = productionDate.ToString("yyyy-MM-dd");
+            if (Date != currentDate)
+            {
+                ResetCore();
+                Date = currentDate;
+            }
+
+            var isDayShift = completedTime.TimeOfDay >= dayStart && completedTime.TimeOfDay < dayEnd;
+            var shift = isDayShift ? DayShift : NightShift;
+
+            if (isOk)
+            {
+                shift.OkCount++;
+            }
+            else
+            {
+                shift.NgCount++;
+            }
+
+            if (HalfHourly.Count == 0)
+            {
+                HalfHourly = CreateHalfHourBuckets();
+            }
+
+            var slotIndex = completedTime.Hour * 2 + (completedTime.Minute >= 30 ? 1 : 0);
+            var bucket = HalfHourly.FirstOrDefault(x => x.SlotIndex == slotIndex);
+            if (bucket is null)
+            {
+                bucket = CreateBucket(slotIndex);
+                HalfHourly.Add(bucket);
+                HalfHourly = HalfHourly.OrderBy(x => x.SlotIndex).ToList();
+            }
+
+            if (isOk)
+            {
+                bucket.OkCount++;
+            }
+            else
+            {
+                bucket.NgCount++;
+            }
+
+            return isDayShift ? "D" : "N";
+        }
+    }
+
     public void Reset()
+    {
+        lock (_sync)
+        {
+            ResetCore();
+        }
+    }
+
+    public TodayCapacity CreateSnapshot()
+    {
+        lock (_sync)
+        {
+            return new TodayCapacity
+            {
+                Date = Date,
+                DayShift = DayShift.Clone(),
+                NightShift = NightShift.Clone(),
+                HalfHourly = HalfHourly.Select(x => x.Clone()).ToList()
+            };
+        }
+    }
+
+    private void ResetCore()
     {
         DayShift = new ShiftCapacity("D");
         NightShift = new ShiftCapacity("N");
@@ -89,11 +139,9 @@ public class TodayCapacity
     }
 
     private static List<HalfHourCapacity> CreateHalfHourBuckets()
-    {
-        return Enumerable.Range(0, 48)
+        => Enumerable.Range(0, 48)
             .Select(CreateBucket)
             .ToList();
-    }
 
     private static HalfHourCapacity CreateBucket(int slotIndex)
     {
@@ -114,27 +162,30 @@ public class TodayCapacity
     }
 }
 
-/// <summary>
-/// 单个班次的产能统计。
-/// </summary>
 public class ShiftCapacity
 {
     public ShiftCapacity() { }
-    public ShiftCapacity(string shiftCode) { ShiftCode = shiftCode; }
+
+    public ShiftCapacity(string shiftCode)
+    {
+        ShiftCode = shiftCode;
+    }
 
     public string ShiftCode { get; set; } = string.Empty;
     public int OkCount { get; set; }
     public int NgCount { get; set; }
 
     public int Total => OkCount + NgCount;
-    public string Yield => Total > 0
-        ? $"{OkCount * 100.0 / Total:F1}%"
-        : "0%";
+    public string Yield => Total > 0 ? $"{OkCount * 100.0 / Total:F1}%" : "0%";
+
+    public ShiftCapacity Clone()
+        => new(ShiftCode)
+        {
+            OkCount = OkCount,
+            NgCount = NgCount
+        };
 }
 
-/// <summary>
-/// 单个半小时产能桶。
-/// </summary>
 public class HalfHourCapacity
 {
     public int SlotIndex { get; set; }
@@ -142,15 +193,22 @@ public class HalfHourCapacity
     public int StartMinute { get; set; }
     public int EndHour { get; set; }
     public int EndMinute { get; set; }
-
     public int OkCount { get; set; }
     public int NgCount { get; set; }
 
     public int Total => OkCount + NgCount;
-    public string Yield => Total > 0
-        ? $"{OkCount * 100.0 / Total:F1}%"
-        : "0%";
+    public string Yield => Total > 0 ? $"{OkCount * 100.0 / Total:F1}%" : "0%";
+    public string TimeLabel => $"{StartHour:D2}:{StartMinute:D2}-{EndHour:D2}:{EndMinute:D2}";
 
-    public string TimeLabel =>
-        $"{StartHour:D2}:{StartMinute:D2}-{EndHour:D2}:{EndMinute:D2}";
+    public HalfHourCapacity Clone()
+        => new()
+        {
+            SlotIndex = SlotIndex,
+            StartHour = StartHour,
+            StartMinute = StartMinute,
+            EndHour = EndHour,
+            EndMinute = EndMinute,
+            OkCount = OkCount,
+            NgCount = NgCount
+        };
 }

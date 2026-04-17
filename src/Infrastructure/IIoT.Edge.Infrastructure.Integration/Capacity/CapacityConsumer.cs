@@ -19,6 +19,8 @@ public class CapacityConsumer : ICapacityConsumer
 
     public string Name => "Capacity";
     public int Order => 10;
+    public IIoT.Edge.Application.Abstractions.DataPipeline.ConsumerFailureMode FailureMode
+        => IIoT.Edge.Application.Abstractions.DataPipeline.ConsumerFailureMode.BestEffort;
     public string? RetryChannel => null;
 
     public CapacityConsumer(

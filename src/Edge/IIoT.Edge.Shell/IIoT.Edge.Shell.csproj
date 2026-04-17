@@ -14,34 +14,35 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="AutoMapper" Version="16.1.1" />
-    <PackageReference Include="Dirkster.AvalonDock" Version="4.72.1" />
-    <PackageReference Include="Dirkster.AvalonDock.Themes.VS2013" Version="4.72.1" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.5">
+    <PackageReference Include="AutoMapper" />
+    <PackageReference Include="Dirkster.AvalonDock" />
+    <PackageReference Include="Dirkster.AvalonDock.Themes.VS2013" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.5" />
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Infrastructure\IIoT.Edge.Infrastructure.Integration\IIoT.Edge.Infrastructure.Integration.csproj" />
-    <ProjectReference Include="..\..\Infrastructure\IIoT.Edge.Infrastructure.Persistence.Dapper\IIoT.Edge.Infrastructure.Persistence.Dapper.csproj" />
-    <ProjectReference Include="..\..\Infrastructure\IIoT.Edge.Infrastructure.Persistence.EfCore\IIoT.Edge.Infrastructure.Persistence.EfCore.csproj" />
-    <ProjectReference Include="..\..\Infrastructure\IIoT.Edge.Infrastructure.DeviceComm\IIoT.Edge.Infrastructure.DeviceComm.csproj" />
-    <ProjectReference Include="..\..\Shared\IIoT.Edge.UI.Shared\IIoT.Edge.UI.Shared.csproj" />
-    <ProjectReference Include="..\..\Runtime\IIoT.Edge.Runtime.Scan\IIoT.Edge.Runtime.Scan.csproj" />
-    <ProjectReference Include="..\..\Runtime\IIoT.Edge.Runtime.DataPipeline\IIoT.Edge.Runtime.DataPipeline.csproj" />
-    <ProjectReference Include="..\..\Application\IIoT.Edge.Application\IIoT.Edge.Application.csproj" />
+    <ProjectReference Include="..\IIoT.Edge.Host.Bootstrap\IIoT.Edge.Host.Bootstrap.csproj" />
+    <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.DryRun\IIoT.Edge.Module.DryRun.csproj" />
+    <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.Injection\IIoT.Edge.Module.Injection.csproj" />
+    <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.Stacking\IIoT.Edge.Module.Stacking.csproj" />
     <ProjectReference Include="..\..\Presentation\IIoT.Edge.Presentation.Shell\IIoT.Edge.Presentation.Shell.csproj" />
     <ProjectReference Include="..\..\Presentation\IIoT.Edge.Presentation.Navigation\IIoT.Edge.Presentation.Navigation.csproj" />
     <ProjectReference Include="..\..\Presentation\IIoT.Edge.Presentation.Panels\IIoT.Edge.Presentation.Panels.csproj" />
+    <ProjectReference Include="..\..\Shared\IIoT.Edge.Module.Abstractions\IIoT.Edge.Module.Abstractions.csproj" />
+    <ProjectReference Include="..\..\Shared\IIoT.Edge.UI.Shared\IIoT.Edge.UI.Shared.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <None Update="appsettings.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="appsettings.Development.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="log4net.config">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

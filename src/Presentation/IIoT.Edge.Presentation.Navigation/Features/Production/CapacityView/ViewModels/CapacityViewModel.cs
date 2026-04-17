@@ -1,5 +1,6 @@
 ﻿using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Features.Production.CapacityView;
+using IIoT.Edge.Presentation.Navigation;
 using IIoT.Edge.UI.Shared.Mvvm;
 using IIoT.Edge.UI.Shared.PluginSystem;
 using System.Collections.ObjectModel;
@@ -21,7 +22,7 @@ public class CapacityViewModel : PresentationViewModelBase
     private string _periodYield = "0%";
     private string _avgDaily = "0";
 
-    public override string ViewId => "Production.CapacityView";
+    public override string ViewId => InjectionViewIds.CapacityView;
     public override string ViewTitle => "Capacity Query";
 
     public ObservableCollection<string> DeviceNames { get; } = new();

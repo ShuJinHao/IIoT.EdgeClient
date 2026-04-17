@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Features.Production.DataView;
+using IIoT.Edge.Presentation.Navigation;
 using IIoT.Edge.UI.Shared.Mvvm;
 using IIoT.Edge.UI.Shared.PluginSystem;
 using System.Collections.ObjectModel;
@@ -12,7 +13,7 @@ namespace IIoT.Edge.Presentation.Navigation.Features.Production.DataView;
 /// </summary>
 public class DataViewModel : PresentationViewModelBase
 {
-    public override string ViewId => "Production.DataView";
+    public override string ViewId => InjectionViewIds.DataView;
     public override string ViewTitle => "生产数据";
 
     private readonly IDataViewService _dataViewService;

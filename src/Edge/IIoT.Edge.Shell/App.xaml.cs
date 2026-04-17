@@ -1,10 +1,15 @@
+using IIoT.Edge.Host.Bootstrap;
 using IIoT.Edge.Shell.Core;
+using IIoT.Edge.Shell.Modules;
+using IIoT.Edge.Shell.ViewModels;
 using IIoT.Edge.UI.Shared.Modularity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Threading;
 using WpfApplication = System.Windows.Application;
 
 namespace IIoT.Edge.Shell;
@@ -14,19 +19,28 @@ public partial class App : WpfApplication
     private ServiceProvider? _serviceProvider;
     private readonly CancellationTokenSource _appCts = new();
     private Mutex? _instanceMutex;
+    private int _fatalDialogShown;
 
     public App()
     {
         _ = typeof(MaterialDesignThemes.Wpf.BundledTheme).Assembly;
+        RegisterGlobalExceptionHandlers();
     }
 
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
+        var environmentName = GetEnvironmentName();
         var configuration = new ConfigurationBuilder()
             .SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
             .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+            .AddJsonFile($"appsettings.{environmentName}.json", optional: true, reloadOnChange: true)
+            .AddEnvironmentVariables()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Shell:Environment"] = environmentName
+            })
             .Build();
 
         if (!TryAcquireInstanceLock(configuration))
@@ -35,7 +49,17 @@ public partial class App : WpfApplication
             return;
         }
 
-        _serviceProvider = ConfigureServices(configuration).BuildServiceProvider();
+        try
+        {
+            _serviceProvider = ConfigureServices(configuration).BuildServiceProvider();
+        }
+        catch (Exception ex)
+        {
+            ShowStartupError($"Startup service configuration failed: {ex.Message}");
+            Shutdown(-1);
+            return;
+        }
+
         var lifecycle = _serviceProvider.GetRequiredService<IAppLifecycleCoordinator>();
         var startupResult = await lifecycle.StartAsync(_appCts.Token);
         if (!startupResult.Success)
@@ -64,14 +88,74 @@ public partial class App : WpfApplication
                 _serviceProvider = null;
             }
         }
-        catch
+        catch (Exception ex)
         {
+            CrashLogWriter.Write("Application shutdown failed.", ex);
         }
         finally
         {
             ReleaseMutex();
             _appCts.Dispose();
             base.OnExit(e);
+        }
+    }
+
+    private void RegisterGlobalExceptionHandlers()
+    {
+        DispatcherUnhandledException += OnDispatcherUnhandledException;
+        AppDomain.CurrentDomain.UnhandledException += OnAppDomainUnhandledException;
+        TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
+    }
+
+    private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
+    {
+        HandleFatalException("DispatcherUnhandledException", e.Exception, requestShutdown: true);
+        e.Handled = true;
+    }
+
+    private void OnAppDomainUnhandledException(object? sender, UnhandledExceptionEventArgs e)
+    {
+        var exception = e.ExceptionObject as Exception
+            ?? new Exception(e.ExceptionObject?.ToString() ?? "Unknown unhandled exception.");
+        HandleFatalException("AppDomain.CurrentDomain.UnhandledException", exception, requestShutdown: false);
+    }
+
+    private void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
+    {
+        CrashLogWriter.Write("TaskScheduler.UnobservedTaskException", e.Exception);
+        e.SetObserved();
+    }
+
+    private void HandleFatalException(string source, Exception exception, bool requestShutdown)
+    {
+        CrashLogWriter.Write(source, exception);
+
+        if (Interlocked.Exchange(ref _fatalDialogShown, 1) != 0)
+        {
+            return;
+        }
+
+        try
+        {
+            MessageBox.Show(
+                "程序发生未处理异常，详细信息已写入 crash.log，应用将退出。",
+                "IIoT Edge Client",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+        catch
+        {
+        }
+
+        if (requestShutdown)
+        {
+            try
+            {
+                Shutdown(-1);
+            }
+            catch
+            {
+            }
         }
     }
 
@@ -113,8 +197,20 @@ public partial class App : WpfApplication
         var services = new ServiceCollection();
         var viewRegistry = new ViewRegistry();
         var dbDir = GetDbDirectory();
-        services.AddShell(viewRegistry, configuration, dbDir);
+        var discoveredModules = ShellModuleCatalog.DiscoverCompiledModules();
+        var modules = ShellModuleCatalog.CreateEnabledModules(configuration, discoveredModules);
+
+        services.AddEdgeHostBootstrap(viewRegistry, configuration, dbDir, discoveredModules, modules);
+        services.AddSingleton<MainWindowViewModel>();
+        services.AddSingleton<MainWindow>();
         return services;
+    }
+
+    private static string GetEnvironmentName()
+    {
+        return Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
+            ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+            ?? "Production";
     }
 
     private static string GetDbDirectory()

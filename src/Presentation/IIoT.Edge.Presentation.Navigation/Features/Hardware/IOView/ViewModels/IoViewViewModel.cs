@@ -2,6 +2,7 @@
 using IIoT.Edge.Application.Features.Hardware.Queries;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Domain.Hardware.Aggregates;
+using IIoT.Edge.Presentation.Navigation;
 using IIoT.Edge.UI.Shared.PluginSystem;
 using MediatR;
 using System.Collections.ObjectModel;
@@ -16,7 +17,7 @@ namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
 /// </summary>
 public class IoViewViewModel : ViewModelBase
 {
-    public override string ViewId => "Hardware.IOView";
+    public override string ViewId => InjectionViewIds.IoView;
     public override string ViewTitle => "IO交互";
 
     private readonly IPlcDataStore _dataStore;

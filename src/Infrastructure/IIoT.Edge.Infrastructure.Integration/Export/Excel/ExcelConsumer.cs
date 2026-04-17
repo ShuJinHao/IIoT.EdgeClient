@@ -18,6 +18,8 @@ public class ExcelConsumer : IExcelConsumer
     private readonly string _excelDirectory;
     private readonly ILogService _logger;
     private readonly object _fileLock = new();
+    public IIoT.Edge.Application.Abstractions.DataPipeline.ConsumerFailureMode FailureMode
+        => IIoT.Edge.Application.Abstractions.DataPipeline.ConsumerFailureMode.BestEffort;
     public string? RetryChannel => null;
     public string Name => "Excel";
     public int Order => 30;

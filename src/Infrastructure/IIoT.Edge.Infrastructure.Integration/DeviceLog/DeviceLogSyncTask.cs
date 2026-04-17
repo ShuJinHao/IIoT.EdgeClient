@@ -1,4 +1,4 @@
-﻿using IIoT.Edge.Application.Abstractions.DataPipeline;
+using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 using IIoT.Edge.Application.Abstractions.DataPipeline.SyncTask;
 using IIoT.Edge.Application.Abstractions.Device;
@@ -28,7 +28,12 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
     private const int RetryMaxBatchesPerRound = 3;
     private static readonly TimeSpan SyncInterval = TimeSpan.FromSeconds(60);
 
-    public DeviceLogSyncTask(ICloudHttpClient cloudHttp, ICloudApiEndpointProvider endpointProvider, IDeviceService deviceService, IDeviceLogBufferStore bufferStore, ILogService logger)
+    public DeviceLogSyncTask(
+        ICloudHttpClient cloudHttp,
+        ICloudApiEndpointProvider endpointProvider,
+        IDeviceService deviceService,
+        IDeviceLogBufferStore bufferStore,
+        ILogService logger)
     {
         _cloudHttp = cloudHttp;
         _endpointProvider = endpointProvider;
@@ -99,10 +104,19 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
                 {
                 }
             }
+
             localCts.Dispose();
         }
 
-        await FlushQueueToBufferAsync();
+        try
+        {
+            await FlushQueueToBufferAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[DeviceLogSync] Flush on stop failed: {ex.Message}");
+        }
+
         _logger.Info("[DeviceLogSync] Stopped.");
     }
 
@@ -120,8 +134,15 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
     {
         while (!ct.IsCancellationRequested)
         {
-            try { await Task.Delay(SyncInterval, ct); }
-            catch (OperationCanceledException) { break; }
+            try
+            {
+                await Task.Delay(SyncInterval, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+
             await ExecuteOnceAsync();
         }
     }
@@ -131,18 +152,24 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
         await _syncGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            var batch = DrainQueue();
-            if (batch.Count == 0) return;
+            await FlushQueueToBufferAsync().ConfigureAwait(false);
 
-            var device = _deviceService.CurrentDevice;
-            if (device is null || _deviceService.CurrentState == NetworkState.Offline)
+            if (_deviceService.CurrentState == NetworkState.Offline)
             {
-                await SaveToBufferAsync(batch);
                 return;
             }
 
-            var success = await PostLogsAsync(device.DeviceId, batch);
-            if (!success) await SaveToBufferAsync(batch);
+            var device = _deviceService.CurrentDevice;
+            if (device is null)
+            {
+                return;
+            }
+
+            await RetryBufferedLogsCoreAsync(device).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[DeviceLogSync] Execute failed: {ex.Message}");
         }
         finally
         {
@@ -150,7 +177,57 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
         }
     }
 
-    private async Task<bool> PostLogsAsync(Guid deviceId, List<LogItem> batch)
+    private async Task<bool> RetryBufferedLogsCoreAsync(DeviceSession device)
+    {
+        for (var i = 0; i < RetryMaxBatchesPerRound; i++)
+        {
+            var claimedBatch = await _bufferStore.ClaimPendingBatchAsync(RetryBatchSize).ConfigureAwait(false);
+            if (claimedBatch is null || claimedBatch.Records.Count == 0)
+            {
+                return true;
+            }
+
+            var posted = false;
+            try
+            {
+                posted = await PostLogsAsync(device.DeviceId, claimedBatch.Records).ConfigureAwait(false);
+                if (!posted)
+                {
+                    await _bufferStore.ReleaseClaimAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
+                    return false;
+                }
+
+                await _bufferStore.DeleteClaimedBatchAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
+
+                if (claimedBatch.Records.Count < RetryBatchSize)
+                {
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                if (!posted)
+                {
+                    try
+                    {
+                        await _bufferStore.ReleaseClaimAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
+                    }
+                    catch (Exception releaseEx)
+                    {
+                        _logger.Error(
+                            $"[DeviceLogSync] Failed to release device log claim {claimedBatch.ClaimToken}: {releaseEx.Message}");
+                    }
+                }
+
+                _logger.Error($"[DeviceLogSync] Retry buffered logs failed: {ex.Message}");
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private async Task<bool> PostLogsAsync(Guid deviceId, IReadOnlyCollection<DeviceLogRecord> batch)
     {
         var payload = new
         {
@@ -159,36 +236,46 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
             {
                 level = l.Level,
                 message = l.Message,
-                logTime = l.LogTime.ToString("O")
+                logTime = l.LogTime
             }).ToArray()
         };
 
-        return await _cloudHttp.PostAsync(_endpointProvider.GetDeviceLogPath(), payload);
+        return await _cloudHttp.PostAsync(_endpointProvider.GetDeviceLogPath(), payload).ConfigureAwait(false);
     }
 
     private async Task SaveToBufferAsync(List<LogItem> batch)
     {
+        var createdAt = DateTime.Now.ToString("O");
         var records = batch.Select(l => new DeviceLogRecord
         {
             Level = l.Level,
             Message = l.Message,
             LogTime = l.LogTime.ToString("O"),
-            CreatedAt = DateTime.Now.ToString("O")
+            CreatedAt = createdAt
         });
 
-        await _bufferStore.SaveBatchAsync(records);
+        await _bufferStore.SaveBatchAsync(records).ConfigureAwait(false);
     }
 
     private async Task FlushQueueToBufferAsync()
     {
         var remaining = DrainQueue();
-        if (remaining.Count > 0) await SaveToBufferAsync(remaining);
+        if (remaining.Count == 0)
+        {
+            return;
+        }
+
+        await SaveToBufferAsync(remaining).ConfigureAwait(false);
     }
 
     private List<LogItem> DrainQueue()
     {
         var list = new List<LogItem>();
-        while (_queue.TryDequeue(out var item)) list.Add(item);
+        while (_queue.TryDequeue(out var item))
+        {
+            list.Add(item);
+        }
+
         return list;
     }
 
@@ -203,32 +290,12 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
             }
 
             var device = _deviceService.CurrentDevice;
-            if (device is null) return false;
-
-            for (var i = 0; i < RetryMaxBatchesPerRound; i++)
+            if (device is null)
             {
-                var records = await _bufferStore.GetPendingAsync(RetryBatchSize).ConfigureAwait(false);
-                if (records.Count == 0) return true;
-
-                var payload = new
-                {
-                    deviceId = device.DeviceId,
-                    logs = records.Select(r => new
-                    {
-                        level = r.Level,
-                        message = r.Message,
-                        logTime = r.LogTime
-                    }).ToArray()
-                };
-
-                var success = await _cloudHttp.PostAsync(_endpointProvider.GetDeviceLogPath(), payload);
-                if (!success) return false;
-
-                await _bufferStore.DeleteBatchAsync(records.Select(r => r.Id)).ConfigureAwait(false);
-                if (records.Count < RetryBatchSize) return true;
+                return false;
             }
 
-            return true;
+            return await RetryBufferedLogsCoreAsync(device).ConfigureAwait(false);
         }
         finally
         {

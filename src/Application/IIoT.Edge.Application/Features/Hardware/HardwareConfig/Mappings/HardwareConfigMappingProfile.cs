@@ -18,9 +18,15 @@ public class HardwareConfigMappingProfile : Profile
                 src.DeviceName,
                 src.DeviceType,
                 src.DeviceModel,
+                src.ModuleId,
                 src.IpAddress,
                 src.Port1,
-                src.IsEnabled));
+                src.Port2,
+                src.SendCmd1,
+                src.SendCmd2,
+                src.ConnectTimeout,
+                src.IsEnabled,
+                src.Remark));
 
         CreateMap<SerialDeviceVm, SerialDeviceDto>()
             .ConstructUsing(src => new SerialDeviceDto(

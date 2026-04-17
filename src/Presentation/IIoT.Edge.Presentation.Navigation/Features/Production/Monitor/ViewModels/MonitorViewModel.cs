@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Features.Production.Monitor;
+using IIoT.Edge.Presentation.Navigation;
 using IIoT.Edge.UI.Shared.Mvvm;
 using IIoT.Edge.UI.Shared.PluginSystem;
 using System.Collections.ObjectModel;
@@ -9,7 +10,7 @@ namespace IIoT.Edge.Presentation.Navigation.Features.Production.Monitor;
 
 public class MonitorViewModel : PresentationViewModelBase
 {
-    public override string ViewId => "Production.Monitor";
+    public override string ViewId => InjectionViewIds.Monitor;
     public override string ViewTitle => "Real-time Monitor";
 
     private readonly IMonitorViewService _monitorViewService;

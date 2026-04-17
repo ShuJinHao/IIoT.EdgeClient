@@ -8,7 +8,11 @@ namespace IIoT.Edge.Application.Abstractions.DataPipeline;
 /// ProcessQueueTask 会按顺序依次调用各个消费者。
 /// 任意一步失败都不会阻塞后续消费者。
 /// 
-/// RetryChannel 用于决定失败后的补传策略：
+/// FailureMode 用于声明失败后的处理语义：
+///   BestEffort：仅记录日志，不要求补偿
+///   Durable：必须进入本地补偿链路，不能静默丢失
+///
+/// RetryChannel 用于决定 Durable 失败后的补传通道：
 ///   null：失败后不进入重传队列，例如纯本地操作的 Excel、界面通知
 ///   "Cloud"：进入 Cloud 通道的补传队列
 ///   "MES"：进入 MES 通道的补传队列
@@ -24,6 +28,12 @@ public interface ICellDataConsumer
     /// 执行顺序，数字越小越先执行。
     /// </summary>
     int Order { get; }
+
+    /// <summary>
+    /// 失败语义声明。
+    /// Durable 消费者必须配置 RetryChannel，避免静默丢失。
+    /// </summary>
+    ConsumerFailureMode FailureMode { get; }
 
     /// <summary>
     /// 失败后进入哪个补传通道。

@@ -14,9 +14,15 @@ public record NetworkDeviceDto(
     string DeviceName,
     DeviceType DeviceType,
     string? DeviceModel,
+    string ModuleId,
     string IpAddress,
     int Port1,
-    bool IsEnabled
+    int? Port2,
+    string? SendCmd1,
+    string? SendCmd2,
+    int ConnectTimeout,
+    bool IsEnabled,
+    string? Remark
 );
 
 /// <summary>
@@ -45,7 +51,13 @@ public class SaveNetworkDevicesHandler(
                     dto.DeviceName, dto.DeviceType, dto.IpAddress, dto.Port1)
                 {
                     DeviceModel = dto.DeviceModel,
-                    IsEnabled = dto.IsEnabled
+                    ModuleId = dto.ModuleId,
+                    Port2 = dto.Port2,
+                    SendCmd1 = dto.SendCmd1,
+                    SendCmd2 = dto.SendCmd2,
+                    ConnectTimeout = dto.ConnectTimeout,
+                    IsEnabled = dto.IsEnabled,
+                    Remark = dto.Remark
                 };
                 repo.Add(entity);
             }
@@ -57,9 +69,15 @@ public class SaveNetworkDevicesHandler(
                     entity.DeviceName = dto.DeviceName;
                     entity.DeviceType = dto.DeviceType;
                     entity.DeviceModel = dto.DeviceModel;
+                    entity.ModuleId = dto.ModuleId;
                     entity.IpAddress = dto.IpAddress;
                     entity.Port1 = dto.Port1;
+                    entity.Port2 = dto.Port2;
+                    entity.SendCmd1 = dto.SendCmd1;
+                    entity.SendCmd2 = dto.SendCmd2;
+                    entity.ConnectTimeout = dto.ConnectTimeout;
                     entity.IsEnabled = dto.IsEnabled;
+                    entity.Remark = dto.Remark;
                     repo.Update(entity);
                 }
             }

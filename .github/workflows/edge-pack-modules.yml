@@ -1,0 +1,79 @@
+name: edge-pack-modules
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+env:
+  DOTNET_NOLOGO: true
+  EDGE_SHARED_NUGET_FEED: ${{ vars.EDGE_SHARED_NUGET_FEED }}
+
+jobs:
+  validate-modules:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: IIoT.EdgeClient
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build injection module
+        run: dotnet build src/Modules/IIoT.Edge.Module.Injection/IIoT.Edge.Module.Injection.csproj -p:BuildInParallel=false --disable-build-servers
+
+      - name: Build stacking module
+        run: dotnet build src/Modules/IIoT.Edge.Module.Stacking/IIoT.Edge.Module.Stacking.csproj -p:BuildInParallel=false --disable-build-servers
+
+      - name: Build dry-run module
+        run: dotnet build src/Modules/IIoT.Edge.Module.DryRun/IIoT.Edge.Module.DryRun.csproj -p:BuildInParallel=false --disable-build-servers
+
+      - name: Run module contract tests
+        run: dotnet test src/Tests/IIoT.Edge.Module.ContractTests/IIoT.Edge.Module.ContractTests.csproj -p:BuildInParallel=false --disable-build-servers
+
+      - name: Run host contract baseline
+        run: dotnet test src/Tests/IIoT.Edge.Shell.Tests/IIoT.Edge.Shell.Tests.csproj -p:BuildInParallel=false --disable-build-servers
+
+      - name: Run non-UI regression tests
+        run: dotnet test src/Tests/IIoT.Edge.NonUiRegressionTests/IIoT.Edge.NonUiRegressionTests.csproj -p:BuildInParallel=false --disable-build-servers
+
+  pack-modules:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    needs: validate-modules
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: IIoT.EdgeClient
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Pack module packages
+        run: |
+          if ($env:EDGE_SHARED_NUGET_FEED) {
+            ./scripts/PackEdgePackages.ps1 -Group modules -Configuration Release -PublishSharedFeed
+          }
+          else {
+            ./scripts/PackEdgePackages.ps1 -Group modules -Configuration Release
+          }
+
+      - name: Upload packed module artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: edge-module-packages
+          path: IIoT.EdgeClient/.artifacts/nuget/*.nupkg

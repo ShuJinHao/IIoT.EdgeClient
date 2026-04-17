@@ -1,5 +1,4 @@
 ﻿using IIoT.Edge.Application.Abstractions.Auth;
-using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Common.Models;
 using IIoT.Edge.Infrastructure.Integration.Config;
 using System.IdentityModel.Tokens.Jwt;
@@ -8,13 +7,14 @@ using System.Security.Claims;
 
 namespace IIoT.Edge.Infrastructure.Integration.Auth;
 
-public class AuthService : IAuthService
+public class AuthService : IAuthService, ICloudAccessTokenProvider
 {
     private readonly HttpClient _httpClient;
     private readonly ICloudApiEndpointProvider _endpointProvider;
     private readonly LocalAdminConfig _localAdminConfig;
 
     public UserSession? CurrentUser { get; private set; }
+    public string? AccessToken => CurrentUser?.Token;
     public bool IsAuthenticated => CurrentUser is not null;
     public event Action<UserSession?>? AuthStateChanged;
 

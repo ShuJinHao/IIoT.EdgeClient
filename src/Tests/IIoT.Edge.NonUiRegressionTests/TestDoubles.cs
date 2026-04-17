@@ -4,12 +4,14 @@ using IIoT.Edge.Application.Abstractions.DataPipeline.Consumers;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 using IIoT.Edge.Application.Abstractions.DataPipeline.SyncTask;
 using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Common.Models;
 using IIoT.Edge.Infrastructure.Integration.Config;
 using IIoT.Edge.SharedKernel.Context;
-using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
 using IIoT.Edge.SharedKernel.DataPipeline;
+using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
 using IIoT.Edge.SharedKernel.DataPipeline.DeviceLog;
 
 namespace IIoT.Edge.NonUiRegressionTests;
@@ -69,28 +71,65 @@ internal sealed class FakeDeviceService : IDeviceService
     }
 }
 
+internal sealed class FakeDataPipelineService : IDataPipelineService
+{
+    private readonly Queue<CellCompletedRecord> _queue = new();
+
+    public int PendingCount => _queue.Count;
+
+    public void Enqueue(CellCompletedRecord record) => _queue.Enqueue(record);
+
+    public bool TryDequeue(out CellCompletedRecord? record)
+    {
+        if (_queue.Count == 0)
+        {
+            record = null;
+            return false;
+        }
+
+        record = _queue.Dequeue();
+        return true;
+    }
+}
+
 internal sealed class FakeCellDataConsumer : ICellDataConsumer
 {
     private readonly bool _result;
+    private readonly Func<CellCompletedRecord, Task<bool>>? _processAsync;
 
-    public FakeCellDataConsumer(string name, int order, string? retryChannel, bool result)
+    public FakeCellDataConsumer(
+        string name,
+        int order,
+        string? retryChannel,
+        bool result,
+        ConsumerFailureMode failureMode = ConsumerFailureMode.BestEffort,
+        Func<CellCompletedRecord, Task<bool>>? processAsync = null)
     {
         Name = name;
         Order = order;
         RetryChannel = retryChannel;
         _result = result;
+        FailureMode = failureMode;
+        _processAsync = processAsync;
     }
 
     public string Name { get; }
     public int Order { get; }
+    public ConsumerFailureMode FailureMode { get; }
     public string? RetryChannel { get; }
 
     public int ProcessCallCount { get; private set; }
 
-    public Task<bool> ProcessAsync(CellCompletedRecord record)
+    public async Task<bool> ProcessAsync(CellCompletedRecord record)
     {
         ProcessCallCount++;
-        return Task.FromResult(_result);
+
+        if (_processAsync is not null)
+        {
+            return await _processAsync(record);
+        }
+
+        return _result;
     }
 }
 
@@ -102,12 +141,21 @@ internal sealed class FakeFailedRecordStore : IFailedRecordStore
     public Dictionary<long, RetryUpdate> Updates { get; } = new();
     public List<long> DeletedIds { get; } = new();
     public int ResetAllAbandonedCallCount { get; private set; }
+    public int SaveCallCount { get; private set; }
+    public Exception? SaveException { get; set; }
 
     public Task SaveAsync(CellCompletedRecord record, string failedTarget, string errorMessage, string channel)
     {
+        SaveCallCount++;
+
+        if (SaveException is not null)
+        {
+            throw SaveException;
+        }
+
         PendingRecords.Add(new FailedCellRecord
         {
-            Id = PendingRecords.Count + 1,
+            Id = PendingRecords.Count == 0 ? 1 : PendingRecords.Max(x => x.Id) + 1,
             Channel = channel,
             FailedTarget = failedTarget,
             ErrorMessage = errorMessage,
@@ -148,6 +196,11 @@ internal sealed class FakeFailedRecordStore : IFailedRecordStore
     public Task<int> GetCountAsync(string channel)
         => Task.FromResult(PendingRecords.Count(x => x.Channel == channel));
 
+    public Task<int> GetCountAsync(string channel, string processType)
+        => Task.FromResult(PendingRecords.Count(x =>
+            x.Channel == channel
+            && string.Equals(x.ProcessType, processType, StringComparison.OrdinalIgnoreCase)));
+
     public Task ResetAllAbandonedAsync()
     {
         ResetAllAbandonedCallCount++;
@@ -155,22 +208,74 @@ internal sealed class FakeFailedRecordStore : IFailedRecordStore
     }
 }
 
+internal sealed class FakeCloudFallbackBufferStore : ICloudFallbackBufferStore
+{
+    public List<CloudFallbackRecord> Records { get; } = new();
+    public List<long> DeletedIds { get; } = new();
+    public int SaveCallCount { get; private set; }
+    public Exception? SaveException { get; set; }
+
+    public Task SaveAsync(CellCompletedRecord record, string failedTarget, string errorMessage)
+    {
+        SaveCallCount++;
+
+        if (SaveException is not null)
+        {
+            throw SaveException;
+        }
+
+        Records.Add(new CloudFallbackRecord
+        {
+            Id = Records.Count == 0 ? 1 : Records.Max(x => x.Id) + 1,
+            ProcessType = record.CellData.ProcessType,
+            CellDataJson = "{}",
+            FailedTarget = failedTarget,
+            ErrorMessage = errorMessage,
+            CreatedAt = DateTime.Now
+        });
+
+        return Task.CompletedTask;
+    }
+
+    public Task<List<CloudFallbackRecord>> GetPendingAsync(int batchSize = 50)
+        => Task.FromResult(Records.OrderBy(x => x.Id).Take(batchSize).ToList());
+
+    public Task DeleteBatchAsync(IEnumerable<long> ids)
+    {
+        var idList = ids.ToList();
+        DeletedIds.AddRange(idList);
+        Records.RemoveAll(x => idList.Contains(x.Id));
+        return Task.CompletedTask;
+    }
+
+    public Task<int> GetCountAsync() => Task.FromResult(Records.Count);
+}
+
 internal sealed class FakeDeviceLogBufferStore : IDeviceLogBufferStore
 {
+    private readonly Dictionary<string, List<long>> _claims = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<long> _claimedRecordIds = new();
+
     public List<DeviceLogRecord> Records { get; } = new();
     public List<long> DeletedIds { get; } = new();
+    public List<string> DeletedClaimTokens { get; } = new();
+    public List<string> ReleasedClaimTokens { get; } = new();
 
     public Task SaveBatchAsync(IEnumerable<DeviceLogRecord> records)
     {
         var nextId = Records.Count == 0 ? 1 : Records.Max(x => x.Id) + 1;
         foreach (var record in records)
         {
-            if (record.Id == 0)
+            var copy = new DeviceLogRecord
             {
-                record.Id = nextId++;
-            }
+                Id = record.Id == 0 ? nextId++ : record.Id,
+                Level = record.Level,
+                Message = record.Message,
+                LogTime = record.LogTime,
+                CreatedAt = record.CreatedAt
+            };
 
-            Records.Add(record);
+            Records.Add(copy);
         }
 
         return Task.CompletedTask;
@@ -186,6 +291,70 @@ internal sealed class FakeDeviceLogBufferStore : IDeviceLogBufferStore
         return Task.FromResult(rows);
     }
 
+    public Task<ClaimedDeviceLogBatch?> ClaimPendingBatchAsync(int batchSize = 100)
+    {
+        var rows = Records
+            .Where(x => !_claimedRecordIds.Contains(x.Id))
+            .OrderBy(x => x.Id)
+            .Take(batchSize)
+            .ToList();
+
+        if (rows.Count == 0)
+        {
+            return Task.FromResult<ClaimedDeviceLogBatch?>(null);
+        }
+
+        var claimToken = Guid.NewGuid().ToString("N");
+        var ids = rows.Select(x => x.Id).ToList();
+        _claims[claimToken] = ids;
+        foreach (var id in ids)
+        {
+            _claimedRecordIds.Add(id);
+        }
+
+        return Task.FromResult<ClaimedDeviceLogBatch?>(new ClaimedDeviceLogBatch
+        {
+            ClaimToken = claimToken,
+            Records = rows.Select(CloneDeviceLogRecord).ToList()
+        });
+    }
+
+    public Task DeleteClaimedBatchAsync(string claimToken)
+    {
+        DeletedClaimTokens.Add(claimToken);
+
+        if (_claims.TryGetValue(claimToken, out var ids))
+        {
+            DeletedIds.AddRange(ids);
+            Records.RemoveAll(x => ids.Contains(x.Id));
+            foreach (var id in ids)
+            {
+                _claimedRecordIds.Remove(id);
+            }
+
+            _claims.Remove(claimToken);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task ReleaseClaimAsync(string claimToken)
+    {
+        ReleasedClaimTokens.Add(claimToken);
+
+        if (_claims.TryGetValue(claimToken, out var ids))
+        {
+            foreach (var id in ids)
+            {
+                _claimedRecordIds.Remove(id);
+            }
+
+            _claims.Remove(claimToken);
+        }
+
+        return Task.CompletedTask;
+    }
+
     public Task DeleteBatchAsync(IEnumerable<long> ids)
     {
         var idList = ids.ToList();
@@ -195,6 +364,16 @@ internal sealed class FakeDeviceLogBufferStore : IDeviceLogBufferStore
     }
 
     public Task<int> GetCountAsync() => Task.FromResult(Records.Count);
+
+    private static DeviceLogRecord CloneDeviceLogRecord(DeviceLogRecord source)
+        => new()
+        {
+            Id = source.Id,
+            Level = source.Level,
+            Message = source.Message,
+            LogTime = source.LogTime,
+            CreatedAt = source.CreatedAt
+        };
 }
 
 internal sealed class FakeCloudHttpClient : ICloudHttpClient
@@ -234,23 +413,44 @@ internal sealed class FakeCloudHttpClient : ICloudHttpClient
 
 internal sealed class FakeCloudApiEndpointProvider : ICloudApiEndpointProvider
 {
-    public string BuildUrl(string relativeOrAbsoluteUrl) => relativeOrAbsoluteUrl;
+    private static readonly Uri BaseUri = new("https://cloud.test");
+
+    public string BuildUrl(string relativeOrAbsoluteUrl)
+    {
+        if (Uri.TryCreate(relativeOrAbsoluteUrl, UriKind.Absolute, out var absoluteUri))
+        {
+            return absoluteUri.ToString();
+        }
+
+        return new Uri(BaseUri, relativeOrAbsoluteUrl).ToString();
+    }
+
     public string GetClientCode() => "TEST";
-    public string GetDeviceInstancePath() => "/device-instance";
-    public string GetIdentityDeviceLoginPath() => "/device-login";
-    public string GetPassStationInjectionBatchPath() => "/pass-station";
-    public string GetDeviceLogPath() => "/device-log";
-    public string BuildRecipeByDevicePath(Guid deviceId) => $"/recipe/{deviceId:N}";
-    public string GetCapacityHourlyPath() => "/capacity-hourly";
-    public string GetCapacitySummaryPath() => "/capacity-summary";
-    public string GetCapacitySummaryRangePath() => "/capacity-summary-range";
+    public string GetDeviceInstancePath() => "/api/v1/edge/bootstrap/device-instance";
+    public string GetIdentityDeviceLoginPath() => "/api/v1/human/identity/edge-login";
+    public string GetPassStationInjectionBatchPath() => "/api/v1/edge/pass-stations/injection/batch";
+    public string GetPassStationStackingPath() => "/api/v1/edge/pass-stations/stacking";
+    public string GetDeviceLogPath() => "/api/v1/edge/device-logs";
+    public string BuildRecipeByDevicePath(Guid deviceId) => $"/api/v1/edge/recipes/device/{deviceId}";
+    public string GetCapacityHourlyPath() => "/api/v1/edge/capacity/hourly";
+    public string GetCapacitySummaryPath() => "/api/v1/edge/capacity/summary";
+    public string GetCapacitySummaryRangePath() => "/api/v1/edge/capacity/summary/range";
+}
+
+internal sealed class FakeCloudAccessTokenProvider(string? accessToken = null) : ICloudAccessTokenProvider
+{
+    public string? AccessToken { get; set; } = accessToken;
 }
 
 internal sealed class FakeCapacityBufferStore : ICapacityBufferStore
 {
+    private readonly Dictionary<string, List<BufferHourlySummaryDto>> _claims = new(StringComparer.OrdinalIgnoreCase);
+
     public List<CapacityRecord> Records { get; } = new();
     public List<BufferSummaryDto> ShiftSummaries { get; } = new();
     public List<BufferHourlySummaryDto> HourlySummaries { get; } = new();
+    public List<string> ReleasedClaimTokens { get; } = new();
+    public List<(string ClaimToken, string Date, int Hour, int MinuteBucket, string ShiftCode, string PlcName)> DeletedSummaries { get; } = new();
     public int ClearAllCallCount { get; private set; }
 
     public Task SaveAsync(CapacityRecord record)
@@ -266,10 +466,74 @@ internal sealed class FakeCapacityBufferStore : ICapacityBufferStore
     }
 
     public Task<List<BufferSummaryDto>> GetShiftSummaryAsync()
-        => Task.FromResult(ShiftSummaries.ToList());
+        => Task.FromResult(ShiftSummaries.Select(CloneShiftSummary).ToList());
 
     public Task<List<BufferHourlySummaryDto>> GetHourlySummaryAsync()
-        => Task.FromResult(HourlySummaries.ToList());
+        => Task.FromResult(HourlySummaries.Select(CloneHourlySummary).ToList());
+
+    public Task<ClaimedCapacityBufferBatch?> ClaimHourlySummaryBatchAsync(int batchSize = 200)
+    {
+        var rows = HourlySummaries
+            .Take(batchSize)
+            .Select(CloneHourlySummary)
+            .ToList();
+
+        if (rows.Count == 0)
+        {
+            return Task.FromResult<ClaimedCapacityBufferBatch?>(null);
+        }
+
+        var claimToken = Guid.NewGuid().ToString("N");
+        _claims[claimToken] = rows.Select(CloneHourlySummary).ToList();
+
+        return Task.FromResult<ClaimedCapacityBufferBatch?>(new ClaimedCapacityBufferBatch
+        {
+            ClaimToken = claimToken,
+            Summaries = rows
+        });
+    }
+
+    public Task DeleteClaimedSummaryAsync(
+        string claimToken,
+        string date,
+        int hour,
+        int minuteBucket,
+        string shiftCode,
+        string plcName)
+    {
+        DeletedSummaries.Add((claimToken, date, hour, minuteBucket, shiftCode, plcName));
+
+        HourlySummaries.RemoveAll(x =>
+            x.Date == date
+            && x.Hour == hour
+            && x.MinuteBucket == minuteBucket
+            && x.ShiftCode == shiftCode
+            && x.PlcName == plcName);
+
+        if (_claims.TryGetValue(claimToken, out var claimed))
+        {
+            claimed.RemoveAll(x =>
+                x.Date == date
+                && x.Hour == hour
+                && x.MinuteBucket == minuteBucket
+                && x.ShiftCode == shiftCode
+                && x.PlcName == plcName);
+
+            if (claimed.Count == 0)
+            {
+                _claims.Remove(claimToken);
+            }
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task ReleaseClaimAsync(string claimToken)
+    {
+        ReleasedClaimTokens.Add(claimToken);
+        _claims.Remove(claimToken);
+        return Task.CompletedTask;
+    }
 
     public Task ClearAllAsync()
     {
@@ -277,11 +541,35 @@ internal sealed class FakeCapacityBufferStore : ICapacityBufferStore
         HourlySummaries.Clear();
         ShiftSummaries.Clear();
         Records.Clear();
+        _claims.Clear();
         return Task.CompletedTask;
     }
 
     public Task<int> GetCountAsync()
         => Task.FromResult(Records.Count);
+
+    private static BufferSummaryDto CloneShiftSummary(BufferSummaryDto source)
+        => new()
+        {
+            Date = source.Date,
+            ShiftCode = source.ShiftCode,
+            Total = source.Total,
+            OkCount = source.OkCount,
+            NgCount = source.NgCount
+        };
+
+    private static BufferHourlySummaryDto CloneHourlySummary(BufferHourlySummaryDto source)
+        => new()
+        {
+            Date = source.Date,
+            Hour = source.Hour,
+            MinuteBucket = source.MinuteBucket,
+            ShiftCode = source.ShiftCode,
+            Total = source.Total,
+            OkCount = source.OkCount,
+            NgCount = source.NgCount,
+            PlcName = source.PlcName
+        };
 }
 
 internal sealed class FakeProductionContextStore : IProductionContextStore
@@ -364,5 +652,79 @@ internal sealed class FakeCapacitySyncTask : ICapacitySyncTask
     {
         RetryBufferCallCount++;
         return Task.FromResult(RetryResult);
+    }
+}
+
+internal sealed class FakeMesUploadDiagnosticsStore : IMesUploadDiagnosticsStore
+{
+    private readonly Dictionary<string, MesChannelDiagnostics> _entries = new(StringComparer.OrdinalIgnoreCase);
+
+    public IReadOnlyList<MesChannelDiagnostics> GetAll()
+        => _entries.Values.OrderBy(x => x.ProcessType, StringComparer.OrdinalIgnoreCase).ToArray();
+
+    public MesChannelDiagnostics? Get(string processType)
+        => _entries.TryGetValue(processType, out var diagnostics) ? diagnostics : null;
+
+    public void RecordSuccess(string processType)
+    {
+        var now = DateTime.Now;
+        _entries[processType] = new MesChannelDiagnostics(
+            processType,
+            now,
+            now,
+            "Success",
+            null);
+    }
+
+    public void RecordFailure(string processType, string failureReason)
+    {
+        var now = DateTime.Now;
+        var lastSuccessAt = _entries.TryGetValue(processType, out var existing)
+            ? existing.LastSuccessAt
+            : null;
+
+        _entries[processType] = new MesChannelDiagnostics(
+            processType,
+            now,
+            lastSuccessAt,
+            "Failed",
+            failureReason);
+    }
+}
+
+internal sealed class FakeMesUploader : IProcessMesUploader
+{
+    private readonly Queue<bool> _results = new();
+
+    public FakeMesUploader(string processType, MesUploadMode uploadMode = MesUploadMode.Single)
+    {
+        ProcessType = processType;
+        UploadMode = uploadMode;
+    }
+
+    public string ProcessType { get; }
+
+    public MesUploadMode UploadMode { get; }
+
+    public int UploadCallCount { get; private set; }
+
+    public List<IReadOnlyList<CellCompletedRecord>> UploadedBatches { get; } = new();
+
+    public void EnqueueResult(bool result) => _results.Enqueue(result);
+
+    public Task<bool> UploadAsync(
+        ProcessMesUploadContext context,
+        IReadOnlyList<CellCompletedRecord> records,
+        CancellationToken cancellationToken = default)
+    {
+        UploadCallCount++;
+        UploadedBatches.Add(records.ToList());
+
+        if (_results.Count > 0)
+        {
+            return Task.FromResult(_results.Dequeue());
+        }
+
+        return Task.FromResult(true);
     }
 }

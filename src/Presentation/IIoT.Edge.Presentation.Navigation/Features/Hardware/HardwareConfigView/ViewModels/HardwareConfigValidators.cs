@@ -17,6 +17,10 @@ internal sealed class NetworkDeviceValidator : IEditorValidator<NetworkDeviceVm>
         if (string.IsNullOrWhiteSpace(model.DeviceName))
             issues.Add(new ValidationIssue("网络设备名称不能为空。", nameof(model.DeviceName)));
 
+        if (model.DeviceType == IIoT.Edge.SharedKernel.Enums.DeviceType.PLC
+            && string.IsNullOrWhiteSpace(model.ModuleId))
+            issues.Add(new ValidationIssue($"设备\"{model.DeviceName}\"的 ModuleId 不能为空。", nameof(model.ModuleId)));
+
         if (string.IsNullOrWhiteSpace(model.IpAddress))
             issues.Add(new ValidationIssue($"设备\"{model.DeviceName}\"的 IP 地址不能为空。", nameof(model.IpAddress)));
 

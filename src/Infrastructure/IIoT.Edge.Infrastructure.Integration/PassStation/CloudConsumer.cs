@@ -1,46 +1,47 @@
-﻿using AutoMapper;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Consumers;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
-using IIoT.Edge.Infrastructure.Integration.Config;
-using IIoT.Edge.Infrastructure.Integration.Mappings.Cloud.Injection;
+using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.SharedKernel.DataPipeline;
-using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 
 namespace IIoT.Edge.Infrastructure.Integration.PassStation;
 
 public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
 {
-    private readonly ICloudHttpClient _cloudHttp;
-    private readonly ICloudApiEndpointProvider _endpointProvider;
     private readonly IDeviceService _deviceService;
-    private readonly IMapper _mapper;
     private readonly ILogService _logger;
+    private readonly Dictionary<string, IProcessCloudUploader> _uploaders;
 
     public string? RetryChannel => "Cloud";
     public string Name => "Cloud";
     public int Order => 20;
+    public IIoT.Edge.Application.Abstractions.DataPipeline.ConsumerFailureMode FailureMode
+        => IIoT.Edge.Application.Abstractions.DataPipeline.ConsumerFailureMode.Durable;
 
-    public CloudConsumer(ICloudHttpClient cloudHttp, ICloudApiEndpointProvider endpointProvider, IDeviceService deviceService, IMapper mapper, ILogService logger)
+    public CloudConsumer(
+        IDeviceService deviceService,
+        IEnumerable<IProcessCloudUploader> uploaders,
+        ILogService logger)
     {
-        _cloudHttp = cloudHttp;
-        _endpointProvider = endpointProvider;
         _deviceService = deviceService;
-        _mapper = mapper;
         _logger = logger;
+        _uploaders = uploaders.ToDictionary(x => x.ProcessType, StringComparer.OrdinalIgnoreCase);
     }
 
     public Task<bool> ProcessAsync(CellCompletedRecord record) => ProcessBatchAsync([record]);
 
     public async Task<bool> ProcessBatchAsync(IReadOnlyList<CellCompletedRecord> records)
     {
-        if (records.Count == 0) return true;
+        if (records.Count == 0)
+        {
+            return true;
+        }
 
         var device = _deviceService.CurrentDevice;
         if (device is null)
         {
-            _logger.Warn("[Cloud] Device is not identified yet. Skip upload.");
-            return true;
+            _logger.Warn("[Cloud] Device is not identified yet. Move record(s) to retry queue.");
+            return false;
         }
 
         if (_deviceService.CurrentState == NetworkState.Offline)
@@ -49,28 +50,23 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
             return false;
         }
 
-        var items = new List<InjectionCloudDto>(records.Count);
-        foreach (var record in records)
+        var context = new ProcessCloudUploadContext(device);
+        foreach (var group in records.GroupBy(x => x.CellData.ProcessType, StringComparer.OrdinalIgnoreCase))
         {
-            if (record.CellData is not InjectionCellData injection)
+            if (!_uploaders.TryGetValue(group.Key, out var uploader))
             {
-                _logger.Error($"[Cloud] Unsupported process type: {record.CellData.ProcessType}, Label:{record.CellData.DisplayLabel}");
+                _logger.Error($"[Cloud] No uploader registered for process type: {group.Key}");
                 return false;
             }
 
-            items.Add(_mapper.Map<InjectionCloudDto>(injection));
+            var success = await uploader.UploadAsync(context, group.ToList()).ConfigureAwait(false);
+            if (!success)
+            {
+                _logger.Error($"[Cloud] Upload failed for process type {group.Key}. Count:{group.Count()}");
+                return false;
+            }
         }
 
-        var payload = new
-        {
-            deviceId = device.DeviceId,
-            items
-        };
-
-        var success = await _cloudHttp.PostAsync(_endpointProvider.GetPassStationInjectionBatchPath(), payload);
-        if (success) return true;
-
-        _logger.Error($"[Cloud] Batch upload failed. Count:{records.Count}");
-        return false;
+        return true;
     }
 }

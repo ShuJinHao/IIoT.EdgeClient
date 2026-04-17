@@ -35,7 +35,7 @@ public sealed class RetryTaskBehaviorTests
         {
             DeviceId = Guid.NewGuid(),
             DeviceName = "PLC-A",
-            MacAddress = "00-11-22-33-44-55",
+            ClientCode = "CLIENT-01",
             ProcessId = Guid.NewGuid()
         });
 
@@ -49,7 +49,7 @@ public sealed class RetryTaskBehaviorTests
         {
             DeviceId = Guid.NewGuid(),
             DeviceName = "PLC-A",
-            MacAddress = "00-11-22-33-44-55",
+            ClientCode = "CLIENT-01",
             ProcessId = Guid.NewGuid()
         });
         await task.ExecuteOnceAsync();
@@ -72,7 +72,7 @@ public sealed class RetryTaskBehaviorTests
         {
             DeviceId = Guid.NewGuid(),
             DeviceName = "PLC-A",
-            MacAddress = "00-11-22-33-44-55",
+            ClientCode = "CLIENT-01",
             ProcessId = Guid.NewGuid()
         });
 
@@ -129,7 +129,7 @@ public sealed class RetryTaskBehaviorTests
         {
             DeviceId = Guid.NewGuid(),
             DeviceName = "PLC-A",
-            MacAddress = "00-11-22-33-44-55",
+            ClientCode = "CLIENT-01",
             ProcessId = Guid.NewGuid()
         });
 

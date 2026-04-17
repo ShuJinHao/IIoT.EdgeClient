@@ -9,4 +9,25 @@
     <BuildInParallel>false</BuildInParallel>
     <RestoreDisableParallel>true</RestoreDisableParallel>
   </PropertyGroup>
+
+  <PropertyGroup>
+    <VersionPrefix>1.0.0-preview.1</VersionPrefix>
+    <Authors>IIoT Edge Team</Authors>
+    <RepositoryUrl>https://github.com/iiot/IIoT.EdgeClient</RepositoryUrl>
+    <PackageOutputPath>$(MSBuildThisFileDirectory).artifacts\nuget</PackageOutputPath>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <PackageId Condition="'$(PackageId)' == ''">$(MSBuildProjectName)</PackageId>
+    <IsPackable Condition="'$(IsPackable)' == '' and '$(IsTestProject)' != 'true' and '$(OutputType)' != 'Exe' and '$(OutputType)' != 'WinExe'">true</IsPackable>
+    <PackageReadmeFile Condition="'$(IsPackable)' == 'true' and '$(PackageReadmeFile)' == ''">PACKAGE-README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(IsPackable)' == 'true'">
+    <None Include="$(MSBuildThisFileDirectory)PACKAGE-README.md"
+          Pack="true"
+          PackagePath="\" 
+          Visible="false"
+          Link="PACKAGE-README.md" />
+  </ItemGroup>
 </Project>

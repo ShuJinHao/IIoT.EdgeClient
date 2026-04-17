@@ -17,6 +17,11 @@ public record IoMappingPageResult(
     List<IoMappingVm> Items,
     int TotalCount);
 
+public record ModuleTemplateInfoResult(
+    bool IsAvailable,
+    string? ModuleId,
+    string Summary);
+
 public record LoadHardwareConfigQuery : IRequest<HardwareConfigInitResult>;
 
 public record LoadIoMappingsQuery(int NetworkDeviceId, int PageIndex, int PageSize)

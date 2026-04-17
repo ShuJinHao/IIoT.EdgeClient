@@ -7,6 +7,7 @@
     <Project Path="src/Core/IIoT.Edge.Domain/IIoT.Edge.Domain.csproj" Id="bf1c5c1a-aed5-4685-bbce-2db4d59f6282" />
   </Folder>
   <Folder Name="/src/Edge/">
+    <Project Path="src/Edge/IIoT.Edge.Host.Bootstrap/IIoT.Edge.Host.Bootstrap.csproj" />
     <Project Path="src/Edge/IIoT.Edge.Shell/IIoT.Edge.Shell.csproj" Id="18446b65-38e5-4acb-a229-ba0f9d8a83cf" />
     <Project Path="src/Edge/IIoT.Edge.TestSimulator/IIoT.Edge.TestSimulator.csproj" />
   </Folder>
@@ -21,17 +22,23 @@
     <Project Path="src/Presentation/IIoT.Edge.Presentation.Navigation/IIoT.Edge.Presentation.Navigation.csproj" />
     <Project Path="src/Presentation/IIoT.Edge.Presentation.Panels/IIoT.Edge.Presentation.Panels.csproj" />
   </Folder>
+  <Folder Name="/src/Modules/">
+    <Project Path="src/Modules/IIoT.Edge.Module.DryRun/IIoT.Edge.Module.DryRun.csproj" />
+    <Project Path="src/Modules/IIoT.Edge.Module.Injection/IIoT.Edge.Module.Injection.csproj" />
+    <Project Path="src/Modules/IIoT.Edge.Module.Stacking/IIoT.Edge.Module.Stacking.csproj" />
+  </Folder>
   <Folder Name="/src/Shared/">
+    <Project Path="src/Shared/IIoT.Edge.Module.Abstractions/IIoT.Edge.Module.Abstractions.csproj" />
     <Project Path="src/Shared/IIoT.Edge.SharedKernel/IIoT.Edge.SharedKernel.csproj" />
     <Project Path="src/Shared/IIoT.Edge.UI.Shared/IIoT.Edge.UI.Shared.csproj" Id="2c8e15da-52ba-4d59-aced-196d42918475" />
   </Folder>
   <Folder Name="/src/Runtime/">
-    <Project Path="src/Runtime/IIoT.Edge.Runtime.Scan/IIoT.Edge.Runtime.Scan.csproj" Id="1b084c68-6e45-466a-8a98-438cf08eac27" />
-    <Project Path="src/Runtime/IIoT.Edge.Runtime.DataPipeline/IIoT.Edge.Runtime.DataPipeline.csproj" Id="d87f2998-d7cc-4f4b-a518-095f3a84f3d5" />
     <Project Path="src/Runtime/IIoT.Edge.Runtime/IIoT.Edge.Runtime.csproj" Id="0af2fc95-d944-481f-89e1-897ba043a59d" />
   </Folder>
   <Folder Name="/src/Tests/">
+    <Project Path="src/Tests/IIoT.Edge.Module.ContractTests/IIoT.Edge.Module.ContractTests.csproj" />
     <Project Path="src/Tests/IIoT.Edge.NonUiRegressionTests/IIoT.Edge.NonUiRegressionTests.csproj" />
+    <Project Path="src/Tests/IIoT.Edge.Shell.Tests/IIoT.Edge.Shell.Tests.csproj" />
   </Folder>
 </Solution>
 

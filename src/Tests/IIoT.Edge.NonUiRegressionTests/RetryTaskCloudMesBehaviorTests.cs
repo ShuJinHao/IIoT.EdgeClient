@@ -3,6 +3,7 @@ using IIoT.Edge.Application.Abstractions.DataPipeline.Consumers;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 using IIoT.Edge.Application.Abstractions.DataPipeline.SyncTask;
 using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Runtime.DataPipeline.Tasks;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
@@ -102,6 +103,96 @@ public sealed class RetryTaskCloudMesBehaviorTests
     }
 
     [Fact]
+    public async Task CloudBatchRetry_WhenRegistryMarksProcessAsBatch_ShouldBatchNonInjectionRecords()
+    {
+        CellDataTypeRegistry.Register<StackingCellData>("Stacking");
+
+        var logger = new FakeLogService();
+        var failedStore = new FakeFailedRecordStore();
+        var deviceService = CreateOnlineDeviceService();
+        var cloudBatch = new FakeCloudBatchConsumer();
+        cloudBatch.EnqueueResult(true);
+        var integrationRegistry = new FakeProcessIntegrationRegistry();
+        integrationRegistry.RegisterCloudUploader("Stacking", ProcessUploadMode.Batch);
+
+        failedStore.PendingRecords.Add(CreateFailedRecord(
+            id: 31,
+            channel: "Cloud",
+            failedTarget: "Cloud",
+            retryCount: 0,
+            processType: "Stacking",
+            cellData: new StackingCellData { Barcode = "ST-31" }));
+        failedStore.PendingRecords.Add(CreateFailedRecord(
+            id: 32,
+            channel: "Cloud",
+            failedTarget: "Cloud",
+            retryCount: 0,
+            processType: "Stacking",
+            cellData: new StackingCellData { Barcode = "ST-32" }));
+
+        var task = new TestableRetryTask(
+            channel: "Cloud",
+            logger,
+            failedStore,
+            deviceService,
+            consumers: [new FakeCellDataConsumer("Cloud", 10, "Cloud", result: true)],
+            cloudBatchConsumer: cloudBatch,
+            processIntegrationRegistry: integrationRegistry);
+
+        await task.ExecuteOnceAsync();
+
+        Assert.Equal(1, cloudBatch.ProcessBatchCallCount);
+        Assert.Equal(2, cloudBatch.ReceivedBatches[0].Count);
+        Assert.Contains(31L, failedStore.DeletedIds);
+        Assert.Contains(32L, failedStore.DeletedIds);
+    }
+
+    [Fact]
+    public async Task CloudRetry_WhenRegistryMarksStackingAsSingle_ShouldRetryRecordsIndividually()
+    {
+        CellDataTypeRegistry.Register<StackingCellData>("Stacking");
+
+        var logger = new FakeLogService();
+        var failedStore = new FakeFailedRecordStore();
+        var deviceService = CreateOnlineDeviceService();
+        var cloudBatch = new FakeCloudBatchConsumer();
+        var integrationRegistry = new FakeProcessIntegrationRegistry();
+        integrationRegistry.RegisterCloudUploader("Stacking", ProcessUploadMode.Single);
+        var cloudConsumer = new FakeCellDataConsumer("Cloud", 10, "Cloud", result: true);
+
+        failedStore.PendingRecords.Add(CreateFailedRecord(
+            id: 41,
+            channel: "Cloud",
+            failedTarget: "Cloud",
+            retryCount: 0,
+            processType: "Stacking",
+            cellData: new StackingCellData { Barcode = "ST-41" }));
+        failedStore.PendingRecords.Add(CreateFailedRecord(
+            id: 42,
+            channel: "Cloud",
+            failedTarget: "Cloud",
+            retryCount: 0,
+            processType: "Stacking",
+            cellData: new StackingCellData { Barcode = "ST-42" }));
+
+        var task = new TestableRetryTask(
+            channel: "Cloud",
+            logger,
+            failedStore,
+            deviceService,
+            consumers: [cloudConsumer],
+            cloudBatchConsumer: cloudBatch,
+            processIntegrationRegistry: integrationRegistry);
+
+        await task.ExecuteOnceAsync();
+
+        Assert.Equal(0, cloudBatch.ProcessBatchCallCount);
+        Assert.Equal(2, cloudConsumer.ProcessCallCount);
+        Assert.Contains(41L, failedStore.DeletedIds);
+        Assert.Contains(42L, failedStore.DeletedIds);
+    }
+
+    [Fact]
     public async Task MesChannel_ShouldOnlyRunMesConsumersFromFailedTargetOnward()
     {
         CellDataTypeRegistry.Register<InjectionCellData>("Injection");
@@ -184,15 +275,21 @@ public sealed class RetryTaskCloudMesBehaviorTests
         {
             DeviceId = Guid.NewGuid(),
             DeviceName = "PLC-A",
-            MacAddress = "00-11-22-33-44-55",
+            ClientCode = "CLIENT-01",
             ProcessId = Guid.NewGuid()
         });
         return deviceService;
     }
 
-    private static FailedCellRecord CreateFailedRecord(long id, string channel, string failedTarget, int retryCount)
+    private static FailedCellRecord CreateFailedRecord(
+        long id,
+        string channel,
+        string failedTarget,
+        int retryCount,
+        string processType = "Injection",
+        CellDataBase? cellData = null)
     {
-        var cellData = new InjectionCellData
+        cellData ??= new InjectionCellData
         {
             Barcode = $"BC-{id}",
             WorkOrderNo = $"WO-{id}"
@@ -202,7 +299,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         {
             Id = id,
             Channel = channel,
-            ProcessType = "Injection",
+            ProcessType = processType,
             CellDataJson = SerializeCellData(cellData),
             FailedTarget = failedTarget,
             ErrorMessage = "seed",
@@ -230,9 +327,49 @@ public sealed class RetryTaskCloudMesBehaviorTests
         IEnumerable<ICellDataConsumer> consumers,
         IDeviceLogSyncTask? deviceLogSync = null,
         ICapacitySyncTask? capacitySync = null,
-        ICloudBatchConsumer? cloudBatchConsumer = null)
-        : RetryTask(channel, logger, failedStore, deviceService, consumers, deviceLogSync, capacitySync, cloudBatchConsumer)
+        ICloudBatchConsumer? cloudBatchConsumer = null,
+        IProcessIntegrationRegistry? processIntegrationRegistry = null)
+        : RetryTask(
+            channel,
+            logger,
+            failedStore,
+            deviceService,
+            consumers,
+            deviceLogSync,
+            capacitySync,
+            cloudBatchConsumer,
+            processIntegrationRegistry: processIntegrationRegistry)
     {
         public Task ExecuteOnceAsync() => base.ExecuteAsync();
+    }
+
+    private sealed class FakeProcessIntegrationRegistry : IProcessIntegrationRegistry
+    {
+        private readonly Dictionary<string, CloudUploaderRegistration> _cloudUploaders = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, MesUploaderRegistration> _mesUploaders = new(StringComparer.OrdinalIgnoreCase);
+
+        public void RegisterCloudUploader(string processType, ProcessUploadMode uploadMode)
+        {
+            _cloudUploaders[processType] = new CloudUploaderRegistration(processType, uploadMode);
+        }
+
+        public void RegisterMesUploader(string processType, MesUploadMode uploadMode)
+        {
+            _mesUploaders[processType] = new MesUploaderRegistration(processType, uploadMode);
+        }
+
+        public bool HasCloudUploader(string processType) => _cloudUploaders.ContainsKey(processType);
+
+        public bool HasMesUploader(string processType) => _mesUploaders.ContainsKey(processType);
+
+        public bool TryGetCloudUploader(string processType, out CloudUploaderRegistration registration)
+            => _cloudUploaders.TryGetValue(processType, out registration!);
+
+        public bool TryGetMesUploader(string processType, out MesUploaderRegistration registration)
+            => _mesUploaders.TryGetValue(processType, out registration!);
+
+        public IReadOnlyDictionary<string, CloudUploaderRegistration> GetCloudUploaders() => _cloudUploaders;
+
+        public IReadOnlyDictionary<string, MesUploaderRegistration> GetMesUploaders() => _mesUploaders;
     }
 }

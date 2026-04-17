@@ -30,6 +30,12 @@ public class BufferHourlySummaryDto
 
 }
 
+public sealed class ClaimedCapacityBufferBatch
+{
+    public string ClaimToken { get; set; } = string.Empty;
+    public List<BufferHourlySummaryDto> Summaries { get; set; } = new();
+}
+
 /// <summary>
 /// 产能离线缓冲接口。
 ///
@@ -49,6 +55,15 @@ public interface ICapacityBufferStore
 
     /// <summary>按日期、小时、分钟桶、班次和 PLC 汇总，供补传使用。</summary>
     Task<List<BufferHourlySummaryDto>> GetHourlySummaryAsync();
+
+    /// <summary>认领一批待补传的小时汇总，避免并发清理造成重复或丢失。</summary>
+    Task<ClaimedCapacityBufferBatch?> ClaimHourlySummaryBatchAsync(int batchSize = 200);
+
+    /// <summary>删除某个认领批次中已经补传成功的单个汇总组。</summary>
+    Task DeleteClaimedSummaryAsync(string claimToken, string date, int hour, int minuteBucket, string shiftCode, string plcName);
+
+    /// <summary>释放认领批次，允许剩余数据下次重试。</summary>
+    Task ReleaseClaimAsync(string claimToken);
 
     /// <summary>补传成功后清空全部缓冲记录。</summary>
     Task ClearAllAsync();

@@ -1,0 +1,18 @@
+# Generated artifacts
+.artifacts/
+.claude/
+.dotnet/
+.vs/
+
+# Build outputs
+bin/
+obj/
+publish/
+dist/
+node_modules/
+
+# Local logs and diagnostics
+*.log
+*.trx
+*.tmp
+*.cache

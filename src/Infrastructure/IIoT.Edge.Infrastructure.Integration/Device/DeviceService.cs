@@ -1,4 +1,4 @@
-﻿using System.Net.Http.Json;
+using System.Net.Http.Json;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Infrastructure.Integration.Config;
@@ -10,7 +10,6 @@ public class DeviceService : IDeviceService
 {
     private readonly HttpClient _httpClient;
     private readonly ICloudApiEndpointProvider _endpointProvider;
-    private readonly IDeviceInstanceIdResolver _instanceIdResolver;
     private readonly DeviceSessionFileCacheStore _cacheStore;
     private readonly ILogService _logger;
     private readonly object _stateLock = new();
@@ -27,11 +26,14 @@ public class DeviceService : IDeviceService
     public event Action<NetworkState>? NetworkStateChanged;
     public event Action<DeviceSession?>? DeviceIdentified;
 
-    public DeviceService(HttpClient httpClient, ICloudApiEndpointProvider endpointProvider, IDeviceInstanceIdResolver instanceIdResolver, DeviceSessionFileCacheStore cacheStore, ILogService logger)
+    public DeviceService(
+        HttpClient httpClient,
+        ICloudApiEndpointProvider endpointProvider,
+        DeviceSessionFileCacheStore cacheStore,
+        ILogService logger)
     {
         _httpClient = httpClient;
         _endpointProvider = endpointProvider;
-        _instanceIdResolver = instanceIdResolver;
         _cacheStore = cacheStore;
         _logger = logger;
     }
@@ -98,8 +100,15 @@ public class DeviceService : IDeviceService
         while (!ct.IsCancellationRequested)
         {
             var interval = CurrentState == NetworkState.Online ? OnlineInterval : OfflineInterval;
-            try { await Task.Delay(interval, ct); }
-            catch (OperationCanceledException) { break; }
+            try
+            {
+                await Task.Delay(interval, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+
             await IdentifyOnceAsync(ct);
         }
 
@@ -108,18 +117,19 @@ public class DeviceService : IDeviceService
 
     private async Task IdentifyOnceAsync(CancellationToken ct)
     {
-        var instanceId = _instanceIdResolver.ResolveInstanceId();
+        var clientCode = string.Empty;
         try
         {
-            var clientCode = _endpointProvider.GetClientCode();
+            clientCode = _endpointProvider.GetClientCode();
             var deviceInstancePath = _endpointProvider.GetDeviceInstancePath();
-            var url = _endpointProvider.BuildUrl($"{deviceInstancePath}?macAddress={Uri.EscapeDataString(instanceId)}&clientCode={Uri.EscapeDataString(clientCode)}");
+            var url = _endpointProvider.BuildUrl(
+                $"{deviceInstancePath}?clientCode={Uri.EscapeDataString(clientCode)}");
 
             var response = await _httpClient.GetAsync(url, ct).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
                 _logger.Warn($"[DeviceService] Device identify failed: {response.StatusCode}");
-                GoOffline(instanceId);
+                GoOffline(clientCode);
                 return;
             }
 
@@ -127,7 +137,7 @@ public class DeviceService : IDeviceService
             if (dto is null)
             {
                 _logger.Warn("[DeviceService] Device identify returned empty payload.");
-                GoOffline(instanceId);
+                GoOffline(clientCode);
                 return;
             }
 
@@ -135,7 +145,7 @@ public class DeviceService : IDeviceService
             {
                 DeviceId = dto.Id,
                 DeviceName = dto.DeviceName,
-                MacAddress = instanceId,
+                ClientCode = clientCode,
                 ProcessId = dto.ProcessId
             };
 
@@ -147,17 +157,17 @@ public class DeviceService : IDeviceService
         catch (TaskCanceledException)
         {
             _logger.Warn("[DeviceService] Device identify timeout.");
-            GoOffline(instanceId);
+            GoOffline(clientCode);
         }
         catch (HttpRequestException ex)
         {
             _logger.Warn($"[DeviceService] Network exception: {ex.Message}");
-            GoOffline(instanceId);
+            GoOffline(clientCode);
         }
         catch (Exception ex)
         {
             _logger.Error($"[DeviceService] Identify exception: {ex.Message}");
-            GoOffline(instanceId);
+            GoOffline(clientCode);
         }
     }
 
@@ -168,11 +178,22 @@ public class DeviceService : IDeviceService
 
         lock (_stateLock)
         {
-            var deviceChanged = CurrentDevice is null || CurrentDevice.DeviceId != session.DeviceId || CurrentDevice.DeviceName != session.DeviceName || CurrentDevice.ProcessId != session.ProcessId;
+            var deviceChanged = CurrentDevice is null
+                || CurrentDevice.DeviceId != session.DeviceId
+                || CurrentDevice.DeviceName != session.DeviceName
+                || CurrentDevice.ProcessId != session.ProcessId
+                || !string.Equals(CurrentDevice.ClientCode, session.ClientCode, StringComparison.OrdinalIgnoreCase);
+
             CurrentDevice = session;
 
-            try { _cacheStore.Save(session); }
-            catch (Exception ex) { _logger.Warn($"[DeviceService] Save cache failed: {ex.Message}"); }
+            try
+            {
+                _cacheStore.Save(session);
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn($"[DeviceService] Save cache failed: {ex.Message}");
+            }
 
             if (deviceChanged)
             {
@@ -199,7 +220,7 @@ public class DeviceService : IDeviceService
         }
     }
 
-    private void GoOffline(string instanceId)
+    private void GoOffline(string clientCode)
     {
         var raiseStateChanged = false;
         var raiseDeviceIdentified = false;
@@ -210,7 +231,7 @@ public class DeviceService : IDeviceService
             {
                 try
                 {
-                    var cached = _cacheStore.TryLoad(instanceId);
+                    var cached = _cacheStore.TryLoad(clientCode);
                     if (cached is not null)
                     {
                         CurrentDevice = cached;

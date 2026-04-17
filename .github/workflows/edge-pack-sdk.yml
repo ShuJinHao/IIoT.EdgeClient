@@ -1,0 +1,70 @@
+name: edge-pack-sdk
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+env:
+  DOTNET_NOLOGO: true
+  EDGE_SHARED_NUGET_FEED: ${{ vars.EDGE_SHARED_NUGET_FEED }}
+
+jobs:
+  validate-sdk:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: IIoT.EdgeClient
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build module abstractions
+        run: dotnet build src/Shared/IIoT.Edge.Module.Abstractions/IIoT.Edge.Module.Abstractions.csproj -p:BuildInParallel=false --disable-build-servers
+
+      - name: Build host bootstrap
+        run: dotnet build src/Edge/IIoT.Edge.Host.Bootstrap/IIoT.Edge.Host.Bootstrap.csproj -p:BuildInParallel=false --disable-build-servers
+
+      - name: Run host contract baseline
+        run: dotnet test src/Tests/IIoT.Edge.Shell.Tests/IIoT.Edge.Shell.Tests.csproj -p:BuildInParallel=false --disable-build-servers
+
+  pack-sdk:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    needs: validate-sdk
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: IIoT.EdgeClient
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Pack reusable SDK and host packages
+        run: |
+          if ($env:EDGE_SHARED_NUGET_FEED) {
+            ./scripts/PackEdgePackages.ps1 -Group sdk -Configuration Release -CleanOutput -PublishSharedFeed
+          }
+          else {
+            ./scripts/PackEdgePackages.ps1 -Group sdk -Configuration Release -CleanOutput
+          }
+
+      - name: Upload packed SDK artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: edge-sdk-packages
+          path: IIoT.EdgeClient/.artifacts/nuget/*.nupkg

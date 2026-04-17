@@ -1,6 +1,7 @@
 ﻿using IIoT.Edge.Application.Common.Crud;
 using IIoT.Edge.Application.Features.Config.ParamView;
 using IIoT.Edge.Application.Features.Config.ParamView.Models;
+using IIoT.Edge.Presentation.Navigation;
 using IIoT.Edge.Presentation.Navigation.Common.Crud;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
@@ -15,7 +16,7 @@ public class ParamViewModel : CrudPageViewModelBase
     private int _selectedTabIndex;
     private DeviceParamGroupVm? _selectedGroup;
 
-    public override string ViewId => "Config.ParamView";
+    public override string ViewId => InjectionViewIds.ParamView;
     public override string ViewTitle => "Parameter Config";
 
     public int SelectedTabIndex

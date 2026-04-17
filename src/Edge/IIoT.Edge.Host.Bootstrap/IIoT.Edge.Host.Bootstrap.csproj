@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <IsPackable>true</IsPackable>
+    <PackageId>IIoT.Edge.Host.Bootstrap</PackageId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AutoMapper" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\\..\\Application\\IIoT.Edge.Application\\IIoT.Edge.Application.csproj" />
+    <ProjectReference Include="..\\..\\Infrastructure\\IIoT.Edge.Infrastructure.DeviceComm\\IIoT.Edge.Infrastructure.DeviceComm.csproj" />
+    <ProjectReference Include="..\\..\\Infrastructure\\IIoT.Edge.Infrastructure.Integration\\IIoT.Edge.Infrastructure.Integration.csproj" />
+    <ProjectReference Include="..\\..\\Infrastructure\\IIoT.Edge.Infrastructure.Persistence.Dapper\\IIoT.Edge.Infrastructure.Persistence.Dapper.csproj" />
+    <ProjectReference Include="..\\..\\Infrastructure\\IIoT.Edge.Infrastructure.Persistence.EfCore\\IIoT.Edge.Infrastructure.Persistence.EfCore.csproj" />
+    <ProjectReference Include="..\\..\\Presentation\\IIoT.Edge.Presentation.Navigation\\IIoT.Edge.Presentation.Navigation.csproj" />
+    <ProjectReference Include="..\\..\\Presentation\\IIoT.Edge.Presentation.Panels\\IIoT.Edge.Presentation.Panels.csproj" />
+    <ProjectReference Include="..\\..\\Presentation\\IIoT.Edge.Presentation.Shell\\IIoT.Edge.Presentation.Shell.csproj" />
+    <ProjectReference Include="..\\..\\Runtime\\IIoT.Edge.Runtime\\IIoT.Edge.Runtime.csproj" />
+    <ProjectReference Include="..\\..\\Shared\\IIoT.Edge.Module.Abstractions\\IIoT.Edge.Module.Abstractions.csproj" />
+    <ProjectReference Include="..\\..\\Shared\\IIoT.Edge.UI.Shared\\IIoT.Edge.UI.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

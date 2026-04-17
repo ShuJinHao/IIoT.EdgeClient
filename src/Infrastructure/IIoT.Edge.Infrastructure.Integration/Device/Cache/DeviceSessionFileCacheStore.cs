@@ -1,3 +1,4 @@
+using System.Text.Json;
 using IIoT.Edge.Application.Abstractions.Device;
 
 namespace IIoT.Edge.Infrastructure.Integration.Device.Cache;
@@ -10,11 +11,11 @@ public class DeviceSessionFileCacheStore
 
     public void Save(DeviceSession session)
     {
-        var json = System.Text.Json.JsonSerializer.Serialize(session);
+        var json = JsonSerializer.Serialize(session);
         File.WriteAllText(_cacheFilePath, json);
     }
 
-    public DeviceSession? TryLoad(string instanceId)
+    public DeviceSession? TryLoad(string clientCode)
     {
         if (!File.Exists(_cacheFilePath))
         {
@@ -22,9 +23,51 @@ public class DeviceSessionFileCacheStore
         }
 
         var json = File.ReadAllText(_cacheFilePath);
-        var session = System.Text.Json.JsonSerializer.Deserialize<DeviceSession>(json);
-        return session is null
-            ? null
-            : session with { MacAddress = instanceId };
+        var cacheModel = JsonSerializer.Deserialize<DeviceSessionCacheModel>(
+            json,
+            new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
+
+        if (cacheModel is null
+            || cacheModel.DeviceId == Guid.Empty
+            || string.IsNullOrWhiteSpace(cacheModel.DeviceName))
+        {
+            return null;
+        }
+
+        var cachedClientCode = cacheModel.ClientCode?.Trim();
+        var isLegacyCache = string.IsNullOrWhiteSpace(cachedClientCode);
+
+        if (!isLegacyCache
+            && !string.Equals(cachedClientCode, clientCode, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var session = new DeviceSession
+        {
+            DeviceId = cacheModel.DeviceId,
+            DeviceName = cacheModel.DeviceName,
+            ClientCode = clientCode,
+            ProcessId = cacheModel.ProcessId
+        };
+
+        if (isLegacyCache)
+        {
+            Save(session);
+        }
+
+        return session;
+    }
+
+    private sealed class DeviceSessionCacheModel
+    {
+        public Guid DeviceId { get; init; }
+        public string DeviceName { get; init; } = string.Empty;
+        public string? ClientCode { get; init; }
+        public string? MacAddress { get; init; }
+        public Guid ProcessId { get; init; }
     }
 }

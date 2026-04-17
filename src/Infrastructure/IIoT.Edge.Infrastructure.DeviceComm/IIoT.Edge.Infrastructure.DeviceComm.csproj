@@ -7,8 +7,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="MCProtocol" Version="1.2.5" />
-    <PackageReference Include="S7netplus" Version="0.20.0" />
+    <PackageReference Include="MCProtocol" />
+    <PackageReference Include="S7netplus" />
   </ItemGroup>
 
   <ItemGroup>

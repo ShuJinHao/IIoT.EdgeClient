@@ -7,12 +7,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="Implementations\**" />
-    <EmbeddedResource Remove="Implementations\**" />
-    <None Remove="Implementations\**" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\..\Application\IIoT.Edge.Application\IIoT.Edge.Application.csproj" />
   </ItemGroup>
 

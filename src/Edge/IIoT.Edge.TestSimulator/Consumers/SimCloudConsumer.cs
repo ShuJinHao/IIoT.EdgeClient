@@ -17,6 +17,8 @@ public sealed class SimCloudConsumer : ICloudConsumer, ICloudBatchConsumer
 
     public string Name => "Cloud";
     public int Order => 30;
+    public IIoT.Edge.Application.Abstractions.DataPipeline.ConsumerFailureMode FailureMode
+        => IIoT.Edge.Application.Abstractions.DataPipeline.ConsumerFailureMode.Durable;
     public string? RetryChannel => "Cloud";
 
     public SimCloudConsumer(
@@ -46,8 +48,8 @@ public sealed class SimCloudConsumer : ICloudConsumer, ICloudBatchConsumer
         var device = _deviceService.CurrentDevice;
         if (device is null)
         {
-            _logger.Warn("[SimCloud] Device not identified. Skip upload");
-            return true;
+            _logger.Warn("[SimCloud] Device not identified. Queue record(s) for retry");
+            return false;
         }
 
         var payload = new

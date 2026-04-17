@@ -28,6 +28,12 @@ public class NetworkDeviceConfiguration : IEntityTypeConfiguration<NetworkDevice
             .HasMaxLength(20)
             .HasColumnName("device_model");
 
+        builder.Property(x => x.ModuleId)
+            .IsRequired()
+            .HasMaxLength(50)
+            .HasDefaultValue("Injection")
+            .HasColumnName("module_id");
+
         builder.Property(x => x.IpAddress)
             .IsRequired()
             .HasMaxLength(50)

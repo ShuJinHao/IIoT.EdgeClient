@@ -84,6 +84,7 @@
                         </DataTemplate>
                     </DataGridTemplateColumn.CellEditingTemplate>
                 </DataGridTemplateColumn>
+                <DataGridTextColumn Width="120" Binding="{Binding ModuleId}" Header="ModuleId" />
                 <DataGridTextColumn Width="130" Binding="{Binding IpAddress}" Header="IP地址" />
                 <DataGridTextColumn Width="80" Binding="{Binding Port1}" Header="端口1" />
                 <DataGridTextColumn Width="80" Binding="{Binding Port2}" Header="端口2" />

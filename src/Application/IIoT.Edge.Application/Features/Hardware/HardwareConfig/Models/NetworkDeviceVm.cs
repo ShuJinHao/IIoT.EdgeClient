@@ -42,6 +42,13 @@ public class NetworkDeviceVm : ObservableModelBase
         set { _deviceModel = value; OnPropertyChanged(); }
     }
 
+    private string _moduleId = "Injection";
+    public string ModuleId
+    {
+        get => _moduleId;
+        set { _moduleId = string.IsNullOrWhiteSpace(value) ? "Injection" : value.Trim(); OnPropertyChanged(); }
+    }
+
     public IEnumerable<string> AvailableModels => DeviceType switch
     {
         DeviceType.PLC => Enum.GetNames<PlcType>(),

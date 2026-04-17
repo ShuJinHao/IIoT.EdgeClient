@@ -38,7 +38,7 @@ public class TodayCapacityStore : ITodayCapacityStore
     public TodayCapacity GetSnapshot(string deviceName)
     {
         var ctx = _contextStore.GetOrCreate(deviceName);
-        return ctx.TodayCapacity;
+        return ctx.TodayCapacity.CreateSnapshot();
     }
 
     public void Reset(string deviceName)

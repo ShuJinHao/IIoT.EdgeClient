@@ -1,4 +1,4 @@
-﻿using IIoT.Edge.Application.Abstractions.Context;
+using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 using IIoT.Edge.Application.Abstractions.DataPipeline.SyncTask;
@@ -25,7 +25,14 @@ public class CapacitySyncTask : ICapacitySyncTask
     private bool _isRunning;
     private static readonly TimeSpan SyncInterval = TimeSpan.FromSeconds(60);
 
-    public CapacitySyncTask(ICloudHttpClient cloudHttp, ICloudApiEndpointProvider endpointProvider, IDeviceService deviceService, IProductionContextStore contextStore, ICapacityBufferStore bufferStore, ILogService logger, ShiftConfig shiftConfig)
+    public CapacitySyncTask(
+        ICloudHttpClient cloudHttp,
+        ICloudApiEndpointProvider endpointProvider,
+        IDeviceService deviceService,
+        IProductionContextStore contextStore,
+        ICapacityBufferStore bufferStore,
+        ILogService logger,
+        ShiftConfig shiftConfig)
     {
         _cloudHttp = cloudHttp;
         _endpointProvider = endpointProvider;
@@ -86,6 +93,7 @@ public class CapacitySyncTask : ICapacitySyncTask
                 {
                 }
             }
+
             localCts.Dispose();
         }
     }
@@ -94,10 +102,18 @@ public class CapacitySyncTask : ICapacitySyncTask
     {
         while (!ct.IsCancellationRequested)
         {
-            try { await Task.Delay(SyncInterval, ct); }
-            catch (OperationCanceledException) { break; }
+            try
+            {
+                await Task.Delay(SyncInterval, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+
             await ExecuteOnceAsync();
         }
+
         _logger.Info("[CapacitySync] Stopped.");
     }
 
@@ -119,7 +135,7 @@ public class CapacitySyncTask : ICapacitySyncTask
 
             try
             {
-                await SyncAllDevicesAsync(device.DeviceId);
+                await SyncAllDevicesAsync(device.DeviceId).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -137,40 +153,54 @@ public class CapacitySyncTask : ICapacitySyncTask
         var contexts = _contextStore.GetAll();
         foreach (var ctx in contexts)
         {
-            var capacity = ctx.TodayCapacity;
-            if (string.IsNullOrEmpty(capacity.Date) || capacity.TotalAll == 0) continue;
+            var capacity = ctx.TodayCapacity.CreateSnapshot();
+            if (string.IsNullOrWhiteSpace(capacity.Date) || capacity.TotalAll == 0)
+            {
+                continue;
+            }
 
             foreach (var slot in capacity.HalfHourly.Where(h => h.Total > 0).OrderBy(h => h.SlotIndex))
             {
                 var shiftCode = GetShiftCodeByTime(slot.StartHour, slot.StartMinute);
-                await PostHalfHourCapacityAsync(cloudDeviceId, capacity.Date, slot.StartHour, slot.StartMinute, shiftCode, slot.Total, slot.OkCount, slot.NgCount, ctx.DeviceName);
+                await PostHalfHourCapacityAsync(
+                    cloudDeviceId,
+                    capacity.Date,
+                    slot.StartHour,
+                    slot.StartMinute,
+                    shiftCode,
+                    slot.Total,
+                    slot.OkCount,
+                    slot.NgCount,
+                    ctx.DeviceName).ConfigureAwait(false);
             }
         }
     }
 
-    private async Task PostHalfHourCapacityAsync(Guid deviceId, string date, int hour, int minute, string shiftCode, int totalCount, int okCount, int ngCount, string plcName)
+    private async Task<bool> PostHalfHourCapacityAsync(
+        Guid deviceId,
+        string date,
+        int hour,
+        int minute,
+        string shiftCode,
+        int totalCount,
+        int okCount,
+        int ngCount,
+        string plcName)
     {
-        var endMinute = minute == 30 ? 0 : 30;
-        var endHour = minute == 30 ? (hour + 1) % 24 : hour;
-        var payload = new
-        {
-            deviceId,
-            date,
-            hour,
-            minute,
-            timeLabel = $"{hour:D2}:{minute:D2}-{endHour:D2}:{endMinute:D2}",
-            shiftCode,
-            totalCount,
-            okCount,
-            ngCount,
-            plcName
-        };
+        var payload = CreatePayload(deviceId, date, hour, minute, shiftCode, totalCount, okCount, ngCount, plcName);
+        var success = await _cloudHttp.PostAsync(_endpointProvider.GetCapacityHourlyPath(), payload).ConfigureAwait(false);
 
-        var success = await _cloudHttp.PostAsync(_endpointProvider.GetCapacityHourlyPath(), payload);
         if (success)
-            _logger.Info($"[CapacitySync] [{plcName}] {date} {hour:D2}:{minute:D2}/{shiftCode} synced. Total:{totalCount}, OK:{okCount}, NG:{ngCount}");
+        {
+            _logger.Info(
+                $"[CapacitySync] [{plcName}] {date} {hour:D2}:{minute:D2}/{shiftCode} synced. Total:{totalCount}, OK:{okCount}, NG:{ngCount}");
+        }
         else
+        {
             _logger.Warn($"[CapacitySync] [{plcName}] {date} {hour:D2}:{minute:D2}/{shiftCode} sync failed.");
+        }
+
+        return success;
     }
 
     public async Task<bool> RetryBufferAsync()
@@ -183,46 +213,114 @@ public class CapacitySyncTask : ICapacitySyncTask
                 return false;
             }
 
-            var summaries = await _bufferStore.GetHourlySummaryAsync().ConfigureAwait(false);
-            if (summaries.Count == 0) return true;
-
             var device = _deviceService.CurrentDevice;
-            if (device is null) return false;
-
-            foreach (var summary in summaries)
+            if (device is null)
             {
-                var endMinute = summary.MinuteBucket == 30 ? 0 : 30;
-                var endHour = summary.MinuteBucket == 30 ? (summary.Hour + 1) % 24 : summary.Hour;
-                var payload = new
-                {
-                    deviceId = device.DeviceId,
-                    date = summary.Date,
-                    hour = summary.Hour,
-                    minute = summary.MinuteBucket,
-                    timeLabel = $"{summary.Hour:D2}:{summary.MinuteBucket:D2}-{endHour:D2}:{endMinute:D2}",
-                    shiftCode = summary.ShiftCode,
-                    totalCount = summary.Total,
-                    okCount = summary.OkCount,
-                    ngCount = summary.NgCount,
-                    plcName = summary.PlcName
-                };
+                return false;
+            }
 
-                var success = await _cloudHttp.PostAsync(_endpointProvider.GetCapacityHourlyPath(), payload);
-                if (!success)
+            while (true)
+            {
+                var claimedBatch = await _bufferStore.ClaimHourlySummaryBatchAsync().ConfigureAwait(false);
+                if (claimedBatch is null || claimedBatch.Summaries.Count == 0)
                 {
-                    _logger.Warn($"[Retry-Cloud] Capacity retry failed: {summary.Date} {summary.Hour:D2}:{summary.MinuteBucket:D2}/{summary.ShiftCode}");
+                    return true;
+                }
+
+                var claimReleased = false;
+                try
+                {
+                    foreach (var summary in claimedBatch.Summaries)
+                    {
+                        var payload = CreatePayload(
+                            device.DeviceId,
+                            summary.Date,
+                            summary.Hour,
+                            summary.MinuteBucket,
+                            summary.ShiftCode,
+                            summary.Total,
+                            summary.OkCount,
+                            summary.NgCount,
+                            summary.PlcName);
+
+                        var success = await _cloudHttp
+                            .PostAsync(_endpointProvider.GetCapacityHourlyPath(), payload)
+                            .ConfigureAwait(false);
+
+                        if (!success)
+                        {
+                            await _bufferStore.ReleaseClaimAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
+                            claimReleased = true;
+                            _logger.Warn(
+                                $"[Retry-Cloud] Capacity retry failed: {summary.Date} {summary.Hour:D2}:{summary.MinuteBucket:D2}/{summary.ShiftCode}");
+                            return false;
+                        }
+
+                        await _bufferStore.DeleteClaimedSummaryAsync(
+                            claimedBatch.ClaimToken,
+                            summary.Date,
+                            summary.Hour,
+                            summary.MinuteBucket,
+                            summary.ShiftCode,
+                            summary.PlcName).ConfigureAwait(false);
+                    }
+
+                    _logger.Info(
+                        $"[Retry-Cloud] Capacity retry completed for claim {claimedBatch.ClaimToken}. Rows:{claimedBatch.Summaries.Count}");
+                }
+                catch (Exception ex)
+                {
+                    if (!claimReleased)
+                    {
+                        try
+                        {
+                            await _bufferStore.ReleaseClaimAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
+                        }
+                        catch (Exception releaseEx)
+                        {
+                            _logger.Error(
+                                $"[Retry-Cloud] Failed to release capacity claim {claimedBatch.ClaimToken}: {releaseEx.Message}");
+                        }
+                    }
+
+                    _logger.Error($"[Retry-Cloud] Capacity retry failed with exception: {ex.Message}");
                     return false;
                 }
             }
-
-            await _bufferStore.ClearAllAsync().ConfigureAwait(false);
-            _logger.Info($"[Retry-Cloud] Capacity retry completed. Cleared {summaries.Count} summary row(s).");
-            return true;
         }
         finally
         {
             _syncGate.Release();
         }
+    }
+
+    private object CreatePayload(
+        Guid deviceId,
+        string date,
+        int hour,
+        int minute,
+        string shiftCode,
+        int totalCount,
+        int okCount,
+        int ngCount,
+        string plcName)
+    {
+        var endMinute = minute == 30 ? 0 : 30;
+        var endHour = minute == 30 ? (hour + 1) % 24 : hour;
+
+        return new
+        {
+            deviceId,
+            date,
+            hour,
+            minute,
+            timeLabel = $"{hour:D2}:{minute:D2}-{endHour:D2}:{endMinute:D2}",
+            shiftCode,
+            totalCount,
+            okCount,
+            ngCount,
+            plcName
+        };
     }
 
     private string GetShiftCodeByTime(int hour, int minute)

@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 
 namespace IIoT.Edge.Infrastructure.Integration.Config;
@@ -10,14 +9,11 @@ namespace IIoT.Edge.Infrastructure.Integration.Config;
 public class CloudApiEndpointProvider : ICloudApiEndpointProvider
 {
     private readonly IOptionsMonitor<CloudApiConfig> _cloudApiOptions;
-    private readonly IConfiguration _configuration;
 
     public CloudApiEndpointProvider(
-        IOptionsMonitor<CloudApiConfig> cloudApiOptions,
-        IConfiguration configuration)
+        IOptionsMonitor<CloudApiConfig> cloudApiOptions)
     {
         _cloudApiOptions = cloudApiOptions;
-        _configuration = configuration;
     }
 
     public string BuildUrl(string relativeOrAbsoluteUrl)
@@ -41,39 +37,38 @@ public class CloudApiEndpointProvider : ICloudApiEndpointProvider
         if (!string.IsNullOrWhiteSpace(configured))
             return configured;
 
-        var instanceId = _configuration["InstanceId"]?.Trim();
-        if (!string.IsNullOrWhiteSpace(instanceId))
-            return instanceId;
-
-        throw new InvalidOperationException("Missing config: CloudApi:ClientCode or InstanceId");
+        throw new InvalidOperationException("Missing config: CloudApi:ClientCode");
     }
 
     public string GetDeviceInstancePath()
-        => ResolvePath(_cloudApiOptions.CurrentValue.Paths.DeviceInstance, "/api/v1/Device/instance");
+        => ResolvePath(_cloudApiOptions.CurrentValue.Paths.DeviceInstance, "/api/v1/edge/bootstrap/device-instance");
 
     public string GetIdentityDeviceLoginPath()
-        => ResolvePath(_cloudApiOptions.CurrentValue.Paths.IdentityDeviceLogin, "/api/v1/Identity/device-login");
+        => ResolvePath(_cloudApiOptions.CurrentValue.Paths.IdentityDeviceLogin, "/api/v1/human/identity/edge-login");
 
     public string GetPassStationInjectionBatchPath()
-        => ResolvePath(_cloudApiOptions.CurrentValue.Paths.PassStationInjectionBatch, "/api/v1/PassStation/injection/batch");
+        => ResolvePath(_cloudApiOptions.CurrentValue.Paths.PassStationInjectionBatch, "/api/v1/edge/pass-stations/injection/batch");
+
+    public string GetPassStationStackingPath()
+        => ResolvePath(_cloudApiOptions.CurrentValue.Paths.PassStationStackingPath, "/api/v1/edge/pass-stations/stacking");
 
     public string GetDeviceLogPath()
-        => ResolvePath(_cloudApiOptions.CurrentValue.Paths.DeviceLog, "/api/v1/DeviceLog");
+        => ResolvePath(_cloudApiOptions.CurrentValue.Paths.DeviceLog, "/api/v1/edge/device-logs");
 
     public string GetCapacityHourlyPath()
-        => ResolvePath(_cloudApiOptions.CurrentValue.Paths.CapacityHourly, "/api/v1/Capacity/hourly");
+        => ResolvePath(_cloudApiOptions.CurrentValue.Paths.CapacityHourly, "/api/v1/edge/capacity/hourly");
 
     public string GetCapacitySummaryPath()
-        => ResolvePath(_cloudApiOptions.CurrentValue.Paths.CapacitySummary, "/api/v1/Capacity/summary");
+        => ResolvePath(_cloudApiOptions.CurrentValue.Paths.CapacitySummary, "/api/v1/edge/capacity/summary");
 
     public string GetCapacitySummaryRangePath()
-        => ResolvePath(_cloudApiOptions.CurrentValue.Paths.CapacitySummaryRange, "/api/v1/Capacity/summary/range");
+        => ResolvePath(_cloudApiOptions.CurrentValue.Paths.CapacitySummaryRange, "/api/v1/edge/capacity/summary/range");
 
     public string BuildRecipeByDevicePath(Guid deviceId)
     {
         var template = ResolvePath(
             _cloudApiOptions.CurrentValue.Paths.RecipeByDeviceTemplate,
-            "/api/v1/Recipe/device/{deviceId}");
+            "/api/v1/edge/recipes/device/{deviceId}");
 
         return template.Replace("{deviceId}", deviceId.ToString(), StringComparison.OrdinalIgnoreCase);
     }

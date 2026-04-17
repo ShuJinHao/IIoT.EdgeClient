@@ -11,7 +11,7 @@ public sealed class FakeDeviceService : IDeviceService
     {
         DeviceId  = Guid.Parse("11111111-1111-1111-1111-111111111111"),
         DeviceName = "TestDevice",
-        MacAddress = "AA-BB-CC-DD-EE-FF",
+        ClientCode = "SIM-CLIENT-01",
         ProcessId  = Guid.Parse("22222222-2222-2222-2222-222222222222")
     };
 
