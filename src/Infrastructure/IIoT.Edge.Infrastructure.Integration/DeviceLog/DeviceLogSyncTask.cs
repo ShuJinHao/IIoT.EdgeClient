@@ -58,8 +58,10 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
             }
 
             _isRunning = true;
-            _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            _loopTask = Task.Run(() => SyncLoopAsync(_cts.Token), CancellationToken.None);
+
+            var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            _cts = linkedCts;
+            _loopTask = Task.Run(() => SyncLoopAsync(linkedCts.Token), CancellationToken.None);
         }
 
         _logger.Info("[DeviceLogSync] Started. Interval: 60s");
