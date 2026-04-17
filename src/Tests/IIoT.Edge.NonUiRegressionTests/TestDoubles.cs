@@ -251,6 +251,49 @@ internal sealed class FakeCloudFallbackBufferStore : ICloudFallbackBufferStore
     public Task<int> GetCountAsync() => Task.FromResult(Records.Count);
 }
 
+internal sealed class FakeMesFallbackBufferStore : IMesFallbackBufferStore
+{
+    public List<MesFallbackRecord> Records { get; } = new();
+    public List<long> DeletedIds { get; } = new();
+    public int SaveCallCount { get; private set; }
+    public Exception? SaveException { get; set; }
+
+    public Task SaveAsync(CellCompletedRecord record, string failedTarget, string errorMessage)
+    {
+        SaveCallCount++;
+
+        if (SaveException is not null)
+        {
+            throw SaveException;
+        }
+
+        Records.Add(new MesFallbackRecord
+        {
+            Id = Records.Count == 0 ? 1 : Records.Max(x => x.Id) + 1,
+            ProcessType = record.CellData.ProcessType,
+            CellDataJson = "{}",
+            FailedTarget = failedTarget,
+            ErrorMessage = errorMessage,
+            CreatedAt = DateTime.Now
+        });
+
+        return Task.CompletedTask;
+    }
+
+    public Task<List<MesFallbackRecord>> GetPendingAsync(int batchSize = 50)
+        => Task.FromResult(Records.OrderBy(x => x.Id).Take(batchSize).ToList());
+
+    public Task DeleteBatchAsync(IEnumerable<long> ids)
+    {
+        var idList = ids.ToList();
+        DeletedIds.AddRange(idList);
+        Records.RemoveAll(x => idList.Contains(x.Id));
+        return Task.CompletedTask;
+    }
+
+    public Task<int> GetCountAsync() => Task.FromResult(Records.Count);
+}
+
 internal sealed class FakeDeviceLogBufferStore : IDeviceLogBufferStore
 {
     private readonly Dictionary<string, List<long>> _claims = new(StringComparer.OrdinalIgnoreCase);
@@ -260,9 +303,15 @@ internal sealed class FakeDeviceLogBufferStore : IDeviceLogBufferStore
     public List<long> DeletedIds { get; } = new();
     public List<string> DeletedClaimTokens { get; } = new();
     public List<string> ReleasedClaimTokens { get; } = new();
+    public Exception? SaveBatchException { get; set; }
 
     public Task SaveBatchAsync(IEnumerable<DeviceLogRecord> records)
     {
+        if (SaveBatchException is not null)
+        {
+            throw SaveBatchException;
+        }
+
         var nextId = Records.Count == 0 ? 1 : Records.Max(x => x.Id) + 1;
         foreach (var record in records)
         {

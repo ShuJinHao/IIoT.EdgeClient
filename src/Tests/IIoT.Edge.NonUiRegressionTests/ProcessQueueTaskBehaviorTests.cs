@@ -14,6 +14,7 @@ public sealed class ProcessQueueTaskBehaviorTests
         var pipeline = new FakeDataPipelineService();
         var failedStore = new FakeFailedRecordStore();
         var fallbackStore = new FakeCloudFallbackBufferStore();
+        var mesFallbackStore = new FakeMesFallbackBufferStore();
         pipeline.Enqueue(CreateRecord());
 
         var cloudConsumer = new FakeCellDataConsumer(
@@ -23,7 +24,7 @@ public sealed class ProcessQueueTaskBehaviorTests
             result: false,
             failureMode: ConsumerFailureMode.Durable);
 
-        var task = new TestableProcessQueueTask(logger, pipeline, [cloudConsumer], failedStore, fallbackStore);
+        var task = new TestableProcessQueueTask(logger, pipeline, [cloudConsumer], failedStore, fallbackStore, mesFallbackStore);
 
         await task.ExecuteOnceAsync();
 
@@ -40,6 +41,7 @@ public sealed class ProcessQueueTaskBehaviorTests
         var pipeline = new FakeDataPipelineService();
         var failedStore = new FakeFailedRecordStore();
         var fallbackStore = new FakeCloudFallbackBufferStore();
+        var mesFallbackStore = new FakeMesFallbackBufferStore();
         pipeline.Enqueue(CreateRecord());
 
         var uiConsumer = new FakeCellDataConsumer(
@@ -56,7 +58,7 @@ public sealed class ProcessQueueTaskBehaviorTests
             result: false,
             failureMode: ConsumerFailureMode.Durable);
 
-        var task = new TestableProcessQueueTask(logger, pipeline, [uiConsumer, cloudConsumer], failedStore, fallbackStore);
+        var task = new TestableProcessQueueTask(logger, pipeline, [uiConsumer, cloudConsumer], failedStore, fallbackStore, mesFallbackStore);
 
         await task.ExecuteOnceAsync();
 
@@ -77,6 +79,7 @@ public sealed class ProcessQueueTaskBehaviorTests
             SaveException = new InvalidOperationException("db down")
         };
         var fallbackStore = new FakeCloudFallbackBufferStore();
+        var mesFallbackStore = new FakeMesFallbackBufferStore();
         pipeline.Enqueue(CreateRecord());
 
         var cloudConsumer = new FakeCellDataConsumer(
@@ -86,7 +89,7 @@ public sealed class ProcessQueueTaskBehaviorTests
             result: false,
             failureMode: ConsumerFailureMode.Durable);
 
-        var task = new TestableProcessQueueTask(logger, pipeline, [cloudConsumer], failedStore, fallbackStore);
+        var task = new TestableProcessQueueTask(logger, pipeline, [cloudConsumer], failedStore, fallbackStore, mesFallbackStore);
 
         await task.ExecuteOnceAsync();
 
@@ -94,6 +97,36 @@ public sealed class ProcessQueueTaskBehaviorTests
         Assert.Single(fallbackStore.Records);
         Assert.Equal("Cloud", fallbackStore.Records[0].FailedTarget);
         Assert.Contains(logger.Entries, x => x.Message.Contains("Cloud fallback buffer", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task MesRetryStoreFailure_ShouldWriteToMesFallbackBuffer()
+    {
+        var logger = new FakeLogService();
+        var pipeline = new FakeDataPipelineService();
+        var failedStore = new FakeFailedRecordStore
+        {
+            SaveException = new InvalidOperationException("db down")
+        };
+        var fallbackStore = new FakeCloudFallbackBufferStore();
+        var mesFallbackStore = new FakeMesFallbackBufferStore();
+        pipeline.Enqueue(CreateRecord());
+
+        var mesConsumer = new FakeCellDataConsumer(
+            name: "MES",
+            order: 10,
+            retryChannel: "MES",
+            result: false,
+            failureMode: ConsumerFailureMode.Durable);
+
+        var task = new TestableProcessQueueTask(logger, pipeline, [mesConsumer], failedStore, fallbackStore, mesFallbackStore);
+
+        await task.ExecuteOnceAsync();
+
+        Assert.Equal(1, failedStore.SaveCallCount);
+        Assert.Single(mesFallbackStore.Records);
+        Assert.Equal("MES", mesFallbackStore.Records[0].FailedTarget);
+        Assert.Contains(logger.Entries, x => x.Message.Contains("MES fallback buffer", StringComparison.Ordinal));
     }
 
     private static CellCompletedRecord CreateRecord()
@@ -115,8 +148,9 @@ public sealed class ProcessQueueTaskBehaviorTests
         FakeDataPipelineService pipelineService,
         IEnumerable<ICellDataConsumer> consumers,
         FakeFailedRecordStore failedStore,
-        FakeCloudFallbackBufferStore fallbackStore)
-        : ProcessQueueTask(logger, pipelineService, consumers, failedStore, fallbackStore)
+        FakeCloudFallbackBufferStore fallbackStore,
+        FakeMesFallbackBufferStore mesFallbackStore)
+        : ProcessQueueTask(logger, pipelineService, consumers, failedStore, fallbackStore, mesFallbackStore)
     {
         public Task ExecuteOnceAsync() => base.ExecuteAsync();
     }

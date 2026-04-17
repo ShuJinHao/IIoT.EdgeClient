@@ -6,7 +6,6 @@ using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Common.Models;
 using IIoT.Edge.Infrastructure.Integration.Config;
 using IIoT.Edge.SharedKernel.DataPipeline.DeviceLog;
-using System.Collections.Concurrent;
 
 namespace IIoT.Edge.Infrastructure.Integration.DeviceLog;
 
@@ -17,9 +16,10 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
     private readonly IDeviceService _deviceService;
     private readonly IDeviceLogBufferStore _bufferStore;
     private readonly ILogService _logger;
-    private readonly ConcurrentQueue<LogItem> _queue = new();
+    private readonly object _queueLock = new();
     private readonly object _lifecycleLock = new();
     private readonly SemaphoreSlim _syncGate = new(1, 1);
+    private Queue<LogItem> _queue = new();
     private CancellationTokenSource? _cts;
     private Task? _loopTask;
     private bool _isRunning;
@@ -124,12 +124,15 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
 
     private void OnLogEntryAdded(LogEntry entry)
     {
-        _queue.Enqueue(new LogItem
+        lock (_queueLock)
         {
-            Level = entry.Level,
-            Message = entry.Message,
-            LogTime = entry.Time
-        });
+            _queue.Enqueue(new LogItem
+            {
+                Level = entry.Level,
+                Message = entry.Message,
+                LogTime = entry.Time
+            });
+        }
     }
 
     private async Task SyncLoopAsync(CancellationToken ct)
@@ -267,18 +270,43 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
             return;
         }
 
-        await SaveToBufferAsync(remaining).ConfigureAwait(false);
+        try
+        {
+            await SaveToBufferAsync(remaining).ConfigureAwait(false);
+        }
+        catch
+        {
+            RequeueToFront(remaining);
+            throw;
+        }
     }
 
     private List<LogItem> DrainQueue()
     {
-        var list = new List<LogItem>();
-        while (_queue.TryDequeue(out var item))
+        lock (_queueLock)
         {
-            list.Add(item);
+            if (_queue.Count == 0)
+            {
+                return [];
+            }
+
+            var list = _queue.ToList();
+            _queue.Clear();
+            return list;
+        }
+    }
+
+    private void RequeueToFront(List<LogItem> items)
+    {
+        if (items.Count == 0)
+        {
+            return;
         }
 
-        return list;
+        lock (_queueLock)
+        {
+            _queue = new Queue<LogItem>(items.Concat(_queue));
+        }
     }
 
     public async Task<bool> RetryBufferAsync()

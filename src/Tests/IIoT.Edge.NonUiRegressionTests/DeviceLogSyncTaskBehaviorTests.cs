@@ -144,4 +144,40 @@ public sealed class DeviceLogSyncTaskBehaviorTests
         Assert.True(bufferStore.Records.Count >= 1);
         Assert.Contains(bufferStore.Records, x => x.Message == "queued-log");
     }
+
+    [Fact]
+    public async Task StopAsync_WhenBufferSaveFails_ShouldRetainQueuedLogsInOrder()
+    {
+        var logger = new FakeLogService();
+        var bufferStore = new FakeDeviceLogBufferStore
+        {
+            SaveBatchException = new InvalidOperationException("db locked")
+        };
+        var task = new DeviceLogSyncTask(
+            new FakeCloudHttpClient(),
+            new FakeCloudApiEndpointProvider(),
+            new FakeDeviceService(),
+            bufferStore,
+            logger);
+
+        using var cts = new CancellationTokenSource();
+        await task.StartAsync(cts.Token);
+        logger.Info("first-log");
+        logger.Info("second-log");
+
+        await task.StopAsync();
+
+        Assert.Empty(bufferStore.Records);
+
+        bufferStore.SaveBatchException = null;
+        await task.StartAsync(CancellationToken.None);
+        await task.StopAsync();
+
+        Assert.Equal(
+            ["first-log", "second-log"],
+            bufferStore.Records
+                .Where(x => x.Message.EndsWith("-log", StringComparison.Ordinal))
+                .Select(x => x.Message)
+                .ToArray());
+    }
 }

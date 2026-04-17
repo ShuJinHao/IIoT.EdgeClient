@@ -17,6 +17,7 @@ public class RetryTask : ScheduledTaskBase
     private readonly string _channel;
     private readonly IFailedRecordStore _failedStore;
     private readonly ICloudFallbackBufferStore? _cloudFallbackStore;
+    private readonly IMesFallbackBufferStore? _mesFallbackStore;
     private readonly IDeviceService _deviceService;
     private readonly List<ICellDataConsumer> _consumers;
     private readonly ICloudBatchConsumer? _cloudBatchConsumer;
@@ -45,6 +46,7 @@ public class RetryTask : ScheduledTaskBase
         ICapacitySyncTask? capacitySync = null,
         ICloudBatchConsumer? cloudBatchConsumer = null,
         ICloudFallbackBufferStore? cloudFallbackStore = null,
+        IMesFallbackBufferStore? mesFallbackStore = null,
         IProcessIntegrationRegistry? processIntegrationRegistry = null)
         : base(logger)
     {
@@ -56,6 +58,7 @@ public class RetryTask : ScheduledTaskBase
         _capacitySync = capacitySync;
         _cloudBatchConsumer = cloudBatchConsumer;
         _cloudFallbackStore = cloudFallbackStore;
+        _mesFallbackStore = mesFallbackStore;
         _processIntegrationRegistry = processIntegrationRegistry;
     }
 
@@ -77,6 +80,12 @@ public class RetryTask : ScheduledTaskBase
             }
 
             await RecoverCloudFallbackRecordsAsync();
+        }
+        else if (_channel == "MES"
+            && _deviceService.CurrentState == NetworkState.Online
+            && _deviceService.HasDeviceId)
+        {
+            await RecoverMesFallbackRecordsAsync();
         }
 
         await RetryFailedCellRecordsAsync();
@@ -157,6 +166,53 @@ public class RetryTask : ScheduledTaskBase
         {
             await _cloudFallbackStore.DeleteBatchAsync(recoveredIds).ConfigureAwait(false);
             Logger.Info($"[Retry-{_channel}] Recovered {recoveredIds.Count} Cloud fallback record(s) into the main retry store.");
+        }
+    }
+
+    private async Task RecoverMesFallbackRecordsAsync()
+    {
+        if (_mesFallbackStore is null)
+        {
+            return;
+        }
+
+        var pending = await _mesFallbackStore.GetPendingAsync().ConfigureAwait(false);
+        if (pending.Count == 0)
+        {
+            return;
+        }
+
+        var recoveredIds = new List<long>();
+        foreach (var fallback in pending)
+        {
+            var cellData = DeserializeCellData(fallback.ProcessType, fallback.CellDataJson);
+            if (cellData is null)
+            {
+                Logger.Error($"[Retry-{_channel}] MES fallback deserialize failed for process type {fallback.ProcessType}. Delete record.");
+                recoveredIds.Add(fallback.Id);
+                continue;
+            }
+
+            try
+            {
+                await _failedStore.SaveAsync(
+                    new CellCompletedRecord { CellData = cellData },
+                    fallback.FailedTarget,
+                    fallback.ErrorMessage,
+                    "MES").ConfigureAwait(false);
+                recoveredIds.Add(fallback.Id);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"[Retry-{_channel}] Failed to rehydrate MES fallback record {fallback.Id}: {ex.Message}");
+                break;
+            }
+        }
+
+        if (recoveredIds.Count > 0)
+        {
+            await _mesFallbackStore.DeleteBatchAsync(recoveredIds).ConfigureAwait(false);
+            Logger.Info($"[Retry-{_channel}] Recovered {recoveredIds.Count} MES fallback record(s) into the main retry store.");
         }
     }
 

@@ -209,7 +209,8 @@ public sealed class RetryTaskCloudMesBehaviorTests
             new FakeLogService(),
             failedStore,
             CreateOnlineDeviceService(),
-            consumers: [cloudConsumer, mesPrimary, mesSecondary]);
+            consumers: [cloudConsumer, mesPrimary, mesSecondary],
+            mesFallbackStore: new FakeMesFallbackBufferStore());
 
         await task.ExecuteOnceAsync();
 
@@ -235,13 +236,47 @@ public sealed class RetryTaskCloudMesBehaviorTests
             new FakeLogService(),
             failedStore,
             CreateOnlineDeviceService(),
-            consumers: [mesPrimary]);
+            consumers: [mesPrimary],
+            mesFallbackStore: new FakeMesFallbackBufferStore());
 
         await task.ExecuteOnceAsync();
 
         Assert.Equal(0, mesPrimary.ProcessCallCount);
         Assert.Contains(22L, failedStore.DeletedIds);
         Assert.Empty(failedStore.Updates);
+    }
+
+    [Fact]
+    public async Task MesChannel_ShouldRecoverFallbackRecordsIntoMainRetryStore()
+    {
+        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+
+        var failedStore = new FakeFailedRecordStore();
+        var mesFallbackStore = new FakeMesFallbackBufferStore();
+        mesFallbackStore.Records.Add(new MesFallbackRecord
+        {
+            Id = 100,
+            ProcessType = "Injection",
+            CellDataJson = SerializeCellData(new InjectionCellData { Barcode = "BC-MES-100", WorkOrderNo = "WO-MES-100" }),
+            FailedTarget = "MES",
+            ErrorMessage = "seed",
+            CreatedAt = DateTime.Now.AddMinutes(-5)
+        });
+        var mesConsumer = new FakeCellDataConsumer("MES", 10, "MES", result: true);
+
+        var task = new TestableRetryTask(
+            channel: "MES",
+            new FakeLogService(),
+            failedStore,
+            CreateOnlineDeviceService(),
+            consumers: [mesConsumer],
+            mesFallbackStore: mesFallbackStore);
+
+        await task.ExecuteOnceAsync();
+
+        Assert.Contains(100L, mesFallbackStore.DeletedIds);
+        Assert.Equal(1, failedStore.SaveCallCount);
+        Assert.Equal(1, mesConsumer.ProcessCallCount);
     }
 
     [Fact]
@@ -328,6 +363,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         IDeviceLogSyncTask? deviceLogSync = null,
         ICapacitySyncTask? capacitySync = null,
         ICloudBatchConsumer? cloudBatchConsumer = null,
+        IMesFallbackBufferStore? mesFallbackStore = null,
         IProcessIntegrationRegistry? processIntegrationRegistry = null)
         : RetryTask(
             channel,
@@ -338,6 +374,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
             deviceLogSync,
             capacitySync,
             cloudBatchConsumer,
+            mesFallbackStore: mesFallbackStore,
             processIntegrationRegistry: processIntegrationRegistry)
     {
         public Task ExecuteOnceAsync() => base.ExecuteAsync();

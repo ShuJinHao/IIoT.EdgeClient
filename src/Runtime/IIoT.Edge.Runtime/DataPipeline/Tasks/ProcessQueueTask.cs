@@ -12,6 +12,7 @@ public class ProcessQueueTask : ScheduledTaskBase
     private readonly List<ICellDataConsumer> _consumers;
     private readonly IFailedRecordStore _failedStore;
     private readonly ICloudFallbackBufferStore _cloudFallbackStore;
+    private readonly IMesFallbackBufferStore _mesFallbackStore;
 
     public override string TaskName => "ProcessQueueTask";
     protected override int ExecuteInterval => 50;
@@ -21,12 +22,14 @@ public class ProcessQueueTask : ScheduledTaskBase
         IDataPipelineService pipelineService,
         IEnumerable<ICellDataConsumer> consumers,
         IFailedRecordStore failedStore,
-        ICloudFallbackBufferStore cloudFallbackStore)
+        ICloudFallbackBufferStore cloudFallbackStore,
+        IMesFallbackBufferStore mesFallbackStore)
         : base(logger)
     {
         _pipelineService = pipelineService;
         _failedStore = failedStore;
         _cloudFallbackStore = cloudFallbackStore;
+        _mesFallbackStore = mesFallbackStore;
         _consumers = consumers.OrderBy(c => c.Order).ToList();
     }
 
@@ -92,6 +95,12 @@ public class ProcessQueueTask : ScheduledTaskBase
             if (string.Equals(consumer.RetryChannel, "Cloud", StringComparison.OrdinalIgnoreCase))
             {
                 await TryPersistCloudFallbackAsync(record, consumer.Name, errorMessage);
+                return;
+            }
+
+            if (string.Equals(consumer.RetryChannel, "MES", StringComparison.OrdinalIgnoreCase))
+            {
+                await TryPersistMesFallbackAsync(record, consumer.Name, errorMessage);
             }
         }
     }
@@ -111,6 +120,24 @@ public class ProcessQueueTask : ScheduledTaskBase
         catch (Exception fallbackEx)
         {
             Logger.Fatal($"[{record.CellData.ProcessType}] Cloud fallback buffer also failed for {label}: {fallbackEx.Message}");
+        }
+    }
+
+    private async Task TryPersistMesFallbackAsync(
+        CellCompletedRecord record,
+        string failedTarget,
+        string errorMessage)
+    {
+        var label = record.CellData.DisplayLabel;
+
+        try
+        {
+            await _mesFallbackStore.SaveAsync(record, failedTarget, errorMessage).ConfigureAwait(false);
+            Logger.Error($"[{record.CellData.ProcessType}] Main retry store unavailable. Persisted {label} to MES fallback buffer.");
+        }
+        catch (Exception fallbackEx)
+        {
+            Logger.Fatal($"[{record.CellData.ProcessType}] MES fallback buffer also failed for {label}: {fallbackEx.Message}");
         }
     }
 }

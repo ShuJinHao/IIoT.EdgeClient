@@ -51,6 +51,7 @@ public static class DependencyInjection
             sp.GetRequiredService<ICapacitySyncTask>(),
             sp.GetService<ICloudBatchConsumer>(),
             sp.GetRequiredService<ICloudFallbackBufferStore>(),
+            sp.GetRequiredService<IMesFallbackBufferStore>(),
             sp.GetService<IProcessIntegrationRegistry>()));
 
         services.AddSingleton<RetryTask>(sp => new RetryTask(
@@ -58,6 +59,7 @@ public static class DependencyInjection
             sp.GetRequiredService<ILogService>(),
             sp.GetRequiredService<IFailedRecordStore>(),
             sp.GetRequiredService<IDeviceService>(),
-            sp.GetServices<ICellDataConsumer>()));
+            sp.GetServices<ICellDataConsumer>(),
+            mesFallbackStore: sp.GetRequiredService<IMesFallbackBufferStore>()));
     }
 }
