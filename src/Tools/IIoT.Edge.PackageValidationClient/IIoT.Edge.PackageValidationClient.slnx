@@ -1,0 +1,6 @@
+﻿<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/IIoT.Edge.PackageValidationClient/IIoT.Edge.PackageValidationClient.csproj" />
+  </Folder>
+</Solution>
+

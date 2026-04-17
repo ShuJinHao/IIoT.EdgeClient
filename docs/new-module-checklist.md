@@ -2,6 +2,8 @@
 
 Use this checklist whenever a new device/process module is added under `src/Modules`.
 
+Do not place runnable developer tools or sample shells under `src/Tests`; those belong in `src/Tools`.
+
 ## Required implementation pieces
 
 - Module entry implementing `IEdgeStationModule`

@@ -27,7 +27,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\IIoT.Edge.Host.Bootstrap\IIoT.Edge.Host.Bootstrap.csproj" />
-    <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.DryRun\IIoT.Edge.Module.DryRun.csproj" />
+    <ProjectReference Include="..\..\Tools\ModuleSamples\IIoT.Edge.Module.DryRun\IIoT.Edge.Module.DryRun.csproj" />
     <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.Injection\IIoT.Edge.Module.Injection.csproj" />
     <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.Stacking\IIoT.Edge.Module.Stacking.csproj" />
     <ProjectReference Include="..\..\Presentation\IIoT.Edge.Presentation.Shell\IIoT.Edge.Presentation.Shell.csproj" />

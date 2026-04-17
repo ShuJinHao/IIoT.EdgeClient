@@ -32,7 +32,7 @@ $sdkProjects = @(
 )
 
 $moduleProjects = @(
-    'src\Modules\IIoT.Edge.Module.DryRun\IIoT.Edge.Module.DryRun.csproj',
+    'src\Tools\ModuleSamples\IIoT.Edge.Module.DryRun\IIoT.Edge.Module.DryRun.csproj',
     'src\Modules\IIoT.Edge.Module.Injection\IIoT.Edge.Module.Injection.csproj',
     'src\Modules\IIoT.Edge.Module.Stacking\IIoT.Edge.Module.Stacking.csproj'
 )

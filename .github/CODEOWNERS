@@ -3,6 +3,6 @@
 /src/Edge/IIoT.Edge.Host.Bootstrap/ @ShuJinHao
 /src/Shared/IIoT.Edge.Module.Abstractions/ @ShuJinHao
 /src/Tests/IIoT.Edge.Module.ContractTests/ @ShuJinHao
-/src/Modules/IIoT.Edge.Module.DryRun/ @ShuJinHao
 /src/Modules/IIoT.Edge.Module.Injection/ @ShuJinHao
 /src/Modules/IIoT.Edge.Module.Stacking/ @ShuJinHao
+/src/Tools/ @ShuJinHao

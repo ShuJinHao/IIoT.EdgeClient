@@ -1,0 +1,18 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageVersion Include="IIoT.Edge.Host.Bootstrap" Version="1.0.0-preview.1" />
+    <PackageVersion Include="IIoT.Edge.Module.Abstractions" Version="1.0.0-preview.1" />
+    <PackageVersion Include="IIoT.Edge.Module.DryRun" Version="1.0.0-preview.1" />
+    <PackageVersion Include="IIoT.Edge.Module.Injection" Version="1.0.0-preview.1" />
+    <PackageVersion Include="IIoT.Edge.Module.Stacking" Version="1.0.0-preview.1" />
+    <PackageVersion Include="IIoT.Edge.Presentation.Panels" Version="1.0.0-preview.1" />
+    <PackageVersion Include="IIoT.Edge.Presentation.Shell" Version="1.0.0-preview.1" />
+    <PackageVersion Include="IIoT.Edge.UI.Shared" Version="1.0.0-preview.1" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.5" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.5" />
+  </ItemGroup>
+</Project>

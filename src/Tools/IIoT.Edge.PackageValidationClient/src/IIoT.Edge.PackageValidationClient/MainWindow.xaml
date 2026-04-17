@@ -1,0 +1,142 @@
+﻿<Window
+    x:Class="IIoT.Edge.PackageValidationClient.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:avalon="https://github.com/Dirkster99/AvalonDock"
+    xmlns:equipment="clr-namespace:IIoT.Edge.Presentation.Panels.Features.Equipment;assembly=IIoT.Edge.Presentation.Panels"
+    xmlns:footerVM="clr-namespace:IIoT.Edge.Presentation.Shell.Features.Footer;assembly=IIoT.Edge.Presentation.Shell"
+    xmlns:headerVM="clr-namespace:IIoT.Edge.Presentation.Shell.Features.Header;assembly=IIoT.Edge.Presentation.Shell"
+    xmlns:loginVM="clr-namespace:IIoT.Edge.Presentation.Shell.Features.Login;assembly=IIoT.Edge.Presentation.Shell"
+    xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+    xmlns:sysLog="clr-namespace:IIoT.Edge.Presentation.Panels.Features.SysLog;assembly=IIoT.Edge.Presentation.Panels"
+    xmlns:sysMenuVM="clr-namespace:IIoT.Edge.Presentation.Shell.Features.SysMenu;assembly=IIoT.Edge.Presentation.Shell"
+    Title="IIoT Edge Package Validation Tool"
+    Width="1280"
+    Height="768"
+    MinWidth="900"
+    MinHeight="600"
+    AllowsTransparency="True"
+    Background="#121212"
+    Foreground="#EAEAEA"
+    WindowStartupLocation="CenterScreen"
+    WindowStyle="None">
+
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="pack://application:,,,/IIoT.Edge.UI.Shared;component/Theme.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Border
+        materialDesign:ElevationAssist.Elevation="Dp8"
+        Background="#121212"
+        CornerRadius="8">
+
+        <materialDesign:DialogHost
+            CloseOnClickAway="True"
+            DialogTheme="Dark"
+            Identifier="RootDialog">
+            <materialDesign:DialogHost.DialogContent>
+                <loginVM:LoginView DataContext="{Binding LoginViewModel}" />
+            </materialDesign:DialogHost.DialogContent>
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="220" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="45" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="30" />
+                </Grid.RowDefinitions>
+
+                <Border
+                    Grid.Row="0"
+                    Grid.RowSpan="3"
+                    Grid.Column="0"
+                    Background="#18181B"
+                    BorderBrush="#27272A"
+                    BorderThickness="0,0,1,0"
+                    CornerRadius="8,0,0,8">
+                    <sysMenuVM:SysMenuView DataContext="{Binding SysMenuViewModel}" />
+                </Border>
+
+                <ContentControl
+                    Grid.Row="0"
+                    Grid.Column="1"
+                    Content="{Binding HeaderViewModel}">
+                    <ContentControl.ContentTemplate>
+                        <DataTemplate>
+                            <headerVM:HeaderView />
+                        </DataTemplate>
+                    </ContentControl.ContentTemplate>
+                </ContentControl>
+
+                <avalon:DockingManager
+                    Grid.Row="1"
+                    Grid.Column="1"
+                    Background="#121212"
+                    BorderThickness="0">
+                    <avalon:LayoutRoot>
+                        <avalon:LayoutPanel Orientation="Horizontal">
+
+                            <avalon:LayoutDocumentPane ShowHeader="False">
+                                <avalon:LayoutDocument
+                                    Title="Main Workspace"
+                                    CanClose="False"
+                                    CanFloat="False">
+                                    <Border Background="#1E1E1E">
+                                        <ContentControl Content="{Binding CurrentView}" />
+                                    </Border>
+                                </avalon:LayoutDocument>
+                            </avalon:LayoutDocumentPane>
+
+                            <avalon:LayoutAnchorablePaneGroup DockWidth="320" Orientation="Vertical">
+
+                                <avalon:LayoutAnchorablePane>
+                                    <avalon:LayoutAnchorable
+                                        Title="Device Info"
+                                        CanAutoHide="False"
+                                        CanClose="False"
+                                        CanFloat="False"
+                                        CanHide="False">
+                                        <equipment:EquipmentView DataContext="{Binding EquipmentViewModel}" />
+                                    </avalon:LayoutAnchorable>
+                                </avalon:LayoutAnchorablePane>
+
+                                <avalon:LayoutAnchorablePane>
+                                    <avalon:LayoutAnchorable
+                                        Title="System Log"
+                                        CanAutoHide="False"
+                                        CanClose="False"
+                                        CanFloat="False"
+                                        CanHide="False">
+                                        <sysLog:LogView DataContext="{Binding LogViewModel}" />
+                                    </avalon:LayoutAnchorable>
+                                </avalon:LayoutAnchorablePane>
+
+                            </avalon:LayoutAnchorablePaneGroup>
+
+                        </avalon:LayoutPanel>
+                    </avalon:LayoutRoot>
+                </avalon:DockingManager>
+
+                <ContentControl
+                    Grid.Row="2"
+                    Grid.Column="1"
+                    Content="{Binding FooterViewModel}">
+                    <ContentControl.ContentTemplate>
+                        <DataTemplate>
+                            <footerVM:FooterView />
+                        </DataTemplate>
+                    </ContentControl.ContentTemplate>
+                </ContentControl>
+
+            </Grid>
+        </materialDesign:DialogHost>
+    </Border>
+</Window>
+

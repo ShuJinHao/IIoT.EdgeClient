@@ -7,7 +7,8 @@ This repository is the single collaboration entry point for the Edge client duri
 - Keep one GitHub repository: `IIoT.EdgeClient`.
 - Keep the host boundary inside `src/Edge/IIoT.Edge.Host.Bootstrap` and `src/Shared/IIoT.Edge.Module.Abstractions`.
 - Keep device/process behavior inside `src/Modules/IIoT.Edge.Module.*`.
-- Keep `IIoT.Edge.Integration.DefaultClient` as a package-assembly validation sample, not as a daily-maintained production repository.
+- Keep runnable non-production tools inside `src/Tools`.
+- Keep the package validation shell in `src/Tools/IIoT.Edge.PackageValidationClient`; it is a validation tool, not a second production client.
 
 ## Path ownership
 
@@ -17,6 +18,10 @@ This repository is the single collaboration entry point for the Edge client duri
 - Module code:
   - `src/Modules/IIoT.Edge.Module.Injection`
   - `src/Modules/IIoT.Edge.Module.Stacking`
+- Tools and samples:
+  - `src/Tools/IIoT.Edge.TestSimulator`
+  - `src/Tools/IIoT.Edge.PackageValidationClient`
+  - `src/Tools/ModuleSamples/IIoT.Edge.Module.DryRun`
 
 During the adaptation phase, `CODEOWNERS` routes all approvals to `@ShuJinHao`. When module owners are stable, replace the module entries with their real GitHub usernames.
 
@@ -26,6 +31,9 @@ During the adaptation phase, `CODEOWNERS` routes all approvals to `@ShuJinHao`. 
 - Require PRs for every change.
 - Use `.github/pull_request_template.md` for every PR.
 - If a PR touches host core and a module, review it as a host-core change.
+- New device/process modules go under `src/Modules`.
+- New runnable developer tools go under `src/Tools`.
+- Do not place runnable tools under `src/Tests`.
 - Any module-contract change must explain:
   - why the current contract is insufficient
   - which modules are affected
@@ -59,7 +67,7 @@ Apply these settings in GitHub repository settings:
 
 - Daily development stays in this repository.
 - Package generation stays enabled through `scripts/PackEdgePackages.ps1`.
-- Package-only assembly validation stays in `IIoT.Edge.Integration.DefaultClient`.
+- Package-only assembly validation stays in `src/Tools/IIoT.Edge.PackageValidationClient`.
 - Official production behavior still follows the main Edge shell inside this repository until the team is ready for a dedicated integration repository workflow.
 
 ## Recommended release rehearsal

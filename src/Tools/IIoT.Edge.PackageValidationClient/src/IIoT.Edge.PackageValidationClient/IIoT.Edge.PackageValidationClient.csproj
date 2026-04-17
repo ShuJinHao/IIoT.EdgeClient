@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="IIoT.Edge.Host.Bootstrap" />
+    <PackageReference Include="IIoT.Edge.Module.Abstractions" />
+    <PackageReference Include="IIoT.Edge.Module.DryRun" />
+    <PackageReference Include="IIoT.Edge.Module.Injection" />
+    <PackageReference Include="IIoT.Edge.Module.Stacking" />
+    <PackageReference Include="IIoT.Edge.Presentation.Panels" />
+    <PackageReference Include="IIoT.Edge.Presentation.Shell" />
+    <PackageReference Include="IIoT.Edge.UI.Shared" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="appsettings.Development.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="log4net.config">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

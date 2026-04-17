@@ -7,7 +7,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$integrationRepo = Join-Path (Split-Path -Parent $repoRoot) 'IIoT.Edge.Integration.DefaultClient'
+$integrationRepo = Join-Path $repoRoot 'src\Tools\IIoT.Edge.PackageValidationClient'
 $packageOutput = Join-Path $repoRoot '.artifacts\nuget'
 $releaseOutput = Join-Path $repoRoot '.artifacts\releases'
 $manifestPath = Join-Path $releaseOutput 'release-manifest.json'

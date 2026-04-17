@@ -9,7 +9,6 @@
   <Folder Name="/src/Edge/">
     <Project Path="src/Edge/IIoT.Edge.Host.Bootstrap/IIoT.Edge.Host.Bootstrap.csproj" />
     <Project Path="src/Edge/IIoT.Edge.Shell/IIoT.Edge.Shell.csproj" Id="18446b65-38e5-4acb-a229-ba0f9d8a83cf" />
-    <Project Path="src/Edge/IIoT.Edge.TestSimulator/IIoT.Edge.TestSimulator.csproj" />
   </Folder>
   <Folder Name="/src/Infrastructure/">
     <Project Path="src/Infrastructure/IIoT.Edge.Infrastructure.Integration/IIoT.Edge.Infrastructure.Integration.csproj" Id="23525f6e-79c9-4ad1-992b-f1ad8ddfa65b" />
@@ -23,9 +22,13 @@
     <Project Path="src/Presentation/IIoT.Edge.Presentation.Panels/IIoT.Edge.Presentation.Panels.csproj" />
   </Folder>
   <Folder Name="/src/Modules/">
-    <Project Path="src/Modules/IIoT.Edge.Module.DryRun/IIoT.Edge.Module.DryRun.csproj" />
     <Project Path="src/Modules/IIoT.Edge.Module.Injection/IIoT.Edge.Module.Injection.csproj" />
     <Project Path="src/Modules/IIoT.Edge.Module.Stacking/IIoT.Edge.Module.Stacking.csproj" />
+  </Folder>
+  <Folder Name="/src/Tools/">
+    <Project Path="src/Tools/IIoT.Edge.TestSimulator/IIoT.Edge.TestSimulator.csproj" />
+    <Project Path="src/Tools/IIoT.Edge.PackageValidationClient/src/IIoT.Edge.PackageValidationClient/IIoT.Edge.PackageValidationClient.csproj" />
+    <Project Path="src/Tools/ModuleSamples/IIoT.Edge.Module.DryRun/IIoT.Edge.Module.DryRun.csproj" />
   </Folder>
   <Folder Name="/src/Shared/">
     <Project Path="src/Shared/IIoT.Edge.Module.Abstractions/IIoT.Edge.Module.Abstractions.csproj" />

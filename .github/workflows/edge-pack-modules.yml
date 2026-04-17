@@ -49,7 +49,7 @@ jobs:
 
       - name: Build dry-run module
         shell: pwsh
-        run: dotnet build src/Modules/IIoT.Edge.Module.DryRun/IIoT.Edge.Module.DryRun.csproj -p:BuildInParallel=false --disable-build-servers
+        run: dotnet build src/Tools/ModuleSamples/IIoT.Edge.Module.DryRun/IIoT.Edge.Module.DryRun.csproj -p:BuildInParallel=false --disable-build-servers
 
       - name: Run module contract tests
         shell: pwsh
