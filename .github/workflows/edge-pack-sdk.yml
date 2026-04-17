@@ -24,6 +24,21 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Bootstrap NuGet feeds
+        shell: pwsh
+        run: |
+          $localFeed = Join-Path $env:GITHUB_WORKSPACE '.artifacts\nuget'
+          $sharedFeed = if ([string]::IsNullOrWhiteSpace($env:EDGE_SHARED_NUGET_FEED)) {
+            Join-Path $env:GITHUB_WORKSPACE '.artifacts\shared-feed'
+          }
+          else {
+            $env:EDGE_SHARED_NUGET_FEED
+          }
+
+          New-Item -Path $localFeed -ItemType Directory -Force | Out-Null
+          New-Item -Path $sharedFeed -ItemType Directory -Force | Out-Null
+          "EDGE_SHARED_NUGET_FEED=$sharedFeed" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Build module abstractions
         shell: pwsh
         run: dotnet build src/Shared/IIoT.Edge.Module.Abstractions/IIoT.Edge.Module.Abstractions.csproj -p:BuildInParallel=false --disable-build-servers
@@ -48,6 +63,21 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
+
+      - name: Bootstrap NuGet feeds
+        shell: pwsh
+        run: |
+          $localFeed = Join-Path $env:GITHUB_WORKSPACE '.artifacts\nuget'
+          $sharedFeed = if ([string]::IsNullOrWhiteSpace($env:EDGE_SHARED_NUGET_FEED)) {
+            Join-Path $env:GITHUB_WORKSPACE '.artifacts\shared-feed'
+          }
+          else {
+            $env:EDGE_SHARED_NUGET_FEED
+          }
+
+          New-Item -Path $localFeed -ItemType Directory -Force | Out-Null
+          New-Item -Path $sharedFeed -ItemType Directory -Force | Out-Null
+          "EDGE_SHARED_NUGET_FEED=$sharedFeed" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Pack reusable SDK and host packages
         shell: pwsh
