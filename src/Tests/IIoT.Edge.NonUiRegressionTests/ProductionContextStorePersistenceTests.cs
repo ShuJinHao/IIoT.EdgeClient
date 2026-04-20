@@ -132,7 +132,9 @@ public sealed class ProductionContextStorePersistenceTests
 
             var diagnostics = store.GetPersistenceDiagnostics();
             Assert.Equal(2, diagnostics.CorruptFileCount);
-            Assert.Equal(new DateTime(2026, 4, 18, 23, 30, 45, 2, DateTimeKind.Local), diagnostics.LastCorruptDetectedAt);
+            var expectedLastCorruptDetectedAt = new DateTime(2026, 4, 18, 15, 30, 45, 2, DateTimeKind.Utc)
+                .ToLocalTime();
+            Assert.Equal(expectedLastCorruptDetectedAt, diagnostics.LastCorruptDetectedAt);
         }
         finally
         {
