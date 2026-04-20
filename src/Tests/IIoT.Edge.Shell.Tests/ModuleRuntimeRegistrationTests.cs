@@ -504,6 +504,11 @@ public sealed class ModuleRuntimeRegistrationTests
         foreach (var moduleId in new[] { "DryRun", "Injection", "Stacking" })
         {
             var sourceModuleDirectory = Path.Combine(runtimeModulesRoot, moduleId);
+            if (!Directory.Exists(sourceModuleDirectory))
+            {
+                sourceModuleDirectory = GetModuleRuntimeDirectory(moduleId);
+            }
+
             var targetModuleDirectory = Path.Combine(pluginRoot, moduleId);
             CopyDirectory(sourceModuleDirectory, targetModuleDirectory);
 
@@ -522,6 +527,17 @@ public sealed class ModuleRuntimeRegistrationTests
             "DryRun" => Path.Combine(FindRepoRoot(), "src", "Tools", "ModuleSamples", "IIoT.Edge.Module.DryRun"),
             _ => throw new InvalidOperationException($"Unsupported module id '{moduleId}'.")
         };
+
+    private static string GetModuleRuntimeDirectory(string moduleId)
+    {
+        var runtimeDirectory = Path.Combine(GetModuleSourceDirectory(moduleId), "bin", "Debug", "net10.0-windows");
+        if (!Directory.Exists(runtimeDirectory))
+        {
+            throw new DirectoryNotFoundException($"Module runtime directory was not found: '{runtimeDirectory}'.");
+        }
+
+        return runtimeDirectory;
+    }
 
     private static string FindRepoRoot()
     {

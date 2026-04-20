@@ -66,6 +66,11 @@ internal static class ContractTestPathHelper
         foreach (var moduleId in moduleIds)
         {
             var runtimeModuleDirectory = Path.Combine(runtimeModulesRoot, moduleId);
+            if (!Directory.Exists(runtimeModuleDirectory))
+            {
+                runtimeModuleDirectory = GetModuleRuntimeDirectory(moduleId);
+            }
+
             var targetModuleDirectory = Path.Combine(pluginRoot, moduleId);
             CopyDirectory(runtimeModuleDirectory, targetModuleDirectory);
 
@@ -86,6 +91,17 @@ internal static class ContractTestPathHelper
             "DryRun" => Path.Combine(repoRoot, "src", "Tools", "ModuleSamples", "IIoT.Edge.Module.DryRun"),
             _ => throw new InvalidOperationException($"Unsupported module id '{moduleId}'.")
         };
+    }
+
+    public static string GetModuleRuntimeDirectory(string moduleId)
+    {
+        var runtimeDirectory = Path.Combine(GetModuleSourceDirectory(moduleId), "bin", "Debug", "net10.0-windows");
+        if (!Directory.Exists(runtimeDirectory))
+        {
+            throw new DirectoryNotFoundException($"Module runtime directory was not found: '{runtimeDirectory}'.");
+        }
+
+        return runtimeDirectory;
     }
 
     public static (int ExitCode, string Output) RunProcess(
