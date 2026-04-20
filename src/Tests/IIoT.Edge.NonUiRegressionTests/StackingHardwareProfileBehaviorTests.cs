@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Models;
 using IIoT.Edge.Application.Features.Hardware.Queries;
@@ -37,7 +38,10 @@ public sealed class StackingHardwareProfileBehaviorTests
         [
             new FakeIoMappingEntity(9, "Stacking.Sequence", "DB1.DBW0", 1, "Int16", "Read", 1)
         ]);
-        var service = new HardwareConfigCrudService(sender, [provider]);
+        var service = new HardwareConfigCrudService(
+            sender,
+            [provider],
+            new StubPermissionService { CanEditHardware = true });
         var device = new NetworkDeviceVm
         {
             Id = 9,
@@ -107,7 +111,8 @@ public sealed class StackingHardwareProfileBehaviorTests
                 x.AddressCount,
                 x.DataType,
                 x.Direction,
-                x.SortOrder)));
+                x.SortOrder,
+                x.Remark)));
             return Task.CompletedTask;
         }
     }
@@ -119,12 +124,36 @@ public sealed class StackingHardwareProfileBehaviorTests
         int AddressCount,
         string DataType,
         string Direction,
-        int SortOrder)
+        int SortOrder,
+        string? Remark = null)
     {
         public IIoT.Edge.Domain.Hardware.Aggregates.IoMappingEntity ToEntity()
             => new(NetworkDeviceId, Label, PlcAddress, AddressCount, DataType, Direction)
             {
-                SortOrder = SortOrder
+                SortOrder = SortOrder,
+                Remark = Remark
+            };
+    }
+
+    private sealed class StubPermissionService : IClientPermissionService
+    {
+        public bool CanEditParams { get; init; }
+        public bool CanEditHardware { get; init; }
+        public bool IsLocalAdmin { get; init; }
+
+        public event Action? PermissionStateChanged
+        {
+            add { }
+            remove { }
+        }
+
+        public bool HasPermission(string permission)
+            => permission switch
+            {
+                _ when IsLocalAdmin => true,
+                var value when string.Equals(value, Permissions.HardwareConfig, StringComparison.OrdinalIgnoreCase) => CanEditHardware,
+                var value when string.Equals(value, Permissions.ParamConfig, StringComparison.OrdinalIgnoreCase) => CanEditParams,
+                _ => false
             };
     }
 }

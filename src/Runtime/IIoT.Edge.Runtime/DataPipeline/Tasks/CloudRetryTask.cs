@@ -154,6 +154,7 @@ public sealed class CloudRetryTask : ScheduledTaskBase
         }
 
         var recoveredIds = new List<long>();
+        var deadLetterIds = new List<long>();
         foreach (var fallback in pending)
         {
             var cellData = DeserializeCellData(fallback.ProcessType, fallback.CellDataJson);
@@ -170,7 +171,7 @@ public sealed class CloudRetryTask : ScheduledTaskBase
 
                 if (persisted)
                 {
-                    recoveredIds.Add(fallback.Id);
+                    deadLetterIds.Add(fallback.Id);
                 }
 
                 continue;
@@ -189,10 +190,6 @@ public sealed class CloudRetryTask : ScheduledTaskBase
                     continue;
                 }
 
-                await _retryStore.SaveAsync(
-                    new CellCompletedRecord { CellData = cellData },
-                    fallback.FailedTarget,
-                    fallback.ErrorMessage).ConfigureAwait(false);
                 recoveredIds.Add(fallback.Id);
             }
             catch (Exception ex)
@@ -201,9 +198,14 @@ public sealed class CloudRetryTask : ScheduledTaskBase
             }
         }
 
+        if (deadLetterIds.Count > 0)
+        {
+            await _fallbackStore.DeleteBatchAsync(deadLetterIds).ConfigureAwait(false);
+        }
+
         if (recoveredIds.Count > 0)
         {
-            await _fallbackStore.DeleteBatchAsync(recoveredIds).ConfigureAwait(false);
+            await _fallbackStore.MovePendingToRetryAsync(recoveredIds).ConfigureAwait(false);
             Logger.Info($"[Retry-Cloud] Recovered {recoveredIds.Count} Cloud fallback record(s) into the main retry store.");
         }
 
@@ -215,12 +217,13 @@ public sealed class CloudRetryTask : ScheduledTaskBase
 
     private async Task<bool> RetryFailedCellRecordsAsync()
     {
-        var records = await _retryStore.GetPendingAsync(batchSize: 100).ConfigureAwait(false);
-        if (records.Count == 0)
+        var claimedBatch = await _retryStore.ClaimPendingBatchAsync(batchSize: 100).ConfigureAwait(false);
+        if (claimedBatch is null || claimedBatch.Records.Count == 0)
         {
             return true;
         }
 
+        var records = claimedBatch.Records;
         var batchCandidates = records
             .Where(IsCloudBatchRetryCandidate)
             .ToList();
@@ -229,82 +232,102 @@ public sealed class CloudRetryTask : ScheduledTaskBase
             .Where(r => !IsCloudBatchRetryCandidate(r))
             .ToList();
 
-        foreach (var processGroup in batchCandidates.GroupBy(x => x.ProcessType, StringComparer.OrdinalIgnoreCase))
+        try
         {
-            foreach (var chunk in processGroup.Chunk(100))
+            foreach (var processGroup in batchCandidates.GroupBy(x => x.ProcessType, StringComparer.OrdinalIgnoreCase))
             {
-                var completedRecords = new List<CellCompletedRecord>();
-                var validSourceRecords = new List<FailedCellRecord>();
-
-                foreach (var source in chunk)
+                foreach (var chunk in processGroup.Chunk(100))
                 {
-                    var cellData = DeserializeCellData(source.ProcessType, source.CellDataJson);
-                    if (cellData is null)
-                    {
-                        var persisted = await TryPersistDeadLetterAsync(
-                            source.ProcessType,
-                            source.CellDataJson,
-                            source.FailedTarget,
-                            sourceTable: "failed_cloud_records",
-                            sourceRecordId: source.Id,
-                            DeadLetterStage.RetryDeserialize,
-                            $"Cloud retry deserialize failed for process type {source.ProcessType}.").ConfigureAwait(false);
+                    var completedRecords = new List<CellCompletedRecord>();
+                    var validSourceRecords = new List<FailedCellRecord>();
 
-                        if (persisted)
+                    foreach (var source in chunk)
+                    {
+                        var cellData = DeserializeCellData(source.ProcessType, source.CellDataJson);
+                        if (cellData is null)
+                        {
+                            var persisted = await TryPersistDeadLetterAsync(
+                                source.ProcessType,
+                                source.CellDataJson,
+                                source.FailedTarget,
+                                sourceTable: "failed_cloud_records",
+                                sourceRecordId: source.Id,
+                                DeadLetterStage.RetryDeserialize,
+                                $"Cloud retry deserialize failed for process type {source.ProcessType}.").ConfigureAwait(false);
+
+                            if (persisted)
+                            {
+                                await _retryStore.DeleteAsync(source.Id).ConfigureAwait(false);
+                            }
+
+                            continue;
+                        }
+
+                        completedRecords.Add(new CellCompletedRecord { CellData = cellData });
+                        validSourceRecords.Add(source);
+                    }
+
+                    if (completedRecords.Count == 0)
+                    {
+                        continue;
+                    }
+
+                    var result = await _cloudBatchConsumer.ProcessBatchAsync(completedRecords).ConfigureAwait(false);
+                    if (result.IsSuccess)
+                    {
+                        foreach (var source in validSourceRecords)
                         {
                             await _retryStore.DeleteAsync(source.Id).ConfigureAwait(false);
                         }
 
+                        Logger.Info($"[Retry-Cloud] {processGroup.Key} batch retry succeeded. Count:{validSourceRecords.Count}");
                         continue;
                     }
 
-                    completedRecords.Add(new CellCompletedRecord { CellData = cellData });
-                    validSourceRecords.Add(source);
-                }
-
-                if (completedRecords.Count == 0)
-                {
-                    continue;
-                }
-
-                var result = await _cloudBatchConsumer.ProcessBatchAsync(completedRecords).ConfigureAwait(false);
-                if (result.IsSuccess)
-                {
-                    foreach (var source in validSourceRecords)
+                    if (ShouldPauseForRecovery(result))
                     {
-                        await _retryStore.DeleteAsync(source.Id).ConfigureAwait(false);
+                        await _retryStore.ReleaseClaimAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
+                        _diagnosticsStore.SetRuntimeState(CloudRetryRuntimeState.WaitingForRecovery);
+                        Logger.Warn($"[Retry-Cloud] {processGroup.Key} batch retry paused. Outcome:{result.Outcome}, Reason:{result.ReasonCode}");
+                        return false;
                     }
 
-                    Logger.Info($"[Retry-Cloud] {processGroup.Key} batch retry succeeded. Count:{validSourceRecords.Count}");
-                    continue;
-                }
+                    foreach (var source in validSourceRecords)
+                    {
+                        await HandleRetryFailureAsync(source, $"Cloud batch retry failed ({result.ReasonCode}).").ConfigureAwait(false);
+                    }
 
-                if (ShouldPauseForRecovery(result))
+                    Logger.Warn($"[Retry-Cloud] {processGroup.Key} batch retry failed. Count:{validSourceRecords.Count}");
+                }
+            }
+
+            foreach (var record in others)
+            {
+                var processResult = await ProcessOneAsync(record).ConfigureAwait(false);
+                if (processResult == RetryProcessResult.Pause)
                 {
+                    await _retryStore.ReleaseClaimAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
                     _diagnosticsStore.SetRuntimeState(CloudRetryRuntimeState.WaitingForRecovery);
-                    Logger.Warn($"[Retry-Cloud] {processGroup.Key} batch retry paused. Outcome:{result.Outcome}, Reason:{result.ReasonCode}");
                     return false;
                 }
-
-                foreach (var source in validSourceRecords)
-                {
-                    await HandleRetryFailureAsync(source, $"Cloud batch retry failed ({result.ReasonCode}).").ConfigureAwait(false);
-                }
-
-                Logger.Warn($"[Retry-Cloud] {processGroup.Key} batch retry failed. Count:{validSourceRecords.Count}");
             }
-        }
 
-        foreach (var record in others)
+            return true;
+        }
+        catch (Exception ex)
         {
-            var keepRetrying = await ProcessOneAsync(record).ConfigureAwait(false);
-            if (!keepRetrying)
+            try
             {
-                return false;
+                await _retryStore.ReleaseClaimAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
             }
-        }
+            catch (Exception releaseEx)
+            {
+                Logger.Error($"[Retry-Cloud] Failed to release retry claim {claimedBatch.ClaimToken}: {releaseEx.Message}");
+            }
 
-        return true;
+            Logger.Error($"[Retry-Cloud] Retry batch failed with exception: {ex.Message}");
+            return false;
+        }
     }
 
     private bool IsCloudBatchRetryCandidate(FailedCellRecord record)
@@ -320,7 +343,7 @@ public sealed class CloudRetryTask : ScheduledTaskBase
         return ProcessUploadMode.Single;
     }
 
-    private async Task<bool> ProcessOneAsync(FailedCellRecord record)
+    private async Task<RetryProcessResult> ProcessOneAsync(FailedCellRecord record)
     {
         var cellData = DeserializeCellData(record.ProcessType, record.CellDataJson);
         if (cellData is null)
@@ -339,7 +362,7 @@ public sealed class CloudRetryTask : ScheduledTaskBase
                 await _retryStore.DeleteAsync(record.Id).ConfigureAwait(false);
             }
 
-            return true;
+            return RetryProcessResult.Continue;
         }
 
         var result = await _cloudConsumer
@@ -350,18 +373,17 @@ public sealed class CloudRetryTask : ScheduledTaskBase
         {
             await _retryStore.DeleteAsync(record.Id).ConfigureAwait(false);
             Logger.Info($"[Retry-Cloud] {cellData.DisplayLabel} retry succeeded and the record was removed.");
-            return true;
+            return RetryProcessResult.Continue;
         }
 
         if (ShouldPauseForRecovery(result))
         {
-            _diagnosticsStore.SetRuntimeState(CloudRetryRuntimeState.WaitingForRecovery);
             Logger.Warn($"[Retry-Cloud] {cellData.DisplayLabel} retry paused. Outcome:{result.Outcome}, Reason:{result.ReasonCode}");
-            return false;
+            return RetryProcessResult.Pause;
         }
 
         await HandleRetryFailureAsync(record, result.ReasonCode).ConfigureAwait(false);
-        return true;
+        return RetryProcessResult.Continue;
     }
 
     private async Task HandleRetryFailureAsync(FailedCellRecord record, string errorMessage)
@@ -500,5 +522,11 @@ public sealed class CloudRetryTask : ScheduledTaskBase
                 ex);
             return false;
         }
+    }
+
+    private enum RetryProcessResult
+    {
+        Continue,
+        Pause
     }
 }

@@ -14,7 +14,13 @@ public record SerialDeviceDto(
     string DeviceType,
     string PortName,
     int BaudRate,
-    bool IsEnabled
+    int DataBits,
+    string StopBits,
+    string Parity,
+    string? SendCmd1,
+    string? SendCmd2,
+    bool IsEnabled,
+    string? Remark
 );
 
 /// <summary>
@@ -35,6 +41,18 @@ public class SaveSerialDevicesHandler(
         SaveSerialDevicesCommand request,
         CancellationToken cancellationToken)
     {
+        var existingDevices = await repo.GetListAsync(_ => true, cancellationToken);
+        var existingById = existingDevices.ToDictionary(x => x.Id);
+        var submittedIds = request.Devices
+            .Where(x => x.Id > 0)
+            .Select(x => x.Id)
+            .ToHashSet();
+
+        foreach (var entity in existingDevices.Where(x => !submittedIds.Contains(x.Id)))
+        {
+            repo.Delete(entity);
+        }
+
         foreach (var dto in request.Devices)
         {
             if (dto.Id == 0)
@@ -42,22 +60,30 @@ public class SaveSerialDevicesHandler(
                 var entity = new SerialDeviceEntity(
                     dto.DeviceName, dto.DeviceType, dto.PortName, dto.BaudRate)
                 {
-                    IsEnabled = dto.IsEnabled
+                    DataBits = dto.DataBits,
+                    StopBits = dto.StopBits,
+                    Parity = dto.Parity,
+                    SendCmd1 = dto.SendCmd1,
+                    SendCmd2 = dto.SendCmd2,
+                    IsEnabled = dto.IsEnabled,
+                    Remark = dto.Remark
                 };
                 repo.Add(entity);
             }
-            else
+            else if (existingById.TryGetValue(dto.Id, out var entity))
             {
-                var entity = await repo.GetByIdAsync(dto.Id, cancellationToken);
-                if (entity != null)
-                {
-                    entity.DeviceName = dto.DeviceName;
-                    entity.DeviceType = dto.DeviceType;
-                    entity.PortName = dto.PortName;
-                    entity.BaudRate = dto.BaudRate;
-                    entity.IsEnabled = dto.IsEnabled;
-                    repo.Update(entity);
-                }
+                entity.DeviceName = dto.DeviceName;
+                entity.DeviceType = dto.DeviceType;
+                entity.PortName = dto.PortName;
+                entity.BaudRate = dto.BaudRate;
+                entity.DataBits = dto.DataBits;
+                entity.StopBits = dto.StopBits;
+                entity.Parity = dto.Parity;
+                entity.SendCmd1 = dto.SendCmd1;
+                entity.SendCmd2 = dto.SendCmd2;
+                entity.IsEnabled = dto.IsEnabled;
+                entity.Remark = dto.Remark;
+                repo.Update(entity);
             }
         }
 

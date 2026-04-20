@@ -3,6 +3,7 @@ using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Connection;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Repository;
 using IIoT.Edge.SharedKernel.DataPipeline;
+using Dapper;
 using System.Text.Json;
 
 namespace IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
@@ -73,6 +74,59 @@ public class MesFallbackBufferStore : DapperRepositoryBase<MesFallbackRecord>, I
 
         var result = await SafeQueryAsync(sql, new { BatchSize = batchSize });
         return result.ToList();
+    }
+
+    public async Task MovePendingToRetryAsync(IEnumerable<long> ids)
+    {
+        var idList = ids.Distinct().ToList();
+        if (idList.Count == 0)
+        {
+            return;
+        }
+
+        await ExecuteInTransactionAsync<int>(async (conn, tx) =>
+        {
+            var nextRetryTime = DateTime.UtcNow.AddSeconds(30).ToString("O");
+            var inserted = await conn.ExecuteAsync(
+                @"
+                INSERT INTO failed_mes_records
+                    (ProcessType, CellDataJson, FailedTarget, ErrorMessage, RetryCount, NextRetryTime, CreatedAt)
+                SELECT
+                    ProcessType,
+                    CellDataJson,
+                    FailedTarget,
+                    ErrorMessage,
+                    0,
+                    @NextRetryTime,
+                    CreatedAt
+                FROM mes_fallback_records
+                WHERE Id IN @Ids",
+                new
+                {
+                    Ids = idList,
+                    NextRetryTime = nextRetryTime
+                },
+                tx,
+                commandTimeout: CommandTimeout);
+
+            if (inserted <= 0)
+            {
+                throw new InvalidOperationException("Failed to move MES fallback records into the retry store.");
+            }
+
+            var deleted = await conn.ExecuteAsync(
+                "DELETE FROM mes_fallback_records WHERE Id IN @Ids",
+                new { Ids = idList },
+                tx,
+                commandTimeout: CommandTimeout);
+
+            if (deleted <= 0)
+            {
+                throw new InvalidOperationException("Failed to delete moved MES fallback records.");
+            }
+
+            return deleted;
+        }).ConfigureAwait(false);
     }
 
     public async Task DeleteBatchAsync(IEnumerable<long> ids)

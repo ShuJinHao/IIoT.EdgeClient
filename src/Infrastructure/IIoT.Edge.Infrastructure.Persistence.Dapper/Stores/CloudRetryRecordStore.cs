@@ -9,6 +9,7 @@ public sealed class CloudRetryRecordStore : RetryRecordStoreBase, ICloudRetryRec
     public override string DbName => "pipeline_cloud";
     protected override string TableName => "failed_cloud_records";
     protected override string ChannelName => "Cloud";
+    protected override string ClaimTableName => "failed_cloud_record_claims";
 
     protected override string CreateTableSql => @"
         CREATE TABLE IF NOT EXISTS failed_cloud_records (
@@ -28,6 +29,16 @@ public sealed class CloudRetryRecordStore : RetryRecordStoreBase, ICloudRetryRec
             ON failed_cloud_records (FailedTarget, NextRetryTime);
         CREATE INDEX IF NOT EXISTS idx_failed_cloud_process_retry
             ON failed_cloud_records (ProcessType, NextRetryTime);
+
+        CREATE TABLE IF NOT EXISTS failed_cloud_record_claims (
+            RecordId    INTEGER PRIMARY KEY,
+            ClaimToken  TEXT    NOT NULL,
+            ClaimedAt   TEXT    NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_failed_cloud_claim_token
+            ON failed_cloud_record_claims (ClaimToken);
+        CREATE INDEX IF NOT EXISTS idx_failed_cloud_claim_time
+            ON failed_cloud_record_claims (ClaimedAt);
     ";
 
     public CloudRetryRecordStore(

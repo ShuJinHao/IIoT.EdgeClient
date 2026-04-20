@@ -204,11 +204,16 @@ internal sealed class FakeCellDataConsumer : ICellDataConsumer
 
 internal sealed class FakeFailedRecordStore : ICloudRetryRecordStore, IMesRetryRecordStore
 {
+    private readonly Dictionary<string, List<long>> _claims = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<long> _claimedRecordIds = new();
+
     public sealed record RetryUpdate(long Id, int RetryCount, string ErrorMessage, DateTime NextRetryTime);
 
     public List<FailedCellRecord> PendingRecords { get; } = new();
     public Dictionary<long, RetryUpdate> Updates { get; } = new();
     public List<long> DeletedIds { get; } = new();
+    public List<string> DeletedClaimTokens { get; } = new();
+    public List<string> ReleasedClaimTokens { get; } = new();
     public int ResetAllAbandonedCallCount { get; private set; }
     public int DeleteExpiredAbandonedCallCount { get; private set; }
     public int SaveCallCount { get; private set; }
@@ -232,6 +237,24 @@ internal sealed class FakeFailedRecordStore : ICloudRetryRecordStore, IMesRetryR
 
     Task<List<FailedCellRecord>> IMesRetryRecordStore.GetPendingAsync(int batchSize)
         => GetPendingAsync("MES", batchSize);
+
+    Task<ClaimedFailedCellBatch?> ICloudRetryRecordStore.ClaimPendingBatchAsync(int batchSize)
+        => ClaimPendingBatchAsync("Cloud", batchSize);
+
+    Task<ClaimedFailedCellBatch?> IMesRetryRecordStore.ClaimPendingBatchAsync(int batchSize)
+        => ClaimPendingBatchAsync("MES", batchSize);
+
+    Task ICloudRetryRecordStore.DeleteClaimedBatchAsync(string claimToken)
+        => DeleteClaimedBatchAsync(claimToken);
+
+    Task IMesRetryRecordStore.DeleteClaimedBatchAsync(string claimToken)
+        => DeleteClaimedBatchAsync(claimToken);
+
+    Task ICloudRetryRecordStore.ReleaseClaimAsync(string claimToken)
+        => ReleaseClaimAsync(claimToken);
+
+    Task IMesRetryRecordStore.ReleaseClaimAsync(string claimToken)
+        => ReleaseClaimAsync(claimToken);
 
     Task<int> ICloudRetryRecordStore.GetCountAsync()
         => GetCountAsync("Cloud");
@@ -284,15 +307,73 @@ internal sealed class FakeFailedRecordStore : ICloudRetryRecordStore, IMesRetryR
         return Task.FromResult(rows);
     }
 
+    public Task<ClaimedFailedCellBatch?> ClaimPendingBatchAsync(string channel, int batchSize = 10)
+    {
+        var now = DateTime.UtcNow;
+        var rows = PendingRecords
+            .Where(r => r.Channel == channel && r.NextRetryTime <= now && !_claimedRecordIds.Contains(r.Id))
+            .OrderBy(r => r.Id)
+            .Take(batchSize)
+            .ToList();
+
+        if (rows.Count == 0)
+        {
+            return Task.FromResult<ClaimedFailedCellBatch?>(null);
+        }
+
+        var claimToken = Guid.NewGuid().ToString("N");
+        var ids = rows.Select(x => x.Id).ToList();
+        _claims[claimToken] = ids;
+
+        foreach (var id in ids)
+        {
+            _claimedRecordIds.Add(id);
+        }
+
+        return Task.FromResult<ClaimedFailedCellBatch?>(new ClaimedFailedCellBatch
+        {
+            ClaimToken = claimToken,
+            Records = rows
+        });
+    }
+
     public Task DeleteAsync(long id)
     {
+        ClearClaimForRecord(id);
         DeletedIds.Add(id);
         PendingRecords.RemoveAll(x => x.Id == id);
         return Task.CompletedTask;
     }
 
+    public Task DeleteClaimedBatchAsync(string claimToken)
+    {
+        if (!_claims.TryGetValue(claimToken, out var ids) || ids.Count == 0)
+        {
+            throw new InvalidOperationException($"No claimed failed-record rows found for claim {claimToken}.");
+        }
+
+        DeletedClaimTokens.Add(claimToken);
+        DeletedIds.AddRange(ids);
+        PendingRecords.RemoveAll(x => ids.Contains(x.Id));
+        ReleaseClaimCore(claimToken);
+        return Task.CompletedTask;
+    }
+
+    public Task ReleaseClaimAsync(string claimToken)
+    {
+        if (!_claims.ContainsKey(claimToken))
+        {
+            throw new InvalidOperationException($"No failed-record claim exists for token {claimToken}.");
+        }
+
+        ReleasedClaimTokens.Add(claimToken);
+        ReleaseClaimCore(claimToken);
+        return Task.CompletedTask;
+    }
+
     public Task UpdateRetryAsync(long id, int retryCount, string errorMessage, DateTime nextRetryTime)
     {
+        ClearClaimForRecord(id);
         Updates[id] = new RetryUpdate(id, retryCount, errorMessage, nextRetryTime);
         return Task.CompletedTask;
     }
@@ -369,6 +450,34 @@ internal sealed class FakeFailedRecordStore : ICloudRetryRecordStore, IMesRetryR
             ? Task.Delay(delay)
             : Task.CompletedTask;
     }
+
+    private void ClearClaimForRecord(long id)
+    {
+        _claimedRecordIds.Remove(id);
+        foreach (var pair in _claims.ToList())
+        {
+            pair.Value.Remove(id);
+            if (pair.Value.Count == 0)
+            {
+                _claims.Remove(pair.Key);
+            }
+        }
+    }
+
+    private void ReleaseClaimCore(string claimToken)
+    {
+        if (!_claims.TryGetValue(claimToken, out var ids))
+        {
+            return;
+        }
+
+        foreach (var id in ids)
+        {
+            _claimedRecordIds.Remove(id);
+        }
+
+        _claims.Remove(claimToken);
+    }
 }
 
 internal sealed class FakeCloudFallbackBufferStore : ICloudFallbackBufferStore
@@ -377,6 +486,7 @@ internal sealed class FakeCloudFallbackBufferStore : ICloudFallbackBufferStore
     public List<long> DeletedIds { get; } = new();
     public int SaveCallCount { get; private set; }
     public Exception? SaveException { get; set; }
+    public FakeFailedRecordStore? RetryStore { get; set; }
 
     public Task SaveAsync(CellCompletedRecord record, string failedTarget, string errorMessage)
     {
@@ -403,6 +513,40 @@ internal sealed class FakeCloudFallbackBufferStore : ICloudFallbackBufferStore
     public Task<List<CloudFallbackRecord>> GetPendingAsync(int batchSize = 50)
         => Task.FromResult(Records.OrderBy(x => x.Id).Take(batchSize).ToList());
 
+    public Task MovePendingToRetryAsync(IEnumerable<long> ids)
+    {
+        if (RetryStore is null)
+        {
+            throw new InvalidOperationException("RetryStore is not attached for cloud fallback recovery.");
+        }
+
+        var idList = ids.Distinct().ToList();
+        var rows = Records
+            .Where(x => idList.Contains(x.Id))
+            .OrderBy(x => x.Id)
+            .ToList();
+
+        foreach (var row in rows)
+        {
+            RetryStore.PendingRecords.Add(new FailedCellRecord
+            {
+                Id = RetryStore.PendingRecords.Count == 0 ? 1 : RetryStore.PendingRecords.Max(x => x.Id) + 1,
+                Channel = "Cloud",
+                ProcessType = row.ProcessType,
+                CellDataJson = row.CellDataJson,
+                FailedTarget = row.FailedTarget,
+                ErrorMessage = row.ErrorMessage,
+                RetryCount = 0,
+                NextRetryTime = DateTime.UtcNow,
+                CreatedAt = row.CreatedAt
+            });
+        }
+
+        DeletedIds.AddRange(rows.Select(x => x.Id));
+        Records.RemoveAll(x => idList.Contains(x.Id));
+        return Task.CompletedTask;
+    }
+
     public Task DeleteBatchAsync(IEnumerable<long> ids)
     {
         var idList = ids.ToList();
@@ -420,6 +564,7 @@ internal sealed class FakeMesFallbackBufferStore : IMesFallbackBufferStore
     public List<long> DeletedIds { get; } = new();
     public int SaveCallCount { get; private set; }
     public Exception? SaveException { get; set; }
+    public FakeFailedRecordStore? RetryStore { get; set; }
 
     public Task SaveAsync(CellCompletedRecord record, string failedTarget, string errorMessage)
     {
@@ -445,6 +590,40 @@ internal sealed class FakeMesFallbackBufferStore : IMesFallbackBufferStore
 
     public Task<List<MesFallbackRecord>> GetPendingAsync(int batchSize = 50)
         => Task.FromResult(Records.OrderBy(x => x.Id).Take(batchSize).ToList());
+
+    public Task MovePendingToRetryAsync(IEnumerable<long> ids)
+    {
+        if (RetryStore is null)
+        {
+            throw new InvalidOperationException("RetryStore is not attached for MES fallback recovery.");
+        }
+
+        var idList = ids.Distinct().ToList();
+        var rows = Records
+            .Where(x => idList.Contains(x.Id))
+            .OrderBy(x => x.Id)
+            .ToList();
+
+        foreach (var row in rows)
+        {
+            RetryStore.PendingRecords.Add(new FailedCellRecord
+            {
+                Id = RetryStore.PendingRecords.Count == 0 ? 1 : RetryStore.PendingRecords.Max(x => x.Id) + 1,
+                Channel = "MES",
+                ProcessType = row.ProcessType,
+                CellDataJson = row.CellDataJson,
+                FailedTarget = row.FailedTarget,
+                ErrorMessage = row.ErrorMessage,
+                RetryCount = 0,
+                NextRetryTime = DateTime.UtcNow,
+                CreatedAt = row.CreatedAt
+            });
+        }
+
+        DeletedIds.AddRange(rows.Select(x => x.Id));
+        Records.RemoveAll(x => idList.Contains(x.Id));
+        return Task.CompletedTask;
+    }
 
     public Task DeleteBatchAsync(IEnumerable<long> ids)
     {

@@ -9,6 +9,7 @@ public sealed class MesRetryRecordStore : RetryRecordStoreBase, IMesRetryRecordS
     public override string DbName => "pipeline_mes";
     protected override string TableName => "failed_mes_records";
     protected override string ChannelName => "MES";
+    protected override string ClaimTableName => "failed_mes_record_claims";
 
     protected override string CreateTableSql => @"
         CREATE TABLE IF NOT EXISTS failed_mes_records (
@@ -28,6 +29,16 @@ public sealed class MesRetryRecordStore : RetryRecordStoreBase, IMesRetryRecordS
             ON failed_mes_records (FailedTarget, NextRetryTime);
         CREATE INDEX IF NOT EXISTS idx_failed_mes_process_retry
             ON failed_mes_records (ProcessType, NextRetryTime);
+
+        CREATE TABLE IF NOT EXISTS failed_mes_record_claims (
+            RecordId    INTEGER PRIMARY KEY,
+            ClaimToken  TEXT    NOT NULL,
+            ClaimedAt   TEXT    NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_failed_mes_claim_token
+            ON failed_mes_record_claims (ClaimToken);
+        CREATE INDEX IF NOT EXISTS idx_failed_mes_claim_time
+            ON failed_mes_record_claims (ClaimedAt);
     ";
 
     public MesRetryRecordStore(

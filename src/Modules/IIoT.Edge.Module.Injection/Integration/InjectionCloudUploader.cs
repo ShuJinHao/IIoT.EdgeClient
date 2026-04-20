@@ -2,8 +2,7 @@ using AutoMapper;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.Infrastructure.Integration.Config;
-using IIoT.Edge.Infrastructure.Integration.Http;
+using IIoT.Edge.Integration.Contracts.Http;
 using IIoT.Edge.Module.Injection.Payload;
 using IIoT.Edge.SharedKernel.DataPipeline;
 

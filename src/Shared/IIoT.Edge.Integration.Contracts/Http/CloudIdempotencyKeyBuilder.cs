@@ -3,7 +3,7 @@ using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace IIoT.Edge.Infrastructure.Integration.Http;
+namespace IIoT.Edge.Integration.Contracts.Http;
 
 public static class CloudIdempotencyKeyBuilder
 {
@@ -23,9 +23,7 @@ public static class CloudIdempotencyKeyBuilder
             return ComputeHash($"{processType}|{uploaderName}|empty");
         }
 
-        var itemHashes = records
-            .Select(record => ForRecord(processType, uploaderName, record));
-
+        var itemHashes = records.Select(record => ForRecord(processType, uploaderName, record));
         return ComputeHash($"{processType}|{uploaderName}|{string.Join("|", itemHashes)}");
     }
 

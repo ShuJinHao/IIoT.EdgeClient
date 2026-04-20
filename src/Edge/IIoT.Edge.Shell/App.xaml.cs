@@ -76,7 +76,7 @@ public partial class App : WpfApplication
                 var lifecycle = _serviceProvider.GetRequiredService<IAppLifecycleCoordinator>();
                 using var shutdownCts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
                 lifecycle.StopAsync(shutdownCts.Token).GetAwaiter().GetResult();
-                _serviceProvider.Dispose();
+                _serviceProvider.DisposeAsync().AsTask().GetAwaiter().GetResult();
                 _serviceProvider = null;
             }
         }

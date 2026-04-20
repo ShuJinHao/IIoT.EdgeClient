@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>true</IsPackable>
+    <PackageId>IIoT.Edge.Integration.Contracts</PackageId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\IIoT.Edge.SharedKernel\IIoT.Edge.SharedKernel.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\Application\IIoT.Edge.Application\Abstractions\Device\CloudCallOutcome.cs" Link="CloudCallOutcome.cs" />
+    <Compile Include="..\..\Application\IIoT.Edge.Application\Abstractions\Device\CloudCallResult.cs" Link="CloudCallResult.cs" />
+    <Compile Include="..\..\Application\IIoT.Edge.Application\Abstractions\Device\CloudRequestOptions.cs" Link="CloudRequestOptions.cs" />
+    <Compile Include="..\..\Application\IIoT.Edge.Application\Abstractions\Device\DeviceSession.cs" Link="DeviceSession.cs" />
+    <Compile Include="..\..\Application\IIoT.Edge.Application\Abstractions\Device\EdgeUploadBlockReason.cs" Link="EdgeUploadBlockReason.cs" />
+    <Compile Include="..\..\Application\IIoT.Edge.Application\Abstractions\Device\EdgeUploadBlockReasonExtensions.cs" Link="EdgeUploadBlockReasonExtensions.cs" />
+    <Compile Include="..\..\Application\IIoT.Edge.Application\Abstractions\Device\EdgeUploadGateSnapshot.cs" Link="EdgeUploadGateSnapshot.cs" />
+    <Compile Include="..\..\Application\IIoT.Edge.Application\Abstractions\Device\EdgeUploadGateState.cs" Link="EdgeUploadGateState.cs" />
+    <Compile Include="..\..\Application\IIoT.Edge.Application\Abstractions\Device\ICloudHttpClient.cs" Link="ICloudHttpClient.cs" />
+    <Compile Include="..\..\Application\IIoT.Edge.Application\Abstractions\Device\IDeviceAccessTokenProvider.cs" Link="IDeviceAccessTokenProvider.cs" />
+  </ItemGroup>
+
+</Project>

@@ -284,6 +284,7 @@ public sealed class RetryTaskBehaviorTests
             FakeCloudDeadLetterStore? deadLetterStore = null,
             FakeCriticalPersistenceFallbackWriter? criticalWriter = null)
         {
+            fallbackStore.RetryStore = failedStore;
             _inner = new CloudRetryTask(
                 logger,
                 failedStore,

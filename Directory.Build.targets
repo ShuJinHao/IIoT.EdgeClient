@@ -1,5 +1,17 @@
 <Project>
 
+  <Target Name="ValidateEdgePluginProjectReferences"
+          BeforeTargets="ResolveProjectReferences"
+          Condition="'$(IsEdgePluginModule)' == 'true'">
+    <ItemGroup>
+      <_ForbiddenPluginProjectReference Include="@(ProjectReference)"
+                                        Condition="$([System.String]::Copy('%(ProjectReference.Identity)').Contains('\\Infrastructure\\'))" />
+    </ItemGroup>
+
+    <Error Condition="'@(_ForbiddenPluginProjectReference)' != ''"
+           Text="Edge plugin modules must not directly reference Infrastructure projects. Remove: @(_ForbiddenPluginProjectReference, ', ')" />
+  </Target>
+
   <Target Name="GetPluginArtifacts"
           DependsOnTargets="Build"
           Returns="@(PluginArtifact)"

@@ -108,6 +108,120 @@ public sealed class FailedRecordStoreBehaviorTests
         }
     }
 
+    [Fact]
+    public async Task ClaimPendingBatchAsync_ShouldRespectReleaseAndDeleteLifecycle()
+    {
+        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+
+        var tempDir = Path.Combine(Path.GetTempPath(), "edge-failed-store-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var logger = new FakeLogService();
+            var connectionFactory = new SqliteConnectionFactory(tempDir);
+            var store = new CloudRetryRecordStore(connectionFactory, logger);
+
+            using (var connection = connectionFactory.Create(store.DbName))
+            {
+                await store.InitializeTableAsync(connection);
+            }
+
+            await store.SaveAsync(CreateRecord("CLAIM-A"), "Cloud-Claim-A", "seed");
+            await store.SaveAsync(CreateRecord("CLAIM-B"), "Cloud-Claim-B", "seed");
+
+            await UpdateFailedRecordAsync(
+                connectionFactory,
+                "Cloud-Claim-A",
+                DateTime.UtcNow.AddMinutes(-1).ToString("O"),
+                DateTime.UtcNow.AddMinutes(-5).ToString("O"));
+            await UpdateFailedRecordAsync(
+                connectionFactory,
+                "Cloud-Claim-B",
+                DateTime.UtcNow.AddMinutes(-1).ToString("O"),
+                DateTime.UtcNow.AddMinutes(-4).ToString("O"));
+
+            var firstClaim = await store.ClaimPendingBatchAsync(batchSize: 1);
+            Assert.NotNull(firstClaim);
+            Assert.Single(firstClaim!.Records);
+
+            var secondClaim = await store.ClaimPendingBatchAsync(batchSize: 10);
+            Assert.NotNull(secondClaim);
+            Assert.Single(secondClaim!.Records);
+            Assert.NotEqual(firstClaim.Records[0].Id, secondClaim.Records[0].Id);
+
+            await store.ReleaseClaimAsync(firstClaim.ClaimToken);
+
+            var releasedClaim = await store.ClaimPendingBatchAsync(batchSize: 1);
+            Assert.NotNull(releasedClaim);
+            Assert.Equal(firstClaim.Records[0].Id, releasedClaim!.Records[0].Id);
+
+            await store.DeleteClaimedBatchAsync(releasedClaim.ClaimToken);
+
+            Assert.Equal(1, await CountTableRowsAsync(connectionFactory, "failed_cloud_records"));
+            Assert.Equal(1, await CountTableRowsAsync(connectionFactory, "failed_cloud_record_claims"));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                try
+                {
+                    Directory.Delete(tempDir, recursive: true);
+                }
+                catch (IOException)
+                {
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public async Task MovePendingToRetryAsync_ShouldMoveFallbackRowsIntoRetryTable()
+    {
+        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+
+        var tempDir = Path.Combine(Path.GetTempPath(), "edge-failed-store-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var logger = new FakeLogService();
+            var connectionFactory = new SqliteConnectionFactory(tempDir);
+            var retryStore = new CloudRetryRecordStore(connectionFactory, logger);
+            var fallbackStore = new CloudFallbackBufferStore(connectionFactory, logger);
+
+            using (var connection = connectionFactory.Create(retryStore.DbName))
+            {
+                await retryStore.InitializeTableAsync(connection);
+                await fallbackStore.InitializeTableAsync(connection);
+            }
+
+            await fallbackStore.SaveAsync(CreateRecord("MOVE-1"), "Cloud-Move", "seed");
+            var pendingFallback = await fallbackStore.GetPendingAsync();
+            var fallbackId = Assert.Single(pendingFallback).Id;
+
+            await fallbackStore.MovePendingToRetryAsync([fallbackId]);
+
+            Assert.Empty(await fallbackStore.GetPendingAsync());
+            Assert.Equal(1, await CountTableRowsAsync(connectionFactory, "failed_cloud_records"));
+            Assert.Equal(0, await CountTableRowsAsync(connectionFactory, "cloud_fallback_records"));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                try
+                {
+                    Directory.Delete(tempDir, recursive: true);
+                }
+                catch (IOException)
+                {
+                }
+            }
+        }
+    }
+
     private static CellCompletedRecord CreateRecord(string barcode)
     {
         return new CellCompletedRecord
@@ -146,6 +260,15 @@ public sealed class FailedRecordStoreBehaviorTests
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM failed_cloud_records WHERE FailedTarget = $failedTarget";
         command.Parameters.AddWithValue("$failedTarget", failedTarget);
+        var scalar = await command.ExecuteScalarAsync();
+        return Convert.ToInt32(scalar);
+    }
+
+    private static async Task<int> CountTableRowsAsync(SqliteConnectionFactory connectionFactory, string tableName)
+    {
+        await using var connection = (SqliteConnection)await connectionFactory.CreateAsync("pipeline_cloud");
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"SELECT COUNT(*) FROM {tableName}";
         var scalar = await command.ExecuteScalarAsync();
         return Convert.ToInt32(scalar);
     }

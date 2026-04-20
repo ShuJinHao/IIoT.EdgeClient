@@ -35,7 +35,13 @@ public class HardwareConfigMappingProfile : Profile
                 src.DeviceType,
                 src.PortName,
                 src.BaudRate,
-                src.IsEnabled));
+                src.DataBits,
+                src.StopBits,
+                src.Parity,
+                src.SendCmd1,
+                src.SendCmd2,
+                src.IsEnabled,
+                src.Remark));
 
         CreateMap<IoMappingVm, IoMappingDto>()
             .ConstructUsing((src, context) => new IoMappingDto(
@@ -46,6 +52,7 @@ public class HardwareConfigMappingProfile : Profile
                 src.AddressCount,
                 src.DataType,
                 src.Direction,
-                src.SortOrder));
+                src.SortOrder,
+                src.Remark));
     }
 }

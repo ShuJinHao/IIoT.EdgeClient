@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>true</IsPackable>
+    <PackageId>IIoT.Edge.Module.Contracts</PackageId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\IIoT.Edge.Integration.Contracts\IIoT.Edge.Integration.Contracts.csproj" />
+    <ProjectReference Include="..\IIoT.Edge.SharedKernel\IIoT.Edge.SharedKernel.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\Application\IIoT.Edge.Application\Abstractions\Tasks\IBackgroundTask.cs" Link="Tasks\IBackgroundTask.cs" />
+    <Compile Include="..\..\Application\IIoT.Edge.Application\Abstractions\Modules\ICellDataRegistry.cs" Link="ICellDataRegistry.cs" />
+    <Compile Include="..\..\Application\IIoT.Edge.Application\Abstractions\Modules\IModuleHardwareProfileProvider.cs" Link="IModuleHardwareProfileProvider.cs" />
+    <Compile Include="..\..\Application\IIoT.Edge.Application\Abstractions\Modules\IProcessCloudUploader.cs" Link="IProcessCloudUploader.cs" />
+    <Compile Include="..\..\Application\IIoT.Edge.Application\Abstractions\Modules\IProcessIntegrationRegistry.cs" Link="IProcessIntegrationRegistry.cs" />
+    <Compile Include="..\..\Application\IIoT.Edge.Application\Abstractions\Modules\IProcessMesUploader.cs" Link="IProcessMesUploader.cs" />
+    <Compile Include="..\..\Application\IIoT.Edge.Application\Abstractions\Modules\IStationRuntimeRegistry.cs" Link="IStationRuntimeRegistry.cs" />
+    <Compile Include="..\..\Application\IIoT.Edge.Application\Abstractions\Plc\IPlcTask.cs" Link="Plc\IPlcTask.cs" />
+    <Compile Include="..\..\Application\IIoT.Edge.Application\Abstractions\Plc\Store\IPlcBuffer.cs" Link="Plc\Store\IPlcBuffer.cs" />
+  </ItemGroup>
+
+</Project>

@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Common.Crud;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Models;
@@ -29,7 +30,7 @@ public interface IHardwareConfigCrudService
         NetworkDeviceVm? selectedNetworkDevice,
         CancellationToken cancellationToken = default);
 
-    Task SaveAsync(
+    Task<CrudOperationResult> SaveAsync(
         IReadOnlyCollection<NetworkDeviceVm> networkDevices,
         IReadOnlyCollection<SerialDeviceVm> serialDevices,
         int selectedNetworkDeviceId,
@@ -43,7 +44,8 @@ public interface IHardwareConfigCrudService
 /// </summary>
 public sealed class HardwareConfigCrudService(
     ISender sender,
-    IEnumerable<IModuleHardwareProfileProvider> hardwareProfiles) : IHardwareConfigCrudService
+    IEnumerable<IModuleHardwareProfileProvider> hardwareProfiles,
+    IClientPermissionService permissionService) : IHardwareConfigCrudService
 {
     private readonly Dictionary<string, IModuleHardwareProfileProvider> _hardwareProfiles = hardwareProfiles
         .ToDictionary(x => x.ModuleId, StringComparer.OrdinalIgnoreCase);
@@ -82,6 +84,11 @@ public sealed class HardwareConfigCrudService(
         NetworkDeviceVm? selectedNetworkDevice,
         CancellationToken cancellationToken = default)
     {
+        if (!permissionService.CanEditHardware)
+        {
+            return CrudOperationResult.Failure("当前用户无硬件配置权限。");
+        }
+
         if (selectedNetworkDevice is null)
         {
             return CrudOperationResult.Failure("请先选择一个 PLC 设备。");
@@ -121,7 +128,8 @@ public sealed class HardwareConfigCrudService(
                 x.AddressCount,
                 x.DataType,
                 x.Direction,
-                x.SortOrder))
+                x.SortOrder,
+                x.Remark))
             .ToList();
 
         var existingLabels = new HashSet<string>(
@@ -144,7 +152,8 @@ public sealed class HardwareConfigCrudService(
                 template.AddressCount,
                 template.DataType,
                 template.Direction,
-                template.SortOrder));
+                template.SortOrder,
+                null));
             existingLabels.Add(template.Label);
             addedCount++;
         }
@@ -161,17 +170,24 @@ public sealed class HardwareConfigCrudService(
         return CrudOperationResult.Success($"已补齐 {addedCount} 条模块默认映射。");
     }
 
-    public Task SaveAsync(
+    public Task<CrudOperationResult> SaveAsync(
         IReadOnlyCollection<NetworkDeviceVm> networkDevices,
         IReadOnlyCollection<SerialDeviceVm> serialDevices,
         int selectedNetworkDeviceId,
         IReadOnlyCollection<IoMappingVm> ioMappings,
         CancellationToken cancellationToken = default)
-        => sender.Send(
+    {
+        if (!permissionService.CanEditHardware)
+        {
+            return Task.FromResult(CrudOperationResult.Failure("当前用户无硬件配置权限。"));
+        }
+
+        return sender.Send(
             new SaveHardwareConfigCommand(
                 networkDevices.ToList(),
                 serialDevices.ToList(),
                 selectedNetworkDeviceId,
                 ioMappings.ToList()),
             cancellationToken);
+    }
 }

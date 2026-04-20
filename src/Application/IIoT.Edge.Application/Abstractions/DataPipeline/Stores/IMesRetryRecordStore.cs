@@ -8,6 +8,12 @@ public interface IMesRetryRecordStore
 
     Task<List<FailedCellRecord>> GetPendingAsync(int batchSize = 10);
 
+    Task<ClaimedFailedCellBatch?> ClaimPendingBatchAsync(int batchSize = 10);
+
+    Task DeleteClaimedBatchAsync(string claimToken);
+
+    Task ReleaseClaimAsync(string claimToken);
+
     Task DeleteAsync(long id);
 
     Task UpdateRetryAsync(long id, int retryCount, string errorMessage, DateTime nextRetryTime);

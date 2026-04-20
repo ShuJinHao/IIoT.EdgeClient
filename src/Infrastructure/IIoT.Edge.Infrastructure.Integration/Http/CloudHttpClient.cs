@@ -6,6 +6,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Polly.Timeout;
 
 namespace IIoT.Edge.Infrastructure.Integration.Http;
 
@@ -81,6 +82,11 @@ public class CloudHttpClient : ICloudHttpClient
             _logger.Warn($"[CloudHttp] POST timeout: {requestUrl}, {ex.Message}");
             return CloudCallResult.Failure(CloudCallOutcome.NetworkFailure, "timeout");
         }
+        catch (TimeoutRejectedException ex)
+        {
+            _logger.Warn($"[CloudHttp] POST timeout: {requestUrl}, {ex.Message}");
+            return CloudCallResult.Failure(CloudCallOutcome.NetworkFailure, "timeout");
+        }
         catch (HttpRequestException ex)
         {
             _logger.Error($"[CloudHttp] POST network exception: {requestUrl}, {ex.Message}");
@@ -129,6 +135,11 @@ public class CloudHttpClient : ICloudHttpClient
             _logger.Warn($"[CloudHttp] POST-with-response timeout: {requestUrl}, {ex.Message}");
             return CloudCallResult<string>.Failure(CloudCallOutcome.NetworkFailure, "timeout");
         }
+        catch (TimeoutRejectedException ex)
+        {
+            _logger.Warn($"[CloudHttp] POST-with-response timeout: {requestUrl}, {ex.Message}");
+            return CloudCallResult<string>.Failure(CloudCallOutcome.NetworkFailure, "timeout");
+        }
         catch (HttpRequestException ex)
         {
             _logger.Error($"[CloudHttp] POST-with-response network exception: {requestUrl}, {ex.Message}");
@@ -172,6 +183,11 @@ public class CloudHttpClient : ICloudHttpClient
                 response.StatusCode);
         }
         catch (TaskCanceledException ex)
+        {
+            _logger.Warn($"[CloudHttp] GET timeout: {requestUrl}, {ex.Message}");
+            return CloudCallResult<string>.Failure(CloudCallOutcome.NetworkFailure, "timeout");
+        }
+        catch (TimeoutRejectedException ex)
         {
             _logger.Warn($"[CloudHttp] GET timeout: {requestUrl}, {ex.Message}");
             return CloudCallResult<string>.Failure(CloudCallOutcome.NetworkFailure, "timeout");

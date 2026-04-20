@@ -14,7 +14,31 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Core\IIoT.Edge.Domain\IIoT.Edge.Domain.csproj" />
+    <ProjectReference Include="..\..\Shared\IIoT.Edge.Integration.Contracts\IIoT.Edge.Integration.Contracts.csproj" />
+    <ProjectReference Include="..\..\Shared\IIoT.Edge.Module.Contracts\IIoT.Edge.Module.Contracts.csproj" />
     <ProjectReference Include="..\..\Shared\IIoT.Edge.SharedKernel\IIoT.Edge.SharedKernel.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Abstractions\Device\CloudCallOutcome.cs" />
+    <Compile Remove="Abstractions\Device\CloudCallResult.cs" />
+    <Compile Remove="Abstractions\Device\CloudRequestOptions.cs" />
+    <Compile Remove="Abstractions\Device\DeviceSession.cs" />
+    <Compile Remove="Abstractions\Device\EdgeUploadBlockReason.cs" />
+    <Compile Remove="Abstractions\Device\EdgeUploadBlockReasonExtensions.cs" />
+    <Compile Remove="Abstractions\Device\EdgeUploadGateSnapshot.cs" />
+    <Compile Remove="Abstractions\Device\EdgeUploadGateState.cs" />
+    <Compile Remove="Abstractions\Device\ICloudHttpClient.cs" />
+    <Compile Remove="Abstractions\Device\IDeviceAccessTokenProvider.cs" />
+    <Compile Remove="Abstractions\Modules\ICellDataRegistry.cs" />
+    <Compile Remove="Abstractions\Modules\IModuleHardwareProfileProvider.cs" />
+    <Compile Remove="Abstractions\Modules\IProcessCloudUploader.cs" />
+    <Compile Remove="Abstractions\Modules\IProcessIntegrationRegistry.cs" />
+    <Compile Remove="Abstractions\Modules\IProcessMesUploader.cs" />
+    <Compile Remove="Abstractions\Modules\IStationRuntimeRegistry.cs" />
+    <Compile Remove="Abstractions\Plc\IPlcTask.cs" />
+    <Compile Remove="Abstractions\Plc\Store\IPlcBuffer.cs" />
+    <Compile Remove="Abstractions\Tasks\IBackgroundTask.cs" />
   </ItemGroup>
 
 </Project>

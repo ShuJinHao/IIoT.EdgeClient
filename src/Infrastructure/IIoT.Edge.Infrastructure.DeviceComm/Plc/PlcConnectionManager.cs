@@ -118,6 +118,21 @@ public class PlcConnectionManager : IPlcConnectionManager
         }
     }
 
+    public async Task StopDeviceAsync(int networkDeviceId, CancellationToken ct = default)
+    {
+        await _lifecycleGate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            ThrowIfDisposed();
+            await StopDeviceCoreAsync(networkDeviceId, ct).ConfigureAwait(false);
+            _logger.Info($"[DeviceId={networkDeviceId}] Stop completed.");
+        }
+        finally
+        {
+            _lifecycleGate.Release();
+        }
+    }
+
     public async Task StopAsync(CancellationToken ct = default)
     {
         RequestShutdown();
@@ -146,24 +161,47 @@ public class PlcConnectionManager : IPlcConnectionManager
         }
 
         RequestShutdown();
+        DisposeCoreAsync().GetAwaiter().GetResult();
+    }
 
+    public async ValueTask DisposeAsync()
+    {
+        if (Interlocked.Exchange(ref _disposeState, 1) != 0)
+        {
+            return;
+        }
+
+        RequestShutdown();
+        await DisposeCoreAsync().ConfigureAwait(false);
+    }
+
+    private async Task DisposeCoreAsync()
+    {
         Dictionary<int, CancellationTokenSource> deviceCtsMap;
         Dictionary<int, List<Task>> runningTaskHandles;
         Dictionary<int, IPlcService> plcInstances;
         Dictionary<int, string> deviceNames;
 
-        lock (_stateLock)
+        await _lifecycleGate.WaitAsync().ConfigureAwait(false);
+        try
         {
-            deviceCtsMap = new Dictionary<int, CancellationTokenSource>(_deviceCtsMap);
-            runningTaskHandles = new Dictionary<int, List<Task>>(_runningTaskHandles);
-            plcInstances = new Dictionary<int, IPlcService>(_plcInstances);
-            deviceNames = new Dictionary<int, string>(_deviceNames);
+            lock (_stateLock)
+            {
+                deviceCtsMap = new Dictionary<int, CancellationTokenSource>(_deviceCtsMap);
+                runningTaskHandles = new Dictionary<int, List<Task>>(_runningTaskHandles);
+                plcInstances = new Dictionary<int, IPlcService>(_plcInstances);
+                deviceNames = new Dictionary<int, string>(_deviceNames);
 
-            _deviceCtsMap.Clear();
-            _runningTaskHandles.Clear();
-            _plcInstances.Clear();
-            _plcTasks.Clear();
-            _deviceNames.Clear();
+                _deviceCtsMap.Clear();
+                _runningTaskHandles.Clear();
+                _plcInstances.Clear();
+                _plcTasks.Clear();
+                _deviceNames.Clear();
+            }
+        }
+        finally
+        {
+            _lifecycleGate.Release();
         }
 
         foreach (var cts in deviceCtsMap.Values)
@@ -177,39 +215,36 @@ public class PlcConnectionManager : IPlcConnectionManager
             }
         }
 
-        _ = Task.Run(async () =>
+        foreach (var pair in runningTaskHandles)
         {
-            foreach (var pair in runningTaskHandles)
+            var deviceName = deviceNames.TryGetValue(pair.Key, out var trackedName)
+                ? trackedName
+                : $"DeviceId={pair.Key}";
+            try
             {
-                var deviceName = deviceNames.TryGetValue(pair.Key, out var trackedName)
-                    ? trackedName
-                    : $"DeviceId={pair.Key}";
-                try
-                {
-                    await AwaitRunningHandlesAsync(deviceName, pair.Value, CancellationToken.None).ConfigureAwait(false);
-                }
-                catch
-                {
-                }
+                await AwaitRunningHandlesAsync(deviceName, pair.Value, CancellationToken.None).ConfigureAwait(false);
             }
+            catch
+            {
+            }
+        }
 
-            foreach (var plc in plcInstances.Values)
+        foreach (var plc in plcInstances.Values)
+        {
+            try
             {
-                try
-                {
-                    plc.Disconnect();
-                    plc.Dispose();
-                }
-                catch
-                {
-                }
+                plc.Disconnect();
+                plc.Dispose();
             }
+            catch
+            {
+            }
+        }
 
-            foreach (var cts in deviceCtsMap.Values)
-            {
-                cts.Dispose();
-            }
-        }, CancellationToken.None);
+        foreach (var cts in deviceCtsMap.Values)
+        {
+            cts.Dispose();
+        }
     }
 
     private async Task InitializeDeviceSafelyAsync(NetworkDeviceEntity device, CancellationToken ct)

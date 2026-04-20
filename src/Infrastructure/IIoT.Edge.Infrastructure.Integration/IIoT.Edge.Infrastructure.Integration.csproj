@@ -8,12 +8,15 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Application\IIoT.Edge.Application\IIoT.Edge.Application.csproj" />
+    <ProjectReference Include="..\..\Shared\IIoT.Edge.Integration.Contracts\IIoT.Edge.Integration.Contracts.csproj" />
+    <ProjectReference Include="..\..\Shared\IIoT.Edge.Module.Contracts\IIoT.Edge.Module.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="AutoMapper" />
     <PackageReference Include="ClosedXML" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
   </ItemGroup>
 

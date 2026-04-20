@@ -21,6 +21,7 @@ public class SysMenuViewModel : ViewModelBase
 
     private readonly INavigationService _navigationService;
     private readonly IAuthService _authService;
+    private readonly IClientPermissionService _permissionService;
 
     public ObservableCollection<MenuItemViewModel> MenuItems { get; } = new();
 
@@ -41,10 +42,12 @@ public class SysMenuViewModel : ViewModelBase
     public SysMenuViewModel(
         INavigationService navigationService,
         IAuthService authService,
+        IClientPermissionService permissionService,
         IViewRegistry viewRegistry)
     {
         _navigationService = navigationService;
         _authService = authService;
+        _permissionService = permissionService;
 
         LayoutRow = 1;
         LayoutColumn = 0;
@@ -52,14 +55,7 @@ public class SysMenuViewModel : ViewModelBase
         NavigateCommand = new BaseCommand(ExecuteNavigate);
         LoginCommand = new BaseCommand(_ => ExecuteLogin());
 
-        _authService.AuthStateChanged += _ =>
-        {
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
-            {
-                RefreshMenuPermissions();
-                OnPropertyChanged(nameof(LoginButtonText));
-            });
-        };
+        _permissionService.PermissionStateChanged += HandlePermissionStateChanged;
 
         BuildMenuItemsFromRegistry(viewRegistry);
     }
@@ -68,7 +64,7 @@ public class SysMenuViewModel : ViewModelBase
     {
         MenuItems.Clear();
         foreach (var menu in viewRegistry.GetAllMenus().OrderBy(m => m.Order))
-            MenuItems.Add(new MenuItemViewModel(menu, _authService));
+            MenuItems.Add(new MenuItemViewModel(menu, _permissionService));
     }
 
     private void RefreshMenuPermissions()
@@ -101,5 +97,21 @@ public class SysMenuViewModel : ViewModelBase
         else
             DialogHost.OpenDialogCommand.Execute(null, null);
     }
-}
 
+    private void HandlePermissionStateChanged()
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+        {
+            RefreshMenuPermissions();
+            OnPropertyChanged(nameof(LoginButtonText));
+            return;
+        }
+
+        dispatcher.Invoke(() =>
+        {
+            RefreshMenuPermissions();
+            OnPropertyChanged(nameof(LoginButtonText));
+        });
+    }
+}

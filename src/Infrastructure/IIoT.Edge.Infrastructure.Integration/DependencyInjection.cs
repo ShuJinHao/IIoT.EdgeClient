@@ -19,11 +19,17 @@ using IIoT.Edge.Infrastructure.Integration.PassStation;
 using IIoT.Edge.Infrastructure.Integration.Recipe;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Http.Resilience;
+using Polly;
+using System.Threading;
 
 namespace IIoT.Edge.Infrastructure.Integration;
 
 public static class DependencyInjection
 {
+    private static readonly TimeSpan CloudApiRequestTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan CloudRetryDelay = TimeSpan.FromMilliseconds(500);
+
     public static IServiceCollection AddIntegrationInfrastructure(
         this IServiceCollection services,
         IConfiguration configuration,
@@ -55,7 +61,19 @@ public static class DependencyInjection
         services.AddSingleton<IDeviceService>(sp => sp.GetRequiredService<DeviceService>());
         services.AddSingleton<IDeviceAccessTokenProvider>(sp => sp.GetRequiredService<DeviceService>());
 
-        services.AddHttpClient("CloudApi", client => client.Timeout = timeout);
+        services.AddHttpClient("CloudApi", client => client.Timeout = Timeout.InfiniteTimeSpan)
+            .AddResilienceHandler("cloud-transient", builder =>
+            {
+                builder.AddRetry(new HttpRetryStrategyOptions
+                {
+                    MaxRetryAttempts = 3,
+                    BackoffType = DelayBackoffType.Exponential,
+                    UseJitter = true,
+                    Delay = CloudRetryDelay,
+                    ShouldRetryAfterHeader = true
+                });
+                builder.AddTimeout(CloudApiRequestTimeout);
+            });
         services.AddSingleton<ICloudHttpClient, CloudHttpClient>();
         services.AddHttpClient("MesApi", client => client.Timeout = mesTimeout);
         services.AddSingleton<IMesHttpClient, MesHttpClient>();
@@ -68,6 +86,7 @@ public static class DependencyInjection
         services.AddSingleton<ICapacitySyncTask, CapacitySyncTask>();
         services.AddSingleton<IDeviceLogSyncTask, DeviceLogSyncTask>();
         services.AddSingleton<IRecipeService, RecipeService>();
+        services.AddSingleton<RecipeSyncTask>();
 
         services.AddSingleton<IExcelConsumer>(sp =>
             new ExcelConsumer(excelDirectory, sp.GetRequiredService<ILogService>()));

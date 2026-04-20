@@ -340,8 +340,8 @@ public sealed class RetryTaskCloudMesBehaviorTests
         await task.ExecuteOnceAsync();
 
         Assert.Contains(100L, mesFallbackStore.DeletedIds);
-        Assert.Equal(1, failedStore.SaveCallCount);
         Assert.Equal(1, mesConsumer.ProcessCallCount);
+        Assert.Empty(failedStore.PendingRecords);
     }
 
     [Fact]
@@ -559,19 +559,18 @@ public sealed class RetryTaskCloudMesBehaviorTests
     }
 
     [Fact]
-    public async Task CloudChannel_WhenFallbackSaveFails_ShouldContinueRecoveringRemainingRecords()
+    public async Task CloudChannel_WhenFallbackContainsMixedValidity_ShouldContinueRecoveringRemainingRecords()
     {
         CellDataTypeRegistry.Register<InjectionCellData>("Injection");
 
         var logger = new FakeLogService();
         var failedStore = new FakeFailedRecordStore();
-        failedStore.SaveExceptions.Enqueue(new InvalidOperationException("transient save failure"));
         var cloudFallbackStore = new FakeCloudFallbackBufferStore();
         cloudFallbackStore.Records.Add(new CloudFallbackRecord
         {
             Id = 201,
             ProcessType = "Injection",
-            CellDataJson = SerializeCellData(new InjectionCellData { Barcode = "BC-CLOUD-201", WorkOrderNo = "WO-201" }),
+            CellDataJson = "{bad-json",
             FailedTarget = "Cloud",
             ErrorMessage = "seed-1",
             CreatedAt = DateTime.UtcNow.AddMinutes(-2)
@@ -588,6 +587,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
 
         var cloudConsumer = new FakeCloudConsumer();
         var cloudBatchConsumer = new FakeCloudBatchConsumer();
+        var deadLetterStore = new FakeCloudDeadLetterStore();
         var integrationRegistry = new FakeProcessIntegrationRegistry();
         integrationRegistry.RegisterCloudUploader("Injection", ProcessUploadMode.Batch);
         var task = new TestableCloudRetryTask(
@@ -599,16 +599,17 @@ public sealed class RetryTaskCloudMesBehaviorTests
             cloudBatchConsumer,
             new FakeDeviceLogSyncTask(),
             new FakeCapacitySyncTask(),
-            processIntegrationRegistry: integrationRegistry);
+            processIntegrationRegistry: integrationRegistry,
+            deadLetterStore: deadLetterStore);
 
         await task.ExecuteOnceAsync();
 
-        Assert.Equal(2, failedStore.SaveCallCount);
+        Assert.Contains(201L, cloudFallbackStore.DeletedIds);
         Assert.Contains(202L, cloudFallbackStore.DeletedIds);
-        Assert.DoesNotContain(201L, cloudFallbackStore.DeletedIds);
+        Assert.Single(deadLetterStore.Records);
         Assert.Equal(0, cloudConsumer.ProcessCallCount);
         Assert.Equal(1, cloudBatchConsumer.ProcessBatchCallCount);
-        Assert.Contains(logger.Entries, entry => entry.Message.Contains("Failed to rehydrate Cloud fallback record 201", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, entry => entry.Message.Contains("moved into Cloud dead-letter store", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -767,6 +768,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
             FakeCriticalPersistenceFallbackWriter? criticalWriter = null,
             DataPipelineCapacityGuard? capacityGuard = null)
         {
+            fallbackStore.RetryStore = retryStore;
             _inner = new CloudRetryTask(
                 logger,
                 retryStore,
@@ -801,6 +803,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
             FakeCriticalPersistenceFallbackWriter? criticalWriter = null,
             DataPipelineCapacityGuard? capacityGuard = null)
         {
+            fallbackStore.RetryStore = retryStore;
             _inner = new MesRetryTask(
                 logger,
                 retryStore,

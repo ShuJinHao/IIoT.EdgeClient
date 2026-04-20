@@ -26,6 +26,7 @@
     <ProjectReference Include="..\\..\\Presentation\\IIoT.Edge.Presentation.Shell\\IIoT.Edge.Presentation.Shell.csproj" />
     <ProjectReference Include="..\\..\\Runtime\\IIoT.Edge.Runtime\\IIoT.Edge.Runtime.csproj" />
     <ProjectReference Include="..\\..\\Shared\\IIoT.Edge.Module.Abstractions\\IIoT.Edge.Module.Abstractions.csproj" />
+    <ProjectReference Include="..\\..\\Shared\\IIoT.Edge.Module.Contracts\\IIoT.Edge.Module.Contracts.csproj" />
     <ProjectReference Include="..\\..\\Shared\\IIoT.Edge.UI.Shared\\IIoT.Edge.UI.Shared.csproj" />
   </ItemGroup>
 

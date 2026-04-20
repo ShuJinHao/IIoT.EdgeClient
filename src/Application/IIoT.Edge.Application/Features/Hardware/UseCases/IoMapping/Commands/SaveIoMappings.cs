@@ -16,7 +16,8 @@ public record IoMappingDto(
     int AddressCount,
     string DataType,
     string Direction,
-    int SortOrder
+    int SortOrder,
+    string? Remark
 );
 
 /// <summary>
@@ -38,6 +39,20 @@ public class SaveIoMappingsHandler(
         SaveIoMappingsCommand request,
         CancellationToken cancellationToken)
     {
+        var existingMappings = await repo.GetListAsync(
+            x => x.NetworkDeviceId == request.NetworkDeviceId,
+            cancellationToken);
+        var existingById = existingMappings.ToDictionary(x => x.Id);
+        var submittedIds = request.Mappings
+            .Where(x => x.Id > 0)
+            .Select(x => x.Id)
+            .ToHashSet();
+
+        foreach (var entity in existingMappings.Where(x => !submittedIds.Contains(x.Id)))
+        {
+            repo.Delete(entity);
+        }
+
         foreach (var dto in request.Mappings)
         {
             if (dto.Id == 0)
@@ -46,23 +61,22 @@ public class SaveIoMappingsHandler(
                     request.NetworkDeviceId, dto.Label, dto.PlcAddress,
                     dto.AddressCount, dto.DataType, dto.Direction)
                 {
-                    SortOrder = dto.SortOrder
+                    SortOrder = dto.SortOrder,
+                    Remark = dto.Remark
                 };
                 repo.Add(entity);
             }
-            else
+            else if (existingById.TryGetValue(dto.Id, out var entity))
             {
-                var entity = await repo.GetByIdAsync(dto.Id, cancellationToken);
-                if (entity != null)
-                {
-                    entity.Label = dto.Label;
-                    entity.PlcAddress = dto.PlcAddress;
-                    entity.AddressCount = dto.AddressCount;
-                    entity.DataType = dto.DataType;
-                    entity.Direction = dto.Direction;
-                    entity.SortOrder = dto.SortOrder;
-                    repo.Update(entity);
-                }
+                entity.NetworkDeviceId = request.NetworkDeviceId;
+                entity.Label = dto.Label;
+                entity.PlcAddress = dto.PlcAddress;
+                entity.AddressCount = dto.AddressCount;
+                entity.DataType = dto.DataType;
+                entity.Direction = dto.Direction;
+                entity.SortOrder = dto.SortOrder;
+                entity.Remark = dto.Remark;
+                repo.Update(entity);
             }
         }
 

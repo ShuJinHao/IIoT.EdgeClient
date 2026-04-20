@@ -1,3 +1,5 @@
+using IIoT.Edge.Application.Abstractions.Auth;
+using IIoT.Edge.Application.Common.Crud;
 using AutoMapper;
 using IIoT.Edge.Application.Features.Config.ParamView.Mappings;
 using IIoT.Edge.Application.Features.Config.ParamView.Models;
@@ -23,7 +25,7 @@ public record LoadDeviceParamsQuery(int DeviceId) : IRequest<List<DeviceParamVm>
 public record SaveParamViewCommand(
     List<GeneralParamVm> GeneralParams,
     int DeviceId,
-    List<DeviceParamVm> DeviceParams) : IRequest;
+    List<DeviceParamVm> DeviceParams) : IRequest<CrudOperationResult>;
 
 public class LoadParamViewHandler(ISender sender, IMapper mapper)
     : IRequestHandler<LoadParamViewQuery, ParamViewInitResult>
@@ -72,15 +74,33 @@ public class LoadDeviceParamsHandler(ISender sender, IMapper mapper)
     }
 }
 
-public class SaveParamViewHandler(ISender sender, IMapper mapper)
-    : IRequestHandler<SaveParamViewCommand>
+public class SaveParamViewHandler(
+    ISender sender,
+    IMapper mapper,
+    IClientPermissionService permissionService)
+    : IRequestHandler<SaveParamViewCommand, CrudOperationResult>
 {
-    public async Task Handle(SaveParamViewCommand request, CancellationToken ct)
+    public async Task<CrudOperationResult> Handle(SaveParamViewCommand request, CancellationToken ct)
     {
+        if (!permissionService.CanEditParams)
+        {
+            return CrudOperationResult.Failure("当前用户无参数配置权限。");
+        }
+
         var systemConfigs = mapper.Map<List<SystemConfigDto>>(request.GeneralParams);
-        await sender.Send(new SaveSystemConfigsCommand(systemConfigs), ct);
+        var systemResult = await sender.Send(new SaveSystemConfigsCommand(systemConfigs), ct);
+        if (!systemResult.IsSuccess)
+        {
+            return CrudOperationResult.Failure(systemResult.ErrorMessage ?? "系统参数保存失败。");
+        }
 
         var deviceParams = mapper.Map<List<DeviceParamDto>>(request.DeviceParams);
-        await sender.Send(new SaveDeviceParamsCommand(request.DeviceId, deviceParams), ct);
+        var deviceResult = await sender.Send(new SaveDeviceParamsCommand(request.DeviceId, deviceParams), ct);
+        if (!deviceResult.IsSuccess)
+        {
+            return CrudOperationResult.Failure(deviceResult.ErrorMessage ?? "设备参数保存失败。");
+        }
+
+        return CrudOperationResult.Success("参数配置已保存。");
     }
 }

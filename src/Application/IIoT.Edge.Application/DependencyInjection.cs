@@ -1,5 +1,7 @@
+using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Tasks;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Auth;
 using IIoT.Edge.Application.Common.Diagnostics;
 using IIoT.Edge.Application.Common.Tasks;
 using IIoT.Edge.Application.Features.Config.ParamView;
@@ -19,6 +21,7 @@ public static class DependencyInjection
     public static IServiceCollection AddEdgeApplication(this IServiceCollection services)
     {
         services.AddSingleton<CapacityCloudQueryService>();
+        services.AddSingleton<IClientPermissionService, ClientPermissionService>();
         services.AddTransient<IParamViewCrudService, ParamViewCrudService>();
         services.AddTransient<IHardwareConfigCrudService, HardwareConfigCrudService>();
         services.AddTransient<IRecipeViewCrudService, RecipeViewCrudService>();

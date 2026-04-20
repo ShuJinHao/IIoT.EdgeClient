@@ -32,6 +32,8 @@
   </Folder>
   <Folder Name="/src/Shared/">
     <Project Path="src/Shared/IIoT.Edge.Module.Abstractions/IIoT.Edge.Module.Abstractions.csproj" />
+    <Project Path="src/Shared/IIoT.Edge.Module.Contracts/IIoT.Edge.Module.Contracts.csproj" />
+    <Project Path="src/Shared/IIoT.Edge.Integration.Contracts/IIoT.Edge.Integration.Contracts.csproj" />
     <Project Path="src/Shared/IIoT.Edge.SharedKernel/IIoT.Edge.SharedKernel.csproj" />
     <Project Path="src/Shared/IIoT.Edge.UI.Shared/IIoT.Edge.UI.Shared.csproj" Id="2c8e15da-52ba-4d59-aced-196d42918475" />
   </Folder>

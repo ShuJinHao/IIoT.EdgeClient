@@ -60,16 +60,20 @@ public sealed class InjectionRecipeViewModel : RecipeViewModel
 
 public sealed class InjectionParamViewModel : ParamViewModel
 {
-    public InjectionParamViewModel(IParamViewCrudService crudService)
-        : base(crudService, InjectionViewIds.ParamView, "参数配置")
+    public InjectionParamViewModel(
+        IParamViewCrudService crudService,
+        IClientPermissionService permissionService)
+        : base(crudService, permissionService, InjectionViewIds.ParamView, "参数配置")
     {
     }
 }
 
 public sealed class InjectionHardwareConfigViewModel : HardwareConfigViewModel
 {
-    public InjectionHardwareConfigViewModel(IHardwareConfigCrudService crudService, IAuthService authService)
-        : base(crudService, authService, InjectionViewIds.HardwareConfigView, "硬件配置")
+    public InjectionHardwareConfigViewModel(
+        IHardwareConfigCrudService crudService,
+        IClientPermissionService permissionService)
+        : base(crudService, permissionService, InjectionViewIds.HardwareConfigView, "硬件配置")
     {
     }
 }
