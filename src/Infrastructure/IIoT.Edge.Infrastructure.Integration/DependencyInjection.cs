@@ -43,17 +43,17 @@ public static class DependencyInjection
         services.AddSingleton<IMesEndpointProvider, MesEndpointProvider>();
         services.AddSingleton<DeviceSessionFileCacheStore>();
 
-        var localAdminConfig = new LocalAdminConfig();
-        configuration.GetSection("LocalAdmin").Bind(localAdminConfig);
-        services.AddSingleton(localAdminConfig);
+        services.AddSingleton(new LocalAdminConfig
+        {
+            PasswordHash = Environment.GetEnvironmentVariable("LocalAdmin__PasswordHash")?.Trim() ?? string.Empty
+        });
 
         services.AddHttpClient<AuthService>(client => client.Timeout = timeout);
         services.AddSingleton<IAuthService>(sp => sp.GetRequiredService<AuthService>());
-        services.AddSingleton<ICloudAccessTokenProvider>(sp =>
-            (ICloudAccessTokenProvider)sp.GetRequiredService<IAuthService>());
 
         services.AddHttpClient<DeviceService>(client => client.Timeout = timeout);
         services.AddSingleton<IDeviceService>(sp => sp.GetRequiredService<DeviceService>());
+        services.AddSingleton<IDeviceAccessTokenProvider>(sp => sp.GetRequiredService<DeviceService>());
 
         services.AddHttpClient("CloudApi", client => client.Timeout = timeout);
         services.AddSingleton<ICloudHttpClient, CloudHttpClient>();

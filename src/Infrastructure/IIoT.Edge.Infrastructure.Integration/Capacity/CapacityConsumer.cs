@@ -43,7 +43,7 @@ public class CapacityConsumer : ICapacityConsumer
         {
             var cellData = record.CellData;
             var deviceName = cellData.DeviceName;
-            var completedTime = cellData.CompletedTime ?? DateTime.Now;
+            var completedTime = cellData.CompletedTime ?? DateTime.UtcNow;
             var isOk = cellData.CellResult ?? false;
 
             var shiftCode = _todayCapacityStore.Increment(deviceName, completedTime, isOk);
@@ -54,7 +54,7 @@ public class CapacityConsumer : ICapacityConsumer
                 Snapshot = snapshot
             });
 
-            if (_deviceService.CurrentState == NetworkState.Offline)
+            if (!_deviceService.CanUploadToCloud)
             {
                 await _capacityBufferStore.SaveAsync(new CapacityRecord
                 {
@@ -62,7 +62,7 @@ public class CapacityConsumer : ICapacityConsumer
                     CellResult = isOk,
                     ShiftCode = shiftCode,
                     CompletedTime = completedTime,
-                    CreatedAt = DateTime.Now,
+                    CreatedAt = DateTime.UtcNow,
                     PlcName = deviceName
                 });
             }

@@ -1,12 +1,15 @@
-﻿using IIoT.Edge.Application.Abstractions.Plc;
+using IIoT.Edge.Application.Abstractions.Plc;
 using MCProtocol;
 using static MCProtocol.Mitsubishi;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Plc.Services;
 
-public class McPlcService : IPlcService, IDisposable
+public sealed class McPlcService : IPlcService, IDisposable
 {
-    private McProtocolTcp _mcProtocol = null!;
+    private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan OperationTimeout = TimeSpan.FromSeconds(3);
+
+    private McProtocolTcp? _mcProtocol;
     private string _ip = string.Empty;
     private int _port;
     private readonly McFrame _frameType = McFrame.MC3E;
@@ -20,29 +23,11 @@ public class McPlcService : IPlcService, IDisposable
         _port = port;
     }
 
-    public bool Connect()
-    {
-        try
-        {
-            if (_mcProtocol?.Connected ?? false)
-            {
-                return true;
-            }
-
-            _mcProtocol = new McProtocolTcp(_ip, _port, _frameType);
-            _mcProtocol.Open().GetAwaiter().GetResult();
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Connect failed: {ex.Message}");
-            return false;
-        }
-    }
-
     public async Task<bool> ConnectAsync()
     {
-        if (_mcProtocol?.Connected ?? false)
+        EnsureInitialized();
+
+        if (_mcProtocol?.Connected == true)
         {
             return true;
         }
@@ -52,54 +37,55 @@ public class McPlcService : IPlcService, IDisposable
 
         try
         {
-            var connectTask = _mcProtocol.Open();
-            if (await Task.WhenAny(connectTask, Task.Delay(3000)) != connectTask)
+            await _mcProtocol.Open().WaitAsync(ConnectTimeout).ConfigureAwait(false);
+            if (!_mcProtocol.Connected)
             {
-                Console.WriteLine("Connect timeout");
-                return false;
+                throw new InvalidOperationException($"MC PLC {_ip}:{_port} reported success but is still disconnected.");
             }
 
-            await connectTask;
-            return _mcProtocol.Connected;
+            return true;
         }
-        catch (Exception ex)
+        catch (TimeoutException ex)
         {
-            Console.WriteLine($"Connect failed: {ex.Message}");
-            return false;
+            _mcProtocol.Close();
+            throw new TimeoutException($"Connect to MC PLC {_ip}:{_port} timed out after {ConnectTimeout.TotalSeconds:0}s.", ex);
+        }
+        catch
+        {
+            _mcProtocol.Close();
+            throw;
         }
     }
 
     public void Disconnect() => _mcProtocol?.Close();
 
-    public List<T> ReadData<T>(string address, ushort length)
-        => ReadDataAsync<T>(address, length).GetAwaiter().GetResult();
-
     public async Task<List<T>> ReadDataAsync<T>(string address, ushort length)
     {
-        if (!IsConnected)
-        {
-            throw new InvalidOperationException("PLC is not connected.");
-        }
+        var protocol = EnsureConnected();
 
-        await _semaphore.WaitAsync();
+        await _semaphore.WaitAsync().ConfigureAwait(false);
         try
         {
             if (typeof(T) == typeof(bool))
             {
                 var data = new int[length];
-                await _mcProtocol.GetBitDevice(address, length, data);
+                await protocol.GetBitDevice(address, length, data).WaitAsync(OperationTimeout).ConfigureAwait(false);
                 return data.Select(x => (T)(object)(x != 0)).ToList();
             }
 
             var wordSize = GetWordSize(typeof(T));
             var totalWords = length * wordSize;
             var dataBuffer = new int[totalWords];
-            await _mcProtocol.ReadDeviceBlock(address, (ushort)totalWords, dataBuffer);
+            await protocol.ReadDeviceBlock(address, totalWords, dataBuffer).WaitAsync(OperationTimeout).ConfigureAwait(false);
             return ConvertToTypeList<T>(dataBuffer, length);
         }
-        catch (Exception ex)
+        catch (TimeoutException ex)
         {
-            throw new Exception($"Read {address} failed: {ex.Message}", ex);
+            throw new TimeoutException($"Read {address} timed out after {OperationTimeout.TotalSeconds:0}s.", ex);
+        }
+        catch (Exception ex) when (ex is not TimeoutException)
+        {
+            throw new InvalidOperationException($"Read {address} failed.", ex);
         }
         finally
         {
@@ -107,33 +93,31 @@ public class McPlcService : IPlcService, IDisposable
         }
     }
 
-    public void WriteData<T>(string address, List<T> data)
-        => WriteDataAsync(address, data).GetAwaiter().GetResult();
-
     public async Task WriteDataAsync<T>(string address, List<T> data)
     {
-        if (!IsConnected)
-        {
-            throw new InvalidOperationException("PLC is not connected.");
-        }
+        var protocol = EnsureConnected();
 
-        await _semaphore.WaitAsync();
+        await _semaphore.WaitAsync().ConfigureAwait(false);
         try
         {
             if (typeof(T) == typeof(bool))
             {
                 var intData = data.Select(x => Convert.ToInt32(x)).ToArray();
-                await _mcProtocol.SetBitDevice(address, data.Count, intData);
+                await protocol.SetBitDevice(address, data.Count, intData).WaitAsync(OperationTimeout).ConfigureAwait(false);
                 return;
             }
 
             var wordSize = GetWordSize(typeof(T));
             var intDataArray = ConvertToIntArray(data, wordSize);
-            await _mcProtocol.WriteDeviceBlock(address, (ushort)intDataArray.Length, intDataArray);
+            await protocol.WriteDeviceBlock(address, intDataArray.Length, intDataArray).WaitAsync(OperationTimeout).ConfigureAwait(false);
         }
-        catch (Exception ex)
+        catch (TimeoutException ex)
         {
-            throw new Exception($"Write {address} failed: {ex.Message}", ex);
+            throw new TimeoutException($"Write {address} timed out after {OperationTimeout.TotalSeconds:0}s.", ex);
+        }
+        catch (Exception ex) when (ex is not TimeoutException)
+        {
+            throw new InvalidOperationException($"Write {address} failed.", ex);
         }
         finally
         {
@@ -145,6 +129,25 @@ public class McPlcService : IPlcService, IDisposable
     {
         Disconnect();
         _mcProtocol?.Dispose();
+        _mcProtocol = null;
+    }
+
+    private void EnsureInitialized()
+    {
+        if (string.IsNullOrWhiteSpace(_ip))
+        {
+            throw new InvalidOperationException("MC PLC endpoint is not initialized.");
+        }
+    }
+
+    private McProtocolTcp EnsureConnected()
+    {
+        if (_mcProtocol is null || !_mcProtocol.Connected)
+        {
+            throw new InvalidOperationException("PLC is not connected.");
+        }
+
+        return _mcProtocol;
     }
 
     private static int GetWordSize(Type type)

@@ -29,6 +29,62 @@
                 <TextBlock Margin="0,24,0,8"
                            FontSize="18"
                            FontWeight="SemiBold"
+                           Text="Cloud Sync Diagnostics" />
+                <Border Margin="0,0,0,16"
+                        Padding="12"
+                        Background="#18181B"
+                        CornerRadius="6">
+                    <StackPanel>
+                        <TextBlock Text="{Binding DeviceSummary}" TextWrapping="Wrap" />
+                        <TextBlock Margin="0,4,0,0" Text="{Binding CloudGateSummary}" TextWrapping="Wrap" />
+                        <TextBlock Margin="0,4,0,0" Text="{Binding CloudRuntimeSummary}" TextWrapping="Wrap" />
+                        <TextBlock Margin="0,4,0,0" Text="{Binding CloudResultSummary}" TextWrapping="Wrap" />
+                        <TextBlock Margin="0,4,0,0" Text="{Binding CloudPendingSummary}" TextWrapping="Wrap" />
+                        <TextBlock Margin="0,4,0,0" Text="{Binding CloudCapacitySummary}" TextWrapping="Wrap" />
+                        <TextBlock Margin="0,4,0,0" Text="{Binding CloudPersistenceSummary}" TextWrapping="Wrap" />
+                        <TextBlock Margin="0,4,0,0" Text="{Binding CloudLastAttemptSummary}" TextWrapping="Wrap" />
+                        <TextBlock Margin="0,4,0,0" Text="{Binding CloudLastSuccessSummary}" TextWrapping="Wrap" />
+                        <TextBlock Margin="0,4,0,0" Text="{Binding CloudLastFailureSummary}" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Margin="0,8,0,8"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           Text="MES Sync Diagnostics" />
+                <Border Margin="0,0,0,16"
+                        Padding="12"
+                        Background="#18181B"
+                        CornerRadius="6">
+                    <StackPanel>
+                        <TextBlock Text="{Binding MesRuntimeSummary}" TextWrapping="Wrap" />
+                        <TextBlock Margin="0,4,0,0" Text="{Binding MesPendingSummary}" TextWrapping="Wrap" />
+                        <TextBlock Margin="0,4,0,0" Text="{Binding MesCapacitySummary}" TextWrapping="Wrap" />
+                        <TextBlock Margin="0,4,0,0" Text="{Binding MesPersistenceSummary}" TextWrapping="Wrap" />
+                        <TextBlock Margin="0,4,0,0" Text="{Binding MesLastAttemptSummary}" TextWrapping="Wrap" />
+                        <TextBlock Margin="0,4,0,0" Text="{Binding MesLastSuccessSummary}" TextWrapping="Wrap" />
+                        <TextBlock Margin="0,4,0,0" Text="{Binding MesLastFailureSummary}" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Margin="0,8,0,8"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           Text="Production Context Diagnostics" />
+                <Border Margin="0,0,0,16"
+                        Padding="12"
+                        Background="#18181B"
+                        CornerRadius="6">
+                    <TextBlock Text="{Binding ContextPersistenceSummary}" TextWrapping="Wrap" />
+                </Border>
+
+                <TextBlock Margin="0,24,0,8"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           Text="Startup Diagnostics" />
+                <TextBlock Margin="0,0,0,8"
+                           FontSize="16"
+                           FontWeight="SemiBold"
                            Text="Module registrations" />
                 <DataGrid ItemsSource="{Binding ModuleRegistrations}"
                           AutoGenerateColumns="False"

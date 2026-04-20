@@ -4,6 +4,7 @@ using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 using IIoT.Edge.Application.Abstractions.DataPipeline.SyncTask;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Tasks;
 using IIoT.Edge.Application.Common.Tasks;
 using IIoT.Edge.Infrastructure.Persistence.Dapper;
@@ -94,6 +95,13 @@ public partial class App : WpfApplication
 
         services.AddSingleton<FakeLogService>();
         services.AddSingleton<ILogService>(sp => sp.GetRequiredService<FakeLogService>());
+        services.AddSingleton<ICriticalPersistenceFallbackWriter, SimulatorCriticalPersistenceFallbackWriter>();
+
+        services.AddSingleton<FakeCloudUploadDiagnosticsStore>();
+        services.AddSingleton<ICloudUploadDiagnosticsStore>(sp => sp.GetRequiredService<FakeCloudUploadDiagnosticsStore>());
+
+        services.AddSingleton<FakeMesRetryDiagnosticsStore>();
+        services.AddSingleton<IMesRetryDiagnosticsStore>(sp => sp.GetRequiredService<FakeMesRetryDiagnosticsStore>());
 
         services.AddSingleton<FakeTodayCapacityStore>();
         services.AddSingleton<ITodayCapacityStore>(sp => sp.GetRequiredService<FakeTodayCapacityStore>());
@@ -123,16 +131,11 @@ public partial class App : WpfApplication
 
         services.AddSingleton<DataPipelineService>();
         services.AddSingleton<IDataPipelineService>(sp => sp.GetRequiredService<DataPipelineService>());
+        services.AddSingleton<IIngressOverflowPersistence, SimulatorIngressOverflowPersistence>();
         services.AddSingleton<ProcessQueueTask>();
-
+        services.AddSingleton<CloudRetryTask>();
         services.AddSingleton<TestRetryTask>(sp => new TestRetryTask(
-            sp.GetRequiredService<ILogService>(),
-            sp.GetRequiredService<IFailedRecordStore>(),
-            sp.GetRequiredService<IDeviceService>(),
-            sp.GetServices<ICellDataConsumer>(),
-            sp.GetRequiredService<IDeviceLogSyncTask>(),
-            sp.GetRequiredService<ICapacitySyncTask>(),
-            sp.GetService<ICloudBatchConsumer>()));
+            sp.GetRequiredService<CloudRetryTask>()));
 
         services.AddSingleton<IBackgroundServiceCoordinator, BackgroundServiceCoordinator>();
         services.AddSingleton<IManagedBackgroundService>(sp =>

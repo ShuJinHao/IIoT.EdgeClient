@@ -1,10 +1,10 @@
+using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Runtime.DataPipeline.Tasks;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
+using System.Reflection;
 using System.Text.Json;
-using DeviceSession = IIoT.Edge.Application.Abstractions.Device.DeviceSession;
-using NetworkState = IIoT.Edge.Application.Abstractions.Device.NetworkState;
-
 namespace IIoT.Edge.NonUiRegressionTests;
 
 public sealed class RetryTaskBehaviorTests
@@ -20,13 +20,21 @@ public sealed class RetryTaskBehaviorTests
             HasDeviceId = false,
             CurrentDevice = null
         };
+        deviceService.SetUploadGate(new EdgeUploadGateSnapshot
+        {
+            State = EdgeUploadGateState.Blocked,
+            Reason = EdgeUploadBlockReason.BootstrapNetworkFailure
+        });
 
-        var task = new TestableRetryTask(
-            channel: "Cloud",
+        var task = new TestableCloudRetryTask(
             logger,
             failedStore,
+            new FakeCloudFallbackBufferStore(),
             deviceService,
-            consumers: []);
+            new FakeCloudConsumer(),
+            new FakeCloudBatchConsumer(),
+            new FakeDeviceLogSyncTask(),
+            new FakeCapacitySyncTask());
 
         await task.ExecuteOnceAsync();
         Assert.Equal(0, failedStore.ResetAllAbandonedCallCount);
@@ -63,7 +71,7 @@ public sealed class RetryTaskBehaviorTests
     [InlineData(10, 1500, 2100)]
     public async Task RetryFailure_ShouldUseExpectedBackoffWindow(int currentRetryCount, int minSeconds, int maxSeconds)
     {
-        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+        CellDataTypeRegistry.Register<StackingCellData>("Stacking");
 
         var logger = new FakeLogService();
         var failedStore = new FakeFailedRecordStore();
@@ -76,40 +84,40 @@ public sealed class RetryTaskBehaviorTests
             ProcessId = Guid.NewGuid()
         });
 
-        var recordId = 100 + currentRetryCount;
+        const long recordIdBase = 100;
         failedStore.PendingRecords.Add(new FailedCellRecord
         {
-            Id = recordId,
+            Id = recordIdBase + currentRetryCount,
             Channel = "Cloud",
-            ProcessType = "Injection",
-            CellDataJson = SerializeCellData(new InjectionCellData
+            ProcessType = "Stacking",
+            CellDataJson = SerializeCellData(new StackingCellData
             {
-                Barcode = "BC-TEST",
-                WorkOrderNo = "WO-TEST"
+                Barcode = "BC-TEST"
             }),
             FailedTarget = "Cloud",
             ErrorMessage = "seed",
             RetryCount = currentRetryCount,
-            NextRetryTime = DateTime.Now.AddMinutes(-1),
-            CreatedAt = DateTime.Now.AddMinutes(-2)
+            NextRetryTime = DateTime.UtcNow.AddMinutes(-1),
+            CreatedAt = DateTime.UtcNow.AddMinutes(-2)
         });
 
-        var consumer = new FakeCellDataConsumer(
-            name: "Cloud",
-            order: 1,
-            retryChannel: "Cloud",
-            result: false);
+        var cloudConsumer = new FakeCloudConsumer();
+        cloudConsumer.EnqueueResult(CloudCallResult.Failure(CloudCallOutcome.HttpFailure, "http_failure"));
 
-        var task = new TestableRetryTask(
-            channel: "Cloud",
+        var task = new TestableCloudRetryTask(
             logger,
             failedStore,
+            new FakeCloudFallbackBufferStore(),
             deviceService,
-            consumers: [consumer]);
+            cloudConsumer,
+            new FakeCloudBatchConsumer(),
+            new FakeDeviceLogSyncTask(),
+            new FakeCapacitySyncTask());
 
-        var before = DateTime.Now;
+        var before = DateTime.UtcNow;
         await task.ExecuteOnceAsync();
 
+        var recordId = recordIdBase + currentRetryCount;
         Assert.True(failedStore.Updates.TryGetValue(recordId, out var update));
         Assert.Equal(currentRetryCount + 1, update!.RetryCount);
 
@@ -120,7 +128,7 @@ public sealed class RetryTaskBehaviorTests
     [Fact]
     public async Task RetryFailure_WhenExceedMaxRetry_ShouldStopWithMaxValue()
     {
-        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+        CellDataTypeRegistry.Register<StackingCellData>("Stacking");
 
         var logger = new FakeLogService();
         var failedStore = new FakeFailedRecordStore();
@@ -138,27 +146,115 @@ public sealed class RetryTaskBehaviorTests
         {
             Id = recordId,
             Channel = "Cloud",
-            ProcessType = "Injection",
-            CellDataJson = SerializeCellData(new InjectionCellData { Barcode = "BC-MAX" }),
+            ProcessType = "Stacking",
+            CellDataJson = SerializeCellData(new StackingCellData { Barcode = "BC-MAX" }),
             FailedTarget = "Cloud",
             ErrorMessage = "seed",
             RetryCount = 20,
-            NextRetryTime = DateTime.Now.AddMinutes(-1),
-            CreatedAt = DateTime.Now
+            NextRetryTime = DateTime.UtcNow.AddMinutes(-1),
+            CreatedAt = DateTime.UtcNow
         });
 
-        var task = new TestableRetryTask(
-            channel: "Cloud",
+        var cloudConsumer = new FakeCloudConsumer();
+        cloudConsumer.EnqueueResult(CloudCallResult.Failure(CloudCallOutcome.HttpFailure, "http_failure"));
+
+        var task = new TestableCloudRetryTask(
             logger,
             failedStore,
+            new FakeCloudFallbackBufferStore(),
             deviceService,
-            consumers: [new FakeCellDataConsumer("Cloud", 1, "Cloud", result: false)]);
+            cloudConsumer,
+            new FakeCloudBatchConsumer(),
+            new FakeDeviceLogSyncTask(),
+            new FakeCapacitySyncTask());
 
         await task.ExecuteOnceAsync();
 
         Assert.True(failedStore.Updates.TryGetValue(recordId, out var update));
         Assert.Equal(21, update!.RetryCount);
-        Assert.Equal(DateTime.MaxValue, update.NextRetryTime);
+        Assert.Equal(DateTime.SpecifyKind(DateTime.MaxValue, DateTimeKind.Utc), update.NextRetryTime);
+        Assert.Equal(DateTimeKind.Utc, update.NextRetryTime.Kind);
+    }
+
+    [Fact]
+    public async Task CloudChannel_ShouldCleanupExpiredAbandonedRecordsOnlyOncePerUtcDay()
+    {
+        var failedStore = new FakeFailedRecordStore();
+        var deviceService = new FakeDeviceService();
+        deviceService.SetOnline(new DeviceSession
+        {
+            DeviceId = Guid.NewGuid(),
+            DeviceName = "PLC-A",
+            ClientCode = "CLIENT-01",
+            ProcessId = Guid.NewGuid()
+        });
+
+        var task = new TestableCloudRetryTask(
+            new FakeLogService(),
+            failedStore,
+            new FakeCloudFallbackBufferStore(),
+            deviceService,
+            new FakeCloudConsumer(),
+            new FakeCloudBatchConsumer(),
+            new FakeDeviceLogSyncTask(),
+            new FakeCapacitySyncTask());
+
+        await task.ExecuteOnceAsync();
+        await task.ExecuteOnceAsync();
+
+        Assert.Equal(1, failedStore.DeleteExpiredAbandonedCallCount);
+        Assert.NotNull(failedStore.LastDeleteExpiredOlderThanUtc);
+        Assert.Equal(DateTimeKind.Utc, failedStore.LastDeleteExpiredOlderThanUtc!.Value.Kind);
+    }
+
+    [Fact]
+    public async Task RetryFailure_ShouldMoveCloudRuntimeStateToBackoff()
+    {
+        CellDataTypeRegistry.Register<StackingCellData>("Stacking");
+
+        var diagnosticsStore = new FakeCloudDiagnosticsStore();
+        var failedStore = new FakeFailedRecordStore();
+        failedStore.PendingRecords.Add(new FailedCellRecord
+        {
+            Id = 1001,
+            Channel = "Cloud",
+            ProcessType = "Stacking",
+            CellDataJson = SerializeCellData(new StackingCellData { Barcode = "BC-BACKOFF" }),
+            FailedTarget = "Cloud",
+            ErrorMessage = "seed",
+            NextRetryTime = DateTime.UtcNow.AddMinutes(-1)
+        });
+
+        var cloudConsumer = new FakeCloudConsumer();
+        cloudConsumer.EnqueueResult(CloudCallResult.Failure(CloudCallOutcome.HttpFailure, "http_failure"));
+
+        var task = new TestableCloudRetryTask(
+            new FakeLogService(),
+            failedStore,
+            new FakeCloudFallbackBufferStore(),
+            CreateOnlineDeviceService(),
+            cloudConsumer,
+            new FakeCloudBatchConsumer(),
+            new FakeDeviceLogSyncTask(),
+            new FakeCapacitySyncTask(),
+            diagnosticsStore);
+
+        await task.ExecuteOnceAsync();
+
+        Assert.Equal(CloudRetryRuntimeState.Backoff, diagnosticsStore.Snapshot.RuntimeState);
+    }
+
+    private static FakeDeviceService CreateOnlineDeviceService()
+    {
+        var deviceService = new FakeDeviceService();
+        deviceService.SetOnline(new DeviceSession
+        {
+            DeviceId = Guid.NewGuid(),
+            DeviceName = "PLC-A",
+            ClientCode = "CLIENT-01",
+            ProcessId = Guid.NewGuid()
+        });
+        return deviceService;
     }
 
     private static string SerializeCellData(CellDataBase cellData)
@@ -171,14 +267,43 @@ public sealed class RetryTaskBehaviorTests
         return JsonSerializer.Serialize(cellData, cellData.GetType(), jsonOptions);
     }
 
-    private sealed class TestableRetryTask(
-        string channel,
-        FakeLogService logger,
-        FakeFailedRecordStore failedStore,
-        FakeDeviceService deviceService,
-        IEnumerable<FakeCellDataConsumer> consumers)
-        : RetryTask(channel, logger, failedStore, deviceService, consumers)
+    private sealed class TestableCloudRetryTask
     {
-        public Task ExecuteOnceAsync() => base.ExecuteAsync();
+        private static readonly MethodInfo ExecuteAsyncMethod = typeof(CloudRetryTask)
+            .GetMethod("ExecuteAsync", BindingFlags.Instance | BindingFlags.NonPublic)!
+            ?? throw new InvalidOperationException("CloudRetryTask.ExecuteAsync was not found.");
+
+        private readonly CloudRetryTask _inner;
+
+        public TestableCloudRetryTask(
+            FakeLogService logger,
+            FakeFailedRecordStore failedStore,
+            FakeCloudFallbackBufferStore fallbackStore,
+            FakeDeviceService deviceService,
+            FakeCloudConsumer cloudConsumer,
+            FakeCloudBatchConsumer cloudBatchConsumer,
+            FakeDeviceLogSyncTask deviceLogSync,
+            FakeCapacitySyncTask capacitySync,
+            FakeCloudDiagnosticsStore? diagnosticsStore = null,
+            FakeCloudDeadLetterStore? deadLetterStore = null,
+            FakeCriticalPersistenceFallbackWriter? criticalWriter = null)
+        {
+            _inner = new CloudRetryTask(
+                logger,
+                failedStore,
+                fallbackStore,
+                deadLetterStore ?? new FakeCloudDeadLetterStore(),
+                criticalWriter ?? new FakeCriticalPersistenceFallbackWriter(),
+                deviceService,
+                cloudConsumer,
+                cloudBatchConsumer,
+                deviceLogSync,
+                capacitySync,
+                diagnosticsStore ?? new FakeCloudDiagnosticsStore());
+        }
+
+        public Task ExecuteOnceAsync()
+            => (Task)(ExecuteAsyncMethod.Invoke(_inner, null)
+                ?? throw new InvalidOperationException("CloudRetryTask.ExecuteAsync returned null."));
     }
 }

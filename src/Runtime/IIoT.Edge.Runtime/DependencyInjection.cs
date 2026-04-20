@@ -29,6 +29,8 @@ public static class DependencyInjection
 
     private static void AddDataPipelineRuntimeCore(IServiceCollection services)
     {
+        services.AddSingleton<DataPipelineCapacityGuard>();
+        services.AddSingleton<IIngressOverflowPersistence, IngressOverflowPersistence>();
         services.AddSingleton<DataPipelineService>();
         services.AddSingleton<IDataPipelineService>(sp => sp.GetRequiredService<DataPipelineService>());
 
@@ -40,26 +42,7 @@ public static class DependencyInjection
         services.AddSingleton<ICellDataConsumer>(sp => sp.GetRequiredService<IUiNotifyConsumer>());
 
         services.AddSingleton<ProcessQueueTask>();
-
-        services.AddSingleton<RetryTask>(sp => new RetryTask(
-            "Cloud",
-            sp.GetRequiredService<ILogService>(),
-            sp.GetRequiredService<IFailedRecordStore>(),
-            sp.GetRequiredService<IDeviceService>(),
-            sp.GetServices<ICellDataConsumer>(),
-            sp.GetRequiredService<IDeviceLogSyncTask>(),
-            sp.GetRequiredService<ICapacitySyncTask>(),
-            sp.GetService<ICloudBatchConsumer>(),
-            sp.GetRequiredService<ICloudFallbackBufferStore>(),
-            sp.GetRequiredService<IMesFallbackBufferStore>(),
-            sp.GetService<IProcessIntegrationRegistry>()));
-
-        services.AddSingleton<RetryTask>(sp => new RetryTask(
-            "MES",
-            sp.GetRequiredService<ILogService>(),
-            sp.GetRequiredService<IFailedRecordStore>(),
-            sp.GetRequiredService<IDeviceService>(),
-            sp.GetServices<ICellDataConsumer>(),
-            mesFallbackStore: sp.GetRequiredService<IMesFallbackBufferStore>()));
+        services.AddSingleton<CloudRetryTask>();
+        services.AddSingleton<MesRetryTask>();
     }
 }

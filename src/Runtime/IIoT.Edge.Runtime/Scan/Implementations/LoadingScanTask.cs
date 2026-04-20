@@ -1,24 +1,30 @@
-using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Runtime.Base;
 using IIoT.Edge.Runtime.Context;
 using IIoT.Edge.Runtime.Scan.Base;
+using IIoT.Edge.SharedKernel.Context;
 
 namespace IIoT.Edge.Runtime.Scan.Implementations;
 
-/// <summary>
-/// 上料扫码任务（通用，完全解耦）
-/// 
-/// 状态机：等待 PLC 触发、读取条码、本地查重、可选额外校验、写结果、确认完成并复位
-/// 
-/// 扫码任务只返回条码字符串，不操作 CellData，不依赖任何工序类型
-/// 流程状态机拿到条码后自己创建强类型 CellData 放进 Context
-/// </summary>
 public class LoadingScanTask : PlcTaskBase, IScanTask
 {
+    private static readonly TimeSpan BarcodeReadTimeout = TimeSpan.FromSeconds(3);
+
     private readonly string _taskName;
+    private readonly int _triggerIndex;
+    private readonly int _responseIndex;
+    private readonly IBarcodeReader _barcodeReader;
+    private readonly Func<string, Task<bool>> _localDuplicateChecker;
+    private readonly Func<string, Task<bool>>? _extraValidator;
+
+    private const ushort TriggerStart = 11;
+    private const ushort TriggerIdle = 10;
+    private const ushort ResponseOk = 11;
+    private const ushort ResponseNg = 12;
+    private const ushort ResponseIdle = 10;
+
     public override string TaskName => _taskName;
 
     public string? LastScannedCode { get; private set; }
@@ -26,23 +32,6 @@ public class LoadingScanTask : PlcTaskBase, IScanTask
     public bool? LastResult { get; private set; }
     public DateTime? LastCompletedTime { get; private set; }
 
-    private readonly int _triggerIndex;
-    private readonly int _responseIndex;
-
-    private const ushort TRIGGER_START = 11;
-    private const ushort TRIGGER_IDLE = 10;
-    private const ushort RESPONSE_OK = 11;
-    private const ushort RESPONSE_NG = 12;
-    private const ushort RESPONSE_IDLE = 10;
-
-    private readonly IBarcodeReader _barcodeReader;
-    private readonly Func<string, Task<bool>> _localDuplicateChecker;
-    private readonly Func<string, Task<bool>>? _extraValidator;
-    private readonly string _scanSource;
-
-    /// <summary>
-    /// 扫码成功后触发，外部（流程状态机）订阅此事件拿条码
-    /// </summary>
     public event Action<string, DateTime>? BarcodeScanned;
 
     public LoadingScanTask(
@@ -55,7 +44,7 @@ public class LoadingScanTask : PlcTaskBase, IScanTask
         IBarcodeReader barcodeReader,
         Func<string, Task<bool>> localDuplicateChecker,
         Func<string, Task<bool>>? extraValidator = null,
-        string scanSource = "上料扫码")
+        string scanSource = "LoadingScan")
         : base(buffer, context, logger)
     {
         _taskName = taskName;
@@ -64,7 +53,6 @@ public class LoadingScanTask : PlcTaskBase, IScanTask
         _barcodeReader = barcodeReader;
         _localDuplicateChecker = localDuplicateChecker;
         _extraValidator = extraValidator;
-        _scanSource = scanSource;
     }
 
     protected override async Task DoCoreAsync()
@@ -72,78 +60,103 @@ public class LoadingScanTask : PlcTaskBase, IScanTask
         switch (Step)
         {
             case 0:
-                if (Buffer.GetReadValue(_triggerIndex) == TRIGGER_START)
+                if (Buffer.GetReadValue(_triggerIndex) == TriggerStart)
                 {
-                    Logger.Info($"[{Context.DeviceName}] {TaskName} 触发");
+                    Logger.Info($"[{Context.DeviceName}] {TaskName} triggered.");
                     Step = 10;
                 }
                 break;
 
             case 10:
-                var barcodes = await _barcodeReader.ReadAsync().ConfigureAwait(false);
-
-                if (barcodes.Length == 0 || barcodes.All(string.IsNullOrEmpty))
+                var barcodes = await TryReadBarcodesAsync().ConfigureAwait(false);
+                if (barcodes is null)
                 {
-                    Logger.Warn($"[{Context.DeviceName}] {TaskName} 未读取到条码");
-                    Buffer.SetWriteValue(_responseIndex, RESPONSE_NG);
+                    LastScannedCode = null;
+                    LastResult = false;
+                    Buffer.SetWriteValue(_responseIndex, ResponseNg);
+                    Step = 30;
+                    break;
+                }
+
+                if (barcodes.Length == 0 || barcodes.All(string.IsNullOrWhiteSpace))
+                {
+                    Logger.Warn($"[{Context.DeviceName}] {TaskName} did not receive any barcode.");
+                    LastScannedCode = null;
+                    LastResult = false;
+                    Buffer.SetWriteValue(_responseIndex, ResponseNg);
                     Step = 30;
                     break;
                 }
 
                 var allOk = true;
-                var scanTime = DateTime.Now;
+                var scanTimeUtc = DateTime.UtcNow;
 
                 foreach (var barcode in barcodes)
                 {
-                    if (string.IsNullOrEmpty(barcode)) continue;
+                    if (string.IsNullOrWhiteSpace(barcode))
+                    {
+                        continue;
+                    }
 
-                    // 1. 本地查重
                     var isDuplicate = await _localDuplicateChecker(barcode).ConfigureAwait(false);
                     if (isDuplicate)
                     {
-                        Logger.Warn($"[{Context.DeviceName}] {TaskName} " +
-                            $"条码:{barcode} 本地查重NG（重码）");
+                        Logger.Warn($"[{Context.DeviceName}] {TaskName} barcode {barcode} was rejected as duplicate.");
                         allOk = false;
                         continue;
                     }
 
-                    // 2. 额外校验（可选）
                     if (_extraValidator is not null)
                     {
                         var extraOk = await _extraValidator(barcode).ConfigureAwait(false);
                         if (!extraOk)
                         {
-                            Logger.Warn($"[{Context.DeviceName}] {TaskName} " +
-                                $"条码:{barcode} 额外校验NG");
+                            Logger.Warn($"[{Context.DeviceName}] {TaskName} barcode {barcode} failed extra validation.");
                             allOk = false;
                             continue;
                         }
                     }
 
-                    // 3. 通知外部：扫码成功，流程状态机负责创建 CellData
-                    BarcodeScanned?.Invoke(barcode, scanTime);
+                    BarcodeScanned?.Invoke(barcode, scanTimeUtc);
                 }
 
-                LastScannedCode = barcodes.LastOrDefault(b => !string.IsNullOrEmpty(b));
+                LastScannedCode = barcodes.LastOrDefault(static b => !string.IsNullOrWhiteSpace(b));
                 LastResult = allOk;
+                Buffer.SetWriteValue(_responseIndex, allOk ? ResponseOk : ResponseNg);
 
-                Buffer.SetWriteValue(_responseIndex, allOk ? RESPONSE_OK : RESPONSE_NG);
-
-                Logger.Info($"[{Context.DeviceName}] {TaskName} " +
-                    $"共{barcodes.Length}个条码，结果:{(allOk ? "全部OK" : "存在NG")}");
+                Logger.Info(
+                    $"[{Context.DeviceName}] {TaskName} processed {barcodes.Length} barcode(s). Result:{(allOk ? "OK" : "NG")}");
                 Step = 30;
                 break;
 
             case 30:
-                if (Buffer.GetReadValue(_triggerIndex) == TRIGGER_IDLE)
+                if (Buffer.GetReadValue(_triggerIndex) == TriggerIdle)
                 {
-                    Buffer.SetWriteValue(_responseIndex, RESPONSE_IDLE);
-                    LastCompletedTime = DateTime.Now;
-
-                    Logger.Info($"[{Context.DeviceName}] {TaskName} 流程结束");
+                    Buffer.SetWriteValue(_responseIndex, ResponseIdle);
+                    LastCompletedTime = DateTime.UtcNow;
+                    Logger.Info($"[{Context.DeviceName}] {TaskName} finished.");
                     Step = 0;
                 }
                 break;
         }
+    }
+
+    private async Task<string[]?> TryReadBarcodesAsync()
+    {
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(TaskCancellationToken);
+        var readTask = _barcodeReader.ReadAsync(timeoutCts.Token);
+        var timeoutTask = Task.Delay(BarcodeReadTimeout, TaskCancellationToken);
+        var completedTask = await Task.WhenAny(readTask, timeoutTask).ConfigureAwait(false);
+
+        if (completedTask != readTask)
+        {
+            TaskCancellationToken.ThrowIfCancellationRequested();
+            timeoutCts.Cancel();
+            Logger.Warn(
+                $"[{Context.DeviceName}] {TaskName} barcode read timed out after {BarcodeReadTimeout.TotalSeconds:0}s.");
+            return null;
+        }
+
+        return await readTask.ConfigureAwait(false);
     }
 }

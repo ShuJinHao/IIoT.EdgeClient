@@ -3,7 +3,7 @@ using IIoT.Edge.Application.Abstractions.Plc;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Plc.Services;
 
-public class PlcServiceProxy : IPlcService
+public sealed class PlcServiceProxy : IPlcService
 {
     private readonly IPlcService _target;
     private readonly ILogService _logger;
@@ -20,74 +20,36 @@ public class PlcServiceProxy : IPlcService
 
     public void Init(string ip, int port) => _target.Init(ip, port);
 
-    public bool Connect()
-    {
-        try
-        {
-            return _target.Connect();
-        }
-        catch (Exception ex)
-        {
-            _logger.Error($"[{_deviceName}] 连接失败: {ex.Message}");
-            throw;
-        }
-    }
-
     public async Task<bool> ConnectAsync()
     {
         try
         {
-            var result = await _target.ConnectAsync();
+            var result = await _target.ConnectAsync().ConfigureAwait(false);
             if (!result)
             {
-                _logger.Warn($"[{_deviceName}] 连接失败");
+                _logger.Warn($"[{_deviceName}] 杩炴帴澶辫触");
             }
+
             return result;
         }
         catch (Exception ex)
         {
-            _logger.Error($"[{_deviceName}] 连接异常: {ex.Message}");
+            _logger.Error($"[{_deviceName}] 杩炴帴寮傚父: {ex.Message}");
             throw;
         }
     }
 
     public void Disconnect() => _target.Disconnect();
 
-    public List<T> ReadData<T>(string address, ushort length)
-    {
-        try
-        {
-            return _target.ReadData<T>(address, length);
-        }
-        catch (Exception ex)
-        {
-            _logger.Error($"[{_deviceName}] 读取 {address} 失败: {ex.Message}");
-            throw;
-        }
-    }
-
     public async Task<List<T>> ReadDataAsync<T>(string address, ushort length)
     {
         try
         {
-            return await _target.ReadDataAsync<T>(address, length);
+            return await _target.ReadDataAsync<T>(address, length).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            _logger.Error($"[{_deviceName}] 读取 {address} 失败: {ex.Message}");
-            throw;
-        }
-    }
-
-    public void WriteData<T>(string address, List<T> data)
-    {
-        try
-        {
-            _target.WriteData(address, data);
-        }
-        catch (Exception ex)
-        {
-            _logger.Error($"[{_deviceName}] 写入 {address} 失败: {ex.Message}");
+            _logger.Error($"[{_deviceName}] 璇诲彇 {address} 澶辫触: {ex.Message}");
             throw;
         }
     }
@@ -96,11 +58,11 @@ public class PlcServiceProxy : IPlcService
     {
         try
         {
-            await _target.WriteDataAsync(address, data);
+            await _target.WriteDataAsync(address, data).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            _logger.Error($"[{_deviceName}] 写入 {address} 失败: {ex.Message}");
+            _logger.Error($"[{_deviceName}] 鍐欏叆 {address} 澶辫触: {ex.Message}");
             throw;
         }
     }

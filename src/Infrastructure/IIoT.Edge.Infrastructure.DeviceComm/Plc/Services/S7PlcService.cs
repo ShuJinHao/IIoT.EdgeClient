@@ -1,12 +1,16 @@
-﻿using IIoT.Edge.Application.Abstractions.Plc;
-using S7.Net;
+using IIoT.Edge.Application.Abstractions.Plc;
 using PlcClient = S7.Net.Plc;
+using S7.Net;
+using S7.Net.Types;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Plc.Services;
 
-public class S7PlcService : IPlcService, IDisposable
+public sealed class S7PlcService : IPlcService, IDisposable
 {
-    private PlcClient _plc = null!;
+    private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan OperationTimeout = TimeSpan.FromSeconds(3);
+
+    private PlcClient? _plc;
     private string _ip = string.Empty;
     private int _port;
     private readonly SemaphoreSlim _semaphore = new(1, 1);
@@ -19,29 +23,11 @@ public class S7PlcService : IPlcService, IDisposable
         _port = port;
     }
 
-    public bool Connect()
-    {
-        try
-        {
-            if (_plc?.IsConnected ?? false)
-            {
-                return true;
-            }
-
-            _plc = new PlcClient(CpuType.S71200, _ip, 0, 1);
-            _plc.Open();
-            return _plc.IsConnected;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Connect failed: {ex.Message}");
-            return false;
-        }
-    }
-
     public async Task<bool> ConnectAsync()
     {
-        if (_plc?.IsConnected ?? false)
+        EnsureInitialized();
+
+        if (_plc?.IsConnected == true)
         {
             return true;
         }
@@ -49,48 +35,74 @@ public class S7PlcService : IPlcService, IDisposable
         _plc?.Close();
         _plc = new PlcClient(CpuType.S71200, _ip, 0, 1);
 
+        using var timeoutCts = new CancellationTokenSource(ConnectTimeout);
+
         try
         {
-            var connectTask = Task.Run(() => _plc.Open());
-            if (await Task.WhenAny(connectTask, Task.Delay(3000)) != connectTask)
+            await _plc.OpenAsync(timeoutCts.Token).ConfigureAwait(false);
+            if (!_plc.IsConnected)
             {
-                Console.WriteLine("Connect timeout");
-                return false;
+                throw new InvalidOperationException($"S7 PLC {_ip}:{_port} reported success but is still disconnected.");
             }
 
-            await connectTask;
-            return _plc.IsConnected;
+            return true;
         }
-        catch (Exception ex)
+        catch (OperationCanceledException ex) when (timeoutCts.IsCancellationRequested)
         {
-            Console.WriteLine($"Connect failed: {ex.Message}");
-            return false;
+            _plc.Close();
+            throw new TimeoutException($"Connect to S7 PLC {_ip}:{_port} timed out after {ConnectTimeout.TotalSeconds:0}s.", ex);
+        }
+        catch
+        {
+            _plc.Close();
+            throw;
         }
     }
 
     public void Disconnect() => _plc?.Close();
 
-    public List<T> ReadData<T>(string address, ushort length)
-        => ReadDataAsync<T>(address, length).GetAwaiter().GetResult();
-
     public async Task<List<T>> ReadDataAsync<T>(string address, ushort length)
     {
-        if (!IsConnected)
-        {
-            throw new InvalidOperationException("PLC is not connected.");
-        }
+        var plc = EnsureConnected();
 
-        await _semaphore.WaitAsync();
+        await _semaphore.WaitAsync().ConfigureAwait(false);
         try
         {
-            var result = new List<T>();
+            using var timeoutCts = new CancellationTokenSource(OperationTimeout);
+
+            if (typeof(T) == typeof(ushort)
+                && TryParseDbWordAddress(address, out var dbNumber, out var startByteAddress))
+            {
+                var rawBytes = await plc
+                    .ReadBytesAsync(
+                        DataType.DataBlock,
+                        dbNumber,
+                        startByteAddress,
+                        checked(length * 2),
+                        timeoutCts.Token)
+                    .ConfigureAwait(false);
+
+                var words = Word.ToArray(rawBytes);
+                if (words.Length < length)
+                {
+                    throw new InvalidOperationException(
+                        $"Read {address} returned {words.Length} word(s), expected {length}.");
+                }
+
+                return words
+                    .Take(length)
+                    .Select(value => (T)(object)value)
+                    .ToList();
+            }
+
+            var result = new List<T>(length);
             for (var i = 0; i < length; i++)
             {
                 var currentAddress = GetIndexedAddress(address, i);
-                var value = await Task.Run(() => _plc.Read(currentAddress));
+                var value = await plc.ReadAsync(currentAddress, timeoutCts.Token).ConfigureAwait(false);
                 if (value is null)
                 {
-                    throw new Exception($"Read {currentAddress} returned null.");
+                    throw new InvalidOperationException($"Read {currentAddress} returned null.");
                 }
 
                 result.Add(ConvertValue<T>(value));
@@ -98,9 +110,13 @@ public class S7PlcService : IPlcService, IDisposable
 
             return result;
         }
-        catch (Exception ex)
+        catch (OperationCanceledException ex)
         {
-            throw new Exception($"Read {address} failed: {ex.Message}", ex);
+            throw new TimeoutException($"Read {address} timed out after {OperationTimeout.TotalSeconds:0}s.", ex);
+        }
+        catch (Exception ex) when (ex is not TimeoutException)
+        {
+            throw new InvalidOperationException($"Read {address} failed.", ex);
         }
         finally
         {
@@ -108,28 +124,39 @@ public class S7PlcService : IPlcService, IDisposable
         }
     }
 
-    public void WriteData<T>(string address, List<T> data)
-        => WriteDataAsync(address, data).GetAwaiter().GetResult();
-
     public async Task WriteDataAsync<T>(string address, List<T> data)
     {
-        if (!IsConnected)
-        {
-            throw new InvalidOperationException("PLC is not connected.");
-        }
+        var plc = EnsureConnected();
 
-        await _semaphore.WaitAsync();
+        await _semaphore.WaitAsync().ConfigureAwait(false);
         try
         {
+            using var timeoutCts = new CancellationTokenSource(OperationTimeout);
+
+            if (typeof(T) == typeof(ushort)
+                && TryParseDbWordAddress(address, out var dbNumber, out var startByteAddress))
+            {
+                var words = data.Cast<ushort>().ToArray();
+                var bytes = Word.ToByteArray(words);
+                await plc
+                    .WriteBytesAsync(DataType.DataBlock, dbNumber, startByteAddress, bytes, timeoutCts.Token)
+                    .ConfigureAwait(false);
+                return;
+            }
+
             for (var i = 0; i < data.Count; i++)
             {
                 var currentAddress = GetIndexedAddress(address, i);
-                await Task.Run(() => _plc.Write(currentAddress, (object)data[i]!));
+                await plc.WriteAsync(currentAddress, data[i]!, timeoutCts.Token).ConfigureAwait(false);
             }
         }
-        catch (Exception ex)
+        catch (OperationCanceledException ex)
         {
-            throw new Exception($"Write {address} failed: {ex.Message}", ex);
+            throw new TimeoutException($"Write {address} timed out after {OperationTimeout.TotalSeconds:0}s.", ex);
+        }
+        catch (Exception ex) when (ex is not TimeoutException)
+        {
+            throw new InvalidOperationException($"Write {address} failed.", ex);
         }
         finally
         {
@@ -139,19 +166,50 @@ public class S7PlcService : IPlcService, IDisposable
 
     public void Dispose()
     {
-        try
+        Disconnect();
+        _plc = null;
+    }
+
+    private void EnsureInitialized()
+    {
+        if (string.IsNullOrWhiteSpace(_ip))
         {
-            Disconnect();
-            _plc = null!;
+            throw new InvalidOperationException("S7 PLC endpoint is not initialized.");
         }
-        catch (Exception ex)
+    }
+
+    private PlcClient EnsureConnected()
+    {
+        if (_plc is null || !_plc.IsConnected)
         {
-            Console.WriteLine($"Dispose failed: {ex.Message}");
+            throw new InvalidOperationException("PLC is not connected.");
         }
+
+        return _plc;
     }
 
     private static string GetIndexedAddress(string baseAddress, int index)
         => baseAddress.Contains('[') ? baseAddress : $"{baseAddress}[{index}]";
+
+    private static bool TryParseDbWordAddress(string address, out int dbNumber, out int startByteAddress)
+    {
+        dbNumber = 0;
+        startByteAddress = 0;
+
+        if (string.IsNullOrWhiteSpace(address) || address.Contains('['))
+        {
+            return false;
+        }
+
+        var separatorIndex = address.IndexOf(".DBW", StringComparison.OrdinalIgnoreCase);
+        if (separatorIndex <= 2 || !address.StartsWith("DB", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return int.TryParse(address[2..separatorIndex], out dbNumber)
+            && int.TryParse(address[(separatorIndex + 4)..], out startByteAddress);
+    }
 
     private static T ConvertValue<T>(object value)
     {
@@ -161,7 +219,7 @@ public class S7PlcService : IPlcService, IDisposable
         }
         catch (Exception ex)
         {
-            throw new Exception(
+            throw new InvalidOperationException(
                 $"Convert {value.GetType().Name} to {typeof(T).Name} failed.",
                 ex);
         }

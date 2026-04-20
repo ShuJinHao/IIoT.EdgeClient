@@ -27,12 +27,12 @@ public sealed class MesFrameworkBehaviorTests
     }
 
     [Fact]
-    public async Task MesConsumer_WhenDeviceIsOffline_ShouldFailAndRecordDiagnostics()
+    public async Task MesConsumer_WhenCloudGateIsBlocked_ShouldIgnoreCloudGateAndUpload()
     {
         var uploader = new FakeMesUploader("Injection");
         var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
         var deviceService = CreateOnlineDeviceService();
-        deviceService.SetOffline();
+        deviceService.MarkUploadGateBlocked(EdgeUploadBlockReason.UploadTokenRejected, DateTimeOffset.UtcNow);
 
         var consumer = new MesConsumer(
             deviceService,
@@ -42,12 +42,12 @@ public sealed class MesFrameworkBehaviorTests
 
         var success = await consumer.ProcessAsync(CreateRecord("Injection"));
 
-        Assert.False(success);
-        Assert.Equal(0, uploader.UploadCallCount);
+        Assert.True(success);
+        Assert.Equal(1, uploader.UploadCallCount);
         var diagnostics = diagnosticsStore.Get("Injection");
         Assert.NotNull(diagnostics);
-        Assert.Equal("Failed", diagnostics!.LastResult);
-        Assert.Equal("Network is offline.", diagnostics.LastFailureReason);
+        Assert.Equal("Success", diagnostics!.LastResult);
+        Assert.Null(diagnostics.LastFailureReason);
     }
 
     [Fact]

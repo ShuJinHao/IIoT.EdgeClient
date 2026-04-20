@@ -13,7 +13,9 @@ public interface IDataPipelineService
     /// <summary>
     /// 将打包好的电芯完成记录推入消费队列。
     /// </summary>
-    void Enqueue(CellCompletedRecord record);
+    ValueTask<DataPipelineEnqueueResult> EnqueueAsync(
+        CellCompletedRecord record,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 尝试从队列中取出一条待处理记录。
@@ -21,7 +23,16 @@ public interface IDataPipelineService
     bool TryDequeue(out CellCompletedRecord? record);
 
     /// <summary>
+    /// 等待队列中出现可消费数据。
+    /// </summary>
+    ValueTask<bool> WaitToReadAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// 当前内存队列中的待处理项数量，供界面监控使用。
     /// </summary>
     int PendingCount { get; }
+
+    int OverflowCount { get; }
+
+    int SpillCount { get; }
 }

@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.SharedKernel.DataPipeline;
@@ -23,13 +24,13 @@ public sealed class StackingPlaceholderCloudUploader : IProcessCloudUploader
 
     public ProcessUploadMode UploadMode => ProcessUploadMode.Single;
 
-    public Task<bool> UploadAsync(
+    public Task<CloudCallResult> UploadAsync(
         ProcessCloudUploadContext context,
         IReadOnlyList<CellCompletedRecord> records,
         CancellationToken cancellationToken = default)
     {
         _logger.Warn(
             $"[Cloud] Stacking placeholder uploader was invoked. This module is a skeleton and should not be enabled for production data. Count:{records.Count}");
-        return Task.FromResult(false);
+        return Task.FromResult(CloudCallResult.Failure(CloudCallOutcome.Exception, "placeholder_uploader_invoked"));
     }
 }

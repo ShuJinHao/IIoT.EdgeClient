@@ -46,14 +46,6 @@ public sealed class MesConsumer : IMesConsumer
             return false;
         }
 
-        if (_deviceService.CurrentState == NetworkState.Offline)
-        {
-            const string reason = "Network is offline.";
-            _diagnosticsStore.RecordFailure(record.CellData.ProcessType, reason);
-            _logger.Warn($"[MES] {reason} ProcessType={record.CellData.ProcessType}");
-            return false;
-        }
-
         var success = await uploader
             .UploadAsync(new ProcessMesUploadContext(device), [record])
             .ConfigureAwait(false);

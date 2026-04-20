@@ -10,7 +10,7 @@ namespace IIoT.Edge.Application.Features.Production.CapacityView;
 /// </summary>
 public interface ICapacityViewService
 {
-    event Action<NetworkState>? NetworkStateChanged;
+    event Action<EdgeUploadGateSnapshot>? UploadGateChanged;
 
     bool IsOnline { get; }
 
@@ -30,13 +30,13 @@ public sealed class CapacityViewService(
     IProductionContextStore contextStore,
     IDeviceService deviceService) : ICapacityViewService
 {
-    public event Action<NetworkState>? NetworkStateChanged
+    public event Action<EdgeUploadGateSnapshot>? UploadGateChanged
     {
-        add => deviceService.NetworkStateChanged += value;
-        remove => deviceService.NetworkStateChanged -= value;
+        add => deviceService.UploadGateChanged += value;
+        remove => deviceService.UploadGateChanged -= value;
     }
 
-    public bool IsOnline => deviceService.CurrentState == NetworkState.Online;
+    public bool IsOnline => deviceService.CanUploadToCloud;
 
     public IReadOnlyList<string> GetDeviceNames()
         => contextStore.GetAll()
@@ -47,7 +47,7 @@ public sealed class CapacityViewService(
     public async Task<CapacityViewResult> LoadTodayAsync(string plcName, CancellationToken cancellationToken = default)
     {
         var deviceId = deviceService.CurrentDevice?.DeviceId;
-        if (deviceId is null)
+        if (!deviceService.CanUploadToCloud || deviceId is null)
             return new CapacityViewResult(new(), 0, 0, 0, "0%", "0");
 
         return await sender.Send(
@@ -62,7 +62,7 @@ public sealed class CapacityViewService(
         CancellationToken cancellationToken = default)
     {
         var deviceId = deviceService.CurrentDevice?.DeviceId;
-        if (deviceId is null)
+        if (!deviceService.CanUploadToCloud || deviceId is null)
             return new CapacityViewResult(new(), 0, 0, 0, "0%", "0");
 
         return await sender.Send(

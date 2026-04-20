@@ -14,4 +14,8 @@ public record DeviceSession
     public string ClientCode { get; init; } = string.Empty;
 
     public Guid ProcessId { get; init; }
+
+    public string? UploadAccessToken { get; init; }
+
+    public DateTimeOffset? UploadAccessTokenExpiresAtUtc { get; init; }
 }

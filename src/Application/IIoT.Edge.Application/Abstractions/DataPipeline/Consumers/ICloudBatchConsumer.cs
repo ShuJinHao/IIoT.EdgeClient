@@ -1,4 +1,5 @@
-﻿using IIoT.Edge.SharedKernel.DataPipeline;
+using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.SharedKernel.DataPipeline;
 
 namespace IIoT.Edge.Application.Abstractions.DataPipeline.Consumers;
 
@@ -7,6 +8,5 @@ namespace IIoT.Edge.Application.Abstractions.DataPipeline.Consumers;
 /// </summary>
 public interface ICloudBatchConsumer
 {
-    Task<bool> ProcessBatchAsync(IReadOnlyList<CellCompletedRecord> records);
+    Task<CloudCallResult> ProcessBatchAsync(IReadOnlyList<CellCompletedRecord> records);
 }
-

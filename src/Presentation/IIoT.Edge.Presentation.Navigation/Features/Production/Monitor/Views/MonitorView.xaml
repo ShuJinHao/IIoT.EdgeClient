@@ -39,6 +39,7 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
 
@@ -243,11 +244,11 @@
                                 <TextBlock VerticalAlignment="Center"
                                            FontSize="11"
                                            Foreground="#71717A"
-                                           Text="Cloud Link: " />
+                                           Text="Cloud Sync: " />
                                 <TextBlock VerticalAlignment="Center"
                                            FontSize="11"
                                            Foreground="#A1A1AA"
-                                           Text="{Binding CloudLinkStatus}"
+                                           Text="{Binding CloudSyncStatus}"
                                            TextWrapping="Wrap" />
                             </StackPanel>
                         </Border>
@@ -261,16 +262,34 @@
                                 <TextBlock VerticalAlignment="Center"
                                            FontSize="11"
                                            Foreground="#71717A"
-                                           Text="Retry Queue: " />
+                                           Text="MES Sync: " />
                                 <TextBlock VerticalAlignment="Center"
                                            FontSize="11"
                                            Foreground="#A1A1AA"
-                                           Text="{Binding RetryQueueStatus}"
+                                           Text="{Binding MesSyncStatus}"
                                            TextWrapping="Wrap" />
                             </StackPanel>
                         </Border>
 
-                        <TextBlock Grid.Row="5"
+                        <Border Grid.Row="5"
+                                Margin="0,0,0,4"
+                                Padding="10,6"
+                                Background="#18181B"
+                                CornerRadius="4">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock VerticalAlignment="Top"
+                                           FontSize="11"
+                                           Foreground="#71717A"
+                                           Text="Context Persistence: " />
+                                <TextBlock VerticalAlignment="Top"
+                                           FontSize="11"
+                                           Foreground="#A1A1AA"
+                                           Text="{Binding ContextPersistenceStatus}"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Grid.Row="6"
                                    Margin="0,4,0,4"
                                    FontSize="12"
                                    Foreground="#71717A">
@@ -279,7 +298,7 @@
                             <Run Text=" pcs" />
                         </TextBlock>
 
-                        <DataGrid Grid.Row="6"
+                        <DataGrid Grid.Row="7"
                                   AlternatingRowBackground="#252525"
                                   AutoGenerateColumns="True"
                                   Background="Transparent"

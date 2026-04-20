@@ -3,6 +3,7 @@ using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Infrastructure.Integration.Config;
+using IIoT.Edge.Infrastructure.Integration.Http;
 using IIoT.Edge.Infrastructure.Integration.Mappings.Cloud.Injection;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
@@ -32,14 +33,14 @@ public sealed class InjectionCloudUploader : IProcessCloudUploader
 
     public ProcessUploadMode UploadMode => ProcessUploadMode.Batch;
 
-    public async Task<bool> UploadAsync(
+    public async Task<CloudCallResult> UploadAsync(
         ProcessCloudUploadContext context,
         IReadOnlyList<CellCompletedRecord> records,
         CancellationToken cancellationToken = default)
     {
         if (records.Count == 0)
         {
-            return true;
+            return CloudCallResult.Success();
         }
 
         var items = new List<InjectionCloudDto>(records.Count);
@@ -49,7 +50,7 @@ public sealed class InjectionCloudUploader : IProcessCloudUploader
             {
                 _logger.Error(
                     $"[Cloud] Injection uploader received unexpected process type '{record.CellData.ProcessType}'.");
-                return false;
+                return CloudCallResult.Failure(CloudCallOutcome.Exception, "unexpected_process_type");
             }
 
             items.Add(_mapper.Map<InjectionCloudDto>(injection));
@@ -61,15 +62,23 @@ public sealed class InjectionCloudUploader : IProcessCloudUploader
             items
         };
 
-        var success = await _cloudHttp.PostAsync(
+        var result = await _cloudHttp.PostAsync(
             _endpointProvider.GetPassStationInjectionBatchPath(),
-            payload).ConfigureAwait(false);
+            payload,
+            new CloudRequestOptions
+            {
+                IdempotencyKey = CloudIdempotencyKeyBuilder.ForBatch(
+                    ProcessType,
+                    nameof(InjectionCloudUploader),
+                    records)
+            }).ConfigureAwait(false);
 
-        if (!success)
+        if (!result.IsSuccess)
         {
-            _logger.Error($"[Cloud] Injection batch upload failed. Count:{records.Count}");
+            _logger.Error(
+                $"[Cloud] Injection batch upload failed. Count:{records.Count}, Outcome:{result.Outcome}, Reason:{result.ReasonCode}");
         }
 
-        return success;
+        return result;
     }
 }

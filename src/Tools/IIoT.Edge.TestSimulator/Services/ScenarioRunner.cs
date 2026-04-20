@@ -5,8 +5,8 @@ using IIoT.Edge.TestSimulator.Scenarios;
 namespace IIoT.Edge.TestSimulator.Services;
 
 /// <summary>
-/// 场景执行器
-/// 支持执行全部场景或按名称选择执行
+/// 场景执行器。
+/// 支持顺序执行全部场景或按名称选择执行。
 /// </summary>
 public sealed class ScenarioRunner
 {
@@ -44,11 +44,9 @@ public sealed class ScenarioRunner
         _allScenarios = [_scenario1, _scenario2, _scenario3, _scenario4];
     }
 
-    /// <summary>顺序执行全部场景</summary>
     public Task<List<ScenarioResult>> RunAllAsync(CancellationToken ct = default)
         => RunInternalAsync(_allScenarios, resetBeforeRun: true, ct);
 
-    /// <summary>按选择执行场景</summary>
     public Task<List<ScenarioResult>> RunSelectedAsync(
         IReadOnlyCollection<string> selectedScenarioNames,
         bool resetBeforeRun,
@@ -61,7 +59,6 @@ public sealed class ScenarioRunner
         return RunInternalAsync(selected, resetBeforeRun, ct);
     }
 
-    /// <summary>获取所有场景名称（UI 绑定用）</summary>
     public IReadOnlyList<string> GetAllScenarioNames()
         => _allScenarios.Select(s => s.Name).ToList();
 
@@ -79,13 +76,10 @@ public sealed class ScenarioRunner
         }
 
         _logger.Info("----------------------------------------");
-        _logger.Info("    IIoT Edge 集成测试模拟器  开始运行");
+        _logger.Info("    IIoT Edge 集成测试模拟器 开始运行");
         _logger.Info("----------------------------------------");
 
-        // 历史数据场景不需要清库（它直接上传云端，不依赖本地状态）
-        var needReset = resetBeforeRun
-            && scenarios.Any(s => s is not HistoricalDataScenario);
-
+        var needReset = resetBeforeRun && scenarios.Any(s => s is not HistoricalDataScenario);
         if (needReset)
         {
             await _dataHelper.ClearAllAsync();
@@ -93,10 +87,10 @@ public sealed class ScenarioRunner
             _logger.Info("[ScenarioRunner] 运行前已清空 SQLite 与内存状态");
         }
 
-        for (int i = 0; i < scenarios.Count; i++)
+        for (var i = 0; i < scenarios.Count; i++)
         {
             var scenario = scenarios[i];
-            _logger.Info($"");
+            _logger.Info(string.Empty);
             _logger.Info($"场景 {i + 1} / {scenarios.Count}: {scenario.Name}");
 
             ScenarioResult result;
@@ -117,17 +111,21 @@ public sealed class ScenarioRunner
 
             results.Add(result);
 
-            foreach (var a in result.Assertions)
-                _logger.Info($"  {a}");
+            foreach (var assertion in result.Assertions)
+            {
+                _logger.Info($"  {assertion}");
+            }
 
-            if (result.Error != null)
+            if (result.Error is not null)
+            {
                 _logger.Error($"  异常: {result.Error}");
+            }
 
             _logger.Info($"  {(result.Passed ? "通过" : "失败")}");
         }
 
         var passCount = results.Count(r => r.Passed);
-        _logger.Info("");
+        _logger.Info(string.Empty);
         _logger.Info("----------------------------------------");
         _logger.Info($"    总结: {passCount} / {results.Count} 通过");
         _logger.Info("----------------------------------------");
@@ -135,13 +133,12 @@ public sealed class ScenarioRunner
         return results;
     }
 
-    /// <summary>清空测试数据并重置内存状态</summary>
     public async Task ResetAsync()
     {
         await _dataHelper.ClearAllAsync();
         _httpClient.Reset();
         _capacityStore.ResetAll();
-        _deviceService.CurrentState = IIoT.Edge.Application.Abstractions.Device.NetworkState.Offline;
+        _deviceService.SetOffline();
         _logger.Info("[重置] 所有测试数据已清空，状态已恢复初始值");
     }
 }

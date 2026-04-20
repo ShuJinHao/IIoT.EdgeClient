@@ -654,8 +654,16 @@ public sealed class ModuleRuntimeRegistrationTests
         private readonly Queue<CellCompletedRecord> _queue = new();
 
         public int PendingCount => _queue.Count;
+        public int OverflowCount => 0;
+        public int SpillCount => 0;
 
-        public void Enqueue(CellCompletedRecord record) => _queue.Enqueue(record);
+        public ValueTask<DataPipelineEnqueueResult> EnqueueAsync(
+            CellCompletedRecord record,
+            CancellationToken cancellationToken = default)
+        {
+            _queue.Enqueue(record);
+            return ValueTask.FromResult(DataPipelineEnqueueResult.Accepted());
+        }
 
         public bool TryDequeue(out CellCompletedRecord? record)
         {
@@ -668,6 +676,9 @@ public sealed class ModuleRuntimeRegistrationTests
             record = _queue.Dequeue();
             return true;
         }
+
+        public ValueTask<bool> WaitToReadAsync(CancellationToken cancellationToken = default)
+            => ValueTask.FromResult(_queue.Count > 0);
     }
 
     private sealed class SpyProductionContextStore : IProductionContextStore
@@ -690,6 +701,8 @@ public sealed class ModuleRuntimeRegistrationTests
         }
 
         public IReadOnlyCollection<ProductionContext> GetAll() => _contexts.Values.ToList().AsReadOnly();
+
+        public ProductionContextPersistenceDiagnostics GetPersistenceDiagnostics() => new(0, null);
 
         public void LoadFromFile() => LoadCallCount++;
 

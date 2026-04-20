@@ -1,6 +1,5 @@
 using IIoT.Edge.Application.Abstractions.Context;
-using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
-using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using MediatR;
@@ -27,47 +26,20 @@ public record DeviceMonitorSnapshot(
     string StepSummary,
     int CellCount,
     DataTable CellTable,
-    string CloudLinkStatus,
-    string RetryQueueStatus);
+    CloudSyncDiagnosticsSnapshot CloudSync,
+    MesSyncDiagnosticsSnapshot MesSync,
+    ProductionContextPersistenceDiagnostics ContextPersistence);
 
 public record GetMonitorSnapshotQuery : IRequest<List<DeviceMonitorSnapshot>>;
 
 public class GetMonitorSnapshotHandler(
     IProductionContextStore contextStore,
-    IDeviceService deviceService,
-    IFailedRecordStore failedStore,
-    IDeviceLogBufferStore deviceLogBufferStore,
-    ICapacityBufferStore capacityBufferStore)
+    IEdgeSyncDiagnosticsQuery diagnosticsQuery)
     : IRequestHandler<GetMonitorSnapshotQuery, List<DeviceMonitorSnapshot>>
 {
-    public async Task<List<DeviceMonitorSnapshot>> Handle(GetMonitorSnapshotQuery request, CancellationToken ct)
+    public Task<List<DeviceMonitorSnapshot>> Handle(GetMonitorSnapshotQuery request, CancellationToken ct)
     {
-        var failedCloudCountTask = failedStore.GetCountAsync("Cloud");
-        var failedMesCountTask = failedStore.GetCountAsync("MES");
-        var deviceLogBufferCountTask = deviceLogBufferStore.GetCountAsync();
-        var capacityBufferCountTask = capacityBufferStore.GetCountAsync();
-
-        await Task.WhenAll(
-            failedCloudCountTask,
-            failedMesCountTask,
-            deviceLogBufferCountTask,
-            capacityBufferCountTask);
-
-        var failedCloudCount = await failedCloudCountTask;
-        var failedMesCount = await failedMesCountTask;
-        var deviceLogBufferCount = await deviceLogBufferCountTask;
-        var capacityBufferCount = await capacityBufferCountTask;
-
-        var cloudLinkStatus = BuildCloudLinkStatus(
-            deviceService.CurrentState,
-            deviceService.HasDeviceId,
-            deviceService.CurrentDevice);
-        var retryQueueStatus = BuildRetryQueueStatus(
-            failedCloudCount,
-            failedMesCount,
-            deviceLogBufferCount,
-            capacityBufferCount);
-
+        var diagnostics = diagnosticsQuery.GetCurrent();
         var result = new List<DeviceMonitorSnapshot>();
         var contexts = contextStore.GetAll().ToList();
 
@@ -91,10 +63,11 @@ public class GetMonitorSnapshotHandler(
                 StepSummary: "No steps",
                 CellCount: 0,
                 CellTable: new DataTable(),
-                CloudLinkStatus: cloudLinkStatus,
-                RetryQueueStatus: retryQueueStatus));
+                CloudSync: diagnostics.Cloud,
+                MesSync: diagnostics.Mes,
+                ContextPersistence: diagnostics.ContextPersistence));
 
-            return result;
+            return Task.FromResult(result);
         }
 
         foreach (var ctx in contexts)
@@ -124,41 +97,12 @@ public class GetMonitorSnapshotHandler(
                 StepSummary: string.IsNullOrEmpty(stepInfo) ? "No steps" : stepInfo,
                 CellCount: ctx.CurrentCells.Count,
                 CellTable: BuildCellTable(ctx),
-                CloudLinkStatus: cloudLinkStatus,
-                RetryQueueStatus: retryQueueStatus));
+                CloudSync: diagnostics.Cloud,
+                MesSync: diagnostics.Mes,
+                ContextPersistence: diagnostics.ContextPersistence));
         }
 
-        return result;
-    }
-
-    private static string BuildCloudLinkStatus(NetworkState state, bool hasDeviceId, DeviceSession? deviceSession)
-    {
-        if (state == NetworkState.Offline)
-        {
-            return "Offline: heartbeat unavailable, cloud upload paused.";
-        }
-
-        if (!hasDeviceId || deviceSession is null)
-        {
-            return "Online: waiting for device identification.";
-        }
-
-        return $"Online: identified as {deviceSession.DeviceName}.";
-    }
-
-    private static string BuildRetryQueueStatus(
-        int failedCloudCount,
-        int failedMesCount,
-        int deviceLogBufferCount,
-        int capacityBufferCount)
-    {
-        var total = failedCloudCount + failedMesCount + deviceLogBufferCount + capacityBufferCount;
-        if (total == 0)
-        {
-            return "Retry queue empty.";
-        }
-
-        return $"Pending {total} (CloudFailed={failedCloudCount}, MESFailed={failedMesCount}, LogBuffer={deviceLogBufferCount}, CapacityBuffer={capacityBufferCount}).";
+        return Task.FromResult(result);
     }
 
     private static DataTable BuildCellTable(ProductionContext ctx)
@@ -198,9 +142,19 @@ public class GetMonitorSnapshotHandler(
     private static string FormatValue(object? value) => value switch
     {
         null => "--",
-        DateTime dt => dt.ToString("HH:mm:ss.fff"),
+        DateTime dt => ToLocalTime(dt).ToString("HH:mm:ss.fff"),
         bool b => b ? "OK" : "NG",
         double d => d.ToString("F3"),
         _ => value?.ToString() ?? "--"
     };
+
+    private static DateTime ToLocalTime(DateTime value)
+    {
+        return value.Kind switch
+        {
+            DateTimeKind.Utc => value.ToLocalTime(),
+            DateTimeKind.Unspecified => DateTime.SpecifyKind(value, DateTimeKind.Utc).ToLocalTime(),
+            _ => value
+        };
+    }
 }

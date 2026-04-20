@@ -1,6 +1,7 @@
 using IIoT.Edge.Application;
 using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
+using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 using IIoT.Edge.Application.Abstractions.DataPipeline.SyncTask;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
@@ -55,7 +56,11 @@ public static class DependencyInjection
         services.AddSingleton<IReadOnlyCollection<CompiledModuleDescriptor>>(discoveredModuleList);
         services.AddSingleton<IDevelopmentSampleInitializer, DevelopmentSampleInitializer>();
         services.AddSingleton<IStartupDiagnosticsStore, StartupDiagnosticsStore>();
+        services.AddSingleton<ICloudUploadDiagnosticsStore, CloudUploadDiagnosticsStore>();
         services.AddSingleton<IMesUploadDiagnosticsStore, MesUploadDiagnosticsStore>();
+        services.AddSingleton<IMesRetryDiagnosticsStore, MesRetryDiagnosticsStore>();
+        services.AddSingleton<ICriticalPersistenceFallbackWriter, CriticalPersistenceFallbackWriter>();
+        services.Configure<DataPipelineCapacityOptions>(configuration.GetSection(DataPipelineCapacityOptions.SectionName));
 
         var shiftConfig = new ShiftConfig();
         configuration.GetSection("Shift").Bind(shiftConfig);
@@ -116,8 +121,11 @@ public static class DependencyInjection
         services.AddSingleton<IManagedBackgroundService>(sp =>
             new LongRunningBackgroundTaskGroupService(
                 "DataPipeline.Runtime",
-                new IBackgroundTask[] { sp.GetRequiredService<ProcessQueueTask>() }
-                    .Concat(sp.GetServices<RetryTask>())));
+                [
+                    sp.GetRequiredService<ProcessQueueTask>(),
+                    sp.GetRequiredService<CloudRetryTask>(),
+                    sp.GetRequiredService<MesRetryTask>()
+                ]));
 
         services.AddSingleton<IManagedBackgroundService>(sp =>
             new DelegatingBackgroundService(

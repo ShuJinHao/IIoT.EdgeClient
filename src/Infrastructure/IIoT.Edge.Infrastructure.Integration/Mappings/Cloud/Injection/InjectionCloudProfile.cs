@@ -22,10 +22,10 @@ public class InjectionCloudProfile : Profile
             .ForMember(d => d.CellResult,
                 o => o.MapFrom(s => s.CellResult == true ? "OK" : "NG"))
             .ForMember(d => d.CompletedTime,
-                o => o.MapFrom(s => s.CompletedTime ?? DateTime.Now))
+                o => o.MapFrom(s => s.CompletedTime ?? DateTime.UtcNow))
             .ForMember(d => d.PreInjectionTime,
-                o => o.MapFrom(s => s.ScanTime ?? s.CompletedTime ?? DateTime.Now))
+                o => o.MapFrom(s => s.ScanTime ?? s.CompletedTime ?? DateTime.UtcNow))
             .ForMember(d => d.PostInjectionTime,
-                o => o.MapFrom(s => s.CompletedTime ?? s.ScanTime ?? DateTime.Now));
+                o => o.MapFrom(s => s.CompletedTime ?? s.ScanTime ?? DateTime.UtcNow));
     }
 }

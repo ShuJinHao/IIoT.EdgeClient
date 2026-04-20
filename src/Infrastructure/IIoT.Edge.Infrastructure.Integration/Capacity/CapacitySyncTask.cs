@@ -4,6 +4,7 @@ using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 using IIoT.Edge.Application.Abstractions.DataPipeline.SyncTask;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Infrastructure.Integration.Config;
 using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
 
@@ -18,6 +19,7 @@ public class CapacitySyncTask : ICapacitySyncTask
     private readonly ICapacityBufferStore _bufferStore;
     private readonly ILogService _logger;
     private readonly ShiftConfig _shiftConfig;
+    private readonly ICloudUploadDiagnosticsStore _diagnosticsStore;
     private readonly object _lifecycleLock = new();
     private readonly SemaphoreSlim _syncGate = new(1, 1);
     private CancellationTokenSource? _cts;
@@ -32,7 +34,8 @@ public class CapacitySyncTask : ICapacitySyncTask
         IProductionContextStore contextStore,
         ICapacityBufferStore bufferStore,
         ILogService logger,
-        ShiftConfig shiftConfig)
+        ShiftConfig shiftConfig,
+        ICloudUploadDiagnosticsStore diagnosticsStore)
     {
         _cloudHttp = cloudHttp;
         _endpointProvider = endpointProvider;
@@ -41,6 +44,7 @@ public class CapacitySyncTask : ICapacitySyncTask
         _bufferStore = bufferStore;
         _logger = logger;
         _shiftConfig = shiftConfig;
+        _diagnosticsStore = diagnosticsStore;
     }
 
     public Task StartAsync(CancellationToken ct)
@@ -122,7 +126,7 @@ public class CapacitySyncTask : ICapacitySyncTask
         await _syncGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            if (_deviceService.CurrentState == NetworkState.Offline)
+            if (!_deviceService.CanUploadToCloud)
             {
                 return;
             }
@@ -188,19 +192,24 @@ public class CapacitySyncTask : ICapacitySyncTask
         string plcName)
     {
         var payload = CreatePayload(deviceId, date, hour, minute, shiftCode, totalCount, okCount, ngCount, plcName);
-        var success = await _cloudHttp.PostAsync(_endpointProvider.GetCapacityHourlyPath(), payload).ConfigureAwait(false);
-
-        if (success)
+        var result = await _cloudHttp.PostAsync(_endpointProvider.GetCapacityHourlyPath(), payload).ConfigureAwait(false);
+        _diagnosticsStore.RecordResult("Capacity", result);
+        if (result.IsSuccess)
         {
             _logger.Info(
                 $"[CapacitySync] [{plcName}] {date} {hour:D2}:{minute:D2}/{shiftCode} synced. Total:{totalCount}, OK:{okCount}, NG:{ngCount}");
+        }
+        else if (result.Outcome is CloudCallOutcome.SkippedUploadNotReady or CloudCallOutcome.UnauthorizedAfterRetry)
+        {
+            _logger.Warn(
+                $"[CapacitySync] [{plcName}] {date} {hour:D2}:{minute:D2}/{shiftCode} waiting for cloud recovery. Reason:{result.ReasonCode}");
         }
         else
         {
             _logger.Warn($"[CapacitySync] [{plcName}] {date} {hour:D2}:{minute:D2}/{shiftCode} sync failed.");
         }
 
-        return success;
+        return result.IsSuccess;
     }
 
     public async Task<bool> RetryBufferAsync()
@@ -208,7 +217,7 @@ public class CapacitySyncTask : ICapacitySyncTask
         await _syncGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            if (_deviceService.CurrentState == NetworkState.Offline)
+            if (!_deviceService.CanUploadToCloud)
             {
                 return false;
             }
@@ -243,16 +252,24 @@ public class CapacitySyncTask : ICapacitySyncTask
                             summary.NgCount,
                             summary.PlcName);
 
-                        var success = await _cloudHttp
+                        var result = await _cloudHttp
                             .PostAsync(_endpointProvider.GetCapacityHourlyPath(), payload)
                             .ConfigureAwait(false);
-
-                        if (!success)
+                        _diagnosticsStore.RecordResult("Capacity", result);
+                        if (!result.IsSuccess)
                         {
                             await _bufferStore.ReleaseClaimAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
                             claimReleased = true;
-                            _logger.Warn(
-                                $"[Retry-Cloud] Capacity retry failed: {summary.Date} {summary.Hour:D2}:{summary.MinuteBucket:D2}/{summary.ShiftCode}");
+                            if (result.Outcome is CloudCallOutcome.SkippedUploadNotReady or CloudCallOutcome.UnauthorizedAfterRetry)
+                            {
+                                _logger.Warn(
+                                    $"[Retry-Cloud] Capacity retry paused waiting for cloud recovery: {summary.Date} {summary.Hour:D2}:{summary.MinuteBucket:D2}/{summary.ShiftCode} ({result.ReasonCode})");
+                            }
+                            else
+                            {
+                                _logger.Warn(
+                                    $"[Retry-Cloud] Capacity retry failed: {summary.Date} {summary.Hour:D2}:{summary.MinuteBucket:D2}/{summary.ShiftCode}");
+                            }
                             return false;
                         }
 

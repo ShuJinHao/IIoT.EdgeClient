@@ -85,23 +85,24 @@ public class RecipeService : IRecipeService
             return false;
         }
 
-        if (_deviceService.CurrentState == NetworkState.Offline)
+        if (!_deviceService.CanUploadToCloud)
         {
-            _logger.Warn("[Recipe] Network is offline. Cloud pull skipped.");
+            _logger.Warn(
+                $"[Recipe] Cloud pull skipped because upload gate is blocked ({_deviceService.CurrentUploadGate.Reason.ToReasonCode()}).");
             return false;
         }
 
         var url = _endpointProvider.BuildRecipeByDevicePath(device.DeviceId);
-        var json = await _cloudHttp.GetAsync(url);
-        if (json is null)
+        var result = await _cloudHttp.GetAsync(url);
+        if (!result.IsSuccess || string.IsNullOrWhiteSpace(result.Payload))
         {
-            _logger.Error("[Recipe] Cloud pull failed.");
+            _logger.Error($"[Recipe] Cloud pull failed. Outcome:{result.Outcome}, Reason:{result.ReasonCode}");
             return false;
         }
 
         try
         {
-            var recipe = ParseCloudResponse(json);
+            var recipe = ParseCloudResponse(result.Payload);
             if (recipe is null)
             {
                 _logger.Warn("[Recipe] Cloud response was empty or invalid.");

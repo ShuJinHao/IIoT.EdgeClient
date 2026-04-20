@@ -24,6 +24,11 @@ public interface IProductionContextStore
     IReadOnlyCollection<ProductionContext> GetAll();
 
     /// <summary>
+    /// 获取本地持久化坏档诊断信息。
+    /// </summary>
+    ProductionContextPersistenceDiagnostics GetPersistenceDiagnostics();
+
+    /// <summary>
     /// 启动时从本地文件恢复状态。
     /// </summary>
     void LoadFromFile();

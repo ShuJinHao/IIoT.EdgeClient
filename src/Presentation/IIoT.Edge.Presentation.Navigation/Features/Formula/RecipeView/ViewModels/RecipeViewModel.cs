@@ -22,6 +22,7 @@ public class RecipeViewModel : CrudPageViewModelBase
     private readonly IRecipeViewCrudService _crudService;
     private readonly IRecipeService _recipeService;
     private readonly IEditorValidator<LocalRecipeParamEditModel> _localRecipeParamValidator = new LocalRecipeParamValidator();
+    private bool _isSubscribed;
 
     public ObservableCollection<RecipeParamVm> Params { get; } = new();
 
@@ -83,18 +84,23 @@ public class RecipeViewModel : CrudPageViewModelBase
             param => _ = RunDeleteAsync(() => OnDeleteLocalParamAsync(param)),
             param => IsLocalAdmin && param is string key && !string.IsNullOrWhiteSpace(key));
 
-        _recipeService.RecipeChanged += RefreshUI;
-        _recipeService.RecipeChanged += () => _ = UpdateAdminStateAsync();
     }
 
     public override async Task OnActivatedAsync()
     {
+        EnsureSubscriptions();
         await ExecuteBusyAsync(async () =>
         {
             await UpdateAdminStateAsync();
             IsCloudSource = _recipeService.ActiveSource == RecipeSource.Cloud;
             await RefreshUIAsync();
         });
+    }
+
+    public override Task OnDeactivatedAsync()
+    {
+        RemoveSubscriptions();
+        return Task.CompletedTask;
     }
 
     private async Task<CrudOperationResult> OnSyncCloudAsync()
@@ -158,6 +164,35 @@ public class RecipeViewModel : CrudPageViewModelBase
     private void RefreshUI()
     {
         _ = RefreshUIAsync();
+    }
+
+    private void EnsureSubscriptions()
+    {
+        if (_isSubscribed)
+        {
+            return;
+        }
+
+        _recipeService.RecipeChanged += RefreshUI;
+        _recipeService.RecipeChanged += OnRecipeChangedUpdateAdminState;
+        _isSubscribed = true;
+    }
+
+    private void RemoveSubscriptions()
+    {
+        if (!_isSubscribed)
+        {
+            return;
+        }
+
+        _recipeService.RecipeChanged -= RefreshUI;
+        _recipeService.RecipeChanged -= OnRecipeChangedUpdateAdminState;
+        _isSubscribed = false;
+    }
+
+    private void OnRecipeChangedUpdateAdminState()
+    {
+        _ = UpdateAdminStateAsync();
     }
 
     private async Task RefreshUIAsync()

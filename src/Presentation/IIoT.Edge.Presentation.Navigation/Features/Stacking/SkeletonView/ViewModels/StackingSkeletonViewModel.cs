@@ -18,7 +18,7 @@ public sealed class StackingSkeletonViewModel : PresentationViewModelBase
     private readonly IReadRepository<NetworkDeviceEntity> _networkDevices;
     private readonly IProductionContextStore _contextStore;
     private readonly IStationRuntimeRegistry _runtimeRegistry;
-    private readonly IFailedRecordStore _failedRecordStore;
+    private readonly ICloudRetryRecordStore _cloudRetryRecordStore;
     private readonly DispatcherTimer _refreshTimer;
 
     public override string ViewId => StackingViewIds.PlaceholderDashboard;
@@ -124,13 +124,13 @@ public sealed class StackingSkeletonViewModel : PresentationViewModelBase
         IReadRepository<NetworkDeviceEntity> networkDevices,
         IProductionContextStore contextStore,
         IStationRuntimeRegistry runtimeRegistry,
-        IFailedRecordStore failedRecordStore)
+        ICloudRetryRecordStore cloudRetryRecordStore)
     {
         _configuration = configuration;
         _networkDevices = networkDevices;
         _contextStore = contextStore;
         _runtimeRegistry = runtimeRegistry;
-        _failedRecordStore = failedRecordStore;
+        _cloudRetryRecordStore = cloudRetryRecordStore;
 
         _refreshTimer = new DispatcherTimer
         {
@@ -233,8 +233,7 @@ public sealed class StackingSkeletonViewModel : PresentationViewModelBase
             ? "No cloud upload failure is currently recorded."
             : $"Last failure: {lastCloudError}";
 
-        var pendingCloudRetries = await _failedRecordStore.GetCountAsync(
-            "Cloud",
+        var pendingCloudRetries = await _cloudRetryRecordStore.GetCountAsync(
             StackingModuleConstants.ProcessType);
         CloudRetryStatus = $"Pending Cloud retry records for Stacking: {pendingCloudRetries}.";
 

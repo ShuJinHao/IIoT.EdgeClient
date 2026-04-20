@@ -31,7 +31,8 @@ public sealed class DeviceLogSyncTaskBehaviorTests
             endpointProvider,
             deviceService,
             bufferStore,
-            new FakeLogService());
+            new FakeLogService(),
+            new FakeCloudDiagnosticsStore());
 
         var result = await task.RetryBufferAsync();
 
@@ -71,7 +72,8 @@ public sealed class DeviceLogSyncTaskBehaviorTests
             new FakeCloudApiEndpointProvider(),
             deviceService,
             bufferStore,
-            new FakeLogService());
+            new FakeLogService(),
+            new FakeCloudDiagnosticsStore());
 
         var result = await task.RetryBufferAsync();
 
@@ -112,7 +114,8 @@ public sealed class DeviceLogSyncTaskBehaviorTests
             new FakeCloudApiEndpointProvider(),
             deviceService,
             bufferStore,
-            new FakeLogService());
+            new FakeLogService(),
+            new FakeCloudDiagnosticsStore());
 
         var result = await task.RetryBufferAsync();
 
@@ -121,6 +124,48 @@ public sealed class DeviceLogSyncTaskBehaviorTests
         Assert.Empty(bufferStore.DeletedClaimTokens);
         Assert.Single(bufferStore.ReleasedClaimTokens);
         Assert.Single(bufferStore.Records);
+    }
+
+    [Fact]
+    public async Task RetryBuffer_WhenBufferedLogsAreOlderThan24Hours_ShouldStillPostAndDeleteClaimedRows()
+    {
+        var cloudHttp = new FakeCloudHttpClient();
+        cloudHttp.EnqueuePostResult(true);
+
+        var deviceService = new FakeDeviceService();
+        deviceService.SetOnline(new IIoT.Edge.Application.Abstractions.Device.DeviceSession
+        {
+            DeviceId = Guid.NewGuid(),
+            DeviceName = "PLC-A",
+            ClientCode = "CLIENT-01",
+            ProcessId = Guid.NewGuid()
+        });
+
+        var oldTime = DateTime.UtcNow.AddHours(-25).ToString("O");
+        var bufferStore = new FakeDeviceLogBufferStore();
+        bufferStore.Records.Add(new DeviceLogRecord
+        {
+            Id = 10,
+            Level = "Info",
+            Message = "stale-buffer",
+            LogTime = oldTime,
+            CreatedAt = oldTime
+        });
+
+        var task = new DeviceLogSyncTask(
+            cloudHttp,
+            new FakeCloudApiEndpointProvider(),
+            deviceService,
+            bufferStore,
+            new FakeLogService(),
+            new FakeCloudDiagnosticsStore());
+
+        var result = await task.RetryBufferAsync();
+
+        Assert.True(result);
+        Assert.Equal(1, cloudHttp.PostCallCount);
+        Assert.Single(bufferStore.DeletedClaimTokens);
+        Assert.Empty(bufferStore.Records);
     }
 
     [Fact]
@@ -133,7 +178,8 @@ public sealed class DeviceLogSyncTaskBehaviorTests
             new FakeCloudApiEndpointProvider(),
             new FakeDeviceService(),
             bufferStore,
-            logger);
+            logger,
+            new FakeCloudDiagnosticsStore());
 
         using var cts = new CancellationTokenSource();
         await task.StartAsync(cts.Token);
@@ -158,7 +204,8 @@ public sealed class DeviceLogSyncTaskBehaviorTests
             new FakeCloudApiEndpointProvider(),
             new FakeDeviceService(),
             bufferStore,
-            logger);
+            logger,
+            new FakeCloudDiagnosticsStore());
 
         using var cts = new CancellationTokenSource();
         await task.StartAsync(cts.Token);

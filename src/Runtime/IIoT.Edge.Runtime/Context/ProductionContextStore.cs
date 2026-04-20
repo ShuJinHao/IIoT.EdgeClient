@@ -2,17 +2,25 @@
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 
 namespace IIoT.Edge.Runtime.Context;
 
 public class ProductionContextStore : IProductionContextStore
 {
+    private const string PersistFileName = "production_context.json";
+    private static readonly Regex CorruptFileTimestampPattern = new(
+        @"^production_context\.corrupt-(\d{17})(?:-\d+)?\.json$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
     private readonly Dictionary<string, ProductionContext> _contexts = new();
     private readonly ILogService _logger;
     private readonly string _persistPath;
     private readonly object _lock = new();
+    private ProductionContextPersistenceDiagnostics _persistenceDiagnostics = new(0, null);
 
     private static readonly JsonSerializerOptions _jsonOptions = new()
     {
@@ -35,7 +43,7 @@ public class ProductionContextStore : IProductionContextStore
                 "IIoT.Edge");
 
         Directory.CreateDirectory(dir);
-        _persistPath = Path.Combine(dir, "production_context.json");
+        _persistPath = Path.Combine(dir, PersistFileName);
     }
 
     public ProductionContext GetOrCreate(string deviceName)
@@ -64,16 +72,25 @@ public class ProductionContextStore : IProductionContextStore
         }
     }
 
+    public ProductionContextPersistenceDiagnostics GetPersistenceDiagnostics()
+    {
+        lock (_lock)
+        {
+            return _persistenceDiagnostics;
+        }
+    }
+
     public void LoadFromFile()
     {
+        if (!File.Exists(_persistPath))
+        {
+            _logger.Info("[ContextStore] No persisted file found. Using empty state.");
+            RefreshPersistenceDiagnostics();
+            return;
+        }
+
         try
         {
-            if (!File.Exists(_persistPath))
-            {
-                _logger.Info("[ContextStore] No persisted file found. Using empty state.");
-                return;
-            }
-
             var json = File.ReadAllText(_persistPath);
             var list = JsonSerializer.Deserialize<List<ProductionContext>>(json, _jsonOptions);
             if (list is null)
@@ -103,9 +120,25 @@ public class ProductionContextStore : IProductionContextStore
                 }
             }
         }
+        catch (JsonException ex)
+        {
+            HandleCorruptPersistedFile(ex);
+        }
+        catch (InvalidOperationException ex)
+        {
+            HandleCorruptPersistedFile(ex);
+        }
+        catch (NotSupportedException ex)
+        {
+            HandleCorruptPersistedFile(ex);
+        }
         catch (Exception ex)
         {
             _logger.Error($"[ContextStore] Load failed: {ex.Message}");
+        }
+        finally
+        {
+            RefreshPersistenceDiagnostics();
         }
     }
 
@@ -145,6 +178,115 @@ public class ProductionContextStore : IProductionContextStore
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
         }
+    }
+
+    private void HandleCorruptPersistedFile(Exception ex)
+    {
+        lock (_lock)
+        {
+            _contexts.Clear();
+        }
+
+        var quarantinedPath = TryQuarantineCorruptFile();
+        if (quarantinedPath is not null)
+        {
+            _logger.Error(
+                $"[ContextStore] Persisted state is corrupt. Quarantined to {Path.GetFileName(quarantinedPath)}. {ex.Message}");
+        }
+        else
+        {
+            _logger.Error($"[ContextStore] Persisted state is corrupt and could not be quarantined cleanly: {ex.Message}");
+        }
+
+        _logger.Warn("[ContextStore] Starting with empty runtime state because the persisted file could not be restored.");
+        RefreshPersistenceDiagnostics();
+    }
+
+    private string? TryQuarantineCorruptFile()
+    {
+        try
+        {
+            var directory = Path.GetDirectoryName(_persistPath) ?? ".";
+            var baseName = Path.GetFileNameWithoutExtension(PersistFileName);
+            var extension = Path.GetExtension(PersistFileName);
+            var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmssfff");
+            var candidatePath = Path.Combine(directory, $"{baseName}.corrupt-{timestamp}{extension}");
+            var suffix = 0;
+
+            while (File.Exists(candidatePath))
+            {
+                suffix++;
+                candidatePath = Path.Combine(directory, $"{baseName}.corrupt-{timestamp}-{suffix}{extension}");
+            }
+
+            File.Move(_persistPath, candidatePath);
+            return candidatePath;
+        }
+        catch (Exception moveEx)
+        {
+            _logger.Error($"[ContextStore] Failed to quarantine corrupt persisted state: {moveEx.Message}");
+            return null;
+        }
+    }
+
+    private void RefreshPersistenceDiagnostics()
+    {
+        try
+        {
+            var directory = Path.GetDirectoryName(_persistPath) ?? ".";
+            if (!Directory.Exists(directory))
+            {
+                UpdatePersistenceDiagnostics(new ProductionContextPersistenceDiagnostics(0, null));
+                return;
+            }
+
+            var files = Directory.GetFiles(directory, "production_context.corrupt-*.json");
+            var lastCorruptDetectedAt = files
+                .Select(ParseCorruptTimestamp)
+                .Where(x => x.HasValue)
+                .Max();
+
+            UpdatePersistenceDiagnostics(new ProductionContextPersistenceDiagnostics(
+                CorruptFileCount: files.Length,
+                LastCorruptDetectedAt: lastCorruptDetectedAt));
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"[ContextStore] Failed to refresh persistence diagnostics: {ex.Message}");
+        }
+    }
+
+    private void UpdatePersistenceDiagnostics(ProductionContextPersistenceDiagnostics diagnostics)
+    {
+        lock (_lock)
+        {
+            _persistenceDiagnostics = diagnostics;
+        }
+    }
+
+    private static DateTime? ParseCorruptTimestamp(string path)
+    {
+        var fileName = Path.GetFileName(path);
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            return null;
+        }
+
+        var match = CorruptFileTimestampPattern.Match(fileName);
+        if (match.Success
+            && DateTime.TryParseExact(
+                match.Groups[1].Value,
+                "yyyyMMddHHmmssfff",
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out var timestampUtc))
+        {
+            return timestampUtc.ToLocalTime();
+        }
+
+        return File.Exists(path)
+            ? File.GetLastWriteTime(path)
+            : null;
     }
 }
 

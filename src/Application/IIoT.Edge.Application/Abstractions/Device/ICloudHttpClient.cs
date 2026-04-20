@@ -11,18 +11,26 @@ public interface ICloudHttpClient
     /// <summary>
     /// 向指定地址提交 JSON 数据。
     /// </summary>
-    /// <returns>成功返回 true，失败返回 false，不抛出异常。</returns>
-    Task<bool> PostAsync(string url, object payload);
+    /// <returns>返回云端调用结果，不抛出异常。</returns>
+    Task<CloudCallResult> PostAsync(
+        string url,
+        object payload,
+        CloudRequestOptions? options = null);
 
     /// <summary>
     /// 向指定地址提交 JSON 数据，并返回响应内容。
     /// </summary>
-    /// <returns>成功时返回响应字符串，失败时返回 null。</returns>
-    Task<string?> PostWithResponseAsync(string url, object payload);
+    /// <returns>返回云端调用结果及响应内容，不抛出异常。</returns>
+    Task<CloudCallResult<string>> PostWithResponseAsync(
+        string url,
+        object payload,
+        CloudRequestOptions? options = null);
 
     /// <summary>
     /// 发起 GET 请求。
     /// </summary>
-    /// <returns>成功时返回响应字符串，失败时返回 null。</returns>
-    Task<string?> GetAsync(string url);
+    /// <returns>返回云端调用结果及响应内容，不抛出异常。</returns>
+    Task<CloudCallResult<string>> GetAsync(
+        string url,
+        CloudRequestOptions? options = null);
 }

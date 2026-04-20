@@ -31,25 +31,28 @@ public sealed class SimCloudConsumer : ICloudConsumer, ICloudBatchConsumer
         _logger = logger;
     }
 
-    public Task<bool> ProcessAsync(CellCompletedRecord record)
+    public async Task<bool> ProcessAsync(CellCompletedRecord record)
+        => (await ProcessWithResultAsync(record).ConfigureAwait(false)).IsSuccess;
+
+    public Task<CloudCallResult> ProcessWithResultAsync(CellCompletedRecord record)
         => ProcessBatchAsync([record]);
 
-    public async Task<bool> ProcessBatchAsync(IReadOnlyList<CellCompletedRecord> records)
+    public async Task<CloudCallResult> ProcessBatchAsync(IReadOnlyList<CellCompletedRecord> records)
     {
         if (records.Count == 0)
-            return true;
+            return CloudCallResult.Success();
 
-        if (_deviceService.CurrentState == NetworkState.Offline)
+        if (!_deviceService.CanUploadToCloud)
         {
             _logger.Warn($"[SimCloud] Offline. {records.Count} records queued for retry");
-            return false;
+            return CloudCallResult.Failure(CloudCallOutcome.SkippedUploadNotReady, "simulator_gate_blocked");
         }
 
         var device = _deviceService.CurrentDevice;
         if (device is null)
         {
             _logger.Warn("[SimCloud] Device not identified. Queue record(s) for retry");
-            return false;
+            return CloudCallResult.Failure(CloudCallOutcome.SkippedUploadNotReady, "simulator_device_missing");
         }
 
         var payload = new
@@ -58,14 +61,13 @@ public sealed class SimCloudConsumer : ICloudConsumer, ICloudBatchConsumer
             items = records.Select(r => r.CellData).ToArray()
         };
 
-        var success = await _httpClient.PostAsync("/api/test/passstation/batch", payload);
-
-        if (success)
+        var result = await _httpClient.PostAsync("/api/test/passstation/batch", payload);
+        if (result.IsSuccess)
             _logger.Info($"[SimCloud] Batch upload success: {records.Count}");
         else
-            _logger.Error($"[SimCloud] Batch upload failed: {records.Count}");
+            _logger.Error($"[SimCloud] Batch upload failed: {records.Count}, reason={result.ReasonCode}");
 
-        return success;
+        return result;
     }
 }
 

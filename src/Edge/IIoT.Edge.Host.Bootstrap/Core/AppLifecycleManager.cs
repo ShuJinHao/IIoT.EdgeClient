@@ -96,7 +96,7 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
             var diagnosticsReport = await BuildStartupDiagnosticsReportAsync(cancellationToken).ConfigureAwait(false);
             _startupDiagnosticsStore.Update(diagnosticsReport);
 
-            if (diagnosticsReport.Issues.Count > 0)
+            if (HasBlockingIssues(diagnosticsReport.Issues))
             {
                 var message = BuildValidationMessage(diagnosticsReport.Issues);
                 _logger.Error($"[Lifecycle] Startup validation failed.{Environment.NewLine}{message}");
@@ -148,7 +148,7 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
         var moduleRegistrations = BuildModuleRegistrations();
 
         return new StartupDiagnosticsReport(
-            DateTime.Now,
+            DateTime.UtcNow,
             _discoveredModulesById.Keys.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray(),
             _enabledModuleIds,
             moduleRegistrations,
@@ -311,7 +311,7 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
                 || !Enum.TryParse<PlcType>(device.DeviceModel, ignoreCase: true, out _))
             {
                 issues.Add(CreateIssue(
-                    "CONFIG_INVALID",
+                    "DEVICE_MODEL_INVALID",
                     $"PLC '{deviceName}' has an invalid DeviceModel: {device.DeviceModel ?? "<empty>"}.",
                     device.ModuleId,
                     deviceName));
@@ -481,4 +481,7 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
                 return $"- [{x.Code}]{scopeText} {x.Message}";
             }));
     }
+
+    private static bool HasBlockingIssues(IReadOnlyCollection<StartupDiagnosticIssue> issues)
+        => issues.Any(static issue => !string.Equals(issue.Code, "DEVICE_MODEL_INVALID", StringComparison.OrdinalIgnoreCase));
 }

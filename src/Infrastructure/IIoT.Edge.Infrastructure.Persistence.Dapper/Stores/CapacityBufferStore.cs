@@ -11,7 +11,7 @@ public class CapacityBufferStore : DapperRepositoryBase<CapacityRecord>, ICapaci
 {
     private static readonly TimeSpan ClaimTimeout = TimeSpan.FromMinutes(10);
 
-    public override string DbName => "pipeline";
+    public override string DbName => "pipeline_cloud";
     protected override string TableName => "capacity_buffer";
 
     protected override string CreateTableSql => @"
@@ -61,7 +61,7 @@ public class CapacityBufferStore : DapperRepositoryBase<CapacityRecord>, ICapaci
             record.CellResult,
             CompletedTime = record.CompletedTime.ToString("O"),
             record.ShiftCode,
-            CreatedAt = DateTime.Now.ToString("O"),
+            CreatedAt = DateTime.UtcNow.ToString("O"),
             record.PlcName
         });
     }
@@ -74,7 +74,7 @@ public class CapacityBufferStore : DapperRepositoryBase<CapacityRecord>, ICapaci
             VALUES
                 (@Barcode, @CellResult, @ShiftCode, @CompletedTime, @CreatedAt, @PlcName)";
 
-        var now = DateTime.Now.ToString("O");
+        var now = DateTime.UtcNow.ToString("O");
         var rows = records.Select(r => new
         {
             r.Barcode,
@@ -90,19 +90,13 @@ public class CapacityBufferStore : DapperRepositoryBase<CapacityRecord>, ICapaci
             return;
         }
 
-        try
+        await ExecuteInTransactionAsync<int>(async (conn, tx) =>
         {
-            await ExecuteInTransactionAsync<int>(async (conn, tx) =>
-            {
-                await conn.ExecuteAsync(sql, rows, tx, commandTimeout: CommandTimeout);
-                return 0;
-            });
-            Logger.Info($"[CapacityBuffer] Batch saved: {rows.Count} row(s).");
-        }
-        catch (Exception ex)
-        {
-            Logger.Error($"[CapacityBuffer] Batch save failed: {ex.Message}");
-        }
+            await conn.ExecuteAsync(sql, rows, tx, commandTimeout: CommandTimeout);
+            return rows.Count;
+        });
+
+        Logger.Info($"[CapacityBuffer] Batch saved: {rows.Count} row(s).");
     }
 
     public async Task<List<BufferSummaryDto>> GetShiftSummaryAsync()
@@ -155,7 +149,7 @@ public class CapacityBufferStore : DapperRepositoryBase<CapacityRecord>, ICapaci
     {
         return await ExecuteInTransactionAsync<ClaimedCapacityBufferBatch?>(async (conn, tx) =>
         {
-            var now = DateTime.Now;
+            var now = DateTime.UtcNow;
             await conn.ExecuteAsync(
                 "DELETE FROM capacity_buffer_claims WHERE ClaimedAt <= @ExpiredAt",
                 new { ExpiredAt = now.Subtract(ClaimTimeout).ToString("O") },
@@ -274,7 +268,7 @@ public class CapacityBufferStore : DapperRepositoryBase<CapacityRecord>, ICapaci
 
             if (ids.Count == 0)
             {
-                return 0;
+                throw new InvalidOperationException($"No claimed capacity rows found for claim {claimToken}.");
             }
 
             await conn.ExecuteAsync(
@@ -294,9 +288,11 @@ public class CapacityBufferStore : DapperRepositoryBase<CapacityRecord>, ICapaci
     }
 
     public async Task ReleaseClaimAsync(string claimToken)
-        => await SafeExecuteAsync(
+        => await StrictExecuteAsync(
             "DELETE FROM capacity_buffer_claims WHERE ClaimToken = @ClaimToken",
-            new { ClaimToken = claimToken });
+            new { ClaimToken = claimToken },
+            requireAffectedRows: true,
+            failureMessage: $"Failed to release capacity claim {claimToken}.");
 
     public async Task ClearAllAsync()
     {
@@ -306,19 +302,4 @@ public class CapacityBufferStore : DapperRepositoryBase<CapacityRecord>, ICapaci
 
     public async Task<int> GetCountAsync()
         => await SafeCountAsync($"SELECT COUNT(*) FROM {TableName}");
-
-    private async Task<List<T>> SafeQueryListAsync<T>(string sql, object? param = null)
-    {
-        try
-        {
-            using var conn = GetConnection();
-            var result = await conn.QueryAsync<T>(sql, param, commandTimeout: CommandTimeout);
-            return result.ToList();
-        }
-        catch (Exception ex)
-        {
-            Logger.Error($"[Dapper] Query failed [{TableName}]: {ex.Message}");
-            return new List<T>();
-        }
-    }
 }

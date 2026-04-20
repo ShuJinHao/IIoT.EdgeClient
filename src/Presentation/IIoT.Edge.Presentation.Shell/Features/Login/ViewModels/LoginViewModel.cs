@@ -105,15 +105,22 @@ public class LoginViewModel : ViewModelBase
 
     private async Task ExecuteLoginAsync()
     {
-        ErrorMessage = string.Empty;
+        if (IsBusy)
+        {
+            return;
+        }
 
-        if (string.IsNullOrWhiteSpace(Password))
+        ErrorMessage = string.Empty;
+        var trimmedEmployeeNo = EmployeeNo.Trim();
+        var trimmedPassword = Password.Trim();
+
+        if (string.IsNullOrWhiteSpace(trimmedPassword))
         {
             ErrorMessage = "Password is required.";
             return;
         }
 
-        if (IsCloudMode && string.IsNullOrWhiteSpace(EmployeeNo))
+        if (IsCloudMode && string.IsNullOrWhiteSpace(trimmedEmployeeNo))
         {
             ErrorMessage = "Employee number is required.";
             return;
@@ -126,31 +133,35 @@ public class LoginViewModel : ViewModelBase
 
             if (IsLocalMode)
             {
-                result = await _authService.LoginLocalAsync(Password);
+                result = await _authService.LoginLocalAsync(trimmedPassword);
             }
             else
             {
                 var deviceId = _deviceService.CurrentDevice?.DeviceId;
-                if (deviceId is null || deviceId == Guid.Empty)
+                if (!_deviceService.CanUploadToCloud || deviceId is null || deviceId == Guid.Empty)
                 {
                     ErrorMessage = "Device cloud identity is not ready yet.";
                     return;
                 }
 
-                result = await _authService.LoginCloudAsync(EmployeeNo, Password, deviceId.Value);
+                result = await _authService.LoginCloudAsync(trimmedEmployeeNo, trimmedPassword, deviceId.Value);
             }
 
             if (result.Success)
             {
+                EmployeeNo = string.Empty;
+                Password = string.Empty;
                 LoginSucceeded?.Invoke();
             }
             else
             {
+                EmployeeNo = trimmedEmployeeNo;
                 ErrorMessage = result.Message;
             }
         }
         finally
         {
+            Password = string.Empty;
             IsBusy = false;
         }
     }

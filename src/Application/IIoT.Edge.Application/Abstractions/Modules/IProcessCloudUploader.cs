@@ -17,7 +17,7 @@ public interface IProcessCloudUploader
 
     ProcessUploadMode UploadMode { get; }
 
-    Task<bool> UploadAsync(
+    Task<CloudCallResult> UploadAsync(
         ProcessCloudUploadContext context,
         IReadOnlyList<CellCompletedRecord> records,
         CancellationToken cancellationToken = default);

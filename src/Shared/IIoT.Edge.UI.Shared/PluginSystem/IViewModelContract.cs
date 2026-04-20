@@ -16,4 +16,5 @@ public interface IViewModelContract
     bool IsVisible { get; set; }
 
     Task OnActivatedAsync();
+    Task OnDeactivatedAsync();
 }

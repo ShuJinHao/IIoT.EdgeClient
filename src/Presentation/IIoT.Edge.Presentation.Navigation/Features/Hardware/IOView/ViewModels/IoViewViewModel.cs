@@ -71,7 +71,6 @@ public class IoViewViewModel : ViewModelBase
             Interval = TimeSpan.FromMilliseconds(200)
         };
         _refreshTimer.Tick += OnRefreshTick;
-        _refreshTimer.Start();
     }
 
     private async Task LoadDevicesAsync()
@@ -167,7 +166,18 @@ public class IoViewViewModel : ViewModelBase
 
     public override async Task OnActivatedAsync()
     {
+        if (!_refreshTimer.IsEnabled)
+        {
+            _refreshTimer.Start();
+        }
+
         await LoadDevicesAsync();
+    }
+
+    public override Task OnDeactivatedAsync()
+    {
+        _refreshTimer.Stop();
+        return Task.CompletedTask;
     }
 }
 

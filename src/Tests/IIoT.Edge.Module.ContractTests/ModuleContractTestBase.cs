@@ -1,3 +1,10 @@
+using IIoT.Edge.Application.Abstractions.DataPipeline;
+using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Application.Common.Models;
+using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
+using IIoT.Edge.SharedKernel.Context;
+using IIoT.Edge.SharedKernel.DataPipeline;
+
 namespace IIoT.Edge.Module.ContractTests;
 
 public abstract class ModuleContractTestBase<TModule>
@@ -7,10 +14,14 @@ public abstract class ModuleContractTestBase<TModule>
 
     protected virtual bool RequiresHardwareProfile => false;
     protected virtual bool RequiresMesUploader => false;
-
+    protected virtual int ExpectedRuntimeTaskCount => 0;
     protected virtual int MinimumRouteCount => 1;
 
     protected TModule CreateModule() => new();
+
+    protected virtual void ConfigureRuntimeServices(IServiceCollection services)
+    {
+    }
 
     [Fact]
     public void RegisterPipeline_ShouldPopulateRequiredModuleContracts()
@@ -90,5 +101,71 @@ public abstract class ModuleContractTestBase<TModule>
             menu => Assert.True(
                 menu.ViewId.StartsWith($"{module.ModuleId}.", StringComparison.Ordinal),
                 $"Menu view id '{menu.ViewId}' must use the '{module.ModuleId}.' prefix."));
+    }
+
+    [Fact]
+    public void RuntimeFactory_ShouldCreateTasksWithMinimalRuntimeServices()
+    {
+        var module = CreateModule();
+        var result = _fixture.RegisterModule(module);
+        Assert.True(result.RuntimeRegistry.TryGetFactory(module.ModuleId, out var factory));
+
+        var services = new ServiceCollection();
+        ConfigureRuntimeServices(services);
+
+        var tasks = factory.CreateTasks(
+            services.BuildServiceProvider(),
+            new PlcBuffer(16, 16),
+            new ProductionContext { DeviceName = "PLC-A" });
+
+        Assert.Equal(ExpectedRuntimeTaskCount, tasks.Count);
+    }
+
+    protected static void AddDefaultRuntimeServices(IServiceCollection services)
+    {
+        services.AddSingleton<ILogService, ContractLogService>();
+        services.AddSingleton<IDataPipelineService, ContractDataPipelineService>();
+    }
+
+    private sealed class ContractLogService : ILogService
+    {
+        public event Action<LogEntry>? EntryAdded;
+
+        public void Debug(string message) => Raise(message);
+        public void Info(string message) => Raise(message);
+        public void Warn(string message) => Raise(message);
+        public void Error(string message) => Raise(message);
+        public void Fatal(string message) => Raise(message);
+
+        private void Raise(string message)
+        {
+            EntryAdded?.Invoke(new LogEntry
+            {
+                Level = "Test",
+                Message = message,
+                Time = DateTime.UtcNow
+            });
+        }
+    }
+
+    private sealed class ContractDataPipelineService : IDataPipelineService
+    {
+        public int PendingCount => 0;
+        public int OverflowCount => 0;
+        public int SpillCount => 0;
+
+        public ValueTask<DataPipelineEnqueueResult> EnqueueAsync(
+            CellCompletedRecord record,
+            CancellationToken cancellationToken = default)
+            => ValueTask.FromResult(DataPipelineEnqueueResult.Accepted());
+
+        public bool TryDequeue(out CellCompletedRecord? record)
+        {
+            record = null;
+            return false;
+        }
+
+        public ValueTask<bool> WaitToReadAsync(CancellationToken cancellationToken = default)
+            => ValueTask.FromResult(false);
     }
 }

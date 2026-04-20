@@ -14,7 +14,7 @@ public class MesFallbackBufferStore : DapperRepositoryBase<MesFallbackRecord>, I
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
-    public override string DbName => "pipeline";
+    public override string DbName => "pipeline_mes";
     protected override string TableName => "mes_fallback_records";
 
     protected override string CreateTableSql => @"
@@ -55,7 +55,7 @@ public class MesFallbackBufferStore : DapperRepositoryBase<MesFallbackRecord>, I
             CellDataJson = cellDataJson,
             FailedTarget = failedTarget,
             ErrorMessage = errorMessage,
-            CreatedAt = DateTime.Now.ToString("O")
+            CreatedAt = DateTime.UtcNow.ToString("O")
         });
 
         if (affectedRows <= 0)
@@ -83,7 +83,11 @@ public class MesFallbackBufferStore : DapperRepositoryBase<MesFallbackRecord>, I
             return;
         }
 
-        await SafeExecuteAsync($"DELETE FROM {TableName} WHERE Id IN @Ids", new { Ids = idList });
+        await StrictExecuteAsync(
+            $"DELETE FROM {TableName} WHERE Id IN @Ids",
+            new { Ids = idList },
+            requireAffectedRows: true,
+            failureMessage: "Failed to delete MES fallback records.");
     }
 
     public async Task<int> GetCountAsync()

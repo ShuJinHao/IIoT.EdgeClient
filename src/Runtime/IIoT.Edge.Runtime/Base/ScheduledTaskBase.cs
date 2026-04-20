@@ -13,6 +13,8 @@ public abstract class ScheduledTaskBase : IBackgroundTask
     public abstract string TaskName { get; }
     protected abstract int ExecuteInterval { get; }
     protected virtual int ErrorRetryInterval => 1000;
+    protected virtual Task WaitForNextIterationAsync(CancellationToken ct)
+        => Task.Delay(ExecuteInterval, ct);
 
     protected ScheduledTaskBase(ProductionContext context, ILogService logger)
     {
@@ -47,7 +49,7 @@ public abstract class ScheduledTaskBase : IBackgroundTask
             try
             {
                 await ExecuteAsync();
-                await Task.Delay(ExecuteInterval, ct);
+                await WaitForNextIterationAsync(ct);
             }
             catch (OperationCanceledException)
             {

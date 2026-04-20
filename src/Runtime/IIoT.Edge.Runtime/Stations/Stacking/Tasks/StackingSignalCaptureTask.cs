@@ -27,7 +27,7 @@ public sealed class StackingSignalCaptureTask : PlcTaskBase
         _pipelineService = pipelineService;
     }
 
-    protected override Task DoCoreAsync()
+    protected override async Task DoCoreAsync()
     {
         Context.Set(StackingModuleConstants.RuntimeRegisteredKey, true);
 
@@ -35,7 +35,7 @@ public sealed class StackingSignalCaptureTask : PlcTaskBase
         var layerCount = Buffer.GetReadValue(StackingPlcSignalProfile.LayerCountReadIndex);
         var resultCode = StackingPlcSignalProfile.ParseResultCode(
             Buffer.GetReadValue(StackingPlcSignalProfile.ResultCodeReadIndex));
-        var observedAt = DateTime.Now;
+        var observedAt = DateTime.UtcNow;
 
         Context.Set(StackingModuleConstants.LastObservedSequenceKey, (int)sequence);
         Context.Set(StackingModuleConstants.LastObservedLayerCountKey, (int)layerCount);
@@ -44,13 +44,13 @@ public sealed class StackingSignalCaptureTask : PlcTaskBase
 
         if (sequence == 0)
         {
-            return Task.CompletedTask;
+            return;
         }
 
         var lastPublishedSequence = Context.Get<int>(StackingModuleConstants.LastPublishedSequenceKey);
         if (sequence <= lastPublishedSequence)
         {
-            return Task.CompletedTask;
+            return;
         }
 
         var barcode = $"{Context.DeviceName}-ST-{sequence:D4}";
@@ -73,11 +73,17 @@ public sealed class StackingSignalCaptureTask : PlcTaskBase
         Context.Set(StackingModuleConstants.LastPublishedBarcodeKey, barcode);
         Buffer.SetWriteValue(StackingPlcSignalProfile.AckWriteIndex, sequence);
 
-        _pipelineService.Enqueue(new CellCompletedRecord { CellData = cellData });
+        var enqueueResult = await _pipelineService
+            .EnqueueAsync(new CellCompletedRecord { CellData = cellData }, TaskCancellationToken)
+            .ConfigureAwait(false);
+
+        if (enqueueResult.WasOverflow)
+        {
+            Logger.Warn(
+                $"[{Context.DeviceName}] {TaskName} overflow persisted sample #{sequence} ({barcode}). Targets:{enqueueResult.PersistedTargetCount}, SkippedBestEffort:{enqueueResult.SkippedBestEffortCount}");
+        }
 
         Logger.Info(
             $"[{Context.DeviceName}] {TaskName} captured sample #{sequence} ({barcode}), Layers:{layerCount}, ResultCode:{resultCode}.");
-
-        return Task.CompletedTask;
     }
 }

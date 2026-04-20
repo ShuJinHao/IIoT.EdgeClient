@@ -77,7 +77,7 @@ public sealed class StackingModuleBehaviorTests
             ProcessId = Guid.NewGuid()
         };
 
-        var success = await uploader.UploadAsync(
+        var result = await uploader.UploadAsync(
             new ProcessCloudUploadContext(deviceSession),
             [
                 new CellCompletedRecord
@@ -95,7 +95,7 @@ public sealed class StackingModuleBehaviorTests
                 }
             ]);
 
-        Assert.True(success);
+        Assert.True(result.IsSuccess);
         Assert.Equal(1, cloudHttp.PostCallCount);
         Assert.Equal("/api/v1/edge/pass-stations/stacking", cloudHttp.LastPostUrl);
 
@@ -139,7 +139,7 @@ public sealed class StackingModuleBehaviorTests
             ProcessId = Guid.NewGuid()
         };
 
-        var success = await uploader.UploadAsync(
+        var result = await uploader.UploadAsync(
             new ProcessCloudUploadContext(deviceSession),
             [
                 new CellCompletedRecord
@@ -152,7 +152,7 @@ public sealed class StackingModuleBehaviorTests
                 }
             ]);
 
-        Assert.False(success);
+        Assert.False(result.IsSuccess);
         Assert.Equal(0, cloudHttp.PostCallCount);
         Assert.Contains(logger.Entries, x => x.Message.Contains("Stacking cloud upload is disabled", StringComparison.Ordinal));
 

@@ -51,7 +51,9 @@ public class DeviceSessionFileCacheStore
             DeviceId = cacheModel.DeviceId,
             DeviceName = cacheModel.DeviceName,
             ClientCode = clientCode,
-            ProcessId = cacheModel.ProcessId
+            ProcessId = cacheModel.ProcessId,
+            UploadAccessToken = cacheModel.UploadAccessToken,
+            UploadAccessTokenExpiresAtUtc = cacheModel.UploadAccessTokenExpiresAtUtc
         };
 
         if (isLegacyCache)
@@ -69,5 +71,7 @@ public class DeviceSessionFileCacheStore
         public string? ClientCode { get; init; }
         public string? MacAddress { get; init; }
         public Guid ProcessId { get; init; }
+        public string? UploadAccessToken { get; init; }
+        public DateTimeOffset? UploadAccessTokenExpiresAtUtc { get; init; }
     }
 }

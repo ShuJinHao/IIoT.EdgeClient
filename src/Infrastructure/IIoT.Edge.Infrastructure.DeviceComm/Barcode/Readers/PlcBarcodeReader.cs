@@ -29,7 +29,10 @@ public class PlcBarcodeReader : IBarcodeReader
     public async Task<string[]> ReadAsync(CancellationToken ct = default)
     {
         var totalWords = (ushort)(_codeCount * _wordsPerCode);
-        var rawData = await _plcService.ReadDataAsync<ushort>(_startAddress, totalWords).ConfigureAwait(false);
+        var rawData = await _plcService
+            .ReadDataAsync<ushort>(_startAddress, totalWords)
+            .WaitAsync(ct)
+            .ConfigureAwait(false);
         var barcodes = new string[_codeCount];
 
         for (var i = 0; i < _codeCount; i++)

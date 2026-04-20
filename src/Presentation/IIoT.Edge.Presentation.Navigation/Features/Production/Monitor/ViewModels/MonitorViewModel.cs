@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Features.Production.Monitor;
+using IIoT.Edge.Application.Common.Diagnostics;
 using IIoT.Edge.Presentation.Navigation;
 using IIoT.Edge.UI.Shared.Mvvm;
 using IIoT.Edge.UI.Shared.PluginSystem;
@@ -34,12 +35,22 @@ public class MonitorViewModel : PresentationViewModelBase
             Interval = TimeSpan.FromMilliseconds(500)
         };
         _refreshTimer.Tick += (_, _) => RunViewTaskInBackground(RefreshAsync, "Monitor refresh failed");
-        _refreshTimer.Start();
     }
 
     public override async Task OnActivatedAsync()
     {
+        if (!_refreshTimer.IsEnabled)
+        {
+            _refreshTimer.Start();
+        }
+
         await RunViewTaskAsync(RefreshAsync, "Monitor data load failed");
+    }
+
+    public override Task OnDeactivatedAsync()
+    {
+        _refreshTimer.Stop();
+        return Task.CompletedTask;
     }
 
     private async Task RefreshAsync()
@@ -68,8 +79,9 @@ public class MonitorViewModel : PresentationViewModelBase
                 tab.YieldAll = snapshot.YieldAll;
                 tab.DeviceDataSummary = snapshot.DeviceDataSummary;
                 tab.StepSummary = snapshot.StepSummary;
-                tab.CloudLinkStatus = snapshot.CloudLinkStatus;
-                tab.RetryQueueStatus = snapshot.RetryQueueStatus;
+                tab.CloudSyncStatus = EdgeSyncDiagnosticsFormatter.FormatCloudMonitorSummary(snapshot.CloudSync);
+                tab.MesSyncStatus = EdgeSyncDiagnosticsFormatter.FormatMesMonitorSummary(snapshot.MesSync);
+                tab.ContextPersistenceStatus = EdgeSyncDiagnosticsFormatter.FormatContextPersistenceSummary(snapshot.ContextPersistence);
                 tab.CellCount = snapshot.CellCount;
                 tab.CellTable = snapshot.CellTable;
             });
@@ -183,18 +195,25 @@ public class DeviceTabVm : BaseNotifyPropertyChanged
         set { _stepSummary = value; OnPropertyChanged(); }
     }
 
-    private string _cloudLinkStatus = "Cloud status unknown";
-    public string CloudLinkStatus
+    private string _cloudSyncStatus = "Cloud sync unknown";
+    public string CloudSyncStatus
     {
-        get => _cloudLinkStatus;
-        set { _cloudLinkStatus = value; OnPropertyChanged(); }
+        get => _cloudSyncStatus;
+        set { _cloudSyncStatus = value; OnPropertyChanged(); }
     }
 
-    private string _retryQueueStatus = "Retry queue unknown";
-    public string RetryQueueStatus
+    private string _mesSyncStatus = "MES sync unknown";
+    public string MesSyncStatus
     {
-        get => _retryQueueStatus;
-        set { _retryQueueStatus = value; OnPropertyChanged(); }
+        get => _mesSyncStatus;
+        set { _mesSyncStatus = value; OnPropertyChanged(); }
+    }
+
+    private string _contextPersistenceStatus = "Corrupt files: 0";
+    public string ContextPersistenceStatus
+    {
+        get => _contextPersistenceStatus;
+        set { _contextPersistenceStatus = value; OnPropertyChanged(); }
     }
 
     private int _cellCount;

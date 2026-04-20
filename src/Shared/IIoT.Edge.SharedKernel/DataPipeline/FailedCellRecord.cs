@@ -3,13 +3,13 @@
 /// <summary>
 /// 失败记录实体，用于保存 SQLite 中待重传的数据。
 /// 
-/// 对应数据库：pipeline.db
-/// 对应表：failed_cell_records
+/// 对应数据库：pipeline_cloud.db / pipeline_mes.db
+/// 对应表：failed_cloud_records / failed_mes_records
 /// 
 /// ProcessQueueTask 消费失败时写入：
 ///   CellData 会序列化为 JSON，存入 CellDataJson
 ///   ProcessType 记录工序类型，反序列化时据此还原具体子类
-///   Channel 记录补传通道，RetryTask 会按通道分别轮询
+///   Channel 为运行时附加字段，标识该记录由 Cloud 或 MES 通道负责。
 /// 
 /// RetryTask 捞出时：
 ///   根据 ProcessType 将 CellDataJson 反序列化为对应的 CellDataBase 子类

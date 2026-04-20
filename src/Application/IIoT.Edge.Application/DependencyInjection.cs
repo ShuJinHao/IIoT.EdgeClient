@@ -1,4 +1,6 @@
 using IIoT.Edge.Application.Abstractions.Tasks;
+using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Common.Diagnostics;
 using IIoT.Edge.Application.Common.Tasks;
 using IIoT.Edge.Application.Features.Config.ParamView;
 using IIoT.Edge.Application.Features.Formula.RecipeView;
@@ -25,6 +27,7 @@ public static class DependencyInjection
         services.AddTransient<IMonitorViewService, MonitorViewService>();
         services.AddTransient<IEquipmentPanelService, EquipmentPanelService>();
         services.AddTransient<ILogViewService, LogViewService>();
+        services.AddSingleton<IEdgeSyncDiagnosticsQuery, EdgeSyncDiagnosticsQuery>();
         services.AddSingleton<IBackgroundServiceCoordinator, BackgroundServiceCoordinator>();
         return services;
     }

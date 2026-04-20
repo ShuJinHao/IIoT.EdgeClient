@@ -13,6 +13,11 @@ namespace IIoT.Edge.Application.Common.Models
         public string DisplayName { get; init; } = string.Empty;
 
         /// <summary>
+        /// 当前登录员工号；本地管理员模式使用固定标识。
+        /// </summary>
+        public string? EmployeeNo { get; init; }
+
+        /// <summary>
         /// 是否为本地紧急管理员。
         /// </summary>
         public bool IsLocalAdmin { get; init; }
@@ -21,12 +26,11 @@ namespace IIoT.Edge.Application.Common.Models
         /// 从 JWT 权限声明解析出的权限集合。
         /// 本地紧急管理员通常不依赖此字段，而是直接通过 <see cref="IsLocalAdmin"/> 放行。
         /// </summary>
-        public HashSet<string> Permissions { get; init; } = new();
+        public HashSet<string> Permissions { get; init; } = new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
-        /// JWT 原始令牌字符串。
-        /// 本地紧急管理员模式下通常为空。
+        /// 云端登录会话过期时间；本地管理员模式下为空。
         /// </summary>
-        public string? Token { get; init; }
+        public DateTimeOffset? ExpiresAtUtc { get; init; }
     }
 }

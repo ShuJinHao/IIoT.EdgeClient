@@ -11,6 +11,7 @@ public abstract class PlcTaskBase : IPlcTask
     protected readonly IPlcBuffer Buffer;
     protected readonly ProductionContext Context;
     protected readonly ILogService Logger;
+    protected CancellationToken TaskCancellationToken { get; private set; }
 
     public abstract string TaskName { get; }
 
@@ -32,6 +33,11 @@ public abstract class PlcTaskBase : IPlcTask
 
     protected abstract Task DoCoreAsync();
 
+    protected void SetTaskCancellationToken(CancellationToken cancellationToken)
+    {
+        TaskCancellationToken = cancellationToken;
+    }
+
     public async Task StartAsync(CancellationToken ct)
     {
         await Task.Factory.StartNew(
@@ -43,6 +49,7 @@ public abstract class PlcTaskBase : IPlcTask
 
     private async Task TaskCoreAsync(CancellationToken ct)
     {
+        SetTaskCancellationToken(ct);
         Logger.Info($"[{Context.DeviceName}] {TaskName} started. Current step: {Step}");
 
         while (!ct.IsCancellationRequested)

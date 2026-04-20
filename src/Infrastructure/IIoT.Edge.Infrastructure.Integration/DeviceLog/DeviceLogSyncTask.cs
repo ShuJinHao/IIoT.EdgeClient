@@ -3,6 +3,7 @@ using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 using IIoT.Edge.Application.Abstractions.DataPipeline.SyncTask;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Common.Models;
 using IIoT.Edge.Infrastructure.Integration.Config;
 using IIoT.Edge.SharedKernel.DataPipeline.DeviceLog;
@@ -16,6 +17,7 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
     private readonly IDeviceService _deviceService;
     private readonly IDeviceLogBufferStore _bufferStore;
     private readonly ILogService _logger;
+    private readonly ICloudUploadDiagnosticsStore _diagnosticsStore;
     private readonly object _queueLock = new();
     private readonly object _lifecycleLock = new();
     private readonly SemaphoreSlim _syncGate = new(1, 1);
@@ -33,13 +35,15 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
         ICloudApiEndpointProvider endpointProvider,
         IDeviceService deviceService,
         IDeviceLogBufferStore bufferStore,
-        ILogService logger)
+        ILogService logger,
+        ICloudUploadDiagnosticsStore diagnosticsStore)
     {
         _cloudHttp = cloudHttp;
         _endpointProvider = endpointProvider;
         _deviceService = deviceService;
         _bufferStore = bufferStore;
         _logger = logger;
+        _diagnosticsStore = diagnosticsStore;
     }
 
     public Task StartAsync(CancellationToken ct)
@@ -159,7 +163,7 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
         {
             await FlushQueueToBufferAsync().ConfigureAwait(false);
 
-            if (_deviceService.CurrentState == NetworkState.Offline)
+            if (!_deviceService.CanUploadToCloud)
             {
                 return;
             }
@@ -192,13 +196,18 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
                 return true;
             }
 
-            var posted = false;
+            CloudCallResult? result = null;
             try
             {
-                posted = await PostLogsAsync(device.DeviceId, claimedBatch.Records).ConfigureAwait(false);
-                if (!posted)
+                result = await PostLogsAsync(device.DeviceId, claimedBatch.Records).ConfigureAwait(false);
+                if (!result.IsSuccess)
                 {
                     await _bufferStore.ReleaseClaimAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
+                    if (result.Outcome is CloudCallOutcome.SkippedUploadNotReady or CloudCallOutcome.UnauthorizedAfterRetry)
+                    {
+                        _logger.Warn($"[DeviceLogSync] Retry paused waiting for cloud recovery. Outcome:{result.Outcome}, Reason:{result.ReasonCode}");
+                    }
+
                     return false;
                 }
 
@@ -211,7 +220,7 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
             }
             catch (Exception ex)
             {
-                if (!posted)
+                if (result is null || !result.IsSuccess)
                 {
                     try
                     {
@@ -232,7 +241,7 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
         return true;
     }
 
-    private async Task<bool> PostLogsAsync(Guid deviceId, IReadOnlyCollection<DeviceLogRecord> batch)
+    private async Task<CloudCallResult> PostLogsAsync(Guid deviceId, IReadOnlyCollection<DeviceLogRecord> batch)
     {
         var payload = new
         {
@@ -245,12 +254,14 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
             }).ToArray()
         };
 
-        return await _cloudHttp.PostAsync(_endpointProvider.GetDeviceLogPath(), payload).ConfigureAwait(false);
+        var result = await _cloudHttp.PostAsync(_endpointProvider.GetDeviceLogPath(), payload).ConfigureAwait(false);
+        _diagnosticsStore.RecordResult("DeviceLog", result);
+        return result;
     }
 
     private async Task SaveToBufferAsync(List<LogItem> batch)
     {
-        var createdAt = DateTime.Now.ToString("O");
+        var createdAt = DateTime.UtcNow.ToString("O");
         var records = batch.Select(l => new DeviceLogRecord
         {
             Level = l.Level,
@@ -314,7 +325,7 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
         await _syncGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            if (_deviceService.CurrentState == NetworkState.Offline)
+            if (!_deviceService.CanUploadToCloud)
             {
                 return false;
             }

@@ -1,6 +1,5 @@
-﻿using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
-using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.TestSimulator.Fakes;
 using IIoT.Edge.TestSimulator.Services;
 using IIoT.Edge.TestSimulator.Tasks;
@@ -8,11 +7,8 @@ using IIoT.Edge.TestSimulator.Tasks;
 namespace IIoT.Edge.TestSimulator.Scenarios;
 
 /// <summary>
-/// 重试场景
-///
-/// 前置：先切到 Online，并重置 HTTP 缓存。
-/// 执行：触发一次重试任务，并等待任务提交完成。
-/// 验证：确保 FailedRecordStore(Cloud)=0、CapacityBuffer=0，并验证 Cloud 批量补传按预期触发。
+/// Cloud 重试场景。
+/// 设备恢复 online 后，CloudRetryTask 应消费 cloud retry store 并完成补传。
 /// </summary>
 public sealed class RetryScenario : ITestScenario
 {
@@ -22,7 +18,7 @@ public sealed class RetryScenario : ITestScenario
     private readonly FakeDeviceService _deviceService;
     private readonly TestRetryTask _retryTask;
     private readonly SimDataHelper _dataHelper;
-    private readonly IFailedRecordStore _failedStore;
+    private readonly ICloudRetryRecordStore _cloudRetryStore;
     private readonly ICapacityBufferStore _bufferStore;
     private readonly ILogService _logger;
 
@@ -31,7 +27,7 @@ public sealed class RetryScenario : ITestScenario
         FakeDeviceService deviceService,
         TestRetryTask retryTask,
         SimDataHelper dataHelper,
-        IFailedRecordStore failedStore,
+        ICloudRetryRecordStore cloudRetryStore,
         ICapacityBufferStore bufferStore,
         ILogService logger)
     {
@@ -39,7 +35,7 @@ public sealed class RetryScenario : ITestScenario
         _deviceService = deviceService;
         _retryTask = retryTask;
         _dataHelper = dataHelper;
-        _failedStore = failedStore;
+        _cloudRetryStore = cloudRetryStore;
         _bufferStore = bufferStore;
         _logger = logger;
     }
@@ -50,19 +46,16 @@ public sealed class RetryScenario : ITestScenario
 
         try
         {
-            // 前置：先切到 Online，确保有网络可用。
-            _deviceService.CurrentState = NetworkState.Online;
+            _deviceService.SetOnline();
             _httpClient.IsOnline = true;
             _httpClient.Reset();
 
-            // 重置最近 30 秒的失败计数，避免历史状态影响当前重试验证。
             await _dataHelper.ResetRetryTimesAsync();
 
-            // 执行：触发一次重试，并等待一次完整执行。
             await _retryTask.TriggerAsync();
-            await Task.Delay(300, ct); // 等待异步任务完成一次迭代。
+            await Task.Delay(300, ct);
 
-            var failedCount = await _failedStore.GetCountAsync("Cloud");
+            var failedCount = await _cloudRetryStore.GetCountAsync();
             var bufferCount = await _bufferStore.GetCountAsync();
             var callCount = _httpClient.CallCount;
             var batchCalls = _httpClient.UrlHistory.Count(u =>
@@ -73,7 +66,7 @@ public sealed class RetryScenario : ITestScenario
                 p.Contains("\"clientCode\"", StringComparison.OrdinalIgnoreCase) ||
                 p.Contains("\"client_code\"", StringComparison.OrdinalIgnoreCase));
 
-            assertions.Add(Assert("FailedRecordStore(Cloud) == 0", failedCount == 0, "0", failedCount.ToString()));
+            assertions.Add(Assert("CloudRetryStore == 0", failedCount == 0, "0", failedCount.ToString()));
             assertions.Add(Assert("CapacityBufferStore == 0", bufferCount == 0, "0", bufferCount.ToString()));
             assertions.Add(Assert("SimCloud batch call == 1", batchCalls == 1, "1", batchCalls.ToString()));
             assertions.Add(Assert("FakeHttpClient.CallCount >= 2", callCount >= 2, ">=2", callCount.ToString()));

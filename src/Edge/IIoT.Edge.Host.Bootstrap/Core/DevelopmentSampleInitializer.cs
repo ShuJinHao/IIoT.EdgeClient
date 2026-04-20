@@ -135,7 +135,7 @@ public sealed class DevelopmentSampleInitializer : IDevelopmentSampleInitializer
                 DeviceCode = sampleDevice.DeviceName,
                 PlcDeviceId = sampleDevice.Id,
                 CellResult = true,
-                CompletedTime = DateTime.Now
+                CompletedTime = DateTime.UtcNow
             };
 
             context.AddCell(sampleCell.Barcode, sampleCell);

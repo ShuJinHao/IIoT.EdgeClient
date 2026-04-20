@@ -11,7 +11,7 @@ public class DeviceLogBufferStore : DapperRepositoryBase<DeviceLogRecord>, IDevi
 {
     private static readonly TimeSpan ClaimTimeout = TimeSpan.FromMinutes(10);
 
-    public override string DbName => "pipeline";
+    public override string DbName => "pipeline_cloud";
     protected override string TableName => "device_log_buffer";
 
     protected override string CreateTableSql => @"
@@ -55,16 +55,11 @@ public class DeviceLogBufferStore : DapperRepositoryBase<DeviceLogRecord>, IDevi
             return;
         }
 
-        try
+        await ExecuteInTransactionAsync<int>(async (conn, tx) =>
         {
-            using var conn = GetConnection();
-            await conn.ExecuteAsync(sql, rows, commandTimeout: CommandTimeout);
-        }
-        catch (Exception ex)
-        {
-            Logger.Error($"[Dapper] Batch save failed [{TableName}]: {ex.Message}");
-            throw;
-        }
+            await conn.ExecuteAsync(sql, rows, tx, commandTimeout: CommandTimeout);
+            return rows.Count;
+        });
     }
 
     public async Task<List<DeviceLogRecord>> GetPendingAsync(int batchSize = 100)
@@ -82,7 +77,7 @@ public class DeviceLogBufferStore : DapperRepositoryBase<DeviceLogRecord>, IDevi
     {
         return await ExecuteInTransactionAsync<ClaimedDeviceLogBatch?>(async (conn, tx) =>
         {
-            var now = DateTime.Now;
+            var now = DateTime.UtcNow;
             await conn.ExecuteAsync(
                 "DELETE FROM device_log_buffer_claims WHERE ClaimedAt <= @ExpiredAt",
                 new { ExpiredAt = now.Subtract(ClaimTimeout).ToString("O") },
@@ -161,7 +156,7 @@ public class DeviceLogBufferStore : DapperRepositoryBase<DeviceLogRecord>, IDevi
 
             if (ids.Count == 0)
             {
-                return 0;
+                throw new InvalidOperationException($"No claimed device log rows found for claim {claimToken}.");
             }
 
             await conn.ExecuteAsync(
@@ -181,9 +176,11 @@ public class DeviceLogBufferStore : DapperRepositoryBase<DeviceLogRecord>, IDevi
     }
 
     public async Task ReleaseClaimAsync(string claimToken)
-        => await SafeExecuteAsync(
+        => await StrictExecuteAsync(
             "DELETE FROM device_log_buffer_claims WHERE ClaimToken = @ClaimToken",
-            new { ClaimToken = claimToken });
+            new { ClaimToken = claimToken },
+            requireAffectedRows: true,
+            failureMessage: $"Failed to release device log claim {claimToken}.");
 
     public async Task DeleteBatchAsync(IEnumerable<long> ids)
     {

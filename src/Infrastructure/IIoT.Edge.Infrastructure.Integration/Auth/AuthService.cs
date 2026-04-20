@@ -7,15 +7,15 @@ using System.Security.Claims;
 
 namespace IIoT.Edge.Infrastructure.Integration.Auth;
 
-public class AuthService : IAuthService, ICloudAccessTokenProvider
+public class AuthService : IAuthService
 {
     private readonly HttpClient _httpClient;
     private readonly ICloudApiEndpointProvider _endpointProvider;
     private readonly LocalAdminConfig _localAdminConfig;
+    private UserSession? _currentUser;
 
-    public UserSession? CurrentUser { get; private set; }
-    public string? AccessToken => CurrentUser?.Token;
-    public bool IsAuthenticated => CurrentUser is not null;
+    public UserSession? CurrentUser => GetCurrentActiveSession();
+    public bool IsAuthenticated => GetCurrentActiveSession() is not null;
     public event Action<UserSession?>? AuthStateChanged;
 
     public AuthService(
@@ -30,16 +30,35 @@ public class AuthService : IAuthService, ICloudAccessTokenProvider
 
     public bool HasPermission(string permission)
     {
-        if (CurrentUser is null) return false;
-        if (CurrentUser.IsLocalAdmin) return true;
-        if (CurrentUser.Permissions.Contains("Admin")) return true;
-        return CurrentUser.Permissions.Contains(permission);
+        var session = GetCurrentActiveSession();
+        if (session is null)
+        {
+            return false;
+        }
+
+        if (session.IsLocalAdmin)
+        {
+            return true;
+        }
+
+        if (session.Permissions.Contains("Admin"))
+        {
+            return true;
+        }
+
+        return session.Permissions.Contains(permission);
     }
 
     public Task<AuthResult> LoginLocalAsync(string password)
     {
+        var configuredHash = _localAdminConfig.PasswordHash?.Trim();
+        if (string.IsNullOrWhiteSpace(configuredHash))
+        {
+            return Task.FromResult(AuthResult.Fail("Local admin is not configured."));
+        }
+
         var inputHash = ComputeSha256(password);
-        if (inputHash != _localAdminConfig.PasswordHash)
+        if (!string.Equals(inputHash, configuredHash, StringComparison.Ordinal))
         {
             return Task.FromResult(AuthResult.Fail("Invalid password."));
         }
@@ -47,9 +66,10 @@ public class AuthService : IAuthService, ICloudAccessTokenProvider
         var session = new UserSession
         {
             DisplayName = "Local Admin",
+            EmployeeNo = "LOCAL_ADMIN",
             IsLocalAdmin = true,
-            Permissions = new HashSet<string>(),
-            Token = null
+            Permissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+            ExpiresAtUtc = null
         };
 
         SetSession(session);
@@ -66,7 +86,7 @@ public class AuthService : IAuthService, ICloudAccessTokenProvider
                 employeeNo,
                 password,
                 deviceId
-            });
+            }).ConfigureAwait(false);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -76,6 +96,8 @@ public class AuthService : IAuthService, ICloudAccessTokenProvider
                     {
                         System.Net.HttpStatusCode.Unauthorized => "Invalid employee number or password.",
                         System.Net.HttpStatusCode.Forbidden => "This account is not allowed to operate the current device.",
+                        System.Net.HttpStatusCode.BadRequest => "Login request was rejected.",
+                        >= System.Net.HttpStatusCode.InternalServerError => "Server is temporarily unavailable.",
                         _ => $"Login failed: {response.StatusCode}"
                     };
 
@@ -117,8 +139,25 @@ public class AuthService : IAuthService, ICloudAccessTokenProvider
 
     private void SetSession(UserSession? session)
     {
-        CurrentUser = session;
-        AuthStateChanged?.Invoke(CurrentUser);
+        _currentUser = session;
+        AuthStateChanged?.Invoke(_currentUser);
+    }
+
+    private UserSession? GetCurrentActiveSession()
+    {
+        if (_currentUser is null)
+        {
+            return null;
+        }
+
+        if (_currentUser.ExpiresAtUtc.HasValue
+            && _currentUser.ExpiresAtUtc.Value <= DateTimeOffset.UtcNow)
+        {
+            SetSession(null);
+            return null;
+        }
+
+        return _currentUser;
     }
 
     private static UserSession? ParseJwtToken(string token)
@@ -130,25 +169,50 @@ public class AuthService : IAuthService, ICloudAccessTokenProvider
 
             var displayName = jwtToken.Claims
                 .FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.UniqueName)
-                ?.Value ?? "Unknown User";
+                ?.Value
+                ?? jwtToken.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value
+                ?? "Unknown User";
+
+            var employeeNo = jwtToken.Claims
+                .FirstOrDefault(c => string.Equals(c.Type, "employeeNo", StringComparison.OrdinalIgnoreCase))
+                ?.Value
+                ?? jwtToken.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.UniqueName)?.Value
+                ?? jwtToken.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value;
 
             var permissions = jwtToken.Claims
-                .Where(c => c.Type == "Permission" || c.Type == ClaimTypes.Role)
+                .Where(c =>
+                    string.Equals(c.Type, "Permission", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(c.Type, ClaimTypes.Role, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(c.Type, "role", StringComparison.OrdinalIgnoreCase))
                 .Select(c => c.Value)
-                .ToHashSet();
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var expiresAtUtc = TryGetExpiresAtUtc(jwtToken);
 
             return new UserSession
             {
                 DisplayName = displayName,
+                EmployeeNo = employeeNo,
                 IsLocalAdmin = false,
                 Permissions = permissions,
-                Token = token
+                ExpiresAtUtc = expiresAtUtc
             };
         }
         catch
         {
             return null;
         }
+    }
+
+    private static DateTimeOffset? TryGetExpiresAtUtc(JwtSecurityToken jwtToken)
+    {
+        var expClaim = jwtToken.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Exp)?.Value;
+        if (!long.TryParse(expClaim, out var exp))
+        {
+            return null;
+        }
+
+        return DateTimeOffset.FromUnixTimeSeconds(exp);
     }
 
     private static string ComputeSha256(string input)

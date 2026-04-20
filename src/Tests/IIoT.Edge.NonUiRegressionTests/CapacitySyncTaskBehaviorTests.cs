@@ -160,6 +160,45 @@ public sealed class CapacitySyncTaskBehaviorTests
         Assert.Empty(bufferStore.ReleasedClaimTokens);
     }
 
+    [Fact]
+    public async Task RetryBuffer_WhenHourlySummaryIsOlderThan24Hours_ShouldStillPostAndDeleteClaimedSummary()
+    {
+        var cloudHttp = new FakeCloudHttpClient();
+        cloudHttp.EnqueuePostResult(true);
+
+        var deviceService = new FakeDeviceService();
+        var deviceId = Guid.NewGuid();
+        deviceService.SetOnline(new DeviceSession
+        {
+            DeviceId = deviceId,
+            DeviceName = "PLC-A",
+            ClientCode = "CLIENT-01",
+            ProcessId = Guid.NewGuid()
+        });
+
+        var bufferStore = new FakeCapacityBufferStore();
+        bufferStore.HourlySummaries.Add(new BufferHourlySummaryDto
+        {
+            Date = DateTime.UtcNow.AddHours(-25).ToString("yyyy-MM-dd"),
+            Hour = 6,
+            MinuteBucket = 0,
+            ShiftCode = "N",
+            Total = 9,
+            OkCount = 8,
+            NgCount = 1,
+            PlcName = "PLC-A"
+        });
+
+        var task = CreateTask(cloudHttp, deviceService, bufferStore, new FakeLogService());
+
+        var result = await task.RetryBufferAsync();
+
+        Assert.True(result);
+        Assert.Equal(1, cloudHttp.PostCallCount);
+        Assert.Single(bufferStore.DeletedSummaries);
+        Assert.Empty(bufferStore.HourlySummaries);
+    }
+
     private static CapacitySyncTask CreateTask(
         FakeCloudHttpClient cloudHttp,
         FakeDeviceService deviceService,
@@ -177,7 +216,8 @@ public sealed class CapacitySyncTaskBehaviorTests
             {
                 DayStart = "08:00",
                 DayEnd = "20:00"
-            });
+            },
+            new FakeCloudDiagnosticsStore());
     }
 
     private static JsonElement ParsePayload(object payload)

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Infrastructure.Integration.Config;
 using IIoT.Edge.Infrastructure.Integration.Device;
 using IIoT.Edge.Infrastructure.Integration.Device.Cache;
@@ -22,13 +23,17 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
     {
         var deviceId = Guid.NewGuid();
         var processId = Guid.NewGuid();
+        var expiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(15);
         var handler = new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = JsonContent.Create(new
             {
                 Id = deviceId,
                 DeviceName = "Test Device",
-                ProcessId = processId
+                ClientCode = "LINE-A-01",
+                ProcessId = processId,
+                UploadAccessToken = "device-upload-token",
+                UploadAccessTokenExpiresAtUtc = expiresAtUtc
             })
         });
 
@@ -49,6 +54,8 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
         Assert.Equal(deviceId, service.CurrentDevice!.DeviceId);
         Assert.Equal(processId, service.CurrentDevice.ProcessId);
         Assert.Equal("LINE-A-01", service.CurrentDevice.ClientCode);
+        Assert.Equal("device-upload-token", service.CurrentDevice.UploadAccessToken);
+        Assert.Equal(expiresAtUtc, service.CurrentDevice.UploadAccessTokenExpiresAtUtc);
         Assert.True(requestUri.Query.Contains("clientCode=LINE-A-01", StringComparison.Ordinal));
         Assert.False(requestUri.Query.Contains("macAddress=", StringComparison.OrdinalIgnoreCase));
     }
@@ -82,6 +89,84 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
 
         var migrated = File.ReadAllText(_cacheFilePath);
         Assert.True(migrated.Contains("\"ClientCode\":\"LINE-B-02\"", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenBootstrapReturnsEmptyUploadToken_ShouldRemainBlocked()
+    {
+        var logger = new FakeLogService();
+        var handler = new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = JsonContent.Create(new
+            {
+                Id = Guid.NewGuid(),
+                DeviceName = "Invalid Device",
+                ClientCode = "LINE-C-03",
+                ProcessId = Guid.NewGuid(),
+                UploadAccessToken = "",
+                UploadAccessTokenExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(10)
+            })
+        });
+
+        var service = new DeviceService(
+            new HttpClient(handler),
+            new FakeEndpointProvider("LINE-C-03"),
+            new DeviceSessionFileCacheStore(),
+            logger);
+
+        using var cts = new CancellationTokenSource();
+
+        await service.StartAsync(cts.Token);
+        await handler.WaitForRequestUriAsync();
+        await WaitForAsync(() => service.CurrentUploadGate.Reason == EdgeUploadBlockReason.MissingUploadToken);
+        await service.StopAsync();
+
+        Assert.Equal(NetworkState.Offline, service.CurrentState);
+        Assert.False(service.CanUploadToCloud);
+        Assert.Equal(EdgeUploadGateState.Blocked, service.CurrentUploadGate.State);
+        Assert.Equal(EdgeUploadBlockReason.MissingUploadToken, service.CurrentUploadGate.Reason);
+        Assert.NotNull(service.CurrentDevice);
+        Assert.Contains(logger.Entries, x => x.Message.Contains("event=edge.bootstrap.invalid_token", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, x => x.Message.Contains("reason=missing_upload_token", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenBootstrapReturnsExpiredUploadToken_ShouldRemainBlocked()
+    {
+        var logger = new FakeLogService();
+        var handler = new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = JsonContent.Create(new
+            {
+                Id = Guid.NewGuid(),
+                DeviceName = "Expired Device",
+                ClientCode = "LINE-D-04",
+                ProcessId = Guid.NewGuid(),
+                UploadAccessToken = "expired-token",
+                UploadAccessTokenExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(-5)
+            })
+        });
+
+        var service = new DeviceService(
+            new HttpClient(handler),
+            new FakeEndpointProvider("LINE-D-04"),
+            new DeviceSessionFileCacheStore(),
+            logger);
+
+        using var cts = new CancellationTokenSource();
+
+        await service.StartAsync(cts.Token);
+        await handler.WaitForRequestUriAsync();
+        await WaitForAsync(() => service.CurrentUploadGate.Reason == EdgeUploadBlockReason.ExpiredUploadToken);
+        await service.StopAsync();
+
+        Assert.Equal(NetworkState.Offline, service.CurrentState);
+        Assert.False(service.CanUploadToCloud);
+        Assert.Equal(EdgeUploadGateState.Blocked, service.CurrentUploadGate.State);
+        Assert.Equal(EdgeUploadBlockReason.ExpiredUploadToken, service.CurrentUploadGate.Reason);
+        Assert.NotNull(service.CurrentDevice);
+        Assert.Contains(logger.Entries, x => x.Message.Contains("event=edge.bootstrap.invalid_token", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, x => x.Message.Contains("reason=expired_upload_token", StringComparison.Ordinal));
     }
 
     public void Dispose()

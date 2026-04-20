@@ -27,4 +27,6 @@ public abstract class ViewModelBase : BaseControlNotifyPropertyChanged, IViewMod
     public new bool IsVisible { get => _isVisible; set { _isVisible = value; OnPropertyChanged(); } }
 
     public virtual Task OnActivatedAsync() => Task.CompletedTask;
+
+    public virtual Task OnDeactivatedAsync() => Task.CompletedTask;
 }

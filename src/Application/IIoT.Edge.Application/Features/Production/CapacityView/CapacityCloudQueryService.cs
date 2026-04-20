@@ -149,16 +149,16 @@ public class CapacityCloudQueryService
             : $"{path}?deviceId={deviceId}&date={date:yyyy-MM-dd}&plcName={Uri.EscapeDataString(plcName)}";
 
 
-        var json = await _cloudHttpClient.GetAsync(url);
-        if (string.IsNullOrWhiteSpace(json)) return new();
+        var result = await _cloudHttpClient.GetAsync(url);
+        if (!result.IsSuccess || string.IsNullOrWhiteSpace(result.Payload)) return new();
 
         try
         {
-            using var doc = JsonDocument.Parse(json);
+            using var doc = JsonDocument.Parse(result.Payload);
             var root = doc.RootElement;
             if (root.ValueKind != JsonValueKind.Array) return new();
 
-            var result = new List<HourlySlotVm>();
+            var slots = new List<HourlySlotVm>();
             foreach (var item in root.EnumerateArray())
             {
                 var hour = ReadInt(item, "hour", "Hour");
@@ -179,7 +179,7 @@ public class CapacityCloudQueryService
                 if (string.IsNullOrWhiteSpace(shift))
                     shift = GetShiftCode(hour, minute);
 
-                result.Add(new HourlySlotVm
+                slots.Add(new HourlySlotVm
                 {
                     SlotOrder = hour * 2 + (minute >= 30 ? 1 : 0),
                     Hour = hour,
@@ -193,7 +193,7 @@ public class CapacityCloudQueryService
                     NgCount = ng
                 });
             }
-            return result.OrderBy(x => x.SlotOrder).ToList();
+            return slots.OrderBy(x => x.SlotOrder).ToList();
         }
         catch { return new(); }
     }
@@ -208,12 +208,12 @@ public class CapacityCloudQueryService
             : $"{path}?deviceId={deviceId}&date={date:yyyy-MM-dd}&plcName={Uri.EscapeDataString(plcName)}";
 
 
-        var json = await _cloudHttpClient.GetAsync(url);
-        if (string.IsNullOrWhiteSpace(json)) return null;
+        var result = await _cloudHttpClient.GetAsync(url);
+        if (!result.IsSuccess || string.IsNullOrWhiteSpace(result.Payload)) return null;
 
         try
         {
-            using var doc = JsonDocument.Parse(json);
+            using var doc = JsonDocument.Parse(result.Payload);
             var root = doc.RootElement;
             if (root.ValueKind == JsonValueKind.Array)
             {
@@ -260,16 +260,16 @@ public class CapacityCloudQueryService
             : $"{path}?deviceId={deviceId}&startDate={startDate:yyyy-MM-dd}&endDate={endDate:yyyy-MM-dd}&plcName={Uri.EscapeDataString(plcName)}";
 
 
-        var json = await _cloudHttpClient.GetAsync(url);
-        if (string.IsNullOrWhiteSpace(json)) return new();
+        var result = await _cloudHttpClient.GetAsync(url);
+        if (!result.IsSuccess || string.IsNullOrWhiteSpace(result.Payload)) return new();
 
         try
         {
-            using var doc = JsonDocument.Parse(json);
+            using var doc = JsonDocument.Parse(result.Payload);
             var root = doc.RootElement;
             if (root.ValueKind != JsonValueKind.Array) return new();
 
-            var result = new List<DailyCapacityVm>();
+            var rows = new List<DailyCapacityVm>();
             foreach (var item in root.EnumerateArray())
             {
                 var dateStr = ReadString(item, "date", "Date");
@@ -285,7 +285,7 @@ public class CapacityCloudQueryService
 
                 if (string.IsNullOrWhiteSpace(dateStr)) continue;
 
-                result.Add(new DailyCapacityVm
+                rows.Add(new DailyCapacityVm
                 {
                     Date = dateStr.Length >= 10 ? dateStr.Substring(5, 5) : dateStr,
                     DateFull = dateStr,
@@ -302,7 +302,7 @@ public class CapacityCloudQueryService
                     NightShiftNg = nightNg
                 });
             }
-            return result;
+            return rows;
         }
         catch { return new(); }
     }

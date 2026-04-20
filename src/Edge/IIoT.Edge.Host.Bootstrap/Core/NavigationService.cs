@@ -49,6 +49,7 @@ public class NavigationService : INavigationService
                 return;
             }
 
+            DeactivateCurrentViewModel(viewId, cachedViewModel);
             CurrentViewModel = cachedViewModel;
             CurrentView = cachedView;
             FireAndForgetActivation(viewId, cachedViewModel);
@@ -83,6 +84,7 @@ public class NavigationService : INavigationService
             TrimCacheIfNeeded(viewId);
         }
 
+        DeactivateCurrentViewModel(viewId, viewModel);
         CurrentViewModel = viewModel;
         CurrentView = view;
 
@@ -146,6 +148,16 @@ public class NavigationService : INavigationService
         _ = ActivateViewModelAsync(viewId, viewModel);
     }
 
+    private void DeactivateCurrentViewModel(string nextViewId, ViewModelBase nextViewModel)
+    {
+        if (CurrentViewModel is null || ReferenceEquals(CurrentViewModel, nextViewModel))
+        {
+            return;
+        }
+
+        _ = DeactivateViewModelAsync(nextViewId, CurrentViewModel);
+    }
+
     private async Task ActivateViewModelAsync(string viewId, ViewModelBase viewModel)
     {
         try
@@ -155,6 +167,18 @@ public class NavigationService : INavigationService
         catch (Exception ex)
         {
             _logger.Warn($"[Navigation] ViewModel activation failed for {viewId}: {ex.Message}");
+        }
+    }
+
+    private async Task DeactivateViewModelAsync(string nextViewId, ViewModelBase viewModel)
+    {
+        try
+        {
+            await viewModel.OnDeactivatedAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"[Navigation] ViewModel deactivation failed before {nextViewId}: {ex.Message}");
         }
     }
 }

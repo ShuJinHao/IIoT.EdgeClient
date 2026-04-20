@@ -25,8 +25,7 @@ public static class DependencyInjection
         var assembly = Assembly.GetExecutingAssembly();
         var storeTypes = assembly.GetTypes()
             .Where(t => !t.IsAbstract
-                && t.BaseType is { IsGenericType: true }
-                && t.BaseType.GetGenericTypeDefinition() == typeof(DapperRepositoryBase<>))
+                && DerivesFromDapperRepositoryBase(t))
             .ToList();
 
         foreach (var storeType in storeTypes)
@@ -52,6 +51,20 @@ public static class DependencyInjection
         }
 
         return services;
+    }
+
+    private static bool DerivesFromDapperRepositoryBase(Type type)
+    {
+        for (var current = type.BaseType; current is not null; current = current.BaseType)
+        {
+            if (current.IsGenericType
+                && current.GetGenericTypeDefinition() == typeof(DapperRepositoryBase<>))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

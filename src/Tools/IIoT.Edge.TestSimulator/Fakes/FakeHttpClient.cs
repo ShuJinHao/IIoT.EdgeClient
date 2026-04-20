@@ -38,7 +38,7 @@ public sealed class FakeHttpClient : ICloudHttpClient
         }
     }
 
-    public Task<bool> PostAsync(string url, object payload)
+    public Task<CloudCallResult> PostAsync(string url, object payload, CloudRequestOptions? options = null)
     {
         Interlocked.Increment(ref _callCount);
         lock (_lock)
@@ -47,10 +47,13 @@ public sealed class FakeHttpClient : ICloudHttpClient
             _payloadHistory.Add(SafeSerialize(payload));
         }
 
-        return Task.FromResult(IsOnline);
+        return Task.FromResult(
+            IsOnline
+                ? CloudCallResult.Success()
+                : CloudCallResult.Failure(CloudCallOutcome.NetworkFailure, "simulator_offline"));
     }
 
-    public Task<string?> PostWithResponseAsync(string url, object payload)
+    public Task<CloudCallResult<string>> PostWithResponseAsync(string url, object payload, CloudRequestOptions? options = null)
     {
         Interlocked.Increment(ref _callCount);
         lock (_lock)
@@ -59,14 +62,20 @@ public sealed class FakeHttpClient : ICloudHttpClient
             _payloadHistory.Add(SafeSerialize(payload));
         }
 
-        return Task.FromResult(IsOnline ? "{\"success\":true}" : (string?)null);
+        return Task.FromResult(
+            IsOnline
+                ? CloudCallResult<string>.Success("{\"success\":true}")
+                : CloudCallResult<string>.Failure(CloudCallOutcome.NetworkFailure, "simulator_offline"));
     }
 
-    public Task<string?> GetAsync(string url)
+    public Task<CloudCallResult<string>> GetAsync(string url, CloudRequestOptions? options = null)
     {
         Interlocked.Increment(ref _callCount);
         lock (_lock) _urlHistory.Add(url);
-        return Task.FromResult(IsOnline ? "{}" : (string?)null);
+        return Task.FromResult(
+            IsOnline
+                ? CloudCallResult<string>.Success("{}")
+                : CloudCallResult<string>.Failure(CloudCallOutcome.NetworkFailure, "simulator_offline"));
     }
 
     private static string SafeSerialize(object payload)

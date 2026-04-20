@@ -4,6 +4,7 @@ using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Infrastructure.Integration.Config;
+using IIoT.Edge.Infrastructure.Integration.Http;
 using IIoT.Edge.Infrastructure.Integration.Mappings.Cloud.Stacking;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
@@ -41,14 +42,14 @@ public sealed class StackingCloudUploader : IProcessCloudUploader
 
     public ProcessUploadMode UploadMode => ProcessUploadMode.Single;
 
-    public async Task<bool> UploadAsync(
+    public async Task<CloudCallResult> UploadAsync(
         ProcessCloudUploadContext context,
         IReadOnlyList<CellCompletedRecord> records,
         CancellationToken cancellationToken = default)
     {
         if (records.Count == 0)
         {
-            return true;
+            return CloudCallResult.Success();
         }
 
         var isEnabled = _configuration.GetValue<bool>("Modules:Stacking:CloudUploadEnabled");
@@ -58,7 +59,7 @@ public sealed class StackingCloudUploader : IProcessCloudUploader
             const string errorMessage = "Stacking cloud upload is disabled by configuration.";
             UpdateDiagnostics(deviceName, false, StackingModuleConstants.CloudUploadDisabledStatus, errorMessage);
             _logger.Warn($"[Cloud] {errorMessage}");
-            return false;
+            return CloudCallResult.Failure(CloudCallOutcome.Exception, "cloud_upload_disabled");
         }
 
         foreach (var record in records)
@@ -70,7 +71,7 @@ public sealed class StackingCloudUploader : IProcessCloudUploader
                     $"Stacking uploader received unexpected process type '{record.CellData.ProcessType}'.";
                 UpdateDiagnostics(deviceName, true, StackingModuleConstants.CloudUploadFailedStatus, errorMessage);
                 _logger.Error($"[Cloud] {errorMessage}");
-                return false;
+                return CloudCallResult.Failure(CloudCallOutcome.Exception, "unexpected_process_type");
             }
 
             var payload = new
@@ -79,21 +80,28 @@ public sealed class StackingCloudUploader : IProcessCloudUploader
                 item = _mapper.Map<StackingCloudDto>(stacking)
             };
 
-            var success = await _cloudHttp.PostAsync(
+            var result = await _cloudHttp.PostAsync(
                 _endpointProvider.GetPassStationStackingPath(),
-                payload).ConfigureAwait(false);
+                payload,
+                new CloudRequestOptions
+                {
+                    IdempotencyKey = CloudIdempotencyKeyBuilder.ForRecord(
+                        ProcessType,
+                        nameof(StackingCloudUploader),
+                        record)
+                }).ConfigureAwait(false);
 
-            if (!success)
+            if (!result.IsSuccess)
             {
                 var errorMessage =
-                    $"Cloud API returned failure for Stacking barcode '{stacking.Barcode}'.";
+                    $"Cloud API returned failure for Stacking barcode '{stacking.Barcode}'. Outcome:{result.Outcome}, Reason:{result.ReasonCode}.";
                 UpdateDiagnostics(
                     ResolveDeviceName(record, context),
                     true,
                     StackingModuleConstants.CloudUploadFailedStatus,
                     errorMessage);
                 _logger.Error($"[Cloud] {errorMessage}");
-                return false;
+                return result;
             }
 
             UpdateDiagnostics(
@@ -103,7 +111,7 @@ public sealed class StackingCloudUploader : IProcessCloudUploader
                 errorMessage: null);
         }
 
-        return true;
+        return CloudCallResult.Success();
     }
 
     private string ResolveDeviceName(CellCompletedRecord record, ProcessCloudUploadContext context)

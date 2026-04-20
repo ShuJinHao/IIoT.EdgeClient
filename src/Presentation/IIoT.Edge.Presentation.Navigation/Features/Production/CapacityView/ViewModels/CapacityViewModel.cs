@@ -74,7 +74,7 @@ public class CapacityViewModel : PresentationViewModelBase
     }
 
     public bool CanQueryCloud => IsOnline;
-    public string OfflineHint => IsOnline ? string.Empty : "Cloud is offline. Only current data is available.";
+    public string OfflineHint => IsOnline ? string.Empty : "Cloud query is unavailable until device upload auth is ready.";
 
     public int PeriodTotal { get => _periodTotal; set { _periodTotal = value; OnPropertyChanged(); } }
     public int PeriodOk { get => _periodOk; set { _periodOk = value; OnPropertyChanged(); } }
@@ -92,7 +92,7 @@ public class CapacityViewModel : PresentationViewModelBase
         QueryCommand = new AsyncCommand(() => RunViewTaskAsync(QueryHistoryAsync, "Capacity query failed."));
         ExportCommand = new BaseCommand(_ => { });
 
-        _capacityViewService.NetworkStateChanged += OnNetworkStateChanged;
+        _capacityViewService.UploadGateChanged += OnUploadGateChanged;
     }
 
     public override async Task OnActivatedAsync()
@@ -104,9 +104,9 @@ public class CapacityViewModel : PresentationViewModelBase
 
     public void OnCapacityUpdated() => RunViewTaskInBackground(LoadCurrentDataAsync, "Load capacity data failed.");
 
-    private void OnNetworkStateChanged(NetworkState state)
+    private void OnUploadGateChanged(EdgeUploadGateSnapshot snapshot)
     {
-        IsOnline = state == NetworkState.Online;
+        IsOnline = snapshot.State == EdgeUploadGateState.Ready;
         RunViewTaskInBackground(LoadCurrentDataAsync, "Load capacity data failed.");
     }
 
@@ -143,7 +143,7 @@ public class CapacityViewModel : PresentationViewModelBase
         if (!CanQueryCloud)
         {
             MessageBox.Show(
-                "Cloud is offline. Capacity history cannot be queried.",
+                "Cloud query is unavailable until device upload auth is ready.",
                 "Capacity Query",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
