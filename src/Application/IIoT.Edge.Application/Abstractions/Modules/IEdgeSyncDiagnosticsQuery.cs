@@ -49,5 +49,5 @@ public sealed record EdgeSyncDiagnosticsSnapshot(
 
 public interface IEdgeSyncDiagnosticsQuery
 {
-    EdgeSyncDiagnosticsSnapshot GetCurrent();
+    Task<EdgeSyncDiagnosticsSnapshot> GetCurrentAsync(CancellationToken ct = default);
 }

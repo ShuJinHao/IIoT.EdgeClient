@@ -2,12 +2,13 @@ using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
+using IIoT.Edge.Module.Injection.Payload;
+using IIoT.Edge.Module.Stacking.Payload;
 using IIoT.Edge.Runtime.DataPipeline.Services;
 using IIoT.Edge.Runtime.DataPipeline.Tasks;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using Microsoft.Extensions.Options;
-using System.Reflection;
 using System.Text.Json;
 
 namespace IIoT.Edge.NonUiRegressionTests;
@@ -26,6 +27,8 @@ public sealed class RetryTaskCloudMesBehaviorTests
         var cloudBatch = new FakeCloudBatchConsumer();
         cloudBatch.EnqueueResult(true);
         var cloudConsumer = new FakeCloudConsumer();
+        var integrationRegistry = new FakeProcessIntegrationRegistry();
+        integrationRegistry.RegisterCloudUploader("Injection", ProcessUploadMode.Batch);
 
         failedStore.PendingRecords.Add(CreateFailedRecord(1, "Cloud", "Cloud", 0, "Injection", new InjectionCellData { Barcode = "INJ-1" }));
         failedStore.PendingRecords.Add(CreateFailedRecord(2, "Cloud", "Cloud", 1, "Injection", new InjectionCellData { Barcode = "INJ-2" }));
@@ -39,7 +42,8 @@ public sealed class RetryTaskCloudMesBehaviorTests
             cloudConsumer,
             cloudBatch,
             new FakeDeviceLogSyncTask(),
-            new FakeCapacitySyncTask());
+            new FakeCapacitySyncTask(),
+            processIntegrationRegistry: integrationRegistry);
 
         await task.ExecuteOnceAsync();
 
@@ -65,6 +69,8 @@ public sealed class RetryTaskCloudMesBehaviorTests
         var cloudBatch = new FakeCloudBatchConsumer();
         cloudBatch.EnqueueResult(CloudCallResult.Failure(CloudCallOutcome.HttpFailure, "batch_http_failure"));
         var cloudConsumer = new FakeCloudConsumer();
+        var integrationRegistry = new FakeProcessIntegrationRegistry();
+        integrationRegistry.RegisterCloudUploader("Injection", ProcessUploadMode.Batch);
 
         failedStore.PendingRecords.Add(CreateFailedRecord(10, "Cloud", "Cloud", 0, "Injection", new InjectionCellData { Barcode = "INJ-10" }));
         failedStore.PendingRecords.Add(CreateFailedRecord(11, "Cloud", "Cloud", 2, "Injection", new InjectionCellData { Barcode = "INJ-11" }));
@@ -78,7 +84,8 @@ public sealed class RetryTaskCloudMesBehaviorTests
             cloudConsumer,
             cloudBatch,
             new FakeDeviceLogSyncTask(),
-            new FakeCapacitySyncTask());
+            new FakeCapacitySyncTask(),
+            processIntegrationRegistry: integrationRegistry);
 
         var before = DateTime.UtcNow;
         await task.ExecuteOnceAsync();
@@ -407,6 +414,8 @@ public sealed class RetryTaskCloudMesBehaviorTests
         });
 
         var diagnosticsStore = new FakeCloudDiagnosticsStore();
+        var integrationRegistry = new FakeProcessIntegrationRegistry();
+        integrationRegistry.RegisterCloudUploader("Injection", ProcessUploadMode.Batch);
         var capacityGuard = CreateCapacityGuard(
             logger,
             failedStore,
@@ -429,6 +438,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
             new FakeDeviceLogSyncTask(),
             new FakeCapacitySyncTask(),
             diagnosticsStore: diagnosticsStore,
+            processIntegrationRegistry: integrationRegistry,
             capacityGuard: capacityGuard);
 
         await task.ExecuteOnceAsync();
@@ -577,15 +587,19 @@ public sealed class RetryTaskCloudMesBehaviorTests
         });
 
         var cloudConsumer = new FakeCloudConsumer();
+        var cloudBatchConsumer = new FakeCloudBatchConsumer();
+        var integrationRegistry = new FakeProcessIntegrationRegistry();
+        integrationRegistry.RegisterCloudUploader("Injection", ProcessUploadMode.Batch);
         var task = new TestableCloudRetryTask(
             logger,
             failedStore,
             cloudFallbackStore,
             CreateOnlineDeviceService(),
             cloudConsumer,
-            new FakeCloudBatchConsumer(),
+            cloudBatchConsumer,
             new FakeDeviceLogSyncTask(),
-            new FakeCapacitySyncTask());
+            new FakeCapacitySyncTask(),
+            processIntegrationRegistry: integrationRegistry);
 
         await task.ExecuteOnceAsync();
 
@@ -593,6 +607,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         Assert.Contains(202L, cloudFallbackStore.DeletedIds);
         Assert.DoesNotContain(201L, cloudFallbackStore.DeletedIds);
         Assert.Equal(0, cloudConsumer.ProcessCallCount);
+        Assert.Equal(1, cloudBatchConsumer.ProcessBatchCallCount);
         Assert.Contains(logger.Entries, entry => entry.Message.Contains("Failed to rehydrate Cloud fallback record 201", StringComparison.Ordinal));
     }
 
@@ -735,10 +750,6 @@ public sealed class RetryTaskCloudMesBehaviorTests
 
     private sealed class TestableCloudRetryTask
     {
-        private static readonly MethodInfo ExecuteAsyncMethod = typeof(CloudRetryTask)
-            .GetMethod("ExecuteAsync", BindingFlags.Instance | BindingFlags.NonPublic)!
-            ?? throw new InvalidOperationException("CloudRetryTask.ExecuteAsync was not found.");
-
         private readonly CloudRetryTask _inner;
 
         public TestableCloudRetryTask(
@@ -773,16 +784,11 @@ public sealed class RetryTaskCloudMesBehaviorTests
         }
 
         public Task ExecuteOnceAsync()
-            => (Task)(ExecuteAsyncMethod.Invoke(_inner, null)
-                ?? throw new InvalidOperationException("CloudRetryTask.ExecuteAsync returned null."));
+            => _inner.ExecuteOneIterationAsync();
     }
 
     private sealed class TestableMesRetryTask
     {
-        private static readonly MethodInfo ExecuteAsyncMethod = typeof(MesRetryTask)
-            .GetMethod("ExecuteAsync", BindingFlags.Instance | BindingFlags.NonPublic)!
-            ?? throw new InvalidOperationException("MesRetryTask.ExecuteAsync was not found.");
-
         private readonly MesRetryTask _inner;
 
         public TestableMesRetryTask(
@@ -807,7 +813,6 @@ public sealed class RetryTaskCloudMesBehaviorTests
         }
 
         public Task ExecuteOnceAsync()
-            => (Task)(ExecuteAsyncMethod.Invoke(_inner, null)
-                ?? throw new InvalidOperationException("MesRetryTask.ExecuteAsync returned null."));
+            => _inner.ExecuteOneIterationAsync();
     }
 }

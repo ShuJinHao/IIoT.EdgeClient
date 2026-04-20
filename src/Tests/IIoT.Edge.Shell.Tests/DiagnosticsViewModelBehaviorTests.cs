@@ -16,8 +16,14 @@ public sealed class DiagnosticsViewModelBehaviorTests
             var startupStore = new FakeStartupDiagnosticsStore();
             startupStore.Update(new StartupDiagnosticsReport(
                 GeneratedAt: new DateTime(2026, 4, 18, 10, 0, 0),
+                ConfigurationProfile: new ConfigurationProfileSnapshot("Production", "StackingLine", "appsettings.machine.StackingLine.json", true),
                 DiscoveredModules: ["Injection"],
                 EnabledModules: ["Injection"],
+                ActivatedModules: ["Injection"],
+                PluginStates:
+                [
+                    new PluginLifecycleSnapshot("Injection", "Injection", "Injection", "1.0.0", PluginLifecycleState.Activated, "Plugin is enabled and activated.")
+                ],
                 ModuleRegistrations:
                 [
                     new ModuleRegistrationSnapshot("Injection", "Injection", "IIoT.Edge.Module.Injection", true, true, true, true, true, true)
@@ -75,7 +81,7 @@ public sealed class DiagnosticsViewModelBehaviorTests
 
             var viewModel = new DiagnosticsViewModel(startupStore, diagnosticsQuery);
 
-            await viewModel.OnActivatedAsync();
+            await viewModel.RefreshAsync();
 
             Assert.Equal("Cloud gate: Waiting for Recovery", viewModel.CloudGateSummary);
             Assert.Equal("Cloud runtime: WaitingForRecovery", viewModel.CloudRuntimeSummary);
@@ -84,9 +90,33 @@ public sealed class DiagnosticsViewModelBehaviorTests
             Assert.Contains("Storage fault: yes", viewModel.CloudPersistenceSummary, StringComparison.Ordinal);
             Assert.Contains("Storage fault: yes", viewModel.MesPersistenceSummary, StringComparison.Ordinal);
             Assert.Contains("Corrupt files: 2", viewModel.ContextPersistenceSummary, StringComparison.Ordinal);
+            Assert.Contains("Machine profile: StackingLine", viewModel.ConfigurationProfileSummary, StringComparison.Ordinal);
             Assert.Single(viewModel.ModuleRegistrations);
+            Assert.Single(viewModel.PluginStates);
             Assert.Single(viewModel.DeviceBindings);
             Assert.Single(viewModel.MesUploadDiagnostics);
+        });
+
+    [Fact]
+    public Task DiagnosticsViewModel_WhenRefreshReenters_ShouldOnlyRunOneDiagnosticsQuery()
+        => RunOnStaThreadAsync(async () =>
+        {
+            var startupStore = new FakeStartupDiagnosticsStore();
+            startupStore.Update(StartupDiagnosticsReport.Empty());
+
+            var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery();
+            var viewModel = new DiagnosticsViewModel(startupStore, diagnosticsQuery);
+            await viewModel.RefreshAsync();
+
+            diagnosticsQuery.ResetCounters();
+            diagnosticsQuery.Delay = TimeSpan.FromMilliseconds(120);
+
+            var first = viewModel.RefreshAsync();
+            var second = viewModel.RefreshAsync();
+            await Task.WhenAll(first, second);
+
+            Assert.Equal(1, diagnosticsQuery.TotalCalls);
+            Assert.Equal(1, diagnosticsQuery.MaxConcurrentCalls);
         });
 
     private static Task RunOnStaThreadAsync(Func<Task> testBody)
@@ -137,6 +167,10 @@ public sealed class DiagnosticsViewModelBehaviorTests
 
     private sealed class FakeEdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
     {
+        private int _activeCalls;
+        private int _maxConcurrentCalls;
+        private int _totalCalls;
+
         public EdgeSyncDiagnosticsSnapshot Current { get; set; } = new(
             "Unknown",
             new CloudSyncDiagnosticsSnapshot(
@@ -177,6 +211,55 @@ public sealed class DiagnosticsViewModelBehaviorTests
                 null),
             new ProductionContextPersistenceDiagnostics(0, null));
 
-        public EdgeSyncDiagnosticsSnapshot GetCurrent() => Current;
+        public TimeSpan Delay { get; set; }
+
+        public int MaxConcurrentCalls => _maxConcurrentCalls;
+
+        public int TotalCalls => _totalCalls;
+
+        public void ResetCounters()
+        {
+            _activeCalls = 0;
+            _maxConcurrentCalls = 0;
+            _totalCalls = 0;
+        }
+
+        public async Task<EdgeSyncDiagnosticsSnapshot> GetCurrentAsync(CancellationToken ct = default)
+        {
+            Interlocked.Increment(ref _totalCalls);
+            var active = Interlocked.Increment(ref _activeCalls);
+            UpdateMaxConcurrentCalls(active);
+
+            try
+            {
+                if (Delay > TimeSpan.Zero)
+                {
+                    await Task.Delay(Delay, ct);
+                }
+
+                return Current;
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _activeCalls);
+            }
+        }
+
+        private void UpdateMaxConcurrentCalls(int active)
+        {
+            while (true)
+            {
+                var current = _maxConcurrentCalls;
+                if (active <= current)
+                {
+                    return;
+                }
+
+                if (Interlocked.CompareExchange(ref _maxConcurrentCalls, active, current) == current)
+                {
+                    return;
+                }
+            }
+        }
     }
 }

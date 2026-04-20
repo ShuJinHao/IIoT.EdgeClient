@@ -42,11 +42,11 @@ public class NetworkDeviceVm : ObservableModelBase
         set { _deviceModel = value; OnPropertyChanged(); }
     }
 
-    private string _moduleId = "Injection";
+    private string _moduleId = string.Empty;
     public string ModuleId
     {
         get => _moduleId;
-        set { _moduleId = string.IsNullOrWhiteSpace(value) ? "Injection" : value.Trim(); OnPropertyChanged(); }
+        set { _moduleId = value?.Trim() ?? string.Empty; OnPropertyChanged(); }
     }
 
     public IEnumerable<string> AvailableModels => DeviceType switch

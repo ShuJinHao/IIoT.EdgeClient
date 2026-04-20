@@ -3,6 +3,7 @@ using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Common.Diagnostics;
 using IIoT.Edge.UI.Shared.PluginSystem;
 using System.Collections.ObjectModel;
+using System.Threading;
 using System.Windows.Threading;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
@@ -12,12 +13,15 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
     private readonly IStartupDiagnosticsStore _diagnosticsStore;
     private readonly IEdgeSyncDiagnosticsQuery _syncDiagnosticsQuery;
     private readonly DispatcherTimer _refreshTimer;
+    private int _refreshInProgress;
 
     public override string ViewId => CoreViewIds.Diagnostics;
 
     public override string ViewTitle => "System Diagnostics";
 
     public ObservableCollection<ModuleRegistrationSnapshot> ModuleRegistrations { get; } = [];
+
+    public ObservableCollection<PluginLifecycleSnapshot> PluginStates { get; } = [];
 
     public ObservableCollection<DeviceModuleBindingSnapshot> DeviceBindings { get; } = [];
 
@@ -43,6 +47,28 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
         private set
         {
             _enabledModulesSummary = value;
+            OnPropertyChanged();
+        }
+    }
+
+    private string _activatedModulesSummary = "Checking activated modules...";
+    public string ActivatedModulesSummary
+    {
+        get => _activatedModulesSummary;
+        private set
+        {
+            _activatedModulesSummary = value;
+            OnPropertyChanged();
+        }
+    }
+
+    private string _configurationProfileSummary = "Configuration profile: --";
+    public string ConfigurationProfileSummary
+    {
+        get => _configurationProfileSummary;
+        private set
+        {
+            _configurationProfileSummary = value;
             OnPropertyChanged();
         }
     }
@@ -266,28 +292,67 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
         {
             Interval = TimeSpan.FromSeconds(1)
         };
-        _refreshTimer.Tick += (_, _) => Refresh();
+        _refreshTimer.Tick += OnRefreshTimerTick;
         _refreshTimer.Start();
     }
 
-    public override Task OnActivatedAsync()
+    public override Task OnActivatedAsync() => RefreshAsync();
+
+    internal Task RefreshAsync(CancellationToken ct = default)
+        => RefreshIfIdleAsync(ct);
+
+    private async void OnRefreshTimerTick(object? sender, EventArgs e)
     {
-        Refresh();
-        return Task.CompletedTask;
+        await SafeRefreshAsync();
     }
 
-    private void Refresh()
+    private async Task SafeRefreshAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            await RefreshIfIdleAsync(ct);
+        }
+        catch
+        {
+            // Diagnostics refresh should not crash the periodic UI loop.
+        }
+    }
+
+    private async Task RefreshIfIdleAsync(CancellationToken ct)
+    {
+        if (Interlocked.Exchange(ref _refreshInProgress, 1) == 1)
+        {
+            return;
+        }
+
+        try
+        {
+            await RefreshCoreAsync(ct);
+        }
+        finally
+        {
+            Volatile.Write(ref _refreshInProgress, 0);
+        }
+    }
+
+    private async Task RefreshCoreAsync(CancellationToken ct)
     {
         var report = _diagnosticsStore.Current;
-        var syncDiagnostics = _syncDiagnosticsQuery.GetCurrent();
+        var syncDiagnostics = await _syncDiagnosticsQuery.GetCurrentAsync(ct);
 
         DiscoveredModulesSummary = report.DiscoveredModules.Count == 0
-            ? "No compiled modules were discovered."
+            ? "No plugins were discovered."
             : $"Discovered: {string.Join(", ", report.DiscoveredModules)}";
 
         EnabledModulesSummary = report.EnabledModules.Count == 0
-            ? "No modules are currently enabled."
-            : $"Enabled: {string.Join(", ", report.EnabledModules)}";
+            ? "No modules are configured as enabled."
+            : $"Configured enabled: {string.Join(", ", report.EnabledModules)}";
+
+        ActivatedModulesSummary = report.ActivatedModules.Count == 0
+            ? "No plugins are currently activated."
+            : $"Activated: {string.Join(", ", report.ActivatedModules)}";
+
+        ConfigurationProfileSummary = BuildConfigurationProfileSummary(report.ConfigurationProfile);
 
         LastUpdatedSummary = report.GeneratedAt == DateTime.MinValue
             ? "Startup diagnostics have not been generated yet."
@@ -338,6 +403,7 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
         ContextPersistenceSummary = EdgeSyncDiagnosticsFormatter.FormatContextPersistenceSummary(syncDiagnostics.ContextPersistence);
 
         ReplaceItems(ModuleRegistrations, report.ModuleRegistrations);
+        ReplaceItems(PluginStates, report.PluginStates);
         ReplaceItems(DeviceBindings, report.DeviceBindings);
         ReplaceItems(Issues, report.Issues);
         ReplaceItems(MesUploadDiagnostics, syncDiagnostics.Mes.Channels);
@@ -345,5 +411,18 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
         SetStatus(report.Issues.Count == 0
             ? "Startup diagnostics report is healthy."
             : $"Startup diagnostics report contains {report.Issues.Count} issue(s).");
+    }
+
+    private static string BuildConfigurationProfileSummary(ConfigurationProfileSnapshot profile)
+    {
+        if (string.IsNullOrWhiteSpace(profile.MachineProfile))
+        {
+            return $"Environment: {profile.EnvironmentName}; Machine profile: <none>";
+        }
+
+        var state = profile.IsMachineProfileLoaded
+            ? $"loaded from {profile.MachineProfileFileName}"
+            : $"missing file {profile.MachineProfileFileName}";
+        return $"Environment: {profile.EnvironmentName}; Machine profile: {profile.MachineProfile} ({state})";
     }
 }

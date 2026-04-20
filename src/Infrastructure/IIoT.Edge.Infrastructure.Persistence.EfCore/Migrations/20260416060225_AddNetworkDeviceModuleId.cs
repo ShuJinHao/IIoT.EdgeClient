@@ -16,7 +16,7 @@ namespace IIoT.Edge.Infrastructure.Persistence.EfCore.Migrations
                 type: "TEXT",
                 maxLength: 50,
                 nullable: false,
-                defaultValue: "Injection");
+                defaultValue: "");
         }
 
         /// <inheritdoc />

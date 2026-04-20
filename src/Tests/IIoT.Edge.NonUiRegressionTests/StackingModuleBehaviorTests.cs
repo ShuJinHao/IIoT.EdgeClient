@@ -3,13 +3,13 @@ using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
-using IIoT.Edge.Infrastructure.Integration.Mappings.Cloud.Stacking;
-using IIoT.Edge.Infrastructure.Integration.PassStation;
-using IIoT.Edge.Runtime.Stations.Stacking.Tasks;
+using IIoT.Edge.Module.Stacking.Constants;
+using IIoT.Edge.Module.Stacking.Integration;
+using IIoT.Edge.Module.Stacking.Payload;
+using IIoT.Edge.Module.Stacking.Runtime;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
-using IIoT.Edge.SharedKernel.Modules.Stacking;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Configuration;
 using System.Text.Json;
@@ -64,7 +64,6 @@ public sealed class StackingModuleBehaviorTests
         var configuration = CreateConfiguration(cloudUploadEnabled: true);
         var uploader = new StackingCloudUploader(
             cloudHttp,
-            new FakeCloudApiEndpointProvider(),
             CreateMapper(),
             logger,
             configuration,
@@ -126,7 +125,6 @@ public sealed class StackingModuleBehaviorTests
         var contextStore = new FakeProductionContextStore();
         var uploader = new StackingCloudUploader(
             cloudHttp,
-            new FakeCloudApiEndpointProvider(),
             CreateMapper(),
             logger,
             CreateConfiguration(cloudUploadEnabled: false),
@@ -172,7 +170,6 @@ public sealed class StackingModuleBehaviorTests
         var cloudHttp = new FakeCloudHttpClient();
         var uploader = new StackingCloudUploader(
             cloudHttp,
-            new FakeCloudApiEndpointProvider(),
             CreateMapper(),
             new FakeLogService(),
             CreateConfiguration(cloudUploadEnabled: true),

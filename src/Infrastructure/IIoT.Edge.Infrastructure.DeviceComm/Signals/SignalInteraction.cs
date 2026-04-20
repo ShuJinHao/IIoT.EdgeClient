@@ -136,7 +136,7 @@ public class SignalInteraction : ISignalInteraction
         {
             try
             {
-                await DoCoreAsync();
+                await ExecuteOneCycleAsync();
                 await Task.Delay(TaskLoopInterval, ct);
             }
             catch (Exception ex)
@@ -147,6 +147,8 @@ public class SignalInteraction : ISignalInteraction
             }
         }
     }
+
+    internal Task ExecuteOneCycleAsync() => DoCoreAsync();
 
     private async Task DoCoreAsync()
     {

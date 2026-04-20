@@ -45,6 +45,12 @@ public sealed class MesRetryTask : ScheduledTaskBase
         _capacityGuard = capacityGuard;
     }
 
+    internal Task ExecuteOneIterationAsync(CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        return ExecuteAsync().WaitAsync(ct);
+    }
+
     protected override async Task ExecuteAsync()
     {
         await RecoverFallbackRecordsAsync().ConfigureAwait(false);

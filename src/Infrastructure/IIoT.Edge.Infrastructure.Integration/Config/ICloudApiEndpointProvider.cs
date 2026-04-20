@@ -8,8 +8,6 @@ public interface ICloudApiEndpointProvider : ICloudApiPathProvider
     string GetClientCode();
     string GetDeviceInstancePath();
     string GetIdentityDeviceLoginPath();
-    string GetPassStationInjectionBatchPath();
-    string GetPassStationStackingPath();
     string GetDeviceLogPath();
     string BuildRecipeByDevicePath(Guid deviceId);
 }

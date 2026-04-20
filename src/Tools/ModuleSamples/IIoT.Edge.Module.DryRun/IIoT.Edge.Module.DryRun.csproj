@@ -6,6 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <PackageId>IIoT.Edge.Module.DryRun</PackageId>
+    <IsEdgePluginModule>true</IsEdgePluginModule>
+    <PluginModuleId>DryRun</PluginModuleId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,6 +18,13 @@
     <ProjectReference Include="..\..\..\Shared\IIoT.Edge.Module.Abstractions\IIoT.Edge.Module.Abstractions.csproj" />
     <ProjectReference Include="..\..\..\Shared\IIoT.Edge.SharedKernel\IIoT.Edge.SharedKernel.csproj" />
     <ProjectReference Include="..\..\..\Shared\IIoT.Edge.UI.Shared\IIoT.Edge.UI.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="plugin.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

@@ -1,8 +1,8 @@
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Module.Injection.Payload;
 using IIoT.Edge.Runtime.DataPipeline.Services;
 using IIoT.Edge.SharedKernel.DataPipeline;
-using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using IIoT.Edge.TestSimulator.Fakes;
 
 namespace IIoT.Edge.TestSimulator.Scenarios;

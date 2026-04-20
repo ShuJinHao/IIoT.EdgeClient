@@ -65,6 +65,12 @@ public sealed class CloudRetryTask : ScheduledTaskBase
         _capacityGuard = capacityGuard;
     }
 
+    internal Task ExecuteOneIterationAsync(CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        return ExecuteAsync().WaitAsync(ct);
+    }
+
     protected override async Task ExecuteAsync()
     {
         if (!_deviceService.CanUploadToCloud)
@@ -311,9 +317,7 @@ public sealed class CloudRetryTask : ScheduledTaskBase
             return registration.UploadMode;
         }
 
-        return string.Equals(processType, "Injection", StringComparison.OrdinalIgnoreCase)
-            ? ProcessUploadMode.Batch
-            : ProcessUploadMode.Single;
+        return ProcessUploadMode.Single;
     }
 
     private async Task<bool> ProcessOneAsync(FailedCellRecord record)

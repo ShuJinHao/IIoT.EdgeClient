@@ -1,30 +1,24 @@
-﻿using IIoT.Edge.Module.Abstractions;
+using IIoT.Edge.Module.Abstractions;
 using Microsoft.Extensions.Configuration;
+using System.IO;
 
 namespace IIoT.Edge.PackageValidationClient.Modules;
 
 public static class PackageValidationModuleCatalog
 {
-    public const string DefaultModuleId = "Injection";
-    private static readonly System.Reflection.Assembly[] RootAssemblies = [typeof(PackageValidationModuleCatalog).Assembly];
+    public const string PluginDirectoryName = "Modules";
 
-    public static IReadOnlyList<CompiledModuleDescriptor> DiscoverCompiledModules()
-        => CompiledModuleCatalog.DiscoverCompiledModules(RootAssemblies);
+    public static string GetPluginRootPath(string baseDirectory)
+        => Path.Combine(baseDirectory, PluginDirectoryName);
 
-    public static IReadOnlyList<IEdgeStationModule> CreateEnabledModules(IConfiguration configuration)
-        => CompiledModuleCatalog.CreateEnabledModules(
-            configuration,
-            PackageValidationModuleOptions.SectionName,
-            RootAssemblies,
-            DefaultModuleId);
+    public static ModuleCatalogDiscoveryResult DiscoverModules(string pluginRootPath)
+        => DirectoryModuleCatalog.DiscoverModules(pluginRootPath);
 
-    public static IReadOnlyList<IEdgeStationModule> CreateEnabledModules(
+    public static ModuleCatalogActivationResult CreateEnabledModules(
         IConfiguration configuration,
-        IReadOnlyList<CompiledModuleDescriptor> compiledModules)
-        => CompiledModuleCatalog.CreateEnabledModules(
+        IReadOnlyList<ModulePluginDescriptor> discoveredModules)
+        => DirectoryModuleCatalog.CreateEnabledModules(
             configuration,
             PackageValidationModuleOptions.SectionName,
-            compiledModules,
-            DefaultModuleId);
+            discoveredModules);
 }
-

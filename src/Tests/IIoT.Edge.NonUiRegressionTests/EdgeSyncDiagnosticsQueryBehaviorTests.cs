@@ -13,7 +13,7 @@ namespace IIoT.Edge.NonUiRegressionTests;
 public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
 {
     [Fact]
-    public void GetCurrent_ShouldAggregateCloudAndMesDiagnostics()
+    public async Task GetCurrentAsync_ShouldAggregateCloudAndMesDiagnostics()
     {
         var deviceService = new FakeDeviceService();
         deviceService.SetOnline(new DeviceSession
@@ -102,7 +102,7 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
             deviceLogBufferStore,
             capacityBufferStore);
 
-        var snapshot = query.GetCurrent();
+        var snapshot = await query.GetCurrentAsync();
 
         Assert.Equal("Edge-01", snapshot.DeviceName);
         Assert.Equal(EdgeUploadBlockReason.UploadTokenRejected, snapshot.Cloud.BlockReason);
@@ -120,7 +120,7 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
     }
 
     [Fact]
-    public void GetCurrent_WhenCloudOrMesPersistenceFails_ShouldReturnVisibleFaultSnapshot()
+    public async Task GetCurrentAsync_WhenCloudOrMesPersistenceFails_ShouldReturnVisibleFaultSnapshot()
     {
         var deviceService = new FakeDeviceService();
         deviceService.SetOnline(new DeviceSession
@@ -163,7 +163,7 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
             deviceLogBufferStore,
             capacityBufferStore);
 
-        var snapshot = query.GetCurrent();
+        var snapshot = await query.GetCurrentAsync();
 
         Assert.True(snapshot.Cloud.IsPersistenceFaulted);
         Assert.Contains("cloud retry count failed", snapshot.Cloud.PersistenceFaultMessage, StringComparison.Ordinal);
@@ -176,5 +176,93 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
         Assert.Contains("mes retry count failed", snapshot.Mes.PersistenceFaultMessage, StringComparison.Ordinal);
         Assert.NotNull(snapshot.Mes.LastPersistenceFaultAt);
         Assert.Equal(0, snapshot.Mes.PendingRetryCount);
+    }
+
+    [Fact]
+    public async Task GetCurrentAsync_WhenCountsAreDelayed_ShouldRemainAsynchronous()
+    {
+        var deviceService = new FakeDeviceService();
+        deviceService.SetOnline(new DeviceSession
+        {
+            DeviceId = Guid.NewGuid(),
+            DeviceName = "Edge-03",
+            ClientCode = "LINE-03",
+            ProcessId = Guid.NewGuid(),
+            UploadAccessToken = "token",
+            UploadAccessTokenExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(30)
+        });
+
+        var cloudRetryStore = new FakeFailedRecordStore
+        {
+            CloudCountDelay = TimeSpan.FromMilliseconds(120),
+            MesCountDelay = TimeSpan.FromMilliseconds(120)
+        };
+        cloudRetryStore.PendingRecords.Add(new FailedCellRecord
+        {
+            Id = 1,
+            Channel = "Cloud",
+            ProcessType = "Injection",
+            FailedTarget = "Cloud",
+            CellDataJson = "{}",
+            ErrorMessage = "seed",
+            NextRetryTime = DateTime.UtcNow
+        });
+
+        var mesRetryStore = new FakeFailedRecordStore
+        {
+            MesCountDelay = TimeSpan.FromMilliseconds(120)
+        };
+        mesRetryStore.PendingRecords.Add(new FailedCellRecord
+        {
+            Id = 2,
+            Channel = "MES",
+            ProcessType = "Stacking",
+            FailedTarget = "MES",
+            CellDataJson = "{}",
+            ErrorMessage = "seed",
+            NextRetryTime = DateTime.UtcNow
+        });
+
+        var deviceLogBufferStore = new FakeDeviceLogBufferStore
+        {
+            CountDelay = TimeSpan.FromMilliseconds(120)
+        };
+        deviceLogBufferStore.Records.Add(new DeviceLogRecord { Id = 10, CreatedAt = DateTime.UtcNow.ToString("O") });
+
+        var capacityBufferStore = new FakeCapacityBufferStore
+        {
+            CountDelay = TimeSpan.FromMilliseconds(120)
+        };
+        capacityBufferStore.Records.Add(new CapacityRecord
+        {
+            Id = 20,
+            Barcode = "BC-20",
+            CellResult = true,
+            ShiftCode = "D",
+            CompletedTime = DateTime.UtcNow,
+            CreatedAt = DateTime.UtcNow,
+            PlcName = "PLC-A"
+        });
+
+        var query = new EdgeSyncDiagnosticsQuery(
+            new FakeProductionContextStore(),
+            deviceService,
+            new FakeCloudDiagnosticsStore(),
+            new FakeMesRetryDiagnosticsStore(),
+            new FakeMesUploadDiagnosticsStore(),
+            cloudRetryStore,
+            mesRetryStore,
+            deviceLogBufferStore,
+            capacityBufferStore);
+
+        var snapshotTask = query.GetCurrentAsync();
+
+        Assert.False(snapshotTask.IsCompleted);
+
+        var snapshot = await snapshotTask;
+        Assert.Equal(1, snapshot.Cloud.PendingRetryCount);
+        Assert.Equal(1, snapshot.Cloud.PendingDeviceLogCount);
+        Assert.Equal(1, snapshot.Cloud.PendingCapacityCount);
+        Assert.Equal(1, snapshot.Mes.PendingRetryCount);
     }
 }

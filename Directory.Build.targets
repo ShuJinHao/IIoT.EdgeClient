@@ -1,0 +1,18 @@
+<Project>
+
+  <Target Name="GetPluginArtifacts"
+          DependsOnTargets="Build"
+          Returns="@(PluginArtifact)"
+          Condition="'$(IsEdgePluginModule)' == 'true'">
+    <ItemGroup>
+      <PluginArtifact Include="$(TargetDir)**\*.*"
+                      Exclude="$(TargetDir)ref\**;$(TargetDir)refint\**;$(TargetDir)**\*.nupkg;$(TargetDir)plugin.json">
+        <ModuleId>$(PluginModuleId)</ModuleId>
+      </PluginArtifact>
+      <PluginArtifact Include="$(MSBuildProjectDirectory)\plugin.json">
+        <ModuleId>$(PluginModuleId)</ModuleId>
+      </PluginArtifact>
+    </ItemGroup>
+  </Target>
+
+</Project>

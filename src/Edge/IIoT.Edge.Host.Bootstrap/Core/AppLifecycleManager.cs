@@ -33,9 +33,11 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
     private readonly IProcessIntegrationRegistry _integrationRegistry;
     private readonly IStartupDiagnosticsStore _startupDiagnosticsStore;
     private readonly Dictionary<string, IEdgeStationModule> _modulesById;
-    private readonly Dictionary<string, CompiledModuleDescriptor> _discoveredModulesById;
+    private readonly Dictionary<string, ModulePluginDescriptor> _discoveredModulesById;
     private readonly Dictionary<string, IModuleHardwareProfileProvider> _hardwareProfilesByModuleId;
-    private readonly string[] _enabledModuleIds;
+    private readonly IReadOnlyList<ModuleCatalogIssue> _moduleCatalogIssues;
+    private readonly string[] _configuredEnabledModuleIds;
+    private readonly string[] _activatedModuleIds;
 
     public AppLifecycleManager(
         IServiceProvider serviceProvider,
@@ -53,7 +55,9 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
         IStationRuntimeRegistry runtimeRegistry,
         IProcessIntegrationRegistry integrationRegistry,
         IStartupDiagnosticsStore startupDiagnosticsStore,
-        IReadOnlyCollection<CompiledModuleDescriptor> discoveredModules,
+        IReadOnlyCollection<ModulePluginDescriptor> discoveredModules,
+        IReadOnlyCollection<ModuleCatalogIssue> moduleCatalogIssues,
+        IReadOnlyCollection<string> configuredEnabledModuleIds,
         IEnumerable<IEdgeStationModule> modules,
         IEnumerable<IModuleHardwareProfileProvider> hardwareProfiles)
     {
@@ -74,8 +78,12 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
         _startupDiagnosticsStore = startupDiagnosticsStore;
         _modulesById = modules.ToDictionary(x => x.ModuleId, StringComparer.OrdinalIgnoreCase);
         _discoveredModulesById = discoveredModules.ToDictionary(x => x.ModuleId, StringComparer.OrdinalIgnoreCase);
+        _moduleCatalogIssues = moduleCatalogIssues.ToArray();
         _hardwareProfilesByModuleId = hardwareProfiles.ToDictionary(x => x.ModuleId, StringComparer.OrdinalIgnoreCase);
-        _enabledModuleIds = _modulesById.Keys.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray();
+        _configuredEnabledModuleIds = configuredEnabledModuleIds
+            .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        _activatedModuleIds = _modulesById.Keys.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
     public async Task<AppStartupResult> StartAsync(CancellationToken cancellationToken = default)
@@ -137,6 +145,11 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
     private async Task<StartupDiagnosticsReport> BuildStartupDiagnosticsReportAsync(CancellationToken cancellationToken)
     {
         var issues = new List<StartupDiagnosticIssue>();
+        issues.AddRange(_moduleCatalogIssues.Select(static issue =>
+            new StartupDiagnosticIssue(
+                issue.Code,
+                issue.Message,
+                issue.ModuleId)));
 
         ValidateAppSettings(issues);
         ValidateModuleConfiguration(issues);
@@ -145,12 +158,17 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
             x => x.IsEnabled && x.DeviceType == DeviceType.PLC,
             cancellationToken).ConfigureAwait(false);
         var deviceBindings = await ValidatePlcConfigurationAsync(plcDevices, issues, cancellationToken).ConfigureAwait(false);
+        var configurationProfile = BuildConfigurationProfile();
+        var pluginStates = BuildPluginLifecycleSnapshots();
         var moduleRegistrations = BuildModuleRegistrations();
 
         return new StartupDiagnosticsReport(
             DateTime.UtcNow,
+            configurationProfile,
             _discoveredModulesById.Keys.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray(),
-            _enabledModuleIds,
+            _configuredEnabledModuleIds,
+            _activatedModuleIds,
+            pluginStates,
             moduleRegistrations,
             deviceBindings,
             issues.AsReadOnly());
@@ -189,6 +207,15 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
             && dayStart == dayEnd)
         {
             issues.Add(CreateIssue("CONFIG_INVALID", "Shift:DayStart and Shift:DayEnd cannot be the same."));
+        }
+
+        var configurationProfile = BuildConfigurationProfile();
+        if (!string.IsNullOrWhiteSpace(configurationProfile.MachineProfile)
+            && !configurationProfile.IsMachineProfileLoaded)
+        {
+            issues.Add(CreateIssue(
+                "MACHINE_PROFILE_MISSING",
+                $"Shell machine profile '{configurationProfile.MachineProfile}' was requested, but file '{configurationProfile.MachineProfileFileName}' could not be loaded."));
         }
     }
 
@@ -426,6 +453,133 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
                 _integrationRegistry.HasMesUploader(x.ProcessType),
                 _hardwareProfilesByModuleId.ContainsKey(x.ModuleId)))
             .ToArray();
+    }
+
+    private ConfigurationProfileSnapshot BuildConfigurationProfile()
+    {
+        var environmentName = _configuration["Shell:Environment"]?.Trim();
+        if (string.IsNullOrWhiteSpace(environmentName))
+        {
+            environmentName = "Production";
+        }
+
+        var machineProfile = _configuration["Shell:MachineProfile"]?.Trim();
+        var machineProfileFileName = _configuration["Shell:MachineProfileFileName"]?.Trim();
+        var machineProfileLoaded = bool.TryParse(_configuration["Shell:MachineProfileLoaded"], out var loaded)
+            && loaded;
+
+        return new ConfigurationProfileSnapshot(
+            environmentName,
+            string.IsNullOrWhiteSpace(machineProfile) ? null : machineProfile,
+            string.IsNullOrWhiteSpace(machineProfileFileName) ? null : machineProfileFileName,
+            machineProfileLoaded);
+    }
+
+    private IReadOnlyList<PluginLifecycleSnapshot> BuildPluginLifecycleSnapshots()
+    {
+        var configuredEnabledSet = _configuredEnabledModuleIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var issueLookup = _moduleCatalogIssues
+            .Where(static issue => !string.IsNullOrWhiteSpace(issue.ModuleId))
+            .GroupBy(issue => issue.ModuleId!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.OrdinalIgnoreCase);
+
+        var snapshots = _discoveredModulesById.Values
+            .OrderBy(descriptor => descriptor.ModuleId, StringComparer.OrdinalIgnoreCase)
+            .Select(descriptor => BuildPluginLifecycleSnapshot(descriptor, configuredEnabledSet, issueLookup))
+            .ToList();
+
+        foreach (var issue in _moduleCatalogIssues.Where(static issue => string.Equals(issue.Code, "PLUGIN_MANIFEST_INVALID", StringComparison.OrdinalIgnoreCase)))
+        {
+            var moduleId = issue.ModuleId
+                ?? issue.PluginDirectoryName
+                ?? "UnknownPlugin";
+            if (snapshots.Any(x => string.Equals(x.ModuleId, moduleId, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            snapshots.Add(new PluginLifecycleSnapshot(
+                moduleId,
+                issue.PluginDirectoryName ?? moduleId,
+                null,
+                "--",
+                PluginLifecycleState.ManifestInvalid,
+                issue.Message));
+        }
+
+        return snapshots
+            .OrderBy(snapshot => snapshot.ModuleId, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private PluginLifecycleSnapshot BuildPluginLifecycleSnapshot(
+        ModulePluginDescriptor descriptor,
+        IReadOnlySet<string> configuredEnabledSet,
+        IReadOnlyDictionary<string, ModuleCatalogIssue[]> issueLookup)
+    {
+        var message = "Plugin was discovered successfully.";
+        var state = PluginLifecycleState.Discovered;
+
+        if (issueLookup.TryGetValue(descriptor.ModuleId, out var moduleIssues))
+        {
+            var hostIssue = moduleIssues.FirstOrDefault(static issue =>
+                string.Equals(issue.Code, "PLUGIN_HOST_VERSION_INCOMPATIBLE", StringComparison.OrdinalIgnoreCase));
+            if (hostIssue is not null)
+            {
+                return new PluginLifecycleSnapshot(
+                    descriptor.ModuleId,
+                    descriptor.DisplayName,
+                    descriptor.ProcessType,
+                    descriptor.Version,
+                    PluginLifecycleState.HostVersionIncompatible,
+                    hostIssue.Message);
+            }
+
+            var dependencyIssue = moduleIssues.FirstOrDefault(static issue =>
+                string.Equals(issue.Code, "PLUGIN_DEPENDENCY_MISSING", StringComparison.OrdinalIgnoreCase));
+            if (dependencyIssue is not null)
+            {
+                return new PluginLifecycleSnapshot(
+                    descriptor.ModuleId,
+                    descriptor.DisplayName,
+                    descriptor.ProcessType,
+                    descriptor.Version,
+                    PluginLifecycleState.DependencyMissing,
+                    dependencyIssue.Message);
+            }
+
+            var loadIssue = moduleIssues.FirstOrDefault(static issue =>
+                string.Equals(issue.Code, "PLUGIN_LOAD_FAILED", StringComparison.OrdinalIgnoreCase));
+            if (loadIssue is not null)
+            {
+                return new PluginLifecycleSnapshot(
+                    descriptor.ModuleId,
+                    descriptor.DisplayName,
+                    descriptor.ProcessType,
+                    descriptor.Version,
+                    PluginLifecycleState.LoadFailed,
+                    loadIssue.Message);
+            }
+        }
+
+        if (!configuredEnabledSet.Contains(descriptor.ModuleId))
+        {
+            state = PluginLifecycleState.DisabledByConfig;
+            message = "Plugin was discovered, but it is not enabled by the current configuration.";
+        }
+        else if (_modulesById.ContainsKey(descriptor.ModuleId))
+        {
+            state = PluginLifecycleState.Activated;
+            message = "Plugin is enabled and activated.";
+        }
+
+        return new PluginLifecycleSnapshot(
+            descriptor.ModuleId,
+            descriptor.DisplayName,
+            descriptor.ProcessType,
+            descriptor.Version,
+            state,
+            message);
     }
 
     private async Task BindPlcTaskFactoriesAsync(CancellationToken cancellationToken)

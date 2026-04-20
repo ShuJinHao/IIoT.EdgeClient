@@ -36,14 +36,24 @@ public static class DependencyInjection
         IViewRegistry viewRegistry,
         IConfiguration configuration,
         string dbDir,
-        IReadOnlyCollection<CompiledModuleDescriptor> discoveredModules,
+        IReadOnlyCollection<ModulePluginDescriptor> discoveredModules,
+        IReadOnlyCollection<ModuleCatalogIssue> moduleCatalogIssues,
+        IReadOnlyCollection<string> configuredEnabledModuleIds,
         IEnumerable<IEdgeStationModule> modules)
     {
         ArgumentNullException.ThrowIfNull(discoveredModules);
+        ArgumentNullException.ThrowIfNull(moduleCatalogIssues);
+        ArgumentNullException.ThrowIfNull(configuredEnabledModuleIds);
         ArgumentNullException.ThrowIfNull(modules);
 
         var enabledModules = modules.ToList();
         var discoveredModuleList = discoveredModules.ToArray();
+        var moduleCatalogIssueList = moduleCatalogIssues.ToArray();
+        var configuredEnabledModuleList = configuredEnabledModuleIds.ToArray();
+        var moduleAssemblies = enabledModules
+            .Select(static module => module.GetType().Assembly)
+            .Distinct()
+            .ToArray();
         var efDbPath = Path.Combine(dbDir, "edge.db");
         var excelDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data", "excel");
 
@@ -53,7 +63,9 @@ public static class DependencyInjection
         services.AddSingleton(configuration);
         services.AddSingleton(viewRegistry);
         services.AddSingleton<IViewRegistry>(viewRegistry);
-        services.AddSingleton<IReadOnlyCollection<CompiledModuleDescriptor>>(discoveredModuleList);
+        services.AddSingleton<IReadOnlyCollection<ModulePluginDescriptor>>(discoveredModuleList);
+        services.AddSingleton<IReadOnlyCollection<ModuleCatalogIssue>>(moduleCatalogIssueList);
+        services.AddSingleton<IReadOnlyCollection<string>>(configuredEnabledModuleList);
         services.AddSingleton<IDevelopmentSampleInitializer, DevelopmentSampleInitializer>();
         services.AddSingleton<IStartupDiagnosticsStore, StartupDiagnosticsStore>();
         services.AddSingleton<ICloudUploadDiagnosticsStore, CloudUploadDiagnosticsStore>();
@@ -77,20 +89,26 @@ public static class DependencyInjection
         {
             cfg.LicenseKey = configuration["MediatR:LicenseKey"] ?? string.Empty;
             cfg.RegisterServicesFromAssemblies(
-                typeof(IIoT.Edge.Application.DependencyInjection).Assembly,
-                typeof(IIoT.Edge.Presentation.Navigation.DependencyInjection).Assembly,
-                typeof(IIoT.Edge.Presentation.Panels.DependencyInjection).Assembly);
+                [
+                    typeof(IIoT.Edge.Application.DependencyInjection).Assembly,
+                    typeof(IIoT.Edge.Presentation.Navigation.DependencyInjection).Assembly,
+                    typeof(IIoT.Edge.Presentation.Panels.DependencyInjection).Assembly,
+                    ..moduleAssemblies
+                ]);
         });
 
         services.AddUiShared();
         services.AddAutoMapper(
             _ => { },
-            typeof(IIoT.Edge.Application.DependencyInjection).Assembly,
-            typeof(IIoT.Edge.Presentation.Shell.DependencyInjection).Assembly,
-            typeof(IIoT.Edge.Presentation.Navigation.DependencyInjection).Assembly,
-            typeof(IIoT.Edge.Presentation.Panels.DependencyInjection).Assembly,
-            typeof(IIoT.Edge.Infrastructure.Integration.DependencyInjection).Assembly,
-            typeof(IIoT.Edge.Infrastructure.DeviceComm.DependencyInjection).Assembly);
+            [
+                typeof(IIoT.Edge.Application.DependencyInjection).Assembly,
+                typeof(IIoT.Edge.Presentation.Shell.DependencyInjection).Assembly,
+                typeof(IIoT.Edge.Presentation.Navigation.DependencyInjection).Assembly,
+                typeof(IIoT.Edge.Presentation.Panels.DependencyInjection).Assembly,
+                typeof(IIoT.Edge.Infrastructure.Integration.DependencyInjection).Assembly,
+                typeof(IIoT.Edge.Infrastructure.DeviceComm.DependencyInjection).Assembly,
+                ..moduleAssemblies
+            ]);
         services.AddShellPresentation();
         services.AddNavigationPresentation();
         services.AddPanelPresentation();

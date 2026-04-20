@@ -1,10 +1,11 @@
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Module.Abstractions;
-using IIoT.Edge.Infrastructure.Integration.PassStation;
-using IIoT.Edge.Presentation.Navigation;
-using IIoT.Edge.Runtime.Stations.Stacking;
-using IIoT.Edge.SharedKernel.DataPipeline.CellData;
-using IIoT.Edge.SharedKernel.Modules.Stacking;
+using IIoT.Edge.Module.Stacking.Constants;
+using IIoT.Edge.Module.Stacking.Integration;
+using IIoT.Edge.Module.Stacking.Payload;
+using IIoT.Edge.Module.Stacking.Presentation;
+using IIoT.Edge.Module.Stacking.Runtime;
+using IIoT.Edge.Module.Stacking.Samples;
 using IIoT.Edge.UI.Shared.Modularity;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -22,6 +23,8 @@ public sealed class StackingModule : IEdgeStationModule
     {
         services.AddSingleton<IProcessCloudUploader, StackingCloudUploader>();
         services.AddSingleton<IModuleHardwareProfileProvider, StackingHardwareProfileProvider>();
+        services.AddSingleton<IDevelopmentSampleContributor, StackingDevelopmentSampleContributor>();
+        services.AddSingleton<Presentation.ViewModels.StackingSkeletonViewModel>();
     }
 
     public void RegisterViews(IViewRegistry viewRegistry)

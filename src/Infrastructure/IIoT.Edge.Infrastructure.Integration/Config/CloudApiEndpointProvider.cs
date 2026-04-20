@@ -46,12 +46,6 @@ public class CloudApiEndpointProvider : ICloudApiEndpointProvider
     public string GetIdentityDeviceLoginPath()
         => ResolvePath(_cloudApiOptions.CurrentValue.Paths.IdentityDeviceLogin, "/api/v1/human/identity/edge-login");
 
-    public string GetPassStationInjectionBatchPath()
-        => ResolvePath(_cloudApiOptions.CurrentValue.Paths.PassStationInjectionBatch, "/api/v1/edge/pass-stations/injection/batch");
-
-    public string GetPassStationStackingPath()
-        => ResolvePath(_cloudApiOptions.CurrentValue.Paths.PassStationStackingPath, "/api/v1/edge/pass-stations/stacking");
-
     public string GetDeviceLogPath()
         => ResolvePath(_cloudApiOptions.CurrentValue.Paths.DeviceLog, "/api/v1/edge/device-logs");
 

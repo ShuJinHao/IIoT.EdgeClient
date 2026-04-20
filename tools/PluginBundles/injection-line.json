@@ -1,0 +1,6 @@
+{
+  "bundleId": "injection-line",
+  "displayName": "Injection Line Bundle",
+  "includeModules": [ "Injection" ],
+  "machineProfiles": [ "InjectionLine" ]
+}

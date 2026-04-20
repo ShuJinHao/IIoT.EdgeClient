@@ -1,9 +1,9 @@
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Module.Injection.Integration;
+using IIoT.Edge.Module.Injection.Payload;
+using IIoT.Edge.Module.Injection.Presentation;
+using IIoT.Edge.Module.Injection.Runtime;
 using IIoT.Edge.Module.Abstractions;
-using IIoT.Edge.Infrastructure.Integration.PassStation;
-using IIoT.Edge.Presentation.Navigation;
-using IIoT.Edge.Runtime.Stations.Injection;
-using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using IIoT.Edge.UI.Shared.Modularity;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -20,6 +20,13 @@ public sealed class InjectionModule : IEdgeStationModule
     public void RegisterServices(IServiceCollection services)
     {
         services.AddSingleton<IProcessCloudUploader, InjectionCloudUploader>();
+        services.AddSingleton<InjectionDataViewModel>();
+        services.AddSingleton<InjectionCapacityViewModel>();
+        services.AddSingleton<InjectionMonitorViewModel>();
+        services.AddSingleton<InjectionIoViewModel>();
+        services.AddSingleton<InjectionRecipeViewModel>();
+        services.AddSingleton<InjectionParamViewModel>();
+        services.AddSingleton<InjectionHardwareConfigViewModel>();
     }
 
     public void RegisterViews(IViewRegistry viewRegistry)

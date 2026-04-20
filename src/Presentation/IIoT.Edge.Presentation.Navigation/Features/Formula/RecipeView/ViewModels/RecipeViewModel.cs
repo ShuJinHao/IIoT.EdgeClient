@@ -1,28 +1,25 @@
-﻿using IIoT.Edge.SharedKernel.DataPipeline.Recipe;
-using IIoT.Edge.UI.Shared.Mvvm;
-using IIoT.Edge.Application.Common.Crud;
 using IIoT.Edge.Application.Abstractions.Recipe;
+using IIoT.Edge.Application.Common.Crud;
 using IIoT.Edge.Application.Features.Formula.RecipeView;
-using IIoT.Edge.Presentation.Navigation;
 using IIoT.Edge.Presentation.Navigation.Common.Crud;
+using IIoT.Edge.SharedKernel.DataPipeline.Recipe;
+using IIoT.Edge.UI.Shared.Mvvm;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Formula.RecipeView;
 
-/// <summary>
-/// 配方页面视图模型。
-/// 负责配方快照展示、云端同步、来源切换以及本地参数维护。
-/// </summary>
 public class RecipeViewModel : CrudPageViewModelBase
 {
-    public override string ViewId => InjectionViewIds.RecipeView;
-    public override string ViewTitle => "产品配方";
-
     private readonly IRecipeViewCrudService _crudService;
     private readonly IRecipeService _recipeService;
     private readonly IEditorValidator<LocalRecipeParamEditModel> _localRecipeParamValidator = new LocalRecipeParamValidator();
+    private readonly string _viewId;
+    private readonly string _viewTitle;
     private bool _isSubscribed;
+
+    public override string ViewId => _viewId;
+    public override string ViewTitle => _viewTitle;
 
     public ObservableCollection<RecipeParamVm> Params { get; } = new();
 
@@ -73,9 +70,20 @@ public class RecipeViewModel : CrudPageViewModelBase
     public ICommand DeleteLocalParamCommand { get; }
 
     public RecipeViewModel(IRecipeViewCrudService crudService, IRecipeService recipeService)
+        : this(crudService, recipeService, "Formula.RecipeView", "产品配方")
+    {
+    }
+
+    protected RecipeViewModel(
+        IRecipeViewCrudService crudService,
+        IRecipeService recipeService,
+        string viewId,
+        string viewTitle)
     {
         _crudService = crudService;
         _recipeService = recipeService;
+        _viewId = viewId;
+        _viewTitle = viewTitle;
 
         SyncCloudCommand = CreateBusyCommand(OnSyncCloudAsync);
         SwitchSourceCommand = new BaseCommand(_ => OnSwitchSource());
@@ -83,7 +91,6 @@ public class RecipeViewModel : CrudPageViewModelBase
         DeleteLocalParamCommand = new BaseCommand(
             param => _ = RunDeleteAsync(() => OnDeleteLocalParamAsync(param)),
             param => IsLocalAdmin && param is string key && !string.IsNullOrWhiteSpace(key));
-
     }
 
     public override async Task OnActivatedAsync()
@@ -107,7 +114,9 @@ public class RecipeViewModel : CrudPageViewModelBase
     {
         var success = await _crudService.SyncCloudAsync();
         if (!success)
+        {
             return CrudOperationResult.Failure("配方同步失败，请检查网络连接。");
+        }
 
         await RefreshUIAsync();
         return CrudOperationResult.Success("云端配方已同步。");
@@ -126,7 +135,9 @@ public class RecipeViewModel : CrudPageViewModelBase
         var validationIssues = await ValidateAsync(editModel, _localRecipeParamValidator);
         var validationResult = CreateValidationResult(validationIssues);
         if (!validationResult.IsSuccess)
+        {
             return validationResult;
+        }
 
         double? min = double.TryParse(EditMin, out var minVal) ? minVal : null;
         double? max = double.TryParse(EditMax, out var maxVal) ? maxVal : null;
@@ -149,7 +160,9 @@ public class RecipeViewModel : CrudPageViewModelBase
     private async Task<CrudOperationResult> OnDeleteLocalParamAsync(object? param)
     {
         if (param is not string key || string.IsNullOrWhiteSpace(key))
+        {
             return CrudOperationResult.Failure("请选择要删除的本地配方参数。");
+        }
 
         await _crudService.DeleteLocalParamAsync(key);
         await RefreshUIAsync();
@@ -227,9 +240,6 @@ public class RecipeViewModel : CrudPageViewModelBase
     }
 }
 
-/// <summary>
-/// 配方参数展示项视图模型。
-/// </summary>
 public class RecipeParamVm
 {
     public string Name { get; set; } = "";
@@ -237,4 +247,3 @@ public class RecipeParamVm
     public string Max { get; set; } = "";
     public string Unit { get; set; } = "";
 }
-

@@ -1,42 +1,35 @@
 using IIoT.Edge.Module.Abstractions;
 using Microsoft.Extensions.Configuration;
+using System.IO;
 
 namespace IIoT.Edge.Shell.Modules;
 
 public static class ShellModuleCatalog
 {
-    public const string DefaultModuleId = "Injection";
-    private static readonly System.Reflection.Assembly[] RootAssemblies = [typeof(ShellModuleCatalog).Assembly];
+    public const string PluginDirectoryName = "Modules";
 
-    public static IReadOnlyList<CompiledModuleDescriptor> DiscoverCompiledModules()
-        => CompiledModuleCatalog.DiscoverCompiledModules(RootAssemblies);
+    public static string GetPluginRootPath(string baseDirectory)
+        => Path.Combine(baseDirectory, PluginDirectoryName);
 
-    public static IReadOnlyList<IEdgeStationModule> CreateEnabledModules(IConfiguration configuration)
-        => CompiledModuleCatalog.CreateEnabledModules(
-            configuration,
-            ShellModuleOptions.SectionName,
-            RootAssemblies,
-            DefaultModuleId);
+    public static ModuleCatalogDiscoveryResult DiscoverModules(string pluginRootPath)
+        => DirectoryModuleCatalog.DiscoverModules(pluginRootPath);
 
-    public static IReadOnlyList<IEdgeStationModule> CreateEnabledModules(
+    public static ModuleCatalogActivationResult CreateEnabledModules(
         IConfiguration configuration,
-        IReadOnlyList<CompiledModuleDescriptor> compiledModules)
-        => CompiledModuleCatalog.CreateEnabledModules(
+        IReadOnlyList<ModulePluginDescriptor> discoveredModules)
+        => DirectoryModuleCatalog.CreateEnabledModules(
             configuration,
             ShellModuleOptions.SectionName,
-            compiledModules,
-            DefaultModuleId);
+            discoveredModules);
 
     public static IReadOnlyList<IEdgeStationModule> CreateAllModulesForValidation()
-        => CompiledModuleCatalog.CreateAllModules(RootAssemblies);
+        => DirectoryModuleCatalog.CreateAllModules(
+            DiscoverModules(GetPluginRootPath(AppContext.BaseDirectory)).Modules);
 
     public static IReadOnlyList<IEdgeStationModule> CreateAllModulesForValidation(
-        IReadOnlyList<CompiledModuleDescriptor> compiledModules)
-        => CompiledModuleCatalog.CreateAllModules(compiledModules);
+        IReadOnlyList<ModulePluginDescriptor> discoveredModules)
+        => DirectoryModuleCatalog.CreateAllModules(discoveredModules);
 
-    public static bool IsCompiledModule(string moduleId)
-        => CompiledModuleCatalog.IsCompiledModule(moduleId, RootAssemblies);
-
-    public static bool IsCompiledModule(string moduleId, IReadOnlyList<CompiledModuleDescriptor> compiledModules)
-        => CompiledModuleCatalog.IsCompiledModule(moduleId, compiledModules);
+    public static bool IsDiscoveredModule(string moduleId, IReadOnlyList<ModulePluginDescriptor> discoveredModules)
+        => DirectoryModuleCatalog.IsDiscoveredModule(moduleId, discoveredModules);
 }

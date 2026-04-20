@@ -1,7 +1,6 @@
-﻿using IIoT.Edge.Application.Common.Crud;
+using IIoT.Edge.Application.Common.Crud;
 using IIoT.Edge.Application.Features.Config.ParamView;
 using IIoT.Edge.Application.Features.Config.ParamView.Models;
-using IIoT.Edge.Presentation.Navigation;
 using IIoT.Edge.Presentation.Navigation.Common.Crud;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
@@ -13,11 +12,13 @@ public class ParamViewModel : CrudPageViewModelBase
     private readonly IParamViewCrudService _crudService;
     private readonly IEditorValidator<GeneralParamVm> _generalParamValidator = new GeneralParamValidator();
     private readonly IEditorValidator<DeviceParamVm> _deviceParamValidator = new DeviceParamValidator();
+    private readonly string _viewId;
+    private readonly string _viewTitle;
     private int _selectedTabIndex;
     private DeviceParamGroupVm? _selectedGroup;
 
-    public override string ViewId => InjectionViewIds.ParamView;
-    public override string ViewTitle => "Parameter Config";
+    public override string ViewId => _viewId;
+    public override string ViewTitle => _viewTitle;
 
     public int SelectedTabIndex
     {
@@ -53,8 +54,18 @@ public class ParamViewModel : CrudPageViewModelBase
     public ICommand DeleteDeviceParamCommand { get; }
 
     public ParamViewModel(IParamViewCrudService crudService)
+        : this(crudService, "Config.ParamView", "Parameter Config")
+    {
+    }
+
+    protected ParamViewModel(
+        IParamViewCrudService crudService,
+        string viewId,
+        string viewTitle)
     {
         _crudService = crudService;
+        _viewId = viewId;
+        _viewTitle = viewTitle;
 
         SaveCommand = CreateBusyCommand(SaveAsync);
         AddGeneralParamCommand = CreateAddCommand(GeneralParams, () => new GeneralParamVm());
@@ -72,7 +83,7 @@ public class ParamViewModel : CrudPageViewModelBase
     {
         var result = await _crudService.LoadAsync();
 
-        ReplaceItems<GeneralParamVm>(GeneralParams, result.GeneralParams);
+        ReplaceItems(GeneralParams, result.GeneralParams);
 
         DeviceParamGroups.Clear();
         foreach (var header in result.DeviceGroups)
@@ -93,7 +104,7 @@ public class ParamViewModel : CrudPageViewModelBase
     private async Task LoadDeviceParamsAsync(DeviceParamGroupVm group)
     {
         var parameters = await _crudService.LoadDeviceParamsAsync(group.DeviceId);
-        ReplaceItems<DeviceParamVm>(group.Params, parameters);
+        ReplaceItems(group.Params, parameters);
     }
 
     private async Task<CrudOperationResult> SaveAsync()
@@ -117,7 +128,7 @@ public class ParamViewModel : CrudPageViewModelBase
 
         await LoadDeviceParamsAsync(SelectedGroup);
         var result = await _crudService.LoadAsync();
-        ReplaceItems<GeneralParamVm>(GeneralParams, result.GeneralParams);
+        ReplaceItems(GeneralParams, result.GeneralParams);
 
         return CrudOperationResult.Success("Parameter configuration saved.");
     }

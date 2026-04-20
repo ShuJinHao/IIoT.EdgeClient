@@ -6,6 +6,7 @@ using IIoT.Edge.UI.Shared.Modularity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -31,17 +32,8 @@ public partial class App : WpfApplication
     {
         base.OnStartup(e);
 
-        var environmentName = GetEnvironmentName();
-        var configuration = new ConfigurationBuilder()
-            .SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
-            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-            .AddJsonFile($"appsettings.{environmentName}.json", optional: true, reloadOnChange: true)
-            .AddEnvironmentVariables()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["Shell:Environment"] = environmentName
-            })
-            .Build();
+        var configurationResult = ShellConfigurationLoader.Load(AppDomain.CurrentDomain.BaseDirectory);
+        var configuration = configurationResult.Configuration;
 
         if (!TryAcquireInstanceLock(configuration))
         {
@@ -197,20 +189,24 @@ public partial class App : WpfApplication
         var services = new ServiceCollection();
         var viewRegistry = new ViewRegistry();
         var dbDir = GetDbDirectory();
-        var discoveredModules = ShellModuleCatalog.DiscoverCompiledModules();
-        var modules = ShellModuleCatalog.CreateEnabledModules(configuration, discoveredModules);
+        var pluginRootPath = ShellModuleCatalog.GetPluginRootPath(AppDomain.CurrentDomain.BaseDirectory);
+        var discoveryResult = ShellModuleCatalog.DiscoverModules(pluginRootPath);
+        var activationResult = ShellModuleCatalog.CreateEnabledModules(configuration, discoveryResult.Modules);
+        var moduleCatalogIssues = discoveryResult.Issues
+            .Concat(activationResult.Issues)
+            .ToArray();
 
-        services.AddEdgeHostBootstrap(viewRegistry, configuration, dbDir, discoveredModules, modules);
+        services.AddEdgeHostBootstrap(
+            viewRegistry,
+            configuration,
+            dbDir,
+            discoveryResult.Modules,
+            moduleCatalogIssues,
+            activationResult.EnabledModuleIds,
+            activationResult.Modules);
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<MainWindow>();
         return services;
-    }
-
-    private static string GetEnvironmentName()
-    {
-        return Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
-            ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
-            ?? "Production";
     }
 
     private static string GetDbDirectory()

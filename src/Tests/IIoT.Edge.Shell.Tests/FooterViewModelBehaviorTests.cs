@@ -11,7 +11,7 @@ public sealed class FooterViewModelBehaviorTests
 {
     [Fact]
     public Task FooterViewModel_ShouldRenderCloudAndMesSummaries()
-        => RunOnStaThreadAsync(() =>
+        => RunOnStaThreadAsync(async () =>
         {
             var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery();
             diagnosticsQuery.Current = CreateSnapshot(
@@ -54,6 +54,7 @@ public sealed class FooterViewModelBehaviorTests
                     PersistenceFaultMessage: null));
 
             var viewModel = new FooterViewModel(diagnosticsQuery);
+            await viewModel.RefreshDiagnosticsAsync();
 
             Assert.Equal("Edge-A", viewModel.DeviceName);
             Assert.Equal("Cloud: Ready", viewModel.CloudStatus);
@@ -72,7 +73,7 @@ public sealed class FooterViewModelBehaviorTests
                     RuntimeState = MesRetryRuntimeState.Backoff
                 });
 
-            InvokeTimerTick(viewModel);
+            await viewModel.RefreshDiagnosticsAsync();
 
             Assert.Equal("Cloud: Waiting for Recovery", viewModel.CloudStatus);
             Assert.Equal("MES: Retry Backoff", viewModel.MesStatus);
@@ -90,17 +91,15 @@ public sealed class FooterViewModelBehaviorTests
                     RuntimeState = MesRetryRuntimeState.LastFailed
                 });
 
-            InvokeTimerTick(viewModel);
+            await viewModel.RefreshDiagnosticsAsync();
 
             Assert.Equal("Cloud: Blocked (bootstrap timeout)", viewModel.CloudStatus);
             Assert.Equal("MES: Last Failed", viewModel.MesStatus);
-
-            return Task.CompletedTask;
         });
 
     [Fact]
     public Task FooterViewModel_WhenCapacityBlocked_ShouldRenderLightweightBlockedStatus()
-        => RunOnStaThreadAsync(() =>
+        => RunOnStaThreadAsync(async () =>
         {
             var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery();
             diagnosticsQuery.Current = CreateSnapshot(
@@ -143,16 +142,15 @@ public sealed class FooterViewModelBehaviorTests
                     PersistenceFaultMessage: null));
 
             var viewModel = new FooterViewModel(diagnosticsQuery);
+            await viewModel.RefreshDiagnosticsAsync();
 
             Assert.Equal("Cloud: Capacity Blocked", viewModel.CloudStatus);
             Assert.Equal("MES: Capacity Blocked", viewModel.MesStatus);
-
-            return Task.CompletedTask;
         });
 
     [Fact]
     public Task FooterViewModel_WhenPersistenceFaulted_ShouldRenderStorageFaultStatus()
-        => RunOnStaThreadAsync(() =>
+        => RunOnStaThreadAsync(async () =>
         {
             var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery();
             diagnosticsQuery.Current = CreateSnapshot(
@@ -195,11 +193,29 @@ public sealed class FooterViewModelBehaviorTests
                     PersistenceFaultMessage: "mes retry count failed"));
 
             var viewModel = new FooterViewModel(diagnosticsQuery);
+            await viewModel.RefreshDiagnosticsAsync();
 
             Assert.Equal("Cloud: Storage Fault", viewModel.CloudStatus);
             Assert.Equal("MES: Storage Fault", viewModel.MesStatus);
+        });
 
-            return Task.CompletedTask;
+    [Fact]
+    public Task FooterViewModel_WhenRefreshReenters_ShouldOnlyRunOneDiagnosticsQuery()
+        => RunOnStaThreadAsync(async () =>
+        {
+            var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery();
+            var viewModel = new FooterViewModel(diagnosticsQuery);
+            await viewModel.RefreshDiagnosticsAsync();
+
+            diagnosticsQuery.ResetCounters();
+            diagnosticsQuery.Delay = TimeSpan.FromMilliseconds(120);
+
+            var first = viewModel.RefreshDiagnosticsAsync();
+            var second = viewModel.RefreshDiagnosticsAsync();
+            await Task.WhenAll(first, second);
+
+            Assert.Equal(1, diagnosticsQuery.TotalCalls);
+            Assert.Equal(1, diagnosticsQuery.MaxConcurrentCalls);
         });
 
     private static EdgeSyncDiagnosticsSnapshot CreateSnapshot(
@@ -207,15 +223,6 @@ public sealed class FooterViewModelBehaviorTests
         CloudSyncDiagnosticsSnapshot cloud,
         MesSyncDiagnosticsSnapshot mes)
         => new(deviceName, cloud, mes, new ProductionContextPersistenceDiagnostics(0, null));
-
-    private static void InvokeTimerTick(FooterViewModel viewModel)
-    {
-        var method = typeof(FooterViewModel).GetMethod(
-            "OnTimerTick",
-            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-
-        method!.Invoke(viewModel, [null, EventArgs.Empty]);
-    }
 
     private static Task RunOnStaThreadAsync(Func<Task> testBody)
     {
@@ -255,6 +262,10 @@ public sealed class FooterViewModelBehaviorTests
 
     private sealed class FakeEdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
     {
+        private int _activeCalls;
+        private int _maxConcurrentCalls;
+        private int _totalCalls;
+
         public EdgeSyncDiagnosticsSnapshot Current { get; set; } = new(
             "Unknown",
             new CloudSyncDiagnosticsSnapshot(
@@ -295,6 +306,55 @@ public sealed class FooterViewModelBehaviorTests
                 null),
             new ProductionContextPersistenceDiagnostics(0, null));
 
-        public EdgeSyncDiagnosticsSnapshot GetCurrent() => Current;
+        public TimeSpan Delay { get; set; }
+
+        public int MaxConcurrentCalls => _maxConcurrentCalls;
+
+        public int TotalCalls => _totalCalls;
+
+        public void ResetCounters()
+        {
+            _activeCalls = 0;
+            _maxConcurrentCalls = 0;
+            _totalCalls = 0;
+        }
+
+        public async Task<EdgeSyncDiagnosticsSnapshot> GetCurrentAsync(CancellationToken ct = default)
+        {
+            Interlocked.Increment(ref _totalCalls);
+            var active = Interlocked.Increment(ref _activeCalls);
+            UpdateMaxConcurrentCalls(active);
+
+            try
+            {
+                if (Delay > TimeSpan.Zero)
+                {
+                    await Task.Delay(Delay, ct);
+                }
+
+                return Current;
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _activeCalls);
+            }
+        }
+
+        private void UpdateMaxConcurrentCalls(int active)
+        {
+            while (true)
+            {
+                var current = _maxConcurrentCalls;
+                if (active <= current)
+                {
+                    return;
+                }
+
+                if (Interlocked.CompareExchange(ref _maxConcurrentCalls, active, current) == current)
+                {
+                    return;
+                }
+            }
+        }
     }
 }

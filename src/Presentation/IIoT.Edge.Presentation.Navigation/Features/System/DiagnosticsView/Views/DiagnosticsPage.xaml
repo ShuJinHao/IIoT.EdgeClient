@@ -23,6 +23,12 @@
                            Text="{Binding EnabledModulesSummary}"
                            TextWrapping="Wrap" />
                 <TextBlock Margin="0,4,0,0"
+                           Text="{Binding ActivatedModulesSummary}"
+                           TextWrapping="Wrap" />
+                <TextBlock Margin="0,4,0,0"
+                           Text="{Binding ConfigurationProfileSummary}"
+                           TextWrapping="Wrap" />
+                <TextBlock Margin="0,4,0,0"
                            Text="{Binding LastUpdatedSummary}"
                            TextWrapping="Wrap" />
 
@@ -82,6 +88,26 @@
                            FontSize="18"
                            FontWeight="SemiBold"
                            Text="Startup Diagnostics" />
+                <TextBlock Margin="0,0,0,8"
+                           FontSize="16"
+                           FontWeight="SemiBold"
+                           Text="Plugin lifecycle" />
+                <DataGrid ItemsSource="{Binding PluginStates}"
+                          AutoGenerateColumns="False"
+                          HeadersVisibility="Column"
+                          IsReadOnly="True"
+                          CanUserAddRows="False"
+                          Margin="0,0,0,16">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Module" Binding="{Binding ModuleId}" />
+                        <DataGridTextColumn Header="DisplayName" Binding="{Binding DisplayName}" />
+                        <DataGridTextColumn Header="ProcessType" Binding="{Binding ProcessType}" />
+                        <DataGridTextColumn Header="Version" Binding="{Binding Version}" />
+                        <DataGridTextColumn Header="State" Binding="{Binding State}" />
+                        <DataGridTextColumn Header="Message" Binding="{Binding Message}" Width="*" />
+                    </DataGrid.Columns>
+                </DataGrid>
+
                 <TextBlock Margin="0,0,0,8"
                            FontSize="16"
                            FontWeight="SemiBold"

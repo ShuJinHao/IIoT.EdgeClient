@@ -27,7 +27,7 @@ public sealed class MesUploadDiagnosticsStore : IMesUploadDiagnosticsStore
     {
         Upsert(processType, static existing =>
         {
-            var now = DateTime.Now;
+            var now = DateTime.UtcNow;
             return existing with
             {
                 LastAttemptAt = now,
@@ -42,7 +42,7 @@ public sealed class MesUploadDiagnosticsStore : IMesUploadDiagnosticsStore
     {
         Upsert(processType, existing => existing with
         {
-            LastAttemptAt = DateTime.Now,
+            LastAttemptAt = DateTime.UtcNow,
             LastResult = "Failed",
             LastFailureReason = failureReason
         });

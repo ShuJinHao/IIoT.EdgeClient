@@ -1,0 +1,12 @@
+{
+  "moduleId": "Stacking",
+  "displayName": "Stacking",
+  "version": "1.0.0",
+  "hostApiVersion": "1.0.0",
+  "minHostVersion": "1.0.0",
+  "maxHostVersion": "99.0.0",
+  "entryAssembly": "IIoT.Edge.Module.Stacking.dll",
+  "entryType": "IIoT.Edge.Module.Stacking.StackingModule",
+  "supportedProcessType": "Stacking",
+  "dependencies": []
+}

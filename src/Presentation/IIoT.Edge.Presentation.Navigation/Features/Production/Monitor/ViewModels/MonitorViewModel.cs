@@ -1,6 +1,5 @@
-using IIoT.Edge.Application.Features.Production.Monitor;
 using IIoT.Edge.Application.Common.Diagnostics;
-using IIoT.Edge.Presentation.Navigation;
+using IIoT.Edge.Application.Features.Production.Monitor;
 using IIoT.Edge.UI.Shared.Mvvm;
 using IIoT.Edge.UI.Shared.PluginSystem;
 using System.Collections.ObjectModel;
@@ -11,11 +10,13 @@ namespace IIoT.Edge.Presentation.Navigation.Features.Production.Monitor;
 
 public class MonitorViewModel : PresentationViewModelBase
 {
-    public override string ViewId => InjectionViewIds.Monitor;
-    public override string ViewTitle => "Real-time Monitor";
-
     private readonly IMonitorViewService _monitorViewService;
     private readonly DispatcherTimer _refreshTimer;
+    private readonly string _viewId;
+    private readonly string _viewTitle;
+
+    public override string ViewId => _viewId;
+    public override string ViewTitle => _viewTitle;
 
     public ObservableCollection<DeviceTabVm> DeviceTabs { get; } = new();
 
@@ -27,8 +28,18 @@ public class MonitorViewModel : PresentationViewModelBase
     }
 
     public MonitorViewModel(IMonitorViewService monitorViewService)
+        : this(monitorViewService, "Production.Monitor", "Real-time Monitor")
+    {
+    }
+
+    protected MonitorViewModel(
+        IMonitorViewService monitorViewService,
+        string viewId,
+        string viewTitle)
     {
         _monitorViewService = monitorViewService;
+        _viewId = viewId;
+        _viewTitle = viewTitle;
 
         _refreshTimer = new DispatcherTimer
         {

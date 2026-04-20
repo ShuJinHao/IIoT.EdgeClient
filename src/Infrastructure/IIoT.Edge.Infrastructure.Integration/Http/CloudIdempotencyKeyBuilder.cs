@@ -5,7 +5,7 @@ using System.Text;
 
 namespace IIoT.Edge.Infrastructure.Integration.Http;
 
-internal static class CloudIdempotencyKeyBuilder
+public static class CloudIdempotencyKeyBuilder
 {
     public static string ForRecord(
         string processType,

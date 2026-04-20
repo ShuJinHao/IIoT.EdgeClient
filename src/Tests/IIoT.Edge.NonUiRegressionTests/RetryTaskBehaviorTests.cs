@@ -1,9 +1,9 @@
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Module.Stacking.Payload;
 using IIoT.Edge.Runtime.DataPipeline.Tasks;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
-using System.Reflection;
 using System.Text.Json;
 namespace IIoT.Edge.NonUiRegressionTests;
 
@@ -269,10 +269,6 @@ public sealed class RetryTaskBehaviorTests
 
     private sealed class TestableCloudRetryTask
     {
-        private static readonly MethodInfo ExecuteAsyncMethod = typeof(CloudRetryTask)
-            .GetMethod("ExecuteAsync", BindingFlags.Instance | BindingFlags.NonPublic)!
-            ?? throw new InvalidOperationException("CloudRetryTask.ExecuteAsync was not found.");
-
         private readonly CloudRetryTask _inner;
 
         public TestableCloudRetryTask(
@@ -303,7 +299,6 @@ public sealed class RetryTaskBehaviorTests
         }
 
         public Task ExecuteOnceAsync()
-            => (Task)(ExecuteAsyncMethod.Invoke(_inner, null)
-                ?? throw new InvalidOperationException("CloudRetryTask.ExecuteAsync returned null."));
+            => _inner.ExecuteOneIterationAsync();
     }
 }

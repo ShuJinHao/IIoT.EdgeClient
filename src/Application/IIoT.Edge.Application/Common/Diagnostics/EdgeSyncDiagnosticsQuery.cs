@@ -40,7 +40,7 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
         _capacityBufferStore = capacityBufferStore;
     }
 
-    public EdgeSyncDiagnosticsSnapshot GetCurrent()
+    public async Task<EdgeSyncDiagnosticsSnapshot> GetCurrentAsync(CancellationToken ct = default)
     {
         var cloudDiagnostics = _cloudDiagnosticsStore.Snapshot;
         var mesRuntime = _mesRetryDiagnosticsStore.Snapshot;
@@ -49,8 +49,11 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
             .Where(x => string.Equals(x.LastResult, "Failed", StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(x => x.LastAttemptAt ?? DateTime.MinValue)
             .FirstOrDefault();
-        var cloudPending = GetCloudPendingDiagnostics();
-        var mesPending = GetMesPendingDiagnostics();
+        var cloudPendingTask = GetCloudPendingDiagnosticsAsync(ct);
+        var mesPendingTask = GetMesPendingDiagnosticsAsync(ct);
+        await Task.WhenAll(cloudPendingTask, mesPendingTask).ConfigureAwait(false);
+        var cloudPending = await cloudPendingTask.ConfigureAwait(false);
+        var mesPending = await mesPendingTask.ConfigureAwait(false);
 
         var cloud = new CloudSyncDiagnosticsSnapshot(
             GateState: _deviceService.CurrentUploadGate.State,
@@ -100,66 +103,60 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
             ContextPersistence: _productionContextStore.GetPersistenceDiagnostics());
     }
 
-    private PendingDiagnosticsSnapshot GetCloudPendingDiagnostics()
+    private async Task<PendingDiagnosticsSnapshot> GetCloudPendingDiagnosticsAsync(CancellationToken ct)
     {
-        DateTime? lastFaultAt = null;
-        string? faultMessage = null;
+        var retryTask = TryGetCountAsync(() => _cloudRetryStore.GetCountAsync(), ct);
+        var deviceLogTask = TryGetCountAsync(() => _deviceLogBufferStore.GetCountAsync(), ct);
+        var capacityTask = TryGetCountAsync(() => _capacityBufferStore.GetCountAsync(), ct);
+        await Task.WhenAll(retryTask, deviceLogTask, capacityTask).ConfigureAwait(false);
 
-        var retryCount = TryGetCount(
-            () => _cloudRetryStore.GetCountAsync(),
-            ref lastFaultAt,
-            ref faultMessage);
-        var deviceLogCount = TryGetCount(
-            () => _deviceLogBufferStore.GetCountAsync(),
-            ref lastFaultAt,
-            ref faultMessage);
-        var capacityCount = TryGetCount(
-            () => _capacityBufferStore.GetCountAsync(),
-            ref lastFaultAt,
-            ref faultMessage);
+        var retryCount = await retryTask.ConfigureAwait(false);
+        var deviceLogCount = await deviceLogTask.ConfigureAwait(false);
+        var capacityCount = await capacityTask.ConfigureAwait(false);
+        var fault = CountResult.Merge(retryCount, deviceLogCount, capacityCount);
 
         return new PendingDiagnosticsSnapshot(
-            retryCount,
-            deviceLogCount,
-            capacityCount,
-            !string.IsNullOrWhiteSpace(faultMessage),
-            lastFaultAt,
-            faultMessage);
+            retryCount.Count,
+            deviceLogCount.Count,
+            capacityCount.Count,
+            fault.IsFaulted,
+            fault.LastFaultAt,
+            fault.FaultMessage);
     }
 
-    private PendingDiagnosticsSnapshot GetMesPendingDiagnostics()
+    private async Task<PendingDiagnosticsSnapshot> GetMesPendingDiagnosticsAsync(CancellationToken ct)
     {
-        DateTime? lastFaultAt = null;
-        string? faultMessage = null;
-
-        var retryCount = TryGetCount(
-            () => _mesRetryStore.GetCountAsync(),
-            ref lastFaultAt,
-            ref faultMessage);
+        var retryCount = await TryGetCountAsync(() => _mesRetryStore.GetCountAsync(), ct).ConfigureAwait(false);
 
         return new PendingDiagnosticsSnapshot(
-            retryCount,
+            retryCount.Count,
             0,
             0,
-            !string.IsNullOrWhiteSpace(faultMessage),
-            lastFaultAt,
-            faultMessage);
+            retryCount.IsFaulted,
+            retryCount.LastFaultAt,
+            retryCount.FaultMessage);
     }
 
-    private static int TryGetCount(
+    private static async Task<CountResult> TryGetCountAsync(
         Func<Task<int>> action,
-        ref DateTime? lastFaultAt,
-        ref string? faultMessage)
+        CancellationToken ct)
     {
         try
         {
-            return action().GetAwaiter().GetResult();
+            ct.ThrowIfCancellationRequested();
+            return new CountResult(
+                Count: await action().ConfigureAwait(false),
+                IsFaulted: false,
+                LastFaultAt: null,
+                FaultMessage: null);
         }
         catch (PersistenceAccessException ex)
         {
-            lastFaultAt ??= DateTime.Now;
-            faultMessage ??= ex.Message;
-            return 0;
+            return new CountResult(
+                Count: 0,
+                IsFaulted: true,
+                LastFaultAt: DateTime.UtcNow,
+                FaultMessage: ex.Message);
         }
     }
 
@@ -170,6 +167,33 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
         bool IsPersistenceFaulted,
         DateTime? LastPersistenceFaultAt,
         string? PersistenceFaultMessage);
+
+    private sealed record CountResult(
+        int Count,
+        bool IsFaulted,
+        DateTime? LastFaultAt,
+        string? FaultMessage)
+    {
+        public static CountResult Merge(params CountResult[] results)
+        {
+            var lastFaultAt = results
+                .Where(x => x.IsFaulted)
+                .Select(x => x.LastFaultAt)
+                .Where(x => x.HasValue)
+                .Max();
+
+            var faultMessage = results
+                .Where(x => x.IsFaulted && !string.IsNullOrWhiteSpace(x.FaultMessage))
+                .Select(x => x.FaultMessage)
+                .FirstOrDefault();
+
+            return new CountResult(
+                Count: 0,
+                IsFaulted: results.Any(x => x.IsFaulted),
+                LastFaultAt: lastFaultAt,
+                FaultMessage: faultMessage);
+        }
+    }
 }
 
 public static class EdgeSyncDiagnosticsFormatter
@@ -312,7 +336,16 @@ public static class EdgeSyncDiagnosticsFormatter
     };
 
     public static string FormatTimestamp(DateTime? value)
-        => value?.ToString("yyyy-MM-dd HH:mm:ss") ?? "--";
+        => value is null
+            ? "--"
+            : NormalizeTimestamp(value.Value).ToString("yyyy-MM-dd HH:mm:ss");
+
+    private static DateTime NormalizeTimestamp(DateTime value) => value.Kind switch
+    {
+        DateTimeKind.Utc => value.ToLocalTime(),
+        DateTimeKind.Unspecified => DateTime.SpecifyKind(value, DateTimeKind.Utc).ToLocalTime(),
+        _ => value
+    };
 
     public static string FormatCloudOutcome(
         CloudCallOutcome outcome,

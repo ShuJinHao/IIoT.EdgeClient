@@ -54,7 +54,7 @@ public sealed class MesRetryDiagnosticsStore : IMesRetryDiagnosticsStore
                 IsCapacityBlocked = true,
                 BlockedChannel = channel,
                 BlockedReason = string.IsNullOrWhiteSpace(blockedReason) ? "unknown" : blockedReason,
-                LastCapacityBlockAt = occurredAt ?? DateTime.Now
+                LastCapacityBlockAt = occurredAt ?? DateTime.UtcNow
             };
         }
     }

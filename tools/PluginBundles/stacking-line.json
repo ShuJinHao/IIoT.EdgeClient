@@ -1,0 +1,6 @@
+{
+  "bundleId": "stacking-line",
+  "displayName": "Stacking Line Bundle",
+  "includeModules": [ "Stacking" ],
+  "machineProfiles": [ "StackingLine" ]
+}

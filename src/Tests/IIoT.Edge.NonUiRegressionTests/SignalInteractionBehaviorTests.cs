@@ -5,16 +5,11 @@ using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Infrastructure.DeviceComm.Signals;
 using IIoT.Edge.SharedKernel.Enums;
 using System.Diagnostics;
-using System.Reflection;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 
 public sealed class SignalInteractionBehaviorTests
 {
-    private static readonly MethodInfo DoCoreAsyncMethod = typeof(SignalInteraction)
-        .GetMethod("DoCoreAsync", BindingFlags.Instance | BindingFlags.NonPublic)
-        ?? throw new InvalidOperationException("SignalInteraction.DoCoreAsync was not found.");
-
     [Fact]
     public async Task PlcBarcodeReader_WhenCancellationRequested_ShouldPropagateCancellation()
     {
@@ -67,12 +62,12 @@ public sealed class SignalInteractionBehaviorTests
 
         var buffer = Assert.IsType<PlcBuffer>(dataStore.GetBuffer(1));
         await interaction.ConnectAsync();
-        await Assert.ThrowsAsync<Exception>(() => InvokeDoCoreAsync(interaction));
+        await Assert.ThrowsAsync<Exception>(() => interaction.ExecuteOneCycleAsync());
         Assert.Equal(1, plcService.DisconnectCallCount);
         Assert.False(plcService.IsConnected);
 
         await interaction.ConnectAsync();
-        await InvokeDoCoreAsync(interaction);
+        await interaction.ExecuteOneCycleAsync();
 
         Assert.True(plcService.ConnectAsyncCallCount >= 2);
         Assert.True(plcService.ReadAsyncCallCount >= 2);
@@ -102,12 +97,12 @@ public sealed class SignalInteractionBehaviorTests
             new FakeLogService());
 
         await interaction.ConnectAsync();
-        await Assert.ThrowsAsync<Exception>(() => InvokeDoCoreAsync(interaction));
+        await Assert.ThrowsAsync<Exception>(() => interaction.ExecuteOneCycleAsync());
         Assert.Equal(1, plcService.DisconnectCallCount);
         Assert.False(plcService.IsConnected);
 
         await interaction.ConnectAsync();
-        await InvokeDoCoreAsync(interaction);
+        await interaction.ExecuteOneCycleAsync();
 
         Assert.True(plcService.ConnectAsyncCallCount >= 2);
         Assert.True(plcService.WriteAsyncCallCount >= 2);
@@ -181,10 +176,6 @@ public sealed class SignalInteractionBehaviorTests
         {
         }
     }
-
-    private static Task InvokeDoCoreAsync(SignalInteraction interaction)
-        => (Task)(DoCoreAsyncMethod.Invoke(interaction, null)
-            ?? throw new InvalidOperationException("SignalInteraction.DoCoreAsync returned null."));
 
     private sealed class BlockingPlcService : IPlcService
     {

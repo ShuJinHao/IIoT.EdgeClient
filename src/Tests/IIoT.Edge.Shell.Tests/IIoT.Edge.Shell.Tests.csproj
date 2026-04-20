@@ -31,4 +31,27 @@
     <ProjectReference Include="..\..\Shared\IIoT.Edge.SharedKernel\IIoT.Edge.SharedKernel.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PluginModuleProject Include="..\..\Modules\**\*.csproj" />
+    <PluginModuleProject Include="..\..\Tools\ModuleSamples\**\*.csproj" />
+  </ItemGroup>
+
+  <Target Name="ResolvePluginModuleArtifacts">
+    <MSBuild
+      Projects="@(PluginModuleProject)"
+      Targets="GetPluginArtifacts"
+      BuildInParallel="false"
+      Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+      <Output TaskParameter="TargetOutputs" ItemName="PluginModuleArtifact" />
+    </MSBuild>
+  </Target>
+
+  <Target Name="CopyPluginModulesToTestOutput" AfterTargets="Build" DependsOnTargets="ResolvePluginModuleArtifacts" Condition="'@(PluginModuleArtifact)' != ''">
+    <MakeDir Directories="@(PluginModuleArtifact -> '$(TargetDir)Modules\%(ModuleId)\%(RecursiveDir)')" />
+    <Copy
+      SourceFiles="@(PluginModuleArtifact)"
+      DestinationFiles="@(PluginModuleArtifact -> '$(TargetDir)Modules\%(ModuleId)\%(RecursiveDir)%(Filename)%(Extension)')"
+      SkipUnchangedFiles="true" />
+  </Target>
+
 </Project>

@@ -37,9 +37,9 @@ public class GetMonitorSnapshotHandler(
     IEdgeSyncDiagnosticsQuery diagnosticsQuery)
     : IRequestHandler<GetMonitorSnapshotQuery, List<DeviceMonitorSnapshot>>
 {
-    public Task<List<DeviceMonitorSnapshot>> Handle(GetMonitorSnapshotQuery request, CancellationToken ct)
+    public async Task<List<DeviceMonitorSnapshot>> Handle(GetMonitorSnapshotQuery request, CancellationToken ct)
     {
-        var diagnostics = diagnosticsQuery.GetCurrent();
+        var diagnostics = await diagnosticsQuery.GetCurrentAsync(ct).ConfigureAwait(false);
         var result = new List<DeviceMonitorSnapshot>();
         var contexts = contextStore.GetAll().ToList();
 
@@ -67,7 +67,7 @@ public class GetMonitorSnapshotHandler(
                 MesSync: diagnostics.Mes,
                 ContextPersistence: diagnostics.ContextPersistence));
 
-            return Task.FromResult(result);
+            return result;
         }
 
         foreach (var ctx in contexts)
@@ -102,7 +102,7 @@ public class GetMonitorSnapshotHandler(
                 ContextPersistence: diagnostics.ContextPersistence));
         }
 
-        return Task.FromResult(result);
+        return result;
     }
 
     private static DataTable BuildCellTable(ProductionContext ctx)

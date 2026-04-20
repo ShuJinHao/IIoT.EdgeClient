@@ -1,0 +1,6 @@
+{
+  "bundleId": "all-official",
+  "displayName": "All Official Edge Modules",
+  "includeModules": [ "Injection", "Stacking" ],
+  "machineProfiles": [ "InjectionLine", "StackingLine" ]
+}

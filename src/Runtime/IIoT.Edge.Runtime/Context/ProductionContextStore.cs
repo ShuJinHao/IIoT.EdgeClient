@@ -281,11 +281,11 @@ public class ProductionContextStore : IProductionContextStore
                 DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
                 out var timestampUtc))
         {
-            return timestampUtc.ToLocalTime();
+            return timestampUtc;
         }
 
         return File.Exists(path)
-            ? File.GetLastWriteTime(path)
+            ? File.GetLastWriteTimeUtc(path)
             : null;
     }
 }

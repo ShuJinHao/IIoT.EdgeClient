@@ -36,7 +36,7 @@ public sealed class CloudUploadDiagnosticsStore : ICloudUploadDiagnosticsStore
     {
         ArgumentNullException.ThrowIfNull(result);
 
-        var now = DateTime.Now;
+        var now = DateTime.UtcNow;
         lock (_sync)
         {
             _snapshot = _snapshot with
@@ -81,7 +81,7 @@ public sealed class CloudUploadDiagnosticsStore : ICloudUploadDiagnosticsStore
                 IsCapacityBlocked = true,
                 BlockedChannel = channel,
                 BlockedReason = string.IsNullOrWhiteSpace(blockedReason) ? "unknown" : blockedReason,
-                LastCapacityBlockAt = occurredAt ?? DateTime.Now
+                LastCapacityBlockAt = occurredAt ?? DateTime.UtcNow
             };
         }
     }

@@ -2,6 +2,7 @@ using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Infrastructure.Integration.Http;
 using IIoT.Edge.Infrastructure.Integration.Mes;
+using IIoT.Edge.Module.Injection.Payload;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using System.Net;

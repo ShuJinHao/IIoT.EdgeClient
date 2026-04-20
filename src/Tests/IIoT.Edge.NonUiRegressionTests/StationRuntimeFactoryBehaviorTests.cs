@@ -1,11 +1,10 @@
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
-using IIoT.Edge.Runtime.Stations.Injection;
-using IIoT.Edge.Runtime.Stations.Stacking;
-using IIoT.Edge.Runtime.Stations.Stacking.Tasks;
+using IIoT.Edge.Module.Injection.Runtime;
+using IIoT.Edge.Module.Stacking.Constants;
+using IIoT.Edge.Module.Stacking.Runtime;
 using IIoT.Edge.SharedKernel.Context;
-using IIoT.Edge.SharedKernel.Modules.Stacking;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace IIoT.Edge.NonUiRegressionTests;

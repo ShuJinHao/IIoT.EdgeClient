@@ -1,5 +1,4 @@
 using IIoT.Edge.Application.Features.Production.DataView;
-using IIoT.Edge.Presentation.Navigation;
 using IIoT.Edge.UI.Shared.Mvvm;
 using IIoT.Edge.UI.Shared.PluginSystem;
 using System.Collections.ObjectModel;
@@ -7,16 +6,14 @@ using System.Windows.Input;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Production.DataView;
 
-/// <summary>
-/// 生产数据页面视图模型。
-/// 负责时间范围查询、汇总统计与记录列表展示。
-/// </summary>
 public class DataViewModel : PresentationViewModelBase
 {
-    public override string ViewId => InjectionViewIds.DataView;
-    public override string ViewTitle => "生产数据";
-
     private readonly IDataViewService _dataViewService;
+    private readonly string _viewId;
+    private readonly string _viewTitle;
+
+    public override string ViewId => _viewId;
+    public override string ViewTitle => _viewTitle;
 
     private int _todayTotal;
     public int TodayTotal
@@ -66,8 +63,18 @@ public class DataViewModel : PresentationViewModelBase
     public ICommand ExportCommand { get; }
 
     public DataViewModel(IDataViewService dataViewService)
+        : this(dataViewService, "Production.DataView", "生产数据")
+    {
+    }
+
+    protected DataViewModel(
+        IDataViewService dataViewService,
+        string viewId,
+        string viewTitle)
     {
         _dataViewService = dataViewService;
+        _viewId = viewId;
+        _viewTitle = viewTitle;
         QueryCommand = new AsyncCommand(() => RunViewTaskAsync(QueryAsync, "生产数据查询失败"));
         ExportCommand = new BaseCommand(_ => { });
     }
@@ -86,7 +93,7 @@ public class DataViewModel : PresentationViewModelBase
         TodayNg = snapshot.TodayNg;
         TodayYield = snapshot.TodayYield;
 
-        ReplaceItems<ProductionRecordVm>(
+        ReplaceItems(
             Records,
             snapshot.Records.Select(record => new ProductionRecordVm
             {
@@ -100,9 +107,6 @@ public class DataViewModel : PresentationViewModelBase
     }
 }
 
-/// <summary>
-/// 生产记录展示项视图模型。
-/// </summary>
 public class ProductionRecordVm
 {
     public string Time { get; set; } = "";

@@ -1,26 +1,18 @@
-using IIoT.Edge.SharedKernel.Enums;
-using IIoT.Edge.UI.Shared.Mvvm;
-using IIoT.Edge.Application.Common.Crud;
 using IIoT.Edge.Application.Abstractions.Auth;
+using IIoT.Edge.Application.Common.Crud;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Models;
-using IIoT.Edge.Presentation.Navigation;
 using IIoT.Edge.Presentation.Navigation.Common.Crud;
+using IIoT.Edge.SharedKernel.Enums;
+using IIoT.Edge.UI.Shared.Mvvm;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows.Input;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView;
 
-/// <summary>
-/// 硬件配置页面视图模型。
-/// 负责网络设备、串口设备与 IO 映射的加载、分页和保存流程。
-/// </summary>
 public class HardwareConfigViewModel : CrudPageViewModelBase
 {
-    public override string ViewId => InjectionViewIds.HardwareConfigView;
-    public override string ViewTitle => "硬件配置";
-
     private readonly IHardwareConfigCrudService _crudService;
     private readonly IAuthService _authService;
     private readonly IEditorValidator<NetworkDeviceVm> _networkDeviceValidator = new NetworkDeviceValidator();
@@ -28,8 +20,13 @@ public class HardwareConfigViewModel : CrudPageViewModelBase
     private readonly IEditorValidator<IoMappingVm> _ioMappingValidator = new IoMappingValidator();
     private readonly AsyncCommand _applyModuleTemplateCommand;
     private readonly BaseCommand _ioPrevPageCommand;
+    private readonly string _viewId;
+    private readonly string _viewTitle;
 
     private const int IoPageSize = 20;
+
+    public override string ViewId => _viewId;
+    public override string ViewTitle => _viewTitle;
 
     public IEnumerable<DeviceType> DeviceTypes => Enum.GetValues<DeviceType>();
     public IEnumerable<PlcType> PlcTypes => Enum.GetValues<PlcType>();
@@ -130,13 +127,24 @@ public class HardwareConfigViewModel : CrudPageViewModelBase
     public ICommand SaveCommand { get; }
 
     public HardwareConfigViewModel(IHardwareConfigCrudService crudService, IAuthService authService)
+        : this(crudService, authService, "Hardware.HardwareConfigView", "硬件配置")
+    {
+    }
+
+    protected HardwareConfigViewModel(
+        IHardwareConfigCrudService crudService,
+        IAuthService authService,
+        string viewId,
+        string viewTitle)
     {
         _crudService = crudService;
         _authService = authService;
+        _viewId = viewId;
+        _viewTitle = viewTitle;
 
         AddNetworkDeviceCommand = CreateAddCommand(
             NetworkDevices,
-            () => new NetworkDeviceVm { DeviceType = DeviceType.PLC, ModuleId = "Injection" },
+            () => new NetworkDeviceVm { DeviceType = DeviceType.PLC, ModuleId = string.Empty },
             () => CanEdit);
         DeleteNetworkDeviceCommand = CreateDeleteCommand(NetworkDevices, () => CanEdit);
         AddSerialDeviceCommand = CreateAddCommand(
@@ -158,7 +166,7 @@ public class HardwareConfigViewModel : CrudPageViewModelBase
         _applyModuleTemplateCommand = (AsyncCommand)CreateBusyCommand(
             ApplyModuleTemplateAsync,
             () => CanApplyModuleTemplate);
-        IoNextPageCommand = new AsyncCommand(() => IoNextPageAsync());
+        IoNextPageCommand = new AsyncCommand(IoNextPageAsync);
         _ioPrevPageCommand = new BaseCommand(_ => IoPrevPage(), _ => IoPageIndex > 0);
         SaveCommand = CreateBusyCommand(SaveAsync, () => CanEdit);
     }

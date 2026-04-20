@@ -31,7 +31,6 @@ public class NetworkDeviceConfiguration : IEntityTypeConfiguration<NetworkDevice
         builder.Property(x => x.ModuleId)
             .IsRequired()
             .HasMaxLength(50)
-            .HasDefaultValue("Injection")
             .HasColumnName("module_id");
 
         builder.Property(x => x.IpAddress)

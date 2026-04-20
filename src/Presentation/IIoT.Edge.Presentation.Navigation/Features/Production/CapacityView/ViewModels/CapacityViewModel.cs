@@ -1,6 +1,5 @@
-﻿using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Features.Production.CapacityView;
-using IIoT.Edge.Presentation.Navigation;
 using IIoT.Edge.UI.Shared.Mvvm;
 using IIoT.Edge.UI.Shared.PluginSystem;
 using System.Collections.ObjectModel;
@@ -12,6 +11,8 @@ namespace IIoT.Edge.Presentation.Navigation.Features.Production.CapacityView;
 public class CapacityViewModel : PresentationViewModelBase
 {
     private readonly ICapacityViewService _capacityViewService;
+    private readonly string _viewId;
+    private readonly string _viewTitle;
     private string _selectedDeviceName = string.Empty;
     private string _selectedQueryMode = "By Day";
     private DateTime _queryDate = DateTime.Today;
@@ -22,8 +23,8 @@ public class CapacityViewModel : PresentationViewModelBase
     private string _periodYield = "0%";
     private string _avgDaily = "0";
 
-    public override string ViewId => InjectionViewIds.CapacityView;
-    public override string ViewTitle => "Capacity Query";
+    public override string ViewId => _viewId;
+    public override string ViewTitle => _viewTitle;
 
     public ObservableCollection<string> DeviceNames { get; } = new();
     public ObservableCollection<string> QueryModes { get; } = new() { "By Day", "By Month", "By Year" };
@@ -86,8 +87,18 @@ public class CapacityViewModel : PresentationViewModelBase
     public ICommand ExportCommand { get; }
 
     public CapacityViewModel(ICapacityViewService capacityViewService)
+        : this(capacityViewService, "Production.CapacityView", "Capacity Query")
+    {
+    }
+
+    protected CapacityViewModel(
+        ICapacityViewService capacityViewService,
+        string viewId,
+        string viewTitle)
     {
         _capacityViewService = capacityViewService;
+        _viewId = viewId;
+        _viewTitle = viewTitle;
 
         QueryCommand = new AsyncCommand(() => RunViewTaskAsync(QueryHistoryAsync, "Capacity query failed."));
         ExportCommand = new BaseCommand(_ => { });
@@ -113,7 +124,7 @@ public class CapacityViewModel : PresentationViewModelBase
     private void RefreshDeviceList()
     {
         var names = _capacityViewService.GetDeviceNames();
-        ReplaceItems<string>(DeviceNames, names);
+        ReplaceItems(DeviceNames, names);
 
         if (!string.IsNullOrEmpty(_selectedDeviceName) && names.Contains(_selectedDeviceName))
         {
@@ -128,7 +139,7 @@ public class CapacityViewModel : PresentationViewModelBase
     {
         if (!CanQueryCloud)
         {
-            ReplaceItems<DailyCapacityVm>(DailyRecords, Array.Empty<DailyCapacityVm>());
+            ReplaceItems(DailyRecords, Array.Empty<DailyCapacityVm>());
             ClearSummary();
             RefreshChart();
             return;
@@ -163,7 +174,7 @@ public class CapacityViewModel : PresentationViewModelBase
 
     private void ApplyResult(CapacityViewResult result)
     {
-        ReplaceItems<DailyCapacityVm>(DailyRecords, result.Rows);
+        ReplaceItems(DailyRecords, result.Rows);
         PeriodTotal = result.PeriodTotal;
         PeriodOk = result.PeriodOk;
         PeriodNg = result.PeriodNg;

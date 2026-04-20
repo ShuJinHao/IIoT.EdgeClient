@@ -3,6 +3,7 @@ using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Common.Diagnostics;
 using IIoT.Edge.UI.Shared.Mvvm;
 using IIoT.Edge.UI.Shared.PluginSystem;
+using System.Threading;
 using System.Windows.Media;
 using System.Windows.Threading;
 
@@ -20,6 +21,7 @@ public class FooterViewModel : ViewModelBase
     private Brush _mesStatusColor = new SolidColorBrush(Color.FromRgb(0x22, 0xC5, 0x5E));
     private string _currentTime = DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss");
     private string _upTime = "00:00:00";
+    private int _refreshInProgress;
 
     private static readonly Brush OnlineBrush = new SolidColorBrush(Color.FromRgb(0x22, 0xC5, 0x5E));
     private static readonly Brush RefreshingBrush = new SolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B));
@@ -84,8 +86,7 @@ public class FooterViewModel : ViewModelBase
         LayoutRow = 2;
         LayoutColumn = 0;
         ColumnSpan = 12;
-
-        RefreshDiagnostics();
+        UpdateClock();
 
         _timer = new DispatcherTimer
         {
@@ -93,19 +94,57 @@ public class FooterViewModel : ViewModelBase
         };
         _timer.Tick += OnTimerTick;
         _timer.Start();
+        _ = SafeRefreshDiagnosticsAsync();
     }
 
-    private void OnTimerTick(object? sender, EventArgs e)
+    internal Task RefreshDiagnosticsAsync(CancellationToken ct = default)
+        => RefreshDiagnosticsIfIdleAsync(ct);
+
+    private async void OnTimerTick(object? sender, EventArgs e)
+    {
+        UpdateClock();
+        await SafeRefreshDiagnosticsAsync();
+    }
+
+    private void UpdateClock()
     {
         CurrentTime = DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss");
         var elapsed = DateTime.Now - _startTime;
         UpTime = $"{(int)elapsed.TotalHours:D2}:{elapsed.Minutes:D2}:{elapsed.Seconds:D2}";
-        RefreshDiagnostics();
     }
 
-    private void RefreshDiagnostics()
+    private async Task SafeRefreshDiagnosticsAsync(CancellationToken ct = default)
     {
-        var snapshot = _diagnosticsQuery.GetCurrent();
+        try
+        {
+            await RefreshDiagnosticsIfIdleAsync(ct);
+        }
+        catch
+        {
+            // Diagnostics failures should not tear down the UI refresh loop.
+        }
+    }
+
+    private async Task RefreshDiagnosticsIfIdleAsync(CancellationToken ct)
+    {
+        if (Interlocked.Exchange(ref _refreshInProgress, 1) == 1)
+        {
+            return;
+        }
+
+        try
+        {
+            await RefreshDiagnosticsCoreAsync(ct);
+        }
+        finally
+        {
+            Volatile.Write(ref _refreshInProgress, 0);
+        }
+    }
+
+    private async Task RefreshDiagnosticsCoreAsync(CancellationToken ct)
+    {
+        var snapshot = await _diagnosticsQuery.GetCurrentAsync(ct);
         DeviceName = snapshot.DeviceName;
 
         CloudStatus = EdgeSyncDiagnosticsFormatter.FormatCloudFooterStatus(snapshot.Cloud);

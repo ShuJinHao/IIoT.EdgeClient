@@ -202,10 +202,8 @@ namespace IIoT.Edge.Infrastructure.Persistence.EfCore.Migrations
 
                     b.Property<string>("ModuleId")
                         .IsRequired()
-                        .ValueGeneratedOnAdd()
                         .HasMaxLength(50)
                         .HasColumnType("TEXT")
-                        .HasDefaultValue("Injection")
                         .HasColumnName("module_id");
 
                     b.Property<int>("Port1")

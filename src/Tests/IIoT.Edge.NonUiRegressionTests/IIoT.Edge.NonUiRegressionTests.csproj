@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
@@ -23,6 +23,10 @@
     <ProjectReference Include="..\..\Runtime\IIoT.Edge.Runtime\IIoT.Edge.Runtime.csproj" />
     <ProjectReference Include="..\..\Infrastructure\IIoT.Edge.Infrastructure.Integration\IIoT.Edge.Infrastructure.Integration.csproj" />
     <ProjectReference Include="..\..\Infrastructure\IIoT.Edge.Infrastructure.Persistence.Dapper\IIoT.Edge.Infrastructure.Persistence.Dapper.csproj" />
+    <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.Injection\IIoT.Edge.Module.Injection.csproj" />
+    <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.Stacking\IIoT.Edge.Module.Stacking.csproj" />
+    <ProjectReference Include="..\..\Tools\ModuleSamples\IIoT.Edge.Module.DryRun\IIoT.Edge.Module.DryRun.csproj" />
+    <ProjectReference Include="..\..\Shared\IIoT.Edge.Module.Abstractions\IIoT.Edge.Module.Abstractions.csproj" />
   </ItemGroup>
 
 </Project>

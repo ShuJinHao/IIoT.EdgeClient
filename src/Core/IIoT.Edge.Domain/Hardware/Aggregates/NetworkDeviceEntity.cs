@@ -22,7 +22,7 @@ public class NetworkDeviceEntity : BaseEntity<int>, IAggregateRoot
     public string DeviceName { get; set; } = null!;
     public DeviceType DeviceType { get; set; }
     public string? DeviceModel { get; set; }
-    public string ModuleId { get; set; } = "Injection";
+    public string ModuleId { get; set; } = string.Empty;
     public string IpAddress { get; set; } = null!;
     public int Port1 { get; set; }
     public int? Port2 { get; set; }

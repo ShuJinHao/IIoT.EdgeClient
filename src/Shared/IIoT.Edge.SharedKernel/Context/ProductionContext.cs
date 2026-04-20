@@ -68,12 +68,12 @@ public class ProductionContext
         return removed;
     }
 
-    public void AddCell(CellDataBase cellData)
-        => AddCell(cellData.DisplayLabel, cellData);
-
     public void AddCell(string barcode, CellDataBase cellData)
     {
-        var key = ResolveCellKey(barcode, cellData);
+        ArgumentException.ThrowIfNullOrWhiteSpace(barcode);
+        ArgumentNullException.ThrowIfNull(cellData);
+
+        var key = barcode.Trim();
         CurrentCellEntries[key] = cellData;
         DataChanged?.Invoke("CellAdded", key, cellData);
     }
@@ -124,21 +124,5 @@ public class ProductionContext
         CurrentCellEntries.Clear();
         StepStateEntries.Clear();
         TodayCapacity.Reset();
-    }
-
-    private static string ResolveCellKey(string? requestedKey, CellDataBase cellData)
-    {
-        var displayLabel = cellData.DisplayLabel?.Trim();
-        if (!string.IsNullOrWhiteSpace(displayLabel))
-        {
-            return displayLabel;
-        }
-
-        if (!string.IsNullOrWhiteSpace(requestedKey))
-        {
-            return requestedKey.Trim();
-        }
-
-        return cellData.ProcessType;
     }
 }

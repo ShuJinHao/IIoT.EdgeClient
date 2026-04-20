@@ -27,14 +27,16 @@
 
   <ItemGroup>
     <ProjectReference Include="..\IIoT.Edge.Host.Bootstrap\IIoT.Edge.Host.Bootstrap.csproj" />
-    <ProjectReference Include="..\..\Tools\ModuleSamples\IIoT.Edge.Module.DryRun\IIoT.Edge.Module.DryRun.csproj" />
-    <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.Injection\IIoT.Edge.Module.Injection.csproj" />
-    <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.Stacking\IIoT.Edge.Module.Stacking.csproj" />
     <ProjectReference Include="..\..\Presentation\IIoT.Edge.Presentation.Shell\IIoT.Edge.Presentation.Shell.csproj" />
     <ProjectReference Include="..\..\Presentation\IIoT.Edge.Presentation.Navigation\IIoT.Edge.Presentation.Navigation.csproj" />
     <ProjectReference Include="..\..\Presentation\IIoT.Edge.Presentation.Panels\IIoT.Edge.Presentation.Panels.csproj" />
     <ProjectReference Include="..\..\Shared\IIoT.Edge.Module.Abstractions\IIoT.Edge.Module.Abstractions.csproj" />
     <ProjectReference Include="..\..\Shared\IIoT.Edge.UI.Shared\IIoT.Edge.UI.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PluginModuleProject Include="..\..\Modules\**\*.csproj" />
+    <PluginModuleProject Include="..\..\Tools\ModuleSamples\**\*.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -44,9 +46,39 @@
     <None Update="appsettings.Development.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="appsettings.machine.*.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
     <None Update="log4net.config">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
+
+  <Target Name="ResolvePluginModuleArtifacts">
+    <MSBuild
+      Projects="@(PluginModuleProject)"
+      Targets="GetPluginArtifacts"
+      BuildInParallel="false"
+      Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+      <Output TaskParameter="TargetOutputs" ItemName="PluginModuleArtifact" />
+    </MSBuild>
+  </Target>
+
+  <Target Name="CopyPluginModulesToBuildOutput" AfterTargets="Build" DependsOnTargets="ResolvePluginModuleArtifacts" Condition="'@(PluginModuleArtifact)' != ''">
+    <MakeDir Directories="@(PluginModuleArtifact -> '$(TargetDir)Modules\%(ModuleId)\%(RecursiveDir)')" />
+    <Copy
+      SourceFiles="@(PluginModuleArtifact)"
+      DestinationFiles="@(PluginModuleArtifact -> '$(TargetDir)Modules\%(ModuleId)\%(RecursiveDir)%(Filename)%(Extension)')"
+      SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyPluginModulesToPublishOutput" AfterTargets="Publish" DependsOnTargets="ResolvePluginModuleArtifacts" Condition="'$(PublishDir)' != '' and '@(PluginModuleArtifact)' != ''">
+    <MakeDir Directories="@(PluginModuleArtifact -> '$(PublishDir)Modules\%(ModuleId)\%(RecursiveDir)')" />
+    <Copy
+      SourceFiles="@(PluginModuleArtifact)"
+      DestinationFiles="@(PluginModuleArtifact -> '$(PublishDir)Modules\%(ModuleId)\%(RecursiveDir)%(Filename)%(Extension)')"
+      SkipUnchangedFiles="true" />
+  </Target>
 
 </Project>

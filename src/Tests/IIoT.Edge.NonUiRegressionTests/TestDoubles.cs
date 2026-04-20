@@ -215,6 +215,8 @@ internal sealed class FakeFailedRecordStore : ICloudRetryRecordStore, IMesRetryR
     public Exception? SaveException { get; set; }
     public Exception? CloudCountException { get; set; }
     public Exception? MesCountException { get; set; }
+    public TimeSpan CloudCountDelay { get; set; }
+    public TimeSpan MesCountDelay { get; set; }
     public Queue<Exception> SaveExceptions { get; } = new();
     public DateTime? LastDeleteExpiredOlderThanUtc { get; private set; }
     public int DeleteExpiredAbandonedResult { get; set; }
@@ -297,26 +299,28 @@ internal sealed class FakeFailedRecordStore : ICloudRetryRecordStore, IMesRetryR
 
     public Task<int> GetCountAsync() => Task.FromResult(PendingRecords.Count);
 
-    public Task<int> GetCountAsync(string channel)
+    public async Task<int> GetCountAsync(string channel)
     {
         if (TryGetCountException(channel) is { } ex)
         {
             throw ex;
         }
 
-        return Task.FromResult(PendingRecords.Count(x => x.Channel == channel));
+        await MaybeDelayAsync(channel);
+        return PendingRecords.Count(x => x.Channel == channel);
     }
 
-    public Task<int> GetCountAsync(string channel, string processType)
+    public async Task<int> GetCountAsync(string channel, string processType)
     {
         if (TryGetCountException(channel) is { } ex)
         {
             throw ex;
         }
 
-        return Task.FromResult(PendingRecords.Count(x =>
+        await MaybeDelayAsync(channel);
+        return PendingRecords.Count(x =>
             x.Channel == channel
-            && string.Equals(x.ProcessType, processType, StringComparison.OrdinalIgnoreCase)));
+            && string.Equals(x.ProcessType, processType, StringComparison.OrdinalIgnoreCase));
     }
 
     public Task ResetAllAbandonedAsync()
@@ -350,6 +354,20 @@ internal sealed class FakeFailedRecordStore : ICloudRetryRecordStore, IMesRetryR
             "MES" => MesCountException,
             _ => null
         };
+    }
+
+    private Task MaybeDelayAsync(string channel)
+    {
+        var delay = channel switch
+        {
+            "Cloud" => CloudCountDelay,
+            "MES" => MesCountDelay,
+            _ => TimeSpan.Zero
+        };
+
+        return delay > TimeSpan.Zero
+            ? Task.Delay(delay)
+            : Task.CompletedTask;
     }
 }
 
@@ -512,6 +530,7 @@ internal sealed class FakeDeviceLogBufferStore : IDeviceLogBufferStore
     public List<string> ReleasedClaimTokens { get; } = new();
     public Exception? SaveBatchException { get; set; }
     public Exception? CountException { get; set; }
+    public TimeSpan CountDelay { get; set; }
 
     public Task SaveBatchAsync(IEnumerable<DeviceLogRecord> records)
     {
@@ -620,14 +639,19 @@ internal sealed class FakeDeviceLogBufferStore : IDeviceLogBufferStore
         return Task.CompletedTask;
     }
 
-    public Task<int> GetCountAsync()
+    public async Task<int> GetCountAsync()
     {
         if (CountException is not null)
         {
             throw CountException;
         }
 
-        return Task.FromResult(Records.Count);
+        if (CountDelay > TimeSpan.Zero)
+        {
+            await Task.Delay(CountDelay);
+        }
+
+        return Records.Count;
     }
 
     private static DeviceLogRecord CloneDeviceLogRecord(DeviceLogRecord source)
@@ -742,8 +766,6 @@ internal sealed class FakeCloudApiEndpointProvider : ICloudApiEndpointProvider
     public string GetClientCode() => "TEST";
     public string GetDeviceInstancePath() => "/api/v1/edge/bootstrap/device-instance";
     public string GetIdentityDeviceLoginPath() => "/api/v1/human/identity/edge-login";
-    public string GetPassStationInjectionBatchPath() => "/api/v1/edge/pass-stations/injection/batch";
-    public string GetPassStationStackingPath() => "/api/v1/edge/pass-stations/stacking";
     public string GetDeviceLogPath() => "/api/v1/edge/device-logs";
     public string BuildRecipeByDevicePath(Guid deviceId) => $"/api/v1/edge/recipes/device/{deviceId}";
     public string GetCapacityHourlyPath() => "/api/v1/edge/capacity/hourly";
@@ -768,6 +790,7 @@ internal sealed class FakeCapacityBufferStore : ICapacityBufferStore
     public List<(string ClaimToken, string Date, int Hour, int MinuteBucket, string ShiftCode, string PlcName)> DeletedSummaries { get; } = new();
     public int ClearAllCallCount { get; private set; }
     public Exception? CountException { get; set; }
+    public TimeSpan CountDelay { get; set; }
 
     public Task SaveAsync(CapacityRecord record)
     {
@@ -861,14 +884,19 @@ internal sealed class FakeCapacityBufferStore : ICapacityBufferStore
         return Task.CompletedTask;
     }
 
-    public Task<int> GetCountAsync()
+    public async Task<int> GetCountAsync()
     {
         if (CountException is not null)
         {
             throw CountException;
         }
 
-        return Task.FromResult(Records.Count);
+        if (CountDelay > TimeSpan.Zero)
+        {
+            await Task.Delay(CountDelay);
+        }
+
+        return Records.Count;
     }
 
     private static BufferSummaryDto CloneShiftSummary(BufferSummaryDto source)

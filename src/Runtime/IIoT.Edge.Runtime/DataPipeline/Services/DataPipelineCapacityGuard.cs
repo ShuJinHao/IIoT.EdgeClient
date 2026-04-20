@@ -292,7 +292,7 @@ public sealed class DataPipelineCapacityGuard
                 blockedChannel,
                 blockedReason,
                 processType,
-                DateTime.Now));
+                DateTime.UtcNow));
             applyDiagnostics();
         }
 

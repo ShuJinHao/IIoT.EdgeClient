@@ -1,10 +1,10 @@
 using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.Infrastructure.Integration.PassStation;
 using IIoT.Edge.Module.Abstractions;
-using IIoT.Edge.Presentation.Navigation;
-using IIoT.Edge.Runtime.Stations.DryRun;
-using IIoT.Edge.SharedKernel.DataPipeline.CellData;
-using IIoT.Edge.SharedKernel.Modules.DryRun;
+using IIoT.Edge.Module.DryRun.Constants;
+using IIoT.Edge.Module.DryRun.Integration;
+using IIoT.Edge.Module.DryRun.Payload;
+using IIoT.Edge.Module.DryRun.Presentation;
+using IIoT.Edge.Module.DryRun.Runtime;
 using IIoT.Edge.UI.Shared.Modularity;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -21,6 +21,7 @@ public sealed class DryRunModule : IEdgeStationModule
     public void RegisterServices(IServiceCollection services)
     {
         services.AddSingleton<IProcessCloudUploader, DryRunCloudUploader>();
+        services.AddSingleton<Presentation.ViewModels.DryRunDashboardViewModel>();
     }
 
     public void RegisterViews(IViewRegistry viewRegistry)

@@ -1,7 +1,7 @@
 using IIoT.Edge.Application.Abstractions.DataPipeline;
+using IIoT.Edge.Module.Injection.Payload;
 using IIoT.Edge.Runtime.DataPipeline.Services;
 using IIoT.Edge.SharedKernel.DataPipeline;
-using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 
