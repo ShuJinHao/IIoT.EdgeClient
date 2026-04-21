@@ -27,7 +27,6 @@ namespace IIoT.Edge.Infrastructure.Integration;
 
 public static class DependencyInjection
 {
-    private static readonly TimeSpan CloudApiRequestTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan CloudRetryDelay = TimeSpan.FromMilliseconds(500);
 
     public static IServiceCollection AddIntegrationInfrastructure(
@@ -74,7 +73,7 @@ public static class DependencyInjection
                 };
                 retryOptions.DisableForUnsafeHttpMethods();
                 builder.AddRetry(retryOptions);
-                builder.AddTimeout(CloudApiRequestTimeout);
+                builder.AddTimeout(timeout);
             });
         services.AddSingleton<ICloudHttpClient, CloudHttpClient>();
         services.AddHttpClient("MesApi", client => client.Timeout = mesTimeout);

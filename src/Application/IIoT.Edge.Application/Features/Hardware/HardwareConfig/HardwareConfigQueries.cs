@@ -174,7 +174,8 @@ public class SaveHardwareConfigHandler(
             && submittedPlcById.ContainsKey(request.SelectedNetworkDeviceId)
             && HasIoMappingsChanged(existingIoMappings, request.IoMappings, request.SelectedNetworkDeviceId);
 
-        var reloadDeviceNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var reloadTargets = new List<(int? DeviceId, string DeviceName)>();
+        var reloadTargetIds = new HashSet<int>();
         foreach (var plcDevice in submittedPlcDevices)
         {
             var deviceName = plcDevice.DeviceName?.Trim();
@@ -185,32 +186,38 @@ public class SaveHardwareConfigHandler(
 
             if (plcDevice.Id == 0)
             {
-                reloadDeviceNames.Add(deviceName);
+                reloadTargets.Add((null, deviceName));
                 continue;
             }
 
             if (!existingPlcById.TryGetValue(plcDevice.Id, out var existingPlc))
             {
-                reloadDeviceNames.Add(deviceName);
+                if (reloadTargetIds.Add(plcDevice.Id))
+                {
+                    reloadTargets.Add((plcDevice.Id, deviceName));
+                }
                 continue;
             }
 
             if (HasRuntimeRelevantNetworkChange(existingPlc, plcDevice)
                 || (ioMappingsChanged && request.SelectedNetworkDeviceId == plcDevice.Id))
             {
-                reloadDeviceNames.Add(deviceName);
+                if (reloadTargetIds.Add(plcDevice.Id))
+                {
+                    reloadTargets.Add((plcDevice.Id, deviceName));
+                }
             }
         }
 
-        foreach (var deviceName in reloadDeviceNames)
+        foreach (var target in reloadTargets)
         {
             try
             {
-                await plcConnectionManager.ReloadAsync(deviceName, ct);
+                await plcConnectionManager.ReloadAsync(target.DeviceName, ct);
             }
             catch (Exception ex)
             {
-                reloadFailures.Add($"{deviceName} ({ex.Message})");
+                reloadFailures.Add($"{target.DeviceName} ({ex.Message})");
             }
         }
 

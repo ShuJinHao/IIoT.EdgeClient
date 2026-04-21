@@ -257,6 +257,36 @@ public sealed class HardwareConfigFullSyncBehaviorTests
     }
 
     [Fact]
+    public async Task SaveHardwareConfigHandler_WhenTwoPlcsShareTheSameName_ShouldReloadBothChangedTargets()
+    {
+        var sender = new HardwareConfigSender
+        {
+            ExistingNetworkDevices =
+            [
+                CreateNetworkDevice(id: 1, name: "PLC-DUP", ipAddress: "192.168.0.10", port1: 102),
+                CreateNetworkDevice(id: 2, name: "PLC-DUP", ipAddress: "192.168.0.11", port1: 102)
+            ]
+        };
+        var plcManager = new FakePlcConnectionManager();
+        var handler = CreateSaveHandler(sender, plcManager);
+
+        var result = await handler.Handle(
+            new SaveHardwareConfigCommand(
+                [
+                    CreateNetworkVm(id: 1, name: "PLC-DUP", ipAddress: "192.168.0.10", port1: 103),
+                    CreateNetworkVm(id: 2, name: "PLC-DUP", ipAddress: "192.168.0.11", port1: 104)
+                ],
+                [],
+                1,
+                []),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess, result.Message);
+        Assert.Equal(2, plcManager.ReloadedDeviceNames.Count);
+        Assert.All(plcManager.ReloadedDeviceNames, x => Assert.Equal("PLC-DUP", x));
+    }
+
+    [Fact]
     public async Task SaveHardwareConfigHandler_WhenPersistenceSucceedsButStopOrReloadFails_ShouldReturnSavedButNotAppliedMessage()
     {
         var sender = new HardwareConfigSender
