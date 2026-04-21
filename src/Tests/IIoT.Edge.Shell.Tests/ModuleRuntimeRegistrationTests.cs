@@ -829,6 +829,8 @@ public sealed class ModuleRuntimeRegistrationTests
 
         public Task ReloadAsync(string deviceName, CancellationToken ct = default) => Task.CompletedTask;
 
+        public Task StopDeviceAsync(int networkDeviceId, CancellationToken ct = default) => Task.CompletedTask;
+
         public void RegisterTasks(string deviceName, Func<IPlcBuffer, ProductionContext, List<IPlcTask>> factory)
         {
             RegisteredFactories[deviceName] = factory;
@@ -841,6 +843,8 @@ public sealed class ModuleRuntimeRegistrationTests
         public void Dispose()
         {
         }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
     private sealed class SpyDataPipelineService : IDataPipelineService
