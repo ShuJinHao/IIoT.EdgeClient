@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 using IIoT.Edge.Application.Abstractions.Logging;
@@ -16,6 +17,7 @@ public sealed class MesRetryTask : ScheduledTaskBase
     private readonly IMesDeadLetterStore _deadLetterStore;
     private readonly ICriticalPersistenceFallbackWriter _criticalFallbackWriter;
     private readonly IMesConsumer _mesConsumer;
+    private readonly ILocalSystemRuntimeConfigService _runtimeConfig;
     private readonly IMesRetryDiagnosticsStore _diagnosticsStore;
     private readonly DataPipelineCapacityGuard? _capacityGuard;
 
@@ -32,6 +34,7 @@ public sealed class MesRetryTask : ScheduledTaskBase
         IMesDeadLetterStore deadLetterStore,
         ICriticalPersistenceFallbackWriter criticalFallbackWriter,
         IMesConsumer mesConsumer,
+        ILocalSystemRuntimeConfigService runtimeConfig,
         IMesRetryDiagnosticsStore diagnosticsStore,
         DataPipelineCapacityGuard? capacityGuard = null)
         : base(logger)
@@ -41,6 +44,7 @@ public sealed class MesRetryTask : ScheduledTaskBase
         _deadLetterStore = deadLetterStore;
         _criticalFallbackWriter = criticalFallbackWriter;
         _mesConsumer = mesConsumer;
+        _runtimeConfig = runtimeConfig;
         _diagnosticsStore = diagnosticsStore;
         _capacityGuard = capacityGuard;
     }
@@ -53,6 +57,18 @@ public sealed class MesRetryTask : ScheduledTaskBase
 
     protected override async Task ExecuteAsync()
     {
+        if (!_runtimeConfig.Current.MesUploadEnabled)
+        {
+            if (_capacityGuard is not null)
+            {
+                await _capacityGuard.RefreshMesRetryCapacityStatusAsync().ConfigureAwait(false);
+                await _capacityGuard.RefreshMesFallbackCapacityStatusAsync().ConfigureAwait(false);
+            }
+
+            _diagnosticsStore.SetRuntimeState(MesRetryRuntimeState.Idle);
+            return;
+        }
+
         await RecoverFallbackRecordsAsync().ConfigureAwait(false);
 
         var claimedBatch = await _retryStore.ClaimPendingBatchAsync(batchSize: 5).ConfigureAwait(false);
@@ -204,9 +220,13 @@ public sealed class MesRetryTask : ScheduledTaskBase
             if (persisted)
             {
                 await _retryStore.DeleteAsync(record.Id).ConfigureAwait(false);
+                return true;
             }
 
-            return true;
+            await HandleRetryFailureAsync(
+                record,
+                "MES retry deserialize failed and dead-letter persistence also failed.").ConfigureAwait(false);
+            return false;
         }
 
         var completedRecord = new CellCompletedRecord { CellData = cellData };

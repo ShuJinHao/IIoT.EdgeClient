@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Infrastructure.Integration.Config;
@@ -11,6 +12,7 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
     private readonly HttpClient _httpClient;
     private readonly ICloudApiEndpointProvider _endpointProvider;
     private readonly DeviceSessionFileCacheStore _cacheStore;
+    private readonly ILocalSystemRuntimeConfigService _runtimeConfig;
     private readonly ILogService _logger;
     private readonly object _stateLock = new();
     private readonly object _lifecycleLock = new();
@@ -18,7 +20,6 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
     private CancellationTokenSource? _cts;
     private Task? _heartbeatTask;
     private bool _isRunning;
-    private static readonly TimeSpan OnlineInterval = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan OfflineInterval = TimeSpan.FromSeconds(10);
 
     public DeviceSession? CurrentDevice { get; private set; }
@@ -42,11 +43,13 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
         HttpClient httpClient,
         ICloudApiEndpointProvider endpointProvider,
         DeviceSessionFileCacheStore cacheStore,
+        ILocalSystemRuntimeConfigService runtimeConfig,
         ILogService logger)
     {
         _httpClient = httpClient;
         _endpointProvider = endpointProvider;
         _cacheStore = cacheStore;
+        _runtimeConfig = runtimeConfig;
         _logger = logger;
     }
 
@@ -136,7 +139,9 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
 
         while (!ct.IsCancellationRequested)
         {
-            var interval = CurrentState == NetworkState.Online ? OnlineInterval : OfflineInterval;
+            var interval = CurrentState == NetworkState.Online
+                ? _runtimeConfig.Current.OnlineHeartbeatInterval
+                : OfflineInterval;
             try
             {
                 await Task.Delay(interval, ct);

@@ -64,14 +64,16 @@ public static class DependencyInjection
         services.AddHttpClient("CloudApi", client => client.Timeout = Timeout.InfiniteTimeSpan)
             .AddResilienceHandler("cloud-transient", builder =>
             {
-                builder.AddRetry(new HttpRetryStrategyOptions
+                var retryOptions = new HttpRetryStrategyOptions
                 {
                     MaxRetryAttempts = 3,
                     BackoffType = DelayBackoffType.Exponential,
                     UseJitter = true,
                     Delay = CloudRetryDelay,
                     ShouldRetryAfterHeader = true
-                });
+                };
+                retryOptions.DisableForUnsafeHttpMethods();
+                builder.AddRetry(retryOptions);
                 builder.AddTimeout(CloudApiRequestTimeout);
             });
         services.AddSingleton<ICloudHttpClient, CloudHttpClient>();

@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 using IIoT.Edge.Application.Abstractions.DataPipeline.SyncTask;
@@ -15,6 +16,7 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
     private readonly ICloudHttpClient _cloudHttp;
     private readonly ICloudApiEndpointProvider _endpointProvider;
     private readonly IDeviceService _deviceService;
+    private readonly ILocalSystemRuntimeConfigService _runtimeConfig;
     private readonly IDeviceLogBufferStore _bufferStore;
     private readonly ILogService _logger;
     private readonly ICloudUploadDiagnosticsStore _diagnosticsStore;
@@ -28,12 +30,12 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
     private bool _isSubscribed;
     private const int RetryBatchSize = 100;
     private const int RetryMaxBatchesPerRound = 3;
-    private static readonly TimeSpan SyncInterval = TimeSpan.FromSeconds(60);
 
     public DeviceLogSyncTask(
         ICloudHttpClient cloudHttp,
         ICloudApiEndpointProvider endpointProvider,
         IDeviceService deviceService,
+        ILocalSystemRuntimeConfigService runtimeConfig,
         IDeviceLogBufferStore bufferStore,
         ILogService logger,
         ICloudUploadDiagnosticsStore diagnosticsStore)
@@ -41,6 +43,7 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
         _cloudHttp = cloudHttp;
         _endpointProvider = endpointProvider;
         _deviceService = deviceService;
+        _runtimeConfig = runtimeConfig;
         _bufferStore = bufferStore;
         _logger = logger;
         _diagnosticsStore = diagnosticsStore;
@@ -68,7 +71,7 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
             _loopTask = Task.Run(() => SyncLoopAsync(linkedCts.Token), CancellationToken.None);
         }
 
-        _logger.Info("[DeviceLogSync] Started. Interval: 60s");
+        _logger.Info($"[DeviceLogSync] Started. Interval: {(int)_runtimeConfig.Current.CloudSyncInterval.TotalSeconds}s");
         return Task.CompletedTask;
     }
 
@@ -145,7 +148,7 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
         {
             try
             {
-                await Task.Delay(SyncInterval, ct);
+                await Task.Delay(_runtimeConfig.Current.CloudSyncInterval, ct);
             }
             catch (OperationCanceledException)
             {

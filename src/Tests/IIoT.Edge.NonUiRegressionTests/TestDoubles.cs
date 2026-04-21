@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Abstractions.Context;
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Consumers;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
@@ -127,6 +128,14 @@ internal sealed class FakeDeviceService : IDeviceService, IDeviceAccessTokenProv
         CanUploadToCloud = false;
         UploadGateChanged?.Invoke(CurrentUploadGate);
     }
+}
+
+internal sealed class FakeLocalSystemRuntimeConfigService : ILocalSystemRuntimeConfigService
+{
+    public SystemRuntimeConfigSnapshot Current { get; set; } = SystemRuntimeConfigSnapshot.Default;
+
+    public Task EnsureInitializedAsync(CancellationToken cancellationToken = default)
+        => Task.CompletedTask;
 }
 
 internal sealed class FakeDataPipelineService : IDataPipelineService

@@ -1,10 +1,13 @@
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Infrastructure.Integration.Config;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Infrastructure.Integration.Http;
 using IIoT.Edge.Infrastructure.Integration.Mes;
 using IIoT.Edge.Module.Injection.Payload;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
+using Microsoft.Extensions.Options;
 using System.Net;
 using System.Net.Http;
 using System.Text;
@@ -18,6 +21,7 @@ public sealed class MesFrameworkBehaviorTests
     {
         var consumer = new MesConsumer(
             CreateOnlineDeviceService(),
+            new FakeLocalSystemRuntimeConfigService(),
             uploaders: [],
             new FakeMesUploadDiagnosticsStore(),
             new FakeLogService());
@@ -37,6 +41,7 @@ public sealed class MesFrameworkBehaviorTests
 
         var consumer = new MesConsumer(
             deviceService,
+            new FakeLocalSystemRuntimeConfigService(),
             [uploader],
             diagnosticsStore,
             new FakeLogService());
@@ -58,6 +63,7 @@ public sealed class MesFrameworkBehaviorTests
         var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
         var consumer = new MesConsumer(
             CreateOnlineDeviceService(),
+            new FakeLocalSystemRuntimeConfigService(),
             [uploader],
             diagnosticsStore,
             new FakeLogService());
@@ -71,6 +77,32 @@ public sealed class MesFrameworkBehaviorTests
         Assert.Equal("Success", diagnostics!.LastResult);
         Assert.NotNull(diagnostics.LastSuccessAt);
         Assert.Null(diagnostics.LastFailureReason);
+    }
+
+    [Fact]
+    public async Task MesConsumer_WhenMesUploadDisabled_ShouldReturnTrueWithoutCallingUploader()
+    {
+        var uploader = new FakeMesUploader("Injection");
+        var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
+        var runtimeConfig = new FakeLocalSystemRuntimeConfigService
+        {
+            Current = SystemRuntimeConfigSnapshot.Default with
+            {
+                MesUploadEnabled = false
+            }
+        };
+        var consumer = new MesConsumer(
+            CreateOnlineDeviceService(),
+            runtimeConfig,
+            [uploader],
+            diagnosticsStore,
+            new FakeLogService());
+
+        var success = await consumer.ProcessAsync(CreateRecord("Injection"));
+
+        Assert.True(success);
+        Assert.Equal(0, uploader.UploadCallCount);
+        Assert.Null(diagnosticsStore.Get("Injection"));
     }
 
     [Fact]
@@ -97,6 +129,46 @@ public sealed class MesFrameworkBehaviorTests
         Assert.Equal("https://mes.test/api/mes/outbound", handler.LastRequest!.RequestUri!.ToString());
         Assert.Equal("default", handler.LastRequest.Headers.GetValues("X-Default").Single());
         Assert.Equal("MES", handler.LastRequest.Headers.GetValues("X-Request").Single());
+    }
+
+    [Fact]
+    public void MesEndpointProvider_WhenLocalMesUrlExists_ShouldPreferRuntimeConfig()
+    {
+        var provider = new MesEndpointProvider(
+            new TestOptionsMonitor<MesApiConfig>(
+                new MesApiConfig
+                {
+                    BaseUrl = "https://options-mes.test"
+                }),
+            new FakeLocalSystemRuntimeConfigService
+            {
+                Current = SystemRuntimeConfigSnapshot.Default with
+                {
+                    MesBaseUrl = "https://local-mes.test"
+                }
+            });
+
+        var url = provider.BuildUrl("/api/mes/outbound");
+
+        Assert.True(provider.IsConfigured);
+        Assert.Equal("https://local-mes.test/api/mes/outbound", url);
+    }
+
+    [Fact]
+    public void MesEndpointProvider_WhenLocalMesUrlMissing_ShouldFallbackToOptionsConfig()
+    {
+        var provider = new MesEndpointProvider(
+            new TestOptionsMonitor<MesApiConfig>(
+                new MesApiConfig
+                {
+                    BaseUrl = "https://options-mes.test"
+                }),
+            new FakeLocalSystemRuntimeConfigService());
+
+        var url = provider.BuildUrl("/api/mes/outbound");
+
+        Assert.True(provider.IsConfigured);
+        Assert.Equal("https://options-mes.test/api/mes/outbound", url);
     }
 
     private static FakeDeviceService CreateOnlineDeviceService()
@@ -156,6 +228,24 @@ public sealed class MesFrameworkBehaviorTests
             {
                 Content = new StringContent("{}", Encoding.UTF8, "application/json")
             });
+        }
+    }
+
+    private sealed class TestOptionsMonitor<T>(T currentValue) : IOptionsMonitor<T>
+    {
+        public T CurrentValue { get; private set; } = currentValue;
+
+        public T Get(string? name) => CurrentValue;
+
+        public IDisposable OnChange(Action<T, string?> listener) => NoOpDisposable.Instance;
+    }
+
+    private sealed class NoOpDisposable : IDisposable
+    {
+        public static NoOpDisposable Instance { get; } = new();
+
+        public void Dispose()
+        {
         }
     }
 }

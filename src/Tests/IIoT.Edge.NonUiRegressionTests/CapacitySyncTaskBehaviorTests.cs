@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Infrastructure.Integration.Capacity;
 using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
 using System.Text.Json;
@@ -199,6 +200,56 @@ public sealed class CapacitySyncTaskBehaviorTests
         Assert.Empty(bufferStore.HourlySummaries);
     }
 
+    [Fact]
+    public async Task StartAsync_WhenCloudSyncIntervalConfigured_ShouldUseConfiguredLoopInterval()
+    {
+        var cloudHttp = new FakeCloudHttpClient();
+        cloudHttp.EnqueuePostResult(true);
+
+        var deviceService = new FakeDeviceService();
+        deviceService.SetOnline(new DeviceSession
+        {
+            DeviceId = Guid.NewGuid(),
+            DeviceName = "PLC-A",
+            ClientCode = "CLIENT-01",
+            ProcessId = Guid.NewGuid()
+        });
+
+        var contextStore = new FakeProductionContextStore();
+        var context = contextStore.GetOrCreate("PLC-A");
+        context.TodayCapacity.Date = DateTime.UtcNow.ToString("yyyy-MM-dd");
+        context.TodayCapacity.DayShift.OkCount = 1;
+        context.TodayCapacity.HalfHourly[0].OkCount = 1;
+
+        var task = new CapacitySyncTask(
+            cloudHttp,
+            new FakeCloudApiEndpointProvider(),
+            deviceService,
+            new FakeLocalSystemRuntimeConfigService
+            {
+                Current = SystemRuntimeConfigSnapshot.Default with
+                {
+                    CloudSyncInterval = TimeSpan.FromSeconds(1)
+                }
+            },
+            contextStore,
+            new FakeCapacityBufferStore(),
+            new FakeLogService(),
+            new ShiftConfig
+            {
+                DayStart = "08:00",
+                DayEnd = "20:00"
+            },
+            new FakeCloudDiagnosticsStore());
+
+        using var cts = new CancellationTokenSource();
+        await task.StartAsync(cts.Token);
+        await WaitForAsync(() => cloudHttp.PostCallCount >= 1);
+        await task.StopAsync();
+
+        Assert.True(cloudHttp.PostCallCount >= 1);
+    }
+
     private static CapacitySyncTask CreateTask(
         FakeCloudHttpClient cloudHttp,
         FakeDeviceService deviceService,
@@ -209,6 +260,10 @@ public sealed class CapacitySyncTaskBehaviorTests
             cloudHttp,
             new FakeCloudApiEndpointProvider(),
             deviceService,
+            new FakeLocalSystemRuntimeConfigService
+            {
+                Current = SystemRuntimeConfigSnapshot.Default
+            },
             new FakeProductionContextStore(),
             bufferStore,
             logger,
@@ -224,5 +279,21 @@ public sealed class CapacitySyncTaskBehaviorTests
     {
         using var doc = JsonDocument.Parse(JsonSerializer.Serialize(payload));
         return doc.RootElement.Clone();
+    }
+
+    private static async Task WaitForAsync(Func<bool> predicate)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(3);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (predicate())
+            {
+                return;
+            }
+
+            await Task.Delay(50);
+        }
+
+        Assert.True(predicate(), "Condition was not satisfied before timeout.");
     }
 }

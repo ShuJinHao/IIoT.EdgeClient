@@ -2,6 +2,7 @@
 using IIoT.Edge.SharedKernel.Repository;
 using IIoT.Edge.SharedKernel.Result;
 using IIoT.Edge.Application.Abstractions.Cache;
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Domain.Config.Aggregates;
 
 namespace IIoT.Edge.Application.Features.Config.UseCases.SystemConfig.Commands;
@@ -24,7 +25,8 @@ public record SaveSystemConfigsCommand(
 
 public class SaveSystemConfigsHandler(
     IRepository<SystemConfigEntity> repo,
-    IEdgeCacheService cache
+    IEdgeCacheService cache,
+    ILocalParameterConfigChangePublisher changePublisher
 ) : ICommandHandler<SaveSystemConfigsCommand, Result>
 {
     private const string CacheKey = "Config:SystemAll";
@@ -52,6 +54,7 @@ public class SaveSystemConfigsHandler(
         await repo.SaveChangesAsync(cancellationToken);
 
         cache.Remove(CacheKey);
+        changePublisher.NotifySystemChanged();
         return Result.Success();
     }
 }

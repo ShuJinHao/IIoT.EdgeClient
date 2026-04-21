@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Infrastructure.Integration.DeviceLog;
 using IIoT.Edge.SharedKernel.DataPipeline.DeviceLog;
 
@@ -30,6 +31,7 @@ public sealed class DeviceLogSyncTaskBehaviorTests
             cloudHttp,
             endpointProvider,
             deviceService,
+            CreateRuntimeConfig(),
             bufferStore,
             new FakeLogService(),
             new FakeCloudDiagnosticsStore());
@@ -71,6 +73,7 @@ public sealed class DeviceLogSyncTaskBehaviorTests
             cloudHttp,
             new FakeCloudApiEndpointProvider(),
             deviceService,
+            CreateRuntimeConfig(),
             bufferStore,
             new FakeLogService(),
             new FakeCloudDiagnosticsStore());
@@ -113,6 +116,7 @@ public sealed class DeviceLogSyncTaskBehaviorTests
             cloudHttp,
             new FakeCloudApiEndpointProvider(),
             deviceService,
+            CreateRuntimeConfig(),
             bufferStore,
             new FakeLogService(),
             new FakeCloudDiagnosticsStore());
@@ -156,6 +160,7 @@ public sealed class DeviceLogSyncTaskBehaviorTests
             cloudHttp,
             new FakeCloudApiEndpointProvider(),
             deviceService,
+            CreateRuntimeConfig(),
             bufferStore,
             new FakeLogService(),
             new FakeCloudDiagnosticsStore());
@@ -177,6 +182,7 @@ public sealed class DeviceLogSyncTaskBehaviorTests
             new FakeCloudHttpClient(),
             new FakeCloudApiEndpointProvider(),
             new FakeDeviceService(),
+            CreateRuntimeConfig(),
             bufferStore,
             logger,
             new FakeCloudDiagnosticsStore());
@@ -203,6 +209,7 @@ public sealed class DeviceLogSyncTaskBehaviorTests
             new FakeCloudHttpClient(),
             new FakeCloudApiEndpointProvider(),
             new FakeDeviceService(),
+            CreateRuntimeConfig(),
             bufferStore,
             logger,
             new FakeCloudDiagnosticsStore());
@@ -226,5 +233,67 @@ public sealed class DeviceLogSyncTaskBehaviorTests
                 .Where(x => x.Message.EndsWith("-log", StringComparison.Ordinal))
                 .Select(x => x.Message)
                 .ToArray());
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenCloudSyncIntervalConfigured_ShouldUseConfiguredLoopInterval()
+    {
+        var cloudHttp = new FakeCloudHttpClient();
+        cloudHttp.EnqueuePostResult(true);
+
+        var deviceService = new FakeDeviceService();
+        deviceService.SetOnline(new IIoT.Edge.Application.Abstractions.Device.DeviceSession
+        {
+            DeviceId = Guid.NewGuid(),
+            DeviceName = "PLC-A",
+            ClientCode = "CLIENT-01",
+            ProcessId = Guid.NewGuid()
+        });
+
+        var logger = new FakeLogService();
+        var task = new DeviceLogSyncTask(
+            cloudHttp,
+            new FakeCloudApiEndpointProvider(),
+            deviceService,
+            new FakeLocalSystemRuntimeConfigService
+            {
+                Current = SystemRuntimeConfigSnapshot.Default with
+                {
+                    CloudSyncInterval = TimeSpan.FromSeconds(1)
+                }
+            },
+            new FakeDeviceLogBufferStore(),
+            logger,
+            new FakeCloudDiagnosticsStore());
+
+        using var cts = new CancellationTokenSource();
+        await task.StartAsync(cts.Token);
+        logger.Info("interval-log");
+        await WaitForAsync(() => cloudHttp.PostCallCount >= 1);
+        await task.StopAsync();
+
+        Assert.True(cloudHttp.PostCallCount >= 1);
+    }
+
+    private static FakeLocalSystemRuntimeConfigService CreateRuntimeConfig()
+        => new()
+        {
+            Current = SystemRuntimeConfigSnapshot.Default
+        };
+
+    private static async Task WaitForAsync(Func<bool> predicate)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(3);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (predicate())
+            {
+                return;
+            }
+
+            await Task.Delay(50);
+        }
+
+        Assert.True(predicate(), "Condition was not satisfied before timeout.");
     }
 }

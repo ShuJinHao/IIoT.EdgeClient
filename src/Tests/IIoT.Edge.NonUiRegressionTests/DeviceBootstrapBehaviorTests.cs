@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Infrastructure.Integration.Config;
 using IIoT.Edge.Infrastructure.Integration.Device;
@@ -41,6 +42,7 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
             new HttpClient(handler),
             new FakeEndpointProvider("LINE-A-01"),
             new DeviceSessionFileCacheStore(),
+            CreateRuntimeConfig(),
             new FakeLogService());
 
         using var cts = new CancellationTokenSource();
@@ -112,6 +114,7 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
             new HttpClient(handler),
             new FakeEndpointProvider("LINE-C-03"),
             new DeviceSessionFileCacheStore(),
+            CreateRuntimeConfig(),
             logger);
 
         using var cts = new CancellationTokenSource();
@@ -151,6 +154,7 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
             new HttpClient(handler),
             new FakeEndpointProvider("LINE-D-04"),
             new DeviceSessionFileCacheStore(),
+            CreateRuntimeConfig(),
             logger);
 
         using var cts = new CancellationTokenSource();
@@ -167,6 +171,50 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
         Assert.NotNull(service.CurrentDevice);
         Assert.Contains(logger.Entries, x => x.Message.Contains("event=edge.bootstrap.invalid_token", StringComparison.Ordinal));
         Assert.Contains(logger.Entries, x => x.Message.Contains("reason=expired_upload_token", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenHeartbeatIntervalConfigured_ShouldUseConfiguredOnlineInterval()
+    {
+        var requestCount = 0;
+        var handler = new RecordingHttpMessageHandler(_ =>
+        {
+            Interlocked.Increment(ref requestCount);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new
+                {
+                    Id = Guid.NewGuid(),
+                    DeviceName = "Heartbeat Device",
+                    ClientCode = "LINE-HB-01",
+                    ProcessId = Guid.NewGuid(),
+                    UploadAccessToken = "heartbeat-token",
+                    UploadAccessTokenExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(10)
+                })
+            };
+        });
+
+        var service = new DeviceService(
+            new HttpClient(handler),
+            new FakeEndpointProvider("LINE-HB-01"),
+            new DeviceSessionFileCacheStore(),
+            new FakeLocalSystemRuntimeConfigService
+            {
+                Current = SystemRuntimeConfigSnapshot.Default with
+                {
+                    OnlineHeartbeatInterval = TimeSpan.FromSeconds(1)
+                }
+            },
+            new FakeLogService());
+
+        using var cts = new CancellationTokenSource();
+
+        await service.StartAsync(cts.Token);
+        await handler.WaitForRequestUriAsync();
+        await WaitForAsync(() => Volatile.Read(ref requestCount) >= 2);
+        await service.StopAsync();
+
+        Assert.True(Volatile.Read(ref requestCount) >= 2);
     }
 
     public void Dispose()
@@ -197,6 +245,12 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
 
         Assert.True(predicate(), "Condition was not satisfied before timeout.");
     }
+
+    private static FakeLocalSystemRuntimeConfigService CreateRuntimeConfig()
+        => new()
+        {
+            Current = SystemRuntimeConfigSnapshot.Default
+        };
 
     private sealed class FakeEndpointProvider(string clientCode) : ICloudApiEndpointProvider
     {

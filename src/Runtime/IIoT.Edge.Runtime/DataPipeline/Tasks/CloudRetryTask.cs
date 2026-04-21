@@ -259,6 +259,12 @@ public sealed class CloudRetryTask : ScheduledTaskBase
                             {
                                 await _retryStore.DeleteAsync(source.Id).ConfigureAwait(false);
                             }
+                            else
+                            {
+                                await HandleRetryFailureAsync(
+                                    source,
+                                    "Cloud retry deserialize failed and dead-letter persistence also failed.").ConfigureAwait(false);
+                            }
 
                             continue;
                         }
@@ -360,6 +366,12 @@ public sealed class CloudRetryTask : ScheduledTaskBase
             if (persisted)
             {
                 await _retryStore.DeleteAsync(record.Id).ConfigureAwait(false);
+            }
+            else
+            {
+                await HandleRetryFailureAsync(
+                    record,
+                    "Cloud retry deserialize failed and dead-letter persistence also failed.").ConfigureAwait(false);
             }
 
             return RetryProcessResult.Continue;

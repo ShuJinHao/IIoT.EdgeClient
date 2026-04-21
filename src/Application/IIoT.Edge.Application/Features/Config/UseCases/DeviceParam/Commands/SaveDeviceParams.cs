@@ -2,6 +2,7 @@
 using IIoT.Edge.SharedKernel.Repository;
 using IIoT.Edge.SharedKernel.Result;
 using IIoT.Edge.Application.Abstractions.Cache;
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Domain.Config.Aggregates;
 
 namespace IIoT.Edge.Application.Features.Config.UseCases.DeviceParam.Commands;
@@ -27,7 +28,8 @@ public record SaveDeviceParamsCommand(
 
 public class SaveDeviceParamsHandler(
     IRepository<DeviceParamEntity> repo,
-    IEdgeCacheService cache
+    IEdgeCacheService cache,
+    ILocalParameterConfigChangePublisher changePublisher
 ) : ICommandHandler<SaveDeviceParamsCommand, Result>
 {
     private const string CachePrefix = "Config:DeviceParam:";
@@ -58,6 +60,7 @@ public class SaveDeviceParamsHandler(
         await repo.SaveChangesAsync(cancellationToken);
 
         cache.Remove(CachePrefix + request.DeviceId);
+        changePublisher.NotifyDeviceChanged(request.DeviceId);
         return Result.Success();
     }
 }

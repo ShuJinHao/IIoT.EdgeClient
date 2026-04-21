@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
@@ -9,6 +10,7 @@ namespace IIoT.Edge.Infrastructure.Integration.Mes;
 public sealed class MesConsumer : IMesConsumer
 {
     private readonly IDeviceService _deviceService;
+    private readonly ILocalSystemRuntimeConfigService _runtimeConfig;
     private readonly ILogService _logger;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
     private readonly Dictionary<string, IProcessMesUploader> _uploaders;
@@ -20,11 +22,13 @@ public sealed class MesConsumer : IMesConsumer
 
     public MesConsumer(
         IDeviceService deviceService,
+        ILocalSystemRuntimeConfigService runtimeConfig,
         IEnumerable<IProcessMesUploader> uploaders,
         IMesUploadDiagnosticsStore diagnosticsStore,
         ILogService logger)
     {
         _deviceService = deviceService;
+        _runtimeConfig = runtimeConfig;
         _diagnosticsStore = diagnosticsStore;
         _logger = logger;
         _uploaders = uploaders.ToDictionary(x => x.ProcessType, StringComparer.OrdinalIgnoreCase);
@@ -33,6 +37,11 @@ public sealed class MesConsumer : IMesConsumer
     public async Task<bool> ProcessAsync(CellCompletedRecord record)
     {
         if (!_uploaders.TryGetValue(record.CellData.ProcessType, out var uploader))
+        {
+            return true;
+        }
+
+        if (!_runtimeConfig.Current.MesUploadEnabled)
         {
             return true;
         }

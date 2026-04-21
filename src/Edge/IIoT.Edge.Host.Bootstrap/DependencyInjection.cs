@@ -1,4 +1,5 @@
 using IIoT.Edge.Application;
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
@@ -124,6 +125,12 @@ public static class DependencyInjection
                     "RuntimeState.AutoSave",
                     ct => sp.GetRequiredService<IProductionContextStore>()
                         .StartAutoSaveAsync(ct, intervalSeconds: 30))));
+
+        services.AddSingleton<IManagedBackgroundService>(sp =>
+            new DelegatingBackgroundService(
+                "Config.RuntimeWarmup",
+                ct => sp.GetRequiredService<ILocalSystemRuntimeConfigService>().EnsureInitializedAsync(ct),
+                _ => Task.CompletedTask));
 
         services.AddSingleton<IManagedBackgroundService>(sp =>
             new DelegatingBackgroundService(

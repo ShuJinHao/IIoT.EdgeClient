@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Abstractions.Context;
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 using IIoT.Edge.Application.Abstractions.DataPipeline.SyncTask;
@@ -15,6 +16,7 @@ public class CapacitySyncTask : ICapacitySyncTask
     private readonly ICloudHttpClient _cloudHttp;
     private readonly ICloudApiEndpointProvider _endpointProvider;
     private readonly IDeviceService _deviceService;
+    private readonly ILocalSystemRuntimeConfigService _runtimeConfig;
     private readonly IProductionContextStore _contextStore;
     private readonly ICapacityBufferStore _bufferStore;
     private readonly ILogService _logger;
@@ -25,12 +27,12 @@ public class CapacitySyncTask : ICapacitySyncTask
     private CancellationTokenSource? _cts;
     private Task? _loopTask;
     private bool _isRunning;
-    private static readonly TimeSpan SyncInterval = TimeSpan.FromSeconds(60);
 
     public CapacitySyncTask(
         ICloudHttpClient cloudHttp,
         ICloudApiEndpointProvider endpointProvider,
         IDeviceService deviceService,
+        ILocalSystemRuntimeConfigService runtimeConfig,
         IProductionContextStore contextStore,
         ICapacityBufferStore bufferStore,
         ILogService logger,
@@ -40,6 +42,7 @@ public class CapacitySyncTask : ICapacitySyncTask
         _cloudHttp = cloudHttp;
         _endpointProvider = endpointProvider;
         _deviceService = deviceService;
+        _runtimeConfig = runtimeConfig;
         _contextStore = contextStore;
         _bufferStore = bufferStore;
         _logger = logger;
@@ -61,7 +64,7 @@ public class CapacitySyncTask : ICapacitySyncTask
             _loopTask = Task.Run(() => SyncLoopAsync(_cts.Token), CancellationToken.None);
         }
 
-        _logger.Info("[CapacitySync] Started. Interval: 60s");
+        _logger.Info($"[CapacitySync] Started. Interval: {(int)_runtimeConfig.Current.CloudSyncInterval.TotalSeconds}s");
         return Task.CompletedTask;
     }
 
@@ -108,7 +111,7 @@ public class CapacitySyncTask : ICapacitySyncTask
         {
             try
             {
-                await Task.Delay(SyncInterval, ct);
+                await Task.Delay(_runtimeConfig.Current.CloudSyncInterval, ct);
             }
             catch (OperationCanceledException)
             {

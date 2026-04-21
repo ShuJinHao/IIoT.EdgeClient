@@ -155,11 +155,16 @@ public class ParamViewModel : CrudPageViewModelBase
             return saveResult;
         }
 
-        await LoadDeviceParamsAsync(SelectedGroup);
-        var result = await _crudService.LoadAsync();
-        ReplaceItems(GeneralParams, result.GeneralParams);
+        await RefreshAfterSaveAsync(SelectedGroup);
 
         return saveResult;
+    }
+
+    private async Task RefreshAfterSaveAsync(DeviceParamGroupVm selectedGroup)
+    {
+        var result = await _crudService.LoadAsync();
+        ReplaceItems(GeneralParams, result.GeneralParams);
+        await LoadDeviceParamsAsync(selectedGroup);
     }
 
     private void HandlePermissionStateChanged()

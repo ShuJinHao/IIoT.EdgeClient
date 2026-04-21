@@ -1,12 +1,9 @@
 using IIoT.Edge.Application.Abstractions.Auth;
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Common.Crud;
-using AutoMapper;
-using IIoT.Edge.Application.Features.Config.ParamView.Mappings;
 using IIoT.Edge.Application.Features.Config.ParamView.Models;
 using IIoT.Edge.Application.Features.Config.UseCases.DeviceParam.Commands;
-using IIoT.Edge.Application.Features.Config.UseCases.DeviceParam.Queries;
 using IIoT.Edge.Application.Features.Config.UseCases.SystemConfig.Commands;
-using IIoT.Edge.Application.Features.Config.UseCases.SystemConfig.Queries;
 using IIoT.Edge.Application.Features.Hardware.Queries;
 using MediatR;
 
@@ -27,20 +24,23 @@ public record SaveParamViewCommand(
     int DeviceId,
     List<DeviceParamVm> DeviceParams) : IRequest<CrudOperationResult>;
 
-public class LoadParamViewHandler(ISender sender, IMapper mapper)
+public class LoadParamViewHandler(
+    ISender sender,
+    ILocalParameterConfigService localParameterConfigService)
     : IRequestHandler<LoadParamViewQuery, ParamViewInitResult>
 {
     public async Task<ParamViewInitResult> Handle(LoadParamViewQuery request, CancellationToken ct)
     {
-        var sysResult = await sender.Send(new GetAllSystemConfigsQuery(), ct);
-        var general = new List<GeneralParamVm>();
-        if (sysResult.IsSuccess && sysResult.Value != null)
-        {
-            foreach (var entity in sysResult.Value.OrderBy(x => x.SortOrder))
+        var general = (await localParameterConfigService.GetSystemConfigsAsync(ct))
+            .Select(snapshot => new GeneralParamVm
             {
-                general.Add(mapper.Map<GeneralParamVm>(entity));
-            }
-        }
+                Id = snapshot.Id,
+                Key = snapshot.Key,
+                Name = snapshot.Key,
+                Value = snapshot.Value,
+                Description = snapshot.Description ?? string.Empty
+            })
+            .ToList();
 
         var devResult = await sender.Send(new GetAllNetworkDevicesQuery(), ct);
         var groups = new List<DeviceGroupHeader>();
@@ -56,27 +56,26 @@ public class LoadParamViewHandler(ISender sender, IMapper mapper)
     }
 }
 
-public class LoadDeviceParamsHandler(ISender sender, IMapper mapper)
+public class LoadDeviceParamsHandler(
+    ILocalParameterConfigService localParameterConfigService)
     : IRequestHandler<LoadDeviceParamsQuery, List<DeviceParamVm>>
 {
     public async Task<List<DeviceParamVm>> Handle(LoadDeviceParamsQuery request, CancellationToken ct)
-    {
-        var result = await sender.Send(new GetDeviceParamsQuery(request.DeviceId), ct);
-        if (!result.IsSuccess || result.Value is null)
-        {
-            return new();
-        }
-
-        return result.Value
-            .OrderBy(x => x.SortOrder)
-            .Select(entity => mapper.Map<DeviceParamVm>(entity))
+        => (await localParameterConfigService.GetDeviceParamsAsync(request.DeviceId, ct))
+            .Select(snapshot => new DeviceParamVm
+            {
+                Id = snapshot.Id,
+                Name = snapshot.Name,
+                Value = snapshot.Value,
+                Unit = snapshot.Unit ?? string.Empty,
+                Min = snapshot.MinValue ?? string.Empty,
+                Max = snapshot.MaxValue ?? string.Empty
+            })
             .ToList();
-    }
 }
 
 public class SaveParamViewHandler(
     ISender sender,
-    IMapper mapper,
     IClientPermissionService permissionService)
     : IRequestHandler<SaveParamViewCommand, CrudOperationResult>
 {
@@ -87,20 +86,32 @@ public class SaveParamViewHandler(
             return CrudOperationResult.Failure("当前用户无参数配置权限。");
         }
 
-        var systemConfigs = mapper.Map<List<SystemConfigDto>>(request.GeneralParams);
+        var systemConfigs = request.GeneralParams
+            .Select(item => new SystemConfigDto(
+                item.Name,
+                item.Value,
+                string.IsNullOrWhiteSpace(item.Description) ? null : item.Description))
+            .ToList();
         var systemResult = await sender.Send(new SaveSystemConfigsCommand(systemConfigs), ct);
         if (!systemResult.IsSuccess)
         {
             return CrudOperationResult.Failure(systemResult.ErrorMessage ?? "系统参数保存失败。");
         }
 
-        var deviceParams = mapper.Map<List<DeviceParamDto>>(request.DeviceParams);
+        var deviceParams = request.DeviceParams
+            .Select(item => new DeviceParamDto(
+                item.Name,
+                item.Value,
+                string.IsNullOrWhiteSpace(item.Unit) ? null : item.Unit,
+                string.IsNullOrWhiteSpace(item.Min) ? null : item.Min,
+                string.IsNullOrWhiteSpace(item.Max) ? null : item.Max))
+            .ToList();
         var deviceResult = await sender.Send(new SaveDeviceParamsCommand(request.DeviceId, deviceParams), ct);
         if (!deviceResult.IsSuccess)
         {
             return CrudOperationResult.Failure(deviceResult.ErrorMessage ?? "设备参数保存失败。");
         }
 
-        return CrudOperationResult.Success("参数配置已保存。");
+        return CrudOperationResult.Success("已保存到本地参数配置。");
     }
 }

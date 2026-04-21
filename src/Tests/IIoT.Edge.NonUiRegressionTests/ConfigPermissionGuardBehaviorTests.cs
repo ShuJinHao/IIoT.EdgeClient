@@ -83,7 +83,6 @@ public sealed class ConfigPermissionGuardBehaviorTests
         var sender = new CountingSender();
         var handler = new SaveParamViewHandler(
             sender,
-            CreateMapper(),
             new StubPermissionService { CanEditParams = false });
 
         var result = await handler.Handle(

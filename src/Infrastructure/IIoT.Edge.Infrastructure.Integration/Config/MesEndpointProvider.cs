@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Modules;
 using Microsoft.Extensions.Options;
 
@@ -6,14 +7,18 @@ namespace IIoT.Edge.Infrastructure.Integration.Config;
 public sealed class MesEndpointProvider : IMesEndpointProvider
 {
     private readonly IOptionsMonitor<MesApiConfig> _mesApiOptions;
+    private readonly ILocalSystemRuntimeConfigService _runtimeConfig;
 
-    public MesEndpointProvider(IOptionsMonitor<MesApiConfig> mesApiOptions)
+    public MesEndpointProvider(
+        IOptionsMonitor<MesApiConfig> mesApiOptions,
+        ILocalSystemRuntimeConfigService runtimeConfig)
     {
         _mesApiOptions = mesApiOptions;
+        _runtimeConfig = runtimeConfig;
     }
 
     public bool IsConfigured
-        => !string.IsNullOrWhiteSpace(_mesApiOptions.CurrentValue.BaseUrl);
+        => TryResolveConfiguredBaseUri(out _);
 
     public string BuildUrl(string relativeOrAbsoluteUrl)
     {
@@ -22,15 +27,9 @@ public sealed class MesEndpointProvider : IMesEndpointProvider
             return absoluteUri.ToString();
         }
 
-        var baseUrl = _mesApiOptions.CurrentValue.BaseUrl?.Trim();
-        if (string.IsNullOrWhiteSpace(baseUrl))
+        if (!TryResolveConfiguredBaseUri(out var baseUri))
         {
             throw new InvalidOperationException("Missing config: MesApi:BaseUrl");
-        }
-
-        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri))
-        {
-            throw new InvalidOperationException($"Invalid config: MesApi:BaseUrl = '{baseUrl}'");
         }
 
         return new Uri(baseUri, relativeOrAbsoluteUrl).ToString();
@@ -43,4 +42,26 @@ public sealed class MesEndpointProvider : IMesEndpointProvider
                 static x => x.Key.Trim(),
                 static x => x.Value ?? string.Empty,
                 StringComparer.OrdinalIgnoreCase);
+
+    private bool TryResolveConfiguredBaseUri(out Uri baseUri)
+    {
+        var runtimeBaseUrl = _runtimeConfig.Current.MesBaseUrl?.Trim();
+        if (!string.IsNullOrWhiteSpace(runtimeBaseUrl)
+            && Uri.TryCreate(runtimeBaseUrl, UriKind.Absolute, out var runtimeBaseUri))
+        {
+            baseUri = runtimeBaseUri;
+            return true;
+        }
+
+        var configuredBaseUrl = _mesApiOptions.CurrentValue.BaseUrl?.Trim();
+        if (!string.IsNullOrWhiteSpace(configuredBaseUrl)
+            && Uri.TryCreate(configuredBaseUrl, UriKind.Absolute, out var configuredBaseUri))
+        {
+            baseUri = configuredBaseUri;
+            return true;
+        }
+
+        baseUri = default!;
+        return false;
+    }
 }
