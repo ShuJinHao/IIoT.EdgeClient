@@ -10,8 +10,10 @@ public class CloudApiConfig
 
 public class CloudApiPaths
 {
-    public string DeviceInstance { get; set; } = "/api/v1/edge/bootstrap/device-instance";
-    public string IdentityDeviceLogin { get; set; } = "/api/v1/human/identity/edge-login";
+    public string DeviceInstance { get; set; } = "/api/v1/bootstrap/device-instance";
+    public string BootstrapRefresh { get; set; } = "/api/v1/bootstrap/edge-refresh";
+    public string IdentityDeviceLogin { get; set; } = "/api/v1/bootstrap/edge-login";
+    public string HumanIdentityRefresh { get; set; } = "/api/v1/human/identity/refresh";
     public string DeviceLog { get; set; } = "/api/v1/edge/device-logs";
     public string CapacityHourly { get; set; } = "/api/v1/edge/capacity/hourly";
     public string CapacitySummary { get; set; } = "/api/v1/edge/capacity/summary";

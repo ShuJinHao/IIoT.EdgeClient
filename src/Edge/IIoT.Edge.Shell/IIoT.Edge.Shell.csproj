@@ -7,6 +7,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <BaseOutputPath>..\..\..\..\publish\</BaseOutputPath>
+    <OutputPath>..\..\..\..\publish\$(Configuration)\shell\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <EnableLocalPluginModuleBuild Condition="'$(EnableLocalPluginModuleBuild)' == ''">false</EnableLocalPluginModuleBuild>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(SKIP_EDGE_WPF_PROJECTS)' == 'true'">
@@ -34,7 +37,7 @@
     <ProjectReference Include="..\..\Shared\IIoT.Edge.UI.Shared\IIoT.Edge.UI.Shared.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(EnableLocalPluginModuleBuild)' == 'true'">
     <PluginModuleProject Include="..\..\Modules\**\*.csproj" />
     <PluginModuleProject Include="..\..\Tools\ModuleSamples\**\*.csproj" />
   </ItemGroup>
@@ -55,7 +58,7 @@
     </None>
   </ItemGroup>
 
-  <Target Name="ResolvePluginModuleArtifacts">
+  <Target Name="ResolvePluginModuleArtifacts" Condition="'$(EnableLocalPluginModuleBuild)' == 'true'">
     <MSBuild
       Projects="@(PluginModuleProject)"
       Targets="GetPluginArtifacts"
@@ -65,7 +68,7 @@
     </MSBuild>
   </Target>
 
-  <Target Name="CopyPluginModulesToBuildOutput" AfterTargets="Build" DependsOnTargets="ResolvePluginModuleArtifacts" Condition="'@(PluginModuleArtifact)' != ''">
+  <Target Name="CopyPluginModulesToBuildOutput" AfterTargets="Build" DependsOnTargets="ResolvePluginModuleArtifacts" Condition="'$(EnableLocalPluginModuleBuild)' == 'true' and '@(PluginModuleArtifact)' != ''">
     <MakeDir Directories="@(PluginModuleArtifact -> '$(TargetDir)Modules\%(ModuleId)\%(RecursiveDir)')" />
     <Copy
       SourceFiles="@(PluginModuleArtifact)"
@@ -73,7 +76,7 @@
       SkipUnchangedFiles="true" />
   </Target>
 
-  <Target Name="CopyPluginModulesToPublishOutput" AfterTargets="Publish" DependsOnTargets="ResolvePluginModuleArtifacts" Condition="'$(PublishDir)' != '' and '@(PluginModuleArtifact)' != ''">
+  <Target Name="CopyPluginModulesToPublishOutput" AfterTargets="Publish" DependsOnTargets="ResolvePluginModuleArtifacts" Condition="'$(EnableLocalPluginModuleBuild)' == 'true' and '$(PublishDir)' != '' and '@(PluginModuleArtifact)' != ''">
     <MakeDir Directories="@(PluginModuleArtifact -> '$(PublishDir)Modules\%(ModuleId)\%(RecursiveDir)')" />
     <Copy
       SourceFiles="@(PluginModuleArtifact)"

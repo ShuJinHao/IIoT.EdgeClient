@@ -1,7 +1,8 @@
-﻿using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Domain.Hardware.Aggregates;
+using IIoT.Edge.Infrastructure.DeviceComm.Plc;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Signals;
 
@@ -11,6 +12,7 @@ public class SignalInteraction : ISignalInteraction
     private readonly IPlcDataStore _dataStore;
     private readonly NetworkDeviceEntity _deviceConfig;
     private readonly ILogService _logger;
+    private readonly PlcConnectionStatusStore? _statusStore;
     private readonly IoMappingEntity[] _readMappings;
     private readonly IoMappingEntity[] _writeMappings;
     private readonly bool _canMergeRead;
@@ -27,12 +29,19 @@ public class SignalInteraction : ISignalInteraction
     public string TaskName => $"SignalInteraction_{_deviceConfig.DeviceName}";
     public bool IsConnected => _plcService.IsConnected;
 
-    public SignalInteraction(IPlcService plcService, IPlcDataStore dataStore, NetworkDeviceEntity deviceConfig, IoMappingEntity[] ioMappings, ILogService logger)
+    public SignalInteraction(
+        IPlcService plcService,
+        IPlcDataStore dataStore,
+        NetworkDeviceEntity deviceConfig,
+        IoMappingEntity[] ioMappings,
+        ILogService logger,
+        PlcConnectionStatusStore? statusStore = null)
     {
         _plcService = plcService;
         _dataStore = dataStore;
         _deviceConfig = deviceConfig;
         _logger = logger;
+        _statusStore = statusStore;
         _readMappings = ioMappings.Where(x => x.Direction == "Read").OrderBy(x => x.SortOrder).ToArray();
         _writeMappings = ioMappings.Where(x => x.Direction == "Write").OrderBy(x => x.SortOrder).ToArray();
         (_canMergeRead, _mergedReadAddress, _mergedReadCount) = TryMergeMappings(_readMappings);
@@ -67,6 +76,7 @@ public class SignalInteraction : ISignalInteraction
             _lastDisconnectLogTime = now;
             return true;
         }
+
         return false;
     }
 
@@ -102,9 +112,10 @@ public class SignalInteraction : ISignalInteraction
         try
         {
             _plcService.Init(_deviceConfig.IpAddress, _deviceConfig.Port1);
-            var result = await _plcService.ConnectAsync();
+            var result = await _plcService.ConnectAsync().ConfigureAwait(false);
             if (result)
             {
+                _statusStore?.MarkConnected(_deviceConfig.Id, _deviceConfig.DeviceName);
                 if (_retryCount > 0 || _lastDisconnectLogTime != DateTime.MinValue)
                 {
                     _logger.Info($"[{_deviceConfig.DeviceName}] Connected successfully.");
@@ -115,19 +126,21 @@ public class SignalInteraction : ISignalInteraction
             else
             {
                 _retryCount++;
+                _statusStore?.MarkDisconnected(_deviceConfig.Id, _deviceConfig.DeviceName, "Connect failed.");
                 if (ShouldLogDisconnect()) _logger.Warn($"[{_deviceConfig.DeviceName}] Connect failed. Entering backoff retry.");
             }
         }
         catch (Exception ex)
         {
             _retryCount++;
+            _statusStore?.MarkDisconnected(_deviceConfig.Id, _deviceConfig.DeviceName, ex.Message);
             if (ShouldLogDisconnect()) _logger.Error($"[{_deviceConfig.DeviceName}] Connect exception: {ex.Message}");
         }
     }
 
     public async Task StartAsync(CancellationToken ct)
     {
-        await Task.Factory.StartNew(() => TaskCoreAsync(ct), ct, TaskCreationOptions.LongRunning, TaskScheduler.Default).Unwrap();
+        await Task.Factory.StartNew(() => TaskCoreAsync(ct), ct, TaskCreationOptions.LongRunning, TaskScheduler.Default).Unwrap().ConfigureAwait(false);
     }
 
     private async Task TaskCoreAsync(CancellationToken ct)
@@ -136,14 +149,14 @@ public class SignalInteraction : ISignalInteraction
         {
             try
             {
-                await ExecuteOneCycleAsync();
-                await Task.Delay(TaskLoopInterval, ct);
+                await ExecuteOneCycleAsync().ConfigureAwait(false);
+                await Task.Delay(TaskLoopInterval, ct).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
                 _retryCount++;
                 if (ShouldLogDisconnect()) _logger.Error($"[{_deviceConfig.DeviceName}] Loop exception: {ex.Message}");
-                await Task.Delay(GetBackoffDelay(), ct);
+                await Task.Delay(GetBackoffDelay(), ct).ConfigureAwait(false);
             }
         }
     }
@@ -154,10 +167,10 @@ public class SignalInteraction : ISignalInteraction
     {
         if (!_plcService.IsConnected)
         {
-            await ConnectAsync();
+            await ConnectAsync().ConfigureAwait(false);
             if (!_plcService.IsConnected)
             {
-                await Task.Delay(GetBackoffDelay());
+                await Task.Delay(GetBackoffDelay()).ConfigureAwait(false);
                 return;
             }
         }
@@ -170,7 +183,7 @@ public class SignalInteraction : ISignalInteraction
             ushort[] allReadData;
             if (_canMergeRead && _mergedReadAddress is not null)
             {
-                var data = await _plcService.ReadDataAsync<ushort>(_mergedReadAddress, _mergedReadCount);
+                var data = await _plcService.ReadDataAsync<ushort>(_mergedReadAddress, _mergedReadCount).ConfigureAwait(false);
                 allReadData = data.ToArray();
             }
             else
@@ -178,17 +191,20 @@ public class SignalInteraction : ISignalInteraction
                 var list = new List<ushort>();
                 for (var i = 0; i < _readMappings.Length; i++)
                 {
-                    var data = await _plcService.ReadDataAsync<ushort>(_readMappings[i].PlcAddress, (ushort)_readMappings[i].AddressCount);
+                    var data = await _plcService.ReadDataAsync<ushort>(_readMappings[i].PlcAddress, (ushort)_readMappings[i].AddressCount).ConfigureAwait(false);
                     list.AddRange(data);
                 }
+
                 allReadData = list.ToArray();
             }
+
             buffer.UpdateReadBuffer(allReadData);
         }
         catch (Exception ex)
         {
             if (ShouldLogDisconnect()) _logger.Error($"[{_deviceConfig.DeviceName}] Read failed: {ex.Message}");
             _plcService.Disconnect();
+            _statusStore?.MarkDisconnected(_deviceConfig.Id, _deviceConfig.DeviceName, $"Read failed: {ex.Message}");
             throw new Exception("Read pipeline failed and the PLC connection was reset.");
         }
 
@@ -197,7 +213,7 @@ public class SignalInteraction : ISignalInteraction
             var writeData = buffer.GetWriteBuffer();
             if (_canMergeWrite && _mergedWriteAddress is not null)
             {
-                await _plcService.WriteDataAsync(_mergedWriteAddress, writeData.ToList());
+                await _plcService.WriteDataAsync(_mergedWriteAddress, writeData.ToList()).ConfigureAwait(false);
             }
             else
             {
@@ -207,7 +223,7 @@ public class SignalInteraction : ISignalInteraction
                     var count = _writeMappings[i].AddressCount;
                     var segment = new ushort[count];
                     Array.Copy(writeData, writeOffset, segment, 0, count);
-                    await _plcService.WriteDataAsync(_writeMappings[i].PlcAddress, segment.ToList());
+                    await _plcService.WriteDataAsync(_writeMappings[i].PlcAddress, segment.ToList()).ConfigureAwait(false);
                     writeOffset += count;
                 }
             }
@@ -216,6 +232,7 @@ public class SignalInteraction : ISignalInteraction
         {
             if (ShouldLogDisconnect()) _logger.Error($"[{_deviceConfig.DeviceName}] Write failed: {ex.Message}");
             _plcService.Disconnect();
+            _statusStore?.MarkDisconnected(_deviceConfig.Id, _deviceConfig.DeviceName, $"Write failed: {ex.Message}");
             throw new Exception("Write pipeline failed and the PLC connection was reset.");
         }
     }

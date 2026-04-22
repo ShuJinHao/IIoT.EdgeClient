@@ -60,7 +60,7 @@ function Get-EnabledModules {
         return @($DefaultModuleId)
     }
 
-    $config = Get-Content $ConfigPath -Raw | ConvertFrom-Json
+$config = Get-Content -Raw -Encoding UTF8 $ConfigPath | ConvertFrom-Json
     $enabled = $null
     if ($null -ne $config.Modules -and $null -ne $config.Modules.Enabled) {
         $enabled = $config.Modules.Enabled

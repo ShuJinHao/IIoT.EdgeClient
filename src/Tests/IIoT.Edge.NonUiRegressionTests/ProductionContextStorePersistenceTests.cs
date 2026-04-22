@@ -196,6 +196,79 @@ public sealed class ProductionContextStorePersistenceTests
         }
     }
 
+    [Fact]
+    public void SaveToFile_WhenTempWriteFails_ShouldDeleteResidualTmpFileAndLogCleanupResult()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "edge-context-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var logger = new FakeLogService();
+            var fileSystem = new FaultingPersistenceFileSystem
+            {
+                FailOnWrite = true,
+                LeaveTempFileOnWriteFailure = true
+            };
+            var store = new ProductionContextStore(logger, fileSystem, tempDir);
+            store.GetOrCreate("PLC-A").Set("WorkOrder", "WO-001");
+
+            store.SaveToFile();
+
+            var tempPath = Path.Combine(tempDir, "production_context.json.tmp");
+            Assert.False(File.Exists(tempPath));
+            Assert.Contains(
+                logger.Entries,
+                x => x.Message.Contains("writing temp file", StringComparison.OrdinalIgnoreCase)
+                    && x.Message.Contains("Temp cleanup: deleted residual .tmp file.", StringComparison.Ordinal));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void SaveToFile_WhenReplaceFails_ShouldDeleteTmpFileAndKeepExistingPersistedFile()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "edge-context-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var logger = new FakeLogService();
+            var fileSystem = new FaultingPersistenceFileSystem
+            {
+                FailOnReplace = true
+            };
+            var persistPath = Path.Combine(tempDir, "production_context.json");
+            File.WriteAllText(persistPath, "seed");
+
+            var store = new ProductionContextStore(logger, fileSystem, tempDir);
+            store.GetOrCreate("PLC-A").Set("WorkOrder", "WO-002");
+
+            store.SaveToFile();
+
+            var tempPath = Path.Combine(tempDir, "production_context.json.tmp");
+            Assert.False(File.Exists(tempPath));
+            Assert.Equal("seed", File.ReadAllText(persistPath));
+            Assert.Contains(
+                logger.Entries,
+                x => x.Message.Contains("replacing persisted file", StringComparison.OrdinalIgnoreCase)
+                    && x.Message.Contains("Temp cleanup: deleted residual .tmp file.", StringComparison.Ordinal));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
     private sealed class NamedCellData : CellDataBase
     {
         public override string ProcessType => "Named";
@@ -203,5 +276,44 @@ public sealed class ProductionContextStorePersistenceTests
         public override string DisplayLabel => Label;
 
         public string Label { get; set; } = string.Empty;
+    }
+
+    private sealed class FaultingPersistenceFileSystem : IProductionContextPersistenceFileSystem
+    {
+        public bool FailOnWrite { get; init; }
+
+        public bool LeaveTempFileOnWriteFailure { get; init; }
+
+        public bool FailOnReplace { get; init; }
+
+        public void WriteAllText(string path, string content)
+        {
+            if (!FailOnWrite)
+            {
+                File.WriteAllText(path, content);
+                return;
+            }
+
+            if (LeaveTempFileOnWriteFailure)
+            {
+                File.WriteAllText(path, content);
+            }
+
+            throw new IOException("disk full");
+        }
+
+        public void ReplaceFile(string sourcePath, string destinationPath)
+        {
+            if (FailOnReplace)
+            {
+                throw new UnauthorizedAccessException("replace blocked");
+            }
+
+            File.Move(sourcePath, destinationPath, overwrite: true);
+        }
+
+        public bool FileExists(string path) => File.Exists(path);
+
+        public void DeleteFile(string path) => File.Delete(path);
     }
 }

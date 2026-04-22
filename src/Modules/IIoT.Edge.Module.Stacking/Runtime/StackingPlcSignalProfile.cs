@@ -1,4 +1,5 @@
 using IIoT.Edge.Module.Stacking.Constants;
+using IIoT.Edge.Plugin.Shared.Signals;
 
 namespace IIoT.Edge.Module.Stacking.Runtime;
 
@@ -65,6 +66,19 @@ public static class StackingPlcSignalProfile
     public static IReadOnlyList<StackingSignalDefinition> WriteSignals { get; } =
         Signals.Where(static x => x.Direction == "Write")
             .OrderBy(static x => x.SortOrder)
+            .ToArray();
+
+    public static IReadOnlyList<ModuleSignalDefinition> LogicalSignals { get; } =
+        Signals.Select(static signal => new ModuleSignalDefinition(
+                signal.Label,
+                signal.DisplayName,
+                signal.DefaultAddress,
+                signal.AddressCount,
+                signal.DataType,
+                string.Equals(signal.Direction, "Write", StringComparison.OrdinalIgnoreCase)
+                    ? ModuleSignalDirection.Write
+                    : ModuleSignalDirection.Read,
+                signal.SortOrder))
             .ToArray();
 
     public static int SequenceReadIndex => 0;

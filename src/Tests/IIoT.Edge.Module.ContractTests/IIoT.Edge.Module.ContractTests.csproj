@@ -23,6 +23,7 @@
     <ProjectReference Include="..\..\Tools\ModuleSamples\IIoT.Edge.Module.ScanCaptureStarter\IIoT.Edge.Module.ScanCaptureStarter.csproj" />
     <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.Injection\IIoT.Edge.Module.Injection.csproj" />
     <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.Stacking\IIoT.Edge.Module.Stacking.csproj" />
+    <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.Homogenization\IIoT.Edge.Module.Homogenization.csproj" />
     <ProjectReference Include="..\..\Shared\IIoT.Edge.Module.Abstractions\IIoT.Edge.Module.Abstractions.csproj" />
   </ItemGroup>
 

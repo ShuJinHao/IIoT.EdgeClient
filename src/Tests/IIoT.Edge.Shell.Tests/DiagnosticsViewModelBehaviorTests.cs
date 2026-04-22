@@ -16,7 +16,12 @@ public sealed class DiagnosticsViewModelBehaviorTests
             var startupStore = new FakeStartupDiagnosticsStore();
             startupStore.Update(new StartupDiagnosticsReport(
                 GeneratedAt: new DateTime(2026, 4, 18, 10, 0, 0),
-                ConfigurationProfile: new ConfigurationProfileSnapshot("Production", "StackingLine", "appsettings.machine.StackingLine.json", true),
+                ConfigurationProfile: new ConfigurationProfileSnapshot(
+                    "Production",
+                    "StackingLine",
+                    "appsettings.machine.StackingLine.json",
+                    true,
+                    @"C:\EdgeRuntime\StackingLine"),
                 DiscoveredModules: ["Injection"],
                 EnabledModules: ["Injection"],
                 ActivatedModules: ["Injection"],

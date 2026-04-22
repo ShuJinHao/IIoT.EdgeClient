@@ -1,4 +1,5 @@
 using IIoT.Edge.Module.Abstractions;
+using IIoT.Edge.Plugin.Shared.Modules;
 using Microsoft.Extensions.Configuration;
 using System.IO;
 
@@ -22,11 +23,11 @@ public static class ShellModuleCatalog
             ShellModuleOptions.SectionName,
             discoveredModules);
 
-    public static IReadOnlyList<IEdgeStationModule> CreateAllModulesForValidation()
+    public static IReadOnlyList<IEdgeProcessModule> CreateAllModulesForValidation()
         => DirectoryModuleCatalog.CreateAllModules(
             DiscoverModules(GetPluginRootPath(AppContext.BaseDirectory)).Modules);
 
-    public static IReadOnlyList<IEdgeStationModule> CreateAllModulesForValidation(
+    public static IReadOnlyList<IEdgeProcessModule> CreateAllModulesForValidation(
         IReadOnlyList<ModulePluginDescriptor> discoveredModules)
         => DirectoryModuleCatalog.CreateAllModules(discoveredModules);
 

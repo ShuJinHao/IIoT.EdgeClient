@@ -16,13 +16,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\\..\\Presentation\\IIoT.Edge.Presentation.Navigation\\IIoT.Edge.Presentation.Navigation.csproj" />
-    <ProjectReference Include="..\\..\\Runtime\\IIoT.Edge.Runtime\\IIoT.Edge.Runtime.csproj" />
-    <ProjectReference Include="..\\..\\Shared\\IIoT.Edge.Module.Abstractions\\IIoT.Edge.Module.Abstractions.csproj" />
-    <ProjectReference Include="..\\..\\Shared\\IIoT.Edge.Integration.Contracts\\IIoT.Edge.Integration.Contracts.csproj" />
-    <ProjectReference Include="..\\..\\Shared\\IIoT.Edge.Module.Contracts\\IIoT.Edge.Module.Contracts.csproj" />
-    <ProjectReference Include="..\\..\\Shared\\IIoT.Edge.SharedKernel\\IIoT.Edge.SharedKernel.csproj" />
-    <ProjectReference Include="..\\..\\Shared\\IIoT.Edge.UI.Shared\\IIoT.Edge.UI.Shared.csproj" />
+    <ProjectReference Include="..\..\Presentation\IIoT.Edge.Presentation.Navigation\IIoT.Edge.Presentation.Navigation.csproj" />
+    <ProjectReference Include="..\..\Runtime\IIoT.Edge.Runtime\IIoT.Edge.Runtime.csproj" />
+    <ProjectReference Include="..\..\Shared\IIoT.Edge.Module.Abstractions\IIoT.Edge.Module.Abstractions.csproj" />
+    <ProjectReference Include="..\..\Shared\IIoT.Edge.Integration.Contracts\IIoT.Edge.Integration.Contracts.csproj" />
+    <ProjectReference Include="..\..\Shared\IIoT.Edge.Module.Contracts\IIoT.Edge.Module.Contracts.csproj" />
+    <ProjectReference Include="..\..\Shared\IIoT.Edge.SharedKernel\IIoT.Edge.SharedKernel.csproj" />
+    <ProjectReference Include="..\..\Shared\IIoT.Edge.UI.Shared\IIoT.Edge.UI.Shared.csproj" />
   </ItemGroup>
 
   <ItemGroup>

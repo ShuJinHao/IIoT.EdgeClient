@@ -1,7 +1,7 @@
 using IIoT.Edge.Module.DryRun;
 using IIoT.Edge.Module.Injection;
-using IIoT.Edge.Module.Stacking;
 using IIoT.Edge.Module.Abstractions;
+using IIoT.Edge.Plugin.Shared.Modules;
 using System.IO;
 
 namespace IIoT.Edge.Module.ContractTests;
@@ -38,8 +38,8 @@ public sealed class ModuleDiscoveryContractTests
             Assert.Equal(3, modules.Select(x => x.ModuleId).Distinct(StringComparer.OrdinalIgnoreCase).Count());
             Assert.Equal(3, modules.Select(x => x.ProcessType).Distinct(StringComparer.OrdinalIgnoreCase).Count());
             Assert.Contains(modules, x => x is InjectionModule);
-            Assert.Contains(modules, x => x is StackingModule);
             Assert.Contains(modules, x => x is DryRunModule);
+            Assert.Contains(modules, x => string.Equals(x.ModuleId, "Stacking", StringComparison.OrdinalIgnoreCase));
         }
         finally
         {
@@ -62,18 +62,21 @@ public sealed class ModuleDiscoveryContractTests
 
             foreach (var module in modules)
             {
-                module.RegisterServices(services);
-                module.RegisterCellData(cellDataRegistry);
-                module.RegisterRuntime(runtimeRegistry);
-                module.RegisterIntegrations(integrationRegistry);
-                module.RegisterViews(new ModuleViewRegistry(viewRegistry, module.ModuleId));
+                module.Configure(new TestEdgeProcessModuleBuilder(
+                    module.ModuleId,
+                    module.ProcessType,
+                    services,
+                    new ModuleViewRegistry(viewRegistry, module.ModuleId),
+                    cellDataRegistry,
+                    runtimeRegistry,
+                    integrationRegistry));
             }
 
             Assert.Equal(3, cellDataRegistry.GetRegistrations().Count);
             Assert.Equal(3, runtimeRegistry.GetRegistrations().Count);
             Assert.Equal(3, integrationRegistry.GetCloudUploaders().Count);
             Assert.NotNull(viewRegistry.GetViewRegistration("Injection.DataView"));
-            Assert.NotNull(viewRegistry.GetViewRegistration("Stacking.PlaceholderDashboard"));
+            Assert.NotNull(viewRegistry.GetViewRegistration("Stacking.DataView"));
             Assert.NotNull(viewRegistry.GetViewRegistration("DryRun.Dashboard"));
         }
         finally

@@ -21,7 +21,8 @@ public sealed record ConfigurationProfileSnapshot(
     string EnvironmentName,
     string? MachineProfile,
     string? MachineProfileFileName,
-    bool IsMachineProfileLoaded);
+    bool IsMachineProfileLoaded,
+    string RuntimeDataRoot);
 
 public sealed record PluginLifecycleSnapshot(
     string ModuleId,
@@ -63,7 +64,7 @@ public sealed record StartupDiagnosticsReport(
     public static StartupDiagnosticsReport Empty()
         => new(
             DateTime.MinValue,
-            new ConfigurationProfileSnapshot("Production", null, null, false),
+            new ConfigurationProfileSnapshot("Production", null, null, false, "<unresolved>"),
             [],
             [],
             [],

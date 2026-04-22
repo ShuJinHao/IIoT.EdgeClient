@@ -16,3 +16,6 @@ node_modules/
 *.trx
 *.tmp
 *.cache
+
+# Local launcher secrets
+src/Edge/IIoT.Edge.Launcher/launcher.accounts.json

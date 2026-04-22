@@ -18,4 +18,8 @@ public record DeviceSession
     public string? UploadAccessToken { get; init; }
 
     public DateTimeOffset? UploadAccessTokenExpiresAtUtc { get; init; }
+
+    public string? RefreshToken { get; init; }
+
+    public DateTimeOffset? RefreshTokenExpiresAtUtc { get; init; }
 }

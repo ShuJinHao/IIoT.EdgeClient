@@ -41,10 +41,16 @@ public class CloudApiEndpointProvider : ICloudApiEndpointProvider
     }
 
     public string GetDeviceInstancePath()
-        => ResolvePath(_cloudApiOptions.CurrentValue.Paths.DeviceInstance, "/api/v1/edge/bootstrap/device-instance");
+        => ResolvePath(_cloudApiOptions.CurrentValue.Paths.DeviceInstance, "/api/v1/bootstrap/device-instance");
+
+    public string GetBootstrapRefreshPath()
+        => ResolvePath(_cloudApiOptions.CurrentValue.Paths.BootstrapRefresh, "/api/v1/bootstrap/edge-refresh");
 
     public string GetIdentityDeviceLoginPath()
-        => ResolvePath(_cloudApiOptions.CurrentValue.Paths.IdentityDeviceLogin, "/api/v1/human/identity/edge-login");
+        => ResolvePath(_cloudApiOptions.CurrentValue.Paths.IdentityDeviceLogin, "/api/v1/bootstrap/edge-login");
+
+    public string GetHumanIdentityRefreshPath()
+        => ResolvePath(_cloudApiOptions.CurrentValue.Paths.HumanIdentityRefresh, "/api/v1/human/identity/refresh");
 
     public string GetDeviceLogPath()
         => ResolvePath(_cloudApiOptions.CurrentValue.Paths.DeviceLog, "/api/v1/edge/device-logs");

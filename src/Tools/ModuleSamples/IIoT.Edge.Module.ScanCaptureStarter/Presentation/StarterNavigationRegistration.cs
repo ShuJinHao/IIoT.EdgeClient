@@ -3,19 +3,19 @@ using IIoT.Edge.Presentation.Navigation.Features.Config.ParamView;
 using IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView;
 using IIoT.Edge.Module.ScanCaptureStarter.Presentation.ViewModels;
 using IIoT.Edge.Module.ScanCaptureStarter.Presentation.Views;
-using IIoT.Edge.UI.Shared.Modularity;
+using IIoT.Edge.Plugin.Shared.Modules;
 
 namespace IIoT.Edge.Module.ScanCaptureStarter.Presentation;
 
 public static class StarterNavigationRegistration
 {
-    public static IViewRegistry RegisterScanCaptureStarterViews(this IViewRegistry registry)
+    public static IEdgeProcessModuleBuilder RegisterScanCaptureStarterViews(this IEdgeProcessModuleBuilder builder)
     {
-        registry.RegisterRoute(StarterViewIds.Skeleton, typeof(ScanCaptureStarterSkeletonPage), typeof(StarterSkeletonViewModel), cacheView: true);
-        registry.RegisterRoute(StarterViewIds.ParamView, typeof(ParamViewPage), typeof(StarterParamViewModel), cacheView: false);
-        registry.RegisterRoute(StarterViewIds.HardwareConfigView, typeof(HardwareConfigPage), typeof(StarterHardwareConfigViewModel), cacheView: false);
+        builder.RegisterRoute(StarterViewIds.Skeleton, typeof(ScanCaptureStarterSkeletonPage), typeof(StarterSkeletonViewModel), cacheView: true);
+        builder.RegisterRoute(StarterViewIds.ParamView, typeof(ParamViewPage), typeof(StarterParamViewModel), cacheView: false);
+        builder.RegisterRoute(StarterViewIds.HardwareConfigView, typeof(HardwareConfigPage), typeof(StarterHardwareConfigViewModel), cacheView: false);
 
-        registry.RegisterMenu(new MenuInfo
+        builder.RegisterMenu(new EdgeMenuInfo
         {
             Title = "Starter Dashboard",
             ViewId = StarterViewIds.Skeleton,
@@ -23,7 +23,7 @@ public static class StarterNavigationRegistration
             Order = 30,
             RequiredPermission = string.Empty
         });
-        registry.RegisterMenu(new MenuInfo
+        builder.RegisterMenu(new EdgeMenuInfo
         {
             Title = "Starter Params",
             ViewId = StarterViewIds.ParamView,
@@ -31,7 +31,7 @@ public static class StarterNavigationRegistration
             Order = 31,
             RequiredPermission = Permissions.ParamConfig
         });
-        registry.RegisterMenu(new MenuInfo
+        builder.RegisterMenu(new EdgeMenuInfo
         {
             Title = "Starter Hardware",
             ViewId = StarterViewIds.HardwareConfigView,
@@ -40,6 +40,6 @@ public static class StarterNavigationRegistration
             RequiredPermission = Permissions.HardwareConfig
         });
 
-        return registry;
+        return builder;
     }
 }

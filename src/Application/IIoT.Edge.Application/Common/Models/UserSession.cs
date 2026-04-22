@@ -32,5 +32,11 @@ namespace IIoT.Edge.Application.Common.Models
         /// 云端登录会话过期时间；本地管理员模式下为空。
         /// </summary>
         public DateTimeOffset? ExpiresAtUtc { get; init; }
+
+        public string? AccessToken { get; init; }
+
+        public string? RefreshToken { get; init; }
+
+        public DateTimeOffset? RefreshTokenExpiresAtUtc { get; init; }
     }
 }

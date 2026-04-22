@@ -2,7 +2,9 @@
 # Once module owners are stable, replace module entries with the actual responsible teammates.
 /src/Edge/IIoT.Edge.Host.Bootstrap/ @ShuJinHao
 /src/Shared/IIoT.Edge.Module.Abstractions/ @ShuJinHao
+/src/Shared/IIoT.Edge.Module.Contracts/ @ShuJinHao
 /src/Tests/IIoT.Edge.Module.ContractTests/ @ShuJinHao
 /src/Modules/IIoT.Edge.Module.Injection/ @ShuJinHao
 /src/Modules/IIoT.Edge.Module.Stacking/ @ShuJinHao
+/src/Modules/IIoT.Edge.Module.Homogenization/ @ShuJinHao
 /src/Tools/ @ShuJinHao

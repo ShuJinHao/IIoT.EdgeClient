@@ -6,44 +6,31 @@ using IIoT.Edge.Module.ScanCaptureStarter.Payload;
 using IIoT.Edge.Module.ScanCaptureStarter.Presentation;
 using IIoT.Edge.Module.ScanCaptureStarter.Runtime;
 using IIoT.Edge.Module.ScanCaptureStarter.Samples;
-using IIoT.Edge.UI.Shared.Modularity;
+using IIoT.Edge.Plugin.Shared.Modules;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace IIoT.Edge.Module.ScanCaptureStarter;
 
-public sealed class ScanCaptureStarterModule : IEdgeStationModule
+public sealed class ScanCaptureStarterModule : IEdgeProcessModule
 {
     public string ModuleId => StarterModuleConstants.ModuleId;
 
     public string ProcessType => StarterModuleConstants.ProcessType;
 
-    public void RegisterServices(IServiceCollection services)
-    {
-        services.AddSingleton<IProcessCloudUploader, StarterCloudUploader>();
-        services.AddSingleton<IModuleHardwareProfileProvider, StarterHardwareProfileProvider>();
-        services.AddSingleton<IDevelopmentSampleContributor, ScanCaptureStarterDevelopmentSampleContributor>();
-        services.AddSingleton<Presentation.ViewModels.StarterSkeletonViewModel>();
-        services.AddSingleton<Presentation.StarterParamViewModel>();
-        services.AddSingleton<Presentation.StarterHardwareConfigViewModel>();
-    }
+    public string DisplayName => "ScanCaptureStarter";
 
-    public void RegisterViews(IViewRegistry viewRegistry)
+    public void Configure(IEdgeProcessModuleBuilder builder)
     {
-        viewRegistry.RegisterScanCaptureStarterViews();
-    }
+        builder.Services.AddSingleton<IProcessCloudUploader, StarterCloudUploader>();
+        builder.Services.AddSingleton<IModuleHardwareProfileProvider, StarterHardwareProfileProvider>();
+        builder.Services.AddSingleton<IDevelopmentSampleContributor, ScanCaptureStarterDevelopmentSampleContributor>();
+        builder.Services.AddSingleton<Presentation.ViewModels.StarterSkeletonViewModel>();
+        builder.Services.AddSingleton<Presentation.StarterParamViewModel>();
+        builder.Services.AddSingleton<Presentation.StarterHardwareConfigViewModel>();
 
-    public void RegisterCellData(ICellDataRegistry registry)
-    {
-        registry.Register<StarterCellData>(ProcessType);
-    }
-
-    public void RegisterRuntime(IStationRuntimeRegistry registry)
-    {
-        registry.Register(new StarterStationRuntimeFactory());
-    }
-
-    public void RegisterIntegrations(IProcessIntegrationRegistry registry)
-    {
-        registry.RegisterCloudUploader(ProcessType, ProcessUploadMode.Single);
+        builder.RegisterCellData(typeof(StarterCellData));
+        builder.RegisterRuntimeFactory(new StarterStationRuntimeFactory());
+        builder.RegisterCloudUploader(PluginCloudUploadMode.Single);
+        builder.RegisterScanCaptureStarterViews();
     }
 }

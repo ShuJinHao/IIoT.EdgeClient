@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Common.Models;
 using log4net;
@@ -17,9 +18,11 @@ public class Log4NetLogService : ILogService
 
     public event Action<LogEntry>? EntryAdded;
 
-    public Log4NetLogService()
+    public Log4NetLogService(EdgeRuntimePaths runtimePaths)
     {
         var configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "log4net.config");
+        Directory.CreateDirectory(runtimePaths.LogDirectory);
+        log4net.GlobalContext.Properties["LogDirectory"] = EnsureTrailingSeparator(runtimePaths.LogDirectory);
 
         if (File.Exists(configPath))
             XmlConfigurator.Configure(new FileInfo(configPath));
@@ -44,4 +47,9 @@ public class Log4NetLogService : ILogService
 
         EntryAdded?.Invoke(entry);
     }
+
+    private static string EnsureTrailingSeparator(string path)
+        => path.EndsWith(Path.DirectorySeparatorChar)
+            ? path
+            : path + Path.DirectorySeparatorChar;
 }

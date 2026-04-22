@@ -17,6 +17,7 @@ public class ProductionContextStore : IProductionContextStore
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private readonly Dictionary<string, ProductionContext> _contexts = new();
+    private readonly IProductionContextPersistenceFileSystem _fileSystem;
     private readonly ILogService _logger;
     private readonly string _persistPath;
     private readonly object _lock = new();
@@ -34,8 +35,19 @@ public class ProductionContextStore : IProductionContextStore
     };
 
     public ProductionContextStore(ILogService logger, string? persistDirectory = null)
+        : this(logger, new ProductionContextPersistenceFileSystem(), persistDirectory)
     {
+    }
+
+    internal ProductionContextStore(
+        ILogService logger,
+        IProductionContextPersistenceFileSystem fileSystem,
+        string? persistDirectory = null)
+    {
+        ArgumentNullException.ThrowIfNull(fileSystem);
+
         _logger = logger;
+        _fileSystem = fileSystem;
 
         var dir = persistDirectory
             ?? Path.Combine(
@@ -144,6 +156,8 @@ public class ProductionContextStore : IProductionContextStore
 
     public void SaveToFile()
     {
+        var tempPath = _persistPath + ".tmp";
+
         try
         {
             List<ProductionContext> contexts;
@@ -153,9 +167,28 @@ public class ProductionContextStore : IProductionContextStore
             }
 
             var json = JsonSerializer.Serialize(contexts, _jsonOptions);
-            var tempPath = _persistPath + ".tmp";
-            File.WriteAllText(tempPath, json);
-            File.Move(tempPath, _persistPath, overwrite: true);
+
+            try
+            {
+                _fileSystem.WriteAllText(tempPath, json);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(
+                    $"[ContextStore] Save failed while writing temp file {Path.GetFileName(tempPath)}: {ex.Message}. {CleanupTempFile(tempPath)}");
+                return;
+            }
+
+            try
+            {
+                _fileSystem.ReplaceFile(tempPath, _persistPath);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(
+                    $"[ContextStore] Save failed while replacing persisted file {Path.GetFileName(_persistPath)}: {ex.Message}. {CleanupTempFile(tempPath)}");
+                return;
+            }
 
             _logger.Info($"[ContextStore] Saved {contexts.Count} device contexts.");
         }
@@ -261,6 +294,24 @@ public class ProductionContextStore : IProductionContextStore
         lock (_lock)
         {
             _persistenceDiagnostics = diagnostics;
+        }
+    }
+
+    private string CleanupTempFile(string tempPath)
+    {
+        try
+        {
+            if (!_fileSystem.FileExists(tempPath))
+            {
+                return "Temp cleanup: no residual .tmp file found.";
+            }
+
+            _fileSystem.DeleteFile(tempPath);
+            return "Temp cleanup: deleted residual .tmp file.";
+        }
+        catch (Exception cleanupEx)
+        {
+            return $"Temp cleanup: failed to delete residual .tmp file: {cleanupEx.Message}";
         }
     }
 

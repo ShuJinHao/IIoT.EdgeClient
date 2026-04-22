@@ -1,15 +1,15 @@
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Module.Abstractions;
 using IIoT.Edge.Module.Injection.Integration;
 using IIoT.Edge.Module.Injection.Payload;
 using IIoT.Edge.Module.Injection.Presentation;
 using IIoT.Edge.Module.Injection.Runtime;
-using IIoT.Edge.Module.Abstractions;
-using IIoT.Edge.UI.Shared.Modularity;
+using IIoT.Edge.Plugin.Shared.Modules;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace IIoT.Edge.Module.Injection;
 
-public sealed class InjectionModule : IEdgeStationModule
+public sealed class InjectionModule : IEdgeProcessModule
 {
     public const string ModuleKey = "Injection";
 
@@ -17,35 +17,22 @@ public sealed class InjectionModule : IEdgeStationModule
 
     public string ProcessType => ModuleKey;
 
-    public void RegisterServices(IServiceCollection services)
-    {
-        services.AddSingleton<IProcessCloudUploader, InjectionCloudUploader>();
-        services.AddSingleton<InjectionDataViewModel>();
-        services.AddSingleton<InjectionCapacityViewModel>();
-        services.AddSingleton<InjectionMonitorViewModel>();
-        services.AddSingleton<InjectionIoViewModel>();
-        services.AddSingleton<InjectionRecipeViewModel>();
-        services.AddSingleton<InjectionParamViewModel>();
-        services.AddSingleton<InjectionHardwareConfigViewModel>();
-    }
+    public string DisplayName => "注液";
 
-    public void RegisterViews(IViewRegistry viewRegistry)
+    public void Configure(IEdgeProcessModuleBuilder builder)
     {
-        viewRegistry.RegisterInjectionViews();
-    }
+        builder.Services.AddSingleton<IProcessCloudUploader, InjectionCloudUploader>();
+        builder.Services.AddSingleton<InjectionDataViewModel>();
+        builder.Services.AddSingleton<InjectionCapacityViewModel>();
+        builder.Services.AddSingleton<InjectionMonitorViewModel>();
+        builder.Services.AddSingleton<InjectionIoViewModel>();
+        builder.Services.AddSingleton<InjectionRecipeViewModel>();
+        builder.Services.AddSingleton<InjectionParamViewModel>();
+        builder.Services.AddSingleton<InjectionHardwareConfigViewModel>();
 
-    public void RegisterCellData(ICellDataRegistry registry)
-    {
-        registry.Register<InjectionCellData>(ProcessType);
-    }
-
-    public void RegisterRuntime(IStationRuntimeRegistry registry)
-    {
-        registry.Register(new InjectionStationRuntimeFactory());
-    }
-
-    public void RegisterIntegrations(IProcessIntegrationRegistry registry)
-    {
-        registry.RegisterCloudUploader(ProcessType, ProcessUploadMode.Batch);
+        builder.RegisterCellData(typeof(InjectionCellData));
+        builder.RegisterRuntimeFactory(new InjectionStationRuntimeFactory());
+        builder.RegisterCloudUploader(PluginCloudUploadMode.Batch);
+        builder.RegisterInjectionViews();
     }
 }

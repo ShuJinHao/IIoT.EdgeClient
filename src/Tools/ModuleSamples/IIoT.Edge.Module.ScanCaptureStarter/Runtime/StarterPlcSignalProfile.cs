@@ -1,3 +1,5 @@
+using IIoT.Edge.Plugin.Shared.Signals;
+
 namespace IIoT.Edge.Module.ScanCaptureStarter.Runtime;
 
 public sealed record StarterSignalDefinition(
@@ -32,6 +34,19 @@ public static class StarterPlcSignalProfile
     ];
 
     public static IReadOnlyList<StarterSignalDefinition> Signals { get; } = ReadSignals.Concat(WriteSignals).ToArray();
+
+    public static IReadOnlyList<ModuleSignalDefinition> LogicalSignals { get; } =
+        Signals.Select(static signal => new ModuleSignalDefinition(
+                signal.Label,
+                signal.DisplayName,
+                signal.DefaultAddress,
+                signal.AddressCount,
+                signal.DataType,
+                string.Equals(signal.Direction, "Write", StringComparison.OrdinalIgnoreCase)
+                    ? ModuleSignalDirection.Write
+                    : ModuleSignalDirection.Read,
+                signal.SortOrder))
+            .ToArray();
 
     public static bool? ToCellResult(ushort resultCode)
         => resultCode switch

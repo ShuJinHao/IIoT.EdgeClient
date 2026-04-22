@@ -1,6 +1,7 @@
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Plugin.Shared.Signals;
 using IIoT.Edge.Runtime.Base;
 using IIoT.Edge.Runtime.Context;
 using IIoT.Edge.Runtime.Scan.Base;
@@ -13,8 +14,9 @@ public class LoadingScanTask : PlcTaskBase, IScanTask
     private static readonly TimeSpan BarcodeReadTimeout = TimeSpan.FromSeconds(3);
 
     private readonly string _taskName;
-    private readonly int _triggerIndex;
-    private readonly int _responseIndex;
+    private readonly ILogicalSignalAccessor _signals;
+    private readonly string _triggerLabel;
+    private readonly string _responseLabel;
     private readonly IBarcodeReader _barcodeReader;
     private readonly Func<string, Task<bool>> _localDuplicateChecker;
     private readonly Func<string, Task<bool>>? _extraValidator;
@@ -36,20 +38,26 @@ public class LoadingScanTask : PlcTaskBase, IScanTask
 
     public LoadingScanTask(
         IPlcBuffer buffer,
+        ILogicalSignalAccessor signals,
         ProductionContext context,
         ILogService logger,
         string taskName,
-        int triggerIndex,
-        int responseIndex,
+        string triggerLabel,
+        string responseLabel,
         IBarcodeReader barcodeReader,
         Func<string, Task<bool>> localDuplicateChecker,
         Func<string, Task<bool>>? extraValidator = null,
         string scanSource = "LoadingScan")
         : base(buffer, context, logger)
     {
+        _signals = signals ?? throw new ArgumentNullException(nameof(signals));
         _taskName = taskName;
-        _triggerIndex = triggerIndex;
-        _responseIndex = responseIndex;
+        _triggerLabel = string.IsNullOrWhiteSpace(triggerLabel)
+            ? throw new ArgumentException("Trigger label cannot be empty.", nameof(triggerLabel))
+            : triggerLabel;
+        _responseLabel = string.IsNullOrWhiteSpace(responseLabel)
+            ? throw new ArgumentException("Response label cannot be empty.", nameof(responseLabel))
+            : responseLabel;
         _barcodeReader = barcodeReader;
         _localDuplicateChecker = localDuplicateChecker;
         _extraValidator = extraValidator;
@@ -60,7 +68,7 @@ public class LoadingScanTask : PlcTaskBase, IScanTask
         switch (Step)
         {
             case 0:
-                if (Buffer.GetReadValue(_triggerIndex) == TriggerStart)
+                if (_signals.Read(_triggerLabel) == TriggerStart)
                 {
                     Logger.Info($"[{Context.DeviceName}] {TaskName} triggered.");
                     Step = 10;
@@ -73,7 +81,7 @@ public class LoadingScanTask : PlcTaskBase, IScanTask
                 {
                     LastScannedCode = null;
                     LastResult = false;
-                    Buffer.SetWriteValue(_responseIndex, ResponseNg);
+                    _signals.Write(_responseLabel, ResponseNg);
                     Step = 30;
                     break;
                 }
@@ -83,7 +91,7 @@ public class LoadingScanTask : PlcTaskBase, IScanTask
                     Logger.Warn($"[{Context.DeviceName}] {TaskName} did not receive any barcode.");
                     LastScannedCode = null;
                     LastResult = false;
-                    Buffer.SetWriteValue(_responseIndex, ResponseNg);
+                    _signals.Write(_responseLabel, ResponseNg);
                     Step = 30;
                     break;
                 }
@@ -122,7 +130,7 @@ public class LoadingScanTask : PlcTaskBase, IScanTask
 
                 LastScannedCode = barcodes.LastOrDefault(static b => !string.IsNullOrWhiteSpace(b));
                 LastResult = allOk;
-                Buffer.SetWriteValue(_responseIndex, allOk ? ResponseOk : ResponseNg);
+                _signals.Write(_responseLabel, allOk ? ResponseOk : ResponseNg);
 
                 Logger.Info(
                     $"[{Context.DeviceName}] {TaskName} processed {barcodes.Length} barcode(s). Result:{(allOk ? "OK" : "NG")}");
@@ -130,9 +138,9 @@ public class LoadingScanTask : PlcTaskBase, IScanTask
                 break;
 
             case 30:
-                if (Buffer.GetReadValue(_triggerIndex) == TriggerIdle)
+                if (_signals.Read(_triggerLabel) == TriggerIdle)
                 {
-                    Buffer.SetWriteValue(_responseIndex, ResponseIdle);
+                    _signals.Write(_responseLabel, ResponseIdle);
                     LastCompletedTime = DateTime.UtcNow;
                     Logger.Info($"[{Context.DeviceName}] {TaskName} finished.");
                     Step = 0;

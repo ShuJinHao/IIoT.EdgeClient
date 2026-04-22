@@ -9,6 +9,7 @@ using IIoT.Edge.Module.ScanCaptureStarter.Integration;
 using IIoT.Edge.Module.ScanCaptureStarter.Payload;
 using IIoT.Edge.Module.ScanCaptureStarter.Runtime;
 using IIoT.Edge.Module.ScanCaptureStarter.Samples;
+using IIoT.Edge.Runtime.Signals;
 using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
@@ -197,6 +198,52 @@ public sealed class ScanCaptureStarterBehaviorTests
     }
 
     [Fact]
+    public async Task StarterStationRuntimeFactory_WhenSignalOrderChanges_ShouldStillCaptureAndAckByLabel()
+    {
+        var logger = new FakeLogService();
+        var pipeline = new FakeDataPipelineService();
+        var services = new ServiceCollection();
+        services.AddSingleton<ILogService>(logger);
+        services.AddSingleton<IDataPipelineService>(pipeline);
+        services.AddSingleton<IBarcodeReaderFactory>(new StubBarcodeReaderFactory(["STARTER-SCAN-REORDER"]));
+        using var provider = services.BuildServiceProvider();
+
+        var buffer = new PlcBuffer(8, 8);
+        var context = new ProductionContext
+        {
+            DeviceName = "PLC-STARTER",
+            DeviceId = 11
+        };
+        ProductionContextSignalBindings.Set(context,
+        [
+            new ModuleIoSnapshot("Starter.ResultCode", "DB1.DBW4", 1, "Int16", "Read", 1),
+            new ModuleIoSnapshot("Starter.ScanTrigger", "DB1.DBW0", 1, "Int16", "Read", 2),
+            new ModuleIoSnapshot("Starter.Sequence", "DB1.DBW2", 1, "Int16", "Read", 3),
+            new ModuleIoSnapshot("Starter.Ack", "DB1.DBW8", 1, "Int16", "Write", 1),
+            new ModuleIoSnapshot("Starter.ScanResponse", "DB1.DBW6", 1, "Int16", "Write", 2)
+        ]);
+
+        var tasks = new StarterStationRuntimeFactory().CreateTasks(provider, buffer, context);
+
+        using var cts = new CancellationTokenSource();
+        var runningTasks = tasks.Select(x => x.StartAsync(cts.Token)).ToArray();
+
+        buffer.UpdateReadBuffer([1, 11, 1]);
+        await Task.Delay(220);
+        buffer.UpdateReadBuffer([1, 10, 1]);
+        await Task.Delay(220);
+
+        cts.Cancel();
+        await Task.WhenAll(runningTasks);
+
+        var cell = Assert.Single(context.CurrentCells.Values.OfType<StarterCellData>());
+        Assert.Equal("STARTER-SCAN-REORDER", cell.Barcode);
+        Assert.Equal(1, cell.SequenceNo);
+        Assert.Equal((ushort)1, buffer.GetWriteBuffer()[0]);
+        Assert.Equal((ushort)10, buffer.GetWriteBuffer()[1]);
+    }
+
+    [Fact]
     public async Task ScanCaptureStarterDevelopmentSampleContributor_ShouldSeedDeviceMappingsAndRuntimeSample()
     {
         var configuration = new ConfigurationBuilder()
@@ -240,17 +287,13 @@ public sealed class ScanCaptureStarterBehaviorTests
     [Fact]
     public void ScanCaptureStarterModule_ShouldNotBeEnabledInDefaultShellConfig()
     {
-        var configPath = Path.GetFullPath(
-            Path.Combine(
-                AppContext.BaseDirectory,
-                "..",
-                "..",
-                "..",
-                "..",
-                "..",
-                "Edge",
-                "IIoT.Edge.Shell",
-                "appsettings.json"));
+        var repoRoot = FindEdgeClientRoot();
+        var configPath = Path.Combine(
+            repoRoot,
+            "src",
+            "Edge",
+            "IIoT.Edge.Shell",
+            "appsettings.json");
 
         Assert.True(File.Exists(configPath), $"Expected shell config file at '{configPath}'.");
 
@@ -275,6 +318,22 @@ public sealed class ScanCaptureStarterBehaviorTests
                 ["Modules:ScanCaptureStarter:CloudUploadEnabled"] = cloudUploadEnabled.ToString()
             })
             .Build();
+
+    private static string FindEdgeClientRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "IIoT.EdgeClient.slnx")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new InvalidOperationException("Could not locate IIoT.EdgeClient repository root.");
+    }
 
     private sealed class StubBarcodeReaderFactory(IReadOnlyList<string> barcodes) : IBarcodeReaderFactory
     {

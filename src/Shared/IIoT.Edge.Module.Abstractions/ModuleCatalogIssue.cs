@@ -1,3 +1,5 @@
+using IIoT.Edge.Plugin.Shared.Modules;
+
 namespace IIoT.Edge.Module.Abstractions;
 
 public sealed record ModuleCatalogIssue(
@@ -13,6 +15,6 @@ public sealed record ModuleCatalogDiscoveryResult(
     IReadOnlyList<ModuleCatalogIssue> Issues);
 
 public sealed record ModuleCatalogActivationResult(
-    IReadOnlyList<IEdgeStationModule> Modules,
+    IReadOnlyList<IEdgeProcessModule> Modules,
     IReadOnlyList<string> EnabledModuleIds,
     IReadOnlyList<ModuleCatalogIssue> Issues);

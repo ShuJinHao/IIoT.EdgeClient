@@ -952,8 +952,10 @@ internal sealed class FakeCloudApiEndpointProvider : ICloudApiEndpointProvider
     }
 
     public string GetClientCode() => "TEST";
-    public string GetDeviceInstancePath() => "/api/v1/edge/bootstrap/device-instance";
-    public string GetIdentityDeviceLoginPath() => "/api/v1/human/identity/edge-login";
+    public string GetDeviceInstancePath() => "/api/v1/bootstrap/device-instance";
+    public string GetBootstrapRefreshPath() => "/api/v1/bootstrap/edge-refresh";
+    public string GetIdentityDeviceLoginPath() => "/api/v1/bootstrap/edge-login";
+    public string GetHumanIdentityRefreshPath() => "/api/v1/human/identity/refresh";
     public string GetDeviceLogPath() => "/api/v1/edge/device-logs";
     public string BuildRecipeByDevicePath(Guid deviceId) => $"/api/v1/edge/recipes/device/{deviceId}";
     public string GetCapacityHourlyPath() => "/api/v1/edge/capacity/hourly";

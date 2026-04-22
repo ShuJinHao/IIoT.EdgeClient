@@ -11,12 +11,13 @@ This repository has one production client and several supporting projects with d
 
 ## Business modules
 
-Keep real device/process modules in `src/Modules` only.
+Keep all process modules in `src/Modules`.
 
 - `src/Modules/IIoT.Edge.Module.Injection`
 - `src/Modules/IIoT.Edge.Module.Stacking`
+- `src/Modules/IIoT.Edge.Module.Homogenization`
 
-New device support should start as a new module here.
+New device support should be added as a new module project under `src/Modules`.
 
 ## Tools
 

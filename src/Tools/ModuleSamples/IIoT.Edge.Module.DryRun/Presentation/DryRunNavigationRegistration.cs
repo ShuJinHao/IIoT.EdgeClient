@@ -1,20 +1,20 @@
 using IIoT.Edge.Module.DryRun.Presentation.ViewModels;
 using IIoT.Edge.Module.DryRun.Presentation.Views;
-using IIoT.Edge.UI.Shared.Modularity;
+using IIoT.Edge.Plugin.Shared.Modules;
 
 namespace IIoT.Edge.Module.DryRun.Presentation;
 
 public static class DryRunNavigationRegistration
 {
-    public static IViewRegistry RegisterDryRunViews(this IViewRegistry registry)
+    public static IEdgeProcessModuleBuilder RegisterDryRunViews(this IEdgeProcessModuleBuilder builder)
     {
-        registry.RegisterRoute(
+        builder.RegisterRoute(
             DryRunViewIds.Dashboard,
             typeof(DryRunDashboardPage),
             typeof(DryRunDashboardViewModel),
             cacheView: true);
 
-        registry.RegisterMenu(new MenuInfo
+        builder.RegisterMenu(new EdgeMenuInfo
         {
             Title = "DryRun",
             ViewId = DryRunViewIds.Dashboard,
@@ -23,6 +23,6 @@ public static class DryRunNavigationRegistration
             RequiredPermission = string.Empty
         });
 
-        return registry;
+        return builder;
     }
 }

@@ -1,11 +1,11 @@
-﻿using IIoT.Edge.Host.Bootstrap;
+using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Host.Bootstrap;
 using IIoT.Edge.PackageValidationClient.Modules;
 using IIoT.Edge.PackageValidationClient.ViewModels;
 using IIoT.Edge.Shell.Core;
 using IIoT.Edge.UI.Shared.Modularity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -34,6 +34,8 @@ public partial class App : WpfApplication
 
         var configurationResult = ShellConfigurationLoader.Load(AppDomain.CurrentDomain.BaseDirectory);
         var configuration = configurationResult.Configuration;
+        var runtimePaths = ShellRuntimePathResolver.Resolve(AppDomain.CurrentDomain.BaseDirectory, configuration);
+        ConfigureCrashLogging(runtimePaths);
 
         if (!TryAcquireInstanceLock(configuration))
         {
@@ -43,7 +45,7 @@ public partial class App : WpfApplication
 
         try
         {
-            _serviceProvider = ConfigureServices(configuration).BuildServiceProvider();
+            _serviceProvider = ConfigureServices(configuration, runtimePaths).BuildServiceProvider();
         }
         catch (Exception ex)
         {
@@ -184,11 +186,10 @@ public partial class App : WpfApplication
         _instanceMutex = null;
     }
 
-    private ServiceCollection ConfigureServices(IConfiguration configuration)
+    private ServiceCollection ConfigureServices(IConfiguration configuration, EdgeRuntimePaths runtimePaths)
     {
         var services = new ServiceCollection();
         var viewRegistry = new ViewRegistry();
-        var dbDir = GetDbDirectory();
         var pluginRootPath = PackageValidationModuleCatalog.GetPluginRootPath(AppDomain.CurrentDomain.BaseDirectory);
         var discoveryResult = PackageValidationModuleCatalog.DiscoverModules(pluginRootPath);
         var activationResult = PackageValidationModuleCatalog.CreateEnabledModules(configuration, discoveryResult.Modules);
@@ -199,7 +200,7 @@ public partial class App : WpfApplication
         services.AddEdgeHostBootstrap(
             viewRegistry,
             configuration,
-            dbDir,
+            runtimePaths,
             discoveryResult.Modules,
             moduleCatalogIssues,
             activationResult.EnabledModuleIds,
@@ -209,11 +210,11 @@ public partial class App : WpfApplication
         return services;
     }
 
-    private static string GetDbDirectory()
+    private static void ConfigureCrashLogging(EdgeRuntimePaths runtimePaths)
     {
-        var dbDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data", "db");
-        Directory.CreateDirectory(dbDir);
-        return dbDir;
+        CrashLogWriter.ConfigurePaths(
+            () => runtimePaths.PrimaryCrashLogPath,
+            () => runtimePaths.FallbackCrashLogPath);
     }
 
     private static void ShowStartupError(string message)
@@ -225,4 +226,3 @@ public partial class App : WpfApplication
             MessageBoxImage.Error);
     }
 }
-

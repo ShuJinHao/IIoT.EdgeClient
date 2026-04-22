@@ -5,12 +5,12 @@ using IIoT.Edge.Module.DryRun.Integration;
 using IIoT.Edge.Module.DryRun.Payload;
 using IIoT.Edge.Module.DryRun.Presentation;
 using IIoT.Edge.Module.DryRun.Runtime;
-using IIoT.Edge.UI.Shared.Modularity;
+using IIoT.Edge.Plugin.Shared.Modules;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace IIoT.Edge.Module.DryRun;
 
-public sealed class DryRunModule : IEdgeStationModule
+public sealed class DryRunModule : IEdgeProcessModule
 {
     public const string ModuleKey = DryRunModuleConstants.ModuleId;
 
@@ -18,29 +18,16 @@ public sealed class DryRunModule : IEdgeStationModule
 
     public string ProcessType => DryRunModuleConstants.ProcessType;
 
-    public void RegisterServices(IServiceCollection services)
-    {
-        services.AddSingleton<IProcessCloudUploader, DryRunCloudUploader>();
-        services.AddSingleton<Presentation.ViewModels.DryRunDashboardViewModel>();
-    }
+    public string DisplayName => "DryRun";
 
-    public void RegisterViews(IViewRegistry viewRegistry)
+    public void Configure(IEdgeProcessModuleBuilder builder)
     {
-        viewRegistry.RegisterDryRunViews();
-    }
+        builder.Services.AddSingleton<IProcessCloudUploader, DryRunCloudUploader>();
+        builder.Services.AddSingleton<Presentation.ViewModels.DryRunDashboardViewModel>();
 
-    public void RegisterCellData(ICellDataRegistry registry)
-    {
-        registry.Register<DryRunCellData>(ProcessType);
-    }
-
-    public void RegisterRuntime(IStationRuntimeRegistry registry)
-    {
-        registry.Register(new DryRunStationRuntimeFactory());
-    }
-
-    public void RegisterIntegrations(IProcessIntegrationRegistry registry)
-    {
-        registry.RegisterCloudUploader(ProcessType, ProcessUploadMode.Single);
+        builder.RegisterCellData(typeof(DryRunCellData));
+        builder.RegisterRuntimeFactory(new DryRunStationRuntimeFactory());
+        builder.RegisterCloudUploader(PluginCloudUploadMode.Single);
+        builder.RegisterDryRunViews();
     }
 }

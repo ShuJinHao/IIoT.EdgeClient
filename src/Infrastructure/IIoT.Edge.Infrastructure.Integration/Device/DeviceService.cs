@@ -4,6 +4,7 @@ using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Infrastructure.Integration.Config;
 using IIoT.Edge.Infrastructure.Integration.Device.Cache;
+using IIoT.Edge.Infrastructure.Integration.Http;
 
 namespace IIoT.Edge.Infrastructure.Integration.Device;
 
@@ -91,12 +92,12 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
 
         if (localCts is not null)
         {
-            await localCts.CancelAsync();
+            await localCts.CancelAsync().ConfigureAwait(false);
             if (localTask is not null)
             {
                 try
                 {
-                    await localTask;
+                    await localTask.ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {
@@ -108,7 +109,7 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
     }
 
     public Task RefreshBootstrapAsync(CancellationToken ct = default)
-        => IdentifyOnceAsync(ct);
+        => RefreshOrIdentifyOnceAsync(ct);
 
     public void MarkUploadGateBlocked(EdgeUploadBlockReason reason, DateTimeOffset occurredAtUtc)
     {
@@ -135,7 +136,7 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
     private async Task HeartbeatLoopAsync(CancellationToken ct)
     {
         _logger.Info("[DeviceService] Heartbeat loop started.");
-        await IdentifyOnceAsync(ct);
+        await RefreshOrIdentifyOnceAsync(ct).ConfigureAwait(false);
 
         while (!ct.IsCancellationRequested)
         {
@@ -144,20 +145,20 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
                 : OfflineInterval;
             try
             {
-                await Task.Delay(interval, ct);
+                await Task.Delay(interval, ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
                 break;
             }
 
-            await IdentifyOnceAsync(ct);
+            await RefreshOrIdentifyOnceAsync(ct).ConfigureAwait(false);
         }
 
         _logger.Info("[DeviceService] Heartbeat loop stopped.");
     }
 
-    private async Task IdentifyOnceAsync(CancellationToken ct)
+    private async Task RefreshOrIdentifyOnceAsync(CancellationToken ct)
     {
         await _identifyGate.WaitAsync(ct).ConfigureAwait(false);
         try
@@ -171,12 +172,39 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
                     LastBootstrapAttemptedAtUtc = attemptedAtUtc
                 });
 
-            await IdentifyOnceCoreAsync(attemptedAtUtc, previousGate, ct).ConfigureAwait(false);
+            await RefreshOrIdentifyOnceCoreAsync(attemptedAtUtc, previousGate, ct).ConfigureAwait(false);
         }
         finally
         {
             _identifyGate.Release();
         }
+    }
+
+    private async Task RefreshOrIdentifyOnceCoreAsync(
+        DateTimeOffset attemptedAtUtc,
+        EdgeUploadGateSnapshot previousGate,
+        CancellationToken ct)
+    {
+        if (CanRefreshCurrentDevice())
+        {
+            var refreshResult = await TryRefreshCurrentDeviceAsync(attemptedAtUtc, ct).ConfigureAwait(false);
+            if (refreshResult == DeviceRefreshResult.Refreshed)
+            {
+                return;
+            }
+
+            if (refreshResult == DeviceRefreshResult.Cancelled)
+            {
+                UpdateUploadGate(
+                    previousGate with
+                    {
+                        LastBootstrapAttemptedAtUtc = attemptedAtUtc
+                    });
+                return;
+            }
+        }
+
+        await IdentifyOnceCoreAsync(attemptedAtUtc, previousGate, ct).ConfigureAwait(false);
     }
 
     private async Task IdentifyOnceCoreAsync(
@@ -192,11 +220,12 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
             var url = _endpointProvider.BuildUrl(
                 $"{deviceInstancePath}?clientCode={Uri.EscapeDataString(clientCode)}");
 
-            var response = await _httpClient.GetAsync(url, ct).ConfigureAwait(false);
+            using var response = await _httpClient.GetAsync(url, ct).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
+                var errorMessage = await TryReadFirstErrorAsync(response, ct).ConfigureAwait(false);
                 _logger.Warn(
-                    $"event=edge.bootstrap.failure client_code={FormatValue(clientCode)} status_code={(int)response.StatusCode} result=failed reason=http_status");
+                    $"event=edge.bootstrap.failure client_code={FormatValue(clientCode)} status_code={(int)response.StatusCode} result=failed reason=http_status error={FormatValue(errorMessage)}");
                 GoOffline(clientCode, null, EdgeUploadBlockReason.BootstrapHttpFailure, attemptedAtUtc);
                 return;
             }
@@ -210,6 +239,10 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
                 return;
             }
 
+            dto.RefreshToken ??= CloudAuthHeaders.ReadRefreshToken(response);
+            dto.RefreshTokenExpiresAtUtc ??= CloudAuthHeaders.ReadRefreshTokenExpiresAtUtc(response);
+            dto.UploadAccessTokenExpiresAtUtc ??= CloudAuthHeaders.ReadAccessTokenExpiresAtUtc(response);
+
             var session = new DeviceSession
             {
                 DeviceId = dto.Id,
@@ -217,7 +250,9 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
                 ClientCode = string.IsNullOrWhiteSpace(dto.ClientCode) ? clientCode : dto.ClientCode,
                 ProcessId = dto.ProcessId,
                 UploadAccessToken = dto.UploadAccessToken,
-                UploadAccessTokenExpiresAtUtc = dto.UploadAccessTokenExpiresAtUtc
+                UploadAccessTokenExpiresAtUtc = dto.UploadAccessTokenExpiresAtUtc,
+                RefreshToken = dto.RefreshToken,
+                RefreshTokenExpiresAtUtc = dto.RefreshTokenExpiresAtUtc
             };
 
             if (!TryResolveTokenBlockReason(session, out var invalidReason))
@@ -258,6 +293,105 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
                 $"event=edge.bootstrap.failure client_code={FormatValue(clientCode)} result=failed reason=exception message={SanitizeValue(ex.Message)}");
             GoOffline(clientCode, null, EdgeUploadBlockReason.BootstrapPayloadInvalid, attemptedAtUtc);
         }
+    }
+
+    private async Task<DeviceRefreshResult> TryRefreshCurrentDeviceAsync(
+        DateTimeOffset attemptedAtUtc,
+        CancellationToken ct)
+    {
+        var session = CurrentDevice;
+        if (session is null || string.IsNullOrWhiteSpace(session.RefreshToken))
+        {
+            return DeviceRefreshResult.FallbackToBootstrap;
+        }
+
+        var clientCode = string.IsNullOrWhiteSpace(session.ClientCode)
+            ? _endpointProvider.GetClientCode()
+            : session.ClientCode;
+
+        try
+        {
+            using var request = new HttpRequestMessage(
+                HttpMethod.Post,
+                _endpointProvider.BuildUrl(_endpointProvider.GetBootstrapRefreshPath()));
+            request.Headers.TryAddWithoutValidation(CloudAuthHeaders.RefreshToken, session.RefreshToken);
+
+            using var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorMessage = await TryReadFirstErrorAsync(response, ct).ConfigureAwait(false);
+                _logger.Warn(
+                    $"event=edge.bootstrap.refresh.failure client_code={FormatValue(clientCode)} status_code={(int)response.StatusCode} result=failed reason=http_status error={FormatValue(errorMessage)}");
+                return DeviceRefreshResult.FallbackToBootstrap;
+            }
+
+            var dto = await response.Content.ReadFromJsonAsync<DeviceResponseDto>(ct).ConfigureAwait(false);
+            if (dto is null)
+            {
+                _logger.Warn(
+                    $"event=edge.bootstrap.refresh.failure client_code={FormatValue(clientCode)} result=failed reason=empty_payload");
+                return DeviceRefreshResult.FallbackToBootstrap;
+            }
+
+            dto.RefreshToken ??= CloudAuthHeaders.ReadRefreshToken(response);
+            dto.RefreshTokenExpiresAtUtc ??= CloudAuthHeaders.ReadRefreshTokenExpiresAtUtc(response);
+            dto.UploadAccessTokenExpiresAtUtc ??= CloudAuthHeaders.ReadAccessTokenExpiresAtUtc(response);
+
+            var refreshedSession = new DeviceSession
+            {
+                DeviceId = dto.Id,
+                DeviceName = dto.DeviceName,
+                ClientCode = string.IsNullOrWhiteSpace(dto.ClientCode) ? clientCode : dto.ClientCode,
+                ProcessId = dto.ProcessId,
+                UploadAccessToken = dto.UploadAccessToken,
+                UploadAccessTokenExpiresAtUtc = dto.UploadAccessTokenExpiresAtUtc,
+                RefreshToken = dto.RefreshToken,
+                RefreshTokenExpiresAtUtc = dto.RefreshTokenExpiresAtUtc
+            };
+
+            if (TryResolveTokenBlockReason(refreshedSession, out var invalidReason))
+            {
+                _logger.Warn(
+                    $"event=edge.bootstrap.refresh.invalid_token client_code={FormatValue(refreshedSession.ClientCode)} device_id={refreshedSession.DeviceId} process_id={refreshedSession.ProcessId} expires_at_utc={FormatTimestamp(refreshedSession.UploadAccessTokenExpiresAtUtc)} result=invalid reason={invalidReason.ToReasonCode()}");
+                GoOffline(refreshedSession.ClientCode, refreshedSession, invalidReason, attemptedAtUtc);
+                return DeviceRefreshResult.Refreshed;
+            }
+
+            _logger.Info(
+                $"event=edge.bootstrap.refresh.success client_code={FormatValue(refreshedSession.ClientCode)} device_id={refreshedSession.DeviceId} process_id={refreshedSession.ProcessId} expires_at_utc={FormatTimestamp(refreshedSession.UploadAccessTokenExpiresAtUtc)} result=ok");
+            GoOnline(refreshedSession, attemptedAtUtc);
+            return DeviceRefreshResult.Refreshed;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return DeviceRefreshResult.Cancelled;
+        }
+        catch (TaskCanceledException)
+        {
+            _logger.Warn(
+                $"event=edge.bootstrap.refresh.failure client_code={FormatValue(clientCode)} result=failed reason=timeout");
+            return DeviceRefreshResult.FallbackToBootstrap;
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.Warn(
+                $"event=edge.bootstrap.refresh.failure client_code={FormatValue(clientCode)} result=failed reason=network_exception message={SanitizeValue(ex.Message)}");
+            return DeviceRefreshResult.FallbackToBootstrap;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(
+                $"event=edge.bootstrap.refresh.failure client_code={FormatValue(clientCode)} result=failed reason=exception message={SanitizeValue(ex.Message)}");
+            return DeviceRefreshResult.FallbackToBootstrap;
+        }
+    }
+
+    private bool CanRefreshCurrentDevice()
+    {
+        var session = CurrentDevice;
+        return session is not null
+            && !string.IsNullOrWhiteSpace(session.RefreshToken)
+            && (!session.RefreshTokenExpiresAtUtc.HasValue || session.RefreshTokenExpiresAtUtc.Value > DateTimeOffset.UtcNow);
     }
 
     private static bool TryResolveTokenBlockReason(DeviceSession? session, out EdgeUploadBlockReason reason)
@@ -471,6 +605,19 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
         }
     }
 
+    private static async Task<string?> TryReadFirstErrorAsync(HttpResponseMessage response, CancellationToken ct)
+    {
+        try
+        {
+            var envelope = await response.Content.ReadFromJsonAsync<ApiErrorEnvelope>(ct).ConfigureAwait(false);
+            return envelope?.Errors?.FirstOrDefault();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private static string FormatTimestamp(DateTimeOffset? value)
         => value?.ToString("O") ?? "null";
 
@@ -479,4 +626,11 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
 
     private static string SanitizeValue(string value)
         => value.Replace(' ', '_');
+
+    private enum DeviceRefreshResult
+    {
+        FallbackToBootstrap,
+        Refreshed,
+        Cancelled
+    }
 }

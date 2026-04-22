@@ -1,7 +1,9 @@
-﻿using IIoT.Edge.Application.Abstractions.Auth;
+using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Common.Models;
 using IIoT.Edge.Infrastructure.Integration.Config;
+using IIoT.Edge.Infrastructure.Integration.Http;
 using System.IdentityModel.Tokens.Jwt;
+using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
 
@@ -12,6 +14,7 @@ public class AuthService : IAuthService
     private readonly HttpClient _httpClient;
     private readonly ICloudApiEndpointProvider _endpointProvider;
     private readonly LocalAdminConfig _localAdminConfig;
+    private readonly SemaphoreSlim _refreshGate = new(1, 1);
     private UserSession? _currentUser;
 
     public UserSession? CurrentUser => GetCurrentActiveSession();
@@ -69,7 +72,10 @@ public class AuthService : IAuthService
             EmployeeNo = "LOCAL_ADMIN",
             IsLocalAdmin = true,
             Permissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase),
-            ExpiresAtUtc = null
+            ExpiresAtUtc = null,
+            AccessToken = null,
+            RefreshToken = null,
+            RefreshTokenExpiresAtUtc = null
         };
 
         SetSession(session);
@@ -81,41 +87,17 @@ public class AuthService : IAuthService
         try
         {
             var loginUrl = _endpointProvider.BuildUrl(_endpointProvider.GetIdentityDeviceLoginPath());
-            var response = await _httpClient.PostAsJsonAsync(loginUrl, new
+            using var response = await _httpClient.PostAsJsonAsync(loginUrl, new
             {
                 employeeNo,
                 password,
                 deviceId
             }).ConfigureAwait(false);
 
-            if (!response.IsSuccessStatusCode)
-            {
-                var errors = await response.Content.ReadFromJsonAsync<string[]>();
-                var errorMsg = errors?.FirstOrDefault()
-                    ?? response.StatusCode switch
-                    {
-                        System.Net.HttpStatusCode.Unauthorized => "Invalid employee number or password.",
-                        System.Net.HttpStatusCode.Forbidden => "This account is not allowed to operate the current device.",
-                        System.Net.HttpStatusCode.BadRequest => "Login request was rejected.",
-                        >= System.Net.HttpStatusCode.InternalServerError => "Server is temporarily unavailable.",
-                        _ => $"Login failed: {response.StatusCode}"
-                    };
-
-                return AuthResult.Fail(errorMsg);
-            }
-
-            var token = await response.Content.ReadAsStringAsync();
-            token = token.Trim('"');
-
-            if (string.IsNullOrEmpty(token))
-            {
-                return AuthResult.Fail("Server returned an empty token.");
-            }
-
-            var session = ParseJwtToken(token);
+            var session = await TryReadSessionAsync(response).ConfigureAwait(false);
             if (session is null)
             {
-                return AuthResult.Fail("Token parse failed.");
+                return AuthResult.Fail(await BuildAuthFailureMessageAsync(response).ConfigureAwait(false));
             }
 
             SetSession(session);
@@ -150,17 +132,147 @@ public class AuthService : IAuthService
             return null;
         }
 
+        if (_currentUser.IsLocalAdmin)
+        {
+            return _currentUser;
+        }
+
         if (_currentUser.ExpiresAtUtc.HasValue
             && _currentUser.ExpiresAtUtc.Value <= DateTimeOffset.UtcNow)
         {
-            SetSession(null);
-            return null;
+            return TryRefreshExpiredSessionSync()
+                ? _currentUser
+                : null;
         }
 
         return _currentUser;
     }
 
-    private static UserSession? ParseJwtToken(string token)
+    private bool TryRefreshExpiredSessionSync()
+    {
+        try
+        {
+            return RefreshCloudSessionAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+        }
+        catch
+        {
+            SetSession(null);
+            return false;
+        }
+    }
+
+    private async Task<bool> RefreshCloudSessionAsync(CancellationToken ct = default)
+    {
+        await _refreshGate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            if (_currentUser is null)
+            {
+                return false;
+            }
+
+            if (_currentUser.IsLocalAdmin)
+            {
+                return true;
+            }
+
+            if (_currentUser.ExpiresAtUtc.HasValue
+                && _currentUser.ExpiresAtUtc.Value > DateTimeOffset.UtcNow)
+            {
+                return true;
+            }
+
+            if (string.IsNullOrWhiteSpace(_currentUser.RefreshToken)
+                || (_currentUser.RefreshTokenExpiresAtUtc.HasValue
+                    && _currentUser.RefreshTokenExpiresAtUtc.Value <= DateTimeOffset.UtcNow))
+            {
+                SetSession(null);
+                return false;
+            }
+
+            using var request = new HttpRequestMessage(
+                HttpMethod.Post,
+                _endpointProvider.BuildUrl(_endpointProvider.GetHumanIdentityRefreshPath()));
+            request.Headers.TryAddWithoutValidation(CloudAuthHeaders.RefreshToken, _currentUser.RefreshToken);
+
+            using var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
+            var refreshedSession = await TryReadSessionAsync(response).ConfigureAwait(false);
+            if (refreshedSession is null)
+            {
+                SetSession(null);
+                return false;
+            }
+
+            SetSession(refreshedSession);
+            return true;
+        }
+        catch
+        {
+            SetSession(null);
+            return false;
+        }
+        finally
+        {
+            _refreshGate.Release();
+        }
+    }
+
+    private static async Task<UserSession?> TryReadSessionAsync(HttpResponseMessage response)
+    {
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        var token = (await response.Content.ReadAsStringAsync().ConfigureAwait(false)).Trim('"', ' ', '\r', '\n', '\t');
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return null;
+        }
+
+        return ParseJwtToken(
+            token,
+            CloudAuthHeaders.ReadRefreshToken(response),
+            CloudAuthHeaders.ReadRefreshTokenExpiresAtUtc(response),
+            CloudAuthHeaders.ReadAccessTokenExpiresAtUtc(response));
+    }
+
+    private static async Task<string> BuildAuthFailureMessageAsync(HttpResponseMessage response)
+    {
+        var errorEnvelope = await TryReadErrorEnvelopeAsync(response).ConfigureAwait(false);
+        var firstError = errorEnvelope?.Errors?.FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(firstError))
+        {
+            return firstError;
+        }
+
+        return response.StatusCode switch
+        {
+            HttpStatusCode.Unauthorized => "Invalid employee number or password.",
+            HttpStatusCode.Forbidden => "This account is not allowed to operate the current device.",
+            HttpStatusCode.BadRequest => "Login request was rejected.",
+            >= HttpStatusCode.InternalServerError => "Server is temporarily unavailable.",
+            _ => $"Login failed: {response.StatusCode}"
+        };
+    }
+
+    private static async Task<ApiErrorEnvelope?> TryReadErrorEnvelopeAsync(HttpResponseMessage response)
+    {
+        try
+        {
+            return await response.Content.ReadFromJsonAsync<ApiErrorEnvelope>().ConfigureAwait(false);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static UserSession? ParseJwtToken(
+        string token,
+        string? refreshToken,
+        DateTimeOffset? refreshTokenExpiresAtUtc,
+        DateTimeOffset? accessTokenExpiresAtUtc)
     {
         try
         {
@@ -187,15 +299,16 @@ public class AuthService : IAuthService
                 .Select(c => c.Value)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            var expiresAtUtc = TryGetExpiresAtUtc(jwtToken);
-
             return new UserSession
             {
                 DisplayName = displayName,
                 EmployeeNo = employeeNo,
                 IsLocalAdmin = false,
                 Permissions = permissions,
-                ExpiresAtUtc = expiresAtUtc
+                ExpiresAtUtc = accessTokenExpiresAtUtc ?? TryGetExpiresAtUtc(jwtToken),
+                AccessToken = token,
+                RefreshToken = refreshToken,
+                RefreshTokenExpiresAtUtc = refreshTokenExpiresAtUtc
             };
         }
         catch

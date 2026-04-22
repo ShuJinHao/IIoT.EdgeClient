@@ -24,7 +24,7 @@ public sealed class ModuleScaffoldContractTests
 
             var buildResult = ContractTestPathHelper.RunProcess(
                 "dotnet",
-                $"build \"{expectedProject}\" -p:BuildInParallel=false --disable-build-servers",
+                $"build \"{expectedProject}\" -m:1 /nr:false -p:BuildInParallel=false -p:UseSharedCompilation=false --disable-build-servers",
                 repoRoot);
 
             Assert.True(buildResult.ExitCode == 0, buildResult.Output);

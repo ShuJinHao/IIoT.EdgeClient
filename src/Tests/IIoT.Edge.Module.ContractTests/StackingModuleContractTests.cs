@@ -6,6 +6,7 @@ public sealed class StackingModuleContractTests : ModuleContractTestBase<Stackin
 {
     protected override bool RequiresHardwareProfile => true;
     protected override int ExpectedRuntimeTaskCount => 1;
+    protected override int MinimumRouteCount => 7;
 
     protected override void ConfigureRuntimeServices(IServiceCollection services)
     {

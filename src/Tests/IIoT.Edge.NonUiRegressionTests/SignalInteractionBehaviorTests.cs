@@ -1,6 +1,7 @@
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Infrastructure.DeviceComm.Barcode.Readers;
+using IIoT.Edge.Infrastructure.DeviceComm.Plc;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Infrastructure.DeviceComm.Signals;
 using IIoT.Edge.SharedKernel.Enums;
@@ -27,18 +28,22 @@ public sealed class SignalInteractionBehaviorTests
         plcService.ConnectOutcomes.Enqueue(new TimeoutException("connect timeout"));
 
         var logger = new FakeLogService();
+        var statusStore = new PlcConnectionStatusStore();
         var interaction = new SignalInteraction(
             plcService,
             new PlcDataStore(),
             CreateDevice(1, "PLC-A"),
             [],
-            logger);
+            logger,
+            statusStore);
 
         await interaction.ConnectAsync();
 
         Assert.False(plcService.IsConnected);
         Assert.Equal(1, plcService.ConnectAsyncCallCount);
         Assert.Contains(logger.Entries, x => x.Message.Contains("Connect exception", StringComparison.Ordinal));
+        Assert.False(statusStore.GetSnapshot(1)?.IsConnected);
+        Assert.Equal("connect timeout", statusStore.GetSnapshot(1)?.LastError);
     }
 
     [Fact]
@@ -52,19 +57,22 @@ public sealed class SignalInteractionBehaviorTests
 
         var dataStore = new PlcDataStore();
         dataStore.Register(1, readSize: 1, writeSize: 0);
+        var statusStore = new PlcConnectionStatusStore();
 
         var interaction = new SignalInteraction(
             plcService,
             dataStore,
             CreateDevice(1, "PLC-A"),
             [CreateIoMapping(1, "Read", "D100", 1)],
-            new FakeLogService());
+            new FakeLogService(),
+            statusStore);
 
         var buffer = Assert.IsType<PlcBuffer>(dataStore.GetBuffer(1));
         await interaction.ConnectAsync();
         await Assert.ThrowsAsync<Exception>(() => interaction.ExecuteOneCycleAsync());
         Assert.Equal(1, plcService.DisconnectCallCount);
         Assert.False(plcService.IsConnected);
+        Assert.False(statusStore.GetSnapshot(1)?.IsConnected);
 
         await interaction.ConnectAsync();
         await interaction.ExecuteOneCycleAsync();
@@ -72,6 +80,7 @@ public sealed class SignalInteractionBehaviorTests
         Assert.True(plcService.ConnectAsyncCallCount >= 2);
         Assert.True(plcService.ReadAsyncCallCount >= 2);
         Assert.Equal((ushort)7, buffer.GetReadValue(0));
+        Assert.True(statusStore.GetSnapshot(1)?.IsConnected);
     }
 
     [Fact]
@@ -85,6 +94,7 @@ public sealed class SignalInteractionBehaviorTests
 
         var dataStore = new PlcDataStore();
         dataStore.Register(2, readSize: 0, writeSize: 1);
+        var statusStore = new PlcConnectionStatusStore();
 
         var buffer = Assert.IsType<PlcBuffer>(dataStore.GetBuffer(2));
         buffer.SetWriteValue(0, 9);
@@ -94,18 +104,21 @@ public sealed class SignalInteractionBehaviorTests
             dataStore,
             CreateDevice(2, "PLC-B"),
             [CreateIoMapping(2, "Write", "D200", 1)],
-            new FakeLogService());
+            new FakeLogService(),
+            statusStore);
 
         await interaction.ConnectAsync();
         await Assert.ThrowsAsync<Exception>(() => interaction.ExecuteOneCycleAsync());
         Assert.Equal(1, plcService.DisconnectCallCount);
         Assert.False(plcService.IsConnected);
+        Assert.False(statusStore.GetSnapshot(2)?.IsConnected);
 
         await interaction.ConnectAsync();
         await interaction.ExecuteOneCycleAsync();
 
         Assert.True(plcService.ConnectAsyncCallCount >= 2);
         Assert.True(plcService.WriteAsyncCallCount >= 2);
+        Assert.True(statusStore.GetSnapshot(2)?.IsConnected);
     }
 
     [Fact]

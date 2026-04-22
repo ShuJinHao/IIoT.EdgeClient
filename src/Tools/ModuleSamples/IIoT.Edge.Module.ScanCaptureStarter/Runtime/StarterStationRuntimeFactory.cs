@@ -6,6 +6,7 @@ using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Module.ScanCaptureStarter.Constants;
 using IIoT.Edge.Runtime.Scan.Implementations;
+using IIoT.Edge.Runtime.Signals;
 using IIoT.Edge.SharedKernel.Context;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -31,14 +32,19 @@ public sealed class StarterStationRuntimeFactory : IStationRuntimeFactory
         var barcodeReader = context.DeviceId > 0
             ? barcodeReaderFactory.Create(context.DeviceId, StarterBarcodeReaderProfile.DefaultOptions)
             : new EmptyBarcodeReader();
+        var signalAccessor = BufferLogicalSignalAccessor.Create(
+            buffer,
+            context,
+            StarterPlcSignalProfile.LogicalSignals);
 
         var loadingScanTask = new LoadingScanTask(
             buffer,
+            signalAccessor,
             context,
             logger,
             StarterModuleConstants.ScanTaskName,
-            StarterPlcSignalProfile.ScanTriggerReadIndex,
-            StarterPlcSignalProfile.ScanResponseWriteIndex,
+            StarterPlcSignalProfile.ReadSignals[0].Label,
+            StarterPlcSignalProfile.WriteSignals[0].Label,
             barcodeReader,
             barcode => Task.FromResult(IsDuplicate(context, barcode)));
 
@@ -55,6 +61,7 @@ public sealed class StarterStationRuntimeFactory : IStationRuntimeFactory
             loadingScanTask,
             new StarterSignalCaptureTask(
                 buffer,
+                signalAccessor,
                 context,
                 pipelineService,
                 logger)

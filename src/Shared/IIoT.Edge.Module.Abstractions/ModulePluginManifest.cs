@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace IIoT.Edge.Module.Abstractions;
+namespace IIoT.Edge.Plugin.Shared.Modules;
 
 public sealed class ModulePluginManifest
 {

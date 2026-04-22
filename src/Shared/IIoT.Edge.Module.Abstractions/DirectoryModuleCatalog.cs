@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using System.IO;
 using System.Text.Json;
+using IIoT.Edge.Plugin.Shared.Modules;
 
 namespace IIoT.Edge.Module.Abstractions;
 
@@ -79,7 +80,7 @@ public static class DirectoryModuleCatalog
         var modulesById = discoveredModules.ToDictionary(
             static x => x.ModuleId,
             StringComparer.OrdinalIgnoreCase);
-        var modules = new List<IEdgeStationModule>(configuredEnabledModuleIds.Count);
+        var modules = new List<IEdgeProcessModule>(configuredEnabledModuleIds.Count);
         var pendingDescriptors = new Dictionary<string, ModulePluginDescriptor>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var moduleId in configuredEnabledModuleIds)
@@ -196,7 +197,7 @@ public static class DirectoryModuleCatalog
         return new ModuleCatalogActivationResult(modules, configuredEnabledModuleIds, issues);
     }
 
-    public static IReadOnlyList<IEdgeStationModule> CreateAllModules(IReadOnlyList<ModulePluginDescriptor> discoveredModules)
+    public static IReadOnlyList<IEdgeProcessModule> CreateAllModules(IReadOnlyList<ModulePluginDescriptor> discoveredModules)
     {
         ArgumentNullException.ThrowIfNull(discoveredModules);
         return discoveredModules.Select(static x => x.CreateModule()).ToArray();

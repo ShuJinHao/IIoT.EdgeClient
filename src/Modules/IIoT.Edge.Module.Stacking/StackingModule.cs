@@ -6,12 +6,12 @@ using IIoT.Edge.Module.Stacking.Payload;
 using IIoT.Edge.Module.Stacking.Presentation;
 using IIoT.Edge.Module.Stacking.Runtime;
 using IIoT.Edge.Module.Stacking.Samples;
-using IIoT.Edge.UI.Shared.Modularity;
+using IIoT.Edge.Plugin.Shared.Modules;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace IIoT.Edge.Module.Stacking;
 
-public sealed class StackingModule : IEdgeStationModule
+public sealed class StackingModule : IEdgeProcessModule
 {
     public const string ModuleKey = StackingModuleConstants.ModuleId;
 
@@ -19,31 +19,24 @@ public sealed class StackingModule : IEdgeStationModule
 
     public string ProcessType => StackingModuleConstants.ProcessType;
 
-    public void RegisterServices(IServiceCollection services)
-    {
-        services.AddSingleton<IProcessCloudUploader, StackingCloudUploader>();
-        services.AddSingleton<IModuleHardwareProfileProvider, StackingHardwareProfileProvider>();
-        services.AddSingleton<IDevelopmentSampleContributor, StackingDevelopmentSampleContributor>();
-        services.AddSingleton<Presentation.ViewModels.StackingSkeletonViewModel>();
-    }
+    public string DisplayName => "叠片";
 
-    public void RegisterViews(IViewRegistry viewRegistry)
+    public void Configure(IEdgeProcessModuleBuilder builder)
     {
-        viewRegistry.RegisterStackingViews();
-    }
+        builder.Services.AddSingleton<IProcessCloudUploader, StackingCloudUploader>();
+        builder.Services.AddSingleton<IModuleHardwareProfileProvider, StackingHardwareProfileProvider>();
+        builder.Services.AddSingleton<IDevelopmentSampleContributor, StackingDevelopmentSampleContributor>();
+        builder.Services.AddSingleton<StackingDataViewModel>();
+        builder.Services.AddSingleton<StackingCapacityViewModel>();
+        builder.Services.AddSingleton<StackingMonitorViewModel>();
+        builder.Services.AddSingleton<StackingIoViewModel>();
+        builder.Services.AddSingleton<StackingRecipeViewModel>();
+        builder.Services.AddSingleton<StackingParamViewModel>();
+        builder.Services.AddSingleton<StackingHardwareConfigViewModel>();
 
-    public void RegisterCellData(ICellDataRegistry registry)
-    {
-        registry.Register<StackingCellData>(ProcessType);
-    }
-
-    public void RegisterRuntime(IStationRuntimeRegistry registry)
-    {
-        registry.Register(new StackingStationRuntimeFactory());
-    }
-
-    public void RegisterIntegrations(IProcessIntegrationRegistry registry)
-    {
-        registry.RegisterCloudUploader(ProcessType, ProcessUploadMode.Single);
+        builder.RegisterCellData(typeof(StackingCellData));
+        builder.RegisterRuntimeFactory(new StackingStationRuntimeFactory());
+        builder.RegisterCloudUploader(PluginCloudUploadMode.Single);
+        builder.RegisterStackingViews();
     }
 }

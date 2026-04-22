@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Consumers;
@@ -16,9 +17,12 @@ namespace IIoT.Edge.Runtime;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddEdgeRuntime(this IServiceCollection services)
+    public static IServiceCollection AddEdgeRuntime(this IServiceCollection services, EdgeRuntimePaths runtimePaths)
     {
-        services.AddSingleton<ProductionContextStore>();
+        services.AddSingleton(sp =>
+            new ProductionContextStore(
+                sp.GetRequiredService<ILogService>(),
+                runtimePaths.ContextDirectory));
         services.AddSingleton<IProductionContextStore>(sp => sp.GetRequiredService<ProductionContextStore>());
         services.AddSingleton<ITodayCapacityStore, TodayCapacityStore>();
 

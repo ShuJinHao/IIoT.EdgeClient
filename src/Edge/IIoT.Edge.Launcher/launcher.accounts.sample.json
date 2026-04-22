@@ -1,0 +1,8 @@
+[
+  {
+    "UserName": "edge-admin",
+    "DisplayName": "现场启动管理员",
+    "PasswordHash": "REPLACE_WITH_SHA256_HASH",
+    "IsEnabled": true
+  }
+]

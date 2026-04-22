@@ -90,8 +90,14 @@ Assert-Identifier -Value $ModuleId -Name "ModuleId"
 Assert-Identifier -Value $ProcessType -Name "ProcessType"
 
 $repositoryRootPath = Resolve-NormalizedPath $RepositoryRoot
+$edgeClientRootPath = $repositoryRootPath
 if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
-    $OutputRoot = Join-Path $repositoryRootPath "src/Modules"
+    if (Test-Path -LiteralPath (Join-Path $repositoryRootPath "IIoT.EdgeClient.slnx")) {
+        $OutputRoot = Join-Path $repositoryRootPath "src/Modules"
+    }
+    else {
+        $OutputRoot = Join-Path $repositoryRootPath "src"
+    }
 }
 
 $outputRootPath = Resolve-NormalizedPath $OutputRoot
@@ -104,12 +110,18 @@ if (Test-Path -LiteralPath $moduleDirectory) {
     throw "Module directory '$moduleDirectory' already exists."
 }
 
-$applicationProject = Resolve-NormalizedPath (Join-Path $repositoryRootPath "src/Application/IIoT.Edge.Application/IIoT.Edge.Application.csproj")
-$sharedKernelProject = Resolve-NormalizedPath (Join-Path $repositoryRootPath "src/Shared/IIoT.Edge.SharedKernel/IIoT.Edge.SharedKernel.csproj")
-$moduleAbstractionsProject = Resolve-NormalizedPath (Join-Path $repositoryRootPath "src/Shared/IIoT.Edge.Module.Abstractions/IIoT.Edge.Module.Abstractions.csproj")
-$uiSharedProject = Resolve-NormalizedPath (Join-Path $repositoryRootPath "src/Shared/IIoT.Edge.UI.Shared/IIoT.Edge.UI.Shared.csproj")
+$edgeClientRootFromModule = Get-RelativePathCompat -BasePath $moduleDirectory -TargetPath $edgeClientRootPath
 
-$solutionPath = Resolve-NormalizedPath (Join-Path $repositoryRootPath "IIoT.EdgeClient.slnx")
+$solutionPath = Join-Path $repositoryRootPath "IIoT.EdgeClient.slnx"
+if (-not (Test-Path -LiteralPath $solutionPath)) {
+    $solutionCandidate = Get-ChildItem -LiteralPath $repositoryRootPath -Filter *.slnx -File -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if ($null -ne $solutionCandidate) {
+        $solutionPath = $solutionCandidate.FullName
+    }
+}
+
+$solutionPath = Resolve-NormalizedPath $solutionPath
 $projectPath = Join-Path $moduleDirectory "$projectName.csproj"
 
 $tokens = @{
@@ -118,10 +130,7 @@ $tokens = @{
     "__DISPLAY_NAME__" = $DisplayName
     "__PROJECT_NAME__" = $projectName
     "__NAMESPACE__" = $namespaceRoot
-    "__APPLICATION_PROJECT__" = Get-RelativePathCompat -BasePath $moduleDirectory -TargetPath $applicationProject
-    "__SHAREDKERNEL_PROJECT__" = Get-RelativePathCompat -BasePath $moduleDirectory -TargetPath $sharedKernelProject
-    "__MODULE_ABSTRACTIONS_PROJECT__" = Get-RelativePathCompat -BasePath $moduleDirectory -TargetPath $moduleAbstractionsProject
-    "__UI_SHARED_PROJECT__" = Get-RelativePathCompat -BasePath $moduleDirectory -TargetPath $uiSharedProject
+    "__EDGECLIENT_ROOT__" = $edgeClientRootFromModule
 }
 
 $csprojTemplate = @'
@@ -132,11 +141,11 @@ $csprojTemplate = @'
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
-    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <IsPackable>true</IsPackable>
     <PackageId>__PROJECT_NAME__</PackageId>
     <IsEdgePluginModule>true</IsEdgePluginModule>
     <PluginModuleId>__MODULE_ID__</PluginModuleId>
+    <EdgeClientRoot>__EDGECLIENT_ROOT__</EdgeClientRoot>
   </PropertyGroup>
 
   <ItemGroup>
@@ -144,10 +153,13 @@ $csprojTemplate = @'
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="__APPLICATION_PROJECT__" />
-    <ProjectReference Include="__SHAREDKERNEL_PROJECT__" />
-    <ProjectReference Include="__MODULE_ABSTRACTIONS_PROJECT__" />
-    <ProjectReference Include="__UI_SHARED_PROJECT__" />
+    <ProjectReference Include="$(EdgeClientRoot)\src\Presentation\IIoT.Edge.Presentation.Navigation\IIoT.Edge.Presentation.Navigation.csproj" />
+    <ProjectReference Include="$(EdgeClientRoot)\src\Runtime\IIoT.Edge.Runtime\IIoT.Edge.Runtime.csproj" />
+    <ProjectReference Include="$(EdgeClientRoot)\src\Shared\IIoT.Edge.Integration.Contracts\IIoT.Edge.Integration.Contracts.csproj" />
+    <ProjectReference Include="$(EdgeClientRoot)\src\Shared\IIoT.Edge.Module.Contracts\IIoT.Edge.Module.Contracts.csproj" />
+    <ProjectReference Include="$(EdgeClientRoot)\src\Shared\IIoT.Edge.SharedKernel\IIoT.Edge.SharedKernel.csproj" />
+    <ProjectReference Include="$(EdgeClientRoot)\src\Shared\IIoT.Edge.Module.Abstractions\IIoT.Edge.Module.Abstractions.csproj" />
+    <ProjectReference Include="$(EdgeClientRoot)\src\Shared\IIoT.Edge.UI.Shared\IIoT.Edge.UI.Shared.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -186,42 +198,29 @@ using __NAMESPACE__.Runtime;
 using __NAMESPACE__.Samples;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Module.Abstractions;
-using IIoT.Edge.UI.Shared.Modularity;
+using IIoT.Edge.Plugin.Shared.Modules;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace __NAMESPACE__;
 
-public sealed class __MODULE_ID__Module : IEdgeStationModule
+public sealed class __MODULE_ID__Module : IEdgeProcessModule
 {
     public string ModuleId => __MODULE_ID__ModuleConstants.ModuleId;
 
     public string ProcessType => __MODULE_ID__ModuleConstants.ProcessType;
 
-    public void RegisterServices(IServiceCollection services)
-    {
-        services.AddSingleton<IProcessCloudUploader, __MODULE_ID__CloudUploader>();
-        services.AddSingleton<IDevelopmentSampleContributor, __MODULE_ID__DevelopmentSampleContributor>();
-        services.AddSingleton<__MODULE_ID__DashboardViewModel>();
-    }
+    public string DisplayName => "__DISPLAY_NAME__";
 
-    public void RegisterViews(IViewRegistry viewRegistry)
+    public void Configure(IEdgeProcessModuleBuilder builder)
     {
-        viewRegistry.Register__MODULE_ID__Views();
-    }
+        builder.Services.AddSingleton<IProcessCloudUploader, __MODULE_ID__CloudUploader>();
+        builder.Services.AddSingleton<IDevelopmentSampleContributor, __MODULE_ID__DevelopmentSampleContributor>();
+        builder.Services.AddSingleton<__MODULE_ID__DashboardViewModel>();
 
-    public void RegisterCellData(ICellDataRegistry registry)
-    {
-        registry.Register<__MODULE_ID__CellData>(ProcessType);
-    }
-
-    public void RegisterRuntime(IStationRuntimeRegistry registry)
-    {
-        registry.Register(new __MODULE_ID__StationRuntimeFactory());
-    }
-
-    public void RegisterIntegrations(IProcessIntegrationRegistry registry)
-    {
-        registry.RegisterCloudUploader(ProcessType, ProcessUploadMode.Single);
+        builder.RegisterCellData(typeof(__MODULE_ID__CellData));
+        builder.RegisterRuntimeFactory(new __MODULE_ID__StationRuntimeFactory());
+        builder.RegisterCloudUploader(PluginCloudUploadMode.Single);
+        builder.Register__MODULE_ID__Views();
     }
 }
 '@
@@ -374,21 +373,21 @@ public static class __MODULE_ID__ViewIds
 $navigationTemplate = @'
 using __NAMESPACE__.Presentation.ViewModels;
 using __NAMESPACE__.Presentation.Views;
-using IIoT.Edge.UI.Shared.Modularity;
+using IIoT.Edge.Plugin.Shared.Modules;
 
 namespace __NAMESPACE__.Presentation;
 
 public static class __MODULE_ID__NavigationRegistration
 {
-    public static IViewRegistry Register__MODULE_ID__Views(this IViewRegistry registry)
+    public static IEdgeProcessModuleBuilder Register__MODULE_ID__Views(this IEdgeProcessModuleBuilder builder)
     {
-        registry.RegisterRoute(
+        builder.RegisterRoute(
             __MODULE_ID__ViewIds.Dashboard,
             typeof(__MODULE_ID__DashboardPage),
             typeof(__MODULE_ID__DashboardViewModel),
             cacheView: true);
 
-        registry.RegisterMenu(new MenuInfo
+        builder.RegisterMenu(new EdgeMenuInfo
         {
             Title = "__DISPLAY_NAME__",
             ViewId = __MODULE_ID__ViewIds.Dashboard,
@@ -397,7 +396,7 @@ public static class __MODULE_ID__NavigationRegistration
             RequiredPermission = string.Empty
         });
 
-        return registry;
+        return builder;
     }
 }
 '@

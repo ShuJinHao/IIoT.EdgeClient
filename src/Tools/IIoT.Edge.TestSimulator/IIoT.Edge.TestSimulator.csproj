@@ -22,6 +22,7 @@
     <ProjectReference Include="..\..\Shared\IIoT.Edge.UI.Shared\IIoT.Edge.UI.Shared.csproj" />
     <ProjectReference Include="..\..\Runtime\IIoT.Edge.Runtime\IIoT.Edge.Runtime.csproj" />
     <ProjectReference Include="..\..\Application\IIoT.Edge.Application\IIoT.Edge.Application.csproj" />
+    <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.Injection\IIoT.Edge.Module.Injection.csproj" />
   </ItemGroup>
 
 </Project>

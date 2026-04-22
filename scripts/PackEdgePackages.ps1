@@ -14,6 +14,8 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $packageOutput = Join-Path $repoRoot '.artifacts\nuget'
 
+Write-Warning 'PackEdgePackages.ps1 is now a legacy NuGet packaging helper. The official delivery path is directory-style runtime publish via PublishEdgeRuntime.ps1 and PublishEdgeModules.ps1.'
+
 $sdkProjects = @(
     'src\Shared\IIoT.Edge.Module.Abstractions\IIoT.Edge.Module.Abstractions.csproj',
     'src\Shared\IIoT.Edge.SharedKernel\IIoT.Edge.SharedKernel.csproj',
@@ -34,7 +36,8 @@ $sdkProjects = @(
 $moduleProjects = @(
     'src\Tools\ModuleSamples\IIoT.Edge.Module.DryRun\IIoT.Edge.Module.DryRun.csproj',
     'src\Modules\IIoT.Edge.Module.Injection\IIoT.Edge.Module.Injection.csproj',
-    'src\Modules\IIoT.Edge.Module.Stacking\IIoT.Edge.Module.Stacking.csproj'
+    'src\Modules\IIoT.Edge.Module.Stacking\IIoT.Edge.Module.Stacking.csproj',
+    'src\Modules\IIoT.Edge.Module.Homogenization\IIoT.Edge.Module.Homogenization.csproj'
 )
 
 $projects = switch ($Group) {

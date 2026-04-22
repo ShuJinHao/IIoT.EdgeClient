@@ -16,6 +16,10 @@ public static class DependencyInjection
     {
         services.AddSingleton<IPlcDataStore, PlcDataStore>();
         services.AddSingleton<IPlcServiceFactory, PlcServiceFactory>();
+        services.AddSingleton<PlcRuntimeRegistry>();
+        services.AddSingleton<PlcConnectionStatusStore>();
+        services.AddSingleton<PlcDeviceRuntimeBuilder>();
+        services.AddSingleton<PlcLifecycleCoordinator>();
         services.AddSingleton<IPlcConnectionManager, PlcConnectionManager>();
         services.AddSingleton<IBarcodeReaderFactory, PlcBarcodeReaderFactory>();
 

@@ -1,5 +1,7 @@
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Plugin.Shared.Signals;
+using IIoT.Edge.Runtime.Signals;
 using IIoT.Edge.Runtime.Scan.Implementations;
 using IIoT.Edge.SharedKernel.Context;
 
@@ -21,11 +23,17 @@ public sealed class LoadingScanTaskBehaviorTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         await task.ExecuteCoreAsync(cts.Token);
 
-        Assert.Equal(12, buffer.GetWrittenValue(1));
+        Assert.Equal(12, buffer.GetWrittenValue(0));
         Assert.Equal(30, context.GetStep(task.TaskName));
         Assert.False(task.LastResult);
         Assert.Contains(logger.Entries, entry => entry.Message.Contains("timed out", StringComparison.OrdinalIgnoreCase));
     }
+
+    private static readonly IReadOnlyList<ModuleSignalDefinition> SignalDefinitions =
+    [
+        new("Starter.ScanTrigger", "Scan trigger", "DB1.DBW0", 1, "Int16", ModuleSignalDirection.Read, 1),
+        new("Starter.ScanResponse", "Scan response", "DB1.DBW2", 1, "Int16", ModuleSignalDirection.Write, 1)
+    ];
 
     private sealed class TestableLoadingScanTask(
         IPlcBuffer buffer,
@@ -34,11 +42,12 @@ public sealed class LoadingScanTaskBehaviorTests
         IBarcodeReader barcodeReader)
         : LoadingScanTask(
             buffer,
+            BufferLogicalSignalAccessor.Create(buffer, context, SignalDefinitions),
             context,
             logger,
             taskName: "LoadingScan",
-            triggerIndex: 0,
-            responseIndex: 1,
+            triggerLabel: "Starter.ScanTrigger",
+            responseLabel: "Starter.ScanResponse",
             barcodeReader: barcodeReader,
             localDuplicateChecker: _ => Task.FromResult(false))
     {

@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Features.Hardware.Queries;
 using IIoT.Edge.Domain.Hardware.Aggregates;
@@ -13,6 +14,7 @@ namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
 public class IoViewViewModel : ViewModelBase
 {
     private readonly IPlcDataStore _dataStore;
+    private readonly IPlcConnectionManager _plcConnectionManager;
     private readonly ISender _sender;
     private readonly DispatcherTimer _refreshTimer;
     private readonly string _viewId;
@@ -45,7 +47,7 @@ public class IoViewViewModel : ViewModelBase
         set { _isConnected = value; OnPropertyChanged(); }
     }
 
-    private string _statusText = "未连接";
+    private string _statusText = "鏈繛鎺?";
     public string StatusText
     {
         get => _statusText;
@@ -55,18 +57,23 @@ public class IoViewViewModel : ViewModelBase
     public ICommand WriteCommand { get; }
     public ICommand RefreshDevicesCommand { get; }
 
-    public IoViewViewModel(IPlcDataStore dataStore, ISender sender)
-        : this(dataStore, sender, "Hardware.IOView", "IO交互")
+    public IoViewViewModel(
+        IPlcDataStore dataStore,
+        IPlcConnectionManager plcConnectionManager,
+        ISender sender)
+        : this(dataStore, plcConnectionManager, sender, "Hardware.IOView", "IO浜や簰")
     {
     }
 
     protected IoViewViewModel(
         IPlcDataStore dataStore,
+        IPlcConnectionManager plcConnectionManager,
         ISender sender,
         string viewId,
         string viewTitle)
     {
         _dataStore = dataStore;
+        _plcConnectionManager = plcConnectionManager;
         _sender = sender;
         _viewId = viewId;
         _viewTitle = viewTitle;
@@ -192,13 +199,13 @@ public class IoViewViewModel : ViewModelBase
         if (SelectedDevice is null)
         {
             IsConnected = false;
-            StatusText = "未选择设备";
+            StatusText = "鏈€夋嫨璁惧";
             return;
         }
 
-        var hasBuffer = _dataStore.HasDevice(SelectedDevice.Id);
-        IsConnected = hasBuffer;
-        StatusText = hasBuffer ? "已连接" : "未连接";
+        var isConnected = _plcConnectionManager.GetRuntimeStatus(SelectedDevice.Id)?.IsConnected == true;
+        IsConnected = isConnected;
+        StatusText = isConnected ? "宸茶繛鎺?" : "鏈繛鎺?";
     }
 
     public override async Task OnActivatedAsync()

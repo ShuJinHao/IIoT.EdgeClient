@@ -1,6 +1,5 @@
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.Module.Stacking.Payload;
 using IIoT.Edge.Runtime.DataPipeline.Tasks;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
@@ -71,7 +70,7 @@ public sealed class RetryTaskBehaviorTests
     [InlineData(10, 1500, 2100)]
     public async Task RetryFailure_ShouldUseExpectedBackoffWindow(int currentRetryCount, int minSeconds, int maxSeconds)
     {
-        CellDataTypeRegistry.Register<StackingCellData>("Stacking");
+        CellDataTypeRegistry.Register<StackingLikeCellData>("Stacking");
 
         var logger = new FakeLogService();
         var failedStore = new FakeFailedRecordStore();
@@ -90,7 +89,7 @@ public sealed class RetryTaskBehaviorTests
             Id = recordIdBase + currentRetryCount,
             Channel = "Cloud",
             ProcessType = "Stacking",
-            CellDataJson = SerializeCellData(new StackingCellData
+            CellDataJson = SerializeCellData(new StackingLikeCellData
             {
                 Barcode = "BC-TEST"
             }),
@@ -128,7 +127,7 @@ public sealed class RetryTaskBehaviorTests
     [Fact]
     public async Task RetryFailure_WhenExceedMaxRetry_ShouldStopWithMaxValue()
     {
-        CellDataTypeRegistry.Register<StackingCellData>("Stacking");
+        CellDataTypeRegistry.Register<StackingLikeCellData>("Stacking");
 
         var logger = new FakeLogService();
         var failedStore = new FakeFailedRecordStore();
@@ -147,7 +146,7 @@ public sealed class RetryTaskBehaviorTests
             Id = recordId,
             Channel = "Cloud",
             ProcessType = "Stacking",
-            CellDataJson = SerializeCellData(new StackingCellData { Barcode = "BC-MAX" }),
+            CellDataJson = SerializeCellData(new StackingLikeCellData { Barcode = "BC-MAX" }),
             FailedTarget = "Cloud",
             ErrorMessage = "seed",
             RetryCount = 20,
@@ -210,7 +209,7 @@ public sealed class RetryTaskBehaviorTests
     [Fact]
     public async Task RetryFailure_ShouldMoveCloudRuntimeStateToBackoff()
     {
-        CellDataTypeRegistry.Register<StackingCellData>("Stacking");
+        CellDataTypeRegistry.Register<StackingLikeCellData>("Stacking");
 
         var diagnosticsStore = new FakeCloudDiagnosticsStore();
         var failedStore = new FakeFailedRecordStore();
@@ -219,7 +218,7 @@ public sealed class RetryTaskBehaviorTests
             Id = 1001,
             Channel = "Cloud",
             ProcessType = "Stacking",
-            CellDataJson = SerializeCellData(new StackingCellData { Barcode = "BC-BACKOFF" }),
+            CellDataJson = SerializeCellData(new StackingLikeCellData { Barcode = "BC-BACKOFF" }),
             FailedTarget = "Cloud",
             ErrorMessage = "seed",
             NextRetryTime = DateTime.UtcNow.AddMinutes(-1)

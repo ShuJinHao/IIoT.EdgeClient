@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
@@ -8,6 +9,8 @@ using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Infrastructure.Persistence.Dapper;
 using IIoT.Edge.Infrastructure.Persistence.EfCore;
 using IIoT.Edge.Module.Abstractions;
+using IIoT.Edge.Plugin.Shared.Modules;
+using IIoT.Edge.Runtime.Signals;
 using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
 using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.SharedKernel.Repository;
@@ -19,6 +22,7 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly IConfiguration _configuration;
+    private readonly EdgeRuntimePaths _runtimePaths;
     private readonly ShiftConfig _shiftConfig;
     private readonly IRepository<NetworkDeviceEntity> _networkDevices;
     private readonly IRepository<IoMappingEntity> _ioMappings;
@@ -32,7 +36,7 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
     private readonly IStationRuntimeRegistry _runtimeRegistry;
     private readonly IProcessIntegrationRegistry _integrationRegistry;
     private readonly IStartupDiagnosticsStore _startupDiagnosticsStore;
-    private readonly Dictionary<string, IEdgeStationModule> _modulesById;
+    private readonly Dictionary<string, IEdgeProcessModule> _modulesById;
     private readonly Dictionary<string, ModulePluginDescriptor> _discoveredModulesById;
     private readonly Dictionary<string, IModuleHardwareProfileProvider> _hardwareProfilesByModuleId;
     private readonly IReadOnlyList<ModuleCatalogIssue> _moduleCatalogIssues;
@@ -42,6 +46,7 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
     public AppLifecycleManager(
         IServiceProvider serviceProvider,
         IConfiguration configuration,
+        EdgeRuntimePaths runtimePaths,
         ShiftConfig shiftConfig,
         IRepository<NetworkDeviceEntity> networkDevices,
         IRepository<IoMappingEntity> ioMappings,
@@ -58,11 +63,12 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
         IReadOnlyCollection<ModulePluginDescriptor> discoveredModules,
         IReadOnlyCollection<ModuleCatalogIssue> moduleCatalogIssues,
         IReadOnlyCollection<string> configuredEnabledModuleIds,
-        IEnumerable<IEdgeStationModule> modules,
+        IEnumerable<IEdgeProcessModule> modules,
         IEnumerable<IModuleHardwareProfileProvider> hardwareProfiles)
     {
         _serviceProvider = serviceProvider;
         _configuration = configuration;
+        _runtimePaths = runtimePaths;
         _shiftConfig = shiftConfig;
         _networkDevices = networkDevices;
         _ioMappings = ioMappings;
@@ -472,7 +478,8 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
             environmentName,
             string.IsNullOrWhiteSpace(machineProfile) ? null : machineProfile,
             string.IsNullOrWhiteSpace(machineProfileFileName) ? null : machineProfileFileName,
-            machineProfileLoaded);
+            machineProfileLoaded,
+            _runtimePaths.RuntimeDataRoot);
     }
 
     private IReadOnlyList<PluginLifecycleSnapshot> BuildPluginLifecycleSnapshots()
@@ -597,9 +604,26 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
                 continue;
             }
 
+            var mappings = await _ioMappings.GetListAsync(
+                x => x.NetworkDeviceId == device.Id,
+                cancellationToken).ConfigureAwait(false);
+            var signalBindings = mappings
+                .Select(static mapping => new ModuleIoSnapshot(
+                    mapping.Label,
+                    mapping.PlcAddress,
+                    mapping.AddressCount,
+                    mapping.DataType,
+                    mapping.Direction,
+                    mapping.SortOrder))
+                .ToArray();
+
             _plcConnectionManager.RegisterTasks(
                 device.DeviceName,
-                (buffer, context) => factory.CreateTasks(_serviceProvider, buffer, context));
+                (buffer, context) =>
+                {
+                    ProductionContextSignalBindings.Set(context, signalBindings);
+                    return factory.CreateTasks(_serviceProvider, buffer, context);
+                });
         }
     }
 

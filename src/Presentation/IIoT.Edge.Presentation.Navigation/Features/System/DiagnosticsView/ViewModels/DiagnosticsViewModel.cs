@@ -417,12 +417,12 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
     {
         if (string.IsNullOrWhiteSpace(profile.MachineProfile))
         {
-            return $"Environment: {profile.EnvironmentName}; Machine profile: <none>";
+            return $"Environment: {profile.EnvironmentName}; Machine profile: <none>; Runtime root: {profile.RuntimeDataRoot}";
         }
 
         var state = profile.IsMachineProfileLoaded
             ? $"loaded from {profile.MachineProfileFileName}"
             : $"missing file {profile.MachineProfileFileName}";
-        return $"Environment: {profile.EnvironmentName}; Machine profile: {profile.MachineProfile} ({state})";
+        return $"Environment: {profile.EnvironmentName}; Machine profile: {profile.MachineProfile} ({state}); Runtime root: {profile.RuntimeDataRoot}";
     }
 }

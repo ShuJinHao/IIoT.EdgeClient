@@ -80,6 +80,49 @@ public sealed class ShellConfigurationLoaderBehaviorTests
         }
     }
 
+    [Fact]
+    public void Load_WhenMachineProfileComesFromEnvironmentVariable_ShouldPreferEnvironmentOverride()
+    {
+        var tempDirectory = CreateTempDirectory();
+        const string environmentVariable = "Shell__MachineProfile";
+        var originalValue = Environment.GetEnvironmentVariable(environmentVariable);
+
+        try
+        {
+            WriteText(
+                Path.Combine(tempDirectory, "appsettings.json"),
+                """
+                {
+                  "Shell": {
+                    "MachineProfile": "InjectionLine"
+                  }
+                }
+                """);
+            WriteText(
+                Path.Combine(tempDirectory, "appsettings.machine.StackingLine.json"),
+                """
+                {
+                  "Modules": {
+                    "Enabled": [ "Stacking" ]
+                  }
+                }
+                """);
+
+            Environment.SetEnvironmentVariable(environmentVariable, "StackingLine");
+
+            var result = ShellConfigurationLoader.Load(tempDirectory);
+
+            Assert.Equal("StackingLine", result.MachineProfile);
+            Assert.True(result.IsMachineProfileLoaded);
+            Assert.Equal("Stacking", result.Configuration["Modules:Enabled:0"]);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(environmentVariable, originalValue);
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
     private static string CreateTempDirectory()
     {
         var path = Path.Combine(Path.GetTempPath(), "edge-shell-config-tests", Guid.NewGuid().ToString("N"));
