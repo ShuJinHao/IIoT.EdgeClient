@@ -57,7 +57,8 @@ public class NavigationService : INavigationService
             return;
         }
 
-        var viewModel = _serviceProvider.GetRequiredService(registration.ViewModelType) as ViewModelBase;
+        var viewModel = registration.ViewModelFactory?.Invoke(_serviceProvider)
+            ?? _serviceProvider.GetRequiredService(registration.ViewModelType) as ViewModelBase;
         if (viewModel is null)
         {
             _logger.Warn($"[Navigation] Failed to resolve ViewModel: {registration.ViewModelType.Name}");

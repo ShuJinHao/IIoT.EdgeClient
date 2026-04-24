@@ -36,6 +36,7 @@
     <Compile Remove="Abstractions\Modules\IProcessIntegrationRegistry.cs" />
     <Compile Remove="Abstractions\Modules\IProcessMesUploader.cs" />
     <Compile Remove="Abstractions\Modules\IStationRuntimeRegistry.cs" />
+    <Compile Remove="Abstractions\Modules\MesCallResult.cs" />
     <Compile Remove="Abstractions\Plc\IPlcTask.cs" />
     <Compile Remove="Abstractions\Plc\Store\IPlcBuffer.cs" />
     <Compile Remove="Abstractions\Tasks\IBackgroundTask.cs" />

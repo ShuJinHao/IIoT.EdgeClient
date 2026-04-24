@@ -1,10 +1,10 @@
+using System.Collections.ObjectModel;
+using System.Threading;
+using System.Windows.Threading;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Common.Diagnostics;
 using IIoT.Edge.UI.Shared.PluginSystem;
-using System.Collections.ObjectModel;
-using System.Threading;
-using System.Windows.Threading;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
 
@@ -16,20 +16,15 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
     private int _refreshInProgress;
 
     public override string ViewId => CoreViewIds.Diagnostics;
+    public override string ViewTitle => "系统诊断";
 
-    public override string ViewTitle => "System Diagnostics";
+    public ObservableCollection<ModuleRegistrationRow> ModuleRegistrations { get; } = [];
+    public ObservableCollection<PluginLifecycleRow> PluginStates { get; } = [];
+    public ObservableCollection<DeviceModuleBindingRow> DeviceBindings { get; } = [];
+    public ObservableCollection<StartupDiagnosticIssueRow> Issues { get; } = [];
+    public ObservableCollection<MesChannelDiagnosticsRow> MesUploadDiagnostics { get; } = [];
 
-    public ObservableCollection<ModuleRegistrationSnapshot> ModuleRegistrations { get; } = [];
-
-    public ObservableCollection<PluginLifecycleSnapshot> PluginStates { get; } = [];
-
-    public ObservableCollection<DeviceModuleBindingSnapshot> DeviceBindings { get; } = [];
-
-    public ObservableCollection<StartupDiagnosticIssue> Issues { get; } = [];
-
-    public ObservableCollection<MesChannelDiagnostics> MesUploadDiagnostics { get; } = [];
-
-    private string _discoveredModulesSummary = "Checking discovered modules...";
+    private string _discoveredModulesSummary = "正在检查已发现模块...";
     public string DiscoveredModulesSummary
     {
         get => _discoveredModulesSummary;
@@ -40,7 +35,7 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
         }
     }
 
-    private string _enabledModulesSummary = "Checking enabled modules...";
+    private string _enabledModulesSummary = "正在检查已启用模块...";
     public string EnabledModulesSummary
     {
         get => _enabledModulesSummary;
@@ -51,7 +46,7 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
         }
     }
 
-    private string _activatedModulesSummary = "Checking activated modules...";
+    private string _activatedModulesSummary = "正在检查已激活模块...";
     public string ActivatedModulesSummary
     {
         get => _activatedModulesSummary;
@@ -62,7 +57,7 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
         }
     }
 
-    private string _configurationProfileSummary = "Configuration profile: --";
+    private string _configurationProfileSummary = "配置概况：--";
     public string ConfigurationProfileSummary
     {
         get => _configurationProfileSummary;
@@ -73,7 +68,7 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
         }
     }
 
-    private string _lastUpdatedSummary = "No startup diagnostics have been captured yet.";
+    private string _lastUpdatedSummary = "启动诊断尚未生成。";
     public string LastUpdatedSummary
     {
         get => _lastUpdatedSummary;
@@ -84,7 +79,7 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
         }
     }
 
-    private string _deviceSummary = "Device: Unknown";
+    private string _deviceSummary = "设备：未知";
     public string DeviceSummary
     {
         get => _deviceSummary;
@@ -95,7 +90,7 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
         }
     }
 
-    private string _cloudGateSummary = "Cloud gate: --";
+    private string _cloudGateSummary = "上传门禁：--";
     public string CloudGateSummary
     {
         get => _cloudGateSummary;
@@ -106,7 +101,7 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
         }
     }
 
-    private string _cloudRuntimeSummary = "Cloud runtime: Idle";
+    private string _cloudRuntimeSummary = "云端运行：空闲";
     public string CloudRuntimeSummary
     {
         get => _cloudRuntimeSummary;
@@ -117,7 +112,7 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
         }
     }
 
-    private string _cloudResultSummary = "Cloud last result: --";
+    private string _cloudResultSummary = "最近结果：--";
     public string CloudResultSummary
     {
         get => _cloudResultSummary;
@@ -128,7 +123,7 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
         }
     }
 
-    private string _cloudPendingSummary = "Cloud pending: retry=0, logs=0, capacity=0";
+    private string _cloudPendingSummary = "待处理：重试=0，日志=0，产能=0";
     public string CloudPendingSummary
     {
         get => _cloudPendingSummary;
@@ -139,7 +134,7 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
         }
     }
 
-    private string _cloudCapacitySummary = "Capacity blocked: no";
+    private string _cloudCapacitySummary = "产能阻塞：否";
     public string CloudCapacitySummary
     {
         get => _cloudCapacitySummary;
@@ -150,7 +145,7 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
         }
     }
 
-    private string _cloudPersistenceSummary = "Storage fault: no";
+    private string _cloudPersistenceSummary = "存储故障：否";
     public string CloudPersistenceSummary
     {
         get => _cloudPersistenceSummary;
@@ -161,7 +156,7 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
         }
     }
 
-    private string _cloudLastAttemptSummary = "Cloud last attempt: --";
+    private string _cloudLastAttemptSummary = "最近尝试：--";
     public string CloudLastAttemptSummary
     {
         get => _cloudLastAttemptSummary;
@@ -172,7 +167,7 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
         }
     }
 
-    private string _cloudLastSuccessSummary = "Cloud last success: --";
+    private string _cloudLastSuccessSummary = "最近成功：--";
     public string CloudLastSuccessSummary
     {
         get => _cloudLastSuccessSummary;
@@ -183,7 +178,7 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
         }
     }
 
-    private string _cloudLastFailureSummary = "Cloud last failure: --";
+    private string _cloudLastFailureSummary = "最近失败：--";
     public string CloudLastFailureSummary
     {
         get => _cloudLastFailureSummary;
@@ -194,7 +189,7 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
         }
     }
 
-    private string _mesRuntimeSummary = "MES runtime: Idle";
+    private string _mesRuntimeSummary = "MES运行：空闲";
     public string MesRuntimeSummary
     {
         get => _mesRuntimeSummary;
@@ -205,7 +200,7 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
         }
     }
 
-    private string _mesPendingSummary = "MES pending: retry=0";
+    private string _mesPendingSummary = "待处理：重试=0";
     public string MesPendingSummary
     {
         get => _mesPendingSummary;
@@ -216,7 +211,7 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
         }
     }
 
-    private string _mesCapacitySummary = "Capacity blocked: no";
+    private string _mesCapacitySummary = "产能阻塞：否";
     public string MesCapacitySummary
     {
         get => _mesCapacitySummary;
@@ -227,7 +222,7 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
         }
     }
 
-    private string _mesPersistenceSummary = "Storage fault: no";
+    private string _mesPersistenceSummary = "存储故障：否";
     public string MesPersistenceSummary
     {
         get => _mesPersistenceSummary;
@@ -238,7 +233,7 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
         }
     }
 
-    private string _mesLastAttemptSummary = "MES last attempt: --";
+    private string _mesLastAttemptSummary = "最近尝试：--";
     public string MesLastAttemptSummary
     {
         get => _mesLastAttemptSummary;
@@ -249,7 +244,7 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
         }
     }
 
-    private string _mesLastSuccessSummary = "MES last success: --";
+    private string _mesLastSuccessSummary = "最近成功：--";
     public string MesLastSuccessSummary
     {
         get => _mesLastSuccessSummary;
@@ -260,7 +255,7 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
         }
     }
 
-    private string _mesLastFailureSummary = "MES last failure: --";
+    private string _mesLastFailureSummary = "最近失败：--";
     public string MesLastFailureSummary
     {
         get => _mesLastFailureSummary;
@@ -271,7 +266,7 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
         }
     }
 
-    private string _contextPersistenceSummary = "Corrupt files: 0";
+    private string _contextPersistenceSummary = "损坏文件数：0";
     public string ContextPersistenceSummary
     {
         get => _contextPersistenceSummary;
@@ -314,7 +309,7 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
         }
         catch
         {
-            // Diagnostics refresh should not crash the periodic UI loop.
+            // 诊断页刷新失败不应导致界面轮询崩溃。
         }
     }
 
@@ -339,39 +334,46 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
     {
         var report = _diagnosticsStore.Current;
         var syncDiagnostics = await _syncDiagnosticsQuery.GetCurrentAsync(ct);
+        var moduleNameMap = BuildModuleNameMap(report);
 
-        DiscoveredModulesSummary = report.DiscoveredModules.Count == 0
-            ? "No plugins were discovered."
-            : $"Discovered: {string.Join(", ", report.DiscoveredModules)}";
+        DiscoveredModulesSummary = BuildModuleSummary(
+            "已发现模块",
+            "当前未发现模块。",
+            report.DiscoveredModules,
+            moduleNameMap);
 
-        EnabledModulesSummary = report.EnabledModules.Count == 0
-            ? "No modules are configured as enabled."
-            : $"Configured enabled: {string.Join(", ", report.EnabledModules)}";
+        EnabledModulesSummary = BuildModuleSummary(
+            "已启用模块",
+            "当前没有配置为启用的模块。",
+            report.EnabledModules,
+            moduleNameMap);
 
-        ActivatedModulesSummary = report.ActivatedModules.Count == 0
-            ? "No plugins are currently activated."
-            : $"Activated: {string.Join(", ", report.ActivatedModules)}";
+        ActivatedModulesSummary = BuildModuleSummary(
+            "已激活模块",
+            "当前没有已激活模块。",
+            report.ActivatedModules,
+            moduleNameMap);
 
         ConfigurationProfileSummary = BuildConfigurationProfileSummary(report.ConfigurationProfile);
-
         LastUpdatedSummary = report.GeneratedAt == DateTime.MinValue
-            ? "Startup diagnostics have not been generated yet."
-            : $"Last generated: {report.GeneratedAt:yyyy-MM-dd HH:mm:ss}";
+            ? "启动诊断尚未生成。"
+            : $"最近生成：{report.GeneratedAt:yyyy-MM-dd HH:mm:ss}";
 
-        DeviceSummary = $"Device: {syncDiagnostics.DeviceName}";
+        DeviceSummary = $"设备：{syncDiagnostics.DeviceName}";
 
         var cloudGate = syncDiagnostics.Cloud.GateState switch
         {
-            EdgeUploadGateState.Ready => "Ready",
-            _ when syncDiagnostics.Cloud.IsPausedWaitingForRecovery => "Waiting for Recovery",
-            _ => $"Blocked ({EdgeSyncDiagnosticsFormatter.FormatBlockReason(syncDiagnostics.Cloud.BlockReason)})"
+            EdgeUploadGateState.Ready => "已就绪",
+            _ when syncDiagnostics.Cloud.IsPausedWaitingForRecovery => "等待恢复",
+            _ => $"已阻塞（{EdgeSyncDiagnosticsFormatter.FormatBlockReason(syncDiagnostics.Cloud.BlockReason)}）"
         };
-        CloudGateSummary = $"Cloud gate: {cloudGate}";
-        CloudRuntimeSummary = $"Cloud runtime: {syncDiagnostics.Cloud.RuntimeState}";
+
+        CloudGateSummary = $"上传门禁：{cloudGate}";
+        CloudRuntimeSummary = $"云端运行：{EdgeSyncDiagnosticsFormatter.FormatCloudRuntimeState(syncDiagnostics.Cloud.RuntimeState)}";
         CloudResultSummary =
-            $"Cloud last result: {EdgeSyncDiagnosticsFormatter.FormatCloudOutcome(syncDiagnostics.Cloud.LastOutcome, syncDiagnostics.Cloud.LastReasonCode, syncDiagnostics.Cloud.LastProcessType)}";
+            $"最近结果：{EdgeSyncDiagnosticsFormatter.FormatCloudOutcome(syncDiagnostics.Cloud.LastOutcome, syncDiagnostics.Cloud.LastReasonCode, syncDiagnostics.Cloud.LastProcessType)}";
         CloudPendingSummary =
-            $"Cloud pending: retry={syncDiagnostics.Cloud.PendingRetryCount}, logs={syncDiagnostics.Cloud.PendingDeviceLogCount}, capacity={syncDiagnostics.Cloud.PendingCapacityCount}";
+            $"待处理：重试={syncDiagnostics.Cloud.PendingRetryCount}，日志={syncDiagnostics.Cloud.PendingDeviceLogCount}，产能={syncDiagnostics.Cloud.PendingCapacityCount}";
         CloudCapacitySummary = EdgeSyncDiagnosticsFormatter.FormatCapacityBlockedSummary(
             syncDiagnostics.Cloud.IsCapacityBlocked,
             syncDiagnostics.Cloud.BlockedChannel,
@@ -381,12 +383,12 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
             syncDiagnostics.Cloud.IsPersistenceFaulted,
             syncDiagnostics.Cloud.LastPersistenceFaultAt,
             syncDiagnostics.Cloud.PersistenceFaultMessage);
-        CloudLastAttemptSummary = $"Cloud last attempt: {EdgeSyncDiagnosticsFormatter.FormatTimestamp(syncDiagnostics.Cloud.LastAttemptAt)}";
-        CloudLastSuccessSummary = $"Cloud last success: {EdgeSyncDiagnosticsFormatter.FormatTimestamp(syncDiagnostics.Cloud.LastSuccessAt)}";
-        CloudLastFailureSummary = $"Cloud last failure: {EdgeSyncDiagnosticsFormatter.FormatTimestamp(syncDiagnostics.Cloud.LastFailureAt)}";
+        CloudLastAttemptSummary = $"最近尝试：{EdgeSyncDiagnosticsFormatter.FormatTimestamp(syncDiagnostics.Cloud.LastAttemptAt)}";
+        CloudLastSuccessSummary = $"最近成功：{EdgeSyncDiagnosticsFormatter.FormatTimestamp(syncDiagnostics.Cloud.LastSuccessAt)}";
+        CloudLastFailureSummary = $"最近失败：{EdgeSyncDiagnosticsFormatter.FormatTimestamp(syncDiagnostics.Cloud.LastFailureAt)}";
 
-        MesRuntimeSummary = $"MES runtime: {syncDiagnostics.Mes.RuntimeState}";
-        MesPendingSummary = $"MES pending: retry={syncDiagnostics.Mes.PendingRetryCount}";
+        MesRuntimeSummary = $"MES运行：{EdgeSyncDiagnosticsFormatter.FormatMesRuntimeState(syncDiagnostics.Mes.RuntimeState)}";
+        MesPendingSummary = $"待处理：重试={syncDiagnostics.Mes.PendingRetryCount}";
         MesCapacitySummary = EdgeSyncDiagnosticsFormatter.FormatCapacityBlockedSummary(
             syncDiagnostics.Mes.IsCapacityBlocked,
             syncDiagnostics.Mes.BlockedChannel,
@@ -396,33 +398,168 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
             syncDiagnostics.Mes.IsPersistenceFaulted,
             syncDiagnostics.Mes.LastPersistenceFaultAt,
             syncDiagnostics.Mes.PersistenceFaultMessage);
-        MesLastAttemptSummary = $"MES last attempt: {EdgeSyncDiagnosticsFormatter.FormatTimestamp(syncDiagnostics.Mes.LastAttemptAt)}";
-        MesLastSuccessSummary = $"MES last success: {EdgeSyncDiagnosticsFormatter.FormatTimestamp(syncDiagnostics.Mes.LastSuccessAt)}";
+        MesLastAttemptSummary = $"最近尝试：{EdgeSyncDiagnosticsFormatter.FormatTimestamp(syncDiagnostics.Mes.LastAttemptAt)}";
+        MesLastSuccessSummary = $"最近成功：{EdgeSyncDiagnosticsFormatter.FormatTimestamp(syncDiagnostics.Mes.LastSuccessAt)}";
         MesLastFailureSummary =
-            $"MES last failure: {EdgeSyncDiagnosticsFormatter.FormatTimestamp(syncDiagnostics.Mes.LastFailureAt)} ({syncDiagnostics.Mes.LastFailureReason ?? "--"})";
+            $"最近失败：{EdgeSyncDiagnosticsFormatter.FormatTimestamp(syncDiagnostics.Mes.LastFailureAt)}（{NormalizeText(syncDiagnostics.Mes.LastFailureReason)}）";
+
         ContextPersistenceSummary = EdgeSyncDiagnosticsFormatter.FormatContextPersistenceSummary(syncDiagnostics.ContextPersistence);
 
-        ReplaceItems(ModuleRegistrations, report.ModuleRegistrations);
-        ReplaceItems(PluginStates, report.PluginStates);
-        ReplaceItems(DeviceBindings, report.DeviceBindings);
-        ReplaceItems(Issues, report.Issues);
-        ReplaceItems(MesUploadDiagnostics, syncDiagnostics.Mes.Channels);
+        ReplaceItems(
+            ModuleRegistrations,
+            report.ModuleRegistrations.Select(x => new ModuleRegistrationRow(
+                x.ModuleId,
+                EdgeSyncDiagnosticsFormatter.FormatProcessType(x.ProcessType),
+                x.AssemblyName,
+                x.IsEnabled,
+                x.HasCellDataRegistration,
+                x.HasRuntimeFactory,
+                x.HasCloudUploader,
+                x.HasMesUploader,
+                x.HasHardwareProfile)));
+
+        ReplaceItems(
+            PluginStates,
+            report.PluginStates.Select(x => new PluginLifecycleRow(
+                x.ModuleId,
+                NormalizeText(x.DisplayName),
+                EdgeSyncDiagnosticsFormatter.FormatProcessType(x.ProcessType),
+                x.Version,
+                EdgeSyncDiagnosticsFormatter.FormatPluginLifecycleState(x.State),
+                NormalizeText(x.Message))));
+
+        ReplaceItems(
+            DeviceBindings,
+            report.DeviceBindings.Select(x => new DeviceModuleBindingRow(
+                x.DeviceName,
+                NormalizeText(x.ModuleId),
+                x.ModuleExists,
+                x.ModuleEnabled,
+                x.HasIoMappings)));
+
+        ReplaceItems(
+            Issues,
+            report.Issues.Select(x => new StartupDiagnosticIssueRow(
+                x.Code,
+                NormalizeText(x.ModuleId),
+                NormalizeText(x.DeviceName),
+                NormalizeText(x.Message))));
+
+        ReplaceItems(
+            MesUploadDiagnostics,
+            syncDiagnostics.Mes.Channels.Select(x => new MesChannelDiagnosticsRow(
+                EdgeSyncDiagnosticsFormatter.FormatProcessType(x.ProcessType),
+                EdgeSyncDiagnosticsFormatter.FormatMesChannelResult(x.LastResult),
+                EdgeSyncDiagnosticsFormatter.FormatTimestamp(x.LastAttemptAt),
+                EdgeSyncDiagnosticsFormatter.FormatTimestamp(x.LastSuccessAt),
+                NormalizeText(x.LastFailureReason))));
 
         SetStatus(report.Issues.Count == 0
-            ? "Startup diagnostics report is healthy."
-            : $"Startup diagnostics report contains {report.Issues.Count} issue(s).");
+            ? "启动诊断正常。"
+            : $"启动诊断发现 {report.Issues.Count} 个问题。");
+    }
+
+    private static IReadOnlyDictionary<string, string> BuildModuleNameMap(StartupDiagnosticsReport report)
+    {
+        var pairs = report.PluginStates
+            .Select(x => new KeyValuePair<string, string>(
+                x.ModuleId,
+                !string.IsNullOrWhiteSpace(x.DisplayName)
+                    ? x.DisplayName
+                    : EdgeSyncDiagnosticsFormatter.FormatProcessType(x.ProcessType)))
+            .Concat(report.ModuleRegistrations.Select(x => new KeyValuePair<string, string>(
+                x.ModuleId,
+                EdgeSyncDiagnosticsFormatter.FormatProcessType(x.ProcessType))));
+
+        return pairs
+            .GroupBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                x => x.Key,
+                x => x.Select(y => y.Value).FirstOrDefault(y => !string.IsNullOrWhiteSpace(y)) ?? x.Key,
+                StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static string BuildModuleSummary(
+        string label,
+        string emptyText,
+        IReadOnlyList<string> modules,
+        IReadOnlyDictionary<string, string> moduleNameMap)
+    {
+        if (modules.Count == 0)
+        {
+            return emptyText;
+        }
+
+        var names = modules
+            .Select(x => ResolveModuleDisplayName(x, moduleNameMap))
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+        return $"{label}：{string.Join("、", names)}";
+    }
+
+    private static string ResolveModuleDisplayName(string moduleId, IReadOnlyDictionary<string, string> moduleNameMap)
+    {
+        if (moduleNameMap.TryGetValue(moduleId, out var displayName) && !string.IsNullOrWhiteSpace(displayName))
+        {
+            return displayName;
+        }
+
+        return EdgeSyncDiagnosticsFormatter.FormatProcessType(moduleId);
     }
 
     private static string BuildConfigurationProfileSummary(ConfigurationProfileSnapshot profile)
     {
         if (string.IsNullOrWhiteSpace(profile.MachineProfile))
         {
-            return $"Environment: {profile.EnvironmentName}; Machine profile: <none>; Runtime root: {profile.RuntimeDataRoot}";
+            return $"环境：{profile.EnvironmentName}；机型：未配置；运行目录：{profile.RuntimeDataRoot}";
         }
 
-        var state = profile.IsMachineProfileLoaded
-            ? $"loaded from {profile.MachineProfileFileName}"
-            : $"missing file {profile.MachineProfileFileName}";
-        return $"Environment: {profile.EnvironmentName}; Machine profile: {profile.MachineProfile} ({state}); Runtime root: {profile.RuntimeDataRoot}";
+        var loadState = profile.IsMachineProfileLoaded
+            ? $"已从 {profile.MachineProfileFileName} 加载"
+            : $"未找到 {profile.MachineProfileFileName}";
+        return $"环境：{profile.EnvironmentName}；机型：{profile.MachineProfile}（{loadState}）；运行目录：{profile.RuntimeDataRoot}";
     }
+
+    private static string NormalizeText(string? value)
+        => string.IsNullOrWhiteSpace(value)
+            ? "--"
+            : value;
+
+    public sealed record PluginLifecycleRow(
+        string ModuleId,
+        string DisplayName,
+        string ProcessType,
+        string Version,
+        string State,
+        string Message);
+
+    public sealed record ModuleRegistrationRow(
+        string ModuleId,
+        string ProcessType,
+        string AssemblyName,
+        bool IsEnabled,
+        bool HasCellDataRegistration,
+        bool HasRuntimeFactory,
+        bool HasCloudUploader,
+        bool HasMesUploader,
+        bool HasHardwareProfile);
+
+    public sealed record DeviceModuleBindingRow(
+        string DeviceName,
+        string ModuleId,
+        bool ModuleExists,
+        bool ModuleEnabled,
+        bool HasIoMappings);
+
+    public sealed record StartupDiagnosticIssueRow(
+        string Code,
+        string ModuleId,
+        string DeviceName,
+        string Message);
+
+    public sealed record MesChannelDiagnosticsRow(
+        string ProcessType,
+        string LastResult,
+        string LastAttemptAt,
+        string LastSuccessAt,
+        string LastFailureReason);
 }

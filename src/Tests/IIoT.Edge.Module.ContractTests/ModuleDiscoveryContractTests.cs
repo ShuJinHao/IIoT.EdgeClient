@@ -48,6 +48,31 @@ public sealed class ModuleDiscoveryContractTests
     }
 
     [Fact]
+    public void CreateModule_WhenEntryTypeDoesNotImplementProcessModule_ShouldRejectWithClearContractMessage()
+    {
+        var assemblyPath = typeof(NonModuleEntry).Assembly.Location;
+        var descriptor = new ModulePluginDescriptor(
+            "BadModule",
+            "BadProcess",
+            "错误模块",
+            "1.0.0",
+            ModulePluginHostRuntime.HostApiVersion,
+            "1.0.0",
+            "99.0.0",
+            [],
+            Path.GetFileNameWithoutExtension(assemblyPath),
+            typeof(NonModuleEntry).FullName!,
+            Path.GetDirectoryName(assemblyPath)!,
+            Path.Combine(Path.GetDirectoryName(assemblyPath)!, "plugin.json"),
+            assemblyPath);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => descriptor.CreateModule());
+
+        Assert.Contains(nameof(IEdgeProcessModule), ex.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("IEdgeStationModule", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void RegisterAllDiscoveredModules_ShouldNotProduceViewOrRegistrationConflicts()
     {
         var pluginRoot = ContractTestPathHelper.CreatePluginRuntimeRoot("DryRun", "Injection", "Stacking");
@@ -90,5 +115,9 @@ public sealed class ModuleDiscoveryContractTests
         var discovery = DirectoryModuleCatalog.DiscoverModules(pluginRoot);
         Assert.Empty(discovery.Issues);
         return discovery;
+    }
+
+    private sealed class NonModuleEntry
+    {
     }
 }

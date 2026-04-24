@@ -74,7 +74,7 @@ public class RecipeViewModel : CrudPageViewModelBase
     {
     }
 
-    protected RecipeViewModel(
+    public RecipeViewModel(
         IRecipeViewCrudService crudService,
         IRecipeService recipeService,
         string viewId,

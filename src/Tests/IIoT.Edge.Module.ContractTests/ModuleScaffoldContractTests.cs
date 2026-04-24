@@ -12,7 +12,9 @@ public sealed class ModuleScaffoldContractTests
         {
             var outputRoot = Path.Combine(tempRoot, "Modules");
             var scriptPath = Path.Combine(repoRoot, "tools", "New-EdgeModule.ps1");
-            var expectedProject = Path.Combine(outputRoot, "IIoT.Edge.Module.GeneratedSmoke", "IIoT.Edge.Module.GeneratedSmoke.csproj");
+            var generatedModuleRoot = Path.Combine(outputRoot, "IIoT.Edge.Module.GeneratedSmoke");
+            var expectedProject = Path.Combine(generatedModuleRoot, "IIoT.Edge.Module.GeneratedSmoke.csproj");
+            var expectedModuleFile = Path.Combine(generatedModuleRoot, "GeneratedSmokeModule.cs");
 
             var scaffoldResult = ContractTestPathHelper.RunProcess(
                 "powershell",
@@ -21,6 +23,11 @@ public sealed class ModuleScaffoldContractTests
 
             Assert.True(scaffoldResult.ExitCode == 0, scaffoldResult.Output);
             Assert.True(File.Exists(expectedProject), $"Expected generated project at '{expectedProject}'.");
+            Assert.True(File.Exists(expectedModuleFile), $"Expected generated module entry at '{expectedModuleFile}'.");
+
+            var moduleSource = File.ReadAllText(expectedModuleFile);
+            Assert.Contains(": IEdgeProcessModule", moduleSource, StringComparison.Ordinal);
+            Assert.DoesNotContain("IEdgeStationModule", moduleSource, StringComparison.Ordinal);
 
             var buildResult = ContractTestPathHelper.RunProcess(
                 "dotnet",

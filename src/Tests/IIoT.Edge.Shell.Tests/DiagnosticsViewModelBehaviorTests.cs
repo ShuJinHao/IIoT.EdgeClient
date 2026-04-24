@@ -88,14 +88,14 @@ public sealed class DiagnosticsViewModelBehaviorTests
 
             await viewModel.RefreshAsync();
 
-            Assert.Equal("Cloud gate: Waiting for Recovery", viewModel.CloudGateSummary);
-            Assert.Equal("Cloud runtime: WaitingForRecovery", viewModel.CloudRuntimeSummary);
-            Assert.Equal("MES runtime: Backoff", viewModel.MesRuntimeSummary);
-            Assert.Contains("Capacity blocked: yes", viewModel.CloudCapacitySummary, StringComparison.Ordinal);
-            Assert.Contains("Storage fault: yes", viewModel.CloudPersistenceSummary, StringComparison.Ordinal);
-            Assert.Contains("Storage fault: yes", viewModel.MesPersistenceSummary, StringComparison.Ordinal);
-            Assert.Contains("Corrupt files: 2", viewModel.ContextPersistenceSummary, StringComparison.Ordinal);
-            Assert.Contains("Machine profile: StackingLine", viewModel.ConfigurationProfileSummary, StringComparison.Ordinal);
+            Assert.Equal("上传门禁：等待恢复", viewModel.CloudGateSummary);
+            Assert.Equal("云端运行：等待恢复", viewModel.CloudRuntimeSummary);
+            Assert.Equal("MES运行：退避中", viewModel.MesRuntimeSummary);
+            Assert.Contains("产能阻塞：是", viewModel.CloudCapacitySummary, StringComparison.Ordinal);
+            Assert.Contains("存储故障：是", viewModel.CloudPersistenceSummary, StringComparison.Ordinal);
+            Assert.Contains("存储故障：是", viewModel.MesPersistenceSummary, StringComparison.Ordinal);
+            Assert.Contains("损坏文件数：2", viewModel.ContextPersistenceSummary, StringComparison.Ordinal);
+            Assert.Contains("机型：StackingLine", viewModel.ConfigurationProfileSummary, StringComparison.Ordinal);
             Assert.Single(viewModel.ModuleRegistrations);
             Assert.Single(viewModel.PluginStates);
             Assert.Single(viewModel.DeviceBindings);
@@ -177,7 +177,7 @@ public sealed class DiagnosticsViewModelBehaviorTests
         private int _totalCalls;
 
         public EdgeSyncDiagnosticsSnapshot Current { get; set; } = new(
-            "Unknown",
+            "未知",
             new CloudSyncDiagnosticsSnapshot(
                 EdgeUploadGateState.Unknown,
                 EdgeUploadBlockReason.DeviceUnidentified,

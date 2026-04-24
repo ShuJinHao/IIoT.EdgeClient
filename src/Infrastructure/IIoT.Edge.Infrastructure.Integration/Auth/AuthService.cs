@@ -1,11 +1,11 @@
-using IIoT.Edge.Application.Abstractions.Auth;
-using IIoT.Edge.Application.Common.Models;
-using IIoT.Edge.Infrastructure.Integration.Config;
-using IIoT.Edge.Infrastructure.Integration.Http;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
+using IIoT.Edge.Application.Abstractions.Auth;
+using IIoT.Edge.Application.Common.Models;
+using IIoT.Edge.Infrastructure.Integration.Config;
+using IIoT.Edge.Infrastructure.Integration.Http;
 
 namespace IIoT.Edge.Infrastructure.Integration.Auth;
 
@@ -57,18 +57,18 @@ public class AuthService : IAuthService
         var configuredHash = _localAdminConfig.PasswordHash?.Trim();
         if (string.IsNullOrWhiteSpace(configuredHash))
         {
-            return Task.FromResult(AuthResult.Fail("Local admin is not configured."));
+            return Task.FromResult(AuthResult.Fail("本地管理员未配置。"));
         }
 
         var inputHash = ComputeSha256(password);
         if (!string.Equals(inputHash, configuredHash, StringComparison.Ordinal))
         {
-            return Task.FromResult(AuthResult.Fail("Invalid password."));
+            return Task.FromResult(AuthResult.Fail("密码错误。"));
         }
 
         var session = new UserSession
         {
-            DisplayName = "Local Admin",
+            DisplayName = "本地管理员",
             EmployeeNo = "LOCAL_ADMIN",
             IsLocalAdmin = true,
             Permissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase),
@@ -79,7 +79,7 @@ public class AuthService : IAuthService
         };
 
         SetSession(session);
-        return Task.FromResult(AuthResult.Ok("Local admin login succeeded."));
+        return Task.FromResult(AuthResult.Ok("本地管理员登录成功。"));
     }
 
     public async Task<AuthResult> LoginCloudAsync(string employeeNo, string password, Guid deviceId)
@@ -101,19 +101,19 @@ public class AuthService : IAuthService
             }
 
             SetSession(session);
-            return AuthResult.Ok($"Welcome, {session.DisplayName}");
+            return AuthResult.Ok($"欢迎，{session.DisplayName}");
         }
         catch (TaskCanceledException)
         {
-            return AuthResult.Fail("Connection timeout.");
+            return AuthResult.Fail("连接超时。");
         }
         catch (HttpRequestException)
         {
-            return AuthResult.Fail("Cannot reach the server.");
+            return AuthResult.Fail("无法连接到服务器。");
         }
         catch (Exception ex)
         {
-            return AuthResult.Fail($"Login exception: {ex.Message}");
+            return AuthResult.Fail($"登录异常：{ex.Message}");
         }
     }
 
@@ -248,11 +248,11 @@ public class AuthService : IAuthService
 
         return response.StatusCode switch
         {
-            HttpStatusCode.Unauthorized => "Invalid employee number or password.",
-            HttpStatusCode.Forbidden => "This account is not allowed to operate the current device.",
-            HttpStatusCode.BadRequest => "Login request was rejected.",
-            >= HttpStatusCode.InternalServerError => "Server is temporarily unavailable.",
-            _ => $"Login failed: {response.StatusCode}"
+            HttpStatusCode.Unauthorized => "工号或密码错误。",
+            HttpStatusCode.Forbidden => "当前账号无权操作这台设备。",
+            HttpStatusCode.BadRequest => "登录请求被拒绝。",
+            >= HttpStatusCode.InternalServerError => "服务器暂时不可用。",
+            _ => $"登录失败：{response.StatusCode}"
         };
     }
 
@@ -283,7 +283,7 @@ public class AuthService : IAuthService
                 .FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.UniqueName)
                 ?.Value
                 ?? jwtToken.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value
-                ?? "Unknown User";
+                ?? "未知用户";
 
             var employeeNo = jwtToken.Claims
                 .FirstOrDefault(c => string.Equals(c.Type, "employeeNo", StringComparison.OrdinalIgnoreCase))

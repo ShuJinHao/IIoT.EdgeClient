@@ -6,9 +6,9 @@ public sealed class HomogenizationCellDataValidator
     {
         ArgumentNullException.ThrowIfNull(cellData);
 
-        if (string.IsNullOrWhiteSpace(cellData.Barcode))
+        if (string.IsNullOrWhiteSpace(cellData.TrayCode))
         {
-            error = "Barcode is required.";
+            error = "托盘码不能为空。";
             return false;
         }
 

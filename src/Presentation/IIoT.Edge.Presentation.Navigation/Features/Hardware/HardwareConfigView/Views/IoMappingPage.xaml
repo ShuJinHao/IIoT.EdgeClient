@@ -146,6 +146,9 @@
                     <DataGridTextColumn Width="120" Binding="{Binding Label}" Header="标签" />
                     <DataGridTextColumn Width="100" Binding="{Binding PlcAddress}" Header="PLC地址" />
                     <DataGridTextColumn Width="70" Binding="{Binding AddressCount}" Header="数量" />
+                    <DataGridTextColumn Width="110" Binding="{Binding Category}" Header="分类" />
+                    <DataGridTextColumn Width="110" Binding="{Binding GroupName}" Header="分组" />
+                    <DataGridTextColumn Width="90" Binding="{Binding DisplayRole}" Header="显示角色" />
                     <DataGridTemplateColumn Width="90" Header="数据类型">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>

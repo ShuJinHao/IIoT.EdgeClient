@@ -38,6 +38,19 @@ if (Test-Path $contractTestFile) {
 
 New-Item -Path $moduleRoot -ItemType Directory -Force | Out-Null
 
+$standardDirectories = @(
+    'Config',
+    'Integration',
+    'Payload',
+    'Presentation',
+    'Runtime',
+    'Runtime\Tasks'
+)
+
+foreach ($relativePath in $standardDirectories) {
+    New-Item -Path (Join-Path $moduleRoot $relativePath) -ItemType Directory -Force | Out-Null
+}
+
 $csproj = @"
 <Project Sdk="Microsoft.NET.Sdk">
 
@@ -63,14 +76,12 @@ $csproj = @"
 "@
 
 $moduleClass = @"
-using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Module.Abstractions;
-using IIoT.Edge.UI.Shared.Modularity;
-using Microsoft.Extensions.DependencyInjection;
+using IIoT.Edge.Plugin.Shared.Modules;
 
 namespace IIoT.Edge.Module.$ModuleName;
 
-public sealed class ${ModuleName}Module : IEdgeStationModule
+public sealed class ${ModuleName}Module : IEdgeProcessModule
 {
     public const string ModuleKey = "$ModuleName";
 
@@ -78,29 +89,15 @@ public sealed class ${ModuleName}Module : IEdgeStationModule
 
     public string ProcessType => "$ProcessType";
 
-    public void RegisterServices(IServiceCollection services)
-    {
-        throw new NotImplementedException("Register $ModuleName services.");
-    }
+    public string DisplayName => "$ModuleName";
 
-    public void RegisterViews(IViewRegistry viewRegistry)
+    public void Configure(IEdgeProcessModuleBuilder builder)
     {
-        throw new NotImplementedException("Register $ModuleName views.");
-    }
+        ArgumentNullException.ThrowIfNull(builder);
 
-    public void RegisterCellData(ICellDataRegistry registry)
-    {
-        throw new NotImplementedException("Register $ModuleName cell data.");
-    }
-
-    public void RegisterRuntime(IStationRuntimeRegistry registry)
-    {
-        throw new NotImplementedException("Register $ModuleName runtime factory.");
-    }
-
-    public void RegisterIntegrations(IProcessIntegrationRegistry registry)
-    {
-        registry.RegisterCloudUploader(ProcessType, ProcessUploadMode.$UploadMode);
+        // TODO: 注册服务、CellData、运行时工厂、上传器和标准视图。
+        // 触发-应答类 PLC 任务应使用显式 switch (Step) 任务机；心跳、周期快照任务才优先复用共享基类。
+        builder.RegisterCloudUploader(PluginCloudUploadMode.$UploadMode);
     }
 }
 "@
@@ -114,10 +111,16 @@ Module scaffold created by `scripts/NewEdgeModule.ps1`.
 
 - Replace all `NotImplementedException` placeholders.
 - Add a module-specific `CellData` type.
+- Keep module payload, snapshots, PLC signal profile, options, and context inside this module.
+- Put runtime context/factory/codec under `Runtime`, and put tasks under `Runtime/Tasks`.
+- Use explicit `switch (Step)` task machines for trigger/ack PLC workflows.
+- Reuse shared task bases only for heartbeat mirrors and periodic snapshot uploads.
 - Add runtime factory and tasks.
-- Add Cloud uploader registration.
+- Add Cloud uploader registration through the shared uploader base when possible.
+- Add MES uploader registration through the shared MES base only when this process has MES business.
 - Add hardware profile provider registration if this module uses PLC devices.
-- Register module routes with the `<ModuleId>.*` prefix only.
+- Register standard module routes before adding custom ViewModel wrappers.
+- Register module routes with the `<ModuleId>.*` prefix only through `IEdgeProcessModuleBuilder`.
 - Add or update module-specific non-UI coverage where needed.
 - Update `${ModuleName}ModuleContractTests.cs` if this module requires PLC hardware profiles.
 - Add a project reference to this module from the host or integration shell that should discover it.

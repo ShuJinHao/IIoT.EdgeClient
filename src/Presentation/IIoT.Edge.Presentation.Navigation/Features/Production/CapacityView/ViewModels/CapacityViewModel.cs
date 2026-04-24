@@ -1,10 +1,10 @@
+using System.Collections.ObjectModel;
+using System.Windows;
+using System.Windows.Input;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Features.Production.CapacityView;
 using IIoT.Edge.UI.Shared.Mvvm;
 using IIoT.Edge.UI.Shared.PluginSystem;
-using System.Collections.ObjectModel;
-using System.Windows;
-using System.Windows.Input;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Production.CapacityView;
 
@@ -14,7 +14,7 @@ public class CapacityViewModel : PresentationViewModelBase
     private readonly string _viewId;
     private readonly string _viewTitle;
     private string _selectedDeviceName = string.Empty;
-    private string _selectedQueryMode = "By Day";
+    private string _selectedQueryMode = "按日查询";
     private DateTime _queryDate = DateTime.Today;
     private bool _isOnline;
     private int _periodTotal;
@@ -26,10 +26,10 @@ public class CapacityViewModel : PresentationViewModelBase
     public override string ViewId => _viewId;
     public override string ViewTitle => _viewTitle;
 
-    public ObservableCollection<string> DeviceNames { get; } = new();
-    public ObservableCollection<string> QueryModes { get; } = new() { "By Day", "By Month", "By Year" };
-    public ObservableCollection<DailyCapacityVm> DailyRecords { get; } = new();
-    public ObservableCollection<CapacityChartBarVm> ChartBars { get; } = new();
+    public ObservableCollection<string> DeviceNames { get; } = [];
+    public ObservableCollection<string> QueryModes { get; } = ["按日查询", "按月查询", "按年查询"];
+    public ObservableCollection<DailyCapacityVm> DailyRecords { get; } = [];
+    public ObservableCollection<CapacityChartBarVm> ChartBars { get; } = [];
 
     public string SelectedDeviceName
     {
@@ -38,7 +38,7 @@ public class CapacityViewModel : PresentationViewModelBase
         {
             _selectedDeviceName = value;
             OnPropertyChanged();
-            RunViewTaskInBackground(LoadCurrentDataAsync, "Load capacity data failed.");
+            ScheduleLoadCurrentData();
         }
     }
 
@@ -75,23 +75,70 @@ public class CapacityViewModel : PresentationViewModelBase
     }
 
     public bool CanQueryCloud => IsOnline;
-    public string OfflineHint => IsOnline ? string.Empty : "Cloud query is unavailable until device upload auth is ready.";
 
-    public int PeriodTotal { get => _periodTotal; set { _periodTotal = value; OnPropertyChanged(); } }
-    public int PeriodOk { get => _periodOk; set { _periodOk = value; OnPropertyChanged(); } }
-    public int PeriodNg { get => _periodNg; set { _periodNg = value; OnPropertyChanged(); } }
-    public string PeriodYield { get => _periodYield; set { _periodYield = value; OnPropertyChanged(); } }
-    public string AvgDaily { get => _avgDaily; set { _avgDaily = value; OnPropertyChanged(); } }
+    public string OfflineHint => IsOnline
+        ? string.Empty
+        : "设备上传鉴权尚未就绪，暂时无法查询云端产能。";
+
+    public int PeriodTotal
+    {
+        get => _periodTotal;
+        set
+        {
+            _periodTotal = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public int PeriodOk
+    {
+        get => _periodOk;
+        set
+        {
+            _periodOk = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public int PeriodNg
+    {
+        get => _periodNg;
+        set
+        {
+            _periodNg = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public string PeriodYield
+    {
+        get => _periodYield;
+        set
+        {
+            _periodYield = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public string AvgDaily
+    {
+        get => _avgDaily;
+        set
+        {
+            _avgDaily = value;
+            OnPropertyChanged();
+        }
+    }
 
     public ICommand QueryCommand { get; }
     public ICommand ExportCommand { get; }
 
     public CapacityViewModel(ICapacityViewService capacityViewService)
-        : this(capacityViewService, "Production.CapacityView", "Capacity Query")
+        : this(capacityViewService, "Production.CapacityView", "产能查询")
     {
     }
 
-    protected CapacityViewModel(
+    public CapacityViewModel(
         ICapacityViewService capacityViewService,
         string viewId,
         string viewTitle)
@@ -100,7 +147,7 @@ public class CapacityViewModel : PresentationViewModelBase
         _viewId = viewId;
         _viewTitle = viewTitle;
 
-        QueryCommand = new AsyncCommand(() => RunViewTaskAsync(QueryHistoryAsync, "Capacity query failed."));
+        QueryCommand = new AsyncCommand(() => RunViewTaskAsync(QueryHistoryAsync, "产能查询失败。"));
         ExportCommand = new BaseCommand(_ => { });
 
         _capacityViewService.UploadGateChanged += OnUploadGateChanged;
@@ -110,16 +157,20 @@ public class CapacityViewModel : PresentationViewModelBase
     {
         RefreshDeviceList();
         IsOnline = _capacityViewService.IsOnline;
-        await RunViewTaskAsync(LoadCurrentDataAsync, "Load capacity data failed.");
+        await RunViewTaskAsync(LoadCurrentDataAsync, "加载产能数据失败。");
     }
 
-    public void OnCapacityUpdated() => RunViewTaskInBackground(LoadCurrentDataAsync, "Load capacity data failed.");
+    public void OnCapacityUpdated() => ScheduleLoadCurrentData();
 
     private void OnUploadGateChanged(EdgeUploadGateSnapshot snapshot)
-    {
-        IsOnline = snapshot.State == EdgeUploadGateState.Ready;
-        RunViewTaskInBackground(LoadCurrentDataAsync, "Load capacity data failed.");
-    }
+        => RunOnUiThread(() =>
+        {
+            IsOnline = snapshot.State == EdgeUploadGateState.Ready;
+            RunViewTaskInBackground(LoadCurrentDataAsync, "加载产能数据失败。");
+        });
+
+    private void ScheduleLoadCurrentData()
+        => RunOnUiThread(() => RunViewTaskInBackground(LoadCurrentDataAsync, "加载产能数据失败。"));
 
     private void RefreshDeviceList()
     {
@@ -154,8 +205,8 @@ public class CapacityViewModel : PresentationViewModelBase
         if (!CanQueryCloud)
         {
             MessageBox.Show(
-                "Cloud query is unavailable until device upload auth is ready.",
-                "Capacity Query",
+                "设备上传鉴权尚未就绪，暂时无法查询云端产能。",
+                "产能查询",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
             ClearSummary();
@@ -209,5 +260,17 @@ public class CapacityViewModel : PresentationViewModelBase
         PeriodNg = 0;
         PeriodYield = "0%";
         AvgDaily = "0";
+    }
+
+    private static void RunOnUiThread(Action action)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+        {
+            action();
+            return;
+        }
+
+        _ = dispatcher.InvokeAsync(action);
     }
 }

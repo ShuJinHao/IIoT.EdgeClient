@@ -22,6 +22,7 @@ public static class DependencyInjection
         services.AddSingleton(sp =>
             new ProductionContextStore(
                 sp.GetRequiredService<ILogService>(),
+                sp.GetServices<IProductionContextFactory>(),
                 runtimePaths.ContextDirectory));
         services.AddSingleton<IProductionContextStore>(sp => sp.GetRequiredService<ProductionContextStore>());
         services.AddSingleton<ITodayCapacityStore, TodayCapacityStore>();

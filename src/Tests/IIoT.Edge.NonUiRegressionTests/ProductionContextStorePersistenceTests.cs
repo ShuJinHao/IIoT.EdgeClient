@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Module.Injection.Payload;
 using IIoT.Edge.Runtime.Context;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
@@ -197,6 +198,65 @@ public sealed class ProductionContextStorePersistenceTests
     }
 
     [Fact]
+    public void GetOrCreate_WhenModuleFactoryRegistered_ShouldCreateModuleSpecificContext()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "edge-context-tests", Guid.NewGuid().ToString("N"));
+        var logger = new FakeLogService();
+
+        try
+        {
+            var store = new ProductionContextStore(logger, [new TestProductionContextFactory()], tempDir);
+
+            var context = store.GetOrCreate("PLC-H", TestProductionContextFactory.TestModuleId);
+
+            var typedContext = Assert.IsType<TestProductionContext>(context);
+            Assert.Equal("PLC-H", typedContext.DeviceName);
+            Assert.Equal("CreatedByFactory", typedContext.ModuleMarker);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void GetOrCreate_WhenExistingBaseContextNeedsModuleContext_ShouldPreserveRuntimeState()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "edge-context-tests", Guid.NewGuid().ToString("N"));
+        var logger = new FakeLogService();
+
+        try
+        {
+            var store = new ProductionContextStore(logger, [new TestProductionContextFactory()], tempDir);
+
+            var baseContext = store.GetOrCreate("PLC-H");
+            baseContext.DeviceId = 9;
+            baseContext.SetStep("Homogenization.Inbound", 30);
+            baseContext.Set("BatchNo", "B-1001");
+            baseContext.AddCell("BC-1001", new NamedCellData { Label = "Display-Only" });
+
+            var upgraded = store.GetOrCreate("PLC-H", TestProductionContextFactory.TestModuleId);
+
+            var typedContext = Assert.IsType<TestProductionContext>(upgraded);
+            Assert.Equal(9, typedContext.DeviceId);
+            Assert.Equal(30, typedContext.GetStep("Homogenization.Inbound"));
+            Assert.Equal("B-1001", typedContext.Get<string>("BatchNo"));
+            Assert.True(typedContext.HasCell("BC-1001"));
+            Assert.Equal("Display-Only", Assert.IsType<NamedCellData>(typedContext.GetCell("BC-1001")).DisplayLabel);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public void SaveToFile_WhenTempWriteFails_ShouldDeleteResidualTmpFileAndLogCleanupResult()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "edge-context-tests", Guid.NewGuid().ToString("N"));
@@ -276,6 +336,27 @@ public sealed class ProductionContextStorePersistenceTests
         public override string DisplayLabel => Label;
 
         public string Label { get; set; } = string.Empty;
+    }
+
+    private sealed class TestProductionContext : ProductionContext
+    {
+        public string ModuleMarker { get; init; } = string.Empty;
+    }
+
+    private sealed class TestProductionContextFactory : IProductionContextFactory
+    {
+        public const string TestModuleId = "Homogenization";
+
+        public string ModuleId => TestModuleId;
+
+        public Type ContextType => typeof(TestProductionContext);
+
+        public ProductionContext Create(string deviceName)
+            => new TestProductionContext
+            {
+                DeviceName = deviceName,
+                ModuleMarker = "CreatedByFactory"
+            };
     }
 
     private sealed class FaultingPersistenceFileSystem : IProductionContextPersistenceFileSystem

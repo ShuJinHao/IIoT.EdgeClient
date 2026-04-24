@@ -57,8 +57,8 @@ public sealed class FooterViewModelBehaviorTests
             await viewModel.RefreshDiagnosticsAsync();
 
             Assert.Equal("Edge-A", viewModel.DeviceName);
-            Assert.Equal("Cloud: Ready", viewModel.CloudStatus);
-            Assert.Equal("MES: Idle", viewModel.MesStatus);
+            Assert.Equal("云端：已就绪", viewModel.CloudStatus);
+            Assert.Equal("MES：空闲", viewModel.MesStatus);
 
             diagnosticsQuery.Current = CreateSnapshot(
                 "Edge-A",
@@ -75,8 +75,8 @@ public sealed class FooterViewModelBehaviorTests
 
             await viewModel.RefreshDiagnosticsAsync();
 
-            Assert.Equal("Cloud: Waiting for Recovery", viewModel.CloudStatus);
-            Assert.Equal("MES: Retry Backoff", viewModel.MesStatus);
+            Assert.Equal("云端：等待恢复", viewModel.CloudStatus);
+            Assert.Equal("MES：退避中", viewModel.MesStatus);
 
             diagnosticsQuery.Current = CreateSnapshot(
                 "Edge-A",
@@ -93,8 +93,8 @@ public sealed class FooterViewModelBehaviorTests
 
             await viewModel.RefreshDiagnosticsAsync();
 
-            Assert.Equal("Cloud: Blocked (bootstrap timeout)", viewModel.CloudStatus);
-            Assert.Equal("MES: Last Failed", viewModel.MesStatus);
+            Assert.Equal("云端：已阻塞（bootstrap 超时）", viewModel.CloudStatus);
+            Assert.Equal("MES：最近失败", viewModel.MesStatus);
         });
 
     [Fact]
@@ -144,8 +144,8 @@ public sealed class FooterViewModelBehaviorTests
             var viewModel = new FooterViewModel(diagnosticsQuery);
             await viewModel.RefreshDiagnosticsAsync();
 
-            Assert.Equal("Cloud: Capacity Blocked", viewModel.CloudStatus);
-            Assert.Equal("MES: Capacity Blocked", viewModel.MesStatus);
+            Assert.Equal("云端：产能阻塞", viewModel.CloudStatus);
+            Assert.Equal("MES：产能阻塞", viewModel.MesStatus);
         });
 
     [Fact]
@@ -195,8 +195,8 @@ public sealed class FooterViewModelBehaviorTests
             var viewModel = new FooterViewModel(diagnosticsQuery);
             await viewModel.RefreshDiagnosticsAsync();
 
-            Assert.Equal("Cloud: Storage Fault", viewModel.CloudStatus);
-            Assert.Equal("MES: Storage Fault", viewModel.MesStatus);
+            Assert.Equal("云端：存储故障", viewModel.CloudStatus);
+            Assert.Equal("MES：存储故障", viewModel.MesStatus);
         });
 
     [Fact]
@@ -267,7 +267,7 @@ public sealed class FooterViewModelBehaviorTests
         private int _totalCalls;
 
         public EdgeSyncDiagnosticsSnapshot Current { get; set; } = new(
-            "Unknown",
+            "未知",
             new CloudSyncDiagnosticsSnapshot(
                 EdgeUploadGateState.Unknown,
                 EdgeUploadBlockReason.DeviceUnidentified,

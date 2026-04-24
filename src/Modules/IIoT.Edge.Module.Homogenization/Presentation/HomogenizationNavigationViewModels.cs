@@ -1,83 +1,91 @@
-using IIoT.Edge.Application.Abstractions.Auth;
-using IIoT.Edge.Application.Abstractions.Plc;
-using IIoT.Edge.Application.Abstractions.Plc.Store;
-using IIoT.Edge.Application.Abstractions.Recipe;
-using IIoT.Edge.Application.Features.Config.ParamView;
-using IIoT.Edge.Application.Features.Formula.RecipeView;
-using IIoT.Edge.Application.Features.Hardware.HardwareConfigView;
-using IIoT.Edge.Application.Features.Production.CapacityView;
-using IIoT.Edge.Application.Features.Production.DataView;
-using IIoT.Edge.Application.Features.Production.Monitor;
-using IIoT.Edge.Presentation.Navigation.Features.Config.ParamView;
-using IIoT.Edge.Presentation.Navigation.Features.Formula.RecipeView;
-using IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView;
-using IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
-using IIoT.Edge.Presentation.Navigation.Features.Production.CapacityView;
-using IIoT.Edge.Presentation.Navigation.Features.Production.DataView;
-using IIoT.Edge.Presentation.Navigation.Features.Production.Monitor;
-using MediatR;
+using System.Collections.ObjectModel;
+using System.Windows.Threading;
+using IIoT.Edge.Application.Abstractions.Context;
+using IIoT.Edge.Module.Homogenization.Config;
+using IIoT.Edge.Module.Homogenization.Payload;
+using IIoT.Edge.Module.Homogenization.Runtime;
+using IIoT.Edge.UI.Shared.PluginSystem;
 
 namespace IIoT.Edge.Module.Homogenization.Presentation;
 
-public sealed class HomogenizationDataViewModel : DataViewModel
+public sealed class HomogenizationDataViewModel : PresentationViewModelBase
 {
-    public HomogenizationDataViewModel(IDataViewService dataViewService)
-        : base(dataViewService, HomogenizationViewIds.DataView, "鐢熶骇鏁版嵁")
+    private readonly IProductionContextStore _contextStore;
+    private readonly DispatcherTimer _timer;
+
+    public HomogenizationDataViewModel(
+        IProductionContextStore contextStore,
+        HomogenizationModuleOptions moduleOptions)
     {
+        _contextStore = contextStore;
+        _timer = HomogenizationPresentationHelpers.CreateTimer(
+            RefreshAsync,
+            moduleOptions.Presentation.DataViewRefreshIntervalMs);
     }
+
+    public override string ViewId => HomogenizationViewIds.DataView;
+
+    public override string ViewTitle => "匀浆产品数据";
+
+    public ObservableCollection<HomogenizationDataRow> Records { get; } = [];
+
+    public override Task OnActivatedAsync()
+    {
+        _timer.Start();
+        return RefreshAsync();
+    }
+
+    public override Task OnDeactivatedAsync()
+    {
+        _timer.Stop();
+        return Task.CompletedTask;
+    }
+
+    private Task RefreshAsync()
+        => RunViewTaskAsync(() =>
+        {
+            var rows = _contextStore.GetAll()
+                .OfType<HomogenizationContext>()
+                .SelectMany(static x => x.OutboundRecords)
+                .OrderByDescending(static x => x.CompletedTime ?? x.InboundTime ?? DateTime.MinValue)
+                .Select(static x => new HomogenizationDataRow(
+                    x.TrayCode,
+                    x.InboundTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "-",
+                    x.CompletedTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "-",
+                    x.RuntimeStatus,
+                    x.RealtimeSnapshot?.StirringSpeed.ToString() ?? "-",
+                    x.RealtimeSnapshot?.Temperature.ToString() ?? "-",
+                    x.RealtimeSnapshot?.Vacuum.ToString() ?? "-",
+                    x.CntActualKg?.ToString() ?? "-",
+                    x.NmpActualKg?.ToString() ?? "-"))
+                .ToArray();
+
+            ReplaceItems(Records, rows);
+            SetStatus(rows.Length == 0 ? "暂无匀浆出料记录。" : $"记录数：{rows.Length}");
+            return Task.CompletedTask;
+        }, trackBusy: false, clearFeedback: false);
 }
 
-public sealed class HomogenizationCapacityViewModel : CapacityViewModel
-{
-    public HomogenizationCapacityViewModel(ICapacityViewService capacityViewService)
-        : base(capacityViewService, HomogenizationViewIds.CapacityView, "浜ц兘鏌ヨ")
-    {
-    }
-}
+public sealed record HomogenizationDataRow(
+    string TrayCode,
+    string InboundTime,
+    string OutboundTime,
+    string Status,
+    string StirringSpeed,
+    string Temperature,
+    string Vacuum,
+    string CntActual,
+    string NmpActual);
 
-public sealed class HomogenizationMonitorViewModel : MonitorViewModel
+internal static class HomogenizationPresentationHelpers
 {
-    public HomogenizationMonitorViewModel(IMonitorViewService monitorViewService)
-        : base(monitorViewService, HomogenizationViewIds.Monitor, "瀹炴椂鐩戞帶")
+    public static DispatcherTimer CreateTimer(Func<Task> refreshAsync, int intervalMs)
     {
-    }
-}
-
-public sealed class HomogenizationIoViewModel : IoViewViewModel
-{
-    public HomogenizationIoViewModel(
-        IPlcDataStore dataStore,
-        IPlcConnectionManager plcConnectionManager,
-        ISender sender)
-        : base(dataStore, plcConnectionManager, sender, HomogenizationViewIds.IoView, "IO浜や簰")
-    {
-    }
-}
-
-public sealed class HomogenizationRecipeViewModel : RecipeViewModel
-{
-    public HomogenizationRecipeViewModel(IRecipeViewCrudService crudService, IRecipeService recipeService)
-        : base(crudService, recipeService, HomogenizationViewIds.RecipeView, "浜у搧閰嶆柟")
-    {
-    }
-}
-
-public sealed class HomogenizationParamViewModel : ParamViewModel
-{
-    public HomogenizationParamViewModel(
-        IParamViewCrudService crudService,
-        IClientPermissionService permissionService)
-        : base(crudService, permissionService, HomogenizationViewIds.ParamView, "鍙傛暟閰嶇疆")
-    {
-    }
-}
-
-public sealed class HomogenizationHardwareConfigViewModel : HardwareConfigViewModel
-{
-    public HomogenizationHardwareConfigViewModel(
-        IHardwareConfigCrudService crudService,
-        IClientPermissionService permissionService)
-        : base(crudService, permissionService, HomogenizationViewIds.HardwareConfigView, "纭欢閰嶇疆")
-    {
+        var timer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(Math.Max(200, intervalMs))
+        };
+        timer.Tick += async (_, _) => await refreshAsync();
+        return timer;
     }
 }

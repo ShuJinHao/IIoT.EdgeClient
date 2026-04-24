@@ -11,15 +11,41 @@ public class ViewRegistry : IViewRegistry
     public void RegisterRoute(string viewId, Type viewType, Type viewModelType, bool cacheView = true)
     {
         EnsureRouteDoesNotUseCorePrefix(viewId);
-        RegisterRouteCore(viewId, viewType, viewModelType, cacheView);
+        RegisterRouteCore(viewId, viewType, viewModelType, viewModelFactory: null, cacheView);
+    }
+
+    public void RegisterRoute(
+        string viewId,
+        Type viewType,
+        Type viewModelType,
+        Func<IServiceProvider, IIoT.Edge.UI.Shared.PluginSystem.ViewModelBase> viewModelFactory,
+        bool cacheView = true)
+    {
+        EnsureRouteDoesNotUseCorePrefix(viewId);
+        RegisterRouteCore(viewId, viewType, viewModelType, viewModelFactory, cacheView);
     }
 
     internal void RegisterCoreRoute(string viewId, Type viewType, Type viewModelType, bool cacheView = true)
     {
-        RegisterRouteCore(viewId, viewType, viewModelType, cacheView);
+        RegisterRouteCore(viewId, viewType, viewModelType, viewModelFactory: null, cacheView);
     }
 
-    private void RegisterRouteCore(string viewId, Type viewType, Type viewModelType, bool cacheView)
+    internal void RegisterCoreRoute(
+        string viewId,
+        Type viewType,
+        Type viewModelType,
+        Func<IServiceProvider, IIoT.Edge.UI.Shared.PluginSystem.ViewModelBase> viewModelFactory,
+        bool cacheView = true)
+    {
+        RegisterRouteCore(viewId, viewType, viewModelType, viewModelFactory, cacheView);
+    }
+
+    private void RegisterRouteCore(
+        string viewId,
+        Type viewType,
+        Type viewModelType,
+        Func<IServiceProvider, IIoT.Edge.UI.Shared.PluginSystem.ViewModelBase>? viewModelFactory,
+        bool cacheView)
     {
         if (_views.ContainsKey(viewId))
         {
@@ -31,6 +57,7 @@ public class ViewRegistry : IViewRegistry
             ViewId = viewId,
             ViewType = viewType,
             ViewModelType = viewModelType,
+            ViewModelFactory = viewModelFactory,
             CacheView = cacheView
         };
     }
@@ -57,6 +84,22 @@ public class ViewRegistry : IViewRegistry
     }
 
     public void RegisterAnchorable(AnchorableInfo info, Type viewType, Type viewModelType, bool cacheView = true)
+        => RegisterAnchorableCore(info, viewType, viewModelType, viewModelFactory: null, cacheView);
+
+    public void RegisterAnchorable(
+        AnchorableInfo info,
+        Type viewType,
+        Type viewModelType,
+        Func<IServiceProvider, IIoT.Edge.UI.Shared.PluginSystem.ViewModelBase> viewModelFactory,
+        bool cacheView = true)
+        => RegisterAnchorableCore(info, viewType, viewModelType, viewModelFactory, cacheView);
+
+    private void RegisterAnchorableCore(
+        AnchorableInfo info,
+        Type viewType,
+        Type viewModelType,
+        Func<IServiceProvider, IIoT.Edge.UI.Shared.PluginSystem.ViewModelBase>? viewModelFactory,
+        bool cacheView)
     {
         if (_views.ContainsKey(info.ContentId))
         {
@@ -69,6 +112,7 @@ public class ViewRegistry : IViewRegistry
             ViewId = info.ContentId,
             ViewType = viewType,
             ViewModelType = viewModelType,
+            ViewModelFactory = viewModelFactory,
             CacheView = cacheView
         };
     }

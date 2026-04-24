@@ -1,9 +1,9 @@
-﻿using IIoT.Edge.Application.Abstractions.Auth;
+using System.Windows.Input;
+using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Common.Models;
 using IIoT.Edge.UI.Shared.Mvvm;
 using IIoT.Edge.UI.Shared.PluginSystem;
-using System.Windows.Input;
 
 namespace IIoT.Edge.Presentation.Shell.Features.Login;
 
@@ -18,7 +18,7 @@ public class LoginViewModel : ViewModelBase
     private string _errorMessage = string.Empty;
 
     public override string ViewId => "Core.Login";
-    public override string ViewTitle => "Login";
+    public override string ViewTitle => "登录";
 
     public string EmployeeNo
     {
@@ -57,7 +57,7 @@ public class LoginViewModel : ViewModelBase
 
     public bool IsCloudMode => !_isLocalMode;
 
-    public string ModeTitle => _isLocalMode ? "Local Emergency Admin" : "Cloud Account Login";
+    public string ModeTitle => _isLocalMode ? "本地紧急管理员" : "云端账号登录";
 
     public bool IsBusy
     {
@@ -116,13 +116,13 @@ public class LoginViewModel : ViewModelBase
 
         if (string.IsNullOrWhiteSpace(trimmedPassword))
         {
-            ErrorMessage = "Password is required.";
+            ErrorMessage = "密码不能为空。";
             return;
         }
 
         if (IsCloudMode && string.IsNullOrWhiteSpace(trimmedEmployeeNo))
         {
-            ErrorMessage = "Employee number is required.";
+            ErrorMessage = "工号不能为空。";
             return;
         }
 
@@ -140,7 +140,7 @@ public class LoginViewModel : ViewModelBase
                 var deviceId = _deviceService.CurrentDevice?.DeviceId;
                 if (!_deviceService.CanUploadToCloud || deviceId is null || deviceId == Guid.Empty)
                 {
-                    ErrorMessage = "Device cloud identity is not ready yet.";
+                    ErrorMessage = "设备云端身份尚未就绪。";
                     return;
                 }
 

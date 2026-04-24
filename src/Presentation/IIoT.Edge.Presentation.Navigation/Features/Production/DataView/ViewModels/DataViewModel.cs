@@ -67,7 +67,7 @@ public class DataViewModel : PresentationViewModelBase
     {
     }
 
-    protected DataViewModel(
+    public DataViewModel(
         IDataViewService dataViewService,
         string viewId,
         string viewTitle)

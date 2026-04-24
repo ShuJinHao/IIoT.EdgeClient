@@ -4,6 +4,8 @@ using IIoT.Edge.Infrastructure.DeviceComm.Barcode.Readers;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Infrastructure.DeviceComm.Signals;
+using IIoT.Edge.Runtime.Signals;
+using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.Enums;
 using System.Diagnostics;
 
@@ -11,6 +13,32 @@ namespace IIoT.Edge.NonUiRegressionTests;
 
 public sealed class SignalInteractionBehaviorTests
 {
+    [Fact]
+    public void ProductionContextSignalBindings_ShouldPreserveIoDisplayMetadata()
+    {
+        var context = new ProductionContext { DeviceName = "PLC-A" };
+
+        ProductionContextSignalBindings.Set(
+            context,
+            [
+                new(
+                    "Homogenization.InboundTrigger",
+                    "D701",
+                    1,
+                    "Int16",
+                    "Read",
+                    2,
+                    "信号交互",
+                    "扫码进站",
+                    "PLC 触发")
+            ]);
+
+        var binding = Assert.Single(ProductionContextSignalBindings.Get(context));
+        Assert.Equal("信号交互", binding.Category);
+        Assert.Equal("扫码进站", binding.GroupName);
+        Assert.Equal("PLC 触发", binding.DisplayRole);
+    }
+
     [Fact]
     public async Task PlcBarcodeReader_WhenCancellationRequested_ShouldPropagateCancellation()
     {

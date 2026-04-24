@@ -17,6 +17,7 @@ public class ProductionContextStore : IProductionContextStore
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private readonly Dictionary<string, ProductionContext> _contexts = new();
+    private readonly IReadOnlyDictionary<string, IProductionContextFactory> _contextFactories;
     private readonly IProductionContextPersistenceFileSystem _fileSystem;
     private readonly ILogService _logger;
     private readonly string _persistPath;
@@ -35,7 +36,15 @@ public class ProductionContextStore : IProductionContextStore
     };
 
     public ProductionContextStore(ILogService logger, string? persistDirectory = null)
-        : this(logger, new ProductionContextPersistenceFileSystem(), persistDirectory)
+        : this(logger, Array.Empty<IProductionContextFactory>(), new ProductionContextPersistenceFileSystem(), persistDirectory)
+    {
+    }
+
+    public ProductionContextStore(
+        ILogService logger,
+        IEnumerable<IProductionContextFactory> contextFactories,
+        string? persistDirectory = null)
+        : this(logger, contextFactories, new ProductionContextPersistenceFileSystem(), persistDirectory)
     {
     }
 
@@ -43,11 +52,27 @@ public class ProductionContextStore : IProductionContextStore
         ILogService logger,
         IProductionContextPersistenceFileSystem fileSystem,
         string? persistDirectory = null)
+        : this(logger, Array.Empty<IProductionContextFactory>(), fileSystem, persistDirectory)
+    {
+    }
+
+    internal ProductionContextStore(
+        ILogService logger,
+        IEnumerable<IProductionContextFactory> contextFactories,
+        IProductionContextPersistenceFileSystem fileSystem,
+        string? persistDirectory = null)
     {
         ArgumentNullException.ThrowIfNull(fileSystem);
 
         _logger = logger;
         _fileSystem = fileSystem;
+        _contextFactories = (contextFactories ?? Array.Empty<IProductionContextFactory>())
+            .Where(static x => !string.IsNullOrWhiteSpace(x.ModuleId))
+            .GroupBy(static x => x.ModuleId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                static group => group.Key,
+                static group => group.Last(),
+                StringComparer.OrdinalIgnoreCase);
 
         var dir = persistDirectory
             ?? Path.Combine(
@@ -59,18 +84,32 @@ public class ProductionContextStore : IProductionContextStore
     }
 
     public ProductionContext GetOrCreate(string deviceName)
+        => GetOrCreate(deviceName, moduleId: null);
+
+    public ProductionContext GetOrCreate(string deviceName, string? moduleId)
     {
         lock (_lock)
         {
             if (_contexts.TryGetValue(deviceName, out var ctx))
             {
+                if (TryGetContextFactory(moduleId, out var factory)
+                    && !factory.ContextType.IsInstanceOfType(ctx))
+                {
+                    var upgraded = CreateContext(factory, deviceName);
+                    CopyRuntimeState(ctx, upgraded);
+                    _contexts[deviceName] = upgraded;
+                    return upgraded;
+                }
+
                 return ctx;
             }
 
-            ctx = new ProductionContext
-            {
-                DeviceName = deviceName
-            };
+            ctx = TryGetContextFactory(moduleId, out var contextFactory)
+                ? CreateContext(contextFactory, deviceName)
+                : new ProductionContext
+                {
+                    DeviceName = deviceName
+                };
             _contexts[deviceName] = ctx;
             return ctx;
         }
@@ -294,6 +333,51 @@ public class ProductionContextStore : IProductionContextStore
         lock (_lock)
         {
             _persistenceDiagnostics = diagnostics;
+        }
+    }
+
+    private bool TryGetContextFactory(string? moduleId, out IProductionContextFactory factory)
+    {
+        if (!string.IsNullOrWhiteSpace(moduleId)
+            && _contextFactories.TryGetValue(moduleId, out factory!))
+        {
+            return true;
+        }
+
+        factory = default!;
+        return false;
+    }
+
+    private static ProductionContext CreateContext(IProductionContextFactory factory, string deviceName)
+    {
+        var context = factory.Create(deviceName);
+        if (string.IsNullOrWhiteSpace(context.DeviceName))
+        {
+            context.DeviceName = deviceName;
+        }
+
+        return context;
+    }
+
+    private static void CopyRuntimeState(ProductionContext source, ProductionContext target)
+    {
+        target.DeviceName = source.DeviceName;
+        target.DeviceId = source.DeviceId;
+        target.TodayCapacity = source.TodayCapacity;
+
+        foreach (var entry in source.StepStateEntries)
+        {
+            target.StepStateEntries[entry.Key] = entry.Value;
+        }
+
+        foreach (var entry in source.DeviceBagEntries)
+        {
+            target.DeviceBagEntries[entry.Key] = entry.Value;
+        }
+
+        foreach (var entry in source.CurrentCellEntries)
+        {
+            target.CurrentCellEntries[entry.Key] = entry.Value;
         }
     }
 

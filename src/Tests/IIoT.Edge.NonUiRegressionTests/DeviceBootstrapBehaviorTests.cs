@@ -201,8 +201,8 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
         Assert.Equal(EdgeUploadGateState.Blocked, service.CurrentUploadGate.State);
         Assert.Equal(EdgeUploadBlockReason.MissingUploadToken, service.CurrentUploadGate.Reason);
         Assert.NotNull(service.CurrentDevice);
-        Assert.Contains(logger.Entries, x => x.Message.Contains("event=edge.bootstrap.invalid_token", StringComparison.Ordinal));
-        Assert.Contains(logger.Entries, x => x.Message.Contains("reason=missing_upload_token", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, x => x.Message.Contains("事件(edge.bootstrap.invalid_token)", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, x => x.Message.Contains("原因=missing_upload_token", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -241,8 +241,8 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
         Assert.Equal(EdgeUploadGateState.Blocked, service.CurrentUploadGate.State);
         Assert.Equal(EdgeUploadBlockReason.ExpiredUploadToken, service.CurrentUploadGate.Reason);
         Assert.NotNull(service.CurrentDevice);
-        Assert.Contains(logger.Entries, x => x.Message.Contains("event=edge.bootstrap.invalid_token", StringComparison.Ordinal));
-        Assert.Contains(logger.Entries, x => x.Message.Contains("reason=expired_upload_token", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, x => x.Message.Contains("事件(edge.bootstrap.invalid_token)", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, x => x.Message.Contains("原因=expired_upload_token", StringComparison.Ordinal));
     }
 
     [Fact]

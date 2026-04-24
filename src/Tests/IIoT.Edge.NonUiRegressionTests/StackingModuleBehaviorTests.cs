@@ -153,7 +153,7 @@ public sealed class StackingModuleBehaviorTests
 
         Assert.False(result.IsSuccess);
         Assert.Equal(0, cloudHttp.PostCallCount);
-        Assert.Contains(logger.Entries, x => x.Message.Contains("Stacking cloud upload is disabled", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, x => x.Message.Contains("叠片云端上传已被配置关闭", StringComparison.Ordinal));
 
         var productionContext = contextStore.GetOrCreate(deviceSession.DeviceName);
         Assert.False(productionContext.Get<bool>(StackingModuleConstants.CloudUploadEnabledKey));
@@ -161,7 +161,7 @@ public sealed class StackingModuleBehaviorTests
             StackingModuleConstants.CloudUploadDisabledStatus,
             productionContext.Get<string>(StackingModuleConstants.LastCloudUploadStatusKey));
         Assert.Equal(
-            "Stacking cloud upload is disabled by configuration.",
+            "叠片云端上传已被配置关闭。",
             productionContext.Get<string>(StackingModuleConstants.LastCloudUploadErrorKey));
     }
 

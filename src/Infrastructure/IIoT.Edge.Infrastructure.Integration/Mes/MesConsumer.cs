@@ -55,19 +55,19 @@ public sealed class MesConsumer : IMesConsumer
             return false;
         }
 
-        var success = await uploader
+        var result = await uploader
             .UploadAsync(new ProcessMesUploadContext(device), [record])
             .ConfigureAwait(false);
 
-        if (success)
+        if (result.IsSuccess)
         {
             _diagnosticsStore.RecordSuccess(record.CellData.ProcessType);
             return true;
         }
 
-        const string failedReason = "Uploader returned false.";
-        _diagnosticsStore.RecordFailure(record.CellData.ProcessType, failedReason);
-        _logger.Error($"[MES] Upload failed for process type {record.CellData.ProcessType}.");
+        _diagnosticsStore.RecordFailure(record.CellData.ProcessType, result.Message);
+        _logger.Error(
+            $"[MES] Upload failed for process type {record.CellData.ProcessType}. Outcome:{result.Outcome}, Message:{result.Message}");
         return false;
     }
 }

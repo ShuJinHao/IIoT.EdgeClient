@@ -10,7 +10,7 @@
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <Grid Margin="24">
             <StackPanel>
-                <TextBlock Text="System Diagnostics"
+                <TextBlock Text="系统诊断"
                            FontSize="24"
                            FontWeight="Bold" />
                 <TextBlock Margin="0,8,0,0"
@@ -35,7 +35,7 @@
                 <TextBlock Margin="0,24,0,8"
                            FontSize="18"
                            FontWeight="SemiBold"
-                           Text="Cloud Sync Diagnostics" />
+                           Text="云端同步诊断" />
                 <Border Margin="0,0,0,16"
                         Padding="12"
                         Background="#18181B"
@@ -57,7 +57,7 @@
                 <TextBlock Margin="0,8,0,8"
                            FontSize="18"
                            FontWeight="SemiBold"
-                           Text="MES Sync Diagnostics" />
+                           Text="MES同步诊断" />
                 <Border Margin="0,0,0,16"
                         Padding="12"
                         Background="#18181B"
@@ -76,7 +76,7 @@
                 <TextBlock Margin="0,8,0,8"
                            FontSize="18"
                            FontWeight="SemiBold"
-                           Text="Production Context Diagnostics" />
+                           Text="生产上下文诊断" />
                 <Border Margin="0,0,0,16"
                         Padding="12"
                         Background="#18181B"
@@ -87,11 +87,11 @@
                 <TextBlock Margin="0,24,0,8"
                            FontSize="18"
                            FontWeight="SemiBold"
-                           Text="Startup Diagnostics" />
+                           Text="启动诊断" />
                 <TextBlock Margin="0,0,0,8"
                            FontSize="16"
                            FontWeight="SemiBold"
-                           Text="Plugin lifecycle" />
+                           Text="插件生命周期" />
                 <DataGrid ItemsSource="{Binding PluginStates}"
                           AutoGenerateColumns="False"
                           HeadersVisibility="Column"
@@ -99,19 +99,19 @@
                           CanUserAddRows="False"
                           Margin="0,0,0,16">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Module" Binding="{Binding ModuleId}" />
-                        <DataGridTextColumn Header="DisplayName" Binding="{Binding DisplayName}" />
-                        <DataGridTextColumn Header="ProcessType" Binding="{Binding ProcessType}" />
-                        <DataGridTextColumn Header="Version" Binding="{Binding Version}" />
-                        <DataGridTextColumn Header="State" Binding="{Binding State}" />
-                        <DataGridTextColumn Header="Message" Binding="{Binding Message}" Width="*" />
+                        <DataGridTextColumn Header="模块ID" Binding="{Binding ModuleId}" />
+                        <DataGridTextColumn Header="显示名" Binding="{Binding DisplayName}" />
+                        <DataGridTextColumn Header="工序" Binding="{Binding ProcessType}" />
+                        <DataGridTextColumn Header="版本" Binding="{Binding Version}" />
+                        <DataGridTextColumn Header="状态" Binding="{Binding State}" />
+                        <DataGridTextColumn Header="消息" Binding="{Binding Message}" Width="*" />
                     </DataGrid.Columns>
                 </DataGrid>
 
                 <TextBlock Margin="0,0,0,8"
                            FontSize="16"
                            FontWeight="SemiBold"
-                           Text="Module registrations" />
+                           Text="模块注册" />
                 <DataGrid ItemsSource="{Binding ModuleRegistrations}"
                           AutoGenerateColumns="False"
                           HeadersVisibility="Column"
@@ -119,22 +119,22 @@
                           CanUserAddRows="False"
                           Margin="0,0,0,16">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Module" Binding="{Binding ModuleId}" />
-                        <DataGridTextColumn Header="ProcessType" Binding="{Binding ProcessType}" />
-                        <DataGridTextColumn Header="Assembly" Binding="{Binding AssemblyName}" />
-                        <DataGridCheckBoxColumn Header="Enabled" Binding="{Binding IsEnabled}" />
-                        <DataGridCheckBoxColumn Header="CellData" Binding="{Binding HasCellDataRegistration}" />
-                        <DataGridCheckBoxColumn Header="Runtime" Binding="{Binding HasRuntimeFactory}" />
-                        <DataGridCheckBoxColumn Header="Cloud" Binding="{Binding HasCloudUploader}" />
-                        <DataGridCheckBoxColumn Header="MES" Binding="{Binding HasMesUploader}" />
-                        <DataGridCheckBoxColumn Header="Hardware" Binding="{Binding HasHardwareProfile}" />
+                        <DataGridTextColumn Header="模块ID" Binding="{Binding ModuleId}" />
+                        <DataGridTextColumn Header="工序" Binding="{Binding ProcessType}" />
+                        <DataGridTextColumn Header="程序集" Binding="{Binding AssemblyName}" />
+                        <DataGridCheckBoxColumn Header="已启用" Binding="{Binding IsEnabled}" />
+                        <DataGridCheckBoxColumn Header="产品数据" Binding="{Binding HasCellDataRegistration}" />
+                        <DataGridCheckBoxColumn Header="运行时" Binding="{Binding HasRuntimeFactory}" />
+                        <DataGridCheckBoxColumn Header="云端上传" Binding="{Binding HasCloudUploader}" />
+                        <DataGridCheckBoxColumn Header="MES上传" Binding="{Binding HasMesUploader}" />
+                        <DataGridCheckBoxColumn Header="硬件模板" Binding="{Binding HasHardwareProfile}" />
                     </DataGrid.Columns>
                 </DataGrid>
 
                 <TextBlock Margin="0,8,0,8"
                            FontSize="18"
                            FontWeight="SemiBold"
-                           Text="Device bindings" />
+                           Text="设备绑定" />
                 <DataGrid ItemsSource="{Binding DeviceBindings}"
                           AutoGenerateColumns="False"
                           HeadersVisibility="Column"
@@ -142,46 +142,47 @@
                           CanUserAddRows="False"
                           Margin="0,0,0,16">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Device" Binding="{Binding DeviceName}" />
-                        <DataGridTextColumn Header="ModuleId" Binding="{Binding ModuleId}" />
-                        <DataGridCheckBoxColumn Header="Exists" Binding="{Binding ModuleExists}" />
-                        <DataGridCheckBoxColumn Header="Enabled" Binding="{Binding ModuleEnabled}" />
-                        <DataGridCheckBoxColumn Header="Has IO" Binding="{Binding HasIoMappings}" />
+                        <DataGridTextColumn Header="设备" Binding="{Binding DeviceName}" />
+                        <DataGridTextColumn Header="模块ID" Binding="{Binding ModuleId}" />
+                        <DataGridCheckBoxColumn Header="模块存在" Binding="{Binding ModuleExists}" />
+                        <DataGridCheckBoxColumn Header="模块启用" Binding="{Binding ModuleEnabled}" />
+                        <DataGridCheckBoxColumn Header="已配置IO" Binding="{Binding HasIoMappings}" />
                     </DataGrid.Columns>
                 </DataGrid>
 
                 <TextBlock Margin="0,8,0,8"
                            FontSize="18"
                            FontWeight="SemiBold"
-                           Text="Issues" />
+                           Text="问题列表" />
                 <DataGrid ItemsSource="{Binding Issues}"
                           AutoGenerateColumns="False"
                           HeadersVisibility="Column"
                           IsReadOnly="True"
-                          CanUserAddRows="False">
+                          CanUserAddRows="False"
+                          Margin="0,0,0,16">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Code" Binding="{Binding Code}" />
-                        <DataGridTextColumn Header="Module" Binding="{Binding ModuleId}" />
-                        <DataGridTextColumn Header="Device" Binding="{Binding DeviceName}" />
-                        <DataGridTextColumn Header="Message" Binding="{Binding Message}" Width="*" />
+                        <DataGridTextColumn Header="编码" Binding="{Binding Code}" />
+                        <DataGridTextColumn Header="模块ID" Binding="{Binding ModuleId}" />
+                        <DataGridTextColumn Header="设备" Binding="{Binding DeviceName}" />
+                        <DataGridTextColumn Header="消息" Binding="{Binding Message}" Width="*" />
                     </DataGrid.Columns>
                 </DataGrid>
 
                 <TextBlock Margin="0,24,0,8"
                            FontSize="18"
                            FontWeight="SemiBold"
-                           Text="MES upload diagnostics" />
+                           Text="MES上传诊断" />
                 <DataGrid ItemsSource="{Binding MesUploadDiagnostics}"
                           AutoGenerateColumns="False"
                           HeadersVisibility="Column"
                           IsReadOnly="True"
                           CanUserAddRows="False">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="ProcessType" Binding="{Binding ProcessType}" />
-                        <DataGridTextColumn Header="Last Result" Binding="{Binding LastResult}" />
-                        <DataGridTextColumn Header="Last Attempt" Binding="{Binding LastAttemptAt}" />
-                        <DataGridTextColumn Header="Last Success" Binding="{Binding LastSuccessAt}" />
-                        <DataGridTextColumn Header="Failure" Binding="{Binding LastFailureReason}" Width="*" />
+                        <DataGridTextColumn Header="工序" Binding="{Binding ProcessType}" />
+                        <DataGridTextColumn Header="最近结果" Binding="{Binding LastResult}" />
+                        <DataGridTextColumn Header="最近尝试" Binding="{Binding LastAttemptAt}" />
+                        <DataGridTextColumn Header="最近成功" Binding="{Binding LastSuccessAt}" />
+                        <DataGridTextColumn Header="失败原因" Binding="{Binding LastFailureReason}" Width="*" />
                     </DataGrid.Columns>
                 </DataGrid>
             </StackPanel>

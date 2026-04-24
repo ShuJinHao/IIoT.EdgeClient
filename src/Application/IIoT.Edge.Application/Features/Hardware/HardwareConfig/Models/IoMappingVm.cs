@@ -56,6 +56,27 @@ public class IoMappingVm : ObservableModelBase
         set { _direction = value; OnPropertyChanged(); }
     }
 
+    private string _category = "单点读数据";
+    public string Category
+    {
+        get => _category;
+        set { _category = value; OnPropertyChanged(); }
+    }
+
+    private string _groupName = string.Empty;
+    public string GroupName
+    {
+        get => _groupName;
+        set { _groupName = value; OnPropertyChanged(); }
+    }
+
+    private string _displayRole = string.Empty;
+    public string DisplayRole
+    {
+        get => _displayRole;
+        set { _displayRole = value; OnPropertyChanged(); }
+    }
+
     private int _sortOrder;
     public int SortOrder
     {

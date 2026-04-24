@@ -1120,6 +1120,9 @@ internal sealed class FakeProductionContextStore : IProductionContextStore
     public ProductionContextPersistenceDiagnostics PersistenceDiagnostics { get; set; } = new(0, null);
 
     public ProductionContext GetOrCreate(string deviceName)
+        => GetOrCreate(deviceName, moduleId: null);
+
+    public ProductionContext GetOrCreate(string deviceName, string? moduleId)
     {
         if (!_contexts.TryGetValue(deviceName, out var context))
         {
@@ -1414,7 +1417,7 @@ internal sealed class FakeMesUploadDiagnosticsStore : IMesUploadDiagnosticsStore
 
 internal sealed class FakeMesUploader : IProcessMesUploader
 {
-    private readonly Queue<bool> _results = new();
+    private readonly Queue<MesCallResult> _results = new();
 
     public FakeMesUploader(string processType, MesUploadMode uploadMode = MesUploadMode.Single)
     {
@@ -1430,9 +1433,12 @@ internal sealed class FakeMesUploader : IProcessMesUploader
 
     public List<IReadOnlyList<CellCompletedRecord>> UploadedBatches { get; } = new();
 
-    public void EnqueueResult(bool result) => _results.Enqueue(result);
+    public void EnqueueResult(bool result)
+        => _results.Enqueue(result ? MesCallResult.Success() : MesCallResult.TransportFailure("fake_mes_failure"));
 
-    public Task<bool> UploadAsync(
+    public void EnqueueResult(MesCallResult result) => _results.Enqueue(result);
+
+    public Task<MesCallResult> UploadAsync(
         ProcessMesUploadContext context,
         IReadOnlyList<CellCompletedRecord> records,
         CancellationToken cancellationToken = default)
@@ -1445,7 +1451,7 @@ internal sealed class FakeMesUploader : IProcessMesUploader
             return Task.FromResult(_results.Dequeue());
         }
 
-        return Task.FromResult(true);
+        return Task.FromResult(MesCallResult.Success());
     }
 }
 

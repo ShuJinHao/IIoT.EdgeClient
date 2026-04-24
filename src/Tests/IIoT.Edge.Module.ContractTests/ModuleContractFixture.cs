@@ -59,6 +59,14 @@ internal sealed class TestEdgeProcessModuleBuilder(
     public void RegisterRoute(string viewId, Type viewType, Type viewModelType, bool cacheView = true)
         => viewRegistry.RegisterRoute(viewId, viewType, viewModelType, cacheView);
 
+    public void RegisterRoute(
+        string viewId,
+        Type viewType,
+        Type viewModelType,
+        Func<IServiceProvider, ViewModelBase> viewModelFactory,
+        bool cacheView = true)
+        => viewRegistry.RegisterRoute(viewId, viewType, viewModelType, viewModelFactory, cacheView);
+
     public void RegisterMenu(EdgeMenuInfo menuInfo)
         => viewRegistry.RegisterMenu(new MenuInfo
         {
@@ -90,6 +98,31 @@ internal sealed class TestEdgeProcessModuleBuilder(
             },
             viewType,
             viewModelType,
+            cacheView);
+
+    public void RegisterAnchorable(
+        EdgeAnchorableInfo info,
+        Type viewType,
+        Type viewModelType,
+        Func<IServiceProvider, ViewModelBase> viewModelFactory,
+        bool cacheView = true)
+        => viewRegistry.RegisterAnchorable(
+            new AnchorableInfo
+            {
+                Title = info.Title,
+                ContentId = info.ContentId,
+                InitialPosition = info.InitialPosition switch
+                {
+                    EdgeAnchorablePosition.Left => AnchorablePosition.Left,
+                    EdgeAnchorablePosition.Right => AnchorablePosition.Right,
+                    EdgeAnchorablePosition.Bottom => AnchorablePosition.Bottom,
+                    _ => AnchorablePosition.Main
+                },
+                IsVisible = info.IsVisible
+            },
+            viewType,
+            viewModelType,
+            viewModelFactory,
             cacheView);
 
     public void RegisterCellData(Type cellDataType)

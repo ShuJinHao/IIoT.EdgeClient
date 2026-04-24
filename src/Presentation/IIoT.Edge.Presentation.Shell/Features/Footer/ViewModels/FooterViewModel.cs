@@ -1,11 +1,11 @@
+using System.Threading;
+using System.Windows.Media;
+using System.Windows.Threading;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Common.Diagnostics;
 using IIoT.Edge.UI.Shared.Mvvm;
 using IIoT.Edge.UI.Shared.PluginSystem;
-using System.Threading;
-using System.Windows.Media;
-using System.Windows.Threading;
 
 namespace IIoT.Edge.Presentation.Shell.Features.Footer;
 
@@ -14,10 +14,10 @@ public class FooterViewModel : ViewModelBase
     private readonly DispatcherTimer _timer;
     private readonly DateTime _startTime = DateTime.Now;
     private readonly IEdgeSyncDiagnosticsQuery _diagnosticsQuery;
-    private string _deviceName = "Unknown";
-    private string _cloudStatus = "Cloud: Blocked (device)";
+    private string _deviceName = "未知";
+    private string _cloudStatus = "云端：未连接";
     private Brush _cloudStatusColor = new SolidColorBrush(Color.FromRgb(0xEF, 0x44, 0x44));
-    private string _mesStatus = "MES: Idle";
+    private string _mesStatus = "MES：空闲";
     private Brush _mesStatusColor = new SolidColorBrush(Color.FromRgb(0x22, 0xC5, 0x5E));
     private string _currentTime = DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss");
     private string _upTime = "00:00:00";
@@ -28,48 +28,76 @@ public class FooterViewModel : ViewModelBase
     private static readonly Brush OfflineBrush = new SolidColorBrush(Color.FromRgb(0xEF, 0x44, 0x44));
 
     public override string ViewId => "Core.Footer";
-    public override string ViewTitle => "Footer";
+    public override string ViewTitle => "页脚";
 
     public string DeviceName
     {
         get => _deviceName;
-        set { _deviceName = value; OnPropertyChanged(); }
+        set
+        {
+            _deviceName = value;
+            OnPropertyChanged();
+        }
     }
 
     public string CloudStatus
     {
         get => _cloudStatus;
-        set { _cloudStatus = value; OnPropertyChanged(); }
+        set
+        {
+            _cloudStatus = value;
+            OnPropertyChanged();
+        }
     }
 
     public Brush CloudStatusColor
     {
         get => _cloudStatusColor;
-        set { _cloudStatusColor = value; OnPropertyChanged(); }
+        set
+        {
+            _cloudStatusColor = value;
+            OnPropertyChanged();
+        }
     }
 
     public string MesStatus
     {
         get => _mesStatus;
-        set { _mesStatus = value; OnPropertyChanged(); }
+        set
+        {
+            _mesStatus = value;
+            OnPropertyChanged();
+        }
     }
 
     public Brush MesStatusColor
     {
         get => _mesStatusColor;
-        set { _mesStatusColor = value; OnPropertyChanged(); }
+        set
+        {
+            _mesStatusColor = value;
+            OnPropertyChanged();
+        }
     }
 
     public string CurrentTime
     {
         get => _currentTime;
-        private set { _currentTime = value; OnPropertyChanged(); }
+        private set
+        {
+            _currentTime = value;
+            OnPropertyChanged();
+        }
     }
 
     public string UpTime
     {
         get => _upTime;
-        private set { _upTime = value; OnPropertyChanged(); }
+        private set
+        {
+            _upTime = value;
+            OnPropertyChanged();
+        }
     }
 
     static FooterViewModel()
@@ -121,7 +149,7 @@ public class FooterViewModel : ViewModelBase
         }
         catch
         {
-            // Diagnostics failures should not tear down the UI refresh loop.
+            // 页脚诊断刷新失败不应中断界面时钟和状态轮询。
         }
     }
 

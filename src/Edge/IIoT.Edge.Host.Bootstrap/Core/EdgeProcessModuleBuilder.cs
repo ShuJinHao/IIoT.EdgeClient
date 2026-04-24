@@ -43,6 +43,14 @@ internal sealed class EdgeProcessModuleBuilder : IEdgeProcessModuleBuilder
     public void RegisterRoute(string viewId, Type viewType, Type viewModelType, bool cacheView = true)
         => _viewRegistry.RegisterRoute(viewId, viewType, viewModelType, cacheView);
 
+    public void RegisterRoute(
+        string viewId,
+        Type viewType,
+        Type viewModelType,
+        Func<IServiceProvider, IIoT.Edge.UI.Shared.PluginSystem.ViewModelBase> viewModelFactory,
+        bool cacheView = true)
+        => _viewRegistry.RegisterRoute(viewId, viewType, viewModelType, viewModelFactory, cacheView);
+
     public void RegisterMenu(EdgeMenuInfo menuInfo)
     {
         ArgumentNullException.ThrowIfNull(menuInfo);
@@ -79,6 +87,34 @@ internal sealed class EdgeProcessModuleBuilder : IEdgeProcessModuleBuilder
             },
             viewType,
             viewModelType,
+            cacheView);
+    }
+
+    public void RegisterAnchorable(
+        EdgeAnchorableInfo info,
+        Type viewType,
+        Type viewModelType,
+        Func<IServiceProvider, IIoT.Edge.UI.Shared.PluginSystem.ViewModelBase> viewModelFactory,
+        bool cacheView = true)
+    {
+        ArgumentNullException.ThrowIfNull(info);
+        _viewRegistry.RegisterAnchorable(
+            new AnchorableInfo
+            {
+                Title = info.Title,
+                ContentId = info.ContentId,
+                InitialPosition = info.InitialPosition switch
+                {
+                    EdgeAnchorablePosition.Left => AnchorablePosition.Left,
+                    EdgeAnchorablePosition.Right => AnchorablePosition.Right,
+                    EdgeAnchorablePosition.Bottom => AnchorablePosition.Bottom,
+                    _ => AnchorablePosition.Main
+                },
+                IsVisible = info.IsVisible
+            },
+            viewType,
+            viewModelType,
+            viewModelFactory,
             cacheView);
     }
 

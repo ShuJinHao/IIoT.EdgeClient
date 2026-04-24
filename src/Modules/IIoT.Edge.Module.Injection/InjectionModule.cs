@@ -22,13 +22,6 @@ public sealed class InjectionModule : IEdgeProcessModule
     public void Configure(IEdgeProcessModuleBuilder builder)
     {
         builder.Services.AddSingleton<IProcessCloudUploader, InjectionCloudUploader>();
-        builder.Services.AddSingleton<InjectionDataViewModel>();
-        builder.Services.AddSingleton<InjectionCapacityViewModel>();
-        builder.Services.AddSingleton<InjectionMonitorViewModel>();
-        builder.Services.AddSingleton<InjectionIoViewModel>();
-        builder.Services.AddSingleton<InjectionRecipeViewModel>();
-        builder.Services.AddSingleton<InjectionParamViewModel>();
-        builder.Services.AddSingleton<InjectionHardwareConfigViewModel>();
 
         builder.RegisterCellData(typeof(InjectionCellData));
         builder.RegisterRuntimeFactory(new InjectionStationRuntimeFactory());

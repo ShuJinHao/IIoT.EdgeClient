@@ -66,11 +66,11 @@ public class ParamViewModel : CrudPageViewModelBase
     public ParamViewModel(
         IParamViewCrudService crudService,
         IClientPermissionService permissionService)
-        : this(crudService, permissionService, "Config.ParamView", "Parameter Config")
+        : this(crudService, permissionService, "Config.ParamView", "参数配置")
     {
     }
 
-    protected ParamViewModel(
+    public ParamViewModel(
         IParamViewCrudService crudService,
         IClientPermissionService permissionService,
         string viewId,

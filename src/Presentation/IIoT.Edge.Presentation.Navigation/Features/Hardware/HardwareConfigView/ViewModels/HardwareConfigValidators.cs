@@ -72,6 +72,9 @@ internal sealed class IoMappingValidator : IEditorValidator<IoMappingVm>
         if (model.AddressCount <= 0)
             issues.Add(new ValidationIssue($"IO\"{model.Label}\"的地址长度必须大于 0。", nameof(model.AddressCount)));
 
+        if (string.IsNullOrWhiteSpace(model.Category))
+            issues.Add(new ValidationIssue($"IO\"{model.Label}\"的分类不能为空。", nameof(model.Category)));
+
         return Task.FromResult<IReadOnlyCollection<ValidationIssue>>(issues);
     }
 }

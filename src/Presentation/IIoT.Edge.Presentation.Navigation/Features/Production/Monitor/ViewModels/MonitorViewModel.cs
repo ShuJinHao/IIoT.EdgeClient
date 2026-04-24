@@ -28,11 +28,11 @@ public class MonitorViewModel : PresentationViewModelBase
     }
 
     public MonitorViewModel(IMonitorViewService monitorViewService)
-        : this(monitorViewService, "Production.Monitor", "Real-time Monitor")
+        : this(monitorViewService, "Production.Monitor", "实时监控")
     {
     }
 
-    protected MonitorViewModel(
+    public MonitorViewModel(
         IMonitorViewService monitorViewService,
         string viewId,
         string viewTitle)
@@ -45,7 +45,7 @@ public class MonitorViewModel : PresentationViewModelBase
         {
             Interval = TimeSpan.FromMilliseconds(500)
         };
-        _refreshTimer.Tick += (_, _) => RunViewTaskInBackground(RefreshAsync, "Monitor refresh failed");
+        _refreshTimer.Tick += (_, _) => RunViewTaskInBackground(RefreshAsync, "监控刷新失败。");
     }
 
     public override async Task OnActivatedAsync()
@@ -55,7 +55,7 @@ public class MonitorViewModel : PresentationViewModelBase
             _refreshTimer.Start();
         }
 
-        await RunViewTaskAsync(RefreshAsync, "Monitor data load failed");
+        await RunViewTaskAsync(RefreshAsync, "加载监控数据失败。");
     }
 
     public override Task OnDeactivatedAsync()
@@ -192,35 +192,35 @@ public class DeviceTabVm : BaseNotifyPropertyChanged
         set { _yieldAll = value; OnPropertyChanged(); }
     }
 
-    private string _deviceDataSummary = "No data";
+    private string _deviceDataSummary = "暂无数据";
     public string DeviceDataSummary
     {
         get => _deviceDataSummary;
         set { _deviceDataSummary = value; OnPropertyChanged(); }
     }
 
-    private string _stepSummary = "No steps";
+    private string _stepSummary = "暂无步骤";
     public string StepSummary
     {
         get => _stepSummary;
         set { _stepSummary = value; OnPropertyChanged(); }
     }
 
-    private string _cloudSyncStatus = "Cloud sync unknown";
+    private string _cloudSyncStatus = "云端状态未知";
     public string CloudSyncStatus
     {
         get => _cloudSyncStatus;
         set { _cloudSyncStatus = value; OnPropertyChanged(); }
     }
 
-    private string _mesSyncStatus = "MES sync unknown";
+    private string _mesSyncStatus = "MES状态未知";
     public string MesSyncStatus
     {
         get => _mesSyncStatus;
         set { _mesSyncStatus = value; OnPropertyChanged(); }
     }
 
-    private string _contextPersistenceStatus = "Corrupt files: 0";
+    private string _contextPersistenceStatus = "坏文件数：0";
     public string ContextPersistenceStatus
     {
         get => _contextPersistenceStatus;

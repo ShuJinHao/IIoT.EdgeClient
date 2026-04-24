@@ -96,16 +96,16 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
     {
         try
         {
-            _logger.Info("[Lifecycle] Starting application bootstrap.");
+            _logger.Info("[生命周期] 开始应用启动。");
 
             _serviceProvider.ApplyMigrations();
-            _logger.Info("[Lifecycle] EF Core migrations completed.");
+            _logger.Info("[生命周期] EF Core 迁移完成。");
 
             await _serviceProvider.InitializeDapperTablesAsync();
-            _logger.Info("[Lifecycle] Dapper tables initialized.");
+            _logger.Info("[生命周期] Dapper 表初始化完成。");
 
             await _developmentSampleInitializer.EnsureConfigurationSamplesAsync(cancellationToken).ConfigureAwait(false);
-            _logger.Info("[Lifecycle] Development sample configuration bootstrap completed.");
+            _logger.Info("[生命周期] 开发样例配置初始化完成。");
 
             var diagnosticsReport = await BuildStartupDiagnosticsReportAsync(cancellationToken).ConfigureAwait(false);
             _startupDiagnosticsStore.Update(diagnosticsReport);
@@ -113,28 +113,28 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
             if (HasBlockingIssues(diagnosticsReport.Issues))
             {
                 var message = BuildValidationMessage(diagnosticsReport.Issues);
-                _logger.Error($"[Lifecycle] Startup validation failed.{Environment.NewLine}{message}");
+                _logger.Error($"[生命周期] 启动校验失败。{Environment.NewLine}{message}");
                 return AppStartupResult.Failure(message);
             }
 
             await BindPlcTaskFactoriesAsync(cancellationToken).ConfigureAwait(false);
-            _logger.Info("[Lifecycle] PLC module bindings completed.");
+            _logger.Info("[生命周期] PLC 模块绑定完成。");
 
             _contextStore.LoadFromFile();
             _recipeService.LoadFromFile();
             await _developmentSampleInitializer.EnsureRuntimeSamplesAsync(cancellationToken).ConfigureAwait(false);
-            _logger.Info("[Lifecycle] Restored persisted runtime state.");
+            _logger.Info("[生命周期] 运行时持久化状态恢复完成。");
 
             await _backgroundServices.StartAsync(cancellationToken).ConfigureAwait(false);
-            _logger.Info("[Lifecycle] Background services started.");
+            _logger.Info("[生命周期] 后台服务已启动。");
 
             _startupDiagnosticsStore.Update(await BuildStartupDiagnosticsReportAsync(cancellationToken).ConfigureAwait(false));
             return AppStartupResult.Ok();
         }
         catch (Exception ex)
         {
-            _logger.Error($"[Lifecycle] Startup failed: {ex.Message}");
-            return AppStartupResult.Failure($"Application startup failed: {ex.Message}");
+            _logger.Error($"[生命周期] 启动失败：{ex.Message}");
+            return AppStartupResult.Failure($"应用启动失败：{ex.Message}");
         }
     }
 
@@ -142,10 +142,10 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
     {
         _contextStore.SaveToFile();
         _recipeService.SaveToFile();
-        _logger.Info("[Lifecycle] Persisted runtime state before shutdown.");
+        _logger.Info("[生命周期] 关闭前运行时状态已保存。");
 
         await _backgroundServices.StopAsync(cancellationToken).ConfigureAwait(false);
-        _logger.Info("[Lifecycle] Background services stopped.");
+        _logger.Info("[生命周期] 后台服务已停止。");
     }
 
     private async Task<StartupDiagnosticsReport> BuildStartupDiagnosticsReportAsync(CancellationToken cancellationToken)
@@ -185,34 +185,34 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
         var baseUrl = _configuration["CloudApi:BaseUrl"]?.Trim();
         if (string.IsNullOrWhiteSpace(baseUrl))
         {
-            issues.Add(CreateIssue("CONFIG_INVALID", "CloudApi:BaseUrl is missing."));
+            issues.Add(CreateIssue("CONFIG_INVALID", "CloudApi:BaseUrl 未配置。"));
         }
         else if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out _))
         {
-            issues.Add(CreateIssue("CONFIG_INVALID", $"CloudApi:BaseUrl is invalid: {baseUrl}."));
+            issues.Add(CreateIssue("CONFIG_INVALID", $"CloudApi:BaseUrl 无效：{baseUrl}。"));
         }
 
         var clientCode = _configuration["CloudApi:ClientCode"]?.Trim();
         if (string.IsNullOrWhiteSpace(clientCode))
         {
-            issues.Add(CreateIssue("CONFIG_INVALID", "CloudApi:ClientCode is missing."));
+            issues.Add(CreateIssue("CONFIG_INVALID", "CloudApi:ClientCode 未配置。"));
         }
 
         if (!TimeSpan.TryParse(_shiftConfig.DayStart, out var dayStart))
         {
-            issues.Add(CreateIssue("CONFIG_INVALID", $"Shift:DayStart is invalid: {_shiftConfig.DayStart}."));
+            issues.Add(CreateIssue("CONFIG_INVALID", $"Shift:DayStart 无效：{_shiftConfig.DayStart}。"));
         }
 
         if (!TimeSpan.TryParse(_shiftConfig.DayEnd, out var dayEnd))
         {
-            issues.Add(CreateIssue("CONFIG_INVALID", $"Shift:DayEnd is invalid: {_shiftConfig.DayEnd}."));
+            issues.Add(CreateIssue("CONFIG_INVALID", $"Shift:DayEnd 无效：{_shiftConfig.DayEnd}。"));
         }
 
         if (TimeSpan.TryParse(_shiftConfig.DayStart, out dayStart)
             && TimeSpan.TryParse(_shiftConfig.DayEnd, out dayEnd)
             && dayStart == dayEnd)
         {
-            issues.Add(CreateIssue("CONFIG_INVALID", "Shift:DayStart and Shift:DayEnd cannot be the same."));
+            issues.Add(CreateIssue("CONFIG_INVALID", "Shift:DayStart 和 Shift:DayEnd 不能相同。"));
         }
 
         var configurationProfile = BuildConfigurationProfile();
@@ -221,7 +221,7 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
         {
             issues.Add(CreateIssue(
                 "MACHINE_PROFILE_MISSING",
-                $"Shell machine profile '{configurationProfile.MachineProfile}' was requested, but file '{configurationProfile.MachineProfileFileName}' could not be loaded."));
+                $"已请求机型配置“{configurationProfile.MachineProfile}”，但文件“{configurationProfile.MachineProfileFileName}”未加载。"));
         }
     }
 
@@ -233,7 +233,7 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
             {
                 issues.Add(CreateIssue(
                     "CELLDATA_REGISTRATION_MISSING",
-                    $"Module '{module.ModuleId}' is missing CellData registration for process type '{module.ProcessType}'.",
+                    $"模块“{module.ModuleId}”缺少工序类型“{module.ProcessType}”的 CellData 注册。",
                     module.ModuleId));
             }
 
@@ -241,7 +241,7 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
             {
                 issues.Add(CreateIssue(
                     "RUNTIME_FACTORY_MISSING",
-                    $"Module '{module.ModuleId}' is missing a PLC runtime factory registration.",
+                    $"模块“{module.ModuleId}”缺少 PLC 运行时工厂注册。",
                     module.ModuleId));
             }
 
@@ -249,7 +249,7 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
             {
                 issues.Add(CreateIssue(
                     "CLOUD_UPLOADER_MISSING",
-                    $"Module '{module.ModuleId}' is missing a cloud uploader registration for process type '{module.ProcessType}'.",
+                    $"模块“{module.ModuleId}”缺少工序类型“{module.ProcessType}”的云端上传器注册。",
                     module.ModuleId));
             }
         }
@@ -288,7 +288,7 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
             {
                 issues.Add(CreateIssue(
                     "DEVICE_MODULE_MISMATCH",
-                    "An enabled PLC device is missing DeviceName.",
+                    "已启用的 PLC 设备缺少设备名称。",
                     device.DeviceName,
                     deviceName));
             }
@@ -297,7 +297,7 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
             {
                 issues.Add(CreateIssue(
                     "DEVICE_MODULE_MISMATCH",
-                    $"PLC '{deviceName}' is missing ModuleId.",
+                    $"PLC“{deviceName}”缺少 ModuleId。",
                     device.ModuleId,
                     deviceName));
             }
@@ -305,7 +305,7 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
             {
                 issues.Add(CreateIssue(
                     "DEVICE_MODULE_MISMATCH",
-                    $"PLC '{deviceName}' references an unknown module id '{device.ModuleId}'.",
+                    $"PLC“{deviceName}”引用了未知模块“{device.ModuleId}”。",
                     device.ModuleId,
                     deviceName));
             }
@@ -313,7 +313,7 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
             {
                 issues.Add(CreateIssue(
                     "MODULE_NOT_ENABLED",
-                    $"PLC '{deviceName}' references module '{device.ModuleId}', but that module is not enabled.",
+                    $"PLC“{deviceName}”引用模块“{device.ModuleId}”，但该模块未启用。",
                     device.ModuleId,
                     deviceName));
             }
@@ -325,7 +325,7 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
                 {
                     issues.Add(CreateIssue(
                         "RUNTIME_FACTORY_MISSING",
-                        $"PLC '{deviceName}' uses module '{module.ModuleId}', but its runtime factory is not registered.",
+                        $"PLC“{deviceName}”使用模块“{module.ModuleId}”，但运行时工厂未注册。",
                         module.ModuleId,
                         deviceName));
                 }
@@ -334,7 +334,7 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
                 {
                     issues.Add(CreateIssue(
                         "CELLDATA_REGISTRATION_MISSING",
-                        $"PLC '{deviceName}' uses module '{module.ModuleId}', but its CellData is not registered.",
+                        $"PLC“{deviceName}”使用模块“{module.ModuleId}”，但 CellData 未注册。",
                         module.ModuleId,
                         deviceName));
                 }
@@ -345,7 +345,7 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
             {
                 issues.Add(CreateIssue(
                     "DEVICE_MODEL_INVALID",
-                    $"PLC '{deviceName}' has an invalid DeviceModel: {device.DeviceModel ?? "<empty>"}.",
+                    $"PLC“{deviceName}”的 DeviceModel 无效：{device.DeviceModel ?? "<空>"}。",
                     device.ModuleId,
                     deviceName));
             }
@@ -354,7 +354,7 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
             {
                 issues.Add(CreateIssue(
                     "CONFIG_INVALID",
-                    $"PLC '{deviceName}' is missing IpAddress.",
+                    $"PLC“{deviceName}”缺少 IpAddress。",
                     device.ModuleId,
                     deviceName));
             }
@@ -363,7 +363,7 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
             {
                 issues.Add(CreateIssue(
                     "CONFIG_INVALID",
-                    $"PLC '{deviceName}' has an invalid Port1 value: {device.Port1}.",
+                    $"PLC“{deviceName}”的 Port1 无效：{device.Port1}。",
                     device.ModuleId,
                     deviceName));
             }
@@ -372,7 +372,7 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
             {
                 issues.Add(CreateIssue(
                     "CONFIG_INVALID",
-                    $"PLC '{deviceName}' must have ConnectTimeout > 0.",
+                    $"PLC“{deviceName}”的 ConnectTimeout 必须大于 0。",
                     device.ModuleId,
                     deviceName));
             }
@@ -381,7 +381,7 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
             {
                 issues.Add(CreateIssue(
                     "DEVICE_MODULE_MISMATCH",
-                    $"PLC '{deviceName}' has no IO mappings configured.",
+                    $"PLC“{deviceName}”没有配置 IO 映射。",
                     device.ModuleId,
                     deviceName));
                 continue;
@@ -391,7 +391,7 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
             {
                 issues.Add(CreateIssue(
                     "DEVICE_MODULE_MISMATCH",
-                    $"PLC '{deviceName}' has IO mappings with empty PlcAddress.",
+                    $"PLC“{deviceName}”存在 PlcAddress 为空的 IO 映射。",
                     device.ModuleId,
                     deviceName));
             }
@@ -400,7 +400,7 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
             {
                 issues.Add(CreateIssue(
                     "DEVICE_MODULE_MISMATCH",
-                    $"PLC '{deviceName}' has IO mappings with AddressCount <= 0.",
+                    $"PLC“{deviceName}”存在 AddressCount 小于等于 0 的 IO 映射。",
                     device.ModuleId,
                     deviceName));
             }
@@ -409,7 +409,7 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
             {
                 issues.Add(CreateIssue(
                     "DEVICE_MODULE_MISMATCH",
-                    $"PLC '{deviceName}' has IO mappings with invalid Direction values.",
+                    $"PLC“{deviceName}”存在 Direction 无效的 IO 映射。",
                     device.ModuleId,
                     deviceName));
             }
@@ -426,7 +426,10 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
                             x.AddressCount,
                             x.DataType,
                             x.Direction,
-                            x.SortOrder))
+                            x.SortOrder,
+                            x.Category,
+                            x.GroupName,
+                            x.DisplayRole))
                         .ToArray());
 
                 if (!validationResult.IsValid)
@@ -499,7 +502,7 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
         {
             var moduleId = issue.ModuleId
                 ?? issue.PluginDirectoryName
-                ?? "UnknownPlugin";
+                ?? "未知插件";
             if (snapshots.Any(x => string.Equals(x.ModuleId, moduleId, StringComparison.OrdinalIgnoreCase)))
             {
                 continue;
@@ -524,7 +527,7 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
         IReadOnlySet<string> configuredEnabledSet,
         IReadOnlyDictionary<string, ModuleCatalogIssue[]> issueLookup)
     {
-        var message = "Plugin was discovered successfully.";
+        var message = "插件已发现。";
         var state = PluginLifecycleState.Discovered;
 
         if (issueLookup.TryGetValue(descriptor.ModuleId, out var moduleIssues))
@@ -572,12 +575,12 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
         if (!configuredEnabledSet.Contains(descriptor.ModuleId))
         {
             state = PluginLifecycleState.DisabledByConfig;
-            message = "Plugin was discovered, but it is not enabled by the current configuration.";
+            message = "插件已发现，但当前配置未启用。";
         }
         else if (_modulesById.ContainsKey(descriptor.ModuleId))
         {
             state = PluginLifecycleState.Activated;
-            message = "Plugin is enabled and activated.";
+            message = "插件已启用并激活。";
         }
 
         return new PluginLifecycleSnapshot(
@@ -614,7 +617,10 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
                     mapping.AddressCount,
                     mapping.DataType,
                     mapping.Direction,
-                    mapping.SortOrder))
+                    mapping.SortOrder,
+                    mapping.Category,
+                    mapping.GroupName,
+                    mapping.DisplayRole))
                 .ToArray();
 
             _plcConnectionManager.RegisterTasks(
@@ -638,21 +644,21 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
     {
         if (issues.Count == 0)
         {
-            return "Startup validation failed.";
+            return "启动校验失败。";
         }
 
-        return "Startup validation failed:" + Environment.NewLine
+        return "启动校验失败：" + Environment.NewLine
             + string.Join(Environment.NewLine, issues.Select(x =>
             {
                 var scope = new List<string>();
                 if (!string.IsNullOrWhiteSpace(x.ModuleId))
                 {
-                    scope.Add($"Module={x.ModuleId}");
+                    scope.Add($"模块={x.ModuleId}");
                 }
 
                 if (!string.IsNullOrWhiteSpace(x.DeviceName))
                 {
-                    scope.Add($"Device={x.DeviceName}");
+                    scope.Add($"设备={x.DeviceName}");
                 }
 
                 var scopeText = scope.Count == 0 ? string.Empty : $" ({string.Join(", ", scope)})";

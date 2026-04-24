@@ -26,13 +26,6 @@ public sealed class StackingModule : IEdgeProcessModule
         builder.Services.AddSingleton<IProcessCloudUploader, StackingCloudUploader>();
         builder.Services.AddSingleton<IModuleHardwareProfileProvider, StackingHardwareProfileProvider>();
         builder.Services.AddSingleton<IDevelopmentSampleContributor, StackingDevelopmentSampleContributor>();
-        builder.Services.AddSingleton<StackingDataViewModel>();
-        builder.Services.AddSingleton<StackingCapacityViewModel>();
-        builder.Services.AddSingleton<StackingMonitorViewModel>();
-        builder.Services.AddSingleton<StackingIoViewModel>();
-        builder.Services.AddSingleton<StackingRecipeViewModel>();
-        builder.Services.AddSingleton<StackingParamViewModel>();
-        builder.Services.AddSingleton<StackingHardwareConfigViewModel>();
 
         builder.RegisterCellData(typeof(StackingCellData));
         builder.RegisterRuntimeFactory(new StackingStationRuntimeFactory());

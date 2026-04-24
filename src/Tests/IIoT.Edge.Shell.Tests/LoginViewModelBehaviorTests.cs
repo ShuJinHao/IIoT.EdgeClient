@@ -23,7 +23,7 @@ public sealed class LoginViewModelBehaviorTests
             viewModel.LoginCommand.Execute(null);
             await WaitUntilAsync(() => !viewModel.IsBusy);
 
-            Assert.Equal("Device cloud identity is not ready yet.", viewModel.ErrorMessage);
+            Assert.Equal("设备云端身份尚未就绪。", viewModel.ErrorMessage);
             Assert.Equal(string.Empty, viewModel.Password);
             Assert.Equal(0, authService.LoginCloudCallCount);
         });
@@ -61,13 +61,13 @@ public sealed class LoginViewModelBehaviorTests
             Assert.True(viewModel.IsBusy);
             Assert.Equal(1, authService.LoginCloudCallCount);
 
-            loginTask.SetResult(AuthResult.Fail("Invalid employee number or password."));
+            loginTask.SetResult(AuthResult.Fail("工号或密码错误。"));
             await WaitUntilAsync(() => !viewModel.IsBusy);
 
             Assert.False(viewModel.IsBusy);
             Assert.Equal(string.Empty, viewModel.Password);
             Assert.Equal("E1001", viewModel.EmployeeNo);
-            Assert.Equal("Invalid employee number or password.", viewModel.ErrorMessage);
+            Assert.Equal("工号或密码错误。", viewModel.ErrorMessage);
         });
 
     [Fact]

@@ -141,7 +141,7 @@ public class HardwareConfigViewModel : CrudPageViewModelBase
     {
     }
 
-    protected HardwareConfigViewModel(
+    public HardwareConfigViewModel(
         IHardwareConfigCrudService crudService,
         IClientPermissionService permissionService,
         string viewId,
@@ -169,7 +169,8 @@ public class HardwareConfigViewModel : CrudPageViewModelBase
                 NetworkDeviceId = SelectedNetworkDevice!.Id,
                 Direction = "Read",
                 DataType = "Int16",
-                AddressCount = 1
+                AddressCount = 1,
+                Category = "单点读数据"
             },
             () => CanEdit && SelectedNetworkDevice is not null);
         _deleteIoMappingCommand = (BaseCommand)CreateDeleteCommand(IoMappings, () => CanEdit);
@@ -390,6 +391,9 @@ public class HardwareConfigViewModel : CrudPageViewModelBase
             AddressCount = source.AddressCount,
             DataType = source.DataType,
             Direction = source.Direction,
+            Category = source.Category,
+            GroupName = source.GroupName,
+            DisplayRole = source.DisplayRole,
             SortOrder = source.SortOrder,
             Remark = source.Remark
         };

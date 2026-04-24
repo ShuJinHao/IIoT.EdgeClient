@@ -51,7 +51,10 @@ public static class DependencyInjection
 
         services.AddSingleton(new LocalAdminConfig
         {
-            PasswordHash = Environment.GetEnvironmentVariable("LocalAdmin__PasswordHash")?.Trim() ?? string.Empty
+            PasswordHash =
+                Environment.GetEnvironmentVariable("LocalAdmin__PasswordHash")?.Trim()
+                ?? configuration["LocalAdmin:PasswordHash"]?.Trim()
+                ?? string.Empty
         });
 
         services.AddHttpClient<AuthService>(client => client.Timeout = timeout);

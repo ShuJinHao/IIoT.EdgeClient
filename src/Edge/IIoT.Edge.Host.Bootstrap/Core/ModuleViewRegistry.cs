@@ -21,6 +21,17 @@ public sealed class ModuleViewRegistry : IViewRegistry
         _inner.RegisterRoute(viewId, viewType, viewModelType, cacheView);
     }
 
+    public void RegisterRoute(
+        string viewId,
+        Type viewType,
+        Type viewModelType,
+        Func<IServiceProvider, IIoT.Edge.UI.Shared.PluginSystem.ViewModelBase> viewModelFactory,
+        bool cacheView = true)
+    {
+        EnsureModulePrefix(viewId, nameof(viewId));
+        _inner.RegisterRoute(viewId, viewType, viewModelType, viewModelFactory, cacheView);
+    }
+
     public void RegisterMenu(MenuInfo menuInfo)
     {
         ArgumentNullException.ThrowIfNull(menuInfo);
@@ -33,6 +44,18 @@ public sealed class ModuleViewRegistry : IViewRegistry
         ArgumentNullException.ThrowIfNull(info);
         EnsureModulePrefix(info.ContentId, $"{nameof(info)}.{nameof(info.ContentId)}");
         _inner.RegisterAnchorable(info, viewType, viewModelType, cacheView);
+    }
+
+    public void RegisterAnchorable(
+        AnchorableInfo info,
+        Type viewType,
+        Type viewModelType,
+        Func<IServiceProvider, IIoT.Edge.UI.Shared.PluginSystem.ViewModelBase> viewModelFactory,
+        bool cacheView = true)
+    {
+        ArgumentNullException.ThrowIfNull(info);
+        EnsureModulePrefix(info.ContentId, $"{nameof(info)}.{nameof(info.ContentId)}");
+        _inner.RegisterAnchorable(info, viewType, viewModelType, viewModelFactory, cacheView);
     }
 
     public ViewRegistration? GetViewRegistration(string viewId) => _inner.GetViewRegistration(viewId);

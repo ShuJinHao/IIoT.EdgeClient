@@ -25,7 +25,10 @@ public static class ProductionContextSignalBindings
                 binding.AddressCount,
                 binding.DataType,
                 binding.Direction,
-                binding.SortOrder))
+                binding.SortOrder,
+                binding.Category,
+                binding.GroupName,
+                binding.DisplayRole))
             .ToArray();
 
         BindingsByContext.Remove(context);

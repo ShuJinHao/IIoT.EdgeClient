@@ -135,7 +135,7 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
 
     private async Task HeartbeatLoopAsync(CancellationToken ct)
     {
-        _logger.Info("[DeviceService] Heartbeat loop started.");
+        _logger.Info("[设备服务] 心跳循环已启动。");
         await RefreshOrIdentifyOnceAsync(ct).ConfigureAwait(false);
 
         while (!ct.IsCancellationRequested)
@@ -155,7 +155,7 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
             await RefreshOrIdentifyOnceAsync(ct).ConfigureAwait(false);
         }
 
-        _logger.Info("[DeviceService] Heartbeat loop stopped.");
+        _logger.Info("[设备服务] 心跳循环已停止。");
     }
 
     private async Task RefreshOrIdentifyOnceAsync(CancellationToken ct)
@@ -225,7 +225,7 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
             {
                 var errorMessage = await TryReadFirstErrorAsync(response, ct).ConfigureAwait(false);
                 _logger.Warn(
-                    $"event=edge.bootstrap.failure client_code={FormatValue(clientCode)} status_code={(int)response.StatusCode} result=failed reason=http_status error={FormatValue(errorMessage)}");
+                    $"事件(edge.bootstrap.failure) 客户端编码={FormatValue(clientCode)} 状态码={(int)response.StatusCode} 结果=失败 原因=HTTP状态 错误={FormatValue(errorMessage)}");
                 GoOffline(clientCode, null, EdgeUploadBlockReason.BootstrapHttpFailure, attemptedAtUtc);
                 return;
             }
@@ -234,7 +234,7 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
             if (dto is null)
             {
                 _logger.Warn(
-                    $"event=edge.bootstrap.failure client_code={FormatValue(clientCode)} result=failed reason=empty_payload");
+                    $"事件(edge.bootstrap.failure) 客户端编码={FormatValue(clientCode)} 结果=失败 原因=空响应");
                 GoOffline(clientCode, null, EdgeUploadBlockReason.BootstrapPayloadInvalid, attemptedAtUtc);
                 return;
             }
@@ -258,13 +258,13 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
             if (!TryResolveTokenBlockReason(session, out var invalidReason))
             {
                 _logger.Info(
-                    $"event=edge.bootstrap.success client_code={FormatValue(session.ClientCode)} device_id={session.DeviceId} process_id={session.ProcessId} expires_at_utc={FormatTimestamp(session.UploadAccessTokenExpiresAtUtc)} result=ok");
+                    $"事件(edge.bootstrap.success) 客户端编码={FormatValue(session.ClientCode)} 设备ID={session.DeviceId} 工序ID={session.ProcessId} 令牌过期时间={FormatTimestamp(session.UploadAccessTokenExpiresAtUtc)} 结果=成功");
                 GoOnline(session, attemptedAtUtc);
                 return;
             }
 
             _logger.Warn(
-                $"event=edge.bootstrap.invalid_token client_code={FormatValue(session.ClientCode)} device_id={session.DeviceId} process_id={session.ProcessId} expires_at_utc={FormatTimestamp(session.UploadAccessTokenExpiresAtUtc)} result=invalid reason={invalidReason.ToReasonCode()}");
+                $"事件(edge.bootstrap.invalid_token) 客户端编码={FormatValue(session.ClientCode)} 设备ID={session.DeviceId} 工序ID={session.ProcessId} 令牌过期时间={FormatTimestamp(session.UploadAccessTokenExpiresAtUtc)} 结果=无效 原因={invalidReason.ToReasonCode()}");
             GoOffline(session.ClientCode, session, invalidReason, attemptedAtUtc);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -278,19 +278,19 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
         catch (TaskCanceledException)
         {
             _logger.Warn(
-                $"event=edge.bootstrap.failure client_code={FormatValue(clientCode)} result=failed reason=timeout");
+                $"事件(edge.bootstrap.failure) 客户端编码={FormatValue(clientCode)} 结果=失败 原因=超时");
             GoOffline(clientCode, null, EdgeUploadBlockReason.BootstrapTimeout, attemptedAtUtc);
         }
         catch (HttpRequestException ex)
         {
             _logger.Warn(
-                $"event=edge.bootstrap.failure client_code={FormatValue(clientCode)} result=failed reason=network_exception message={SanitizeValue(ex.Message)}");
+                $"事件(edge.bootstrap.failure) 客户端编码={FormatValue(clientCode)} 结果=失败 原因=网络异常 消息={SanitizeValue(ex.Message)}");
             GoOffline(clientCode, null, EdgeUploadBlockReason.BootstrapNetworkFailure, attemptedAtUtc);
         }
         catch (Exception ex)
         {
             _logger.Error(
-                $"event=edge.bootstrap.failure client_code={FormatValue(clientCode)} result=failed reason=exception message={SanitizeValue(ex.Message)}");
+                $"事件(edge.bootstrap.failure) 客户端编码={FormatValue(clientCode)} 结果=失败 原因=异常 消息={SanitizeValue(ex.Message)}");
             GoOffline(clientCode, null, EdgeUploadBlockReason.BootstrapPayloadInvalid, attemptedAtUtc);
         }
     }
@@ -321,7 +321,7 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
             {
                 var errorMessage = await TryReadFirstErrorAsync(response, ct).ConfigureAwait(false);
                 _logger.Warn(
-                    $"event=edge.bootstrap.refresh.failure client_code={FormatValue(clientCode)} status_code={(int)response.StatusCode} result=failed reason=http_status error={FormatValue(errorMessage)}");
+                    $"事件(edge.bootstrap.refresh.failure) 客户端编码={FormatValue(clientCode)} 状态码={(int)response.StatusCode} 结果=失败 原因=HTTP状态 错误={FormatValue(errorMessage)}");
                 return DeviceRefreshResult.FallbackToBootstrap;
             }
 
@@ -329,7 +329,7 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
             if (dto is null)
             {
                 _logger.Warn(
-                    $"event=edge.bootstrap.refresh.failure client_code={FormatValue(clientCode)} result=failed reason=empty_payload");
+                    $"事件(edge.bootstrap.refresh.failure) 客户端编码={FormatValue(clientCode)} 结果=失败 原因=空响应");
                 return DeviceRefreshResult.FallbackToBootstrap;
             }
 
@@ -352,13 +352,13 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
             if (TryResolveTokenBlockReason(refreshedSession, out var invalidReason))
             {
                 _logger.Warn(
-                    $"event=edge.bootstrap.refresh.invalid_token client_code={FormatValue(refreshedSession.ClientCode)} device_id={refreshedSession.DeviceId} process_id={refreshedSession.ProcessId} expires_at_utc={FormatTimestamp(refreshedSession.UploadAccessTokenExpiresAtUtc)} result=invalid reason={invalidReason.ToReasonCode()}");
+                    $"事件(edge.bootstrap.refresh.invalid_token) 客户端编码={FormatValue(refreshedSession.ClientCode)} 设备ID={refreshedSession.DeviceId} 工序ID={refreshedSession.ProcessId} 令牌过期时间={FormatTimestamp(refreshedSession.UploadAccessTokenExpiresAtUtc)} 结果=无效 原因={invalidReason.ToReasonCode()}");
                 GoOffline(refreshedSession.ClientCode, refreshedSession, invalidReason, attemptedAtUtc);
                 return DeviceRefreshResult.Refreshed;
             }
 
             _logger.Info(
-                $"event=edge.bootstrap.refresh.success client_code={FormatValue(refreshedSession.ClientCode)} device_id={refreshedSession.DeviceId} process_id={refreshedSession.ProcessId} expires_at_utc={FormatTimestamp(refreshedSession.UploadAccessTokenExpiresAtUtc)} result=ok");
+                $"事件(edge.bootstrap.refresh.success) 客户端编码={FormatValue(refreshedSession.ClientCode)} 设备ID={refreshedSession.DeviceId} 工序ID={refreshedSession.ProcessId} 令牌过期时间={FormatTimestamp(refreshedSession.UploadAccessTokenExpiresAtUtc)} 结果=成功");
             GoOnline(refreshedSession, attemptedAtUtc);
             return DeviceRefreshResult.Refreshed;
         }
@@ -369,19 +369,19 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
         catch (TaskCanceledException)
         {
             _logger.Warn(
-                $"event=edge.bootstrap.refresh.failure client_code={FormatValue(clientCode)} result=failed reason=timeout");
+                $"事件(edge.bootstrap.refresh.failure) 客户端编码={FormatValue(clientCode)} 结果=失败 原因=超时");
             return DeviceRefreshResult.FallbackToBootstrap;
         }
         catch (HttpRequestException ex)
         {
             _logger.Warn(
-                $"event=edge.bootstrap.refresh.failure client_code={FormatValue(clientCode)} result=failed reason=network_exception message={SanitizeValue(ex.Message)}");
+                $"事件(edge.bootstrap.refresh.failure) 客户端编码={FormatValue(clientCode)} 结果=失败 原因=网络异常 消息={SanitizeValue(ex.Message)}");
             return DeviceRefreshResult.FallbackToBootstrap;
         }
         catch (Exception ex)
         {
             _logger.Error(
-                $"event=edge.bootstrap.refresh.failure client_code={FormatValue(clientCode)} result=failed reason=exception message={SanitizeValue(ex.Message)}");
+                $"事件(edge.bootstrap.refresh.failure) 客户端编码={FormatValue(clientCode)} 结果=失败 原因=异常 消息={SanitizeValue(ex.Message)}");
             return DeviceRefreshResult.FallbackToBootstrap;
         }
     }
@@ -432,7 +432,7 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
             if (CurrentState != NetworkState.Online)
             {
                 CurrentState = NetworkState.Online;
-                _logger.Info("[DeviceService] State changed to Online.");
+                _logger.Info("[设备服务] 状态已切换为在线。");
                 raiseStateChanged = true;
             }
 
@@ -483,20 +483,20 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
                     if (cached is not null)
                     {
                         CurrentDevice = cached;
-                        _logger.Info($"[DeviceService] Loaded local cache: {cached.DeviceName}");
+                        _logger.Info($"[设备服务] 已加载本地缓存：{cached.DeviceName}");
                         raiseDeviceIdentified = true;
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logger.Warn($"[DeviceService] Load cache failed: {ex.Message}");
+                    _logger.Warn($"[设备服务] 加载本地缓存失败：{ex.Message}");
                 }
             }
 
             if (CurrentState != NetworkState.Offline)
             {
                 CurrentState = NetworkState.Offline;
-                _logger.Info("[DeviceService] State changed to Offline.");
+                _logger.Info("[设备服务] 状态已切换为离线。");
                 raiseStateChanged = true;
             }
 
@@ -541,13 +541,13 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
             }
             catch (Exception ex)
             {
-                _logger.Warn($"[DeviceService] Save cache failed: {ex.Message}");
+                _logger.Warn($"[设备服务] 保存本地缓存失败：{ex.Message}");
             }
         }
 
         if (deviceChanged)
         {
-            _logger.Info($"[DeviceService] Device updated: {session.DeviceName}");
+            _logger.Info($"[设备服务] 当前设备已更新：{session.DeviceName}");
         }
 
         return deviceChanged;
@@ -619,10 +619,10 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
     }
 
     private static string FormatTimestamp(DateTimeOffset? value)
-        => value?.ToString("O") ?? "null";
+        => value?.ToString("O") ?? "空";
 
     private static string FormatValue(string? value)
-        => string.IsNullOrWhiteSpace(value) ? "unknown" : SanitizeValue(value);
+        => string.IsNullOrWhiteSpace(value) ? "未知" : SanitizeValue(value);
 
     private static string SanitizeValue(string value)
         => value.Replace(' ', '_');

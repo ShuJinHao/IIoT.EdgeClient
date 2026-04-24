@@ -20,6 +20,9 @@ public abstract class ModuleContractTestBase<TModule>
 
     protected TModule CreateModule() => new();
 
+    protected virtual ProductionContext CreateRuntimeContext()
+        => new() { DeviceName = "PLC-A" };
+
     protected virtual void ConfigureRuntimeServices(IServiceCollection services)
     {
     }
@@ -117,7 +120,7 @@ public abstract class ModuleContractTestBase<TModule>
         var tasks = factory.CreateTasks(
             services.BuildServiceProvider(),
             new PlcBuffer(16, 16),
-            new ProductionContext { DeviceName = "PLC-A" });
+            CreateRuntimeContext());
 
         Assert.Equal(ExpectedRuntimeTaskCount, tasks.Count);
     }

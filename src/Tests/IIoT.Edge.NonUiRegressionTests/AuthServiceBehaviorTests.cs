@@ -20,7 +20,7 @@ public sealed class AuthServiceBehaviorTests
         var result = await service.LoginLocalAsync("123456");
 
         Assert.False(result.Success);
-        Assert.Equal("Local admin is not configured.", result.Message);
+        Assert.Equal("本地管理员未配置。", result.Message);
         Assert.False(service.IsAuthenticated);
     }
 

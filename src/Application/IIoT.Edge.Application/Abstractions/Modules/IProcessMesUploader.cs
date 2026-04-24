@@ -16,7 +16,7 @@ public interface IProcessMesUploader
 
     MesUploadMode UploadMode { get; }
 
-    Task<bool> UploadAsync(
+    Task<MesCallResult> UploadAsync(
         ProcessMesUploadContext context,
         IReadOnlyList<CellCompletedRecord> records,
         CancellationToken cancellationToken = default);

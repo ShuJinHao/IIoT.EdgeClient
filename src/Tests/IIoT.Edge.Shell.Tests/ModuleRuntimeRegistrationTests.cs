@@ -24,6 +24,7 @@ using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.SharedKernel.Repository;
 using IIoT.Edge.Shell.Core;
 using IIoT.Edge.Shell.Modules;
+using IIoT.Edge.UI.Shared.PluginSystem;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using System.Reflection;
@@ -203,6 +204,51 @@ public sealed class ModuleRuntimeRegistrationTests
     }
 
     [Fact]
+    public Task NavigationService_WhenViewModelFactoryIsRegistered_ShouldUseFactory()
+        => RunOnStaThreadAsync(() =>
+        {
+            var services = new ServiceCollection().BuildServiceProvider();
+            var registry = new ViewRegistry();
+            registry.RegisterRoute(
+                "Plugin.Factory",
+                typeof(TestNavigationView),
+                typeof(DefaultNavigationViewModel),
+                _ => new FactoryNavigationViewModel(),
+                cacheView: false);
+
+            var navigation = new NavigationService(services, registry, new SpyLogService());
+
+            navigation.NavigateTo("Plugin.Factory");
+
+            Assert.IsType<FactoryNavigationViewModel>(navigation.CurrentViewModel);
+            Assert.IsType<TestNavigationView>(navigation.CurrentView);
+            return Task.CompletedTask;
+        });
+
+    [Fact]
+    public Task NavigationService_WhenViewModelFactoryIsMissing_ShouldResolveViewModelFromContainer()
+        => RunOnStaThreadAsync(() =>
+        {
+            var services = new ServiceCollection()
+                .AddTransient<DefaultNavigationViewModel>()
+                .BuildServiceProvider();
+            var registry = new ViewRegistry();
+            registry.RegisterRoute(
+                "Plugin.Default",
+                typeof(TestNavigationView),
+                typeof(DefaultNavigationViewModel),
+                cacheView: false);
+
+            var navigation = new NavigationService(services, registry, new SpyLogService());
+
+            navigation.NavigateTo("Plugin.Default");
+
+            Assert.IsType<DefaultNavigationViewModel>(navigation.CurrentViewModel);
+            Assert.IsType<TestNavigationView>(navigation.CurrentView);
+            return Task.CompletedTask;
+        });
+
+    [Fact]
     public void HostBootstrap_ShouldRegisterDiagnosticsCoreView()
     {
         var services = new ServiceCollection();
@@ -255,6 +301,9 @@ public sealed class ModuleRuntimeRegistrationTests
         Assert.Single(harness.PlcManager.RegisteredFactories);
         Assert.Equal(1, harness.ContextStore.LoadCallCount);
         Assert.Equal(1, harness.BackgroundCoordinator.StartCallCount);
+        Assert.Contains(
+            harness.Logger.Entries,
+            entry => entry.Message.Contains("[生命周期] 开始应用启动。", StringComparison.Ordinal));
         Assert.True(harness.PlcManager.RegisteredFactories.TryGetValue("PLC-A", out var factory));
 
         var tasks = factory!(
@@ -600,6 +649,27 @@ public sealed class ModuleRuntimeRegistrationTests
         }
     }
 
+    private static Task RunOnStaThreadAsync(Func<Task> testBody)
+    {
+        var completion = new TaskCompletionSource<object?>();
+        var thread = new Thread(async () =>
+        {
+            try
+            {
+                await testBody().ConfigureAwait(false);
+                completion.SetResult(null);
+            }
+            catch (Exception ex)
+            {
+                completion.SetException(ex);
+            }
+        });
+
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        return completion.Task;
+    }
+
     private sealed class AppLifecycleHarness : IAsyncDisposable
     {
         private readonly ServiceProvider _serviceProvider;
@@ -612,6 +682,7 @@ public sealed class ModuleRuntimeRegistrationTests
             SpyPlcConnectionManager plcManager,
             SpyProductionContextStore contextStore,
             SpyBackgroundServiceCoordinator backgroundCoordinator,
+            SpyLogService logger,
             IStartupDiagnosticsStore startupDiagnosticsStore)
         {
             _serviceProvider = serviceProvider;
@@ -620,6 +691,7 @@ public sealed class ModuleRuntimeRegistrationTests
             PlcManager = plcManager;
             ContextStore = contextStore;
             BackgroundCoordinator = backgroundCoordinator;
+            Logger = logger;
             StartupDiagnosticsStore = startupDiagnosticsStore;
         }
 
@@ -630,6 +702,8 @@ public sealed class ModuleRuntimeRegistrationTests
         public SpyProductionContextStore ContextStore { get; }
 
         public SpyBackgroundServiceCoordinator BackgroundCoordinator { get; }
+
+        public SpyLogService Logger { get; }
 
         public IStartupDiagnosticsStore StartupDiagnosticsStore { get; }
 
@@ -765,6 +839,7 @@ public sealed class ModuleRuntimeRegistrationTests
                 plcManager,
                 contextStore,
                 backgroundCoordinator,
+                logger,
                 serviceProvider.GetRequiredService<IStartupDiagnosticsStore>());
         }
 
@@ -905,6 +980,9 @@ public sealed class ModuleRuntimeRegistrationTests
         public int SaveCallCount { get; private set; }
 
         public ProductionContext GetOrCreate(string deviceName)
+            => GetOrCreate(deviceName, moduleId: null);
+
+        public ProductionContext GetOrCreate(string deviceName, string? moduleId)
         {
             if (!_contexts.TryGetValue(deviceName, out var context))
             {
@@ -985,6 +1063,24 @@ public sealed class ModuleRuntimeRegistrationTests
         public void SaveToFile()
         {
         }
+    }
+
+    private sealed class TestNavigationView : System.Windows.Controls.ContentControl
+    {
+    }
+
+    private sealed class DefaultNavigationViewModel : ViewModelBase
+    {
+        public override string ViewId => "Plugin.Default";
+
+        public override string ViewTitle => "默认页面";
+    }
+
+    private sealed class FactoryNavigationViewModel : ViewModelBase
+    {
+        public override string ViewId => "Plugin.Factory";
+
+        public override string ViewTitle => "工厂页面";
     }
 
     private sealed class SpyLogService : ILogService

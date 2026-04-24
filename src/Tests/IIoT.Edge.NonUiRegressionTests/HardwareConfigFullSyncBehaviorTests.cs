@@ -129,6 +129,9 @@ public sealed class HardwareConfigFullSyncBehaviorTests
                         2,
                         "Int16",
                         "Read",
+                        "单点读数据",
+                        string.Empty,
+                        string.Empty,
                         1,
                         "updated-remark")
                 ]),

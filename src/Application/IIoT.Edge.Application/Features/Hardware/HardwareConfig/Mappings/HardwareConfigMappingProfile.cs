@@ -52,6 +52,9 @@ public class HardwareConfigMappingProfile : Profile
                 src.AddressCount,
                 src.DataType,
                 src.Direction,
+                src.Category,
+                src.GroupName,
+                src.DisplayRole,
                 src.SortOrder,
                 src.Remark));
     }
