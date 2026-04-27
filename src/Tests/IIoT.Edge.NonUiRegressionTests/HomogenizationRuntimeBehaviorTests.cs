@@ -1,4 +1,4 @@
-﻿using System.Linq.Expressions;
+using System.Linq.Expressions;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
@@ -20,12 +20,13 @@ using IIoT.Edge.SharedKernel.Repository;
 using IIoT.Edge.SharedKernel.Specification;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 
 public sealed class HomogenizationRuntimeBehaviorTests
 {
-    private static readonly HomogenizationCodeOptions TestCodeOptions = HomogenizationModuleConfiguration.Load().Codes;
+    private static readonly HomogenizationCodeOptions TestCodeOptions = CreateCodeOptions();
 
     [Fact]
     public async Task HomogenizationDevelopmentSampleContributor_WhenEnabled_ShouldImportSeedDeviceAndMappingsIdempotently()
@@ -51,7 +52,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
         await contributor.EnsureConfigurationSamplesAsync();
 
         var device = Assert.Single(networkDevices.Items);
-        Assert.Equal(HomogenizationModuleConstants.ModuleId, device.ModuleId);
+        Assert.Equal(DependencyInjection.ModuleKey, device.ModuleId);
         Assert.Equal(DeviceType.PLC, device.DeviceType);
         Assert.Equal(HomogenizationPlcSignalProfile.Signals.Count, ioMappings.Items.Count);
         Assert.Equal(
@@ -77,7 +78,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
         var ioMappings = new InMemoryRepository<IoMappingEntity>();
         var device = networkDevices.Add(new NetworkDeviceEntity("PLC-Homogenization-01", DeviceType.PLC, "127.0.0.1", 6000)
         {
-            ModuleId = HomogenizationModuleConstants.ModuleId,
+            ModuleId = DependencyInjection.ModuleKey,
             DeviceModel = "Mc",
             ConnectTimeout = 3000,
             IsEnabled = true
@@ -142,7 +143,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
 
         var oldHomogenizationDevice = networkDevices.Add(new NetworkDeviceEntity("PLC-Old-H", DeviceType.PLC, "10.0.0.3", 6000)
         {
-            ModuleId = HomogenizationModuleConstants.ModuleId,
+            ModuleId = DependencyInjection.ModuleKey,
             DeviceModel = "Mc",
             ConnectTimeout = 3000,
             IsEnabled = true
@@ -164,7 +165,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
         Assert.Contains(ioMappings.Items, static mapping => mapping.Label == "Other.Signal");
 
         var homogenizationDevices = networkDevices.Items
-            .Where(static device => device.ModuleId == HomogenizationModuleConstants.ModuleId)
+            .Where(static device => device.ModuleId == DependencyInjection.ModuleKey)
             .ToArray();
 
         Assert.Single(homogenizationDevices);
@@ -198,7 +199,8 @@ public sealed class HomogenizationRuntimeBehaviorTests
         services.AddSingleton<IHomogenizationMesApiService>(mesApi);
         services.AddSingleton<IDataPipelineService>(pipeline);
         services.AddSingleton(new HomogenizationCellDataValidator());
-        services.AddSingleton(TestCodeOptions);
+        services.AddSingleton(Options.Create(new HomogenizationModuleOptions()));
+        services.AddSingleton(Options.Create(TestCodeOptions));
         using var provider = services.BuildServiceProvider();
 
         var bindings = BuildInboundOutboundBindings();
@@ -341,7 +343,8 @@ public sealed class HomogenizationRuntimeBehaviorTests
         services.AddSingleton<IHomogenizationMesApiService>(mesApi);
         services.AddSingleton<IDataPipelineService>(pipeline);
         services.AddSingleton(new HomogenizationCellDataValidator());
-        services.AddSingleton(TestCodeOptions);
+        services.AddSingleton(Options.Create(new HomogenizationModuleOptions()));
+        services.AddSingleton(Options.Create(TestCodeOptions));
         using var provider = services.BuildServiceProvider();
 
         var bindings = BuildRecipeBindings();
@@ -450,6 +453,38 @@ public sealed class HomogenizationRuntimeBehaviorTests
             new(HomogenizationPlcSignalProfile.RecipeAck.Label, "D603", 1, "Int16", "Write", 4),
             new(HomogenizationPlcSignalProfile.EquipmentStatusAck.Label, "D607", 1, "Int16", "Write", 5)
         ];
+
+    private static HomogenizationCodeOptions CreateCodeOptions()
+        => new()
+        {
+            Plc = new HomogenizationPlcCodeOptions
+            {
+                SignalReset = 10,
+                SignalTrigger = 11,
+                AckOk = 11,
+                AckException = 12,
+                AckMesNg = 13
+            },
+            Mes = new HomogenizationMesCodeOptions
+            {
+                Channels = new HomogenizationMesChannelOptions
+                {
+                    Inbound = "Homogenization.Inbound",
+                    Outbound = "Homogenization",
+                    Realtime = "Homogenization.Realtime",
+                    Recipe = "Homogenization.Recipe",
+                    EquipmentStatus = "Homogenization.EquipmentStatus"
+                },
+                EquipmentStatusTexts = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["-1"] = "报警",
+                    ["0"] = "运行中",
+                    ["1"] = "空闲",
+                    ["2"] = "离线",
+                    ["3"] = "待料"
+                }
+            }
+        };
 
     private static IReadOnlyList<ModuleIoSnapshot> BuildRecipeBindings()
         =>
@@ -757,4 +792,3 @@ public sealed class HomogenizationRuntimeBehaviorTests
             => throw new NotSupportedException();
     }
 }
-

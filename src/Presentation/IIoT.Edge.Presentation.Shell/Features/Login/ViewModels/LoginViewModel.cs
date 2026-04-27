@@ -2,6 +2,7 @@ using System.Windows.Input;
 using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Common.Models;
+using IIoT.Edge.Presentation.Shell.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
 using IIoT.Edge.UI.Shared.PluginSystem;
 
@@ -11,6 +12,7 @@ public class LoginViewModel : ViewModelBase
 {
     private readonly IAuthService _authService;
     private readonly IDeviceService _deviceService;
+    private readonly IAppLanguageService _languageService;
     private string _employeeNo = string.Empty;
     private string _password = string.Empty;
     private bool _isLocalMode;
@@ -18,7 +20,7 @@ public class LoginViewModel : ViewModelBase
     private string _errorMessage = string.Empty;
 
     public override string ViewId => "Core.Login";
-    public override string ViewTitle => "登录";
+    public override string ViewTitle => _languageService.GetString("Shell_ViewTitle_Login", "登录");
 
     public string EmployeeNo
     {
@@ -57,7 +59,9 @@ public class LoginViewModel : ViewModelBase
 
     public bool IsCloudMode => !_isLocalMode;
 
-    public string ModeTitle => _isLocalMode ? "本地紧急管理员" : "云端账号登录";
+    public string ModeTitle => _isLocalMode
+        ? _languageService.GetString("Shell_LocalAdmin", "本地紧急管理员")
+        : _languageService.GetString("Shell_CloudLogin", "云端账号登录");
 
     public bool IsBusy
     {
@@ -88,10 +92,14 @@ public class LoginViewModel : ViewModelBase
 
     public event Action? LoginSucceeded;
 
-    public LoginViewModel(IAuthService authService, IDeviceService deviceService)
+    public LoginViewModel(
+        IAuthService authService,
+        IDeviceService deviceService,
+        IAppLanguageService languageService)
     {
         _authService = authService;
         _deviceService = deviceService;
+        _languageService = languageService;
 
         LoginCommand = new AsyncCommand(ExecuteLoginAsync);
         SwitchModeCommand = new BaseCommand(_ => IsLocalMode = !IsLocalMode);
@@ -101,6 +109,15 @@ public class LoginViewModel : ViewModelBase
             Password = string.Empty;
             ErrorMessage = string.Empty;
         });
+
+        _languageService.LanguageChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(ModeTitle));
+            if (!string.IsNullOrEmpty(ErrorMessage))
+            {
+                ErrorMessage = string.Empty;
+            }
+        };
     }
 
     private async Task ExecuteLoginAsync()
@@ -116,13 +133,13 @@ public class LoginViewModel : ViewModelBase
 
         if (string.IsNullOrWhiteSpace(trimmedPassword))
         {
-            ErrorMessage = "密码不能为空。";
+            ErrorMessage = _languageService.GetString("Shell_PasswordRequired", "密码不能为空。");
             return;
         }
 
         if (IsCloudMode && string.IsNullOrWhiteSpace(trimmedEmployeeNo))
         {
-            ErrorMessage = "工号不能为空。";
+            ErrorMessage = _languageService.GetString("Shell_EmployeeNoRequired", "工号不能为空。");
             return;
         }
 
@@ -140,7 +157,7 @@ public class LoginViewModel : ViewModelBase
                 var deviceId = _deviceService.CurrentDevice?.DeviceId;
                 if (!_deviceService.CanUploadToCloud || deviceId is null || deviceId == Guid.Empty)
                 {
-                    ErrorMessage = "设备云端身份尚未就绪。";
+                    ErrorMessage = _languageService.GetString("Shell_DeviceCloudIdentityNotReady", "设备云端身份尚未就绪。");
                     return;
                 }
 

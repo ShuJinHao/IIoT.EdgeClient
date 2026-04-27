@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Threading;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Host.Bootstrap;
+using IIoT.Edge.Presentation.Shell.Localization;
 using IIoT.Edge.Shell.Core;
 using IIoT.Edge.Shell.Modules;
 using IIoT.Edge.Shell.ViewModels;
@@ -50,6 +51,7 @@ public partial class App : WpfApplication
         try
         {
             _serviceProvider = ConfigureServices(configuration, runtimePaths).BuildServiceProvider();
+            _serviceProvider.GetRequiredService<IAppLanguageService>().Initialize();
         }
         catch (Exception ex)
         {

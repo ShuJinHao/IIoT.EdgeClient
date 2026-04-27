@@ -6,6 +6,7 @@ using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Integration;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.SharedKernel.Enums;
+using Microsoft.Extensions.Options;
 using System.Text.Json;
 
 namespace IIoT.Edge.NonUiRegressionTests;
@@ -96,7 +97,6 @@ public sealed class HomogenizationMesIntegrationTests
         CapturingMesHttpClient httpClient,
         string stationNo)
     {
-        var moduleConfiguration = HomogenizationModuleConfiguration.Load();
         return new HomogenizationMesApiService(
             httpClient,
             new FakeMesEndpointProvider(),
@@ -110,9 +110,65 @@ public sealed class HomogenizationMesIntegrationTests
             },
             new MutableLocalParameterConfigService(stationNo),
             new FakeLogService(),
-            moduleConfiguration.Mes,
-            moduleConfiguration.Codes);
+            Options.Create(CreateMesOptions()),
+            Options.Create(CreateCodeOptions()));
     }
+
+    private static HomogenizationMesOptions CreateMesOptions()
+        => new()
+        {
+            SignToken = "hdc2023",
+            Paths = new HomogenizationMesPathOptions
+            {
+                Inbound = "/dev/dev/getIn/check",
+                Outbound = "/dev/dev/electrode/exit/push",
+                Recipe = "/dev/dev/process/param",
+                Realtime = "/dev/dev/run/info",
+                EquipmentStatus = "/dev/dev/realTime/status"
+            }
+        };
+
+    private static HomogenizationCodeOptions CreateCodeOptions()
+        => new()
+        {
+            Mes = new HomogenizationMesCodeOptions
+            {
+                OutboundProduceItems = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["DeviceCode"] = Item("gluingDeviceCode", "设备编码", "string"),
+                    ["DeviceName"] = Item("gluingDeviceName", "设备名称", "string"),
+                    ["StartTime"] = Item("gluingStartTime", "开始时间", "datetime"),
+                    ["CompleteTime"] = Item("gluingCompleteTime", "完成时间", "datetime"),
+                    ["StirringSpeed"] = Item("gluingStirSpeed", "搅拌转速", "short", "RPM"),
+                    ["Temperature"] = Item("gluingGlueSolutingTemperature", "温度", "short", "C"),
+                    ["Vacuum"] = Item("gluingVacuumDegree", "真空度", "short", "Kpa"),
+                    ["CntActual"] = Item("gluingCntActualValue", "CNT 实际值", "decimal", "kg"),
+                    ["CntTarget"] = Item("gluingCntTargetValue", "CNT 目标值", "decimal", "kg"),
+                    ["CntTankAWeight"] = Item("gluingCntTankAWeight", "CNT A 罐重量", "decimal", "kg"),
+                    ["CntTankBWeight"] = Item("gluingCntTankBWeight", "CNT B 罐重量", "decimal", "kg"),
+                    ["NmpActual"] = Item("gluingNmpActualValue", "NMP 实际值", "decimal", "kg"),
+                    ["NmpTarget"] = Item("gluingNmpTargetValue", "NMP 目标值", "decimal", "kg"),
+                    ["GlueActual"] = Item("gluingGlueActualWeight", "胶液实际重量", "decimal", "kg"),
+                    ["SetStirringTime"] = Item("gluingSetStirTime", "设定搅拌时间", "ushort", "min"),
+                    ["RemainingStirringTime"] = Item("gluingRemainStirTime", "剩余搅拌时间", "ushort", "min"),
+                    ["SetDispersionTime"] = Item("gluingSetDispersionTime", "设定分散时间", "ushort", "min"),
+                    ["RemainingDispersionTime"] = Item("gluingRemainDispersionTime", "剩余分散时间", "ushort", "min")
+                }
+            }
+        };
+
+    private static HomogenizationMesItemCodeOptions Item(
+        string code,
+        string name,
+        string type,
+        string unit = "")
+        => new()
+        {
+            Code = code,
+            Name = name,
+            Type = type,
+            Unit = unit
+        };
 
     private static DeviceSession CreateDevice()
         => new()

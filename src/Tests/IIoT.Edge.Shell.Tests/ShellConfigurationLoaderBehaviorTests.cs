@@ -123,6 +123,55 @@ public sealed class ShellConfigurationLoaderBehaviorTests
         }
     }
 
+    [Fact]
+    public void Load_WhenPluginDefaultAndAppSettingsProvideSameModuleKey_ShouldPreferAppSettings()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            WriteText(
+                Path.Combine(tempDirectory, "appsettings.json"),
+                """
+                {
+                  "Modules": {
+                    "Homogenization": {
+                      "Module": {
+                        "Presentation": {
+                          "MaxOutboundRecords": 25
+                        }
+                      }
+                    }
+                  }
+                }
+                """);
+            var pluginConfigDirectory = Path.Combine(tempDirectory, "Modules", "Homogenization", "Config");
+            Directory.CreateDirectory(pluginConfigDirectory);
+            WriteText(
+                Path.Combine(pluginConfigDirectory, "homogenization.module.json"),
+                """
+                {
+                  "Modules": {
+                    "Homogenization": {
+                      "Module": {
+                        "Presentation": {
+                          "MaxOutboundRecords": 500
+                        }
+                      }
+                    }
+                  }
+                }
+                """);
+
+            var result = ShellConfigurationLoader.Load(tempDirectory);
+
+            Assert.Equal("25", result.Configuration["Modules:Homogenization:Module:Presentation:MaxOutboundRecords"]);
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
     private static string CreateTempDirectory()
     {
         var path = Path.Combine(Path.GetTempPath(), "edge-shell-config-tests", Guid.NewGuid().ToString("N"));

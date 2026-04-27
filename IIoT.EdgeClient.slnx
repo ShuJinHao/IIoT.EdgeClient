@@ -27,15 +27,7 @@
     <Project Path="src/Modules/IIoT.Edge.Module.Stacking/IIoT.Edge.Module.Stacking.csproj" />
     <Project Path="src/Modules/IIoT.Edge.Module.Homogenization/IIoT.Edge.Module.Homogenization.csproj" />
   </Folder>
-  <Folder Name="/src/Tools/">
-    <Project Path="src/Tools/IIoT.Edge.TestSimulator/IIoT.Edge.TestSimulator.csproj" />
-    <Project Path="src/Tools/IIoT.Edge.PackageValidationClient/src/IIoT.Edge.PackageValidationClient/IIoT.Edge.PackageValidationClient.csproj" />
-    <Project Path="src/Tools/ModuleSamples/IIoT.Edge.Module.DryRun/IIoT.Edge.Module.DryRun.csproj" />
-  </Folder>
   <Folder Name="/src/Shared/">
-    <Project Path="src/Shared/IIoT.Edge.Module.Abstractions/IIoT.Edge.Module.Abstractions.csproj" />
-    <Project Path="src/Shared/IIoT.Edge.Module.Contracts/IIoT.Edge.Module.Contracts.csproj" />
-    <Project Path="src/Shared/IIoT.Edge.Integration.Contracts/IIoT.Edge.Integration.Contracts.csproj" />
     <Project Path="src/Shared/IIoT.Edge.SharedKernel/IIoT.Edge.SharedKernel.csproj" />
     <Project Path="src/Shared/IIoT.Edge.UI.Shared/IIoT.Edge.UI.Shared.csproj" Id="2c8e15da-52ba-4d59-aced-196d42918475" />
   </Folder>

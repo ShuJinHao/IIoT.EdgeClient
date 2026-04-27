@@ -21,6 +21,13 @@ public record QueryCapacityHistoryQuery(
     DateTime QueryDate,
     string PlcName) : IRequest<CapacityViewResult>;
 
+public static class CapacityQueryModes
+{
+    public const string Day = "Day";
+    public const string Month = "Month";
+    public const string Year = "Year";
+}
+
 public class LoadTodayCapacityHandler(CapacityCloudQueryService service)
     : IRequestHandler<LoadTodayCapacityQuery, CapacityViewResult>
 {
@@ -47,13 +54,13 @@ public class QueryCapacityHistoryHandler(CapacityCloudQueryService service)
     {
         var rows = request.QueryMode switch
         {
-            "按月查询" => await service.QueryByMonthAsync(
+            CapacityQueryModes.Month => await service.QueryByMonthAsync(
                 request.DeviceId,
                 request.QueryDate.Year,
                 request.QueryDate.Month,
                 request.PlcName),
 
-            "按年查询" => await service.QueryByYearAsync(
+            CapacityQueryModes.Year => await service.QueryByYearAsync(
                 request.DeviceId,
                 request.QueryDate.Year,
                 request.PlcName),
@@ -64,7 +71,7 @@ public class QueryCapacityHistoryHandler(CapacityCloudQueryService service)
                 request.PlcName)
         };
 
-        var divisor = request.QueryMode == "按年查询" ? 12 : Math.Max(1, rows.Count);
+        var divisor = request.QueryMode == CapacityQueryModes.Year ? 12 : Math.Max(1, rows.Count);
         return CapacityQueryHelper.ToResult(rows, divisor);
     }
 }

@@ -5,7 +5,7 @@ namespace IIoT.Edge.Module.Homogenization.Config.Hardware;
 
 public sealed class HomogenizationHardwareProfileProvider : IModuleHardwareProfileProvider
 {
-    public string ModuleId => HomogenizationModuleConstants.ModuleId;
+    public string ModuleId => DependencyInjection.ModuleKey;
 
     public ModulePlcDefaults GetDefaultPlcSettings()
         => new(PlcType.Mc.ToString(), 3000, 6000);
@@ -29,7 +29,7 @@ public sealed class HomogenizationHardwareProfileProvider : IModuleHardwareProfi
         => string.Join(
             Environment.NewLine,
             HomogenizationPlcSignalProfile.Signals.Select(static signal =>
-                $"{signal.Label}：分类 {signal.Category}，分组 {signal.GroupName}，方向 {signal.Direction}，类型 {signal.DataType}，长度 {signal.AddressCount}，排序 {signal.SortOrder}"));
+                $"{signal.Label}：分类={signal.Category}，分组={signal.GroupName}，方向={signal.Direction}，类型={signal.DataType}，长度={signal.AddressCount}，排序={signal.SortOrder}"));
 
     public ModuleHardwareValidationResult ValidatePlcConfiguration(
         string deviceName,

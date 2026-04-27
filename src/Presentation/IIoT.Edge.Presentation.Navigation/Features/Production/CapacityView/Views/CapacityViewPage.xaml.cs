@@ -4,7 +4,7 @@ using System.Windows.Controls;
 namespace IIoT.Edge.Presentation.Navigation.Features.Production.CapacityView
 {
     /// <summary>
-    /// ²úÄÜ²éÑ¯Ò³ÃæÊÓÍ¼¡£
+    /// äº§èƒ½æŸ¥è¯¢é¡µé¢è§†å›¾ã€‚
     /// </summary>
     public partial class CapacityViewPage : PageActionShell
     {

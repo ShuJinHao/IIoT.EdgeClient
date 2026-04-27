@@ -1,4 +1,4 @@
-using Dapper;
+﻿using Dapper;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Common.Persistence;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Connection;

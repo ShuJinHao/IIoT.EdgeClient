@@ -1,6 +1,7 @@
 using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.Plugin.Shared.Modules;
 using IIoT.Edge.UI.Shared.Modularity;
+using IIoT.Edge.UI.Shared.PluginSystem;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace IIoT.Edge.Shell.Core;
@@ -16,6 +17,7 @@ internal sealed class EdgeProcessModuleBuilder : IEdgeProcessModuleBuilder
         string moduleId,
         string processType,
         IServiceCollection services,
+        IConfiguration configuration,
         IViewRegistry viewRegistry,
         ICellDataRegistry cellDataRegistry,
         IStationRuntimeRegistry runtimeRegistry,
@@ -28,6 +30,7 @@ internal sealed class EdgeProcessModuleBuilder : IEdgeProcessModuleBuilder
             ? throw new ArgumentException("ProcessType cannot be empty.", nameof(processType))
             : processType;
         Services = services ?? throw new ArgumentNullException(nameof(services));
+        Configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         _viewRegistry = viewRegistry ?? throw new ArgumentNullException(nameof(viewRegistry));
         _cellDataRegistry = cellDataRegistry ?? throw new ArgumentNullException(nameof(cellDataRegistry));
         _runtimeRegistry = runtimeRegistry ?? throw new ArgumentNullException(nameof(runtimeRegistry));
@@ -40,6 +43,8 @@ internal sealed class EdgeProcessModuleBuilder : IEdgeProcessModuleBuilder
 
     public IServiceCollection Services { get; }
 
+    public IConfiguration Configuration { get; }
+
     public void RegisterRoute(string viewId, Type viewType, Type viewModelType, bool cacheView = true)
         => _viewRegistry.RegisterRoute(viewId, viewType, viewModelType, cacheView);
 
@@ -47,17 +52,26 @@ internal sealed class EdgeProcessModuleBuilder : IEdgeProcessModuleBuilder
         string viewId,
         Type viewType,
         Type viewModelType,
-        Func<IServiceProvider, IIoT.Edge.UI.Shared.PluginSystem.ViewModelBase> viewModelFactory,
+        Func<IServiceProvider, object> viewModelFactory,
         bool cacheView = true)
-        => _viewRegistry.RegisterRoute(viewId, viewType, viewModelType, viewModelFactory, cacheView);
+    {
+        ArgumentNullException.ThrowIfNull(viewModelFactory);
+        _viewRegistry.RegisterRoute(
+            viewId,
+            viewType,
+            viewModelType,
+            serviceProvider => ResolveViewModel(viewId, viewModelFactory, serviceProvider),
+            cacheView);
+    }
 
     public void RegisterMenu(EdgeMenuInfo menuInfo)
     {
         ArgumentNullException.ThrowIfNull(menuInfo);
         _viewRegistry.RegisterMenu(new MenuInfo
         {
-            Title = menuInfo.Title,
-            ViewId = menuInfo.ViewId,
+                Title = menuInfo.Title,
+                TitleResourceKey = menuInfo.TitleResourceKey,
+                ViewId = menuInfo.ViewId,
             Icon = menuInfo.Icon,
             Order = menuInfo.Order,
             RequiredPermission = menuInfo.RequiredPermission
@@ -75,6 +89,7 @@ internal sealed class EdgeProcessModuleBuilder : IEdgeProcessModuleBuilder
             new AnchorableInfo
             {
                 Title = info.Title,
+                TitleResourceKey = info.TitleResourceKey,
                 ContentId = info.ContentId,
                 InitialPosition = info.InitialPosition switch
                 {
@@ -94,14 +109,16 @@ internal sealed class EdgeProcessModuleBuilder : IEdgeProcessModuleBuilder
         EdgeAnchorableInfo info,
         Type viewType,
         Type viewModelType,
-        Func<IServiceProvider, IIoT.Edge.UI.Shared.PluginSystem.ViewModelBase> viewModelFactory,
+        Func<IServiceProvider, object> viewModelFactory,
         bool cacheView = true)
     {
         ArgumentNullException.ThrowIfNull(info);
+        ArgumentNullException.ThrowIfNull(viewModelFactory);
         _viewRegistry.RegisterAnchorable(
             new AnchorableInfo
             {
                 Title = info.Title,
+                TitleResourceKey = info.TitleResourceKey,
                 ContentId = info.ContentId,
                 InitialPosition = info.InitialPosition switch
                 {
@@ -114,7 +131,7 @@ internal sealed class EdgeProcessModuleBuilder : IEdgeProcessModuleBuilder
             },
             viewType,
             viewModelType,
-            viewModelFactory,
+            serviceProvider => ResolveViewModel(info.ContentId, viewModelFactory, serviceProvider),
             cacheView);
     }
 
@@ -152,4 +169,15 @@ internal sealed class EdgeProcessModuleBuilder : IEdgeProcessModuleBuilder
             {
                 _ => MesUploadMode.Single
             });
+
+    private static ViewModelBase ResolveViewModel(
+        string viewId,
+        Func<IServiceProvider, object> viewModelFactory,
+        IServiceProvider serviceProvider)
+    {
+        var viewModel = viewModelFactory(serviceProvider);
+        return viewModel as ViewModelBase
+            ?? throw new InvalidOperationException(
+                $"View model factory for '{viewId}' must return {nameof(ViewModelBase)}.");
+    }
 }

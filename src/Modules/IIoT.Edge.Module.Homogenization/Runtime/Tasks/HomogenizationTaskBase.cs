@@ -5,6 +5,7 @@ using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Integration;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using IIoT.Edge.Runtime.Base;
+using Microsoft.Extensions.Options;
 
 namespace IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 
@@ -16,13 +17,14 @@ internal abstract class HomogenizationTaskBase : PlcTaskBase
         IPlcBuffer buffer,
         HomogenizationContext context,
         ILogService logger,
-        HomogenizationCodeOptions codeOptions,
-        HomogenizationModuleOptions moduleOptions)
+        IOptions<HomogenizationCodeOptions> codeOptions,
+        IOptions<HomogenizationModuleOptions> moduleOptions)
         : base(buffer, context, logger)
     {
         ModuleContext = context;
-        CodeOptions = codeOptions;
-        EventLoopInterval = Math.Max(20, moduleOptions.Runtime.EventLoopIntervalMs);
+        CodeOptions = codeOptions.Value;
+        var runtime = moduleOptions.Value.Runtime;
+        EventLoopInterval = Math.Max(runtime.MinEventLoopIntervalMs, runtime.EventLoopIntervalMs);
     }
 
     protected HomogenizationContext ModuleContext { get; }

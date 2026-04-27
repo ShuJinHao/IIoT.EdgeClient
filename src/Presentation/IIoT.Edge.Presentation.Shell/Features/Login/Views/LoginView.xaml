@@ -31,7 +31,7 @@
             <TextBox
                 Margin="0,0,0,16"
                 materialDesign:HintAssist.FloatingScale="0.8"
-                materialDesign:HintAssist.Hint="工号"
+                materialDesign:HintAssist.Hint="{DynamicResource Shell_EmployeeNo}"
                 CaretBrush="#5EEAD4"
                 Foreground="#E4E4E7"
                 Text="{Binding EmployeeNo, UpdateSourceTrigger=PropertyChanged}">
@@ -51,7 +51,7 @@
                 x:Name="PasswordBox"
                 Margin="0,0,0,8"
                 materialDesign:HintAssist.FloatingScale="0.8"
-                materialDesign:HintAssist.Hint="密码"
+                materialDesign:HintAssist.Hint="{DynamicResource Shell_Password}"
                 CaretBrush="#5EEAD4"
                 Foreground="#E4E4E7"
                 Style="{StaticResource MaterialDesignFloatingHintPasswordBox}" />
@@ -88,7 +88,7 @@
                     <TextBlock
                         HorizontalAlignment="Center"
                         VerticalAlignment="Center"
-                        Text="登录">
+                        Text="{DynamicResource Shell_Login}">
                         <TextBlock.Style>
                             <Style TargetType="TextBlock">
                                 <Setter Property="Visibility" Value="Visible" />
@@ -129,10 +129,10 @@
                 <TextBlock>
                     <TextBlock.Style>
                         <Style TargetType="TextBlock">
-                            <Setter Property="Text" Value="切换到本地紧急管理员" />
+                            <Setter Property="Text" Value="{DynamicResource Shell_SwitchToLocalAdmin}" />
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding IsLocalMode}" Value="True">
-                                    <Setter Property="Text" Value="切换到云端账号登录" />
+                                    <Setter Property="Text" Value="{DynamicResource Shell_SwitchToCloudLogin}" />
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>

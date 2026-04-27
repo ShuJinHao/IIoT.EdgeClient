@@ -1,7 +1,9 @@
 using IIoT.Edge.Application.Abstractions.Context;
+using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.SharedKernel.Collections;
 using IIoT.Edge.SharedKernel.Context;
+using Microsoft.Extensions.Options;
 
 namespace IIoT.Edge.Module.Homogenization.Runtime;
 
@@ -10,7 +12,15 @@ namespace IIoT.Edge.Module.Homogenization.Runtime;
 /// </summary>
 public sealed class HomogenizationContext : ProductionContext
 {
-    private const int MaxOutboundRecords = 500;
+    public HomogenizationContext()
+        : this(new HomogenizationModuleOptions().Presentation.MaxOutboundRecords)
+    {
+    }
+
+    public HomogenizationContext(int maxOutboundRecords)
+    {
+        OutboundRecords = new BoundedRecordQueue<HomogenizationCellData>(Math.Max(1, maxOutboundRecords));
+    }
 
     public string? LastInboundTrayCode { get; set; }
 
@@ -46,7 +56,7 @@ public sealed class HomogenizationContext : ProductionContext
 
     public DateTime LastHeartbeatAt { get; set; }
 
-    public BoundedRecordQueue<HomogenizationCellData> OutboundRecords { get; } = new(MaxOutboundRecords);
+    public BoundedRecordQueue<HomogenizationCellData> OutboundRecords { get; }
 
     public void RecordOutbound(HomogenizationCellData record)
     {
@@ -59,12 +69,19 @@ public sealed class HomogenizationContext : ProductionContext
 
 internal sealed class HomogenizationContextFactory : IProductionContextFactory
 {
-    public string ModuleId => HomogenizationModuleConstants.ModuleId;
+    private readonly HomogenizationModuleOptions _moduleOptions;
+
+    public HomogenizationContextFactory(IOptions<HomogenizationModuleOptions> moduleOptions)
+    {
+        _moduleOptions = moduleOptions.Value;
+    }
+
+    public string ModuleId => DependencyInjection.ModuleKey;
 
     public Type ContextType => typeof(HomogenizationContext);
 
     public ProductionContext Create(string deviceName)
-        => new HomogenizationContext
+        => new HomogenizationContext(_moduleOptions.Presentation.MaxOutboundRecords)
         {
             DeviceName = deviceName
         };

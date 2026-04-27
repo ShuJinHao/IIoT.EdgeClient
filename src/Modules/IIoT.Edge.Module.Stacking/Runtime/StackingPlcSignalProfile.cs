@@ -1,5 +1,5 @@
-using IIoT.Edge.Module.Stacking.Constants;
-using IIoT.Edge.Plugin.Shared.Signals;
+﻿using IIoT.Edge.Module.Stacking.Constants;
+using IIoT.Edge.Application.Abstractions.Plc.Signals;
 
 namespace IIoT.Edge.Module.Stacking.Runtime;
 

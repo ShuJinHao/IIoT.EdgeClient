@@ -1,5 +1,5 @@
-using IIoT.Edge.Module.Homogenization.Presentation.Views;
-using IIoT.Edge.Plugin.Shared.Modules;
+﻿using IIoT.Edge.Module.Homogenization.Presentation.Views;
+using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Presentation.Navigation.PluginSystem;
 
 namespace IIoT.Edge.Module.Homogenization.Presentation;
@@ -17,6 +17,7 @@ public static class HomogenizationNavigationRegistration
         builder.RegisterMenu(new EdgeMenuInfo
         {
             Title = "数据",
+            TitleResourceKey = "Homogenization_Menu_Data",
             ViewId = HomogenizationViewIds.DataView,
             Icon = "ChartBar",
             Order = 1,

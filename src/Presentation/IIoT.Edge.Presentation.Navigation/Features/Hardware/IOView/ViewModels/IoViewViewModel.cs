@@ -58,9 +58,12 @@ public class IoViewViewModel : ViewModelBase
 
             _selectedDevice = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(HasSelectedDevice));
             _ = LoadMappingsAsync();
         }
     }
+
+    public bool HasSelectedDevice => SelectedDevice is not null;
 
     private bool _isConnected;
     public bool IsConnected
@@ -74,22 +77,6 @@ public class IoViewViewModel : ViewModelBase
             }
 
             _isConnected = value;
-            OnPropertyChanged();
-        }
-    }
-
-    private string _statusText = "未连接";
-    public string StatusText
-    {
-        get => _statusText;
-        set
-        {
-            if (_statusText == value)
-            {
-                return;
-            }
-
-            _statusText = value;
             OnPropertyChanged();
         }
     }
@@ -589,13 +576,11 @@ public class IoViewViewModel : ViewModelBase
         if (SelectedDevice is null)
         {
             IsConnected = false;
-            StatusText = "未选择设备";
             return;
         }
 
         var isConnected = _plcConnectionManager.GetRuntimeStatus(SelectedDevice.Id)?.IsConnected == true;
         IsConnected = isConnected;
-        StatusText = isConnected ? "已连接" : "未连接";
     }
 
     private void NotifySignalCollectionsChanged()

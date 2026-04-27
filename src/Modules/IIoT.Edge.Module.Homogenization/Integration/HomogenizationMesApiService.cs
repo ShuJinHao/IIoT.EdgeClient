@@ -9,6 +9,7 @@ using IIoT.Edge.Application.Modules;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.SharedKernel.Enums;
+using Microsoft.Extensions.Options;
 
 namespace IIoT.Edge.Module.Homogenization.Integration;
 
@@ -29,16 +30,16 @@ public sealed class HomogenizationMesApiService : IHomogenizationMesApiService
         ILocalSystemRuntimeConfigService runtimeConfig,
         ILocalParameterConfigService parameterConfigService,
         ILogService logger,
-        HomogenizationMesOptions mesOptions,
-        HomogenizationCodeOptions codeOptions)
+        IOptions<HomogenizationMesOptions> mesOptions,
+        IOptions<HomogenizationCodeOptions> codeOptions)
     {
         _mesHttpClient = mesHttpClient;
         _mesEndpointProvider = mesEndpointProvider;
         _runtimeConfig = runtimeConfig;
         _parameterConfigService = parameterConfigService;
         _logger = logger;
-        _mesOptions = mesOptions;
-        _mesCodes = codeOptions.Mes;
+        _mesOptions = mesOptions.Value;
+        _mesCodes = codeOptions.Value.Mes;
         _mesRequestExecutor = new MesRequestExecutor(mesHttpClient, mesEndpointProvider, runtimeConfig, logger);
     }
 

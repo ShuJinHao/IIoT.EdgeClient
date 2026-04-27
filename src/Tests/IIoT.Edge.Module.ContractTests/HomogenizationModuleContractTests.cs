@@ -1,16 +1,17 @@
-﻿using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Module.Homogenization;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Integration;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Runtime;
-using IIoT.Edge.Module.Abstractions;
 using IIoT.Edge.SharedKernel.Context;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace IIoT.Edge.Module.ContractTests;
 
-public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<HomogenizationModule>
+public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<DependencyInjection>
 {
     protected override bool RequiresHardwareProfile => true;
     protected override bool RequiresMesUploader => true;
@@ -27,17 +28,67 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<H
         services.AddSingleton<IMesUploadDiagnosticsStore, ContractMesUploadDiagnosticsStore>();
         services.AddSingleton<IHomogenizationMesApiService, ContractHomogenizationMesApiService>();
         services.AddSingleton<HomogenizationCellDataValidator>();
+        services.AddSingleton(Options.Create(new HomogenizationModuleOptions()));
+        services.AddSingleton(Options.Create(new HomogenizationCodeOptions()));
     }
 
     [Fact]
     public void RegisterServices_ShouldRegisterDevelopmentSampleContributor()
     {
-        var result = new ModuleContractFixture().RegisterModule(new HomogenizationModule());
+        var result = new ModuleContractFixture().RegisterModule(new DependencyInjection());
 
         Assert.Contains(
             result.Services,
             descriptor => descriptor.ServiceType == typeof(IDevelopmentSampleContributor)
                           && descriptor.ImplementationType == typeof(HomogenizationDevelopmentSampleContributor));
+    }
+
+    [Fact]
+    public void DependencyInjection_Configure_BindsAllOptions()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddJsonFile(
+                Path.Combine(
+                    ContractTestPathHelper.GetModuleSourceDirectory(DependencyInjection.ModuleKey),
+                    "Config",
+                    "homogenization.module.json"),
+                optional: false,
+                reloadOnChange: false)
+            .Build();
+
+        var result = new ModuleContractFixture().RegisterModule(new DependencyInjection(), configuration);
+        using var provider = result.Services.BuildServiceProvider();
+
+        Assert.Equal(500, provider.GetRequiredService<IOptions<HomogenizationModuleOptions>>().Value.Presentation.MaxOutboundRecords);
+        Assert.Equal("hdc2023", provider.GetRequiredService<IOptions<HomogenizationMesOptions>>().Value.SignToken);
+        Assert.Equal(11, provider.GetRequiredService<IOptions<HomogenizationCodeOptions>>().Value.Plc.SignalTrigger);
+    }
+
+    [Fact]
+    public void HomogenizationLanguageDictionaries_ShouldContainSameNonEmptyKeys()
+    {
+        var resourceDirectory = Path.Combine(
+            ContractTestPathHelper.GetModuleSourceDirectory(DependencyInjection.ModuleKey),
+            "Resources",
+            "Languages");
+        var zhKeys = ReadLanguageDictionary(resourceDirectory, "zh-CN.xaml");
+        var enKeys = ReadLanguageDictionary(resourceDirectory, "en-US.xaml");
+
+        Assert.NotEmpty(zhKeys);
+        Assert.Equal(zhKeys.Keys.Order(), enKeys.Keys.Order());
+        Assert.All(zhKeys, item => Assert.False(string.IsNullOrWhiteSpace(item.Value), item.Key));
+        Assert.All(enKeys, item => Assert.False(string.IsNullOrWhiteSpace(item.Value), item.Key));
+    }
+
+    private static IReadOnlyDictionary<string, string> ReadLanguageDictionary(string directory, string fileName)
+    {
+        var path = Path.Combine(directory, fileName);
+        var text = File.ReadAllText(path);
+        return System.Text.RegularExpressions.Regex
+            .Matches(text, "<sys:String x:Key=\"(?<key>[^\"]+)\">(?<value>.*?)</sys:String>")
+            .ToDictionary(
+                match => match.Groups["key"].Value,
+                match => match.Groups["value"].Value);
     }
 
     private sealed class ContractDeviceService : IDeviceService

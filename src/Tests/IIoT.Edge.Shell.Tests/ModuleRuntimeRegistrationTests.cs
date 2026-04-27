@@ -13,8 +13,7 @@ using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Infrastructure.Persistence.Dapper;
 using IIoT.Edge.Infrastructure.Persistence.EfCore;
 using IIoT.Edge.Host.Bootstrap;
-using IIoT.Edge.Module.Abstractions;
-using IIoT.Edge.Plugin.Shared.Modules;
+using IIoT.Edge.Host.Bootstrap.Modules;
 using IIoT.Edge.Presentation.Navigation;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.DataPipeline;
@@ -46,7 +45,7 @@ public sealed class ModuleRuntimeRegistrationTests
             Assert.Empty(discovery.Issues);
             Assert.Empty(activation.Issues);
             Assert.Equal(
-                ["DryRun", "Injection", "Stacking"],
+                ["Homogenization", "Injection", "Stacking"],
                 activation.Modules.Select(x => x.ModuleId).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray());
         }
         finally
@@ -56,7 +55,7 @@ public sealed class ModuleRuntimeRegistrationTests
     }
 
     [Fact]
-    public void DiscoverDirectoryPlugins_ShouldFindInjectionStackingAndDryRun()
+    public void DiscoverDirectoryPlugins_ShouldFindProductModules()
     {
         var pluginRoot = CreatePluginRuntimeRoot();
         try
@@ -64,7 +63,7 @@ public sealed class ModuleRuntimeRegistrationTests
             var discovery = DiscoverTestPlugins(pluginRoot);
 
             Assert.Equal(
-                ["DryRun", "Injection", "Stacking"],
+                ["Homogenization", "Injection", "Stacking"],
                 discovery.Modules.Select(x => x.ModuleId).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray());
         }
         finally
@@ -144,7 +143,7 @@ public sealed class ModuleRuntimeRegistrationTests
     }
 
     [Fact]
-    public void ValidationCatalog_ShouldRegisterInjectionStackingAndDryRunWithoutConflicts()
+    public void ValidationCatalog_ShouldRegisterProductModulesWithoutConflicts()
     {
         var pluginRoot = CreatePluginRuntimeRoot();
         try
@@ -161,6 +160,7 @@ public sealed class ModuleRuntimeRegistrationTests
                     module.ModuleId,
                     module.ProcessType,
                     new ServiceCollection(),
+                    CreateConfiguration(),
                     new ModuleViewRegistry(viewRegistry, module.ModuleId),
                     cellDataRegistry,
                     runtimeRegistry,
@@ -173,7 +173,7 @@ public sealed class ModuleRuntimeRegistrationTests
             Assert.Equal(3, integrationRegistry.GetCloudUploaders().Count);
             Assert.NotNull(viewRegistry.GetViewRegistration("Injection.DataView"));
             Assert.NotNull(viewRegistry.GetViewRegistration("Stacking.DataView"));
-            Assert.NotNull(viewRegistry.GetViewRegistration("DryRun.Dashboard"));
+            Assert.NotNull(viewRegistry.GetViewRegistration("Homogenization.DataView"));
         }
         finally
         {
@@ -559,7 +559,7 @@ public sealed class ModuleRuntimeRegistrationTests
         Directory.CreateDirectory(pluginRoot);
 
         var runtimeModulesRoot = ShellModuleCatalog.GetPluginRootPath(AppContext.BaseDirectory);
-        foreach (var moduleId in new[] { "DryRun", "Injection", "Stacking" })
+        foreach (var moduleId in new[] { "Homogenization", "Injection", "Stacking" })
         {
             var sourceModuleDirectory = Path.Combine(runtimeModulesRoot, moduleId);
             if (!Directory.Exists(sourceModuleDirectory))
@@ -582,7 +582,7 @@ public sealed class ModuleRuntimeRegistrationTests
         {
             "Injection" => Path.Combine(FindRepoRoot(), "src", "Modules", "IIoT.Edge.Module.Injection"),
             "Stacking" => Path.Combine(FindRepoRoot(), "src", "Modules", "IIoT.Edge.Module.Stacking"),
-            "DryRun" => Path.Combine(FindRepoRoot(), "src", "Tools", "ModuleSamples", "IIoT.Edge.Module.DryRun"),
+            "Homogenization" => Path.Combine(FindRepoRoot(), "src", "Modules", "IIoT.Edge.Module.Homogenization"),
             _ => throw new InvalidOperationException($"Unsupported module id '{moduleId}'.")
         };
 
@@ -795,6 +795,7 @@ public sealed class ModuleRuntimeRegistrationTests
                     module.ModuleId,
                     module.ProcessType,
                     services,
+                    configuration,
                     new ModuleViewRegistry(moduleViewRegistry, module.ModuleId),
                     cellDataRegistry,
                     runtimeRegistry,
@@ -1073,14 +1074,14 @@ public sealed class ModuleRuntimeRegistrationTests
     {
         public override string ViewId => "Plugin.Default";
 
-        public override string ViewTitle => "默认页面";
+        public override string ViewTitle => "榛樿椤甸潰";
     }
 
     private sealed class FactoryNavigationViewModel : ViewModelBase
     {
         public override string ViewId => "Plugin.Factory";
 
-        public override string ViewTitle => "工厂页面";
+        public override string ViewTitle => "宸ュ巶椤甸潰";
     }
 
     private sealed class SpyLogService : ILogService

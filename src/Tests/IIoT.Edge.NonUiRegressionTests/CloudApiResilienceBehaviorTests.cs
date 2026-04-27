@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Config;
+﻿using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Infrastructure.Integration;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;

@@ -6,9 +6,13 @@ using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
 using IIoT.Edge.Module.Homogenization.Integration;
 using IIoT.Edge.Module.Homogenization.Runtime;
+using Microsoft.Extensions.Options;
 
 namespace IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 
+/// <summary>
+/// 设备状态握手任务：PLC 触发后读取状态码并上传 MES。
+/// </summary>
 internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
 {
     private readonly IDeviceService _deviceService;
@@ -22,8 +26,8 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
         IHomogenizationMesApiService mesApiService,
         IMesUploadDiagnosticsStore diagnosticsStore,
         ILogService logger,
-        HomogenizationModuleOptions moduleOptions,
-        HomogenizationCodeOptions codeOptions)
+        IOptions<HomogenizationModuleOptions> moduleOptions,
+        IOptions<HomogenizationCodeOptions> codeOptions)
         : base(buffer, context, logger, codeOptions, moduleOptions)
     {
         _deviceService = deviceService;

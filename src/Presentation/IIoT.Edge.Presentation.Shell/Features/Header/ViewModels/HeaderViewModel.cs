@@ -1,4 +1,5 @@
-﻿using IIoT.Edge.UI.Shared.Mvvm;
+using IIoT.Edge.Presentation.Shell.Localization;
+using IIoT.Edge.UI.Shared.Mvvm;
 using IIoT.Edge.UI.Shared.PluginSystem;
 using System.Linq;
 using System.Windows;
@@ -8,18 +9,25 @@ namespace IIoT.Edge.Presentation.Shell.Features.Header;
 
 public class HeaderViewModel : ViewModelBase
 {
-    private string _systemTitle = "IIoT Edge Client";
+    private readonly IAppLanguageService _languageService;
     private string _currentUser = "Admin";
     private string _maxRestoreIcon = "WindowMaximize";
 
-    public override string ViewId => "Core.SystemHeader";
-    public override string ViewTitle => "Header";
-
-    public string SystemTitle
+    public HeaderViewModel(IAppLanguageService languageService)
     {
-        get => _systemTitle;
-        set { _systemTitle = value; OnPropertyChanged(); }
+        _languageService = languageService;
+
+        LayoutRow = 0;
+        LayoutColumn = 0;
+        ColumnSpan = 12;
+
+        WindowControlCommand = new BaseCommand(ExecuteWindowControl);
+        WindowDragCommand = new BaseCommand(ExecuteWindowDrag);
+        _languageService.LanguageChanged += (_, _) => OnPropertyChanged(nameof(SelectedLanguage));
     }
+
+    public override string ViewId => "Core.SystemHeader";
+    public override string ViewTitle => _languageService.GetString("Shell_ViewTitle_Header", "Header");
 
     public string CurrentUser
     {
@@ -33,18 +41,22 @@ public class HeaderViewModel : ViewModelBase
         set { _maxRestoreIcon = value; OnPropertyChanged(); }
     }
 
+    public IReadOnlyList<LanguageOption> SupportedLanguages => _languageService.SupportedLanguages;
+
+    public LanguageOption SelectedLanguage
+    {
+        get => _languageService.CurrentOption;
+        set
+        {
+            if (value is not null)
+            {
+                _languageService.Change(value.Culture);
+            }
+        }
+    }
+
     public ICommand WindowControlCommand { get; }
     public ICommand WindowDragCommand { get; }
-
-    public HeaderViewModel()
-    {
-        LayoutRow = 0;
-        LayoutColumn = 0;
-        ColumnSpan = 12;
-
-        WindowControlCommand = new BaseCommand(ExecuteWindowControl);
-        WindowDragCommand = new BaseCommand(ExecuteWindowDrag);
-    }
 
     private void ExecuteWindowControl(object? parameter)
     {

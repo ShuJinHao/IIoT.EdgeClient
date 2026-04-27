@@ -14,7 +14,7 @@ public sealed class HomogenizationCloudUploader : ProcessCloudUploaderBase<Homog
     {
     }
 
-    public override string ProcessType => HomogenizationModuleConstants.ProcessType;
+    public override string ProcessType => DependencyInjection.ModuleKey;
 
     public override ProcessUploadMode UploadMode => ProcessUploadMode.Single;
 

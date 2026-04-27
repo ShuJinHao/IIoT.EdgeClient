@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
@@ -28,9 +28,6 @@
     <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.Injection\IIoT.Edge.Module.Injection.csproj" />
     <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.Homogenization\IIoT.Edge.Module.Homogenization.csproj" />
     <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.Stacking\IIoT.Edge.Module.Stacking.csproj" />
-    <ProjectReference Include="..\..\Tools\ModuleSamples\IIoT.Edge.Module.DryRun\IIoT.Edge.Module.DryRun.csproj" />
-    <ProjectReference Include="..\..\Tools\ModuleSamples\IIoT.Edge.Module.ScanCaptureStarter\IIoT.Edge.Module.ScanCaptureStarter.csproj" />
-    <ProjectReference Include="..\..\Shared\IIoT.Edge.Module.Abstractions\IIoT.Edge.Module.Abstractions.csproj" />
   </ItemGroup>
 
 </Project>

@@ -3,6 +3,7 @@ using IIoT.Edge.UI.Shared.Mvvm;
 using IIoT.Edge.UI.Shared.PluginSystem;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
+using WpfApplication = System.Windows.Application;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Production.DataView;
 
@@ -63,7 +64,7 @@ public class DataViewModel : PresentationViewModelBase
     public ICommand ExportCommand { get; }
 
     public DataViewModel(IDataViewService dataViewService)
-        : this(dataViewService, "Production.DataView", "生产数据")
+        : this(dataViewService, "Production.DataView", string.Empty)
     {
     }
 
@@ -75,13 +76,17 @@ public class DataViewModel : PresentationViewModelBase
         _dataViewService = dataViewService;
         _viewId = viewId;
         _viewTitle = viewTitle;
-        QueryCommand = new AsyncCommand(() => RunViewTaskAsync(QueryAsync, "生产数据查询失败"));
+        QueryCommand = new AsyncCommand(() => RunViewTaskAsync(
+            QueryAsync,
+            GetText("Navigation_Data_QueryFailed", "生产数据查询失败。")));
         ExportCommand = new BaseCommand(_ => { });
     }
 
     public override async Task OnActivatedAsync()
     {
-        await RunViewTaskAsync(QueryAsync, "生产数据加载失败");
+        await RunViewTaskAsync(
+            QueryAsync,
+            GetText("Navigation_Data_LoadFailed", "生产数据加载失败。"));
     }
 
     private async Task QueryAsync()
@@ -105,6 +110,9 @@ public class DataViewModel : PresentationViewModelBase
                 Yield = record.Yield
             }));
     }
+
+    private static string GetText(string key, string fallback)
+        => WpfApplication.Current?.TryFindResource(key) as string ?? fallback;
 }
 
 public class ProductionRecordVm

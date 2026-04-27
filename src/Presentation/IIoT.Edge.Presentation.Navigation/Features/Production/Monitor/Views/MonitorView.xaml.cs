@@ -4,7 +4,7 @@ using System.Windows.Controls;
 namespace IIoT.Edge.Presentation.Navigation.Features.Production.Monitor
 {
     /// <summary>
-    /// ÊµÊ±¼à¿ØÒ³ÃæÊÓÍ¼¡£
+    /// å®æ—¶ç›‘æ§é¡µé¢è§†å›¾ã€‚
     /// </summary>
     public partial class MonitorViewPage : PageActionShell
     {

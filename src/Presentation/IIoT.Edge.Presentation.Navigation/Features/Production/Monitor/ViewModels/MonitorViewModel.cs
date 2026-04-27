@@ -5,6 +5,7 @@ using IIoT.Edge.UI.Shared.PluginSystem;
 using System.Collections.ObjectModel;
 using System.Data;
 using System.Windows.Threading;
+using WpfApplication = System.Windows.Application;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Production.Monitor;
 
@@ -28,7 +29,7 @@ public class MonitorViewModel : PresentationViewModelBase
     }
 
     public MonitorViewModel(IMonitorViewService monitorViewService)
-        : this(monitorViewService, "Production.Monitor", "实时监控")
+        : this(monitorViewService, "Production.Monitor", string.Empty)
     {
     }
 
@@ -45,7 +46,9 @@ public class MonitorViewModel : PresentationViewModelBase
         {
             Interval = TimeSpan.FromMilliseconds(500)
         };
-        _refreshTimer.Tick += (_, _) => RunViewTaskInBackground(RefreshAsync, "监控刷新失败。");
+        _refreshTimer.Tick += (_, _) => RunViewTaskInBackground(
+            RefreshAsync,
+            GetText("Navigation_Monitor_RefreshFailed", "监控刷新失败。"));
     }
 
     public override async Task OnActivatedAsync()
@@ -55,7 +58,9 @@ public class MonitorViewModel : PresentationViewModelBase
             _refreshTimer.Start();
         }
 
-        await RunViewTaskAsync(RefreshAsync, "加载监控数据失败。");
+        await RunViewTaskAsync(
+            RefreshAsync,
+            GetText("Navigation_Monitor_LoadFailed", "加载监控数据失败。"));
     }
 
     public override Task OnDeactivatedAsync()
@@ -97,6 +102,9 @@ public class MonitorViewModel : PresentationViewModelBase
                 tab.CellTable = snapshot.CellTable;
             });
     }
+
+    private static string GetText(string key, string fallback)
+        => WpfApplication.Current?.TryFindResource(key) as string ?? fallback;
 }
 
 public class DeviceTabVm : BaseNotifyPropertyChanged
@@ -213,7 +221,7 @@ public class DeviceTabVm : BaseNotifyPropertyChanged
         set { _cloudSyncStatus = value; OnPropertyChanged(); }
     }
 
-    private string _mesSyncStatus = "MES状态未知";
+    private string _mesSyncStatus = "MES 状态未知";
     public string MesSyncStatus
     {
         get => _mesSyncStatus;

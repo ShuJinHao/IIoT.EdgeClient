@@ -1,86 +1,93 @@
 {
-  "Module": {
-    "Presentation": {
-      "DataViewRefreshIntervalMs": 1000
-    },
-    "Runtime": {
-      "EventLoopIntervalMs": 50,
-      "RealtimeLoopIntervalMs": 1000
-    }
-  },
-  "Mes": {
-    "SignToken": "hdc2023",
-    "Paths": {
-      "Inbound": "/dev/dev/getIn/check",
-      "Outbound": "/dev/dev/electrode/exit/push",
-      "Recipe": "/dev/dev/process/param",
-      "Realtime": "/dev/dev/run/info",
-      "EquipmentStatus": "/dev/dev/realTime/status"
-    }
-  },
-  "Codes": {
-    "Plc": {
-      "SignalReset": 10,
-      "SignalTrigger": 11,
-      "AckOk": 11,
-      "AckException": 12,
-      "AckMesNg": 13
-    },
-    "Mes": {
-      "Channels": {
-        "Inbound": "Homogenization.Inbound",
-        "Outbound": "Homogenization",
-        "Realtime": "Homogenization.Realtime",
-        "Recipe": "Homogenization.Recipe",
-        "EquipmentStatus": "Homogenization.EquipmentStatus"
+  "Modules": {
+    "Homogenization": {
+      "Module": {
+        "Presentation": {
+          "DataViewRefreshIntervalMs": 1000,
+          "MaxOutboundRecords": 500
+        },
+        "Runtime": {
+          "EventLoopIntervalMs": 50,
+          "RealtimeLoopIntervalMs": 1000,
+          "MinEventLoopIntervalMs": 20,
+          "MinRealtimeLoopIntervalMs": 200
+        }
       },
-      "EquipmentStatusTexts": {
-        "-1": "报警",
-        "0": "运行中",
-        "1": "空闲",
-        "2": "离线",
-        "3": "待料"
+      "Mes": {
+        "SignToken": "hdc2023",
+        "Paths": {
+          "Inbound": "/dev/dev/getIn/check",
+          "Outbound": "/dev/dev/electrode/exit/push",
+          "Recipe": "/dev/dev/process/param",
+          "Realtime": "/dev/dev/run/info",
+          "EquipmentStatus": "/dev/dev/realTime/status"
+        }
       },
-      "RealtimeItems": {
-        "StirringSpeed": { "Code": "stirringSpeed", "Name": "搅拌转速", "Type": "short", "Unit": "RPM" },
-        "StirringCurrent": { "Code": "stirringCurrent", "Name": "搅拌电流", "Type": "short", "Unit": "A" },
-        "DispersionSpeed": { "Code": "dispersionSpeed", "Name": "分散转速", "Type": "short", "Unit": "RPM" },
-        "DispersionCurrent": { "Code": "dispersionCurrent", "Name": "分散电流", "Type": "short", "Unit": "A" },
-        "Temperature": { "Code": "temperature", "Name": "温度", "Type": "short", "Unit": "C" },
-        "Vacuum": { "Code": "vacuum", "Name": "真空度", "Type": "short", "Unit": "Kpa" }
-      },
-      "RecipeItems": {
-        "StirringSpeed": { "Code": "stirringSpeed", "Name": "搅拌转速", "Type": "ushort", "Unit": "RPM" },
-        "DispersionSpeed": { "Code": "dispersionSpeed", "Name": "分散转速", "Type": "ushort", "Unit": "RPM" },
-        "Ncm": { "Code": "ncm", "Name": "NCM", "Type": "float", "Unit": "kg" },
-        "Sp1": { "Code": "sp1", "Name": "SP1", "Type": "float", "Unit": "kg" },
-        "Nmp": { "Code": "nmp", "Name": "NMP", "Type": "float", "Unit": "kg" },
-        "GlueSolution": { "Code": "glueSolution", "Name": "胶液", "Type": "float", "Unit": "kg" },
-        "Cnt": { "Code": "cnt", "Name": "CNT", "Type": "float", "Unit": "kg" },
-        "Vacuum": { "Code": "vacuum", "Name": "真空", "Type": "bool", "Unit": "" },
-        "Time": { "Code": "time", "Name": "时间", "Type": "ushort", "Unit": "Min" },
-        "Temperature": { "Code": "temperature", "Name": "温度", "Type": "short", "Unit": "C" },
-        "StopStep": { "Code": "stopStep", "Name": "停机步", "Type": "bool", "Unit": "" }
-      },
-      "OutboundProduceItems": {
-        "DeviceCode": { "Code": "gluingDeviceCode", "Name": "设备编码", "Type": "string", "Unit": "" },
-        "DeviceName": { "Code": "gluingDeviceName", "Name": "设备名称", "Type": "string", "Unit": "" },
-        "StartTime": { "Code": "gluingStartTime", "Name": "开始时间", "Type": "datetime", "Unit": "" },
-        "CompleteTime": { "Code": "gluingCompleteTime", "Name": "完成时间", "Type": "datetime", "Unit": "" },
-        "StirringSpeed": { "Code": "gluingStirSpeed", "Name": "搅拌转速", "Type": "short", "Unit": "RPM" },
-        "Temperature": { "Code": "gluingGlueSolutingTemperature", "Name": "温度", "Type": "short", "Unit": "C" },
-        "Vacuum": { "Code": "gluingVacuumDegree", "Name": "真空度", "Type": "short", "Unit": "Kpa" },
-        "CntActual": { "Code": "gluingCntActualValue", "Name": "CNT 实际值", "Type": "decimal", "Unit": "kg" },
-        "CntTarget": { "Code": "gluingCntTargetValue", "Name": "CNT 目标值", "Type": "decimal", "Unit": "kg" },
-        "CntTankAWeight": { "Code": "gluingCntTankAWeight", "Name": "CNT A 罐重量", "Type": "decimal", "Unit": "kg" },
-        "CntTankBWeight": { "Code": "gluingCntTankBWeight", "Name": "CNT B 罐重量", "Type": "decimal", "Unit": "kg" },
-        "NmpActual": { "Code": "gluingNmpActualValue", "Name": "NMP 实际值", "Type": "decimal", "Unit": "kg" },
-        "NmpTarget": { "Code": "gluingNmpTargetValue", "Name": "NMP 目标值", "Type": "decimal", "Unit": "kg" },
-        "GlueActual": { "Code": "gluingGlueActualWeight", "Name": "胶液实际重量", "Type": "decimal", "Unit": "kg" },
-        "SetStirringTime": { "Code": "gluingSetStirTime", "Name": "设定搅拌时间", "Type": "ushort", "Unit": "min" },
-        "RemainingStirringTime": { "Code": "gluingRemainStirTime", "Name": "剩余搅拌时间", "Type": "ushort", "Unit": "min" },
-        "SetDispersionTime": { "Code": "gluingSetDispersionTime", "Name": "设定分散时间", "Type": "ushort", "Unit": "min" },
-        "RemainingDispersionTime": { "Code": "gluingRemainDispersionTime", "Name": "剩余分散时间", "Type": "ushort", "Unit": "min" }
+      "Codes": {
+        "Plc": {
+          "SignalReset": 10,
+          "SignalTrigger": 11,
+          "AckOk": 11,
+          "AckException": 12,
+          "AckMesNg": 13
+        },
+        "Mes": {
+          "Channels": {
+            "Inbound": "Homogenization.Inbound",
+            "Outbound": "Homogenization",
+            "Realtime": "Homogenization.Realtime",
+            "Recipe": "Homogenization.Recipe",
+            "EquipmentStatus": "Homogenization.EquipmentStatus"
+          },
+          "EquipmentStatusTexts": {
+            "-1": "报警",
+            "0": "运行中",
+            "1": "空闲",
+            "2": "离线",
+            "3": "待料"
+          },
+          "RealtimeItems": {
+            "StirringSpeed": { "Code": "stirringSpeed", "Name": "搅拌转速", "Type": "short", "Unit": "RPM" },
+            "StirringCurrent": { "Code": "stirringCurrent", "Name": "搅拌电流", "Type": "short", "Unit": "A" },
+            "DispersionSpeed": { "Code": "dispersionSpeed", "Name": "分散转速", "Type": "short", "Unit": "RPM" },
+            "DispersionCurrent": { "Code": "dispersionCurrent", "Name": "分散电流", "Type": "short", "Unit": "A" },
+            "Temperature": { "Code": "temperature", "Name": "温度", "Type": "short", "Unit": "C" },
+            "Vacuum": { "Code": "vacuum", "Name": "真空度", "Type": "short", "Unit": "Kpa" }
+          },
+          "RecipeItems": {
+            "StirringSpeed": { "Code": "stirringSpeed", "Name": "搅拌转速", "Type": "ushort", "Unit": "RPM" },
+            "DispersionSpeed": { "Code": "dispersionSpeed", "Name": "分散转速", "Type": "ushort", "Unit": "RPM" },
+            "Ncm": { "Code": "ncm", "Name": "NCM", "Type": "float", "Unit": "kg" },
+            "Sp1": { "Code": "sp1", "Name": "SP1", "Type": "float", "Unit": "kg" },
+            "Nmp": { "Code": "nmp", "Name": "NMP", "Type": "float", "Unit": "kg" },
+            "GlueSolution": { "Code": "glueSolution", "Name": "胶液", "Type": "float", "Unit": "kg" },
+            "Cnt": { "Code": "cnt", "Name": "CNT", "Type": "float", "Unit": "kg" },
+            "Vacuum": { "Code": "vacuum", "Name": "真空", "Type": "bool", "Unit": "" },
+            "Time": { "Code": "time", "Name": "时间", "Type": "ushort", "Unit": "Min" },
+            "Temperature": { "Code": "temperature", "Name": "温度", "Type": "short", "Unit": "C" },
+            "StopStep": { "Code": "stopStep", "Name": "停机步", "Type": "bool", "Unit": "" }
+          },
+          "OutboundProduceItems": {
+            "DeviceCode": { "Code": "gluingDeviceCode", "Name": "设备编码", "Type": "string", "Unit": "" },
+            "DeviceName": { "Code": "gluingDeviceName", "Name": "设备名称", "Type": "string", "Unit": "" },
+            "StartTime": { "Code": "gluingStartTime", "Name": "开始时间", "Type": "datetime", "Unit": "" },
+            "CompleteTime": { "Code": "gluingCompleteTime", "Name": "完成时间", "Type": "datetime", "Unit": "" },
+            "StirringSpeed": { "Code": "gluingStirSpeed", "Name": "搅拌转速", "Type": "short", "Unit": "RPM" },
+            "Temperature": { "Code": "gluingGlueSolutingTemperature", "Name": "温度", "Type": "short", "Unit": "C" },
+            "Vacuum": { "Code": "gluingVacuumDegree", "Name": "真空度", "Type": "short", "Unit": "Kpa" },
+            "CntActual": { "Code": "gluingCntActualValue", "Name": "CNT 实际值", "Type": "decimal", "Unit": "kg" },
+            "CntTarget": { "Code": "gluingCntTargetValue", "Name": "CNT 目标值", "Type": "decimal", "Unit": "kg" },
+            "CntTankAWeight": { "Code": "gluingCntTankAWeight", "Name": "CNT A 罐重量", "Type": "decimal", "Unit": "kg" },
+            "CntTankBWeight": { "Code": "gluingCntTankBWeight", "Name": "CNT B 罐重量", "Type": "decimal", "Unit": "kg" },
+            "NmpActual": { "Code": "gluingNmpActualValue", "Name": "NMP 实际值", "Type": "decimal", "Unit": "kg" },
+            "NmpTarget": { "Code": "gluingNmpTargetValue", "Name": "NMP 目标值", "Type": "decimal", "Unit": "kg" },
+            "GlueActual": { "Code": "gluingGlueActualWeight", "Name": "胶液实际重量", "Type": "decimal", "Unit": "kg" },
+            "SetStirringTime": { "Code": "gluingSetStirTime", "Name": "设定搅拌时间", "Type": "ushort", "Unit": "min" },
+            "RemainingStirringTime": { "Code": "gluingRemainStirTime", "Name": "剩余搅拌时间", "Type": "ushort", "Unit": "min" },
+            "SetDispersionTime": { "Code": "gluingSetDispersionTime", "Name": "设定分散时间", "Type": "ushort", "Unit": "min" },
+            "RemainingDispersionTime": { "Code": "gluingRemainDispersionTime", "Name": "剩余分散时间", "Type": "ushort", "Unit": "min" }
+          }
+        }
       }
     }
   }

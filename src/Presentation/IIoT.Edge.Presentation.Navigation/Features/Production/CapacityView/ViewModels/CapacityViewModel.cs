@@ -14,7 +14,7 @@ public class CapacityViewModel : PresentationViewModelBase
     private readonly string _viewId;
     private readonly string _viewTitle;
     private string _selectedDeviceName = string.Empty;
-    private string _selectedQueryMode = "按日查询";
+    private string _selectedQueryMode = CapacityQueryModes.Day;
     private DateTime _queryDate = DateTime.Today;
     private bool _isOnline;
     private int _periodTotal;
@@ -27,7 +27,6 @@ public class CapacityViewModel : PresentationViewModelBase
     public override string ViewTitle => _viewTitle;
 
     public ObservableCollection<string> DeviceNames { get; } = [];
-    public ObservableCollection<string> QueryModes { get; } = ["按日查询", "按月查询", "按年查询"];
     public ObservableCollection<DailyCapacityVm> DailyRecords { get; } = [];
     public ObservableCollection<CapacityChartBarVm> ChartBars { get; } = [];
 
@@ -70,15 +69,10 @@ public class CapacityViewModel : PresentationViewModelBase
             _isOnline = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(CanQueryCloud));
-            OnPropertyChanged(nameof(OfflineHint));
         }
     }
 
     public bool CanQueryCloud => IsOnline;
-
-    public string OfflineHint => IsOnline
-        ? string.Empty
-        : "设备上传鉴权尚未就绪，暂时无法查询云端产能。";
 
     public int PeriodTotal
     {
@@ -134,7 +128,7 @@ public class CapacityViewModel : PresentationViewModelBase
     public ICommand ExportCommand { get; }
 
     public CapacityViewModel(ICapacityViewService capacityViewService)
-        : this(capacityViewService, "Production.CapacityView", "产能查询")
+        : this(capacityViewService, "Production.CapacityView", string.Empty)
     {
     }
 
@@ -147,7 +141,7 @@ public class CapacityViewModel : PresentationViewModelBase
         _viewId = viewId;
         _viewTitle = viewTitle;
 
-        QueryCommand = new AsyncCommand(() => RunViewTaskAsync(QueryHistoryAsync, "产能查询失败。"));
+        QueryCommand = new AsyncCommand(() => RunViewTaskAsync(QueryHistoryAsync, GetText("Navigation_Capacity_QueryFailed", "产能查询失败。")));
         ExportCommand = new BaseCommand(_ => { });
 
         _capacityViewService.UploadGateChanged += OnUploadGateChanged;
@@ -157,7 +151,7 @@ public class CapacityViewModel : PresentationViewModelBase
     {
         RefreshDeviceList();
         IsOnline = _capacityViewService.IsOnline;
-        await RunViewTaskAsync(LoadCurrentDataAsync, "加载产能数据失败。");
+        await RunViewTaskAsync(LoadCurrentDataAsync, GetText("Navigation_Capacity_LoadFailed", "加载产能数据失败。"));
     }
 
     public void OnCapacityUpdated() => ScheduleLoadCurrentData();
@@ -166,11 +160,11 @@ public class CapacityViewModel : PresentationViewModelBase
         => RunOnUiThread(() =>
         {
             IsOnline = snapshot.State == EdgeUploadGateState.Ready;
-            RunViewTaskInBackground(LoadCurrentDataAsync, "加载产能数据失败。");
+            RunViewTaskInBackground(LoadCurrentDataAsync, GetText("Navigation_Capacity_LoadFailed", "加载产能数据失败。"));
         });
 
     private void ScheduleLoadCurrentData()
-        => RunOnUiThread(() => RunViewTaskInBackground(LoadCurrentDataAsync, "加载产能数据失败。"));
+        => RunOnUiThread(() => RunViewTaskInBackground(LoadCurrentDataAsync, GetText("Navigation_Capacity_LoadFailed", "加载产能数据失败。")));
 
     private void RefreshDeviceList()
     {
@@ -205,8 +199,8 @@ public class CapacityViewModel : PresentationViewModelBase
         if (!CanQueryCloud)
         {
             MessageBox.Show(
-                "设备上传鉴权尚未就绪，暂时无法查询云端产能。",
-                "产能查询",
+                GetText("Navigation_Capacity_OfflineHint", "设备上传鉴权尚未就绪，暂时无法查询云端产能。"),
+                GetText("Navigation_Title_CapacityQuery", "产能查询"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
             ClearSummary();
@@ -272,5 +266,11 @@ public class CapacityViewModel : PresentationViewModelBase
         }
 
         _ = dispatcher.InvokeAsync(action);
+    }
+
+    private static string GetText(string key, string fallback)
+    {
+        var value = System.Windows.Application.Current?.TryFindResource(key) as string;
+        return string.IsNullOrWhiteSpace(value) ? fallback : value;
     }
 }

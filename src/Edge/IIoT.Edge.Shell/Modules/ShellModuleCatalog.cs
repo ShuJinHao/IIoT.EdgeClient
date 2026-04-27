@@ -1,5 +1,5 @@
-using IIoT.Edge.Module.Abstractions;
-using IIoT.Edge.Plugin.Shared.Modules;
+﻿using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Host.Bootstrap.Modules;
 using Microsoft.Extensions.Configuration;
 using System.IO;
 

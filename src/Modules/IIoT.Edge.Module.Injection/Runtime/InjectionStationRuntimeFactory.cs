@@ -7,7 +7,7 @@ namespace IIoT.Edge.Module.Injection.Runtime;
 
 public sealed class InjectionStationRuntimeFactory : IStationRuntimeFactory
 {
-    public string ModuleId => InjectionModule.ModuleKey;
+    public string ModuleId => DependencyInjection.ModuleKey;
 
     public List<IPlcTask> CreateTasks(
         IServiceProvider serviceProvider,

@@ -17,8 +17,8 @@ public class AuthService : IAuthService
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
     private UserSession? _currentUser;
 
-    public UserSession? CurrentUser => GetCurrentActiveSession();
-    public bool IsAuthenticated => GetCurrentActiveSession() is not null;
+    public UserSession? CurrentUser => GetCachedActiveSession();
+    public bool IsAuthenticated => GetCachedActiveSession() is not null;
     public event Action<UserSession?>? AuthStateChanged;
 
     public AuthService(
@@ -33,7 +33,7 @@ public class AuthService : IAuthService
 
     public bool HasPermission(string permission)
     {
-        var session = GetCurrentActiveSession();
+        var session = GetCachedActiveSession();
         if (session is null)
         {
             return false;
@@ -119,13 +119,16 @@ public class AuthService : IAuthService
 
     public void Logout() => SetSession(null);
 
+    public Task<bool> EnsureAuthenticatedAsync(CancellationToken cancellationToken = default)
+        => RefreshCloudSessionAsync(cancellationToken);
+
     private void SetSession(UserSession? session)
     {
         _currentUser = session;
         AuthStateChanged?.Invoke(_currentUser);
     }
 
-    private UserSession? GetCurrentActiveSession()
+    private UserSession? GetCachedActiveSession()
     {
         if (_currentUser is null)
         {
@@ -140,25 +143,10 @@ public class AuthService : IAuthService
         if (_currentUser.ExpiresAtUtc.HasValue
             && _currentUser.ExpiresAtUtc.Value <= DateTimeOffset.UtcNow)
         {
-            return TryRefreshExpiredSessionSync()
-                ? _currentUser
-                : null;
+            return null;
         }
 
         return _currentUser;
-    }
-
-    private bool TryRefreshExpiredSessionSync()
-    {
-        try
-        {
-            return RefreshCloudSessionAsync().ConfigureAwait(false).GetAwaiter().GetResult();
-        }
-        catch
-        {
-            SetSession(null);
-            return false;
-        }
     }
 
     private async Task<bool> RefreshCloudSessionAsync(CancellationToken ct = default)

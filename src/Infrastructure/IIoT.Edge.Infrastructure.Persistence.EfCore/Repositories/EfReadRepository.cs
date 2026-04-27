@@ -1,4 +1,4 @@
-using IIoT.Edge.SharedKernel.Domain;
+﻿using IIoT.Edge.SharedKernel.Domain;
 using IIoT.Edge.SharedKernel.Repository;
 using IIoT.Edge.SharedKernel.Specification;
 using IIoT.Edge.Infrastructure.Persistence.EfCore.Specifications;

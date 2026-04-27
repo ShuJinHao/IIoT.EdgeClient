@@ -38,7 +38,7 @@
                     VerticalAlignment="Center"
                     FontSize="11"
                     Foreground="#52525B">
-                    <Run Text="设备: " />
+                    <Run Text="{DynamicResource Shell_Footer_DevicePrefix}" />
                     <Run Foreground="#A1A1AA" Text="{Binding DeviceName, Mode=OneWay}" />
                 </TextBlock>
             </StackPanel>
@@ -97,7 +97,7 @@
                     VerticalAlignment="Center"
                     FontSize="11"
                     Foreground="#52525B">
-                    <Run Text="运行时长: " />
+                    <Run Text="{DynamicResource Shell_Footer_RuntimePrefix}" />
                     <Run Foreground="#A1A1AA" Text="{Binding UpTime, Mode=OneWay}" />
                 </TextBlock>
             </StackPanel>

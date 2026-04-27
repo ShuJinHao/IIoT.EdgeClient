@@ -4,9 +4,13 @@ using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using IIoT.Edge.Runtime.Base;
+using Microsoft.Extensions.Options;
 
 namespace IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 
+/// <summary>
+/// 心跳镜像任务：周期读取 PLC 输入心跳并写回输出心跳。
+/// </summary>
 internal sealed class HomogenizationHeartbeatTask : HeartbeatMirrorPlcTaskBase
 {
     private readonly HomogenizationContext _context;
@@ -17,12 +21,13 @@ internal sealed class HomogenizationHeartbeatTask : HeartbeatMirrorPlcTaskBase
         IPlcBuffer buffer,
         HomogenizationContext context,
         ILogService logger,
-        HomogenizationModuleOptions moduleOptions,
-        HomogenizationCodeOptions codeOptions)
+        IOptions<HomogenizationModuleOptions> moduleOptions,
+        IOptions<HomogenizationCodeOptions> codeOptions)
         : base(buffer, context, logger)
     {
         _context = context;
-        _taskLoopInterval = Math.Max(20, moduleOptions.Runtime.EventLoopIntervalMs);
+        var runtime = moduleOptions.Value.Runtime;
+        _taskLoopInterval = Math.Max(runtime.MinEventLoopIntervalMs, runtime.EventLoopIntervalMs);
     }
 
     public override string TaskName => "Homogenization.Heartbeat";

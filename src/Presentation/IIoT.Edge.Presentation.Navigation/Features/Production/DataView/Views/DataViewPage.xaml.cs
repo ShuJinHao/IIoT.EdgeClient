@@ -4,7 +4,7 @@ using System.Windows.Controls;
 namespace IIoT.Edge.Presentation.Navigation.Features.Production.DataView
 {
     /// <summary>
-    /// Éú²úÊı¾İÒ³ÃæÊÓÍ¼¡£
+    /// äº§å“æ•°æ®é¡µé¢è§†å›¾ã€‚
     /// </summary>
     public partial class DataViewPage : PageActionShell
     {

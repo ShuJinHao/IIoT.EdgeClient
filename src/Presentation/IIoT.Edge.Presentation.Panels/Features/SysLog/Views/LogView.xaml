@@ -11,14 +11,14 @@
             FontSize="16"
             FontWeight="Medium"
             Foreground="#E4E4E7"
-            Text="系统日志" />
+            Text="{DynamicResource Panels_Title_SystemLog}" />
     </sharedViews:PageActionShell.HeaderContent>
 
     <sharedViews:PageActionShell.ActionContent>
-        <Button Height="22" Padding="4,0" Command="{Binding ClearCommand}" Style="{StaticResource MaterialDesignFlatButton}" ToolTip="清空日志">
+        <Button Height="22" Padding="4,0" Command="{Binding ClearCommand}" Style="{StaticResource MaterialDesignFlatButton}" ToolTip="{DynamicResource Panels_Tooltip_ClearLog}">
             <StackPanel Orientation="Horizontal">
                 <materialDesign:PackIcon Width="12" Height="12" VerticalAlignment="Center" Foreground="#52525B" Kind="DeleteOutline" />
-                <TextBlock Margin="4,0,0,0" VerticalAlignment="Center" FontSize="11" Foreground="#52525B" Text="清空" />
+                <TextBlock Margin="4,0,0,0" VerticalAlignment="Center" FontSize="11" Foreground="#52525B" Text="{DynamicResource Panels_Button_Clear}" />
             </StackPanel>
         </Button>
     </sharedViews:PageActionShell.ActionContent>

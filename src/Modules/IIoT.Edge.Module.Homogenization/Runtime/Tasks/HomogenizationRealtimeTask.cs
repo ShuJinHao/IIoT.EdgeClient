@@ -7,9 +7,13 @@ using IIoT.Edge.Module.Homogenization.Integration;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using IIoT.Edge.Runtime.Base;
+using Microsoft.Extensions.Options;
 
 namespace IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 
+/// <summary>
+/// 实时上传任务：周期采集 PLC 实时数据快照并上传 MES。
+/// </summary>
 internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBase<HomogenizationRealtimeSnapshot>
 {
     private readonly HomogenizationContext _context;
@@ -27,16 +31,17 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
         IHomogenizationMesApiService mesApiService,
         IMesUploadDiagnosticsStore diagnosticsStore,
         ILogService logger,
-        HomogenizationModuleOptions moduleOptions,
-        HomogenizationCodeOptions codeOptions)
+        IOptions<HomogenizationModuleOptions> moduleOptions,
+        IOptions<HomogenizationCodeOptions> codeOptions)
         : base(buffer, context, logger)
     {
         _context = context;
         _deviceService = deviceService;
         _mesApiService = mesApiService;
         _diagnosticsStore = diagnosticsStore;
-        _codeOptions = codeOptions;
-        _taskLoopInterval = Math.Max(200, moduleOptions.Runtime.RealtimeLoopIntervalMs);
+        _codeOptions = codeOptions.Value;
+        var runtime = moduleOptions.Value.Runtime;
+        _taskLoopInterval = Math.Max(runtime.MinRealtimeLoopIntervalMs, runtime.RealtimeLoopIntervalMs);
     }
 
     public override string TaskName => "Homogenization.Realtime";

@@ -4,11 +4,15 @@ using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
 using IIoT.Edge.Module.Homogenization.Payload;
+using IIoT.Edge.Module.Homogenization.Resources;
 using IIoT.Edge.Runtime.Signals;
 using IIoT.Edge.SharedKernel.Context;
 
 namespace IIoT.Edge.Module.Homogenization.Runtime;
 
+/// <summary>
+/// 按宿主注入的 IO 绑定从 PLC 缓冲区读写匀浆信号。
+/// </summary>
 internal sealed class HomogenizationSignalCodec
 {
     private readonly IPlcBuffer _buffer;
@@ -40,6 +44,9 @@ internal sealed class HomogenizationSignalCodec
     public void WriteWord(string label, ushort value)
         => _buffer.SetWriteValue(GetWriteBinding(label).Offset, value);
 
+    /// <summary>
+    /// 读取按低字节在前、高字节在后的 ASCII 托盘码。
+    /// </summary>
     public string ReadAsciiString(string label)
     {
         var binding = GetReadBinding(label);
@@ -110,6 +117,9 @@ internal sealed class HomogenizationSignalCodec
         return values;
     }
 
+    /// <summary>
+    /// 从实时数据 label 组采集当前 PLC 快照。
+    /// </summary>
     public HomogenizationRealtimeSnapshot CaptureRealtimeSnapshot()
         => new()
         {
@@ -122,6 +132,9 @@ internal sealed class HomogenizationSignalCodec
             Vacuum = ReadInt16(HomogenizationPlcSignalProfile.RealtimeVacuum.Label)
         };
 
+    /// <summary>
+    /// 从配方 label 组采集数组参数，浮点值按两个 PLC word 合成。
+    /// </summary>
     public HomogenizationRecipeSnapshot CaptureRecipeSnapshot()
         => new()
         {
@@ -141,6 +154,9 @@ internal sealed class HomogenizationSignalCodec
             StopStep = ReadBoolList(HomogenizationPlcSignalProfile.RecipeStopStep.Label, 30)
         };
 
+    /// <summary>
+    /// 读取设备状态码，并按 MES 码表转换为状态文本。
+    /// </summary>
     public HomogenizationEquipmentStatusSnapshot CaptureEquipmentStatusSnapshot(HomogenizationMesCodeOptions mesCodes)
     {
         var statusCode = ReadInt16(HomogenizationPlcSignalProfile.EquipmentStatusValue.Label);
@@ -152,7 +168,8 @@ internal sealed class HomogenizationSignalCodec
             messages.Add("PLC 返回报警状态。");
         }
 
-        if (string.Equals(statusText, "未知", StringComparison.Ordinal))
+        var unknownStatus = HomogenizationText.Get("Homogenization_EquipmentStatus_Unknown", "未知");
+        if (string.Equals(statusText, unknownStatus, StringComparison.Ordinal))
         {
             messages.Add($"设备状态码未知：{statusCode}。");
         }

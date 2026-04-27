@@ -89,7 +89,6 @@ internal static class ContractTestPathHelper
             "Injection" => Path.Combine(repoRoot, "src", "Modules", "IIoT.Edge.Module.Injection"),
             "Stacking" => Path.Combine(repoRoot, "src", "Modules", "IIoT.Edge.Module.Stacking"),
             "Homogenization" => Path.Combine(repoRoot, "src", "Modules", "IIoT.Edge.Module.Homogenization"),
-            "DryRun" => Path.Combine(repoRoot, "src", "Tools", "ModuleSamples", "IIoT.Edge.Module.DryRun"),
             _ => throw new InvalidOperationException($"Unsupported module id '{moduleId}'.")
         };
     }

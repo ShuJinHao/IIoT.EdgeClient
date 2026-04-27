@@ -7,7 +7,7 @@ namespace IIoT.Edge.Module.Homogenization.Payload;
 /// </summary>
 public sealed class HomogenizationCellData : CellDataBase
 {
-    public override string ProcessType => HomogenizationModuleConstants.ProcessType;
+    public override string ProcessType => DependencyInjection.ModuleKey;
 
     public override string DisplayLabel => TrayCode;
 

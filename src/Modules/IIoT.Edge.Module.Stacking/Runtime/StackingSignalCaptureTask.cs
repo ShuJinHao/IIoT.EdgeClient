@@ -1,9 +1,9 @@
-using IIoT.Edge.Application.Abstractions.DataPipeline;
+﻿using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Module.Stacking.Constants;
 using IIoT.Edge.Module.Stacking.Payload;
-using IIoT.Edge.Plugin.Shared.Signals;
+using IIoT.Edge.Application.Abstractions.Plc.Signals;
 using IIoT.Edge.Runtime.Base;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.DataPipeline;

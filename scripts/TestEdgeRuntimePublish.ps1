@@ -1,7 +1,7 @@
 param(
     [string]$Configuration = 'Release',
 
-    [string]$OutputRoot = '.artifacts\edge-runtime\smoke-edge-runtime',
+    [string]$OutputRoot = 'publish\edge-runtime-smoke',
 
     [string]$ManifestPath = 'scripts\edge-runtime.publish.json'
 )

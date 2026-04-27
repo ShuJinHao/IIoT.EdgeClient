@@ -1,4 +1,4 @@
-using System.Windows.Threading;
+﻿using System.Windows.Threading;
 using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Common.Models;
@@ -14,7 +14,7 @@ public sealed class LoginViewModelBehaviorTests
         => RunOnStaThreadAsync(async () =>
         {
             var authService = new FakeAuthService();
-            var viewModel = new LoginViewModel(authService, new FakeDeviceService())
+            var viewModel = new LoginViewModel(authService, new FakeDeviceService(), new TestAppLanguageService())
             {
                 EmployeeNo = "E001",
                 Password = "pwd123"
@@ -49,7 +49,7 @@ public sealed class LoginViewModelBehaviorTests
                     UploadAccessTokenExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(10)
                 }
             };
-            var viewModel = new LoginViewModel(authService, deviceService)
+            var viewModel = new LoginViewModel(authService, deviceService, new TestAppLanguageService())
             {
                 EmployeeNo = "  E1001  ",
                 Password = "  secret  "
@@ -90,7 +90,7 @@ public sealed class LoginViewModelBehaviorTests
                     UploadAccessTokenExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(10)
                 }
             };
-            var viewModel = new LoginViewModel(authService, deviceService)
+            var viewModel = new LoginViewModel(authService, deviceService, new TestAppLanguageService())
             {
                 EmployeeNo = "E9001",
                 Password = "secret"
@@ -170,6 +170,9 @@ public sealed class LoginViewModelBehaviorTests
         public event Action<UserSession?>? AuthStateChanged;
 
         public bool HasPermission(string permission) => false;
+
+        public Task<bool> EnsureAuthenticatedAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(IsAuthenticated);
 
         public Task<AuthResult> LoginLocalAsync(string password)
             => LoginLocalHandler?.Invoke(password) ?? Task.FromResult(AuthResult.Fail("Not configured"));

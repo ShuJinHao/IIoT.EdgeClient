@@ -1,7 +1,7 @@
-using IIoT.Edge.Application.Abstractions.Device;
+﻿using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.Integration.Contracts.Http;
+using IIoT.Edge.Application.Common.Http;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 
@@ -114,7 +114,7 @@ public abstract class ProcessCloudUploaderBase<TCellData, TPayload> : IProcessCl
 
             if (!result.IsSuccess)
             {
-                var message = $"云端上传失败，工序={ProcessType}，数量=1，结果={result.Outcome}，原因={result.ReasonCode}。";
+                var message = $"云端上传失败，工序 {ProcessType}，数量 1，结果 {result.Outcome}，原因 {result.ReasonCode}。";
                 Logger.Error($"[Cloud] {message}");
                 await OnUploadFailedAsync(context, singleRecord, result, message, cancellationToken).ConfigureAwait(false);
                 return result;
@@ -144,7 +144,7 @@ public abstract class ProcessCloudUploaderBase<TCellData, TPayload> : IProcessCl
 
         if (!result.IsSuccess)
         {
-            var message = $"云端批量上传失败，工序={ProcessType}，数量={records.Count}，结果={result.Outcome}，原因={result.ReasonCode}。";
+            var message = $"云端批量上传失败，工序 {ProcessType}，数量 {records.Count}，结果 {result.Outcome}，原因 {result.ReasonCode}。";
             Logger.Error($"[Cloud] {message}");
             await OnUploadFailedAsync(context, records, result, message, cancellationToken).ConfigureAwait(false);
             return result;

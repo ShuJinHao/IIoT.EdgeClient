@@ -260,6 +260,9 @@ public sealed class ConfigPermissionGuardBehaviorTests
             return _currentUser.Permissions.Contains(permission);
         }
 
+        public Task<bool> EnsureAuthenticatedAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(IsAuthenticated);
+
         public Task<AuthResult> LoginLocalAsync(string password) => throw new NotSupportedException();
 
         public Task<AuthResult> LoginCloudAsync(string employeeNo, string password, Guid deviceId) => throw new NotSupportedException();

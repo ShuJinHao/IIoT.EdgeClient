@@ -1,7 +1,7 @@
 param(
     [string]$Configuration = 'Release',
 
-    [string]$OutputRoot = '.artifacts\edge-runtime',
+    [string]$OutputRoot = 'publish\edge-runtime',
 
     [string]$ManifestPath = 'scripts\edge-runtime.publish.json',
 
@@ -17,7 +17,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 
 $manifest = Load-EdgeRuntimePublishManifest -RepoRoot $repoRoot -ManifestPath $ManifestPath
 $resolvedOutputRoot = Resolve-EdgeAbsolutePath -BasePath $repoRoot -PathValue $OutputRoot
-$stagingRoot = Join-Path $repoRoot ('.artifacts\edge-runtime\.staging\' + [Guid]::NewGuid().ToString('N'))
+$stagingRoot = Join-Path $resolvedOutputRoot ('.staging\' + [Guid]::NewGuid().ToString('N'))
 $launcherPublishRoot = Join-Path $stagingRoot 'launcher'
 $shellPublishRoot = Join-Path $stagingRoot 'shell'
 $launcherRuntimeRoot = Join-Path $resolvedOutputRoot $manifest.launcherDirectory

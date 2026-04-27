@@ -23,21 +23,6 @@ jobs:
         with:
           global-json-file: global.json
 
-      - name: Bootstrap NuGet feeds
-        shell: pwsh
-        run: |
-          $localFeed = Join-Path $env:GITHUB_WORKSPACE '.artifacts\nuget'
-          $sharedFeed = if ([string]::IsNullOrWhiteSpace($env:EDGE_SHARED_NUGET_FEED)) {
-            Join-Path $env:GITHUB_WORKSPACE '.artifacts\shared-feed'
-          }
-          else {
-            $env:EDGE_SHARED_NUGET_FEED
-          }
-
-          New-Item -Path $localFeed -ItemType Directory -Force | Out-Null
-          New-Item -Path $sharedFeed -ItemType Directory -Force | Out-Null
-          "EDGE_SHARED_NUGET_FEED=$sharedFeed" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
       - name: Build shell
         shell: pwsh
         run: dotnet build src/Edge/IIoT.Edge.Shell/IIoT.Edge.Shell.csproj -p:BuildInParallel=false --disable-build-servers

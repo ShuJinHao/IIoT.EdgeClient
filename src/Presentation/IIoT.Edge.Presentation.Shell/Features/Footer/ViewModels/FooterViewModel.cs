@@ -4,6 +4,7 @@ using System.Windows.Threading;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Common.Diagnostics;
+using IIoT.Edge.Presentation.Shell.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
 using IIoT.Edge.UI.Shared.PluginSystem;
 
@@ -14,10 +15,11 @@ public class FooterViewModel : ViewModelBase
     private readonly DispatcherTimer _timer;
     private readonly DateTime _startTime = DateTime.Now;
     private readonly IEdgeSyncDiagnosticsQuery _diagnosticsQuery;
-    private string _deviceName = "未知";
-    private string _cloudStatus = "云端：未连接";
+    private readonly IAppLanguageService _languageService;
+    private string _deviceName;
+    private string _cloudStatus;
     private Brush _cloudStatusColor = new SolidColorBrush(Color.FromRgb(0xEF, 0x44, 0x44));
-    private string _mesStatus = "MES：空闲";
+    private string _mesStatus;
     private Brush _mesStatusColor = new SolidColorBrush(Color.FromRgb(0x22, 0xC5, 0x5E));
     private string _currentTime = DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss");
     private string _upTime = "00:00:00";
@@ -28,7 +30,7 @@ public class FooterViewModel : ViewModelBase
     private static readonly Brush OfflineBrush = new SolidColorBrush(Color.FromRgb(0xEF, 0x44, 0x44));
 
     public override string ViewId => "Core.Footer";
-    public override string ViewTitle => "页脚";
+    public override string ViewTitle => _languageService.GetString("Shell_ViewTitle_Footer", "页脚");
 
     public string DeviceName
     {
@@ -107,9 +109,15 @@ public class FooterViewModel : ViewModelBase
         OfflineBrush.Freeze();
     }
 
-    public FooterViewModel(IEdgeSyncDiagnosticsQuery diagnosticsQuery)
+    public FooterViewModel(
+        IEdgeSyncDiagnosticsQuery diagnosticsQuery,
+        IAppLanguageService languageService)
     {
         _diagnosticsQuery = diagnosticsQuery;
+        _languageService = languageService;
+        _deviceName = _languageService.GetString("Shell_Footer_Unknown", "未知");
+        _cloudStatus = _languageService.GetString("Shell_Footer_CloudNotConnected", "云端：未连接");
+        _mesStatus = _languageService.GetString("Shell_Footer_MesIdle", "MES：空闲");
 
         LayoutRow = 2;
         LayoutColumn = 0;
@@ -122,6 +130,7 @@ public class FooterViewModel : ViewModelBase
         };
         _timer.Tick += OnTimerTick;
         _timer.Start();
+        _languageService.LanguageChanged += (_, _) => _ = SafeRefreshDiagnosticsAsync();
         _ = SafeRefreshDiagnosticsAsync();
     }
 

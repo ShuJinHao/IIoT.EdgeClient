@@ -10,13 +10,20 @@ using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 using IIoT.Edge.SharedKernel.Context;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace IIoT.Edge.Module.Homogenization.Runtime;
 
+/// <summary>
+/// 匀浆 PLC 运行时任务工厂，按握手任务、心跳、实时上传的顺序装配任务。
+/// </summary>
 public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
 {
-    public string ModuleId => HomogenizationModuleConstants.ModuleId;
+    public string ModuleId => DependencyInjection.ModuleKey;
 
+    /// <summary>
+    /// 基于宿主创建的匀浆上下文和当前 PLC 缓冲区创建 6 个运行任务。
+    /// </summary>
     public List<IPlcTask> CreateTasks(
         IServiceProvider serviceProvider,
         IPlcBuffer buffer,
@@ -37,9 +44,8 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
         var diagnosticsStore = serviceProvider.GetRequiredService<IMesUploadDiagnosticsStore>();
         var dataPipelineService = serviceProvider.GetRequiredService<IDataPipelineService>();
         var validator = serviceProvider.GetService<HomogenizationCellDataValidator>() ?? new HomogenizationCellDataValidator();
-        var moduleOptions = serviceProvider.GetService<HomogenizationModuleOptions>() ?? new HomogenizationModuleOptions();
-        var codeOptions = serviceProvider.GetService<HomogenizationCodeOptions>()
-            ?? HomogenizationModuleConfiguration.Load().Codes;
+        var moduleOptions = serviceProvider.GetRequiredService<IOptions<HomogenizationModuleOptions>>();
+        var codeOptions = serviceProvider.GetRequiredService<IOptions<HomogenizationCodeOptions>>();
 
         return
         [

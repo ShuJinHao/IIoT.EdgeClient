@@ -1,7 +1,8 @@
-<UserControl
+﻿<UserControl
     x:Class="IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView.IOViewPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:uiLoc="clr-namespace:IIoT.Edge.UI.Shared.Localization;assembly=IIoT.Edge.UI.Shared"
     xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
     xmlns:sharedViews="clr-namespace:IIoT.Edge.UI.Shared.Views;assembly=IIoT.Edge.UI.Shared"
     Background="Transparent">
@@ -64,11 +65,11 @@
                     FontSize="16"
                     FontWeight="Medium"
                     Foreground="#E4E4E7"
-                    Text="IO 交互" />
+                    Text="{DynamicResource Navigation_Title_IoInteract}" />
 
                 <ComboBox
                     Grid.Column="1"
-                    materialDesign:HintAssist.Hint="选择设备"
+                    materialDesign:HintAssist.Hint="{DynamicResource Navigation_Hint_SelectDevice}"
                     DisplayMemberPath="DeviceName"
                     FontSize="13"
                     Foreground="#E4E4E7"
@@ -93,7 +94,21 @@
                             </Style>
                         </Ellipse.Style>
                     </Ellipse>
-                    <TextBlock Margin="6,0,0,0" FontSize="13" Foreground="#A1A1AA" Text="{Binding StatusText}" />
+                    <TextBlock Margin="6,0,0,0" FontSize="13" Foreground="#A1A1AA">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Text" Value="{DynamicResource Navigation_Status_NoDevice}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasSelectedDevice}" Value="True">
+                                        <Setter Property="Text" Value="{DynamicResource Navigation_Status_Disconnected}" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsConnected}" Value="True">
+                                        <Setter Property="Text" Value="{DynamicResource Navigation_Status_Connected}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
                 </StackPanel>
             </Grid>
         </sharedViews:PageActionShell.HeaderContent>
@@ -119,7 +134,7 @@
                                 FontSize="13"
                                 FontWeight="Medium"
                                 Foreground="#E4E4E7"
-                                Text="信号交互" />
+                                Text="{DynamicResource Navigation_Title_SignalInteraction}" />
                         </Border>
 
                         <DataGrid
@@ -143,8 +158,8 @@
                             SelectionMode="Single"
                             SelectionUnit="FullRow">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Width="110" Binding="{Binding GroupName}" Header="交互项" IsReadOnly="True" />
-                                <DataGridTemplateColumn Width="2.2*" Header="PLC 信号">
+                                <DataGridTextColumn Width="110" Binding="{Binding GroupName}" Header="{DynamicResource Navigation_Column_InteractionItem}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_InteractionItem" IsReadOnly="True" />
+                                <DataGridTemplateColumn Width="2.2*" Header="{DynamicResource Navigation_Column_PlcSignal}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_PlcSignal">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <TextBlock
@@ -157,8 +172,8 @@
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
-                                <DataGridTextColumn Width="74" Binding="{Binding PlcValueText}" Header="PLC 值" IsReadOnly="True" />
-                                <DataGridTemplateColumn Width="2.4*" Header="当前回复">
+                                <DataGridTextColumn Width="74" Binding="{Binding PlcValueText}" Header="{DynamicResource Navigation_Column_PlcValue}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_PlcValue" IsReadOnly="True" />
+                                <DataGridTemplateColumn Width="2.4*" Header="{DynamicResource Navigation_Column_CurrentReply}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_CurrentReply">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <Grid>
@@ -187,7 +202,7 @@
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
-                                <DataGridTemplateColumn Width="148" Header="待写/操作">
+                                <DataGridTemplateColumn Width="148" Header="{DynamicResource Navigation_Column_PendingWriteOperation}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_PendingWriteOperation">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <Grid HorizontalAlignment="Right">
@@ -224,7 +239,7 @@
                                                     Style="{StaticResource MaterialDesignFlatButton}">
                                                     <StackPanel Orientation="Horizontal">
                                                         <materialDesign:PackIcon Width="13" Height="13" VerticalAlignment="Center" Foreground="#CCFBF1" Kind="Send" />
-                                                        <TextBlock Margin="3,0,0,0" VerticalAlignment="Center" FontSize="12" Foreground="#CCFBF1" Text="写入" />
+                                                        <TextBlock Margin="3,0,0,0" VerticalAlignment="Center" FontSize="12" Foreground="#CCFBF1" Text="{DynamicResource Navigation_Button_Write}" />
                                                     </StackPanel>
                                                 </Button>
                                             </Grid>
@@ -282,12 +297,12 @@
                                         SelectionMode="Single"
                                         SelectionUnit="FullRow">
                                         <DataGrid.Columns>
-                                            <DataGridTextColumn Width="2*" Binding="{Binding Label}" Header="信号名称" />
-                                            <DataGridTextColumn Width="140" Binding="{Binding DisplayRole}" Header="显示角色" />
-                                            <DataGridTextColumn Width="120" Binding="{Binding PlcAddress}" Header="地址" />
-                                            <DataGridTextColumn Width="90" Binding="{Binding DataType}" Header="类型" />
-                                            <DataGridTextColumn Width="70" Binding="{Binding LengthText}" Header="长度" />
-                                            <DataGridTextColumn Width="2*" Binding="{Binding PreviewValue}" Header="当前值" />
+                                            <DataGridTextColumn Width="2*" Binding="{Binding Label}" Header="{DynamicResource Navigation_Column_SignalName}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_SignalName" />
+                                            <DataGridTextColumn Width="140" Binding="{Binding DisplayRole}" Header="{DynamicResource Navigation_Column_DisplayRole}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_DisplayRole" />
+                                            <DataGridTextColumn Width="120" Binding="{Binding PlcAddress}" Header="{DynamicResource Navigation_Column_Address}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_Address" />
+                                            <DataGridTextColumn Width="90" Binding="{Binding DataType}" Header="{DynamicResource Navigation_Column_Type}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_Type" />
+                                            <DataGridTextColumn Width="70" Binding="{Binding LengthText}" Header="{DynamicResource Navigation_Column_Length}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_Length" />
+                                            <DataGridTextColumn Width="2*" Binding="{Binding PreviewValue}" Header="{DynamicResource Navigation_Column_CurrentValue}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_CurrentValue" />
                                         </DataGrid.Columns>
                                     </DataGrid>
                                 </Grid>
@@ -359,7 +374,7 @@
                                             <StackPanel>
                                                 <DockPanel Background="#27272A" LastChildFill="False">
                                                     <Border Width="72" Padding="10,8" BorderBrush="#333" BorderThickness="0,0,1,1">
-                                                        <TextBlock FontSize="12" Foreground="#D4D4D8" Text="序号" />
+                                                        <TextBlock FontSize="12" Foreground="#D4D4D8" Text="{DynamicResource Navigation_Column_Index}" />
                                                     </Border>
                                                     <ItemsControl ItemsSource="{Binding Columns}">
                                                         <ItemsControl.ItemsPanel>
@@ -415,7 +430,7 @@
                     Margin="4,24,0,0"
                     FontSize="13"
                     Foreground="#A1A1AA"
-                    Text="当前设备暂无 IO 映射。"
+                    Text="{DynamicResource Navigation_Empty_IoMappings}"
                     Visibility="{Binding HasNoSignals, Converter={StaticResource BooleanToVisibilityConverter}}" />
             </StackPanel>
         </ScrollViewer>

@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -8,8 +8,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Application\IIoT.Edge.Application\IIoT.Edge.Application.csproj" />
-    <ProjectReference Include="..\..\Shared\IIoT.Edge.Integration.Contracts\IIoT.Edge.Integration.Contracts.csproj" />
-    <ProjectReference Include="..\..\Shared\IIoT.Edge.Module.Contracts\IIoT.Edge.Module.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>

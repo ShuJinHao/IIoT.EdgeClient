@@ -11,6 +11,7 @@ namespace IIoT.Edge.UI.Shared.Modularity
     public class AnchorableInfo
     {
         public string Title { get; set; } = string.Empty;
+        public string TitleResourceKey { get; set; } = string.Empty;
         public string ContentId { get; set; } = string.Empty;
         public AnchorablePosition InitialPosition { get; set; } = AnchorablePosition.Main;
         public bool IsVisible { get; set; } = true;

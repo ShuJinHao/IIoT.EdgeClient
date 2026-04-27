@@ -3,7 +3,6 @@ using System.Text.Json;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Domain.Hardware.Aggregates;
-using IIoT.Edge.Module.Abstractions;
 using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.SharedKernel.Repository;
 using Microsoft.Extensions.Configuration;
@@ -36,7 +35,7 @@ public sealed class HomogenizationDevelopmentSampleContributor : IDevelopmentSam
         configuration.GetSection(HomogenizationIoSeedOptions.SectionName).Bind(_options);
     }
 
-    public string ModuleId => HomogenizationModuleConstants.ModuleId;
+    public string ModuleId => DependencyInjection.ModuleKey;
 
     public async Task EnsureConfigurationSamplesAsync(CancellationToken cancellationToken = default)
     {
@@ -85,7 +84,7 @@ public sealed class HomogenizationDevelopmentSampleContributor : IDevelopmentSam
 
     private async Task<HomogenizationIoSeedFile> LoadSeedFileAsync(CancellationToken cancellationToken)
     {
-        var seedPath = HomogenizationModuleConfiguration.ResolveConfigPath("homogenization.io.seed.json");
+        var seedPath = ResolveConfigPath("homogenization.io.seed.json");
         await using var stream = File.OpenRead(seedPath);
         var seedFile = await JsonSerializer.DeserializeAsync<HomogenizationIoSeedFile>(stream, JsonOptions, cancellationToken)
             .ConfigureAwait(false);
@@ -93,10 +92,25 @@ public sealed class HomogenizationDevelopmentSampleContributor : IDevelopmentSam
         return seedFile ?? new HomogenizationIoSeedFile();
     }
 
+    private static string ResolveConfigPath(string fileName)
+    {
+        var assemblyDirectory = Path.GetDirectoryName(typeof(DependencyInjection).Assembly.Location);
+        if (!string.IsNullOrWhiteSpace(assemblyDirectory))
+        {
+            var outputPath = Path.Combine(assemblyDirectory, "Config", fileName);
+            if (File.Exists(outputPath))
+            {
+                return outputPath;
+            }
+        }
+
+        throw new FileNotFoundException($"未找到匀浆模块配置文件：{fileName}。");
+    }
+
     private async Task ResetHomogenizationConfigurationAsync(CancellationToken cancellationToken)
     {
         var existingDevices = await _networkDevices.GetListAsync(
-            x => x.ModuleId == HomogenizationModuleConstants.ModuleId,
+            x => x.ModuleId == DependencyInjection.ModuleKey,
             cancellationToken).ConfigureAwait(false);
 
         if (existingDevices.Count == 0)
@@ -134,7 +148,7 @@ public sealed class HomogenizationDevelopmentSampleContributor : IDevelopmentSam
         CancellationToken cancellationToken)
     {
         var existingDevice = await _networkDevices.GetAsync(
-            x => x.ModuleId == HomogenizationModuleConstants.ModuleId
+            x => x.ModuleId == DependencyInjection.ModuleKey
                 && x.DeviceName == seedDevice.DeviceName,
             cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -164,7 +178,7 @@ public sealed class HomogenizationDevelopmentSampleContributor : IDevelopmentSam
             DeviceModel = string.IsNullOrWhiteSpace(seedDevice.DeviceModel)
                 ? defaults.DeviceModel
                 : seedDevice.DeviceModel,
-            ModuleId = HomogenizationModuleConstants.ModuleId,
+            ModuleId = DependencyInjection.ModuleKey,
             ConnectTimeout = seedDevice.ConnectTimeout > 0 ? seedDevice.ConnectTimeout : defaults.ConnectTimeout ?? 3000,
             IsEnabled = seedDevice.IsEnabled,
             Remark = string.IsNullOrWhiteSpace(seedDevice.Remark) ? SeedRemark : seedDevice.Remark
@@ -309,12 +323,12 @@ public sealed class HomogenizationDevelopmentSampleContributor : IDevelopmentSam
 
     private IModuleHardwareProfileProvider GetHardwareProfile()
     {
-        if (_hardwareProfiles.TryGetValue(HomogenizationModuleConstants.ModuleId, out var provider))
+        if (_hardwareProfiles.TryGetValue(DependencyInjection.ModuleKey, out var provider))
         {
             return provider;
         }
 
-        throw new InvalidOperationException($"匀浆 IO 种子导入需要模块“{HomogenizationModuleConstants.ModuleId}”的硬件模板提供器。");
+        throw new InvalidOperationException($"匀浆 IO 种子导入需要模块“{DependencyInjection.ModuleKey}”的硬件模板提供器。");
     }
 
     private sealed class HomogenizationIoSeedOptions

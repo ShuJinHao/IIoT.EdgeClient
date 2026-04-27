@@ -1,4 +1,4 @@
-using System.Windows.Threading;
+﻿using System.Windows.Threading;
 using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
@@ -53,7 +53,7 @@ public sealed class FooterViewModelBehaviorTests
                     LastPersistenceFaultAt: null,
                     PersistenceFaultMessage: null));
 
-            var viewModel = new FooterViewModel(diagnosticsQuery);
+            var viewModel = new FooterViewModel(diagnosticsQuery, new TestAppLanguageService());
             await viewModel.RefreshDiagnosticsAsync();
 
             Assert.Equal("Edge-A", viewModel.DeviceName);
@@ -141,7 +141,7 @@ public sealed class FooterViewModelBehaviorTests
                     LastPersistenceFaultAt: null,
                     PersistenceFaultMessage: null));
 
-            var viewModel = new FooterViewModel(diagnosticsQuery);
+            var viewModel = new FooterViewModel(diagnosticsQuery, new TestAppLanguageService());
             await viewModel.RefreshDiagnosticsAsync();
 
             Assert.Equal("云端：产能阻塞", viewModel.CloudStatus);
@@ -192,7 +192,7 @@ public sealed class FooterViewModelBehaviorTests
                     LastPersistenceFaultAt: DateTime.Now,
                     PersistenceFaultMessage: "mes retry count failed"));
 
-            var viewModel = new FooterViewModel(diagnosticsQuery);
+            var viewModel = new FooterViewModel(diagnosticsQuery, new TestAppLanguageService());
             await viewModel.RefreshDiagnosticsAsync();
 
             Assert.Equal("云端：存储故障", viewModel.CloudStatus);
@@ -204,7 +204,7 @@ public sealed class FooterViewModelBehaviorTests
         => RunOnStaThreadAsync(async () =>
         {
             var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery();
-            var viewModel = new FooterViewModel(diagnosticsQuery);
+            var viewModel = new FooterViewModel(diagnosticsQuery, new TestAppLanguageService());
             await viewModel.RefreshDiagnosticsAsync();
 
             diagnosticsQuery.ResetCounters();

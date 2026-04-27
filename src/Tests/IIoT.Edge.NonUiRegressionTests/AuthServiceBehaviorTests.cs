@@ -101,7 +101,38 @@ public sealed class AuthServiceBehaviorTests
     }
 
     [Fact]
-    public async Task IsAuthenticated_WhenCloudSessionIsExpired_ShouldRefreshCurrentUser()
+    public async Task IsAuthenticated_WhenCloudSessionIsExpired_ShouldNotRefreshOnPropertyAccess()
+    {
+        var issuedToken = CreateJwtToken(
+            expiresAtUtc: DateTimeOffset.UtcNow.AddMinutes(-1),
+            new Claim(JwtRegisteredClaimNames.UniqueName, "E002"));
+        var requestCount = 0;
+
+        var service = CreateService(
+            request =>
+            {
+                requestCount++;
+                var response = new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(issuedToken)
+                };
+                response.Headers.Add(CloudAuthHeaders.RefreshToken, "refresh-token-1");
+                response.Headers.Add(CloudAuthHeaders.RefreshTokenExpiresAt, DateTimeOffset.UtcNow.AddDays(7).ToString("O"));
+                response.Headers.Add(CloudAuthHeaders.AccessTokenExpiresAt, DateTimeOffset.UtcNow.AddMinutes(-1).ToString("O"));
+                return response;
+            },
+            new LocalAdminConfig { PasswordHash = "unused" });
+
+        var result = await service.LoginCloudAsync("E002", "pwd", Guid.NewGuid());
+
+        Assert.True(result.Success);
+        Assert.False(service.IsAuthenticated);
+        Assert.Null(service.CurrentUser);
+        Assert.Equal(1, requestCount);
+    }
+
+    [Fact]
+    public async Task EnsureAuthenticatedAsync_WhenCloudSessionIsExpired_ShouldRefreshCurrentUser()
     {
         var issuedTokens = new Queue<string>(new[]
         {
@@ -135,6 +166,8 @@ public sealed class AuthServiceBehaviorTests
         var result = await service.LoginCloudAsync("E002", "pwd", Guid.NewGuid());
 
         Assert.True(result.Success);
+        Assert.False(service.IsAuthenticated);
+        Assert.True(await service.EnsureAuthenticatedAsync());
         Assert.True(service.IsAuthenticated);
         Assert.NotNull(service.CurrentUser);
         Assert.Equal("refresh-token-2", service.CurrentUser!.RefreshToken);
@@ -144,7 +177,7 @@ public sealed class AuthServiceBehaviorTests
     }
 
     [Fact]
-    public async Task IsAuthenticated_WhenRefreshFails_ShouldClearCurrentUser()
+    public async Task EnsureAuthenticatedAsync_WhenRefreshFails_ShouldClearCurrentUser()
     {
         var issuedToken = CreateJwtToken(
             expiresAtUtc: DateTimeOffset.UtcNow.AddMinutes(-1),
@@ -180,6 +213,8 @@ public sealed class AuthServiceBehaviorTests
         var result = await service.LoginCloudAsync("E003", "pwd", Guid.NewGuid());
 
         Assert.True(result.Success);
+        Assert.False(service.IsAuthenticated);
+        Assert.False(await service.EnsureAuthenticatedAsync());
         Assert.False(service.IsAuthenticated);
         Assert.Null(service.CurrentUser);
         Assert.Equal(2, requestCount);

@@ -5,10 +5,15 @@ using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
 using IIoT.Edge.Module.Homogenization.Integration;
+using IIoT.Edge.Module.Homogenization.Resources;
 using IIoT.Edge.Module.Homogenization.Runtime;
+using Microsoft.Extensions.Options;
 
 namespace IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 
+/// <summary>
+/// 进站握手任务：PLC 触发后读取托盘码并调用 MES 进站校验接口。
+/// </summary>
 internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
 {
     private readonly IDeviceService _deviceService;
@@ -22,8 +27,8 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
         IHomogenizationMesApiService mesApiService,
         IMesUploadDiagnosticsStore diagnosticsStore,
         ILogService logger,
-        HomogenizationModuleOptions moduleOptions,
-        HomogenizationCodeOptions codeOptions)
+        IOptions<HomogenizationModuleOptions> moduleOptions,
+        IOptions<HomogenizationCodeOptions> codeOptions)
         : base(buffer, context, logger, codeOptions, moduleOptions)
     {
         _deviceService = deviceService;
@@ -89,7 +94,7 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
         var trayCode = Codec.ReadAsciiString(HomogenizationPlcSignalProfile.TrayCode.Label);
         if (string.IsNullOrWhiteSpace(trayCode))
         {
-            const string message = "托盘码不能为空。";
+            var message = HomogenizationText.Get("Homogenization_Error_PalletCodeRequired", "托盘码不能为空。");
             _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Inbound, message);
             RecordInboundResult(string.Empty, message);
             Codec.WriteWord(AckLabel, CodeOptions.Plc.AckException);

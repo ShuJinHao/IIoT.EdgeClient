@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Plc;
+﻿using IIoT.Edge.Application.Abstractions.Plc;
 using PlcClient = S7.Net.Plc;
 using S7.Net;
 using S7.Net.Types;

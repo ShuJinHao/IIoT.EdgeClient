@@ -1,4 +1,4 @@
-using IIoT.Edge.Application;
+﻿using IIoT.Edge.Application;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
@@ -9,8 +9,7 @@ using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Tasks;
 using IIoT.Edge.Application.Common.Tasks;
-using IIoT.Edge.Module.Abstractions;
-using IIoT.Edge.Plugin.Shared.Modules;
+using IIoT.Edge.Host.Bootstrap.Modules;
 using IIoT.Edge.Infrastructure.DeviceComm;
 using IIoT.Edge.Infrastructure.Integration;
 using IIoT.Edge.Infrastructure.Integration.Recipe;
@@ -24,7 +23,6 @@ using IIoT.Edge.Runtime;
 using IIoT.Edge.Runtime.DataPipeline.Tasks;
 using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
 using IIoT.Edge.Shell.Core;
-using IIoT.Edge.UI.Shared;
 using IIoT.Edge.UI.Shared.Modularity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -101,7 +99,6 @@ public static class DependencyInjection
                 ]);
         });
 
-        services.AddUiShared();
         services.AddAutoMapper(
             _ => { },
             [
@@ -118,7 +115,7 @@ public static class DependencyInjection
         services.AddPanelPresentation();
 
         RegisterHostViews(new HostViewRegistry(viewRegistry));
-        RegisterModules(services, viewRegistry, enabledModules);
+        RegisterModules(services, viewRegistry, configuration, enabledModules);
         viewRegistry.RegisterPanelViews();
 
         services.AddSingleton<IManagedBackgroundService>(sp =>
@@ -189,6 +186,7 @@ public static class DependencyInjection
         registry.RegisterMenu(new MenuInfo
         {
             Title = "系统诊断",
+            TitleResourceKey = "Navigation_Menu_CoreDiagnostics",
             ViewId = CoreViewIds.Diagnostics,
             Icon = "Stethoscope",
             Order = 999,
@@ -199,6 +197,7 @@ public static class DependencyInjection
     private static void RegisterModules(
         IServiceCollection services,
         IViewRegistry viewRegistry,
+        IConfiguration configuration,
         IReadOnlyCollection<IEdgeProcessModule> modules)
     {
         var cellDataRegistry = new CellDataRegistry();
@@ -218,6 +217,7 @@ public static class DependencyInjection
                 module.ModuleId,
                 module.ProcessType,
                 services,
+                configuration,
                 new ModuleViewRegistry(viewRegistry, module.ModuleId),
                 cellDataRegistry,
                 runtimeRegistry,

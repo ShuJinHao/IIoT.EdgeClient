@@ -1,10 +1,11 @@
-using IIoT.Edge.Plugin.Shared.Modules;
+﻿using IIoT.Edge.Application.Abstractions.Modules;
+using Microsoft.Extensions.Configuration;
 
 namespace IIoT.Edge.Module.ContractTests;
 
 public sealed class ModuleContractFixture
 {
-    public ModuleContractResult RegisterModule(IEdgeProcessModule module)
+    public ModuleContractResult RegisterModule(IEdgeProcessModule module, IConfiguration? configuration = null)
     {
         ArgumentNullException.ThrowIfNull(module);
 
@@ -14,10 +15,12 @@ public sealed class ModuleContractFixture
         var cellDataRegistry = new CellDataRegistry();
         var runtimeRegistry = new StationRuntimeRegistry();
         var integrationRegistry = new ProcessIntegrationRegistry();
+        configuration ??= new ConfigurationBuilder().Build();
         var builder = new TestEdgeProcessModuleBuilder(
             module.ModuleId,
             module.ProcessType,
             services,
+            configuration,
             moduleViewRegistry,
             cellDataRegistry,
             runtimeRegistry,
@@ -45,6 +48,7 @@ internal sealed class TestEdgeProcessModuleBuilder(
     string moduleId,
     string processType,
     IServiceCollection services,
+    IConfiguration configuration,
     IViewRegistry viewRegistry,
     ICellDataRegistry cellDataRegistry,
     IStationRuntimeRegistry runtimeRegistry,
@@ -56,6 +60,8 @@ internal sealed class TestEdgeProcessModuleBuilder(
 
     public IServiceCollection Services { get; } = services;
 
+    public IConfiguration Configuration { get; } = configuration;
+
     public void RegisterRoute(string viewId, Type viewType, Type viewModelType, bool cacheView = true)
         => viewRegistry.RegisterRoute(viewId, viewType, viewModelType, cacheView);
 
@@ -63,14 +69,20 @@ internal sealed class TestEdgeProcessModuleBuilder(
         string viewId,
         Type viewType,
         Type viewModelType,
-        Func<IServiceProvider, ViewModelBase> viewModelFactory,
+        Func<IServiceProvider, object> viewModelFactory,
         bool cacheView = true)
-        => viewRegistry.RegisterRoute(viewId, viewType, viewModelType, viewModelFactory, cacheView);
+        => viewRegistry.RegisterRoute(
+            viewId,
+            viewType,
+            viewModelType,
+            serviceProvider => ResolveViewModel(viewId, viewModelFactory, serviceProvider),
+            cacheView);
 
     public void RegisterMenu(EdgeMenuInfo menuInfo)
         => viewRegistry.RegisterMenu(new MenuInfo
         {
             Title = menuInfo.Title,
+            TitleResourceKey = menuInfo.TitleResourceKey,
             ViewId = menuInfo.ViewId,
             Icon = menuInfo.Icon,
             Order = menuInfo.Order,
@@ -104,7 +116,7 @@ internal sealed class TestEdgeProcessModuleBuilder(
         EdgeAnchorableInfo info,
         Type viewType,
         Type viewModelType,
-        Func<IServiceProvider, ViewModelBase> viewModelFactory,
+        Func<IServiceProvider, object> viewModelFactory,
         bool cacheView = true)
         => viewRegistry.RegisterAnchorable(
             new AnchorableInfo
@@ -122,7 +134,7 @@ internal sealed class TestEdgeProcessModuleBuilder(
             },
             viewType,
             viewModelType,
-            viewModelFactory,
+            serviceProvider => ResolveViewModel(info.ContentId, viewModelFactory, serviceProvider),
             cacheView);
 
     public void RegisterCellData(Type cellDataType)
@@ -138,4 +150,15 @@ internal sealed class TestEdgeProcessModuleBuilder(
 
     public void RegisterMesUploader(PluginMesUploadMode uploadMode)
         => integrationRegistry.RegisterMesUploader(ProcessType, MesUploadMode.Single);
+
+    private static ViewModelBase ResolveViewModel(
+        string viewId,
+        Func<IServiceProvider, object> viewModelFactory,
+        IServiceProvider serviceProvider)
+    {
+        var viewModel = viewModelFactory(serviceProvider);
+        return viewModel as ViewModelBase
+            ?? throw new InvalidOperationException(
+                $"View model factory for '{viewId}' must return {nameof(ViewModelBase)}.");
+    }
 }

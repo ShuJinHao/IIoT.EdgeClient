@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Common.Persistence;
+﻿using IIoT.Edge.Application.Common.Persistence;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Connection;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
 using IIoT.Edge.Module.Injection.Payload;

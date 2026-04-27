@@ -3,8 +3,10 @@ using System.Windows.Threading;
 using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Payload;
+using IIoT.Edge.Module.Homogenization.Resources;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using IIoT.Edge.UI.Shared.PluginSystem;
+using Microsoft.Extensions.Options;
 
 namespace IIoT.Edge.Module.Homogenization.Presentation;
 
@@ -15,17 +17,17 @@ public sealed class HomogenizationDataViewModel : PresentationViewModelBase
 
     public HomogenizationDataViewModel(
         IProductionContextStore contextStore,
-        HomogenizationModuleOptions moduleOptions)
+        IOptions<HomogenizationModuleOptions> moduleOptions)
     {
         _contextStore = contextStore;
         _timer = HomogenizationPresentationHelpers.CreateTimer(
             RefreshAsync,
-            moduleOptions.Presentation.DataViewRefreshIntervalMs);
+            moduleOptions.Value.Presentation.DataViewRefreshIntervalMs);
     }
 
     public override string ViewId => HomogenizationViewIds.DataView;
 
-    public override string ViewTitle => "匀浆产品数据";
+    public override string ViewTitle => HomogenizationText.Get("Homogenization_Title_Data", "匀浆产品数据");
 
     public ObservableCollection<HomogenizationDataRow> Records { get; } = [];
 
@@ -61,7 +63,9 @@ public sealed class HomogenizationDataViewModel : PresentationViewModelBase
                 .ToArray();
 
             ReplaceItems(Records, rows);
-            SetStatus(rows.Length == 0 ? "暂无匀浆出料记录。" : $"记录数：{rows.Length}");
+            SetStatus(rows.Length == 0
+                ? HomogenizationText.Get("Homogenization_Empty_OutboundRecords", "暂无匀浆出料记录。")
+                : HomogenizationText.Format("Homogenization_RecordCountFormat", "共 {0} 条出料记录。", rows.Length));
             return Task.CompletedTask;
         }, trackBusy: false, clearFeedback: false);
 }

@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Device;
+﻿using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Infrastructure.Integration.Config;
 using System.Net;

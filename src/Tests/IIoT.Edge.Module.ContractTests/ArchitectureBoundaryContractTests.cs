@@ -6,7 +6,7 @@ public sealed class ArchitectureBoundaryContractTests
     [
         "IIoT.Edge.Module.Injection",
         "IIoT.Edge.Module.Stacking",
-        "IIoT.Edge.Module.DryRun"
+        "IIoT.Edge.Module.Homogenization"
     ];
 
     [Fact]

@@ -5,11 +5,16 @@ using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
 using IIoT.Edge.Module.Homogenization.Payload;
+using IIoT.Edge.Module.Homogenization.Resources;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using IIoT.Edge.SharedKernel.DataPipeline;
+using Microsoft.Extensions.Options;
 
 namespace IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 
+/// <summary>
+/// 出料握手任务：PLC 触发后读取出料数据并写入本地数据管道。
+/// </summary>
 internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
 {
     private readonly IDeviceService _deviceService;
@@ -23,8 +28,8 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
         IDataPipelineService dataPipelineService,
         HomogenizationCellDataValidator validator,
         ILogService logger,
-        HomogenizationModuleOptions moduleOptions,
-        HomogenizationCodeOptions codeOptions)
+        IOptions<HomogenizationModuleOptions> moduleOptions,
+        IOptions<HomogenizationCodeOptions> codeOptions)
         : base(buffer, context, logger, codeOptions, moduleOptions)
     {
         _deviceService = deviceService;
@@ -101,8 +106,10 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
             .ConfigureAwait(false);
 
         var result = enqueueResult.WasOverflow
-            ? "出料已接收，数据已进入溢出持久化。"
-            : "出料已接收。";
+            ? HomogenizationText.Get(
+                "Homogenization_Outbound_OverflowReceived",
+                "出料已接收，数据已进入溢出持久化。")
+            : HomogenizationText.Get("Homogenization_Outbound_Received", "出料已接收。");
 
         RecordOutbound(cellData, result);
         Codec.WriteWord(AckLabel, CodeOptions.Plc.AckOk);
@@ -118,7 +125,7 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
             DeviceCode = _deviceService.CurrentDevice?.ClientCode ?? ModuleContext.DeviceName,
             InboundTime = ModuleContext.LastInboundAt,
             CompletedTime = DateTime.UtcNow,
-            RuntimeStatus = "出料待上传",
+            RuntimeStatus = HomogenizationText.Get("Homogenization_Outbound_PendingUpload", "出料待上传"),
             RealtimeSnapshot = Codec.CaptureRealtimeSnapshot(),
             RecipeSnapshot = ModuleContext.LastRecipeSnapshot,
             EquipmentStatusSnapshot = ModuleContext.LastEquipmentStatusSnapshot

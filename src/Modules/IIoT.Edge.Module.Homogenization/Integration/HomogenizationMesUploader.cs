@@ -18,7 +18,7 @@ public sealed class HomogenizationMesUploader : ProcessMesUploaderBase<Homogeniz
         _mesApiService = mesApiService;
     }
 
-    public override string ProcessType => HomogenizationModuleConstants.ProcessType;
+    public override string ProcessType => DependencyInjection.ModuleKey;
 
     protected override Task<MesCallResult> UploadCellAsync(
         ProcessMesUploadContext context,

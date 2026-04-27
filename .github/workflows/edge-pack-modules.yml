@@ -10,7 +10,6 @@ on:
 
 env:
   DOTNET_NOLOGO: true
-  EDGE_SHARED_NUGET_FEED: ${{ vars.EDGE_SHARED_NUGET_FEED }}
 
 jobs:
   validate-runtime:
@@ -26,21 +25,6 @@ jobs:
         with:
           global-json-file: global.json
 
-      - name: Bootstrap NuGet feeds
-        shell: pwsh
-        run: |
-          $localFeed = Join-Path $env:GITHUB_WORKSPACE '.artifacts\nuget'
-          $sharedFeed = if ([string]::IsNullOrWhiteSpace($env:EDGE_SHARED_NUGET_FEED)) {
-            Join-Path $env:GITHUB_WORKSPACE '.artifacts\shared-feed'
-          }
-          else {
-            $env:EDGE_SHARED_NUGET_FEED
-          }
-
-          New-Item -Path $localFeed -ItemType Directory -Force | Out-Null
-          New-Item -Path $sharedFeed -ItemType Directory -Force | Out-Null
-          "EDGE_SHARED_NUGET_FEED=$sharedFeed" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
       - name: Build launcher
         shell: pwsh
         run: dotnet build src/Edge/IIoT.Edge.Launcher/IIoT.Edge.Launcher.csproj -p:BuildInParallel=false --disable-build-servers
@@ -48,10 +32,6 @@ jobs:
       - name: Build shell
         shell: pwsh
         run: dotnet build src/Edge/IIoT.Edge.Shell/IIoT.Edge.Shell.csproj -p:BuildInParallel=false --disable-build-servers
-
-      - name: Build package validation client
-        shell: pwsh
-        run: dotnet build src/Tools/IIoT.Edge.PackageValidationClient/src/IIoT.Edge.PackageValidationClient/IIoT.Edge.PackageValidationClient.csproj -p:BuildInParallel=false --disable-build-servers
 
       - name: Run launcher tests
         shell: pwsh
@@ -84,31 +64,16 @@ jobs:
         with:
           global-json-file: global.json
 
-      - name: Bootstrap NuGet feeds
-        shell: pwsh
-        run: |
-          $localFeed = Join-Path $env:GITHUB_WORKSPACE '.artifacts\nuget'
-          $sharedFeed = if ([string]::IsNullOrWhiteSpace($env:EDGE_SHARED_NUGET_FEED)) {
-            Join-Path $env:GITHUB_WORKSPACE '.artifacts\shared-feed'
-          }
-          else {
-            $env:EDGE_SHARED_NUGET_FEED
-          }
-
-          New-Item -Path $localFeed -ItemType Directory -Force | Out-Null
-          New-Item -Path $sharedFeed -ItemType Directory -Force | Out-Null
-          "EDGE_SHARED_NUGET_FEED=$sharedFeed" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
       - name: Run runtime publish smoke test
         shell: pwsh
         run: ./scripts/TestEdgeRuntimePublish.ps1 -Configuration Release
 
       - name: Publish runtime directory
         shell: pwsh
-        run: ./scripts/PublishEdgeRuntime.ps1 -Configuration Release -OutputRoot .artifacts/edge-runtime -CleanOutput
+        run: ./scripts/PublishEdgeRuntime.ps1 -Configuration Release -OutputRoot publish/edge-runtime -CleanOutput
 
       - name: Upload runtime artifact
         uses: actions/upload-artifact@v4
         with:
           name: edge-runtime-package
-          path: .artifacts/edge-runtime/**
+          path: publish/edge-runtime/**

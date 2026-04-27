@@ -1,8 +1,8 @@
-using IIoT.Edge.Application.Abstractions.DataPipeline;
+﻿using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Common.Models;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
-using IIoT.Edge.Plugin.Shared.Modules;
+using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.DataPipeline;
 

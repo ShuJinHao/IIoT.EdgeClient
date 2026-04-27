@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Config;
+﻿using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
@@ -8,8 +8,7 @@ using IIoT.Edge.Application.Abstractions.Tasks;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Infrastructure.Persistence.Dapper;
 using IIoT.Edge.Infrastructure.Persistence.EfCore;
-using IIoT.Edge.Module.Abstractions;
-using IIoT.Edge.Plugin.Shared.Modules;
+using IIoT.Edge.Host.Bootstrap.Modules;
 using IIoT.Edge.Runtime.Signals;
 using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
 using IIoT.Edge.SharedKernel.Enums;

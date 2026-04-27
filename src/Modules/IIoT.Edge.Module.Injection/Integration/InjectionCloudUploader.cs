@@ -23,7 +23,7 @@ public sealed class InjectionCloudUploader : ProcessCloudUploaderBase<InjectionC
         _mapper = mapper;
     }
 
-    public override string ProcessType => InjectionModule.ModuleKey;
+    public override string ProcessType => DependencyInjection.ModuleKey;
 
     public override ProcessUploadMode UploadMode => ProcessUploadMode.Batch;
 

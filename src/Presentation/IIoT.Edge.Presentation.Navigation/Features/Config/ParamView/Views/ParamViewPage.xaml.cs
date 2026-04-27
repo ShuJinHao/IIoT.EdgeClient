@@ -4,7 +4,7 @@ using System.Windows.Controls;
 namespace IIoT.Edge.Presentation.Navigation.Features.Config.ParamView
 {
     /// <summary>
-    /// ²ÎÊıÅäÖÃÒ³ÃæÊÓÍ¼¡£
+    /// å‚æ•°é…ç½®é¡µé¢è§†å›¾ã€‚
     /// </summary>
     public partial class ParamViewPage : PageActionShell
     {

@@ -2,7 +2,7 @@ using IIoT.Edge.Module.Stacking;
 
 namespace IIoT.Edge.Module.ContractTests;
 
-public sealed class StackingModuleContractTests : ModuleContractTestBase<StackingModule>
+public sealed class StackingModuleContractTests : ModuleContractTestBase<DependencyInjection>
 {
     protected override bool RequiresHardwareProfile => true;
     protected override int ExpectedRuntimeTaskCount => 1;
