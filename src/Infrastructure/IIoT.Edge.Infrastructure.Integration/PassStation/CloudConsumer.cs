@@ -1,5 +1,6 @@
 using IIoT.Edge.Application.Abstractions.DataPipeline.Consumers;
 using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Common.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.SharedKernel.DataPipeline;

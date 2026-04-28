@@ -4,12 +4,18 @@ using IIoT.Edge.UI.Shared.Mvvm;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
 
+/// <summary>
+/// 连续数组型 IO 的页面展示分组，只承载矩阵行列和展开状态，不参与业务计算。
+/// </summary>
 public sealed class IoArrayMatrixSectionModel : BaseNotifyPropertyChanged
 {
+    private const string SinglePointDataCategory = "单点读数据";
+    private const string ContinuousDataCategory = "连续读数据";
+
     private static readonly HashSet<string> GenericCategories =
     [
-        "单点读数据",
-        "连续读数据"
+        SinglePointDataCategory,
+        ContinuousDataCategory
     ];
 
     private bool _isExpanded;
@@ -19,7 +25,7 @@ public sealed class IoArrayMatrixSectionModel : BaseNotifyPropertyChanged
         ToggleExpandedCommand = new BaseCommand(_ => IsExpanded = !IsExpanded);
     }
 
-    public string Category { get; init; } = "连续读数据";
+    public string Category { get; init; } = ContinuousDataCategory;
 
     public string GroupName { get; init; } = string.Empty;
 
@@ -57,7 +63,7 @@ public sealed class IoArrayMatrixSectionModel : BaseNotifyPropertyChanged
                 ? GetText("Navigation_Io_NoContinuousValues", "暂无连续值")
                 : string.Format(
                     System.Globalization.CultureInfo.CurrentCulture,
-                    GetText("Navigation_Io_ArraySummaryFormat", "{0} 行 x {1} 项"),
+                    GetText("Navigation_Io_ArraySummaryFormat", "{0} 行 x {1} 列"),
                     rows,
                     columns);
 
@@ -134,8 +140,8 @@ public sealed class IoArrayMatrixSectionModel : BaseNotifyPropertyChanged
     private static string LocalizeCategory(string category)
         => category switch
         {
-            "单点读数据" => GetText("Navigation_Io_Category_SingleRead", category),
-            "连续读数据" => GetText("Navigation_Io_Category_ContinuousRead", category),
+            SinglePointDataCategory => GetText("Navigation_Io_Category_SingleRead", category),
+            ContinuousDataCategory => GetText("Navigation_Io_Category_ContinuousRead", category),
             _ => category
         };
 

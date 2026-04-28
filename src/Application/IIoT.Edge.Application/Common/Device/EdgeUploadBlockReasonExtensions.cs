@@ -1,4 +1,6 @@
-namespace IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Abstractions.Device;
+
+namespace IIoT.Edge.Application.Common.Device;
 
 public static class EdgeUploadBlockReasonExtensions
 {

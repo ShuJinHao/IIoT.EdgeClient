@@ -23,7 +23,7 @@ public sealed class DependencyInjection : IEdgeProcessModule
 
         builder.RegisterCellData(typeof(InjectionCellData));
         builder.RegisterRuntimeFactory(new InjectionStationRuntimeFactory());
-        builder.RegisterCloudUploader(PluginCloudUploadMode.Batch);
+        builder.RegisterCloudUploader(ProcessUploadMode.Batch);
         builder.RegisterInjectionViews();
     }
 }

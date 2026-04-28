@@ -10,6 +10,8 @@ namespace IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
 public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TEntity>
     where TEntity : class
 {
+    private static readonly TimeSpan InitialRetryDelay = TimeSpan.FromSeconds(30);
+
     protected abstract string ChannelName { get; }
 
     protected abstract string RetryTableName { get; }
@@ -68,7 +70,9 @@ public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TE
 
         await ExecuteInTransactionAsync<int>(async (conn, tx) =>
         {
-            var nextRetryTime = DateTime.UtcNow.AddSeconds(30).ToString("O");
+            // FallbackBuffer 只负责把异常落盘数据交还给正式重试表；初始延迟避免恢复后立即打满上传通道，
+            // 后续失败退避由 CloudRetryTask/MesRetryTask 的重试策略继续接管。
+            var nextRetryTime = DateTime.UtcNow.Add(InitialRetryDelay).ToString("O");
             var inserted = await conn.ExecuteAsync(
                 $@"
                 INSERT INTO {RetryTableName}

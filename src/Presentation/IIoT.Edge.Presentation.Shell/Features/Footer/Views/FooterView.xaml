@@ -57,7 +57,6 @@
                     VerticalAlignment="Center"
                     FontSize="11"
                     Foreground="#52525B">
-                    <Run Text="Cloud: " />
                     <Run Foreground="#A1A1AA" Text="{Binding CloudStatus, Mode=OneWay}" />
                 </TextBlock>
             </StackPanel>
@@ -76,7 +75,6 @@
                     VerticalAlignment="Center"
                     FontSize="11"
                     Foreground="#52525B">
-                    <Run Text="MES: " />
                     <Run Foreground="#A1A1AA" Text="{Binding MesStatus, Mode=OneWay}" />
                 </TextBlock>
             </StackPanel>

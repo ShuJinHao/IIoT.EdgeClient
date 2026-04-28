@@ -37,9 +37,26 @@ public sealed class RepositoryHygieneTests
         "New-" + "Edge" + "Module"
     ];
 
+    private static readonly string[] DeletedOverWrappedApiNames =
+    [
+        "Plugin" + "Cloud" + "Upload" + "Mode",
+        "Plugin" + "Mes" + "Upload" + "Mode",
+        "Plugin" + "Upload" + "Modes",
+        "I" + "Edge" + "Module",
+        "I" + "Module" + "Loader"
+    ];
+
     private static readonly string[] MojibakeMarkers =
     [
-        "\uFFFD"
+        "\uFFFD",
+        "鎿" + "嶄",
+        "璁" + "惧",
+        "绯" + "荤",
+        "鍗" + "曠",
+        "杩" + "炵",
+        "鐨" + "勪",
+        "涓" + "嶅",
+        "鏃" + "犳"
     ];
 
     [Fact]
@@ -89,6 +106,8 @@ public sealed class RepositoryHygieneTests
         Assert.False(Directory.Exists(Path.Combine(root, "src", "Runtime", "IIoT.Edge.Runtime", "Stations")), "Runtime 不再保留旧站点示例目录。");
         Assert.False(Directory.Exists(Path.Combine(root, "src", "Infrastructure", "IIoT.Edge.Infrastructure.Excel")), "不再保留未接入主方案的 Excel 空壳目录。");
         Assert.False(Directory.Exists(Path.Combine(root, "src", "Infrastructure", "IIoT.Edge.DataMapping")), "不再保留未接入主方案的 DataMapping 空壳目录。");
+        Assert.False(File.Exists(Path.Combine(root, "src", "Core", "domain_restore.txt")), "不应保留 dotnet restore 输出日志。");
+        Assert.False(File.Exists(Path.Combine(root, "src", "Infrastructure", "full_restore_output_en.txt")), "不应保留 dotnet restore 输出日志。");
 
         var nugetConfig = File.ReadAllText(Path.Combine(root, "NuGet.Config"));
         Assert.DoesNotContain("%EDGE_SHARED_NUGET_FEED%", nugetConfig, StringComparison.OrdinalIgnoreCase);
@@ -146,12 +165,46 @@ public sealed class RepositoryHygieneTests
     }
 
     [Fact]
+    public void SourceTree_ShouldNotReferenceDeletedOverWrappedApis()
+    {
+        var root = FindRepositoryRoot();
+        var matches = EnumerateFiles(root, "*.*")
+            .Where(IsTextCandidate)
+            .SelectMany(path => FindForbiddenMatches(root, path, DeletedOverWrappedApiNames))
+            .ToArray();
+
+        Assert.Empty(matches);
+    }
+
+    [Fact]
     public void SourceTree_ShouldNotContainMojibakeMarkers()
     {
         var root = FindRepositoryRoot();
         var matches = EnumerateFiles(root, "*.*")
             .Where(IsTextCandidate)
             .SelectMany(path => FindForbiddenMatches(root, path, MojibakeMarkers))
+            .ToArray();
+
+        Assert.Empty(matches);
+    }
+
+    [Fact]
+    public void ShellVisibleXaml_ShouldUseDynamicResourcesForChineseText()
+    {
+        var root = FindRepositoryRoot();
+        var xamlRoots = new[]
+        {
+            Path.Combine(root, "src", "Edge", "IIoT.Edge.Shell"),
+            Path.Combine(root, "src", "Presentation"),
+            Path.Combine(root, "src", "Modules")
+        };
+
+        var matches = xamlRoots
+            .Where(Directory.Exists)
+            .SelectMany(path => EnumerateFiles(path, "*.xaml"))
+            .Where(path => !ToRepositoryPath(root, path).Contains("/Resources/Languages/", StringComparison.OrdinalIgnoreCase))
+            .Where(ContainsChineseText)
+            .Select(path => ToRepositoryPath(root, path))
             .ToArray();
 
         Assert.Empty(matches);
@@ -214,6 +267,9 @@ public sealed class RepositoryHygieneTests
             || extension.Equals(".config", StringComparison.OrdinalIgnoreCase)
             || extension.Equals(".editorconfig", StringComparison.OrdinalIgnoreCase);
     }
+
+    private static bool ContainsChineseText(string path)
+        => File.ReadAllText(path).Any(ch => ch >= '\u4e00' && ch <= '\u9fff');
 
     private static bool ShouldSkip(string path)
     {

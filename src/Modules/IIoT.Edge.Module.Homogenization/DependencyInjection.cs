@@ -53,8 +53,8 @@ public sealed class DependencyInjection : IEdgeProcessModule
 
         builder.RegisterCellData(typeof(HomogenizationCellData));
         builder.RegisterRuntimeFactory(new HomogenizationStationRuntimeFactory());
-        builder.RegisterCloudUploader(PluginCloudUploadMode.Single);
-        builder.RegisterMesUploader(PluginMesUploadMode.Single);
+        builder.RegisterCloudUploader(ProcessUploadMode.Single);
+        builder.RegisterMesUploader(MesUploadMode.Single);
         builder.RegisterHomogenizationViews();
     }
 }

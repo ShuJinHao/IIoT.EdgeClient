@@ -27,7 +27,7 @@ public sealed class DependencyInjection : IEdgeProcessModule
 
         builder.RegisterCellData(typeof(StackingCellData));
         builder.RegisterRuntimeFactory(new StackingStationRuntimeFactory());
-        builder.RegisterCloudUploader(PluginCloudUploadMode.Single);
+        builder.RegisterCloudUploader(ProcessUploadMode.Single);
         builder.RegisterStackingViews();
     }
 }

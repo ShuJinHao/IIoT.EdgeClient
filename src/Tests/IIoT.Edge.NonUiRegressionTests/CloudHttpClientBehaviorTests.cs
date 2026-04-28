@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Common.Device;
 using IIoT.Edge.Infrastructure.Integration.Http;
 using System.Net;
 using System.Net.Http;

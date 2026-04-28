@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Common.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Infrastructure.Integration.Config;
 using IIoT.Edge.Infrastructure.Integration.Device.Cache;

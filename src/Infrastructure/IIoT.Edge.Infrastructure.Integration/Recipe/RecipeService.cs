@@ -1,4 +1,5 @@
 ﻿using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Common.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Recipe;
 using IIoT.Edge.Infrastructure.Integration.Config;

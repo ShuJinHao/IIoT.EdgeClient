@@ -165,13 +165,11 @@ internal sealed class TestEdgeProcessModuleBuilder(
     public void RegisterRuntimeFactory(object runtimeFactory)
         => runtimeRegistry.Register((IStationRuntimeFactory)runtimeFactory);
 
-    public void RegisterCloudUploader(PluginCloudUploadMode uploadMode)
-        => integrationRegistry.RegisterCloudUploader(
-            ProcessType,
-            uploadMode == PluginCloudUploadMode.Batch ? ProcessUploadMode.Batch : ProcessUploadMode.Single);
+    public void RegisterCloudUploader(ProcessUploadMode uploadMode)
+        => integrationRegistry.RegisterCloudUploader(ProcessType, uploadMode);
 
-    public void RegisterMesUploader(PluginMesUploadMode uploadMode)
-        => integrationRegistry.RegisterMesUploader(ProcessType, MesUploadMode.Single);
+    public void RegisterMesUploader(MesUploadMode uploadMode)
+        => integrationRegistry.RegisterMesUploader(ProcessType, uploadMode);
 
     private static ViewModelBase ResolveViewModel(
         string viewId,

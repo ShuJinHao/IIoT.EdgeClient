@@ -175,20 +175,11 @@ internal sealed class EdgeProcessModuleBuilder : IEdgeProcessModuleBuilder
         _runtimeRegistry.Register(factory);
     }
 
-    public void RegisterCloudUploader(PluginCloudUploadMode uploadMode)
-        => _integrationRegistry.RegisterCloudUploader(
-            ProcessType,
-            uploadMode == PluginCloudUploadMode.Batch
-                ? ProcessUploadMode.Batch
-                : ProcessUploadMode.Single);
+    public void RegisterCloudUploader(ProcessUploadMode uploadMode)
+        => _integrationRegistry.RegisterCloudUploader(ProcessType, uploadMode);
 
-    public void RegisterMesUploader(PluginMesUploadMode uploadMode)
-        => _integrationRegistry.RegisterMesUploader(
-            ProcessType,
-            uploadMode switch
-            {
-                _ => MesUploadMode.Single
-            });
+    public void RegisterMesUploader(MesUploadMode uploadMode)
+        => _integrationRegistry.RegisterMesUploader(ProcessType, uploadMode);
 
     private static ViewModelBase ResolveViewModel(
         string viewId,

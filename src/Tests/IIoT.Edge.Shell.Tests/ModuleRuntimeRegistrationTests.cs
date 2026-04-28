@@ -468,7 +468,7 @@ public sealed class ModuleRuntimeRegistrationTests
         var result = await harness.Manager.StartAsync();
 
         Assert.False(result.Success);
-        Assert.Contains("missing Stacking.Ack", result.Message, StringComparison.Ordinal);
+        Assert.Contains("缺少信号 Stacking.Ack", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -490,7 +490,7 @@ public sealed class ModuleRuntimeRegistrationTests
         var result = await harness.Manager.StartAsync();
 
         Assert.False(result.Success);
-        Assert.Contains("Stacking.Ack direction mismatch", result.Message, StringComparison.Ordinal);
+        Assert.Contains("信号 Stacking.Ack 方向不一致", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -512,7 +512,7 @@ public sealed class ModuleRuntimeRegistrationTests
         var result = await harness.Manager.StartAsync();
 
         Assert.False(result.Success);
-        Assert.Contains("Stacking.ResultCode address count mismatch", result.Message, StringComparison.Ordinal);
+        Assert.Contains("信号 Stacking.ResultCode 地址长度不一致", result.Message, StringComparison.Ordinal);
     }
 
     private static IConfiguration CreateConfiguration(

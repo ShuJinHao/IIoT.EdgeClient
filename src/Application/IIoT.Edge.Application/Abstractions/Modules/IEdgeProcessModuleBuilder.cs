@@ -54,7 +54,7 @@ public interface IEdgeProcessModuleBuilder
 
     void RegisterRuntimeFactory(object runtimeFactory);
 
-    void RegisterCloudUploader(PluginCloudUploadMode uploadMode);
+    void RegisterCloudUploader(ProcessUploadMode uploadMode);
 
-    void RegisterMesUploader(PluginMesUploadMode uploadMode);
+    void RegisterMesUploader(MesUploadMode uploadMode);
 }

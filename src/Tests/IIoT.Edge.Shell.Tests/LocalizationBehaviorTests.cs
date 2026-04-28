@@ -171,6 +171,24 @@ public sealed class LocalizationBehaviorTests
             }
         });
 
+    [Fact]
+    public void FooterView_ShouldNotRenderHardcodedCloudOrMesPrefixes()
+    {
+        var root = FindRepositoryRoot();
+        var xaml = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "Presentation",
+            "IIoT.Edge.Presentation.Shell",
+            "Features",
+            "Footer",
+            "Views",
+            "FooterView.xaml"));
+
+        Assert.DoesNotContain("Cloud: ", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("MES: ", xaml, StringComparison.Ordinal);
+    }
+
     private static string CreateLanguageStateFilePath()
         => Path.Combine(Path.GetTempPath(), "edge-language-tests", Guid.NewGuid().ToString("N"), "language.json");
 
@@ -203,6 +221,22 @@ public sealed class LocalizationBehaviorTests
 
     private static Task RunOnStaThreadAsync(Action testBody)
         => WpfTestDispatcher.RunAsync(testBody);
+
+    private static string FindRepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "IIoT.EdgeClient.slnx")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("无法定位 IIoT.EdgeClient 仓库根目录。");
+    }
 
     private sealed class FakeAuthService(bool isAuthenticated) : IAuthService
     {
