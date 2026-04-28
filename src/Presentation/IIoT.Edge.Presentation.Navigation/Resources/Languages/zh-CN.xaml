@@ -193,6 +193,7 @@
     <sys:String x:Key="Navigation_Sync_LastAttemptFormat">最近尝试：{0}</sys:String>
     <sys:String x:Key="Navigation_Sync_LastSuccessFormat">最近成功：{0}</sys:String>
     <sys:String x:Key="Navigation_Sync_LastFailureFormat">最近失败：{0}</sys:String>
+    <sys:String x:Key="Navigation_Sync_LastFailureWithReasonFormat">最近失败：{0}（{1}）</sys:String>
     <sys:String x:Key="Navigation_Sync_FailureReasonFormat">失败原因：{0}</sys:String>
     <sys:String x:Key="Navigation_Sync_PendingCloudFormat">待处理：重试={0}，日志={1}，产能={2}</sys:String>
     <sys:String x:Key="Navigation_Sync_PendingMesFormat">待处理：重试={0}</sys:String>
@@ -251,6 +252,29 @@
     <sys:String x:Key="Navigation_Diagnostics_Context">生产上下文诊断</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_Startup">启动诊断</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_PluginLifecycle">插件生命周期</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_DiscoveredChecking">正在检查已发现模块...</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_EnabledChecking">正在检查已启用模块...</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_ActivatedChecking">正在检查已激活模块...</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_ConfigPlaceholder">配置概况：--</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_StartupPending">启动诊断尚未生成。</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_LastGeneratedFormat">最近生成：{0:yyyy-MM-dd HH:mm:ss}</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_DeviceFormat">设备：{0}</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_CloudRuntimeFormat">云端运行：{0}</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_MesRuntimeFormat">MES运行：{0}</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_DiscoveredLabel">已发现模块</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_EnabledLabel">已启用模块</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_ActivatedLabel">已激活模块</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_NoDiscoveredModules">当前未发现模块。</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_NoEnabledModules">当前没有配置为启用的模块。</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_NoActivatedModules">当前没有已激活模块。</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_ModuleSummaryFormat">{0}：{1}</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_StartupOk">启动诊断正常。</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_StartupIssueCountFormat">启动诊断发现 {0} 个问题。</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_ProfileNoMachineFormat">环境：{0}；机型：未配置；运行目录：{1}</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_ProfileLoadedFormat">已从 {0} 加载</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_ProfileMissingFormat">未找到 {0}</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_ProfileWithMachineFormat">环境：{0}；机型：{1}（{2}）；运行目录：{3}</sys:String>
+    <sys:String x:Key="Navigation_ListSeparator">、</sys:String>
     <sys:String x:Key="Navigation_Column_ModuleId">模块ID</sys:String>
     <sys:String x:Key="Navigation_Column_Process">工序</sys:String>
     <sys:String x:Key="Navigation_Column_Assembly">程序集</sys:String>

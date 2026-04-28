@@ -1,4 +1,5 @@
-﻿using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Modules.Descriptors;
+using IIoT.Edge.Application.Abstractions.Modules;
 using Microsoft.Extensions.Configuration;
 
 namespace IIoT.Edge.Module.ContractTests;

@@ -1,5 +1,6 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
+using IIoT.Edge.Application.Modules.Descriptors;
 
 namespace IIoT.Edge.Application.Abstractions.Modules;
 

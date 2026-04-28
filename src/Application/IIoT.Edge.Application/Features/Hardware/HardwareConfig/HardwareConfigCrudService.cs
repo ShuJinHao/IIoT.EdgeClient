@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Common.Crud;

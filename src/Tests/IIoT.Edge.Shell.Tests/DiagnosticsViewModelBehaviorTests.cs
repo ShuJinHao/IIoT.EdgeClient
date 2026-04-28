@@ -1,8 +1,12 @@
+using IIoT.Edge.Application.Context;
+using IIoT.Edge.Application.Modules.Diagnostics;
+using System.Globalization;
 using System.Windows.Threading;
 using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
+using IIoT.Edge.Presentation.Shell.Localization;
 using Xunit;
 
 namespace IIoT.Edge.Shell.Tests;
@@ -124,6 +128,105 @@ public sealed class DiagnosticsViewModelBehaviorTests
             Assert.Equal(1, diagnosticsQuery.MaxConcurrentCalls);
         });
 
+    [Fact]
+    public Task DiagnosticsViewModel_WhenLanguageChanges_ShouldRefreshVisibleSummaries()
+        => WpfTestDispatcher.RunAsync(async () =>
+        {
+            var originalCulture = CultureInfo.CurrentCulture;
+            var originalUiCulture = CultureInfo.CurrentUICulture;
+            var tempFile = Path.Combine(Path.GetTempPath(), "edge-language-tests", Guid.NewGuid().ToString("N"), "language.json");
+
+            try
+            {
+                WpfTestDispatcher.EnsureApplication();
+                var languageService = new AppLanguageService(tempFile);
+                languageService.Initialize();
+
+                var startupStore = new FakeStartupDiagnosticsStore();
+                startupStore.Update(new StartupDiagnosticsReport(
+                    GeneratedAt: new DateTime(2026, 4, 18, 10, 0, 0),
+                    ConfigurationProfile: new ConfigurationProfileSnapshot(
+                        "Production",
+                        "StackingLine",
+                        "appsettings.machine.StackingLine.json",
+                        true,
+                        @"C:\EdgeRuntime\StackingLine"),
+                    DiscoveredModules: ["Injection"],
+                    EnabledModules: ["Injection"],
+                    ActivatedModules: ["Injection"],
+                    PluginStates: [],
+                    ModuleRegistrations: [],
+                    DeviceBindings: [],
+                    Issues: []));
+
+                var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery
+                {
+                    Current = new EdgeSyncDiagnosticsSnapshot(
+                        "PLC-A",
+                        new CloudSyncDiagnosticsSnapshot(
+                            EdgeUploadGateState.Ready,
+                            EdgeUploadBlockReason.None,
+                            CloudRetryRuntimeState.Idle,
+                            null,
+                            null,
+                            null,
+                            CloudCallOutcome.Success,
+                            "none",
+                            null,
+                            0,
+                            0,
+                            0,
+                            false,
+                            false,
+                            null,
+                            "none",
+                            null,
+                            false,
+                            null,
+                            null),
+                        new MesSyncDiagnosticsSnapshot(
+                            MesRetryRuntimeState.Idle,
+                            null,
+                            null,
+                            null,
+                            null,
+                            0,
+                            [],
+                            false,
+                            null,
+                            "none",
+                            null,
+                            false,
+                            null,
+                            null),
+                        new ProductionContextPersistenceDiagnostics(0, null))
+                };
+
+                var viewModel = new DiagnosticsViewModel(startupStore, diagnosticsQuery, languageService);
+                await viewModel.RefreshAsync();
+
+                Assert.Equal("上传门禁：已就绪", viewModel.CloudGateSummary);
+                Assert.Equal("设备：PLC-A", viewModel.DeviceSummary);
+                Assert.StartsWith("环境：Production", viewModel.ConfigurationProfileSummary, StringComparison.Ordinal);
+
+                languageService.Change(CultureInfo.GetCultureInfo("en-US"));
+                await viewModel.RefreshAsync();
+
+                Assert.Equal("Upload gate: Ready", viewModel.CloudGateSummary);
+                Assert.Equal("Device: PLC-A", viewModel.DeviceSummary);
+                Assert.StartsWith("Environment: Production", viewModel.ConfigurationProfileSummary, StringComparison.Ordinal);
+                Assert.DoesNotContain("设备：", viewModel.DeviceSummary, StringComparison.Ordinal);
+            }
+            finally
+            {
+                CultureInfo.CurrentCulture = originalCulture;
+                CultureInfo.CurrentUICulture = originalUiCulture;
+                CultureInfo.DefaultThreadCurrentCulture = originalCulture;
+                CultureInfo.DefaultThreadCurrentUICulture = originalUiCulture;
+                TryDeleteDirectory(Path.GetDirectoryName(tempFile));
+            }
+        });
+
     private static Task RunOnStaThreadAsync(Func<Task> testBody)
     {
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -158,6 +261,20 @@ public sealed class DiagnosticsViewModelBehaviorTests
         thread.Start();
 
         return completion.Task;
+    }
+
+    private static void TryDeleteDirectory(string? directory)
+    {
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(directory) && Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+        catch
+        {
+        }
     }
 
     private sealed class FakeStartupDiagnosticsStore : IStartupDiagnosticsStore

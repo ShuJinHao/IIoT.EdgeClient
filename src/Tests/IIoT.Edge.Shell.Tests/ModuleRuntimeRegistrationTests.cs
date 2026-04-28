@@ -1,3 +1,5 @@
+using IIoT.Edge.Application.Modules.Diagnostics;
+using IIoT.Edge.Application.Context;
 using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.DataPipeline;

@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Modules.Diagnostics;
 using IIoT.Edge.Application.Abstractions.Modules;
 
 namespace IIoT.Edge.Shell.Core;

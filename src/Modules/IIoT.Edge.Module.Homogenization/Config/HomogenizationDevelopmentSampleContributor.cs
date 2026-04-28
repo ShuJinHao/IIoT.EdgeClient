@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Modules.Hardware;
 using System.IO;
 using System.Text.Json;
 using IIoT.Edge.Application.Abstractions.Logging;
