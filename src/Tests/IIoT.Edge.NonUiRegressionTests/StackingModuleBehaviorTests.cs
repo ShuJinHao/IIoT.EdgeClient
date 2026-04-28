@@ -326,7 +326,7 @@ public sealed class StackingModuleBehaviorTests
                 return;
             }
 
-            await Task.Delay(20);
+            await Task.Yield();
         }
 
         Assert.True(condition(), "Condition was not satisfied before timeout.");

@@ -291,7 +291,7 @@ public sealed class AuthServiceBehaviorTests
         while (!condition())
         {
             timeout.Token.ThrowIfCancellationRequested();
-            await Task.Delay(20, timeout.Token);
+            await Task.Yield();
         }
     }
 

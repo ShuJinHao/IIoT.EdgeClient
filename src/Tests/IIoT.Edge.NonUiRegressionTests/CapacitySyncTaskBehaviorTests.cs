@@ -291,7 +291,7 @@ public sealed class CapacitySyncTaskBehaviorTests
                 return;
             }
 
-            await Task.Delay(50);
+            await Task.Yield();
         }
 
         Assert.True(predicate(), "Condition was not satisfied before timeout.");

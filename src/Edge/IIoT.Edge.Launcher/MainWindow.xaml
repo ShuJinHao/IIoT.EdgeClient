@@ -153,16 +153,15 @@
                                              materialDesign:HintAssist.Hint="密码"
                                              Style="{StaticResource LauncherHintPasswordBoxStyle}" />
 
-                                <PasswordBox x:Name="NewPasswordInput"
-                                             Margin="0,0,0,18"
-                                             materialDesign:HintAssist.FloatingScale="0.8"
-                                             materialDesign:HintAssist.Hint="新密码（修改密码时填写）"
-                                             Style="{StaticResource LauncherHintPasswordBoxStyle}" />
-
                                 <TextBlock Margin="0,0,0,14"
                                            FontSize="12"
                                            Foreground="{StaticResource Launcher.Text.Error}"
                                            Text="{Binding ErrorMessage}"
+                                           TextWrapping="Wrap" />
+                                <TextBlock Margin="0,0,0,14"
+                                           FontSize="12"
+                                           Foreground="{StaticResource Launcher.Text.Secondary}"
+                                           Text="{Binding StatusMessage}"
                                            TextWrapping="Wrap" />
 
                                 <Button Click="LoginButton_Click"

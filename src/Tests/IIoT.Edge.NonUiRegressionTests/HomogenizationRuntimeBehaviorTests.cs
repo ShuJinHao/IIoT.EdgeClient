@@ -593,7 +593,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
                 return;
             }
 
-            await Task.Delay(20);
+            await Task.Yield();
         }
 
         Assert.True(condition());

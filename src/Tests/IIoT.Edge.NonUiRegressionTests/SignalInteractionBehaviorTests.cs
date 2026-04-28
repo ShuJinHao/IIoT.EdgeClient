@@ -172,7 +172,7 @@ public sealed class SignalInteractionBehaviorTests
         var readCountBeforeCancel = plcService.ReadAsyncCallCount;
 
         await StopInteractionAsync(runTask, cts);
-        await Task.Delay(80);
+        await AssertReadCountRemainsAsync(plcService, readCountBeforeCancel, TimeSpan.FromMilliseconds(80));
 
         Assert.Equal(readCountBeforeCancel, plcService.ReadAsyncCallCount);
     }
@@ -202,10 +202,25 @@ public sealed class SignalInteractionBehaviorTests
                 return;
             }
 
-            await Task.Delay(20);
+            await Task.Yield();
         }
 
         throw new TimeoutException("Condition was not met within the test timeout.");
+    }
+
+    private static async Task AssertReadCountRemainsAsync(
+        ScriptedPlcService plcService,
+        int expected,
+        TimeSpan duration)
+    {
+        var deadline = DateTime.UtcNow.Add(duration);
+        while (DateTime.UtcNow < deadline)
+        {
+            Assert.Equal(expected, plcService.ReadAsyncCallCount);
+            await Task.Yield();
+        }
+
+        Assert.Equal(expected, plcService.ReadAsyncCallCount);
     }
 
     private static async Task StopInteractionAsync(Task runTask, CancellationTokenSource cts)

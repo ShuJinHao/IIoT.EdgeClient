@@ -89,7 +89,7 @@ public sealed class LocalSystemRuntimeConfigBehaviorTests
                 return;
             }
 
-            await Task.Delay(20);
+            await Task.Yield();
         }
 
         Assert.True(predicate(), "Condition was not satisfied before timeout.");

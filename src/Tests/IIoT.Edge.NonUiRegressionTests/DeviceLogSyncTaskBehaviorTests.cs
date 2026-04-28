@@ -291,7 +291,7 @@ public sealed class DeviceLogSyncTaskBehaviorTests
                 return;
             }
 
-            await Task.Delay(50);
+            await Task.Yield();
         }
 
         Assert.True(predicate(), "Condition was not satisfied before timeout.");

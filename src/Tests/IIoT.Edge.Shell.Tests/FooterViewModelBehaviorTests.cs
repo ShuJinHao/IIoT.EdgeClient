@@ -10,6 +10,8 @@ namespace IIoT.Edge.Shell.Tests;
 
 public sealed class FooterViewModelBehaviorTests
 {
+    private static readonly DateTime TestNow = new(2026, 4, 18, 10, 30, 0, DateTimeKind.Utc);
+
     [Fact]
     public Task FooterViewModel_ShouldRenderCloudAndMesSummaries()
         => RunOnStaThreadAsync(async () =>
@@ -21,8 +23,8 @@ public sealed class FooterViewModelBehaviorTests
                     GateState: EdgeUploadGateState.Ready,
                     BlockReason: EdgeUploadBlockReason.None,
                     RuntimeState: CloudRetryRuntimeState.Idle,
-                    LastAttemptAt: DateTime.Now,
-                    LastSuccessAt: DateTime.Now,
+                    LastAttemptAt: TestNow,
+                    LastSuccessAt: TestNow,
                     LastFailureAt: null,
                     LastOutcome: CloudCallOutcome.Success,
                     LastReasonCode: "success",
@@ -122,7 +124,7 @@ public sealed class FooterViewModelBehaviorTests
                     IsCapacityBlocked: true,
                     BlockedChannel: CapacityBlockedChannel.Retry,
                     BlockedReason: "total",
-                    LastCapacityBlockAt: DateTime.Now,
+                    LastCapacityBlockAt: TestNow,
                     IsPersistenceFaulted: false,
                     LastPersistenceFaultAt: null,
                     PersistenceFaultMessage: null),
@@ -137,7 +139,7 @@ public sealed class FooterViewModelBehaviorTests
                     IsCapacityBlocked: true,
                     BlockedChannel: CapacityBlockedChannel.Fallback,
                     BlockedReason: "process_type",
-                    LastCapacityBlockAt: DateTime.Now,
+                    LastCapacityBlockAt: TestNow,
                     IsPersistenceFaulted: false,
                     LastPersistenceFaultAt: null,
                     PersistenceFaultMessage: null));
@@ -175,7 +177,7 @@ public sealed class FooterViewModelBehaviorTests
                     BlockedReason: "none",
                     LastCapacityBlockAt: null,
                     IsPersistenceFaulted: true,
-                    LastPersistenceFaultAt: DateTime.Now,
+                    LastPersistenceFaultAt: TestNow,
                     PersistenceFaultMessage: "cloud retry count failed"),
                 new MesSyncDiagnosticsSnapshot(
                     RuntimeState: MesRetryRuntimeState.Idle,
@@ -190,7 +192,7 @@ public sealed class FooterViewModelBehaviorTests
                     BlockedReason: "none",
                     LastCapacityBlockAt: null,
                     IsPersistenceFaulted: true,
-                    LastPersistenceFaultAt: DateTime.Now,
+                    LastPersistenceFaultAt: TestNow,
                     PersistenceFaultMessage: "mes retry count failed"));
 
             var viewModel = new FooterViewModel(diagnosticsQuery, new TestAppLanguageService());
