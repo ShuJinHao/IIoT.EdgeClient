@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Windows.Input;
 using IIoT.Edge.UI.Shared.Mvvm;
 
@@ -98,6 +99,14 @@ public sealed class IoInteractionRowModel : BaseNotifyPropertyChanged
         OnPropertyChanged(nameof(HostReplyToolTip));
     }
 
+    public void NotifyLocalizationChanged()
+    {
+        OnPropertyChanged(nameof(PlcSignalText));
+        OnPropertyChanged(nameof(PlcSignalToolTip));
+        OnPropertyChanged(nameof(HostSignalText));
+        OnPropertyChanged(nameof(HostReplyToolTip));
+    }
+
     public void InitializeWriteValueFromCurrentBuffer()
     {
         if (_writeValueInitialized || HostSignal is null)
@@ -113,7 +122,11 @@ public sealed class IoInteractionRowModel : BaseNotifyPropertyChanged
     private static string FormatSignal(IoSignalModel signal)
         => string.IsNullOrWhiteSpace(signal.DisplayRole)
             ? signal.Label
-            : $"{signal.Label}（{signal.DisplayRole}）";
+            : FormatText(
+                "Navigation_Io_DisplayRoleFormat",
+                "{0}（{1}）",
+                signal.Label,
+                signal.DisplayRole);
 
     private static string FormatSignalToolTip(
         IReadOnlyCollection<IoSignalModel> signals,
@@ -124,13 +137,22 @@ public sealed class IoInteractionRowModel : BaseNotifyPropertyChanged
             return "-";
         }
 
-        return string.Join("；", signals.Select(signal =>
+        var separator = GetText("Navigation_Io_TooltipSeparator", "；");
+        return string.Join(separator, signals.Select(signal =>
         {
             var role = string.IsNullOrWhiteSpace(signal.DisplayRole)
-                ? "未设置"
+                ? GetText("Navigation_Io_RoleUnset", "未设置")
                 : signal.DisplayRole;
-            var suffix = includeValue ? $"，当前值：{signal.DisplayValue}" : string.Empty;
-            return $"{signal.Label}，角色：{role}，地址：{signal.PlcAddress}{suffix}";
+            var suffix = includeValue
+                ? FormatText("Navigation_Io_TooltipCurrentValueFormat", "，当前值：{0}", signal.DisplayValue)
+                : string.Empty;
+            return FormatText(
+                "Navigation_Io_TooltipSignalFormat",
+                "{0}，角色：{1}，地址：{2}{3}",
+                signal.Label,
+                role,
+                signal.PlcAddress,
+                suffix);
         }));
     }
 
@@ -139,7 +161,13 @@ public sealed class IoInteractionRowModel : BaseNotifyPropertyChanged
         Func<IoSignalModel, string> selector)
         => signals.Count == 0
             ? "-"
-            : string.Join("，", signals.Select(selector));
+            : string.Join(GetText("Navigation_ListSeparator", "、"), signals.Select(selector));
+
+    private static string GetText(string key, string fallback)
+        => System.Windows.Application.Current?.TryFindResource(key) as string ?? fallback;
+
+    private static string FormatText(string key, string fallback, params object[] args)
+        => string.Format(CultureInfo.CurrentUICulture, GetText(key, fallback), args);
 
     private void ReplaceSignals(ObservableCollection<IoSignalModel> signals, IoSignalModel? signal)
     {

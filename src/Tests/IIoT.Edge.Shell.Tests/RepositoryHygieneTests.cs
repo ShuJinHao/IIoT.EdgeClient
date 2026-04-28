@@ -50,6 +50,11 @@ public sealed class RepositoryHygieneTests
     private static readonly string[] MojibakeMarkers =
     [
         "\uFFFD",
+        "\u951b",
+        "\u9347",
+        "\u95b0",
+        "\u93c8",
+        "\u7ead",
         "閹" + "?",
         "鐠" + "?",
         "缁" + "?",
@@ -59,6 +64,14 @@ public sealed class RepositoryHygieneTests
         "娑" + "?",
         "閺" + "?"
     ];
+
+    private static readonly Regex LongTaskDelayPattern = new(
+        @"Task\.Delay\(\s*(?:1\d{2,}|\d{4,}|TimeSpan\.FromMilliseconds\(\s*(?:1\d{2,}|\d{4,}))",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex DirectVisibleValidationIssuePattern = new(
+        @"new\s+ValidationIssue\s*\(\s*""[^""]*[\u4e00-\u9fff]",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     [Fact]
     public void SharedProjects_ShouldNotReferenceUpperLayers()
@@ -237,6 +250,60 @@ public sealed class RepositoryHygieneTests
     }
 
     [Fact]
+    public void NavigationLanguageDictionaries_ShouldHaveSameResourceKeys()
+    {
+        var root = FindRepositoryRoot();
+        var languageRoot = Path.Combine(
+            root,
+            "src",
+            "Presentation",
+            "IIoT.Edge.Presentation.Navigation",
+            "Resources",
+            "Languages");
+
+        var zhKeys = GetXamlResourceKeys(Path.Combine(languageRoot, "zh-CN.xaml"));
+        var enKeys = GetXamlResourceKeys(Path.Combine(languageRoot, "en-US.xaml"));
+
+        Assert.Empty(zhKeys.Except(enKeys, StringComparer.Ordinal).Order(StringComparer.Ordinal));
+        Assert.Empty(enKeys.Except(zhKeys, StringComparer.Ordinal).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void NavigationFeatures_ShouldNotCreateVisibleChineseValidationIssuesDirectly()
+    {
+        var root = FindRepositoryRoot();
+        var featureRoot = Path.Combine(
+            root,
+            "src",
+            "Presentation",
+            "IIoT.Edge.Presentation.Navigation",
+            "Features");
+
+        var matches = EnumerateFiles(featureRoot, "*.cs")
+            .SelectMany(path => DirectVisibleValidationIssuePattern
+                .Matches(File.ReadAllText(path))
+                .Select(match => $"{ToRepositoryPath(root, path)} contains direct visible validation text at offset {match.Index}"))
+            .ToArray();
+
+        Assert.Empty(matches);
+    }
+
+    [Fact]
+    public void Tests_ShouldNotUseLongFixedTaskDelaysForSynchronization()
+    {
+        var root = FindRepositoryRoot();
+        var testRoot = Path.Combine(root, "src", "Tests");
+
+        var matches = EnumerateFiles(testRoot, "*.cs")
+            .SelectMany(path => LongTaskDelayPattern
+                .Matches(File.ReadAllText(path))
+                .Select(match => $"{ToRepositoryPath(root, path)} contains long fixed Task.Delay at offset {match.Index}"))
+            .ToArray();
+
+        Assert.Empty(matches);
+    }
+
+    [Fact]
     public void ShellVisibleXaml_ShouldUseDynamicResourcesForChineseText()
     {
         var root = FindRepositoryRoot();
@@ -265,6 +332,17 @@ public sealed class RepositoryHygieneTests
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .Select(value => value!)
             .ToArray();
+
+    private static IReadOnlySet<string> GetXamlResourceKeys(string path)
+    {
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        return XDocument.Load(path)
+            .Descendants()
+            .Select(element => element.Attribute(x + "Key")?.Value)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!)
+            .ToHashSet(StringComparer.Ordinal);
+    }
 
     private static IEnumerable<string> FindForbiddenMatches(string root, string path, IReadOnlyList<string> forbiddenNames)
     {

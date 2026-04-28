@@ -16,9 +16,9 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
 {
     private readonly IHardwareConfigCrudService _crudService;
     private readonly IClientPermissionService _permissionService;
-    private readonly IEditorValidator<NetworkDeviceVm> _networkDeviceValidator = new NetworkDeviceValidator();
-    private readonly IEditorValidator<SerialDeviceVm> _serialDeviceValidator = new SerialDeviceValidator();
-    private readonly IEditorValidator<IoMappingVm> _ioMappingValidator = new IoMappingValidator();
+    private readonly IEditorValidator<NetworkDeviceVm> _networkDeviceValidator;
+    private readonly IEditorValidator<SerialDeviceVm> _serialDeviceValidator;
+    private readonly IEditorValidator<IoMappingVm> _ioMappingValidator;
     private readonly AsyncCommand _applyModuleTemplateCommand;
     private readonly BaseCommand _addNetworkDeviceCommand;
     private readonly BaseCommand _deleteNetworkDeviceCommand;
@@ -155,6 +155,9 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
     {
         _crudService = crudService;
         _permissionService = permissionService;
+        _networkDeviceValidator = new NetworkDeviceValidator(GetText, FormatText);
+        _serialDeviceValidator = new SerialDeviceValidator(GetText, FormatText);
+        _ioMappingValidator = new IoMappingValidator(GetText, FormatText);
 
         _addNetworkDeviceCommand = (BaseCommand)CreateAddCommand(
             NetworkDevices,
