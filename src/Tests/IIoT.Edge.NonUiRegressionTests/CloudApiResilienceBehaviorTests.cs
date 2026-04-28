@@ -52,7 +52,7 @@ public sealed class CloudApiResilienceBehaviorTests
     [Fact]
     public async Task CloudApiClient_WhenConfiguredTimeoutIsLowerThanResponseTime_ShouldHonorConfiguredTimeout()
     {
-        using var handler = new DelayedMessageHandler(TimeSpan.FromMilliseconds(1500));
+        using var handler = new DelayedMessageHandler(TimeSpan.FromSeconds(5));
 
         using var provider = BuildProvider(
             handler,
