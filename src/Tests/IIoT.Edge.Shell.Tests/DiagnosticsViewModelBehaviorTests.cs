@@ -13,6 +13,8 @@ namespace IIoT.Edge.Shell.Tests;
 
 public sealed class DiagnosticsViewModelBehaviorTests
 {
+    private static readonly DateTime TestNow = new(2026, 4, 18, 10, 30, 0, DateTimeKind.Utc);
+
     [Fact]
     public Task DiagnosticsViewModel_ShouldExposeCloudAndMesDiagnosticsSections()
         => RunOnStaThreadAsync(async () =>
@@ -51,9 +53,9 @@ public sealed class DiagnosticsViewModelBehaviorTests
                         EdgeUploadGateState.Blocked,
                         EdgeUploadBlockReason.UploadTokenRejected,
                         CloudRetryRuntimeState.WaitingForRecovery,
-                        DateTime.Now.AddMinutes(-2),
-                        DateTime.Now.AddMinutes(-5),
-                        DateTime.Now.AddMinutes(-2),
+                        TestNow.AddMinutes(-2),
+                        TestNow.AddMinutes(-5),
+                        TestNow.AddMinutes(-2),
                         CloudCallOutcome.UnauthorizedAfterRetry,
                         "upload_token_rejected",
                         "Capacity",
@@ -64,28 +66,28 @@ public sealed class DiagnosticsViewModelBehaviorTests
                         true,
                         CapacityBlockedChannel.Retry,
                         "total",
-                        DateTime.Now.AddMinutes(-1),
+                        TestNow.AddMinutes(-1),
                         true,
-                        DateTime.Now.AddSeconds(-30),
+                        TestNow.AddSeconds(-30),
                         "cloud retry count failed"),
                     new MesSyncDiagnosticsSnapshot(
                         MesRetryRuntimeState.Backoff,
-                        DateTime.Now.AddMinutes(-3),
-                        DateTime.Now.AddMinutes(-10),
-                        DateTime.Now.AddMinutes(-3),
+                        TestNow.AddMinutes(-3),
+                        TestNow.AddMinutes(-10),
+                        TestNow.AddMinutes(-3),
                         "mes timeout",
                         2,
                         [
-                            new MesChannelDiagnostics("Injection", DateTime.Now.AddMinutes(-3), DateTime.Now.AddMinutes(-10), "Failed", "mes timeout")
+                            new MesChannelDiagnostics("Injection", TestNow.AddMinutes(-3), TestNow.AddMinutes(-10), "Failed", "mes timeout")
                         ],
                         true,
                         CapacityBlockedChannel.Fallback,
                         "total",
-                        DateTime.Now.AddMinutes(-2),
+                        TestNow.AddMinutes(-2),
                         true,
-                        DateTime.Now.AddSeconds(-20),
+                        TestNow.AddSeconds(-20),
                         "mes retry count failed"),
-                    new ProductionContextPersistenceDiagnostics(2, DateTime.Now.AddMinutes(-4)))
+                    new ProductionContextPersistenceDiagnostics(2, TestNow.AddMinutes(-4)))
             };
 
             var viewModel = new DiagnosticsViewModel(startupStore, diagnosticsQuery, new TestAppLanguageService());

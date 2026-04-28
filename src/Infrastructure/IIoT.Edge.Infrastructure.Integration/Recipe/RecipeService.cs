@@ -27,6 +27,9 @@ public class RecipeService : IRecipeService
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
+    private static string CurrentUtcTimestamp()
+        => DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+
     public RecipeService(
         ICloudHttpClient cloudHttp,
         ICloudApiEndpointProvider endpointProvider,
@@ -131,7 +134,7 @@ public class RecipeService : IRecipeService
         {
             RecipeName = "Local Emergency Recipe",
             Version = "LOCAL",
-            UpdatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+            UpdatedAt = CurrentUtcTimestamp()
         };
 
         _localRecipe.Parameters[name] = new RecipeParam
@@ -143,7 +146,7 @@ public class RecipeService : IRecipeService
             Unit = unit
         };
 
-        _localRecipe.UpdatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+        _localRecipe.UpdatedAt = CurrentUtcTimestamp();
         SaveSingleFile(_localRecipe, GetLocalFilePath());
         _logger.Info($"[Recipe] Local parameter updated: {name} [{min} ~ {max}] {unit}");
 
@@ -162,7 +165,7 @@ public class RecipeService : IRecipeService
 
         if (_localRecipe.Parameters.Remove(name))
         {
-            _localRecipe.UpdatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+            _localRecipe.UpdatedAt = CurrentUtcTimestamp();
             SaveSingleFile(_localRecipe, GetLocalFilePath());
             _logger.Info($"[Recipe] Local parameter removed: {name}");
 
@@ -270,7 +273,7 @@ public class RecipeService : IRecipeService
         var recipeEl = activeElement ?? recipeArray[0];
         var recipe = new RecipeData
         {
-            UpdatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+            UpdatedAt = CurrentUtcTimestamp()
         };
 
         if (recipeEl.TryGetProperty("id", out var idEl)) recipe.RecipeId = idEl.GetString() ?? string.Empty;

@@ -80,6 +80,42 @@ public sealed class LauncherMainViewModelTests
         Assert.Equal("显示 1 / 3 个工序", viewModel.ProfileSummaryText);
     }
 
+    [Fact]
+    public async Task ChangePasswordAsync_WhenPasswordChanged_ShouldReturnTrueAndRenderStatus()
+    {
+        var viewModel = new LauncherMainViewModel(
+            new StubLauncherProfileCatalog([]),
+            new StubLauncherAuthService(
+                LauncherAuthenticationResult.Passed("现场管理员"),
+                LauncherPasswordChangeResult.Passed()),
+            new StubShellLaunchService());
+
+        var changed = await viewModel.ChangePasswordAsync("edge-admin", "123456", "654321");
+
+        Assert.True(changed);
+        Assert.Equal("本地密码已修改，请使用新密码登录。", viewModel.StatusMessage);
+        Assert.Equal(string.Empty, viewModel.ErrorMessage);
+        Assert.False(viewModel.IsBusy);
+    }
+
+    [Fact]
+    public async Task ChangePasswordAsync_WhenPasswordChangeFails_ShouldReturnFalse()
+    {
+        var viewModel = new LauncherMainViewModel(
+            new StubLauncherProfileCatalog([]),
+            new StubLauncherAuthService(
+                LauncherAuthenticationResult.Passed("现场管理员"),
+                LauncherPasswordChangeResult.Failed("旧密码不正确。")),
+            new StubShellLaunchService());
+
+        var changed = await viewModel.ChangePasswordAsync("edge-admin", "wrong", "654321");
+
+        Assert.False(changed);
+        Assert.Equal("请修正密码信息后重试。", viewModel.StatusMessage);
+        Assert.Equal("旧密码不正确。", viewModel.ErrorMessage);
+        Assert.False(viewModel.IsBusy);
+    }
+
     private sealed class StubLauncherProfileCatalog : ILauncherProfileCatalog
     {
         private readonly IReadOnlyList<LauncherProfileDefinition> _profiles;
@@ -95,16 +131,20 @@ public sealed class LauncherMainViewModelTests
     private sealed class StubLauncherAuthService : ILocalLauncherAuthService
     {
         private readonly LauncherAuthenticationResult _result;
+        private readonly LauncherPasswordChangeResult _changeResult;
 
-        public StubLauncherAuthService(LauncherAuthenticationResult result)
+        public StubLauncherAuthService(
+            LauncherAuthenticationResult result,
+            LauncherPasswordChangeResult? changeResult = null)
         {
             _result = result;
+            _changeResult = changeResult ?? LauncherPasswordChangeResult.Passed();
         }
 
         public LauncherAuthenticationResult Authenticate(string? userName, string? password) => _result;
 
         public LauncherPasswordChangeResult ChangePassword(string? userName, string? oldPassword, string? newPassword)
-            => LauncherPasswordChangeResult.Passed();
+            => _changeResult;
     }
 
     private sealed class StubShellLaunchService : IShellLaunchService

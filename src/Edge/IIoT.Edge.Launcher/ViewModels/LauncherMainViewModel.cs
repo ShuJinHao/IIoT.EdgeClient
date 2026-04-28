@@ -133,7 +133,7 @@ public sealed class LauncherMainViewModel : ObservableObject
         }
     }
 
-    public async Task ChangePasswordAsync(string? userName, string? oldPassword, string? newPassword)
+    public async Task<bool> ChangePasswordAsync(string? userName, string? oldPassword, string? newPassword)
     {
         ErrorMessage = string.Empty;
         StatusMessage = "正在修改本地密码...";
@@ -147,15 +147,17 @@ public sealed class LauncherMainViewModel : ObservableObject
             {
                 ErrorMessage = result.ErrorMessage ?? "本地密码修改失败。";
                 StatusMessage = "请修正密码信息后重试。";
-                return;
+                return false;
             }
 
             StatusMessage = "本地密码已修改，请使用新密码登录。";
+            return true;
         }
         catch (Exception ex)
         {
             ErrorMessage = ex.Message;
             StatusMessage = "本地密码修改失败。";
+            return false;
         }
         finally
         {

@@ -395,7 +395,7 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
                 return;
             }
 
-            await Task.Delay(20);
+            await Task.Yield();
         }
 
         Assert.True(predicate(), "Condition was not satisfied before timeout.");
@@ -410,7 +410,7 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
         while (DateTime.UtcNow < deadline)
         {
             Assert.Equal(expected, getCount());
-            await Task.Delay(20);
+            await Task.Yield();
         }
 
         Assert.Equal(expected, getCount());
