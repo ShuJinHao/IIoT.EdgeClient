@@ -6,5 +6,5 @@ namespace IIoT.Edge.SharedKernel.Domain;
 /// </summary>
 public abstract class BaseEntity<TId> : IEntity<TId>
 {
-    public TId Id { get; set; } = default!;
+    public TId Id { get; protected set; } = default!;
 }

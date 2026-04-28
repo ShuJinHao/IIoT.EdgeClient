@@ -267,7 +267,7 @@ public sealed class IoViewViewModelBehaviorTests
         bool isEnabled = true)
     {
         var entity = NetworkDeviceEntity.Create(deviceName, deviceType, "127.0.0.1", 102);
-        entity.Id = id;
+        entity.WithId(id);
         entity.AssignModule(moduleId, "S7");
         entity.SetEnabled(isEnabled);
         return entity;

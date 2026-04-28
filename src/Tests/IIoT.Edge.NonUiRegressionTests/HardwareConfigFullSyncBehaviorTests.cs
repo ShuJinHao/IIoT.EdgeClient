@@ -471,7 +471,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
         int port1 = 102)
     {
         var entity = NetworkDeviceEntity.Create(name, DeviceType.PLC, ipAddress, port1);
-        entity.Id = id;
+        entity.WithId(id);
         entity.AssignModule("Injection", "S7");
         entity.UpdateEndpoint(ipAddress, port1, null, 3000);
         entity.Enable();
@@ -499,7 +499,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
     private static SerialDeviceEntity CreateSerialDevice(int id, string name)
     {
         var entity = SerialDeviceEntity.Create(name, "Scanner", "COM1", 9600);
-        entity.Id = id;
+        entity.WithId(id);
         entity.UpdatePort("COM1", 9600, 8, "One", "None");
         entity.Enable();
         return entity;
@@ -513,7 +513,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
         string? remark = null)
     {
         var entity = IoMappingEntity.Create(deviceId, label, plcAddress, 1, "Int16", "Read");
-        entity.Id = id;
+        entity.WithId(id);
         entity.UpdateSortOrder(1);
         entity.UpdateMetadata(label, "Int16", "Read", "单点读数据", string.Empty, string.Empty, remark);
         return entity;
@@ -579,7 +579,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
         {
             if (entity.Id == 0)
             {
-                entity.Id = _nextId++;
+                EntityIdTestHelper.SetId(entity, _nextId++);
             }
 
             _items.Add(entity);
@@ -671,7 +671,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
         private static NetworkDeviceEntity Clone(NetworkDeviceEntity entity)
         {
             var clone = NetworkDeviceEntity.Create(entity.DeviceName, entity.DeviceType, entity.IpAddress, entity.Port1);
-            clone.Id = entity.Id;
+            clone.WithId(entity.Id);
             clone.AssignModule(entity.ModuleId, entity.DeviceModel);
             clone.UpdateEndpoint(entity.IpAddress, entity.Port1, entity.Port2, entity.ConnectTimeout);
             clone.UpdateCommands(entity.SendCmd1, entity.SendCmd2);
@@ -692,7 +692,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
                 entity.Category,
                 entity.GroupName,
                 entity.DisplayRole);
-            clone.Id = entity.Id;
+            clone.WithId(entity.Id);
             clone.UpdateSortOrder(entity.SortOrder);
             clone.UpdateMetadata(
                 entity.Label,

@@ -180,7 +180,7 @@ public sealed class SignalInteractionBehaviorTests
     private static NetworkDeviceEntity CreateDevice(int id, string deviceName)
     {
         var entity = NetworkDeviceEntity.Create(deviceName, DeviceType.PLC, "127.0.0.1", 102);
-        entity.Id = id;
+        entity.WithId(id);
         entity.AssignModule("TestModule", "S7");
         return entity;
     }
