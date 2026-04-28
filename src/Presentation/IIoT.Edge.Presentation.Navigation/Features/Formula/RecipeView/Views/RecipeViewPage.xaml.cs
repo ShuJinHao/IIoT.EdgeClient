@@ -4,7 +4,7 @@ using System.Windows.Controls;
 namespace IIoT.Edge.Presentation.Navigation.Features.Formula.RecipeView
 {
     /// <summary>
-    /// Åä·½Ò³ÃæÊÓÍ¼¡£
+    /// é…æ–¹é¡µé¢è§†å›¾ã€‚
     /// </summary>
     public partial class RecipeViewPage : PageActionShell
     {

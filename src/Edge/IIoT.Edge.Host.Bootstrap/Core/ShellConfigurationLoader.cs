@@ -35,7 +35,14 @@ public static class ShellConfigurationLoader
             && File.Exists(machineProfilePath);
 
         var configuration = new ConfigurationBuilder()
-            .SetBasePath(baseDirectory)
+            .SetBasePath(baseDirectory);
+
+        foreach (var pluginConfigPath in FindPluginDefaultConfigurationFiles(baseDirectory))
+        {
+            configuration.AddJsonFile(pluginConfigPath, optional: true, reloadOnChange: false);
+        }
+
+        configuration
             .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
             .AddJsonFile($"appsettings.{environmentName}.json", optional: true, reloadOnChange: true);
 
@@ -66,4 +73,19 @@ public static class ShellConfigurationLoader
         => Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
             ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
             ?? "Production";
+
+    private static IReadOnlyList<string> FindPluginDefaultConfigurationFiles(string baseDirectory)
+    {
+        var pluginRoot = Path.Combine(baseDirectory, "Modules");
+        if (!Directory.Exists(pluginRoot))
+        {
+            return [];
+        }
+
+        return Directory.GetFiles(pluginRoot, "*.module.json", SearchOption.AllDirectories)
+            .Where(static path => path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                .Any(static segment => string.Equals(segment, "Config", StringComparison.OrdinalIgnoreCase)))
+            .OrderBy(static path => path, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
 }

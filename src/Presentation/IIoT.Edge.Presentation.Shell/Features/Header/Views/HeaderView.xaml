@@ -35,7 +35,7 @@
                     FontSize="14"
                     FontWeight="SemiBold"
                     Foreground="{DynamicResource MaterialDesignBody}"
-                    Text="{Binding SystemTitle}" />
+                    Text="{DynamicResource Shell_SystemTitle}" />
             </StackPanel>
 
             <StackPanel
@@ -49,6 +49,14 @@
                 VerticalAlignment="Center"
                 Orientation="Horizontal">
 
+                <ComboBox
+                    Width="96"
+                    Margin="0,0,8,0"
+                    VerticalAlignment="Center"
+                    DisplayMemberPath="DisplayName"
+                    ItemsSource="{Binding SupportedLanguages}"
+                    SelectedItem="{Binding SelectedLanguage, Mode=TwoWay}" />
+
                 <Separator
                     Width="1"
                     Height="18"
@@ -59,7 +67,7 @@
                     Command="{Binding WindowControlCommand}"
                     CommandParameter="Min"
                     Style="{StaticResource WindowControlBtnStyle}"
-                    ToolTip="最小化">
+                    ToolTip="{DynamicResource Shell_Tooltip_Minimize}">
                     <materialDesign:PackIcon
                         Width="14"
                         Height="14"
@@ -70,7 +78,7 @@
                     Command="{Binding WindowControlCommand}"
                     CommandParameter="Max"
                     Style="{StaticResource WindowControlBtnStyle}"
-                    ToolTip="最大化/还原">
+                    ToolTip="{DynamicResource Shell_Tooltip_MaximizeRestore}">
                     <materialDesign:PackIcon
                         Width="14"
                         Height="14"
@@ -81,7 +89,7 @@
                     Command="{Binding WindowControlCommand}"
                     CommandParameter="Close"
                     Style="{StaticResource WindowCloseBtnStyle}"
-                    ToolTip="关闭">
+                    ToolTip="{DynamicResource Shell_Tooltip_Close}">
                     <materialDesign:PackIcon
                         Width="14"
                         Height="14"

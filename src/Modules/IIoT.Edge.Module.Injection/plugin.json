@@ -1,12 +1,12 @@
 {
   "moduleId": "Injection",
-  "displayName": "Injection",
+  "displayName": "注液",
   "version": "1.0.0",
   "hostApiVersion": "1.0.0",
   "minHostVersion": "1.0.0",
   "maxHostVersion": "99.0.0",
   "entryAssembly": "IIoT.Edge.Module.Injection.dll",
-  "entryType": "IIoT.Edge.Module.Injection.InjectionModule",
+  "entryType": "IIoT.Edge.Module.Injection.DependencyInjection",
   "supportedProcessType": "Injection",
   "dependencies": []
 }

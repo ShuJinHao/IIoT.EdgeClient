@@ -114,6 +114,12 @@ namespace IIoT.Edge.Infrastructure.Persistence.EfCore.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("address_count");
 
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("category");
+
                     b.Property<string>("DataType")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -125,6 +131,18 @@ namespace IIoT.Edge.Infrastructure.Persistence.EfCore.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("TEXT")
                         .HasColumnName("direction");
+
+                    b.Property<string>("DisplayRole")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("display_role");
+
+                    b.Property<string>("GroupName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("group_name");
 
                     b.Property<string>("Label")
                         .IsRequired()

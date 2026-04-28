@@ -1,4 +1,5 @@
 ﻿using IIoT.Edge.Application.Abstractions.Auth;
+using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Modularity;
 using IIoT.Edge.UI.Shared.Mvvm;
 
@@ -11,9 +12,36 @@ namespace IIoT.Edge.Presentation.Shell.Features.SysMenu;
 public class MenuItemViewModel : BaseControlNotifyPropertyChanged
 {
     private readonly IClientPermissionService _permissionService;
+    private readonly IAppLanguageService _languageService;
     private readonly string _requiredPermission;
+    private readonly string _fallbackTitle;
+    private readonly string _titleResourceKey;
+    private string _title;
 
-    public string Title { get; }
+    public MenuItemViewModel(
+        MenuInfo info,
+        IClientPermissionService permissionService,
+        IAppLanguageService languageService)
+    {
+        _permissionService = permissionService;
+        _languageService = languageService;
+        _requiredPermission = info.RequiredPermission;
+        _fallbackTitle = info.Title;
+        _titleResourceKey = info.TitleResourceKey;
+        _title = ResolveTitle();
+
+        ViewId = info.ViewId;
+        Icon = info.Icon;
+
+        RefreshPermission();
+    }
+
+    public string Title
+    {
+        get => _title;
+        private set { _title = value; OnPropertyChanged(); }
+    }
+
     public string ViewId { get; }
     public string Icon { get; }
 
@@ -31,18 +59,6 @@ public class MenuItemViewModel : BaseControlNotifyPropertyChanged
         set { _isSelected = value; OnPropertyChanged(); }
     }
 
-    public MenuItemViewModel(MenuInfo info, IClientPermissionService permissionService)
-    {
-        _permissionService = permissionService;
-        _requiredPermission = info.RequiredPermission;
-
-        Title = info.Title;
-        ViewId = info.ViewId;
-        Icon = info.Icon;
-
-        RefreshPermission();
-    }
-
     private bool _isAccessible;
     public bool IsAccessible
     {
@@ -55,5 +71,20 @@ public class MenuItemViewModel : BaseControlNotifyPropertyChanged
         IsAccessible = string.IsNullOrEmpty(_requiredPermission)
             || _permissionService.HasPermission(_requiredPermission);
         IsEnabled = IsAccessible;
+    }
+
+    public void RefreshTitle()
+        => Title = ResolveTitle();
+
+    private string ResolveTitle()
+    {
+        if (!string.IsNullOrWhiteSpace(_titleResourceKey))
+        {
+            return _languageService.GetString(_titleResourceKey, _fallbackTitle);
+        }
+
+        return string.IsNullOrWhiteSpace(_fallbackTitle)
+            ? _titleResourceKey
+            : _fallbackTitle;
     }
 }

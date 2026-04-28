@@ -100,7 +100,7 @@ public class SaveHardwareConfigHandler(
     {
         if (!permissionService.CanEditHardware)
         {
-            return CrudOperationResult.Failure("当前用户无硬件配置权限。");
+            return CrudOperationResult.Failure("当前用户没有硬件配置权限。");
         }
 
         var existingNetworkDevices = await LoadExistingNetworkDevicesAsync(ct);
@@ -165,7 +165,7 @@ public class SaveHardwareConfigHandler(
             }
             catch (Exception ex)
             {
-                stopFailures.Add($"{existingPlc.DeviceName} ({ex.Message})");
+                stopFailures.Add($"{existingPlc.DeviceName}（{ex.Message}）");
             }
         }
 
@@ -196,6 +196,7 @@ public class SaveHardwareConfigHandler(
                 {
                     reloadTargets.Add((plcDevice.Id, deviceName));
                 }
+
                 continue;
             }
 
@@ -217,24 +218,24 @@ public class SaveHardwareConfigHandler(
             }
             catch (Exception ex)
             {
-                reloadFailures.Add($"{target.DeviceName} ({ex.Message})");
+                reloadFailures.Add($"{target.DeviceName}（{ex.Message}）");
             }
         }
 
         var runtimeIssues = new List<string>();
         if (stopFailures.Count > 0)
         {
-            runtimeIssues.Add($"以下 PLC 已删除停机失败：{string.Join("，", stopFailures)}");
+            runtimeIssues.Add($"以下 PLC 已删除停机失败：{string.Join("；", stopFailures)}");
         }
 
         if (reloadFailures.Count > 0)
         {
-            runtimeIssues.Add($"以下 PLC 重载失败：{string.Join("，", reloadFailures)}");
+            runtimeIssues.Add($"以下 PLC 重载失败：{string.Join("；", reloadFailures)}");
         }
 
         return runtimeIssues.Count == 0
             ? CrudOperationResult.Success("硬件配置已保存。")
-            : CrudOperationResult.Failure($"配置已保存，但{string.Join("；", runtimeIssues)}");
+            : CrudOperationResult.Failure($"配置已保存，但 {string.Join("；", runtimeIssues)}");
     }
 
     private async Task<List<NetworkDeviceEntity>> LoadExistingNetworkDevicesAsync(CancellationToken ct)
@@ -292,6 +293,9 @@ public class SaveHardwareConfigHandler(
                 Normalize(x.DataType),
                 Normalize(x.Direction),
                 x.SortOrder,
+                Normalize(x.Category),
+                NormalizeNullable(x.GroupName),
+                NormalizeNullable(x.DisplayRole),
                 NormalizeNullable(x.Remark)))
             .OrderBy(x => x.SortOrder)
             .ThenBy(x => x.Label, StringComparer.OrdinalIgnoreCase)
@@ -306,6 +310,9 @@ public class SaveHardwareConfigHandler(
                 Normalize(x.DataType),
                 Normalize(x.Direction),
                 x.SortOrder,
+                Normalize(x.Category),
+                NormalizeNullable(x.GroupName),
+                NormalizeNullable(x.DisplayRole),
                 NormalizeNullable(x.Remark)))
             .OrderBy(x => x.SortOrder)
             .ThenBy(x => x.Label, StringComparer.OrdinalIgnoreCase)
@@ -327,5 +334,8 @@ public class SaveHardwareConfigHandler(
         string DataType,
         string Direction,
         int SortOrder,
+        string Category,
+        string? GroupName,
+        string? DisplayRole,
         string? Remark);
 }

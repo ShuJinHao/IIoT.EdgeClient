@@ -2,10 +2,11 @@ using IIoT.Edge.Module.Stacking;
 
 namespace IIoT.Edge.Module.ContractTests;
 
-public sealed class StackingModuleContractTests : ModuleContractTestBase<StackingModule>
+public sealed class StackingModuleContractTests : ModuleContractTestBase<DependencyInjection>
 {
     protected override bool RequiresHardwareProfile => true;
     protected override int ExpectedRuntimeTaskCount => 1;
+    protected override int MinimumRouteCount => 7;
 
     protected override void ConfigureRuntimeServices(IServiceCollection services)
     {

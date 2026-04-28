@@ -1,19 +1,15 @@
 using IIoT.Edge.Application.Features.Production.DataView;
+using IIoT.Edge.Presentation.Navigation.Localization;
+using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
-using IIoT.Edge.UI.Shared.PluginSystem;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Production.DataView;
 
-public class DataViewModel : PresentationViewModelBase
+public class DataViewModel : NavigationViewModelBase
 {
     private readonly IDataViewService _dataViewService;
-    private readonly string _viewId;
-    private readonly string _viewTitle;
-
-    public override string ViewId => _viewId;
-    public override string ViewTitle => _viewTitle;
 
     private int _todayTotal;
     public int TodayTotal
@@ -62,26 +58,36 @@ public class DataViewModel : PresentationViewModelBase
     public ICommand QueryCommand { get; }
     public ICommand ExportCommand { get; }
 
-    public DataViewModel(IDataViewService dataViewService)
-        : this(dataViewService, "Production.DataView", "生产数据")
+    public DataViewModel(IDataViewService dataViewService, IAppLanguageService languageService)
+        : this(
+            dataViewService,
+            languageService,
+            "Production.DataView",
+            "Navigation_Title_Data",
+            "生产数据")
     {
     }
 
-    protected DataViewModel(
+    public DataViewModel(
         IDataViewService dataViewService,
+        IAppLanguageService languageService,
         string viewId,
-        string viewTitle)
+        string titleResourceKey,
+        string titleFallback)
+        : base(languageService, viewId, titleResourceKey, titleFallback)
     {
         _dataViewService = dataViewService;
-        _viewId = viewId;
-        _viewTitle = viewTitle;
-        QueryCommand = new AsyncCommand(() => RunViewTaskAsync(QueryAsync, "生产数据查询失败"));
+        QueryCommand = new AsyncCommand(() => RunViewTaskAsync(
+            QueryAsync,
+            GetText("Navigation_Data_QueryFailed", "生产数据查询失败。")));
         ExportCommand = new BaseCommand(_ => { });
     }
 
     public override async Task OnActivatedAsync()
     {
-        await RunViewTaskAsync(QueryAsync, "生产数据加载失败");
+        await RunViewTaskAsync(
+            QueryAsync,
+            GetText("Navigation_Data_LoadFailed", "生产数据加载失败。"));
     }
 
     private async Task QueryAsync()

@@ -1,0 +1,44 @@
+{
+  "launcherDirectory": "launcher",
+  "runtimes": [
+    {
+      "runtimeId": "stack",
+      "profileId": "StackingLine",
+      "machineProfile": "StackingLine",
+      "outputDirectory": "stack",
+      "machineConfig": "src/Edge/IIoT.Edge.Shell/appsettings.machine.StackingLine.json",
+      "moduleIds": [ "Stacking" ],
+      "displayName": "\u53e0\u7247",
+      "description": "\u4f7f\u7528\u53e0\u7247\u5de5\u5e8f\u7684 profile \u542f\u52a8\u5ba2\u6237\u7aef\uff0c\u5e76\u8fdb\u5165\u72ec\u7acb\u7684\u53e0\u7247\u672c\u5730\u8fd0\u884c\u76ee\u5f55\u3002",
+      "imagePath": "Assets/Profiles/stacking.png",
+      "iconKind": "LayersTriple",
+      "accentColor": "#0F766E"
+    },
+    {
+      "runtimeId": "injection",
+      "profileId": "InjectionLine",
+      "machineProfile": "InjectionLine",
+      "outputDirectory": "injection",
+      "machineConfig": "src/Edge/IIoT.Edge.Shell/appsettings.machine.InjectionLine.json",
+      "moduleIds": [ "Injection" ],
+      "displayName": "\u6ce8\u6db2",
+      "description": "\u4f7f\u7528\u6ce8\u6db2\u5de5\u5e8f\u7684 profile \u542f\u52a8\u5ba2\u6237\u7aef\uff0c\u5e76\u52a0\u8f7d\u6ce8\u6db2\u6a21\u5757\u4e0e\u72ec\u7acb\u8fd0\u884c\u6001\u3002",
+      "imagePath": "Assets/Profiles/injection.png",
+      "iconKind": "Syringe",
+      "accentColor": "#B45309"
+    },
+    {
+      "runtimeId": "homogenization",
+      "profileId": "HomogenizationLine",
+      "machineProfile": "HomogenizationLine",
+      "outputDirectory": "homogenization",
+      "machineConfig": "src/Edge/IIoT.Edge.Shell/appsettings.machine.HomogenizationLine.json",
+      "moduleIds": [ "Homogenization" ],
+      "displayName": "\u5300\u6d46",
+      "description": "\u4f7f\u7528\u5300\u6d46\u5de5\u5e8f\u7684 profile \u542f\u52a8\u5ba2\u6237\u7aef\uff0c\u540e\u7eed\u65b0\u589e\u5300\u6d46\u4e1a\u52a1\u65f6\u53ea\u9700\u90e8\u7f72\u63d2\u4ef6\u4e0e profile \u914d\u7f6e\u3002",
+      "imagePath": "Assets/Profiles/homogenization.png",
+      "iconKind": "BeakerOutline",
+      "accentColor": "#4D7C0F"
+    }
+  ]
+}

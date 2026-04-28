@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Common.Device;
 using IIoT.Edge.Infrastructure.Integration.Http;
 using System.Net;
 using System.Net.Http;
@@ -73,7 +74,7 @@ public sealed class CloudHttpClientBehaviorTests
             new FakeCloudApiEndpointProvider(),
             new FakeLogService());
 
-        var result = await client.GetAsync("/api/v1/edge/bootstrap/device-instance?clientCode=LINE-01");
+        var result = await client.GetAsync("/api/v1/bootstrap/device-instance?clientCode=LINE-01");
 
         Assert.True(result.IsSuccess);
         Assert.Equal("{}", result.Payload);
@@ -96,7 +97,7 @@ public sealed class CloudHttpClientBehaviorTests
             new FakeCloudApiEndpointProvider(),
             new FakeLogService());
 
-        var result = await client.PostAsync("/api/v1/human/identity/edge-login", new { employeeNo = "E001" });
+        var result = await client.PostAsync("/api/v1/bootstrap/edge-login", new { employeeNo = "E001" });
 
         Assert.True(result.IsSuccess);
         Assert.Equal(CloudCallOutcome.Success, result.Outcome);

@@ -3,7 +3,6 @@
 - [ ] Host
 - [ ] Injection
 - [ ] Stacking
-- [ ] Tools
 - [ ] Shared
 
 ## Module Contract Impact

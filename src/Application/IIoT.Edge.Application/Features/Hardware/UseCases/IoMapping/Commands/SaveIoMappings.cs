@@ -16,6 +16,9 @@ public record IoMappingDto(
     int AddressCount,
     string DataType,
     string Direction,
+    string Category,
+    string GroupName,
+    string DisplayRole,
     int SortOrder,
     string? Remark
 );
@@ -59,7 +62,8 @@ public class SaveIoMappingsHandler(
             {
                 var entity = new IoMappingEntity(
                     request.NetworkDeviceId, dto.Label, dto.PlcAddress,
-                    dto.AddressCount, dto.DataType, dto.Direction)
+                    dto.AddressCount, dto.DataType, dto.Direction,
+                    Normalize(dto.Category, "单点读数据"), dto.GroupName ?? string.Empty, dto.DisplayRole ?? string.Empty)
                 {
                     SortOrder = dto.SortOrder,
                     Remark = dto.Remark
@@ -74,6 +78,9 @@ public class SaveIoMappingsHandler(
                 entity.AddressCount = dto.AddressCount;
                 entity.DataType = dto.DataType;
                 entity.Direction = dto.Direction;
+                entity.Category = Normalize(dto.Category, "单点读数据");
+                entity.GroupName = dto.GroupName ?? string.Empty;
+                entity.DisplayRole = dto.DisplayRole ?? string.Empty;
                 entity.SortOrder = dto.SortOrder;
                 entity.Remark = dto.Remark;
                 repo.Update(entity);
@@ -83,4 +90,7 @@ public class SaveIoMappingsHandler(
         await repo.SaveChangesAsync(cancellationToken);
         return Result.Success();
     }
+
+    private static string Normalize(string? value, string fallback)
+        => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
 }

@@ -1,0 +1,601 @@
+<Window x:Class="IIoT.Edge.Launcher.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        mc:Ignorable="d"
+        Title="IIoT Edge Launcher"
+        Width="1440"
+        Height="860"
+        MinWidth="1200"
+        MinHeight="760"
+        Background="#101417"
+        Foreground="#F7FAFC"
+        ResizeMode="CanResize"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None">
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="0"
+                            CornerRadius="0"
+                            GlassFrameThickness="0"
+                            ResizeBorderThickness="8"
+                            UseAeroCaptionButtons="False" />
+    </shell:WindowChrome.WindowChrome>
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="pack://application:,,,/IIoT.Edge.Launcher;component/Themes/LauncherTheme.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Border Background="{StaticResource Launcher.WindowGradient}"
+            BorderBrush="{StaticResource Launcher.Border}"
+            BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="44" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Border Grid.Row="0"
+                    Background="#0B1115"
+                    BorderBrush="{StaticResource Launcher.Border}"
+                    BorderThickness="0,0,0,1"
+                    MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Orientation="Horizontal"
+                                VerticalAlignment="Center"
+                                Margin="16,0,0,0">
+                        <materialDesign:PackIcon Width="18"
+                                                 Height="18"
+                                                 Foreground="#5EEAD4"
+                                                 Kind="ViewDashboardOutline" />
+                        <TextBlock Margin="10,0,0,0"
+                                   VerticalAlignment="Center"
+                                   FontSize="14"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource Launcher.Text.Primary}"
+                                   Text="IIoT Edge Launcher" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1"
+                                Orientation="Horizontal">
+                        <Button Click="MinimizeWindowButton_Click"
+                                Style="{StaticResource LauncherWindowCommandButtonStyle}"
+                                ToolTip="最小化">
+                            <materialDesign:PackIcon Width="18"
+                                                     Height="18"
+                                                     Kind="WindowMinimize" />
+                        </Button>
+                        <Button Click="ToggleWindowStateButton_Click"
+                                Style="{StaticResource LauncherWindowCommandButtonStyle}"
+                                ToolTip="最大化/还原">
+                            <materialDesign:PackIcon Width="18"
+                                                     Height="18"
+                                                     Kind="WindowMaximize" />
+                        </Button>
+                        <Button Click="CloseWindowButton_Click"
+                                Style="{StaticResource LauncherWindowCommandButtonStyle}"
+                                ToolTip="关闭">
+                            <materialDesign:PackIcon Width="18"
+                                                     Height="18"
+                                                     Kind="Close" />
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Grid Grid.Row="1"
+                  Margin="36,28,36,36"
+                  Background="Transparent">
+                <Grid x:Name="LoginPageRoot"
+                      Background="Transparent">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="480" />
+                        <ColumnDefinition Width="36" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border Grid.Column="0"
+                            Padding="36"
+                            Style="{StaticResource LauncherSurfaceBorderStyle}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <StackPanel>
+                                <Border HorizontalAlignment="Left"
+                                        Style="{StaticResource LauncherStatusChipStyle}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <materialDesign:PackIcon Width="18"
+                                                                 Height="18"
+                                                                 Foreground="#5EEAD4"
+                                                                 Kind="ShieldLockOutline" />
+                                        <TextBlock Margin="8,0,0,0"
+                                                   VerticalAlignment="Center"
+                                                   FontSize="12"
+                                                   Foreground="{StaticResource Launcher.Text.Secondary}"
+                                                   Text="本地登录" />
+                                    </StackPanel>
+                                </Border>
+
+                                <TextBlock Margin="0,24,0,0"
+                                           Style="{StaticResource LauncherSectionTitleStyle}"
+                                           Text="先登录，再选择要启动的工序" />
+                                <TextBlock Margin="0,12,0,0"
+                                           Style="{StaticResource LauncherBodyStyle}"
+                                           Text="这里的账号只用于本地启动台，不和云端员工登录共用。登录成功后，再进入工序选择页启动对应客户端。"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="1"
+                                        VerticalAlignment="Center">
+                                <TextBox x:Name="UserNameTextBox"
+                                         Margin="0,0,0,18"
+                                         materialDesign:HintAssist.FloatingScale="0.8"
+                                         materialDesign:HintAssist.Hint="账号"
+                                         Style="{StaticResource LauncherHintTextBoxStyle}" />
+
+                                <PasswordBox x:Name="PasswordInput"
+                                             Margin="0,0,0,18"
+                                             materialDesign:HintAssist.FloatingScale="0.8"
+                                             materialDesign:HintAssist.Hint="密码"
+                                             Style="{StaticResource LauncherHintPasswordBoxStyle}" />
+
+                                <PasswordBox x:Name="NewPasswordInput"
+                                             Margin="0,0,0,18"
+                                             materialDesign:HintAssist.FloatingScale="0.8"
+                                             materialDesign:HintAssist.Hint="新密码（修改密码时填写）"
+                                             Style="{StaticResource LauncherHintPasswordBoxStyle}" />
+
+                                <TextBlock Margin="0,0,0,14"
+                                           FontSize="12"
+                                           Foreground="{StaticResource Launcher.Text.Error}"
+                                           Text="{Binding ErrorMessage}"
+                                           TextWrapping="Wrap" />
+
+                                <Button Click="LoginButton_Click"
+                                        Content="登录并进入工序选择"
+                                        IsDefault="True"
+                                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBooleanConverter}}"
+                                        Style="{StaticResource LauncherPrimaryButtonStyle}" />
+
+                                <Button Margin="0,10,0,0"
+                                        Click="ChangePasswordButton_Click"
+                                        Content="修改本地密码"
+                                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBooleanConverter}}"
+                                        Style="{StaticResource LauncherGhostButtonStyle}" />
+
+                                <TextBlock Margin="0,18,0,0"
+                                           Style="{StaticResource LauncherBodyStyle}"
+                                           Text="登录成功后再显示工序卡片，避免现场误触启动。"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+
+                            <Border Grid.Row="2"
+                                    Padding="14,12"
+                                    Background="{StaticResource Launcher.Bg.Chip}"
+                                    BorderBrush="{StaticResource Launcher.Border}"
+                                    BorderThickness="1"
+                                    CornerRadius="14">
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Width="16"
+                                                             Height="16"
+                                                             Foreground="#60A5FA"
+                                                             Kind="InformationOutline" />
+                                    <TextBlock Margin="10,0,0,0"
+                                               VerticalAlignment="Center"
+                                               FontSize="12"
+                                               Foreground="{StaticResource Launcher.Text.Secondary}"
+                                               Text="Launcher 只负责本地登录、读取 profile 清单并启动 Shell。" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Column="2"
+                            Style="{StaticResource LauncherSurfaceBorderStyle}">
+                        <Grid ClipToBounds="True">
+                            <Image Opacity="0.24"
+                                   Source="pack://application:,,,/IIoT.Edge.UI.Shared;component/Assets/images/login1.png"
+                                   Stretch="UniformToFill" />
+                            <Border Background="{StaticResource Launcher.HeroOverlay}" />
+
+                            <Grid Margin="44">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <WrapPanel>
+                                    <Border Width="74"
+                                            Height="74"
+                                            Background="#1AFFFFFF"
+                                            CornerRadius="22">
+                                        <materialDesign:PackIcon Width="34"
+                                                                 Height="34"
+                                                                 HorizontalAlignment="Center"
+                                                                 VerticalAlignment="Center"
+                                                                 Foreground="White"
+                                                                 Kind="Launch" />
+                                    </Border>
+                                    <Border Width="172"
+                                            Style="{StaticResource LauncherMetricCardStyle}">
+                                        <StackPanel>
+                                            <TextBlock FontSize="12"
+                                                       Foreground="#A5F3FC"
+                                                       Text="软件版本" />
+                                            <TextBlock Margin="0,6,0,0"
+                                                       FontSize="22"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="White"
+                                                       Text="{Binding AppVersionText}" />
+                                        </StackPanel>
+                                    </Border>
+                                </WrapPanel>
+
+                                <Grid Grid.Row="1">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Style="{StaticResource LauncherPageTitleStyle}"
+                                               Text="标准工序启动平台" />
+                                    <TextBlock Grid.Row="1"
+                                               Margin="0,16,0,0"
+                                               FontSize="16"
+                                               Foreground="{StaticResource Launcher.Text.Secondary}"
+                                               Text="Launcher 负责现场本地登录与工序切换，真正的上位机仍然是同一个 IIoT.Edge.Shell.exe。"
+                                               TextWrapping="Wrap" />
+
+                                    <WrapPanel Grid.Row="2"
+                                               Margin="0,28,0,0">
+                                        <Border Width="236"
+                                                Style="{StaticResource LauncherMetricCardStyle}">
+                                            <StackPanel>
+                                                <TextBlock FontSize="12"
+                                                           Foreground="#7DD3FC"
+                                                           Text="平台定位" />
+                                                <TextBlock Margin="0,8,0,0"
+                                                           FontSize="16"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="White"
+                                                           Text="{Binding PlatformMetaText}"
+                                                           TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Width="232"
+                                                Style="{StaticResource LauncherMetricCardStyle}">
+                                            <StackPanel>
+                                                <TextBlock FontSize="12"
+                                                           Foreground="#A5F3FC"
+                                                           Text="运行架构" />
+                                                <TextBlock Margin="0,8,0,0"
+                                                           FontSize="15"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="White"
+                                                           Text="{Binding ArchitectureText}"
+                                                           TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Width="180"
+                                                Style="{StaticResource LauncherMetricCardStyle}">
+                                            <StackPanel>
+                                                <TextBlock FontSize="12"
+                                                           Foreground="#86EFAC"
+                                                           Text="维护信息" />
+                                                <TextBlock Margin="0,8,0,0"
+                                                           FontSize="15"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="White"
+                                                           Text="{Binding MaintainerText}"
+                                                           TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </Border>
+                                    </WrapPanel>
+
+                                    <WrapPanel Grid.Row="3"
+                                               Margin="0,26,0,0">
+                                        <Border Margin="0,0,14,0"
+                                                Style="{StaticResource LauncherStatusChipStyle}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <materialDesign:PackIcon Width="16"
+                                                                         Height="16"
+                                                                         Foreground="#2DD4BF"
+                                                                         Kind="LayersTriple" />
+                                                <TextBlock Margin="8,0,0,0"
+                                                           VerticalAlignment="Center"
+                                                           FontSize="12"
+                                                           Foreground="{StaticResource Launcher.Text.Secondary}"
+                                                           Text="叠片" />
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Margin="0,0,14,0"
+                                                Style="{StaticResource LauncherStatusChipStyle}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <materialDesign:PackIcon Width="16"
+                                                                         Height="16"
+                                                                         Foreground="#FB923C"
+                                                                         Kind="Syringe" />
+                                                <TextBlock Margin="8,0,0,0"
+                                                           VerticalAlignment="Center"
+                                                           FontSize="12"
+                                                           Foreground="{StaticResource Launcher.Text.Secondary}"
+                                                           Text="注液" />
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Style="{StaticResource LauncherStatusChipStyle}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <materialDesign:PackIcon Width="16"
+                                                                         Height="16"
+                                                                         Foreground="#A3E635"
+                                                                         Kind="BeakerOutline" />
+                                                <TextBlock Margin="8,0,0,0"
+                                                           VerticalAlignment="Center"
+                                                           FontSize="12"
+                                                           Foreground="{StaticResource Launcher.Text.Secondary}"
+                                                           Text="匀浆" />
+                                            </StackPanel>
+                                        </Border>
+                                    </WrapPanel>
+                                </Grid>
+
+                                <Border Grid.Row="2"
+                                        Padding="16,14"
+                                        HorizontalAlignment="Left"
+                                        Background="#14FFFFFF"
+                                        BorderBrush="#20FFFFFF"
+                                        BorderThickness="1"
+                                        CornerRadius="16">
+                                    <StackPanel Orientation="Horizontal">
+                                        <materialDesign:PackIcon Width="18"
+                                                                 Height="18"
+                                                                 Foreground="#5EEAD4"
+                                                                 Kind="Sparkles" />
+                                        <TextBlock Margin="10,0,0,0"
+                                                   VerticalAlignment="Center"
+                                                   FontSize="13"
+                                                   Foreground="{StaticResource Launcher.Text.Secondary}"
+                                                   Text="支持单主程序、多 Profile 隔离与插件化工序扩展。" />
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <Grid x:Name="SelectionPageRoot"
+                      Background="Transparent"
+                      Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Border Padding="26,22"
+                            Style="{StaticResource LauncherSurfaceBorderStyle}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <Border Width="56"
+                                    Height="56"
+                                    VerticalAlignment="Center"
+                                    Background="{StaticResource Launcher.Bg.Chip}"
+                                    CornerRadius="16">
+                                <materialDesign:PackIcon Width="28"
+                                                         Height="28"
+                                                         HorizontalAlignment="Center"
+                                                         VerticalAlignment="Center"
+                                                         Foreground="#5EEAD4"
+                                                         Kind="ViewDashboardOutline" />
+                            </Border>
+
+                            <StackPanel Grid.Column="1"
+                                        Margin="20,0,0,0">
+                                <TextBlock Style="{StaticResource LauncherSectionTitleStyle}"
+                                           Text="选择要启动的工序客户端" />
+                                <TextBlock Margin="0,8,0,0"
+                                           Style="{StaticResource LauncherBodyStyle}"
+                                           Text="工序卡片来自本地 profile 清单。新增工序时，只需要补插件、profile 配置和启动卡片。"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+
+                            <Border Grid.Column="2"
+                                    HorizontalAlignment="Right"
+                                    Style="{StaticResource LauncherStatusChipStyle}">
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Width="18"
+                                                             Height="18"
+                                                             Foreground="#60A5FA"
+                                                             Kind="AccountCircleOutline" />
+                                    <TextBlock Margin="10,0,0,0"
+                                               VerticalAlignment="Center"
+                                               FontSize="13"
+                                               Foreground="{StaticResource Launcher.Text.Primary}"
+                                               Text="{Binding WelcomeText}" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Row="1"
+                            Margin="0,18,0,18"
+                            Padding="18"
+                            Style="{StaticResource LauncherSurfaceBorderStyle}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="320" />
+                                <ColumnDefinition Width="16" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBox Grid.Column="0"
+                                     materialDesign:HintAssist.Hint="搜索工序、Profile 或卡片标识"
+                                     Style="{StaticResource LauncherSearchTextBoxStyle}"
+                                     Text="{Binding ProfileSearchText, UpdateSourceTrigger=PropertyChanged}" />
+
+                            <Border Grid.Column="2"
+                                    Style="{StaticResource LauncherStatusChipStyle}">
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Width="16"
+                                                             Height="16"
+                                                             Foreground="#5EEAD4"
+                                                             Kind="ShapeOutline" />
+                                    <TextBlock Margin="8,0,0,0"
+                                               VerticalAlignment="Center"
+                                               FontSize="12"
+                                               Foreground="{StaticResource Launcher.Text.Secondary}"
+                                               Text="{Binding ProfileSummaryText}" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </Border>
+
+                    <ScrollViewer Grid.Row="2"
+                                  Margin="0,0,0,20"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding Profiles}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <materialDesign:Card Style="{StaticResource LauncherProfileCardStyle}">
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="150" />
+                                                <RowDefinition Height="*" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+
+                                            <Border Grid.Row="0"
+                                                    Background="{Binding AccentColor}"
+                                                    ClipToBounds="True"
+                                                    CornerRadius="20,20,0,0">
+                                                <Grid>
+                                                    <Rectangle Fill="#22000000" />
+                                                    <Image Opacity="0.12"
+                                                           Source="{Binding ImagePath}"
+                                                           Stretch="UniformToFill" />
+                                                    <Grid Margin="20">
+                                                        <Border Width="52"
+                                                                Height="52"
+                                                                HorizontalAlignment="Left"
+                                                                VerticalAlignment="Top"
+                                                                Background="#1AFFFFFF"
+                                                                CornerRadius="26">
+                                                            <materialDesign:PackIcon Width="26"
+                                                                                     Height="26"
+                                                                                     HorizontalAlignment="Center"
+                                                                                     VerticalAlignment="Center"
+                                                                                     Foreground="White"
+                                                                                     Kind="{Binding IconKind}" />
+                                                        </Border>
+
+                                                        <StackPanel VerticalAlignment="Bottom">
+                                                            <TextBlock FontSize="24"
+                                                                       FontWeight="Bold"
+                                                                       Foreground="White"
+                                                                       Text="{Binding DisplayName}" />
+                                                            <TextBlock Margin="0,8,0,0"
+                                                                       FontSize="12"
+                                                                       Foreground="#E2E8F0"
+                                                                       Text="{Binding MachineProfile, StringFormat=MachineProfile · {0}}" />
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Grid>
+                                            </Border>
+
+                                            <StackPanel Grid.Row="1"
+                                                        Margin="20,18,20,14">
+                                                <TextBlock FontSize="18"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{StaticResource Launcher.Text.Primary}"
+                                                           Text="{Binding DisplayName}" />
+                                                <TextBlock Margin="0,10,0,0"
+                                                           MaxHeight="72"
+                                                           Style="{StaticResource LauncherBodyStyle}"
+                                                           Text="{Binding Description}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           TextWrapping="Wrap" />
+
+                                                <WrapPanel Margin="0,16,0,0">
+                                                    <Border Style="{StaticResource LauncherProfileInfoChipStyle}">
+                                                        <TextBlock FontSize="12"
+                                                                   Foreground="{StaticResource Launcher.Text.Secondary}"
+                                                                   Text="{Binding MachineProfile, StringFormat=Profile · {0}}" />
+                                                    </Border>
+                                                    <Border Style="{StaticResource LauncherProfileInfoChipStyle}">
+                                                        <TextBlock FontSize="12"
+                                                                   Foreground="{StaticResource Launcher.Text.Secondary}"
+                                                                   Text="{Binding ProfileId, StringFormat=卡片 · {0}}" />
+                                                    </Border>
+                                                </WrapPanel>
+                                            </StackPanel>
+
+                                            <Border Grid.Row="2"
+                                                    Padding="20,0,20,20">
+                                                <Button Background="{Binding AccentColor}"
+                                                        BorderBrush="{Binding AccentColor}"
+                                                        Click="LaunchProfileButton_Click"
+                                                        Content="启动工序"
+                                                        Style="{StaticResource LauncherPrimaryButtonStyle}" />
+                                            </Border>
+                                        </Grid>
+                                    </materialDesign:Card>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <Border Grid.Row="3"
+                            Padding="18,16"
+                            Style="{StaticResource LauncherSurfaceBorderStyle}">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Width="16"
+                                                         Height="16"
+                                                         Foreground="#60A5FA"
+                                                         Kind="InformationOutline" />
+                                <TextBlock Margin="10,0,0,0"
+                                           FontSize="13"
+                                           Foreground="{StaticResource Launcher.Text.Secondary}"
+                                           Text="{Binding StatusMessage}" />
+                            </StackPanel>
+                            <TextBlock Margin="0,8,0,0"
+                                       FontSize="13"
+                                       Foreground="{StaticResource Launcher.Text.Error}"
+                                       Text="{Binding ErrorMessage}"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

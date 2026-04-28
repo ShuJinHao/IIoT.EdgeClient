@@ -13,6 +13,11 @@ public interface IAuthService
 
     bool HasPermission(string permission);
 
+    /// <summary>
+    /// 异步确认当前会话仍然有效；云端令牌过期时在这里刷新，避免属性访问阻塞 UI 线程。
+    /// </summary>
+    Task<bool> EnsureAuthenticatedAsync(CancellationToken cancellationToken = default);
+
     Task<AuthResult> LoginLocalAsync(string password);
 
     /// <summary>

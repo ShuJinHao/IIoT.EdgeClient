@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Module.Injection.Payload;
 using IIoT.Edge.Runtime.Context;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
@@ -196,6 +197,138 @@ public sealed class ProductionContextStorePersistenceTests
         }
     }
 
+    [Fact]
+    public void GetOrCreate_WhenModuleFactoryRegistered_ShouldCreateModuleSpecificContext()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "edge-context-tests", Guid.NewGuid().ToString("N"));
+        var logger = new FakeLogService();
+
+        try
+        {
+            var store = new ProductionContextStore(logger, [new TestProductionContextFactory()], tempDir);
+
+            var context = store.GetOrCreate("PLC-H", TestProductionContextFactory.TestModuleId);
+
+            var typedContext = Assert.IsType<TestProductionContext>(context);
+            Assert.Equal("PLC-H", typedContext.DeviceName);
+            Assert.Equal("CreatedByFactory", typedContext.ModuleMarker);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void GetOrCreate_WhenExistingBaseContextNeedsModuleContext_ShouldPreserveRuntimeState()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "edge-context-tests", Guid.NewGuid().ToString("N"));
+        var logger = new FakeLogService();
+
+        try
+        {
+            var store = new ProductionContextStore(logger, [new TestProductionContextFactory()], tempDir);
+
+            var baseContext = store.GetOrCreate("PLC-H");
+            baseContext.DeviceId = 9;
+            baseContext.SetStep("Homogenization.Inbound", 30);
+            baseContext.Set("BatchNo", "B-1001");
+            baseContext.AddCell("BC-1001", new NamedCellData { Label = "Display-Only" });
+
+            var upgraded = store.GetOrCreate("PLC-H", TestProductionContextFactory.TestModuleId);
+
+            var typedContext = Assert.IsType<TestProductionContext>(upgraded);
+            Assert.Equal(9, typedContext.DeviceId);
+            Assert.Equal(30, typedContext.GetStep("Homogenization.Inbound"));
+            Assert.Equal("B-1001", typedContext.Get<string>("BatchNo"));
+            Assert.True(typedContext.HasCell("BC-1001"));
+            Assert.Equal("Display-Only", Assert.IsType<NamedCellData>(typedContext.GetCell("BC-1001")).DisplayLabel);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void SaveToFile_WhenTempWriteFails_ShouldDeleteResidualTmpFileAndLogCleanupResult()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "edge-context-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var logger = new FakeLogService();
+            var fileSystem = new FaultingPersistenceFileSystem
+            {
+                FailOnWrite = true,
+                LeaveTempFileOnWriteFailure = true
+            };
+            var store = new ProductionContextStore(logger, fileSystem, tempDir);
+            store.GetOrCreate("PLC-A").Set("WorkOrder", "WO-001");
+
+            store.SaveToFile();
+
+            var tempPath = Path.Combine(tempDir, "production_context.json.tmp");
+            Assert.False(File.Exists(tempPath));
+            Assert.Contains(
+                logger.Entries,
+                x => x.Message.Contains("writing temp file", StringComparison.OrdinalIgnoreCase)
+                    && x.Message.Contains("Temp cleanup: deleted residual .tmp file.", StringComparison.Ordinal));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void SaveToFile_WhenReplaceFails_ShouldDeleteTmpFileAndKeepExistingPersistedFile()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "edge-context-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var logger = new FakeLogService();
+            var fileSystem = new FaultingPersistenceFileSystem
+            {
+                FailOnReplace = true
+            };
+            var persistPath = Path.Combine(tempDir, "production_context.json");
+            File.WriteAllText(persistPath, "seed");
+
+            var store = new ProductionContextStore(logger, fileSystem, tempDir);
+            store.GetOrCreate("PLC-A").Set("WorkOrder", "WO-002");
+
+            store.SaveToFile();
+
+            var tempPath = Path.Combine(tempDir, "production_context.json.tmp");
+            Assert.False(File.Exists(tempPath));
+            Assert.Equal("seed", File.ReadAllText(persistPath));
+            Assert.Contains(
+                logger.Entries,
+                x => x.Message.Contains("replacing persisted file", StringComparison.OrdinalIgnoreCase)
+                    && x.Message.Contains("Temp cleanup: deleted residual .tmp file.", StringComparison.Ordinal));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
     private sealed class NamedCellData : CellDataBase
     {
         public override string ProcessType => "Named";
@@ -203,5 +336,65 @@ public sealed class ProductionContextStorePersistenceTests
         public override string DisplayLabel => Label;
 
         public string Label { get; set; } = string.Empty;
+    }
+
+    private sealed class TestProductionContext : ProductionContext
+    {
+        public string ModuleMarker { get; init; } = string.Empty;
+    }
+
+    private sealed class TestProductionContextFactory : IProductionContextFactory
+    {
+        public const string TestModuleId = "Homogenization";
+
+        public string ModuleId => TestModuleId;
+
+        public Type ContextType => typeof(TestProductionContext);
+
+        public ProductionContext Create(string deviceName)
+            => new TestProductionContext
+            {
+                DeviceName = deviceName,
+                ModuleMarker = "CreatedByFactory"
+            };
+    }
+
+    private sealed class FaultingPersistenceFileSystem : IProductionContextPersistenceFileSystem
+    {
+        public bool FailOnWrite { get; init; }
+
+        public bool LeaveTempFileOnWriteFailure { get; init; }
+
+        public bool FailOnReplace { get; init; }
+
+        public void WriteAllText(string path, string content)
+        {
+            if (!FailOnWrite)
+            {
+                File.WriteAllText(path, content);
+                return;
+            }
+
+            if (LeaveTempFileOnWriteFailure)
+            {
+                File.WriteAllText(path, content);
+            }
+
+            throw new IOException("disk full");
+        }
+
+        public void ReplaceFile(string sourcePath, string destinationPath)
+        {
+            if (FailOnReplace)
+            {
+                throw new UnauthorizedAccessException("replace blocked");
+            }
+
+            File.Move(sourcePath, destinationPath, overwrite: true);
+        }
+
+        public bool FileExists(string path) => File.Exists(path);
+
+        public void DeleteFile(string path) => File.Delete(path);
     }
 }

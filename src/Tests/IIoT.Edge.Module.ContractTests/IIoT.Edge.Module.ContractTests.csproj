@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
@@ -19,34 +19,25 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Edge\IIoT.Edge.Host.Bootstrap\IIoT.Edge.Host.Bootstrap.csproj" />
-    <ProjectReference Include="..\..\Tools\ModuleSamples\IIoT.Edge.Module.DryRun\IIoT.Edge.Module.DryRun.csproj" />
-    <ProjectReference Include="..\..\Tools\ModuleSamples\IIoT.Edge.Module.ScanCaptureStarter\IIoT.Edge.Module.ScanCaptureStarter.csproj" />
     <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.Injection\IIoT.Edge.Module.Injection.csproj" />
     <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.Stacking\IIoT.Edge.Module.Stacking.csproj" />
-    <ProjectReference Include="..\..\Shared\IIoT.Edge.Module.Abstractions\IIoT.Edge.Module.Abstractions.csproj" />
+    <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.Homogenization\IIoT.Edge.Module.Homogenization.csproj" />
+    <ProjectReference Include="..\..\Application\IIoT.Edge.Application\IIoT.Edge.Application.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PluginModuleProject Include="..\..\Modules\**\*.csproj" />
-    <PluginModuleProject Include="..\..\Tools\ModuleSamples\**\*.csproj" />
   </ItemGroup>
 
   <Target Name="ResolvePluginModuleArtifacts">
-    <MSBuild
-      Projects="@(PluginModuleProject)"
-      Targets="GetPluginArtifacts"
-      BuildInParallel="false"
-      Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+    <MSBuild Projects="@(PluginModuleProject)" Targets="GetPluginArtifacts" BuildInParallel="false" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
       <Output TaskParameter="TargetOutputs" ItemName="PluginModuleArtifact" />
     </MSBuild>
   </Target>
 
   <Target Name="CopyPluginModulesToTestOutput" AfterTargets="Build" DependsOnTargets="ResolvePluginModuleArtifacts" Condition="'@(PluginModuleArtifact)' != ''">
     <MakeDir Directories="@(PluginModuleArtifact -> '$(TargetDir)Modules\%(ModuleId)\%(RecursiveDir)')" />
-    <Copy
-      SourceFiles="@(PluginModuleArtifact)"
-      DestinationFiles="@(PluginModuleArtifact -> '$(TargetDir)Modules\%(ModuleId)\%(RecursiveDir)%(Filename)%(Extension)')"
-      SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(PluginModuleArtifact)" DestinationFiles="@(PluginModuleArtifact -> '$(TargetDir)Modules\%(ModuleId)\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
 
 </Project>

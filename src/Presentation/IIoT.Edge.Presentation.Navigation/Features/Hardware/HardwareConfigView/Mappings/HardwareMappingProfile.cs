@@ -5,8 +5,8 @@ using IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Models;
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView.Mappings;
 
 /// <summary>
-/// Ó²¼şÅäÖÃÒ³ÃæÓ³ÉäÅäÖÃ¡£
-/// ¸ºÔğÔÚÓ²¼şÁìÓòÊµÌåÓë½çÃæ±à¼­Ä£ĞÍÖ®¼ä½¨Á¢Ó³Éä¹ØÏµ¡£
+/// ç¡¬ä»¶é…ç½®é¡µé¢æ˜ å°„é…ç½®ã€‚
+/// è´Ÿè´£åœ¨ç¡¬ä»¶é…ç½®å®ä½“ä¸é¡µé¢ç¼–è¾‘æ¨¡å‹ä¹‹é—´å»ºç«‹æ˜ å°„å…³ç³»ã€‚
 /// </summary>
 public class HardwareMappingProfile : Profile
 {

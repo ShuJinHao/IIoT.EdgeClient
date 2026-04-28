@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -7,6 +7,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <BaseOutputPath>..\..\..\..\publish\</BaseOutputPath>
+    <OutputPath>..\..\..\..\publish\$(Configuration)\shell\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <EnableLocalPluginModuleBuild Condition="'$(EnableLocalPluginModuleBuild)' == ''">false</EnableLocalPluginModuleBuild>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(SKIP_EDGE_WPF_PROJECTS)' == 'true'">
@@ -30,13 +33,12 @@
     <ProjectReference Include="..\..\Presentation\IIoT.Edge.Presentation.Shell\IIoT.Edge.Presentation.Shell.csproj" />
     <ProjectReference Include="..\..\Presentation\IIoT.Edge.Presentation.Navigation\IIoT.Edge.Presentation.Navigation.csproj" />
     <ProjectReference Include="..\..\Presentation\IIoT.Edge.Presentation.Panels\IIoT.Edge.Presentation.Panels.csproj" />
-    <ProjectReference Include="..\..\Shared\IIoT.Edge.Module.Abstractions\IIoT.Edge.Module.Abstractions.csproj" />
     <ProjectReference Include="..\..\Shared\IIoT.Edge.UI.Shared\IIoT.Edge.UI.Shared.csproj" />
+    <ProjectReference Include="..\..\Application\IIoT.Edge.Application\IIoT.Edge.Application.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(EnableLocalPluginModuleBuild)' == 'true'">
     <PluginModuleProject Include="..\..\Modules\**\*.csproj" />
-    <PluginModuleProject Include="..\..\Tools\ModuleSamples\**\*.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -55,30 +57,20 @@
     </None>
   </ItemGroup>
 
-  <Target Name="ResolvePluginModuleArtifacts">
-    <MSBuild
-      Projects="@(PluginModuleProject)"
-      Targets="GetPluginArtifacts"
-      BuildInParallel="false"
-      Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+  <Target Name="ResolvePluginModuleArtifacts" Condition="'$(EnableLocalPluginModuleBuild)' == 'true'">
+    <MSBuild Projects="@(PluginModuleProject)" Targets="GetPluginArtifacts" BuildInParallel="false" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
       <Output TaskParameter="TargetOutputs" ItemName="PluginModuleArtifact" />
     </MSBuild>
   </Target>
 
-  <Target Name="CopyPluginModulesToBuildOutput" AfterTargets="Build" DependsOnTargets="ResolvePluginModuleArtifacts" Condition="'@(PluginModuleArtifact)' != ''">
+  <Target Name="CopyPluginModulesToBuildOutput" AfterTargets="Build" DependsOnTargets="ResolvePluginModuleArtifacts" Condition="'$(EnableLocalPluginModuleBuild)' == 'true' and '@(PluginModuleArtifact)' != ''">
     <MakeDir Directories="@(PluginModuleArtifact -> '$(TargetDir)Modules\%(ModuleId)\%(RecursiveDir)')" />
-    <Copy
-      SourceFiles="@(PluginModuleArtifact)"
-      DestinationFiles="@(PluginModuleArtifact -> '$(TargetDir)Modules\%(ModuleId)\%(RecursiveDir)%(Filename)%(Extension)')"
-      SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(PluginModuleArtifact)" DestinationFiles="@(PluginModuleArtifact -> '$(TargetDir)Modules\%(ModuleId)\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
 
-  <Target Name="CopyPluginModulesToPublishOutput" AfterTargets="Publish" DependsOnTargets="ResolvePluginModuleArtifacts" Condition="'$(PublishDir)' != '' and '@(PluginModuleArtifact)' != ''">
+  <Target Name="CopyPluginModulesToPublishOutput" AfterTargets="Publish" DependsOnTargets="ResolvePluginModuleArtifacts" Condition="'$(EnableLocalPluginModuleBuild)' == 'true' and '$(PublishDir)' != '' and '@(PluginModuleArtifact)' != ''">
     <MakeDir Directories="@(PluginModuleArtifact -> '$(PublishDir)Modules\%(ModuleId)\%(RecursiveDir)')" />
-    <Copy
-      SourceFiles="@(PluginModuleArtifact)"
-      DestinationFiles="@(PluginModuleArtifact -> '$(PublishDir)Modules\%(ModuleId)\%(RecursiveDir)%(Filename)%(Extension)')"
-      SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(PluginModuleArtifact)" DestinationFiles="@(PluginModuleArtifact -> '$(PublishDir)Modules\%(ModuleId)\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
 
 </Project>

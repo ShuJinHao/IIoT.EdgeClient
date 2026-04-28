@@ -1,4 +1,4 @@
-using IIoT.Edge.SharedKernel.Domain;
+﻿using IIoT.Edge.SharedKernel.Domain;
 using IIoT.Edge.SharedKernel.Repository;
 using Microsoft.EntityFrameworkCore;
 using System.Linq.Expressions;

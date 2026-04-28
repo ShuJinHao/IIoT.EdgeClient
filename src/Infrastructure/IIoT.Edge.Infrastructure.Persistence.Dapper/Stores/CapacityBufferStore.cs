@@ -2,14 +2,13 @@ using Dapper;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Connection;
-using IIoT.Edge.Infrastructure.Persistence.Dapper.Repository;
 using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
 
 namespace IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
 
-public class CapacityBufferStore : DapperRepositoryBase<CapacityRecord>, ICapacityBufferStore
+public class CapacityBufferStore : ClaimBufferStoreBase<CapacityRecord>, ICapacityBufferStore
 {
-    private static readonly TimeSpan ClaimTimeout = TimeSpan.FromMinutes(10);
+    private const string ClaimTableName = "capacity_buffer_claims";
 
     public override string DbName => "pipeline_cloud";
     protected override string TableName => "capacity_buffer";
@@ -150,11 +149,7 @@ public class CapacityBufferStore : DapperRepositoryBase<CapacityRecord>, ICapaci
         return await ExecuteInTransactionAsync<ClaimedCapacityBufferBatch?>(async (conn, tx) =>
         {
             var now = DateTime.UtcNow;
-            await conn.ExecuteAsync(
-                "DELETE FROM capacity_buffer_claims WHERE ClaimedAt <= @ExpiredAt",
-                new { ExpiredAt = now.Subtract(ClaimTimeout).ToString("O") },
-                tx,
-                commandTimeout: CommandTimeout);
+            await DeleteExpiredClaimsAsync(conn, tx, ClaimTableName, now).ConfigureAwait(false);
 
             var ids = (await conn.QueryAsync<long>(
                 @"
@@ -174,18 +169,7 @@ public class CapacityBufferStore : DapperRepositoryBase<CapacityRecord>, ICapaci
             }
 
             var claimToken = Guid.NewGuid().ToString("N");
-            var claimRows = ids.Select(id => new
-            {
-                RecordId = id,
-                ClaimToken = claimToken,
-                ClaimedAt = now.ToString("O")
-            });
-
-            await conn.ExecuteAsync(
-                "INSERT INTO capacity_buffer_claims (RecordId, ClaimToken, ClaimedAt) VALUES (@RecordId, @ClaimToken, @ClaimedAt)",
-                claimRows,
-                tx,
-                commandTimeout: CommandTimeout);
+            await InsertClaimRowsAsync(conn, tx, ClaimTableName, ids, claimToken, now).ConfigureAwait(false);
 
             var summaries = (await conn.QueryAsync<BufferHourlySummaryDto>(
                 @"
@@ -221,7 +205,7 @@ public class CapacityBufferStore : DapperRepositoryBase<CapacityRecord>, ICapaci
             if (summaries.Count == 0)
             {
                 await conn.ExecuteAsync(
-                    "DELETE FROM capacity_buffer_claims WHERE ClaimToken = @ClaimToken",
+                    $"DELETE FROM {ClaimTableName} WHERE ClaimToken = @ClaimToken",
                     new { ClaimToken = claimToken },
                     tx,
                     commandTimeout: CommandTimeout);
@@ -277,22 +261,17 @@ public class CapacityBufferStore : DapperRepositoryBase<CapacityRecord>, ICapaci
                 tx,
                 commandTimeout: CommandTimeout);
 
-            await conn.ExecuteAsync(
-                "DELETE FROM capacity_buffer_claims WHERE RecordId IN @Ids",
-                new { Ids = ids },
-                tx,
-                commandTimeout: CommandTimeout);
+            await DeleteClaimRowsByIdsAsync(conn, tx, ClaimTableName, ids).ConfigureAwait(false);
 
             return ids.Count;
         });
     }
 
     public async Task ReleaseClaimAsync(string claimToken)
-        => await StrictExecuteAsync(
-            "DELETE FROM capacity_buffer_claims WHERE ClaimToken = @ClaimToken",
-            new { ClaimToken = claimToken },
-            requireAffectedRows: true,
-            failureMessage: $"Failed to release capacity claim {claimToken}.");
+        => await ReleaseClaimCoreAsync(
+            ClaimTableName,
+            claimToken,
+            $"Failed to release capacity claim {claimToken}.");
 
     public async Task ClearAllAsync()
     {

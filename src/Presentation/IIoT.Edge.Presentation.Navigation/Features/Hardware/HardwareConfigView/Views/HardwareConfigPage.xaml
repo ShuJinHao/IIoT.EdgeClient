@@ -9,18 +9,18 @@
     <sharedViews:PageActionShell>
 
     <sharedViews:PageActionShell.HeaderContent>
-        <TextBlock VerticalAlignment="Center" FontSize="16" FontWeight="Medium" Foreground="#E4E4E7" Text="硬件配置" />
+        <TextBlock VerticalAlignment="Center" FontSize="16" FontWeight="Medium" Foreground="#E4E4E7" Text="{Binding ViewTitle}" />
     </sharedViews:PageActionShell.HeaderContent>
     <sharedViews:PageActionShell.ActionContent>
         <Button Height="32" Padding="16,0" HorizontalAlignment="Right" Background="#0F766E" BorderThickness="0" Command="{Binding SaveCommand}" Style="{StaticResource MaterialDesignRaisedButton}">
-            <StackPanel Orientation="Horizontal"><materialDesign:PackIcon Width="16" Height="16" VerticalAlignment="Center" Foreground="White" Kind="ContentSave" /><TextBlock Margin="6,0,0,0" VerticalAlignment="Center" FontSize="13" Foreground="White" Text="保存" /></StackPanel>
+            <StackPanel Orientation="Horizontal"><materialDesign:PackIcon Width="16" Height="16" VerticalAlignment="Center" Foreground="White" Kind="ContentSave" /><TextBlock Margin="6,0,0,0" VerticalAlignment="Center" FontSize="13" Foreground="White" Text="{DynamicResource Navigation_Button_Save}" /></StackPanel>
         </Button>
     </sharedViews:PageActionShell.ActionContent>
 
     <TabControl Padding="0" Background="Transparent" BorderThickness="0" SelectedIndex="{Binding SelectedTabIndex}">
-        <TabItem Header="网络设备"><pages:NetworkDevicePage /></TabItem>
-        <TabItem Header="串口设备"><pages:SerialDevicePage /></TabItem>
-        <TabItem Header="IO 映射"><pages:IoMappingPage /></TabItem>
+        <TabItem Header="{DynamicResource Navigation_Tab_NetworkDevice}"><pages:NetworkDevicePage /></TabItem>
+        <TabItem Header="{DynamicResource Navigation_Tab_SerialDevice}"><pages:SerialDevicePage /></TabItem>
+        <TabItem Header="{DynamicResource Navigation_Tab_IoMapping}"><pages:IoMappingPage /></TabItem>
     </TabControl>
     </sharedViews:PageActionShell>
 </UserControl>

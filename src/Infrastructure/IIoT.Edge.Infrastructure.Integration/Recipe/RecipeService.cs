@@ -1,4 +1,5 @@
 ﻿using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Common.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Recipe;
 using IIoT.Edge.Infrastructure.Integration.Config;
@@ -30,14 +31,16 @@ public class RecipeService : IRecipeService
         ICloudHttpClient cloudHttp,
         ICloudApiEndpointProvider endpointProvider,
         IDeviceService deviceService,
-        ILogService logger)
+        ILogService logger,
+        string? recipeDirectory = null)
     {
         _cloudHttp = cloudHttp;
         _endpointProvider = endpointProvider;
         _deviceService = deviceService;
         _logger = logger;
 
-        _recipeDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data", "recipe");
+        _recipeDir = recipeDirectory
+            ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data", "recipe");
         Directory.CreateDirectory(_recipeDir);
     }
 

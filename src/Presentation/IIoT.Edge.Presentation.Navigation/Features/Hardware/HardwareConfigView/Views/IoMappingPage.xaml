@@ -2,6 +2,7 @@
     x:Class="IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView.IoMappingPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:uiLoc="clr-namespace:IIoT.Edge.UI.Shared.Localization;assembly=IIoT.Edge.UI.Shared"
     xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
     xmlns:sharedViews="clr-namespace:IIoT.Edge.UI.Shared.Views;assembly=IIoT.Edge.UI.Shared"
     xmlns:sys="clr-namespace:System;assembly=mscorlib"
@@ -12,7 +13,7 @@
     <sharedViews:PageActionShell>
 
     <sharedViews:PageActionShell.HeaderContent>
-        <TextBlock VerticalAlignment="Center" FontSize="16" FontWeight="Medium" Foreground="#E4E4E7" Text="IO 映射" />
+        <TextBlock VerticalAlignment="Center" FontSize="16" FontWeight="Medium" Foreground="#E4E4E7" Text="{DynamicResource Navigation_Tab_IoMapping}" />
     </sharedViews:PageActionShell.HeaderContent>
 
     <sharedViews:PageActionShell.ActionContent>
@@ -25,7 +26,7 @@
                 Style="{StaticResource MaterialDesignOutlinedButton}">
                 <StackPanel Orientation="Horizontal">
                     <materialDesign:PackIcon Width="14" Height="14" VerticalAlignment="Center" Kind="WrenchCog" />
-                    <TextBlock Margin="4,0,0,0" VerticalAlignment="Center" FontSize="12" Text="应用模板" />
+                    <TextBlock Margin="4,0,0,0" VerticalAlignment="Center" FontSize="12" Text="{DynamicResource Navigation_Button_ApplyTemplate}" />
                 </StackPanel>
             </Button>
             <Button
@@ -36,7 +37,7 @@
                 Style="{StaticResource MaterialDesignOutlinedButton}">
                 <StackPanel Orientation="Horizontal">
                     <materialDesign:PackIcon Width="14" Height="14" VerticalAlignment="Center" Kind="Plus" />
-                    <TextBlock Margin="4,0,0,0" VerticalAlignment="Center" FontSize="12" Text="新增" />
+                    <TextBlock Margin="4,0,0,0" VerticalAlignment="Center" FontSize="12" Text="{DynamicResource Navigation_Button_Add}" />
                 </StackPanel>
             </Button>
             <Button
@@ -47,7 +48,7 @@
                 Style="{StaticResource MaterialDesignOutlinedButton}">
                 <StackPanel Orientation="Horizontal">
                     <materialDesign:PackIcon Width="14" Height="14" VerticalAlignment="Center" Kind="Delete" />
-                    <TextBlock Margin="4,0,0,0" VerticalAlignment="Center" FontSize="12" Text="删除" />
+                    <TextBlock Margin="4,0,0,0" VerticalAlignment="Center" FontSize="12" Text="{DynamicResource Navigation_Button_Delete}" />
                 </StackPanel>
             </Button>
         </StackPanel>
@@ -74,7 +75,7 @@
                     Margin="0,0,0,8"
                     FontSize="12"
                     Foreground="#71717A"
-                    Text="网络设备" />
+                    Text="{DynamicResource Navigation_Tab_NetworkDevice}" />
                 <ListBox
                     Grid.Row="1"
                     Background="Transparent"
@@ -116,7 +117,7 @@
                         FontSize="12"
                         FontWeight="SemiBold"
                         Foreground="#E4E4E7"
-                        Text="模块协议摘要" />
+                        Text="{DynamicResource Navigation_Label_ModuleProtocolSummary}" />
                     <TextBlock
                         Margin="0,8,0,0"
                         FontSize="12"
@@ -143,10 +144,13 @@
                 ItemsSource="{Binding IoMappings}"
                 RowBackground="Transparent">
                 <DataGrid.Columns>
-                    <DataGridTextColumn Width="120" Binding="{Binding Label}" Header="标签" />
-                    <DataGridTextColumn Width="100" Binding="{Binding PlcAddress}" Header="PLC地址" />
-                    <DataGridTextColumn Width="70" Binding="{Binding AddressCount}" Header="数量" />
-                    <DataGridTemplateColumn Width="90" Header="数据类型">
+                    <DataGridTextColumn Width="120" Binding="{Binding Label}" Header="{DynamicResource Navigation_Column_Label}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_Label" />
+                    <DataGridTextColumn Width="100" Binding="{Binding PlcAddress}" Header="{DynamicResource Navigation_Column_PlcAddress}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_PlcAddress" />
+                    <DataGridTextColumn Width="70" Binding="{Binding AddressCount}" Header="{DynamicResource Navigation_Column_Count}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_Count" />
+                    <DataGridTextColumn Width="110" Binding="{Binding Category}" Header="{DynamicResource Navigation_Column_Category}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_Category" />
+                    <DataGridTextColumn Width="110" Binding="{Binding GroupName}" Header="{DynamicResource Navigation_Column_Group}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_Group" />
+                    <DataGridTextColumn Width="90" Binding="{Binding DisplayRole}" Header="{DynamicResource Navigation_Column_DisplayRole}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_DisplayRole" />
+                    <DataGridTemplateColumn Width="90" Header="{DynamicResource Navigation_Column_DataType}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_DataType">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <TextBlock Padding="4,0" VerticalAlignment="Center" Foreground="#E4E4E7" Text="{Binding DataType}" />
@@ -165,7 +169,7 @@
                             </DataTemplate>
                         </DataGridTemplateColumn.CellEditingTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTemplateColumn Width="80" Header="方向">
+                    <DataGridTemplateColumn Width="80" Header="{DynamicResource Navigation_Column_Direction}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_Direction">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <TextBlock Padding="4,0" VerticalAlignment="Center" Foreground="#E4E4E7" Text="{Binding Direction}" />
@@ -182,8 +186,8 @@
                             </DataTemplate>
                         </DataGridTemplateColumn.CellEditingTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTextColumn Width="60" Binding="{Binding SortOrder}" Header="排序" />
-                    <DataGridTextColumn Width="*" Binding="{Binding Remark}" Header="备注" />
+                    <DataGridTextColumn Width="60" Binding="{Binding SortOrder}" Header="{DynamicResource Navigation_Column_SortOrder}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_SortOrder" />
+                    <DataGridTextColumn Width="*" Binding="{Binding Remark}" Header="{DynamicResource Navigation_Column_Remark}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_Remark" />
                 </DataGrid.Columns>
             </DataGrid>
 
@@ -197,11 +201,7 @@
                     VerticalAlignment="Center"
                     FontSize="12"
                     Foreground="#71717A">
-                    <TextBlock.Text>
-                        <MultiBinding StringFormat="共 {0} 条">
-                            <Binding Path="IoTotalCount" />
-                        </MultiBinding>
-                    </TextBlock.Text>
+                    <Run Text="{DynamicResource Navigation_Label_TotalRecordsPrefix}" /><Run Text="{Binding IoTotalCount}" /><Run Text="{DynamicResource Navigation_Label_TotalRecordsSuffix}" />
                 </TextBlock>
                 <Button Width="28" Height="28" Padding="0" Command="{Binding IoPrevPageCommand}" Style="{StaticResource MaterialDesignOutlinedButton}">
                     <materialDesign:PackIcon Width="16" Height="16" Kind="ChevronLeft" />

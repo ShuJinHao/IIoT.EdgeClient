@@ -12,7 +12,10 @@ public sealed record ModuleIoTemplateEntry(
     string DataType,
     string Direction,
     int SortOrder,
-    string? Remark = null);
+    string? Remark = null,
+    string Category = "单点读数据",
+    string GroupName = "",
+    string DisplayRole = "");
 
 public sealed record ModuleIoSnapshot(
     string Label,
@@ -20,7 +23,10 @@ public sealed record ModuleIoSnapshot(
     int AddressCount,
     string DataType,
     string Direction,
-    int SortOrder);
+    int SortOrder,
+    string Category = "单点读数据",
+    string GroupName = "",
+    string DisplayRole = "");
 
 public sealed record ModuleHardwareValidationIssue(string Message);
 

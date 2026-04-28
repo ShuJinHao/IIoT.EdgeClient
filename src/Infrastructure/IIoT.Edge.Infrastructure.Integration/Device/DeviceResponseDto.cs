@@ -11,4 +11,6 @@ internal sealed class DeviceResponseDto
     public Guid ProcessId { get; set; }
     public string? UploadAccessToken { get; set; }
     public DateTimeOffset? UploadAccessTokenExpiresAtUtc { get; set; }
+    public string? RefreshToken { get; set; }
+    public DateTimeOffset? RefreshTokenExpiresAtUtc { get; set; }
 }

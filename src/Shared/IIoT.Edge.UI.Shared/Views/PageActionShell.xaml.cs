@@ -6,9 +6,7 @@ using System.Windows.Markup;
 namespace IIoT.Edge.UI.Shared.Views;
 
 /// <summary>
-/// 页面操作壳控件。
-/// 统一承载页面头部区域、操作区和主体内容区。
-/// 代码定义布局，子类通过 XAML 设置 HeaderContent / ActionContent / PageContent。
+/// 页面操作壳控件，统一承载页面头部、操作区和主体内容区。
 /// </summary>
 [ContentProperty(nameof(PageContent))]
 public class PageActionShell : UserControl
@@ -38,7 +36,6 @@ public class PageActionShell : UserControl
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-        // Row 0: Header area
         var border = new Border { Padding = new Thickness(16, 12, 16, 12) };
         var headerGrid = new Grid();
 
@@ -64,12 +61,10 @@ public class PageActionShell : UserControl
         Grid.SetRow(border, 0);
         grid.Children.Add(border);
 
-        // Row 1: FeedbackBanner
         var banner = new FeedbackBanner { Margin = new Thickness(16, 0, 16, 12) };
         Grid.SetRow(banner, 1);
         grid.Children.Add(banner);
 
-        // Row 2: Page content
         var contentPresenter = new ContentPresenter();
         contentPresenter.SetBinding(ContentPresenter.ContentProperty,
             new Binding(nameof(PageContent)) { Source = this });

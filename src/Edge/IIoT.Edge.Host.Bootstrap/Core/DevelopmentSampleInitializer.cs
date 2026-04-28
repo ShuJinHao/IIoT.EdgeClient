@@ -1,6 +1,6 @@
-using IIoT.Edge.Application.Abstractions.Context;
+﻿using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Logging;
-using IIoT.Edge.Module.Abstractions;
+using IIoT.Edge.Application.Abstractions.Modules;
 
 namespace IIoT.Edge.Shell.Core;
 

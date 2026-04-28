@@ -37,6 +37,21 @@ public class IoMappingConfiguration : IEntityTypeConfiguration<IoMappingEntity>
             .HasMaxLength(10)
             .HasColumnName("direction");
 
+        builder.Property(x => x.Category)
+            .IsRequired()
+            .HasMaxLength(50)
+            .HasColumnName("category");
+
+        builder.Property(x => x.GroupName)
+            .IsRequired()
+            .HasMaxLength(100)
+            .HasColumnName("group_name");
+
+        builder.Property(x => x.DisplayRole)
+            .IsRequired()
+            .HasMaxLength(50)
+            .HasColumnName("display_role");
+
         builder.Property(x => x.SortOrder).HasColumnName("sort_order");
         builder.Property(x => x.Remark).HasMaxLength(500).HasColumnName("remark");
 

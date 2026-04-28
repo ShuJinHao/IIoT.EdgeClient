@@ -1,8 +1,9 @@
-using IIoT.Edge.Application.Abstractions.DataPipeline;
+﻿using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Module.Stacking.Constants;
 using IIoT.Edge.Module.Stacking.Payload;
+using IIoT.Edge.Application.Abstractions.Plc.Signals;
 using IIoT.Edge.Runtime.Base;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.DataPipeline;
@@ -12,6 +13,7 @@ namespace IIoT.Edge.Module.Stacking.Runtime;
 public sealed class StackingSignalCaptureTask : PlcTaskBase
 {
     private readonly IDataPipelineService _pipelineService;
+    private readonly ILogicalSignalAccessor _signals;
 
     public override string TaskName => StackingModuleConstants.RuntimeTaskName;
 
@@ -19,11 +21,13 @@ public sealed class StackingSignalCaptureTask : PlcTaskBase
 
     public StackingSignalCaptureTask(
         IPlcBuffer buffer,
+        ILogicalSignalAccessor signals,
         ProductionContext context,
         IDataPipelineService pipelineService,
         ILogService logger)
         : base(buffer, context, logger)
     {
+        _signals = signals ?? throw new ArgumentNullException(nameof(signals));
         _pipelineService = pipelineService;
     }
 
@@ -31,10 +35,10 @@ public sealed class StackingSignalCaptureTask : PlcTaskBase
     {
         Context.Set(StackingModuleConstants.RuntimeRegisteredKey, true);
 
-        var sequence = Buffer.GetReadValue(StackingPlcSignalProfile.SequenceReadIndex);
-        var layerCount = Buffer.GetReadValue(StackingPlcSignalProfile.LayerCountReadIndex);
+        var sequence = _signals.Read(StackingPlcSignalProfile.Sequence.Label);
+        var layerCount = _signals.Read(StackingPlcSignalProfile.LayerCount.Label);
         var resultCode = StackingPlcSignalProfile.ParseResultCode(
-            Buffer.GetReadValue(StackingPlcSignalProfile.ResultCodeReadIndex));
+            _signals.Read(StackingPlcSignalProfile.ResultCode.Label));
         var observedAt = DateTime.UtcNow;
 
         Context.Set(StackingModuleConstants.LastObservedSequenceKey, (int)sequence);
@@ -71,7 +75,7 @@ public sealed class StackingSignalCaptureTask : PlcTaskBase
         Context.AddCell(barcode, cellData);
         Context.Set(StackingModuleConstants.LastPublishedSequenceKey, (int)sequence);
         Context.Set(StackingModuleConstants.LastPublishedBarcodeKey, barcode);
-        Buffer.SetWriteValue(StackingPlcSignalProfile.AckWriteIndex, sequence);
+        _signals.Write(StackingPlcSignalProfile.Ack.Label, sequence);
 
         var enqueueResult = await _pipelineService
             .EnqueueAsync(new CellCompletedRecord { CellData = cellData }, TaskCancellationToken)

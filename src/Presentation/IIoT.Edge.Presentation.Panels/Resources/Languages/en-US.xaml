@@ -1,0 +1,37 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+    <sys:String x:Key="Panels_Title_Equipment">Equipment Runtime</sys:String>
+    <sys:String x:Key="Panels_Title_SystemLog">System Log</sys:String>
+    <sys:String x:Key="Panels_Tab_HardwareStatus">Hardware Status</sys:String>
+    <sys:String x:Key="Panels_Tab_RecipeInfo">Recipe Info</sys:String>
+    <sys:String x:Key="Panels_Tab_RealtimeData">Realtime Data</sys:String>
+    <sys:String x:Key="Panels_Column_Status">Status</sys:String>
+    <sys:String x:Key="Panels_Column_Connection">Connection</sys:String>
+    <sys:String x:Key="Panels_Column_Name">Name</sys:String>
+    <sys:String x:Key="Panels_Column_AddressPort">Address/Port</sys:String>
+    <sys:String x:Key="Panels_Column_Type">Type</sys:String>
+    <sys:String x:Key="Panels_Column_ParamName">Parameter</sys:String>
+    <sys:String x:Key="Panels_Column_CurrentValue">Current</sys:String>
+    <sys:String x:Key="Panels_Column_Min">Minimum</sys:String>
+    <sys:String x:Key="Panels_Column_Max">Maximum</sys:String>
+    <sys:String x:Key="Panels_Column_Unit">Unit</sys:String>
+    <sys:String x:Key="Panels_Column_WarnLow">Warn Low</sys:String>
+    <sys:String x:Key="Panels_Column_WarnHigh">Warn High</sys:String>
+    <sys:String x:Key="Panels_Label_Recipe">Recipe: </sys:String>
+    <sys:String x:Key="Panels_Label_Version">Version: </sys:String>
+    <sys:String x:Key="Panels_Label_Process">Process: </sys:String>
+    <sys:String x:Key="Panels_Label_Status">Status: </sys:String>
+    <sys:String x:Key="Panels_Status_Inactive">Inactive</sys:String>
+    <sys:String x:Key="Panels_Status_Active">Active</sys:String>
+    <sys:String x:Key="Panels_Status_Connected">Connected</sys:String>
+    <sys:String x:Key="Panels_Status_Disconnected">Disconnected</sys:String>
+    <sys:String x:Key="Panels_Label_TodayOutput">Today Output</sys:String>
+    <sys:String x:Key="Panels_Label_TodayYield">Today Yield</sys:String>
+    <sys:String x:Key="Panels_Label_NgCount">NG Count</sys:String>
+    <sys:String x:Key="Panels_Label_CurrentBatch">Current Batch: </sys:String>
+    <sys:String x:Key="Panels_Unit_Count"> pcs</sys:String>
+    <sys:String x:Key="Panels_Tooltip_ClearLog">Clear logs</sys:String>
+    <sys:String x:Key="Panels_Button_Clear">Clear</sys:String>
+</ResourceDictionary>

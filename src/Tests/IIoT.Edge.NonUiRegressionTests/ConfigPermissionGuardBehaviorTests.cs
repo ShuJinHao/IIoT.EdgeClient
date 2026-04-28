@@ -113,7 +113,7 @@ public sealed class ConfigPermissionGuardBehaviorTests
             []);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal("当前用户无硬件配置权限。", result.Message);
+        Assert.Equal("当前用户没有硬件配置权限。", result.Message);
         Assert.Equal(0, sender.SendCount);
     }
 
@@ -135,7 +135,7 @@ public sealed class ConfigPermissionGuardBehaviorTests
         });
 
         Assert.False(result.IsSuccess);
-        Assert.Equal("当前用户无硬件配置权限。", result.Message);
+        Assert.Equal("当前用户没有硬件配置权限。", result.Message);
         Assert.Equal(0, sender.SendCount);
     }
 
@@ -206,7 +206,7 @@ public sealed class ConfigPermissionGuardBehaviorTests
             CancellationToken.None);
 
         Assert.False(result.IsSuccess);
-        Assert.StartsWith("配置已保存，但以下 PLC 重载失败：", result.Message);
+        Assert.StartsWith("配置已保存，但 以下 PLC 重载失败：", result.Message);
         Assert.Contains("PLC-B", result.Message);
         Assert.Equal(
             ["PLC-A", "PLC-B"],
@@ -259,6 +259,9 @@ public sealed class ConfigPermissionGuardBehaviorTests
 
             return _currentUser.Permissions.Contains(permission);
         }
+
+        public Task<bool> EnsureAuthenticatedAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(IsAuthenticated);
 
         public Task<AuthResult> LoginLocalAsync(string password) => throw new NotSupportedException();
 

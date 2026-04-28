@@ -4,7 +4,7 @@ namespace IIoT.Edge.Module.Injection.Payload;
 
 public class InjectionCellData : CellDataBase
 {
-    public override string ProcessType => InjectionModule.ModuleKey;
+    public override string ProcessType => DependencyInjection.ModuleKey;
 
     public string WorkOrderNo { get; set; } = string.Empty;
 

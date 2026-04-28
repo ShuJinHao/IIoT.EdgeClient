@@ -10,7 +10,7 @@
     xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
     xmlns:sysLog="clr-namespace:IIoT.Edge.Presentation.Panels.Features.SysLog;assembly=IIoT.Edge.Presentation.Panels"
     xmlns:sysMenuVM="clr-namespace:IIoT.Edge.Presentation.Shell.Features.SysMenu;assembly=IIoT.Edge.Presentation.Shell"
-    Title="IIoT 边缘客户端"
+    Title="{DynamicResource Shell_AppTitle}"
     Width="1280"
     Height="768"
     MinWidth="900"
@@ -85,7 +85,7 @@
 
                             <avalon:LayoutDocumentPane ShowHeader="False">
                                 <avalon:LayoutDocument
-                                    Title="主工作区"
+                                    Title="{Binding MainWorkspaceTitle}"
                                     CanClose="False"
                                     CanFloat="False">
                                     <Border Background="#1E1E1E">
@@ -98,7 +98,7 @@
 
                                 <avalon:LayoutAnchorablePane>
                                     <avalon:LayoutAnchorable
-                                        Title="设备信息"
+                                        Title="{Binding EquipmentPanelTitle}"
                                         CanAutoHide="False"
                                         CanClose="False"
                                         CanFloat="False"
@@ -109,7 +109,7 @@
 
                                 <avalon:LayoutAnchorablePane>
                                     <avalon:LayoutAnchorable
-                                        Title="系统日志"
+                                        Title="{Binding SystemLogPanelTitle}"
                                         CanAutoHide="False"
                                         CanClose="False"
                                         CanFloat="False"

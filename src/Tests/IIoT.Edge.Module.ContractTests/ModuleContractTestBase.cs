@@ -1,14 +1,15 @@
-using IIoT.Edge.Application.Abstractions.DataPipeline;
+﻿using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Common.Models;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
+using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.DataPipeline;
 
 namespace IIoT.Edge.Module.ContractTests;
 
 public abstract class ModuleContractTestBase<TModule>
-    where TModule : IEdgeStationModule, new()
+    where TModule : IEdgeProcessModule, new()
 {
     private readonly ModuleContractFixture _fixture = new();
 
@@ -18,6 +19,9 @@ public abstract class ModuleContractTestBase<TModule>
     protected virtual int MinimumRouteCount => 1;
 
     protected TModule CreateModule() => new();
+
+    protected virtual ProductionContext CreateRuntimeContext()
+        => new() { DeviceName = "PLC-A" };
 
     protected virtual void ConfigureRuntimeServices(IServiceCollection services)
     {
@@ -116,7 +120,7 @@ public abstract class ModuleContractTestBase<TModule>
         var tasks = factory.CreateTasks(
             services.BuildServiceProvider(),
             new PlcBuffer(16, 16),
-            new ProductionContext { DeviceName = "PLC-A" });
+            CreateRuntimeContext());
 
         Assert.Equal(ExpectedRuntimeTaskCount, tasks.Count);
     }

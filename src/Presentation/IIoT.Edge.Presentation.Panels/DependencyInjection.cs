@@ -28,6 +28,7 @@ public static class DependencyInjection
             new AnchorableInfo
             {
                 Title = "设备信息",
+                TitleResourceKey = "Shell_EquipmentInfo",
                 ContentId = "Core.Equipment",
                 InitialPosition = AnchorablePosition.Right,
                 IsVisible = true
@@ -39,6 +40,7 @@ public static class DependencyInjection
             new AnchorableInfo
             {
                 Title = "系统日志",
+                TitleResourceKey = "Shell_SystemLog",
                 ContentId = "Core.SysLog",
                 InitialPosition = AnchorablePosition.Right,
                 IsVisible = true

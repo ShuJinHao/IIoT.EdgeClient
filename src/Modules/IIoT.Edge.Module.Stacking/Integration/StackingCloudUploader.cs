@@ -3,7 +3,7 @@ using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.Integration.Contracts.Http;
+using IIoT.Edge.Application.Modules;
 using IIoT.Edge.Module.Stacking.Constants;
 using IIoT.Edge.Module.Stacking.Payload;
 using IIoT.Edge.SharedKernel.DataPipeline;
@@ -11,13 +11,11 @@ using Microsoft.Extensions.Configuration;
 
 namespace IIoT.Edge.Module.Stacking.Integration;
 
-public sealed class StackingCloudUploader : IProcessCloudUploader
+public sealed class StackingCloudUploader : ProcessCloudUploaderBase<StackingCellData, object>
 {
-    private const string UploadPath = "/api/v1/edge/pass-stations/stacking";
+    private const string UploadPathValue = "/api/v1/edge/pass-stations/stacking";
 
-    private readonly ICloudHttpClient _cloudHttp;
     private readonly IMapper _mapper;
-    private readonly ILogService _logger;
     private readonly IConfiguration _configuration;
     private readonly IProductionContextStore _contextStore;
 
@@ -27,88 +25,75 @@ public sealed class StackingCloudUploader : IProcessCloudUploader
         ILogService logger,
         IConfiguration configuration,
         IProductionContextStore contextStore)
+        : base(cloudHttp, logger)
     {
-        _cloudHttp = cloudHttp;
         _mapper = mapper;
-        _logger = logger;
         _configuration = configuration;
         _contextStore = contextStore;
     }
 
-    public string ProcessType => StackingModuleConstants.ProcessType;
+    public override string ProcessType => StackingModuleConstants.ProcessType;
 
-    public ProcessUploadMode UploadMode => ProcessUploadMode.Single;
+    public override ProcessUploadMode UploadMode => ProcessUploadMode.Single;
 
-    public async Task<CloudCallResult> UploadAsync(
+    protected override string UploadPath => UploadPathValue;
+
+    protected override Task<CloudCallResult?> CheckBeforeUploadAsync(
         ProcessCloudUploadContext context,
         IReadOnlyList<CellCompletedRecord> records,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
-        if (records.Count == 0)
-        {
-            return CloudCallResult.Success();
-        }
-
         var isEnabled = _configuration.GetValue<bool>("Modules:Stacking:CloudUploadEnabled");
-        if (!isEnabled)
+        if (isEnabled)
         {
-            var deviceName = ResolveDeviceName(records[0], context);
-            const string errorMessage = "Stacking cloud upload is disabled by configuration.";
-            UpdateDiagnostics(deviceName, false, StackingModuleConstants.CloudUploadDisabledStatus, errorMessage);
-            _logger.Warn($"[Cloud] {errorMessage}");
-            return CloudCallResult.Failure(CloudCallOutcome.Exception, "cloud_upload_disabled");
+            return Task.FromResult<CloudCallResult?>(null);
         }
 
-        foreach (var record in records)
+        var deviceName = ResolveDeviceName(records[0], context);
+        const string message = "叠片云端上传已被配置关闭。";
+        UpdateDiagnostics(deviceName, false, StackingModuleConstants.CloudUploadDisabledStatus, message);
+        Logger.Warn($"[Cloud] {message}");
+        return Task.FromResult<CloudCallResult?>(
+            CloudCallResult.Failure(CloudCallOutcome.Exception, "cloud_upload_disabled"));
+    }
+
+    protected override object BuildPayload(
+        ProcessCloudUploadContext context,
+        IReadOnlyList<StackingCellData> cellData,
+        IReadOnlyList<CellCompletedRecord> records)
+        => new
         {
-            if (record.CellData is not StackingCellData stacking)
-            {
-                var deviceName = ResolveDeviceName(record, context);
-                var errorMessage =
-                    $"Stacking uploader received unexpected process type '{record.CellData.ProcessType}'.";
-                UpdateDiagnostics(deviceName, true, StackingModuleConstants.CloudUploadFailedStatus, errorMessage);
-                _logger.Error($"[Cloud] {errorMessage}");
-                return CloudCallResult.Failure(CloudCallOutcome.Exception, "unexpected_process_type");
-            }
+            deviceId = context.Device.DeviceId,
+            item = _mapper.Map<StackingCloudDto>(cellData[0])
+        };
 
-            var payload = new
-            {
-                deviceId = context.Device.DeviceId,
-                item = _mapper.Map<StackingCloudDto>(stacking)
-            };
+    protected override Task OnUploadSucceededAsync(
+        ProcessCloudUploadContext context,
+        IReadOnlyList<StackingCellData> cellData,
+        IReadOnlyList<CellCompletedRecord> records,
+        CancellationToken cancellationToken)
+    {
+        UpdateDiagnostics(
+            ResolveDeviceName(records[0], context),
+            true,
+            StackingModuleConstants.CloudUploadSuccessStatus,
+            errorMessage: null);
+        return Task.CompletedTask;
+    }
 
-            var result = await _cloudHttp.PostAsync(
-                UploadPath,
-                payload,
-                new CloudRequestOptions
-                {
-                    IdempotencyKey = CloudIdempotencyKeyBuilder.ForRecord(
-                        ProcessType,
-                        nameof(StackingCloudUploader),
-                        record)
-                }).ConfigureAwait(false);
-
-            if (!result.IsSuccess)
-            {
-                var errorMessage =
-                    $"Cloud API returned failure for Stacking barcode '{stacking.Barcode}'. Outcome:{result.Outcome}, Reason:{result.ReasonCode}.";
-                UpdateDiagnostics(
-                    ResolveDeviceName(record, context),
-                    true,
-                    StackingModuleConstants.CloudUploadFailedStatus,
-                    errorMessage);
-                _logger.Error($"[Cloud] {errorMessage}");
-                return result;
-            }
-
-            UpdateDiagnostics(
-                ResolveDeviceName(record, context),
-                true,
-                StackingModuleConstants.CloudUploadSuccessStatus,
-                errorMessage: null);
-        }
-
-        return CloudCallResult.Success();
+    protected override Task OnUploadFailedAsync(
+        ProcessCloudUploadContext context,
+        IReadOnlyList<CellCompletedRecord> records,
+        CloudCallResult result,
+        string message,
+        CancellationToken cancellationToken)
+    {
+        UpdateDiagnostics(
+            ResolveDeviceName(records[0], context),
+            true,
+            StackingModuleConstants.CloudUploadFailedStatus,
+            message);
+        return Task.CompletedTask;
     }
 
     private static string ResolveDeviceName(CellCompletedRecord record, ProcessCloudUploadContext context)

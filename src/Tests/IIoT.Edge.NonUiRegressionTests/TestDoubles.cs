@@ -17,6 +17,11 @@ using IIoT.Edge.SharedKernel.DataPipeline.DeviceLog;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 
+internal sealed class TestHttpClientFactory(HttpClient client) : IHttpClientFactory
+{
+    public HttpClient CreateClient(string name) => client;
+}
+
 internal sealed class FakeLogService : ILogService
 {
     public List<LogEntry> Entries { get; } = new();
@@ -952,8 +957,10 @@ internal sealed class FakeCloudApiEndpointProvider : ICloudApiEndpointProvider
     }
 
     public string GetClientCode() => "TEST";
-    public string GetDeviceInstancePath() => "/api/v1/edge/bootstrap/device-instance";
-    public string GetIdentityDeviceLoginPath() => "/api/v1/human/identity/edge-login";
+    public string GetDeviceInstancePath() => "/api/v1/bootstrap/device-instance";
+    public string GetBootstrapRefreshPath() => "/api/v1/bootstrap/edge-refresh";
+    public string GetIdentityDeviceLoginPath() => "/api/v1/bootstrap/edge-login";
+    public string GetHumanIdentityRefreshPath() => "/api/v1/human/identity/refresh";
     public string GetDeviceLogPath() => "/api/v1/edge/device-logs";
     public string BuildRecipeByDevicePath(Guid deviceId) => $"/api/v1/edge/recipes/device/{deviceId}";
     public string GetCapacityHourlyPath() => "/api/v1/edge/capacity/hourly";
@@ -1118,6 +1125,9 @@ internal sealed class FakeProductionContextStore : IProductionContextStore
     public ProductionContextPersistenceDiagnostics PersistenceDiagnostics { get; set; } = new(0, null);
 
     public ProductionContext GetOrCreate(string deviceName)
+        => GetOrCreate(deviceName, moduleId: null);
+
+    public ProductionContext GetOrCreate(string deviceName, string? moduleId)
     {
         if (!_contexts.TryGetValue(deviceName, out var context))
         {
@@ -1189,7 +1199,7 @@ internal sealed class FakeCloudDiagnosticsStore : ICloudUploadDiagnosticsStore
 
     public void RecordResult(string? processType, CloudCallResult result)
     {
-        var now = DateTime.Now;
+        var now = DateTime.UtcNow;
         Snapshot = Snapshot with
         {
             LastAttemptAt = now,
@@ -1220,7 +1230,7 @@ internal sealed class FakeCloudDiagnosticsStore : ICloudUploadDiagnosticsStore
             IsCapacityBlocked = true,
             BlockedChannel = channel,
             BlockedReason = blockedReason,
-            LastCapacityBlockAt = occurredAt ?? DateTime.Now
+            LastCapacityBlockAt = occurredAt ?? DateTime.UtcNow
         };
     }
 
@@ -1263,7 +1273,7 @@ internal sealed class FakeMesRetryDiagnosticsStore : IMesRetryDiagnosticsStore
             IsCapacityBlocked = true,
             BlockedChannel = channel,
             BlockedReason = blockedReason,
-            LastCapacityBlockAt = occurredAt ?? DateTime.Now
+            LastCapacityBlockAt = occurredAt ?? DateTime.UtcNow
         };
     }
 
@@ -1385,7 +1395,7 @@ internal sealed class FakeMesUploadDiagnosticsStore : IMesUploadDiagnosticsStore
 
     public void RecordSuccess(string processType)
     {
-        var now = DateTime.Now;
+        var now = DateTime.UtcNow;
         _entries[processType] = new MesChannelDiagnostics(
             processType,
             now,
@@ -1396,7 +1406,7 @@ internal sealed class FakeMesUploadDiagnosticsStore : IMesUploadDiagnosticsStore
 
     public void RecordFailure(string processType, string failureReason)
     {
-        var now = DateTime.Now;
+        var now = DateTime.UtcNow;
         var lastSuccessAt = _entries.TryGetValue(processType, out var existing)
             ? existing.LastSuccessAt
             : null;
@@ -1412,7 +1422,7 @@ internal sealed class FakeMesUploadDiagnosticsStore : IMesUploadDiagnosticsStore
 
 internal sealed class FakeMesUploader : IProcessMesUploader
 {
-    private readonly Queue<bool> _results = new();
+    private readonly Queue<MesCallResult> _results = new();
 
     public FakeMesUploader(string processType, MesUploadMode uploadMode = MesUploadMode.Single)
     {
@@ -1428,9 +1438,12 @@ internal sealed class FakeMesUploader : IProcessMesUploader
 
     public List<IReadOnlyList<CellCompletedRecord>> UploadedBatches { get; } = new();
 
-    public void EnqueueResult(bool result) => _results.Enqueue(result);
+    public void EnqueueResult(bool result)
+        => _results.Enqueue(result ? MesCallResult.Success() : MesCallResult.TransportFailure("fake_mes_failure"));
 
-    public Task<bool> UploadAsync(
+    public void EnqueueResult(MesCallResult result) => _results.Enqueue(result);
+
+    public Task<MesCallResult> UploadAsync(
         ProcessMesUploadContext context,
         IReadOnlyList<CellCompletedRecord> records,
         CancellationToken cancellationToken = default)
@@ -1443,7 +1456,7 @@ internal sealed class FakeMesUploader : IProcessMesUploader
             return Task.FromResult(_results.Dequeue());
         }
 
-        return Task.FromResult(true);
+        return Task.FromResult(MesCallResult.Success());
     }
 }
 

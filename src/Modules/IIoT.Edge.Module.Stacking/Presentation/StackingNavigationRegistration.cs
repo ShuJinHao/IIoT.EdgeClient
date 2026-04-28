@@ -1,28 +1,23 @@
-using IIoT.Edge.Module.Stacking.Presentation.ViewModels;
-using IIoT.Edge.Module.Stacking.Presentation.Views;
-using IIoT.Edge.UI.Shared.Modularity;
+﻿using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Presentation.Navigation.PluginSystem;
 
 namespace IIoT.Edge.Module.Stacking.Presentation;
 
 public static class StackingNavigationRegistration
 {
-    public static IViewRegistry RegisterStackingViews(this IViewRegistry registry)
+    public static IEdgeProcessModuleBuilder RegisterStackingViews(this IEdgeProcessModuleBuilder builder)
     {
-        registry.RegisterRoute(
-            StackingViewIds.PlaceholderDashboard,
-            typeof(StackingSkeletonPage),
-            typeof(StackingSkeletonViewModel),
-            cacheView: true);
-
-        registry.RegisterMenu(new MenuInfo
-        {
-            Title = "Stacking",
-            ViewId = StackingViewIds.PlaceholderDashboard,
-            Icon = "LayersTripleOutline",
-            Order = 20,
-            RequiredPermission = string.Empty
-        });
-
-        return registry;
+        var viewIds = StandardModuleViewIds.Create(DependencyInjection.ModuleKey);
+        return builder
+            .RegisterStandardDataView(
+                viewIds.DataView,
+                "叠片产品数据",
+                titleResourceKey: "Stacking_Title_Data")
+            .RegisterStandardCapacityView(viewIds.CapacityView)
+            .RegisterStandardIoView(viewIds.IoView)
+            .RegisterStandardMonitorView(viewIds.Monitor)
+            .RegisterStandardRecipeView(viewIds.RecipeView)
+            .RegisterStandardParamView(viewIds.ParamView)
+            .RegisterStandardHardwareConfigView(viewIds.HardwareConfigView);
     }
 }

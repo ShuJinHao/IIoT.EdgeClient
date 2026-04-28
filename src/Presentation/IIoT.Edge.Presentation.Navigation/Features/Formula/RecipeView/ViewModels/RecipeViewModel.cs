@@ -1,25 +1,21 @@
 using IIoT.Edge.Application.Abstractions.Recipe;
 using IIoT.Edge.Application.Common.Crud;
 using IIoT.Edge.Application.Features.Formula.RecipeView;
-using IIoT.Edge.Presentation.Navigation.Common.Crud;
+using IIoT.Edge.Presentation.Navigation.Localization;
 using IIoT.Edge.SharedKernel.DataPipeline.Recipe;
+using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Formula.RecipeView;
 
-public class RecipeViewModel : CrudPageViewModelBase
+public class RecipeViewModel : LocalizedCrudPageViewModelBase
 {
     private readonly IRecipeViewCrudService _crudService;
     private readonly IRecipeService _recipeService;
     private readonly IEditorValidator<LocalRecipeParamEditModel> _localRecipeParamValidator = new LocalRecipeParamValidator();
-    private readonly string _viewId;
-    private readonly string _viewTitle;
     private bool _isSubscribed;
-
-    public override string ViewId => _viewId;
-    public override string ViewTitle => _viewTitle;
 
     public ObservableCollection<RecipeParamVm> Params { get; } = new();
 
@@ -45,7 +41,9 @@ public class RecipeViewModel : CrudPageViewModelBase
         }
     }
 
-    public string SourceLabel => IsCloudSource ? "云端配方" : "本地配方";
+    public string SourceLabel => IsCloudSource
+        ? GetText("Navigation_Recipe_CloudSource", "云端配方")
+        : GetText("Navigation_Recipe_LocalSource", "本地配方");
 
     private bool _isLocalAdmin;
     public bool IsLocalAdmin
@@ -69,21 +67,31 @@ public class RecipeViewModel : CrudPageViewModelBase
     public ICommand SaveLocalParamCommand { get; }
     public ICommand DeleteLocalParamCommand { get; }
 
-    public RecipeViewModel(IRecipeViewCrudService crudService, IRecipeService recipeService)
-        : this(crudService, recipeService, "Formula.RecipeView", "产品配方")
+    public RecipeViewModel(
+        IRecipeViewCrudService crudService,
+        IRecipeService recipeService,
+        IAppLanguageService languageService)
+        : this(
+            crudService,
+            recipeService,
+            languageService,
+            "Formula.RecipeView",
+            "Navigation_Title_ProductRecipe",
+            "产品配方")
     {
     }
 
-    protected RecipeViewModel(
+    public RecipeViewModel(
         IRecipeViewCrudService crudService,
         IRecipeService recipeService,
+        IAppLanguageService languageService,
         string viewId,
-        string viewTitle)
+        string titleResourceKey,
+        string titleFallback)
+        : base(languageService, viewId, titleResourceKey, titleFallback)
     {
         _crudService = crudService;
         _recipeService = recipeService;
-        _viewId = viewId;
-        _viewTitle = viewTitle;
 
         SyncCloudCommand = CreateBusyCommand(OnSyncCloudAsync);
         SwitchSourceCommand = new BaseCommand(_ => OnSwitchSource());
@@ -115,11 +123,11 @@ public class RecipeViewModel : CrudPageViewModelBase
         var success = await _crudService.SyncCloudAsync();
         if (!success)
         {
-            return CrudOperationResult.Failure("配方同步失败，请检查网络连接。");
+            return CrudOperationResult.Failure(GetText("Navigation_Recipe_SyncFailed", "配方同步失败，请检查网络连接。"));
         }
 
         await RefreshUIAsync();
-        return CrudOperationResult.Success("云端配方已同步。");
+        return CrudOperationResult.Success(GetText("Navigation_Recipe_SyncSuccess", "云端配方已同步。"));
     }
 
     private void OnSwitchSource()
@@ -154,19 +162,19 @@ public class RecipeViewModel : CrudPageViewModelBase
         EditUnit = "";
 
         await RefreshUIAsync();
-        return CrudOperationResult.Success("本地配方参数已保存。");
+        return CrudOperationResult.Success(GetText("Navigation_Recipe_LocalSaveSuccess", "本地配方参数已保存。"));
     }
 
     private async Task<CrudOperationResult> OnDeleteLocalParamAsync(object? param)
     {
         if (param is not string key || string.IsNullOrWhiteSpace(key))
         {
-            return CrudOperationResult.Failure("请选择要删除的本地配方参数。");
+            return CrudOperationResult.Failure(GetText("Navigation_Recipe_SelectLocalParamToDelete", "请选择要删除的本地配方参数。"));
         }
 
         await _crudService.DeleteLocalParamAsync(key);
         await RefreshUIAsync();
-        return CrudOperationResult.Success("本地配方参数已删除。");
+        return CrudOperationResult.Success(GetText("Navigation_Recipe_LocalDeleteSuccess", "本地配方参数已删除。"));
     }
 
     private async Task UpdateAdminStateAsync()
@@ -214,7 +222,7 @@ public class RecipeViewModel : CrudPageViewModelBase
 
         if (snapshot is null)
         {
-            RecipeName = "未加载";
+            RecipeName = GetText("Navigation_Recipe_NotLoaded", "未加载");
             RecipeVersion = "";
             ProcessName = "";
             UpdatedAt = "";
@@ -237,6 +245,17 @@ public class RecipeViewModel : CrudPageViewModelBase
                 Max = param.Max,
                 Unit = param.Unit
             }));
+    }
+
+    protected override void RefreshLocalization()
+    {
+        base.RefreshLocalization();
+        OnPropertyChanged(nameof(SourceLabel));
+        if (string.IsNullOrWhiteSpace(RecipeName)
+            || RecipeName is "未加载" or "Not Loaded")
+        {
+            RecipeName = GetText("Navigation_Recipe_NotLoaded", "未加载");
+        }
     }
 }
 

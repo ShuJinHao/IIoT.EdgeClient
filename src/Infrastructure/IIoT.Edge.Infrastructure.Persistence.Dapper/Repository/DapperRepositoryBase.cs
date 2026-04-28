@@ -1,4 +1,4 @@
-using Dapper;
+﻿using Dapper;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Common.Persistence;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Connection;
@@ -10,7 +10,7 @@ namespace IIoT.Edge.Infrastructure.Persistence.Dapper.Repository;
 public abstract class DapperRepositoryBase<TEntity> : ITableInitializer
     where TEntity : class
 {
-    private static readonly int[] WriteRetryDelaysMs = [50, 150, 400];
+    private static readonly int[] WriteRetryDelaysMs = [100, 250, 500, 1000, 2000];
 
     protected readonly SqliteConnectionFactory ConnectionFactory;
     protected readonly ILogService Logger;

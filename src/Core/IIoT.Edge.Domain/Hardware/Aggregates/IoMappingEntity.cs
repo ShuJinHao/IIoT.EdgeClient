@@ -12,7 +12,10 @@ public class IoMappingEntity : BaseEntity<int>, IAggregateRoot
         string plcAddress,
         int addressCount,
         string dataType,
-        string direction)
+        string direction,
+        string category = "单点读数据",
+        string groupName = "",
+        string displayRole = "")
     {
         NetworkDeviceId = networkDeviceId;
         Label = label;
@@ -20,6 +23,9 @@ public class IoMappingEntity : BaseEntity<int>, IAggregateRoot
         AddressCount = addressCount;
         DataType = dataType;
         Direction = direction;
+        Category = string.IsNullOrWhiteSpace(category) ? "单点读数据" : category.Trim();
+        GroupName = groupName ?? string.Empty;
+        DisplayRole = displayRole ?? string.Empty;
     }
 
     public int NetworkDeviceId { get; set; }
@@ -28,6 +34,9 @@ public class IoMappingEntity : BaseEntity<int>, IAggregateRoot
     public int AddressCount { get; set; } = 1;
     public string DataType { get; set; } = "Int16";
     public string Direction { get; set; } = "Read";
+    public string Category { get; set; } = "单点读数据";
+    public string GroupName { get; set; } = string.Empty;
+    public string DisplayRole { get; set; } = string.Empty;
     public int SortOrder { get; set; }
     public string? Remark { get; set; }
 

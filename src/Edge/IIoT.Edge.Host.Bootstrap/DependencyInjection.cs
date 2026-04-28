@@ -1,4 +1,4 @@
-using IIoT.Edge.Application;
+﻿using IIoT.Edge.Application;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
@@ -9,7 +9,7 @@ using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Tasks;
 using IIoT.Edge.Application.Common.Tasks;
-using IIoT.Edge.Module.Abstractions;
+using IIoT.Edge.Host.Bootstrap.Modules;
 using IIoT.Edge.Infrastructure.DeviceComm;
 using IIoT.Edge.Infrastructure.Integration;
 using IIoT.Edge.Infrastructure.Integration.Recipe;
@@ -23,7 +23,6 @@ using IIoT.Edge.Runtime;
 using IIoT.Edge.Runtime.DataPipeline.Tasks;
 using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
 using IIoT.Edge.Shell.Core;
-using IIoT.Edge.UI.Shared;
 using IIoT.Edge.UI.Shared.Modularity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -37,11 +36,11 @@ public static class DependencyInjection
         this IServiceCollection services,
         IViewRegistry viewRegistry,
         IConfiguration configuration,
-        string dbDir,
+        EdgeRuntimePaths runtimePaths,
         IReadOnlyCollection<ModulePluginDescriptor> discoveredModules,
         IReadOnlyCollection<ModuleCatalogIssue> moduleCatalogIssues,
         IReadOnlyCollection<string> configuredEnabledModuleIds,
-        IEnumerable<IEdgeStationModule> modules)
+        IEnumerable<IEdgeProcessModule> modules)
     {
         ArgumentNullException.ThrowIfNull(discoveredModules);
         ArgumentNullException.ThrowIfNull(moduleCatalogIssues);
@@ -56,13 +55,14 @@ public static class DependencyInjection
             .Select(static module => module.GetType().Assembly)
             .Distinct()
             .ToArray();
-        var efDbPath = Path.Combine(dbDir, "edge.db");
-        var excelDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data", "excel");
+        var efDbPath = Path.Combine(runtimePaths.DatabaseDirectory, "edge.db");
 
-        Directory.CreateDirectory(dbDir);
-        Directory.CreateDirectory(excelDir);
+        Directory.CreateDirectory(runtimePaths.DatabaseDirectory);
+        Directory.CreateDirectory(runtimePaths.ExcelDirectory);
+        Directory.CreateDirectory(runtimePaths.LogDirectory);
 
         services.AddSingleton(configuration);
+        services.AddSingleton(runtimePaths);
         services.AddSingleton(viewRegistry);
         services.AddSingleton<IViewRegistry>(viewRegistry);
         services.AddSingleton<IReadOnlyCollection<ModulePluginDescriptor>>(discoveredModuleList);
@@ -82,14 +82,19 @@ public static class DependencyInjection
 
         services.AddEdgeApplication();
         services.AddEfCorePersistenceInfrastructure(efDbPath);
-        services.AddDapperPersistenceInfrastructure(dbDir);
-        services.AddIntegrationInfrastructure(configuration, excelDir);
+        services.AddDapperPersistenceInfrastructure(runtimePaths.DatabaseDirectory);
+        services.AddIntegrationInfrastructure(configuration, runtimePaths);
         services.AddDeviceCommInfrastructure();
-        services.AddEdgeRuntime();
+        services.AddEdgeRuntime(runtimePaths);
 
         services.AddMediatR(cfg =>
         {
-            cfg.LicenseKey = configuration["MediatR:LicenseKey"] ?? string.Empty;
+            var licenseKey = ResolveMediatRLicenseKey(configuration);
+            if (!string.IsNullOrWhiteSpace(licenseKey))
+            {
+                cfg.LicenseKey = licenseKey;
+            }
+
             cfg.RegisterServicesFromAssemblies(
                 [
                     typeof(IIoT.Edge.Application.DependencyInjection).Assembly,
@@ -99,7 +104,6 @@ public static class DependencyInjection
                 ]);
         });
 
-        services.AddUiShared();
         services.AddAutoMapper(
             _ => { },
             [
@@ -116,7 +120,7 @@ public static class DependencyInjection
         services.AddPanelPresentation();
 
         RegisterHostViews(new HostViewRegistry(viewRegistry));
-        RegisterModules(services, viewRegistry, enabledModules);
+        RegisterModules(services, viewRegistry, configuration, enabledModules);
         viewRegistry.RegisterPanelViews();
 
         services.AddSingleton<IManagedBackgroundService>(sp =>
@@ -177,6 +181,15 @@ public static class DependencyInjection
         return services;
     }
 
+    private static string? ResolveMediatRLicenseKey(IConfiguration configuration)
+        => FirstNonEmpty(
+            Environment.GetEnvironmentVariable("MediatR__LicenseKey"),
+            Environment.GetEnvironmentVariable("MEDIATR_LICENSE_KEY"),
+            configuration["MediatR:LicenseKey"]);
+
+    private static string? FirstNonEmpty(params string?[] values)
+        => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
+
     private static void RegisterHostViews(IViewRegistry registry)
     {
         registry.RegisterRoute(
@@ -187,6 +200,7 @@ public static class DependencyInjection
         registry.RegisterMenu(new MenuInfo
         {
             Title = "系统诊断",
+            TitleResourceKey = "Navigation_Menu_CoreDiagnostics",
             ViewId = CoreViewIds.Diagnostics,
             Icon = "Stethoscope",
             Order = 999,
@@ -197,7 +211,8 @@ public static class DependencyInjection
     private static void RegisterModules(
         IServiceCollection services,
         IViewRegistry viewRegistry,
-        IReadOnlyCollection<IEdgeStationModule> modules)
+        IConfiguration configuration,
+        IReadOnlyCollection<IEdgeProcessModule> modules)
     {
         var cellDataRegistry = new CellDataRegistry();
         var runtimeRegistry = new StationRuntimeRegistry();
@@ -211,19 +226,24 @@ public static class DependencyInjection
 
         foreach (var module in modules)
         {
-            services.AddSingleton<IEdgeStationModule>(module);
+            services.AddSingleton<IEdgeProcessModule>(module);
+            var builder = new EdgeProcessModuleBuilder(
+                module.ModuleId,
+                module.ProcessType,
+                services,
+                configuration,
+                new ModuleViewRegistry(viewRegistry, module.ModuleId),
+                cellDataRegistry,
+                runtimeRegistry,
+                integrationRegistry);
 
-            module.RegisterServices(services);
-            module.RegisterCellData(cellDataRegistry);
-            module.RegisterRuntime(runtimeRegistry);
-            module.RegisterIntegrations(integrationRegistry);
-            module.RegisterViews(new ModuleViewRegistry(viewRegistry, module.ModuleId));
+            module.Configure(builder);
         }
 
         ValidateModuleRegistrations(modules, cellDataRegistry, runtimeRegistry, integrationRegistry);
     }
 
-    private static void ValidateModuleIdentity(IEnumerable<IEdgeStationModule> modules)
+    private static void ValidateModuleIdentity(IEnumerable<IEdgeProcessModule> modules)
     {
         var moduleIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var processTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -243,7 +263,7 @@ public static class DependencyInjection
     }
 
     private static void ValidateModuleRegistrations(
-        IEnumerable<IEdgeStationModule> modules,
+        IEnumerable<IEdgeProcessModule> modules,
         ICellDataRegistry cellDataRegistry,
         IStationRuntimeRegistry runtimeRegistry,
         IProcessIntegrationRegistry integrationRegistry)

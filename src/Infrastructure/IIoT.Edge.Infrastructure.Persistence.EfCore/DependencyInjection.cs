@@ -13,8 +13,10 @@ public static class DependencyInjection
         this IServiceCollection services,
         string dbPath)
     {
+        EdgeSqliteConnection.EnsureRuntimePragmas(dbPath);
+
         services.AddDbContextFactory<EdgeDbContext>(
-            options => options.UseSqlite($"Data Source={dbPath}"));
+            options => options.UseSqlite(EdgeSqliteConnection.BuildConnectionString(dbPath)));
 
         services.AddSingleton(typeof(IReadRepository<>), typeof(EfReadRepository<>));
         services.AddSingleton(typeof(IRepository<>), typeof(EfRepository<>));

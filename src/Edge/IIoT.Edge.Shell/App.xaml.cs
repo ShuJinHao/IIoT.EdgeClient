@@ -1,25 +1,30 @@
-using IIoT.Edge.Host.Bootstrap;
-using IIoT.Edge.Shell.Core;
-using IIoT.Edge.Shell.Modules;
-using IIoT.Edge.Shell.ViewModels;
-using IIoT.Edge.UI.Shared.Modularity;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
+﻿using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
+using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Host.Bootstrap;
+using IIoT.Edge.UI.Shared.Localization;
+using IIoT.Edge.Shell.Core;
+using IIoT.Edge.Shell.Modules;
+using IIoT.Edge.Shell.ViewModels;
+using IIoT.Edge.UI.Shared.Modularity;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using WpfApplication = System.Windows.Application;
 
 namespace IIoT.Edge.Shell;
 
 public partial class App : WpfApplication
 {
+    private const int ShutdownTimeoutSeconds = 8;
+
     private ServiceProvider? _serviceProvider;
     private readonly CancellationTokenSource _appCts = new();
-    private Mutex? _instanceMutex;
+    private readonly SingleInstanceMutexHandle _instanceLock = new();
     private int _fatalDialogShown;
 
     public App()
@@ -34,6 +39,8 @@ public partial class App : WpfApplication
 
         var configurationResult = ShellConfigurationLoader.Load(AppDomain.CurrentDomain.BaseDirectory);
         var configuration = configurationResult.Configuration;
+        var runtimePaths = ShellRuntimePathResolver.Resolve(AppDomain.CurrentDomain.BaseDirectory, configuration);
+        ConfigureCrashLogging(runtimePaths);
 
         if (!TryAcquireInstanceLock(configuration))
         {
@@ -43,11 +50,12 @@ public partial class App : WpfApplication
 
         try
         {
-            _serviceProvider = ConfigureServices(configuration).BuildServiceProvider();
+            _serviceProvider = ConfigureServices(configuration, runtimePaths).BuildServiceProvider();
+            _serviceProvider.GetRequiredService<IAppLanguageService>().Initialize();
         }
         catch (Exception ex)
         {
-            ShowStartupError($"Startup service configuration failed: {ex.Message}");
+            ShowStartupError($"启动服务配置失败：{ex.Message}");
             Shutdown(-1);
             return;
         }
@@ -67,28 +75,82 @@ public partial class App : WpfApplication
 
     protected override void OnExit(ExitEventArgs e)
     {
+        var forceKill = false;
+
         try
         {
             _appCts.Cancel();
 
             if (_serviceProvider is not null)
             {
-                var lifecycle = _serviceProvider.GetRequiredService<IAppLifecycleCoordinator>();
-                using var shutdownCts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
-                lifecycle.StopAsync(shutdownCts.Token).GetAwaiter().GetResult();
-                _serviceProvider.DisposeAsync().AsTask().GetAwaiter().GetResult();
-                _serviceProvider = null;
+                forceKill = !StopServicesWithinTimeout();
             }
         }
         catch (Exception ex)
         {
-            CrashLogWriter.Write("Application shutdown failed.", ex);
+            CrashLogWriter.Write("应用关闭失败。", ex);
+            forceKill = true;
         }
         finally
         {
             ReleaseMutex();
             _appCts.Dispose();
             base.OnExit(e);
+
+            if (forceKill)
+            {
+                ForceKillCurrentProcess();
+            }
+        }
+    }
+
+    private bool StopServicesWithinTimeout()
+    {
+        var provider = _serviceProvider;
+        if (provider is null)
+        {
+            return true;
+        }
+
+        using var shutdownCts = new CancellationTokenSource(TimeSpan.FromSeconds(ShutdownTimeoutSeconds));
+
+        // 关闭先走生命周期保存和断开逻辑；超时才强制结束，避免后台任务把进程长期挂住。
+        var shutdownTask = Task.Run(async () =>
+        {
+            var lifecycle = provider.GetRequiredService<IAppLifecycleCoordinator>();
+            await lifecycle.StopAsync(shutdownCts.Token).ConfigureAwait(false);
+            await provider.DisposeAsync().AsTask().ConfigureAwait(false);
+            _serviceProvider = null;
+        });
+
+        if (!shutdownTask.Wait(TimeSpan.FromSeconds(ShutdownTimeoutSeconds)))
+        {
+            CrashLogWriter.Write(
+                "应用关闭超时。",
+                details: $"生命周期停机超过 {ShutdownTimeoutSeconds} 秒，已准备强制结束残留进程。");
+            return false;
+        }
+
+        if (shutdownTask.IsFaulted)
+        {
+            CrashLogWriter.Write(
+                "应用关闭失败。",
+                shutdownTask.Exception?.GetBaseException() ?? new InvalidOperationException("关闭任务失败但未返回异常明细。"));
+            return false;
+        }
+
+        return true;
+    }
+
+    private static void ForceKillCurrentProcess()
+    {
+        try
+        {
+            Process.GetCurrentProcess().Kill(entireProcessTree: true);
+        }
+        catch
+        {
+            Environment.Exit(-1);
         }
     }
 
@@ -101,20 +163,20 @@ public partial class App : WpfApplication
 
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
-        HandleFatalException("DispatcherUnhandledException", e.Exception, requestShutdown: true);
+        HandleFatalException("UI 线程未处理异常", e.Exception, requestShutdown: true);
         e.Handled = true;
     }
 
     private void OnAppDomainUnhandledException(object? sender, UnhandledExceptionEventArgs e)
     {
         var exception = e.ExceptionObject as Exception
-            ?? new Exception(e.ExceptionObject?.ToString() ?? "Unknown unhandled exception.");
-        HandleFatalException("AppDomain.CurrentDomain.UnhandledException", exception, requestShutdown: false);
+            ?? new Exception(e.ExceptionObject?.ToString() ?? "未知未处理异常。");
+        HandleFatalException("应用域未处理异常", exception, requestShutdown: false);
     }
 
     private void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
     {
-        CrashLogWriter.Write("TaskScheduler.UnobservedTaskException", e.Exception);
+        CrashLogWriter.Write("后台任务未观察异常", e.Exception);
         e.SetObserved();
     }
 
@@ -156,39 +218,26 @@ public partial class App : WpfApplication
         var instanceId = configuration["InstanceId"] ?? "IIoT-Edge-Default";
         var mutexName = $"Global\\IIoT.EdgeClient_{instanceId}";
 
-        _instanceMutex = new Mutex(true, mutexName, out var createdNew);
-        if (createdNew)
+        if (_instanceLock.TryAcquire(mutexName))
         {
             return true;
         }
 
         MessageBox.Show(
-            $"Instance [{instanceId}] is already running.",
+            $"实例 [{instanceId}] 已在运行。",
             "IIoT Edge Client",
             MessageBoxButton.OK,
             MessageBoxImage.Warning);
 
-        _instanceMutex = null;
         return false;
     }
 
-    private void ReleaseMutex()
-    {
-        if (_instanceMutex is null)
-        {
-            return;
-        }
+    private void ReleaseMutex() => _instanceLock.Release();
 
-        _instanceMutex.ReleaseMutex();
-        _instanceMutex.Dispose();
-        _instanceMutex = null;
-    }
-
-    private ServiceCollection ConfigureServices(IConfiguration configuration)
+    private ServiceCollection ConfigureServices(IConfiguration configuration, EdgeRuntimePaths runtimePaths)
     {
         var services = new ServiceCollection();
         var viewRegistry = new ViewRegistry();
-        var dbDir = GetDbDirectory();
         var pluginRootPath = ShellModuleCatalog.GetPluginRootPath(AppDomain.CurrentDomain.BaseDirectory);
         var discoveryResult = ShellModuleCatalog.DiscoverModules(pluginRootPath);
         var activationResult = ShellModuleCatalog.CreateEnabledModules(configuration, discoveryResult.Modules);
@@ -199,7 +248,7 @@ public partial class App : WpfApplication
         services.AddEdgeHostBootstrap(
             viewRegistry,
             configuration,
-            dbDir,
+            runtimePaths,
             discoveryResult.Modules,
             moduleCatalogIssues,
             activationResult.EnabledModuleIds,
@@ -209,18 +258,18 @@ public partial class App : WpfApplication
         return services;
     }
 
-    private static string GetDbDirectory()
+    private static void ConfigureCrashLogging(EdgeRuntimePaths runtimePaths)
     {
-        var dbDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data", "db");
-        Directory.CreateDirectory(dbDir);
-        return dbDir;
+        CrashLogWriter.ConfigurePaths(
+            () => runtimePaths.PrimaryCrashLogPath,
+            () => runtimePaths.FallbackCrashLogPath);
     }
 
     private static void ShowStartupError(string message)
     {
         MessageBox.Show(
             message,
-            "IIoT Edge Client - Startup Error",
+            "IIoT Edge Client - 启动失败",
             MessageBoxButton.OK,
             MessageBoxImage.Error);
     }

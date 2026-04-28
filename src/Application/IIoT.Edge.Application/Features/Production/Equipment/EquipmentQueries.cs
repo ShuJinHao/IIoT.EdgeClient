@@ -1,6 +1,5 @@
 ﻿using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Plc;
-using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Recipe;
 using IIoT.Edge.Application.Features.Hardware.Queries;
 using IIoT.Edge.Application.Features.Production.Equipment.Models;
@@ -35,8 +34,7 @@ public record GetCapacitySnapshotQuery() : IRequest<CapacitySnapshot>;
 
 public class GetHardwareStatusHandler(
     ISender sender,
-    IPlcConnectionManager plcManager,
-    IPlcDataStore dataStore)
+    IPlcConnectionManager plcManager)
     : IRequestHandler<GetHardwareStatusQuery, List<HardwareSnapshot>>
 {
     public async Task<List<HardwareSnapshot>> Handle(
@@ -50,9 +48,7 @@ public class GetHardwareStatusHandler(
         return result.Value
             .Select(device =>
             {
-                var isConnected =
-                    plcManager.GetPlc(device.Id)?.IsConnected == true ||
-                    dataStore.HasDevice(device.Id);
+                var isConnected = plcManager.GetRuntimeStatus(device.Id)?.IsConnected == true;
 
                 return new HardwareSnapshot(
                     device.DeviceName,

@@ -1,10 +1,11 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Infrastructure.Integration.Config;
 using IIoT.Edge.Infrastructure.Integration.Device;
 using IIoT.Edge.Infrastructure.Integration.Device.Cache;
+using IIoT.Edge.Infrastructure.Integration.Http;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 
@@ -25,21 +26,29 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
         var deviceId = Guid.NewGuid();
         var processId = Guid.NewGuid();
         var expiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(15);
-        var handler = new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        var refreshExpiresAtUtc = DateTimeOffset.UtcNow.AddDays(7);
+        var handler = new RecordingHttpMessageHandler(_ =>
         {
-            Content = JsonContent.Create(new
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Id = deviceId,
-                DeviceName = "Test Device",
-                ClientCode = "LINE-A-01",
-                ProcessId = processId,
-                UploadAccessToken = "device-upload-token",
-                UploadAccessTokenExpiresAtUtc = expiresAtUtc
-            })
+                Content = JsonContent.Create(new
+                {
+                    Id = deviceId,
+                    DeviceName = "Test Device",
+                    ClientCode = "LINE-A-01",
+                    ProcessId = processId,
+                    UploadAccessToken = "device-upload-token",
+                    UploadAccessTokenExpiresAtUtc = expiresAtUtc
+                })
+            };
+            response.Headers.Add(CloudAuthHeaders.RefreshToken, "refresh-bootstrap-token");
+            response.Headers.Add(CloudAuthHeaders.RefreshTokenExpiresAt, refreshExpiresAtUtc.ToString("O"));
+            response.Headers.Add(CloudAuthHeaders.AccessTokenExpiresAt, expiresAtUtc.ToString("O"));
+            return response;
         });
 
         var service = new DeviceService(
-            new HttpClient(handler),
+            new TestHttpClientFactory(new HttpClient(handler)),
             new FakeEndpointProvider("LINE-A-01"),
             new DeviceSessionFileCacheStore(),
             CreateRuntimeConfig(),
@@ -58,8 +67,71 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
         Assert.Equal("LINE-A-01", service.CurrentDevice.ClientCode);
         Assert.Equal("device-upload-token", service.CurrentDevice.UploadAccessToken);
         Assert.Equal(expiresAtUtc, service.CurrentDevice.UploadAccessTokenExpiresAtUtc);
+        Assert.Equal("refresh-bootstrap-token", service.CurrentDevice.RefreshToken);
+        Assert.Equal(refreshExpiresAtUtc, service.CurrentDevice.RefreshTokenExpiresAtUtc);
         Assert.True(requestUri.Query.Contains("clientCode=LINE-A-01", StringComparison.Ordinal));
         Assert.False(requestUri.Query.Contains("macAddress=", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task RefreshBootstrapAsync_WhenRefreshTokenExists_ShouldUseRefreshRouteAndRotateToken()
+    {
+        var deviceId = Guid.NewGuid();
+        var processId = Guid.NewGuid();
+        var refreshRequests = 0;
+        var handler = new RecordingHttpMessageHandler(request =>
+        {
+            if (request.RequestUri!.AbsolutePath == "/api/v1/bootstrap/edge-refresh")
+            {
+                refreshRequests++;
+                Assert.True(request.Headers.TryGetValues(CloudAuthHeaders.RefreshToken, out var refreshTokens));
+                Assert.Equal("refresh-1", refreshTokens.Single());
+
+                var response = new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new
+                    {
+                        Id = deviceId,
+                        DeviceName = "Refresh Device",
+                        ClientCode = "LINE-R-01",
+                        ProcessId = processId,
+                        UploadAccessToken = "access-2",
+                        UploadAccessTokenExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(15)
+                    })
+                };
+                response.Headers.Add(CloudAuthHeaders.RefreshToken, "refresh-2");
+                response.Headers.Add(CloudAuthHeaders.RefreshTokenExpiresAt, DateTimeOffset.UtcNow.AddDays(7).ToString("O"));
+                return response;
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+
+        var service = new DeviceService(
+            new TestHttpClientFactory(new HttpClient(handler)),
+            new FakeEndpointProvider("LINE-R-01"),
+            new DeviceSessionFileCacheStore(),
+            CreateRuntimeConfig(),
+            new FakeLogService());
+
+        service.GetType().GetProperty(nameof(DeviceService.CurrentDevice))!.SetValue(service, new DeviceSession
+        {
+            DeviceId = deviceId,
+            DeviceName = "Refresh Device",
+            ClientCode = "LINE-R-01",
+            ProcessId = processId,
+            UploadAccessToken = "access-1",
+            UploadAccessTokenExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(-5),
+            RefreshToken = "refresh-1",
+            RefreshTokenExpiresAtUtc = DateTimeOffset.UtcNow.AddDays(1)
+        });
+
+        await service.RefreshBootstrapAsync();
+
+        Assert.Equal(1, refreshRequests);
+        Assert.NotNull(service.CurrentDevice);
+        Assert.Equal("access-2", service.CurrentDevice!.UploadAccessToken);
+        Assert.Equal("refresh-2", service.CurrentDevice.RefreshToken);
     }
 
     [Fact]
@@ -111,7 +183,7 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
         });
 
         var service = new DeviceService(
-            new HttpClient(handler),
+            new TestHttpClientFactory(new HttpClient(handler)),
             new FakeEndpointProvider("LINE-C-03"),
             new DeviceSessionFileCacheStore(),
             CreateRuntimeConfig(),
@@ -129,8 +201,8 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
         Assert.Equal(EdgeUploadGateState.Blocked, service.CurrentUploadGate.State);
         Assert.Equal(EdgeUploadBlockReason.MissingUploadToken, service.CurrentUploadGate.Reason);
         Assert.NotNull(service.CurrentDevice);
-        Assert.Contains(logger.Entries, x => x.Message.Contains("event=edge.bootstrap.invalid_token", StringComparison.Ordinal));
-        Assert.Contains(logger.Entries, x => x.Message.Contains("reason=missing_upload_token", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, x => x.Message.Contains("事件(edge.bootstrap.invalid_token)", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, x => x.Message.Contains("原因=missing_upload_token", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -151,7 +223,7 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
         });
 
         var service = new DeviceService(
-            new HttpClient(handler),
+            new TestHttpClientFactory(new HttpClient(handler)),
             new FakeEndpointProvider("LINE-D-04"),
             new DeviceSessionFileCacheStore(),
             CreateRuntimeConfig(),
@@ -169,8 +241,8 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
         Assert.Equal(EdgeUploadGateState.Blocked, service.CurrentUploadGate.State);
         Assert.Equal(EdgeUploadBlockReason.ExpiredUploadToken, service.CurrentUploadGate.Reason);
         Assert.NotNull(service.CurrentDevice);
-        Assert.Contains(logger.Entries, x => x.Message.Contains("event=edge.bootstrap.invalid_token", StringComparison.Ordinal));
-        Assert.Contains(logger.Entries, x => x.Message.Contains("reason=expired_upload_token", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, x => x.Message.Contains("事件(edge.bootstrap.invalid_token)", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, x => x.Message.Contains("原因=expired_upload_token", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -195,7 +267,7 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
         });
 
         var service = new DeviceService(
-            new HttpClient(handler),
+            new TestHttpClientFactory(new HttpClient(handler)),
             new FakeEndpointProvider("LINE-HB-01"),
             new DeviceSessionFileCacheStore(),
             new FakeLocalSystemRuntimeConfigService
@@ -215,6 +287,83 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
         await service.StopAsync();
 
         Assert.True(Volatile.Read(ref requestCount) >= 2);
+    }
+
+    [Fact]
+    public async Task StopAsync_WhenHeartbeatDelayIsPending_ShouldCancelLoopBeforeNextBootstrap()
+    {
+        var requestCount = 0;
+        var handler = new RecordingHttpMessageHandler(_ =>
+        {
+            Interlocked.Increment(ref requestCount);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new
+                {
+                    Id = Guid.NewGuid(),
+                    DeviceName = "Heartbeat Delay Device",
+                    ClientCode = "LINE-HB-STOP-01",
+                    ProcessId = Guid.NewGuid(),
+                    UploadAccessToken = "heartbeat-stop-token",
+                    UploadAccessTokenExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(10)
+                })
+            };
+        });
+
+        var service = new DeviceService(
+            new TestHttpClientFactory(new HttpClient(handler)),
+            new FakeEndpointProvider("LINE-HB-STOP-01"),
+            new DeviceSessionFileCacheStore(),
+            new FakeLocalSystemRuntimeConfigService
+            {
+                Current = SystemRuntimeConfigSnapshot.Default with
+                {
+                    OnlineHeartbeatInterval = TimeSpan.FromSeconds(1)
+                }
+            },
+            new FakeLogService());
+
+        using var cts = new CancellationTokenSource();
+
+        await service.StartAsync(cts.Token);
+        await handler.WaitForRequestUriAsync();
+        await WaitForAsync(() => service.CurrentState == NetworkState.Online);
+
+        await service.StopAsync();
+        await Task.Delay(TimeSpan.FromMilliseconds(1200));
+
+        Assert.Equal(1, Volatile.Read(ref requestCount));
+    }
+
+    [Fact]
+    public async Task StopAsync_WhenBootstrapRequestIsInFlight_ShouldWaitForHeartbeatExitWithoutFollowUpRequests()
+    {
+        var requestCount = 0;
+        var requestStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var handler = new BlockingHttpMessageHandler(async cancellationToken =>
+        {
+            Interlocked.Increment(ref requestCount);
+            requestStarted.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        });
+
+        var service = new DeviceService(
+            new TestHttpClientFactory(new HttpClient(handler)),
+            new FakeEndpointProvider("LINE-HB-STOP-02"),
+            new DeviceSessionFileCacheStore(),
+            CreateRuntimeConfig(),
+            new FakeLogService());
+
+        using var cts = new CancellationTokenSource();
+
+        await service.StartAsync(cts.Token);
+        await requestStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        await service.StopAsync().WaitAsync(TimeSpan.FromSeconds(2));
+        await Task.Delay(TimeSpan.FromMilliseconds(200));
+
+        Assert.Equal(1, Volatile.Read(ref requestCount));
     }
 
     public void Dispose()
@@ -256,8 +405,10 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
     {
         public string BuildUrl(string relativeOrAbsoluteUrl) => $"https://unit.test{relativeOrAbsoluteUrl}";
         public string GetClientCode() => clientCode;
-        public string GetDeviceInstancePath() => "/api/v1/edge/bootstrap/device-instance";
-        public string GetIdentityDeviceLoginPath() => "/api/v1/human/identity/edge-login";
+        public string GetDeviceInstancePath() => "/api/v1/bootstrap/device-instance";
+        public string GetBootstrapRefreshPath() => "/api/v1/bootstrap/edge-refresh";
+        public string GetIdentityDeviceLoginPath() => "/api/v1/bootstrap/edge-login";
+        public string GetHumanIdentityRefreshPath() => "/api/v1/human/identity/refresh";
         public string GetDeviceLogPath() => "/api/v1/edge/device-logs";
         public string GetCapacityHourlyPath() => "/api/v1/edge/capacity/hourly";
         public string GetCapacitySummaryPath() => "/api/v1/edge/capacity/summary";
@@ -284,5 +435,14 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
             using var registration = timeoutCts.Token.Register(() => _requestUriSource.TrySetCanceled(timeoutCts.Token));
             return await _requestUriSource.Task;
         }
+    }
+
+    private sealed class BlockingHttpMessageHandler(
+        Func<CancellationToken, Task<HttpResponseMessage>> sendAsync) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+            => sendAsync(cancellationToken);
     }
 }

@@ -27,14 +27,14 @@ public sealed class PlcServiceProxy : IPlcService
             var result = await _target.ConnectAsync().ConfigureAwait(false);
             if (!result)
             {
-                _logger.Warn($"[{_deviceName}] 杩炴帴澶辫触");
+                _logger.Warn($"[{_deviceName}] 连接失败");
             }
 
             return result;
         }
         catch (Exception ex)
         {
-            _logger.Error($"[{_deviceName}] 杩炴帴寮傚父: {ex.Message}");
+            _logger.Error($"[{_deviceName}] 连接异常: {ex.Message}");
             throw;
         }
     }
@@ -49,7 +49,7 @@ public sealed class PlcServiceProxy : IPlcService
         }
         catch (Exception ex)
         {
-            _logger.Error($"[{_deviceName}] 璇诲彇 {address} 澶辫触: {ex.Message}");
+            _logger.Error($"[{_deviceName}] 读取 {address} 失败: {ex.Message}");
             throw;
         }
     }
@@ -62,7 +62,7 @@ public sealed class PlcServiceProxy : IPlcService
         }
         catch (Exception ex)
         {
-            _logger.Error($"[{_deviceName}] 鍐欏叆 {address} 澶辫触: {ex.Message}");
+            _logger.Error($"[{_deviceName}] 写入 {address} 失败: {ex.Message}");
             throw;
         }
     }

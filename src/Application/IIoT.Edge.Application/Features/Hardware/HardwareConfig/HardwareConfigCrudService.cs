@@ -10,7 +10,7 @@ using MediatR;
 namespace IIoT.Edge.Application.Features.Hardware.HardwareConfigView;
 
 /// <summary>
-/// 硬件配置页面增删改查服务契约。
+/// 硬件配置页增删改查服务契约。
 /// </summary>
 public interface IHardwareConfigCrudService
 {
@@ -39,8 +39,7 @@ public interface IHardwareConfigCrudService
 }
 
 /// <summary>
-/// 硬件配置页面增删改查服务。
-/// 负责将界面操作转发到硬件配置查询与保存命令。
+/// 硬件配置页服务只负责转发界面操作，不直接连接 PLC。
 /// </summary>
 public sealed class HardwareConfigCrudService(
     ISender sender,
@@ -86,7 +85,7 @@ public sealed class HardwareConfigCrudService(
     {
         if (!permissionService.CanEditHardware)
         {
-            return CrudOperationResult.Failure("当前用户无硬件配置权限。");
+            return CrudOperationResult.Failure("当前用户没有硬件配置权限。");
         }
 
         if (selectedNetworkDevice is null)
@@ -128,6 +127,9 @@ public sealed class HardwareConfigCrudService(
                 x.AddressCount,
                 x.DataType,
                 x.Direction,
+                x.Category,
+                x.GroupName,
+                x.DisplayRole,
                 x.SortOrder,
                 x.Remark))
             .ToList();
@@ -152,6 +154,9 @@ public sealed class HardwareConfigCrudService(
                 template.AddressCount,
                 template.DataType,
                 template.Direction,
+                template.Category,
+                template.GroupName,
+                template.DisplayRole,
                 template.SortOrder,
                 null));
             existingLabels.Add(template.Label);
@@ -179,7 +184,7 @@ public sealed class HardwareConfigCrudService(
     {
         if (!permissionService.CanEditHardware)
         {
-            return Task.FromResult(CrudOperationResult.Failure("当前用户无硬件配置权限。"));
+            return Task.FromResult(CrudOperationResult.Failure("当前用户没有硬件配置权限。"));
         }
 
         return sender.Send(

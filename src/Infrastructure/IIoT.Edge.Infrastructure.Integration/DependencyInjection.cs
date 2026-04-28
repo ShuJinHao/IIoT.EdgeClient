@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Abstractions.Auth;
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Consumers;
 using IIoT.Edge.Application.Abstractions.DataPipeline.SyncTask;
@@ -32,7 +33,7 @@ public static class DependencyInjection
     public static IServiceCollection AddIntegrationInfrastructure(
         this IServiceCollection services,
         IConfiguration configuration,
-        string excelDirectory)
+        EdgeRuntimePaths runtimePaths)
     {
         services.Configure<CloudApiConfig>(configuration.GetSection("CloudApi"));
         services.Configure<MesApiConfig>(configuration.GetSection("MesApi"));
@@ -46,17 +47,21 @@ public static class DependencyInjection
         services.AddSingleton<ICloudApiPathProvider>(sp =>
             sp.GetRequiredService<ICloudApiEndpointProvider>());
         services.AddSingleton<IMesEndpointProvider, MesEndpointProvider>();
-        services.AddSingleton<DeviceSessionFileCacheStore>();
+        services.AddSingleton(new DeviceSessionFileCacheStore(runtimePaths.DeviceCacheFilePath));
 
         services.AddSingleton(new LocalAdminConfig
         {
-            PasswordHash = Environment.GetEnvironmentVariable("LocalAdmin__PasswordHash")?.Trim() ?? string.Empty
+            PasswordHash =
+                Environment.GetEnvironmentVariable("LocalAdmin__PasswordHash")?.Trim()
+                ?? configuration["LocalAdmin:PasswordHash"]?.Trim()
+                ?? string.Empty
         });
 
-        services.AddHttpClient<AuthService>(client => client.Timeout = timeout);
-        services.AddSingleton<IAuthService>(sp => sp.GetRequiredService<AuthService>());
+        services.AddHttpClient(AuthService.HttpClientName, client => client.Timeout = timeout);
+        services.AddSingleton<IAuthService, AuthService>();
 
-        services.AddHttpClient<DeviceService>(client => client.Timeout = timeout);
+        services.AddHttpClient(DeviceService.HttpClientName, client => client.Timeout = timeout);
+        services.AddSingleton<DeviceService>();
         services.AddSingleton<IDeviceService>(sp => sp.GetRequiredService<DeviceService>());
         services.AddSingleton<IDeviceAccessTokenProvider>(sp => sp.GetRequiredService<DeviceService>());
 
@@ -86,11 +91,17 @@ public static class DependencyInjection
         services.AddSingleton<ICapacityConsumer, CapacityConsumer>();
         services.AddSingleton<ICapacitySyncTask, CapacitySyncTask>();
         services.AddSingleton<IDeviceLogSyncTask, DeviceLogSyncTask>();
-        services.AddSingleton<IRecipeService, RecipeService>();
+        services.AddSingleton<IRecipeService>(sp =>
+            new RecipeService(
+                sp.GetRequiredService<ICloudHttpClient>(),
+                sp.GetRequiredService<ICloudApiEndpointProvider>(),
+                sp.GetRequiredService<IDeviceService>(),
+                sp.GetRequiredService<ILogService>(),
+                runtimePaths.RecipeDirectory));
         services.AddSingleton<RecipeSyncTask>();
 
         services.AddSingleton<IExcelConsumer>(sp =>
-            new ExcelConsumer(excelDirectory, sp.GetRequiredService<ILogService>()));
+            new ExcelConsumer(runtimePaths.ExcelDirectory, sp.GetRequiredService<ILogService>()));
         services.AddSingleton<ICellDataConsumer>(sp =>
             sp.GetRequiredService<IExcelConsumer>());
 

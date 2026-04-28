@@ -1,20 +1,19 @@
-using IIoT.Edge.Application.Abstractions.Device;
-using IIoT.Edge.Application.Features.Production.CapacityView;
-using IIoT.Edge.UI.Shared.Mvvm;
-using IIoT.Edge.UI.Shared.PluginSystem;
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Input;
+using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Features.Production.CapacityView;
+using IIoT.Edge.Presentation.Navigation.Localization;
+using IIoT.Edge.UI.Shared.Localization;
+using IIoT.Edge.UI.Shared.Mvvm;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Production.CapacityView;
 
-public class CapacityViewModel : PresentationViewModelBase
+public class CapacityViewModel : NavigationViewModelBase
 {
     private readonly ICapacityViewService _capacityViewService;
-    private readonly string _viewId;
-    private readonly string _viewTitle;
     private string _selectedDeviceName = string.Empty;
-    private string _selectedQueryMode = "By Day";
+    private string _selectedQueryMode = CapacityQueryModes.Day;
     private DateTime _queryDate = DateTime.Today;
     private bool _isOnline;
     private int _periodTotal;
@@ -23,13 +22,9 @@ public class CapacityViewModel : PresentationViewModelBase
     private string _periodYield = "0%";
     private string _avgDaily = "0";
 
-    public override string ViewId => _viewId;
-    public override string ViewTitle => _viewTitle;
-
-    public ObservableCollection<string> DeviceNames { get; } = new();
-    public ObservableCollection<string> QueryModes { get; } = new() { "By Day", "By Month", "By Year" };
-    public ObservableCollection<DailyCapacityVm> DailyRecords { get; } = new();
-    public ObservableCollection<CapacityChartBarVm> ChartBars { get; } = new();
+    public ObservableCollection<string> DeviceNames { get; } = [];
+    public ObservableCollection<DailyCapacityVm> DailyRecords { get; } = [];
+    public ObservableCollection<CapacityChartBarVm> ChartBars { get; } = [];
 
     public string SelectedDeviceName
     {
@@ -38,7 +33,7 @@ public class CapacityViewModel : PresentationViewModelBase
         {
             _selectedDeviceName = value;
             OnPropertyChanged();
-            RunViewTaskInBackground(LoadCurrentDataAsync, "Load capacity data failed.");
+            ScheduleLoadCurrentData();
         }
     }
 
@@ -70,37 +65,85 @@ public class CapacityViewModel : PresentationViewModelBase
             _isOnline = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(CanQueryCloud));
-            OnPropertyChanged(nameof(OfflineHint));
         }
     }
 
     public bool CanQueryCloud => IsOnline;
-    public string OfflineHint => IsOnline ? string.Empty : "Cloud query is unavailable until device upload auth is ready.";
 
-    public int PeriodTotal { get => _periodTotal; set { _periodTotal = value; OnPropertyChanged(); } }
-    public int PeriodOk { get => _periodOk; set { _periodOk = value; OnPropertyChanged(); } }
-    public int PeriodNg { get => _periodNg; set { _periodNg = value; OnPropertyChanged(); } }
-    public string PeriodYield { get => _periodYield; set { _periodYield = value; OnPropertyChanged(); } }
-    public string AvgDaily { get => _avgDaily; set { _avgDaily = value; OnPropertyChanged(); } }
+    public int PeriodTotal
+    {
+        get => _periodTotal;
+        set
+        {
+            _periodTotal = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public int PeriodOk
+    {
+        get => _periodOk;
+        set
+        {
+            _periodOk = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public int PeriodNg
+    {
+        get => _periodNg;
+        set
+        {
+            _periodNg = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public string PeriodYield
+    {
+        get => _periodYield;
+        set
+        {
+            _periodYield = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public string AvgDaily
+    {
+        get => _avgDaily;
+        set
+        {
+            _avgDaily = value;
+            OnPropertyChanged();
+        }
+    }
 
     public ICommand QueryCommand { get; }
     public ICommand ExportCommand { get; }
 
-    public CapacityViewModel(ICapacityViewService capacityViewService)
-        : this(capacityViewService, "Production.CapacityView", "Capacity Query")
+    public CapacityViewModel(ICapacityViewService capacityViewService, IAppLanguageService languageService)
+        : this(
+            capacityViewService,
+            languageService,
+            "Production.CapacityView",
+            "Navigation_Title_CapacityQuery",
+            "产能查询")
     {
     }
 
-    protected CapacityViewModel(
+    public CapacityViewModel(
         ICapacityViewService capacityViewService,
+        IAppLanguageService languageService,
         string viewId,
-        string viewTitle)
+        string titleResourceKey,
+        string titleFallback)
+        : base(languageService, viewId, titleResourceKey, titleFallback)
     {
         _capacityViewService = capacityViewService;
-        _viewId = viewId;
-        _viewTitle = viewTitle;
 
-        QueryCommand = new AsyncCommand(() => RunViewTaskAsync(QueryHistoryAsync, "Capacity query failed."));
+        QueryCommand = new AsyncCommand(() => RunViewTaskAsync(QueryHistoryAsync, GetText("Navigation_Capacity_QueryFailed", "产能查询失败。")));
         ExportCommand = new BaseCommand(_ => { });
 
         _capacityViewService.UploadGateChanged += OnUploadGateChanged;
@@ -110,16 +153,20 @@ public class CapacityViewModel : PresentationViewModelBase
     {
         RefreshDeviceList();
         IsOnline = _capacityViewService.IsOnline;
-        await RunViewTaskAsync(LoadCurrentDataAsync, "Load capacity data failed.");
+        await RunViewTaskAsync(LoadCurrentDataAsync, GetText("Navigation_Capacity_LoadFailed", "加载产能数据失败。"));
     }
 
-    public void OnCapacityUpdated() => RunViewTaskInBackground(LoadCurrentDataAsync, "Load capacity data failed.");
+    public void OnCapacityUpdated() => ScheduleLoadCurrentData();
 
     private void OnUploadGateChanged(EdgeUploadGateSnapshot snapshot)
-    {
-        IsOnline = snapshot.State == EdgeUploadGateState.Ready;
-        RunViewTaskInBackground(LoadCurrentDataAsync, "Load capacity data failed.");
-    }
+        => RunOnUiThread(() =>
+        {
+            IsOnline = snapshot.State == EdgeUploadGateState.Ready;
+            RunViewTaskInBackground(LoadCurrentDataAsync, GetText("Navigation_Capacity_LoadFailed", "加载产能数据失败。"));
+        });
+
+    private void ScheduleLoadCurrentData()
+        => RunOnUiThread(() => RunViewTaskInBackground(LoadCurrentDataAsync, GetText("Navigation_Capacity_LoadFailed", "加载产能数据失败。")));
 
     private void RefreshDeviceList()
     {
@@ -154,8 +201,8 @@ public class CapacityViewModel : PresentationViewModelBase
         if (!CanQueryCloud)
         {
             MessageBox.Show(
-                "Cloud query is unavailable until device upload auth is ready.",
-                "Capacity Query",
+                GetText("Navigation_Capacity_OfflineHint", "设备上传鉴权尚未就绪，暂时无法查询云端产能。"),
+                GetText("Navigation_Title_CapacityQuery", "产能查询"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
             ClearSummary();
@@ -209,5 +256,17 @@ public class CapacityViewModel : PresentationViewModelBase
         PeriodNg = 0;
         PeriodYield = "0%";
         AvgDaily = "0";
+    }
+
+    private static void RunOnUiThread(Action action)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+        {
+            action();
+            return;
+        }
+
+        _ = dispatcher.InvokeAsync(action);
     }
 }

@@ -1,4 +1,4 @@
-<sharedViews:PageActionShell
+﻿<sharedViews:PageActionShell
     x:Class="IIoT.Edge.Presentation.Navigation.Features.Production.Monitor.MonitorViewPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -8,7 +8,7 @@
         <TextBlock FontSize="18"
                    FontWeight="Bold"
                    Foreground="#E4E4E7"
-                   Text="Real-time Monitor" />
+                    Text="{Binding ViewTitle}" />
     </sharedViews:PageActionShell.HeaderContent>
 
     <Grid Margin="16">
@@ -54,13 +54,13 @@
                                     <TextBlock FontSize="12"
                                                FontWeight="Medium"
                                                Foreground="#F59E0B"
-                                               Text="Day Shift" />
+                                               Text="{DynamicResource Navigation_Monitor_DayShift}" />
                                     <StackPanel Margin="0,6,0,0"
                                                 Orientation="Horizontal">
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock FontSize="10"
                                                        Foreground="#71717A"
-                                                       Text="Total" />
+                                                       Text="{DynamicResource Navigation_Monitor_Total}" />
                                             <TextBlock FontSize="20"
                                                        FontWeight="Bold"
                                                        Foreground="#E4E4E7"
@@ -69,7 +69,7 @@
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock FontSize="10"
                                                        Foreground="#71717A"
-                                                       Text="OK" />
+                                                       Text="{DynamicResource Navigation_Capacity_Good}" />
                                             <TextBlock FontSize="20"
                                                        FontWeight="Bold"
                                                        Foreground="#22C55E"
@@ -78,7 +78,7 @@
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock FontSize="10"
                                                        Foreground="#71717A"
-                                                       Text="NG" />
+                                                       Text="{DynamicResource Navigation_Capacity_Bad}" />
                                             <TextBlock FontSize="20"
                                                        FontWeight="Bold"
                                                        Foreground="#EF4444"
@@ -87,7 +87,7 @@
                                         <StackPanel>
                                             <TextBlock FontSize="10"
                                                        Foreground="#71717A"
-                                                       Text="Yield" />
+                                                       Text="{DynamicResource Navigation_Monitor_Yield}" />
                                             <TextBlock FontSize="20"
                                                        FontWeight="Bold"
                                                        Foreground="#F59E0B"
@@ -105,13 +105,13 @@
                                     <TextBlock FontSize="12"
                                                FontWeight="Medium"
                                                Foreground="#818CF8"
-                                               Text="Night Shift" />
+                                               Text="{DynamicResource Navigation_Monitor_NightShift}" />
                                     <StackPanel Margin="0,6,0,0"
                                                 Orientation="Horizontal">
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock FontSize="10"
                                                        Foreground="#71717A"
-                                                       Text="Total" />
+                                                       Text="{DynamicResource Navigation_Monitor_Total}" />
                                             <TextBlock FontSize="20"
                                                        FontWeight="Bold"
                                                        Foreground="#E4E4E7"
@@ -120,7 +120,7 @@
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock FontSize="10"
                                                        Foreground="#71717A"
-                                                       Text="OK" />
+                                                       Text="{DynamicResource Navigation_Capacity_Good}" />
                                             <TextBlock FontSize="20"
                                                        FontWeight="Bold"
                                                        Foreground="#22C55E"
@@ -129,7 +129,7 @@
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock FontSize="10"
                                                        Foreground="#71717A"
-                                                       Text="NG" />
+                                                       Text="{DynamicResource Navigation_Capacity_Bad}" />
                                             <TextBlock FontSize="20"
                                                        FontWeight="Bold"
                                                        Foreground="#EF4444"
@@ -138,7 +138,7 @@
                                         <StackPanel>
                                             <TextBlock FontSize="10"
                                                        Foreground="#71717A"
-                                                       Text="Yield" />
+                                                       Text="{DynamicResource Navigation_Monitor_Yield}" />
                                             <TextBlock FontSize="20"
                                                        FontWeight="Bold"
                                                        Foreground="#818CF8"
@@ -156,13 +156,13 @@
                                     <TextBlock FontSize="12"
                                                FontWeight="Medium"
                                                Foreground="#0EA5E9"
-                                               Text="Today Total" />
+                                               Text="{DynamicResource Navigation_Monitor_TodaySummary}" />
                                     <StackPanel Margin="0,6,0,0"
                                                 Orientation="Horizontal">
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock FontSize="10"
                                                        Foreground="#71717A"
-                                                       Text="Total" />
+                                                       Text="{DynamicResource Navigation_Monitor_Total}" />
                                             <TextBlock FontSize="20"
                                                        FontWeight="Bold"
                                                        Foreground="#E4E4E7"
@@ -171,7 +171,7 @@
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock FontSize="10"
                                                        Foreground="#71717A"
-                                                       Text="OK" />
+                                                       Text="{DynamicResource Navigation_Capacity_Good}" />
                                             <TextBlock FontSize="20"
                                                        FontWeight="Bold"
                                                        Foreground="#22C55E"
@@ -180,7 +180,7 @@
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock FontSize="10"
                                                        Foreground="#71717A"
-                                                       Text="NG" />
+                                                       Text="{DynamicResource Navigation_Capacity_Bad}" />
                                             <TextBlock FontSize="20"
                                                        FontWeight="Bold"
                                                        Foreground="#EF4444"
@@ -189,7 +189,7 @@
                                         <StackPanel>
                                             <TextBlock FontSize="10"
                                                        Foreground="#71717A"
-                                                       Text="Yield" />
+                                                       Text="{DynamicResource Navigation_Monitor_Yield}" />
                                             <TextBlock FontSize="20"
                                                        FontWeight="Bold"
                                                        Foreground="#0EA5E9"
@@ -209,7 +209,7 @@
                                 <TextBlock VerticalAlignment="Center"
                                            FontSize="11"
                                            Foreground="#71717A"
-                                           Text="State Machine: " />
+                                           Text="{DynamicResource Navigation_Monitor_StateMachinePrefix}" />
                                 <TextBlock VerticalAlignment="Center"
                                            FontSize="11"
                                            Foreground="#A1A1AA"
@@ -226,7 +226,7 @@
                                 <TextBlock VerticalAlignment="Center"
                                            FontSize="11"
                                            Foreground="#71717A"
-                                           Text="Device Data: " />
+                                           Text="{DynamicResource Navigation_Monitor_DeviceDataPrefix}" />
                                 <TextBlock VerticalAlignment="Center"
                                            FontSize="11"
                                            Foreground="#A1A1AA"
@@ -244,7 +244,7 @@
                                 <TextBlock VerticalAlignment="Center"
                                            FontSize="11"
                                            Foreground="#71717A"
-                                           Text="Cloud Sync: " />
+                                           Text="{DynamicResource Navigation_Monitor_CloudSyncPrefix}" />
                                 <TextBlock VerticalAlignment="Center"
                                            FontSize="11"
                                            Foreground="#A1A1AA"
@@ -262,7 +262,7 @@
                                 <TextBlock VerticalAlignment="Center"
                                            FontSize="11"
                                            Foreground="#71717A"
-                                           Text="MES Sync: " />
+                                           Text="{DynamicResource Navigation_Monitor_MesSyncPrefix}" />
                                 <TextBlock VerticalAlignment="Center"
                                            FontSize="11"
                                            Foreground="#A1A1AA"
@@ -280,7 +280,7 @@
                                 <TextBlock VerticalAlignment="Top"
                                            FontSize="11"
                                            Foreground="#71717A"
-                                           Text="Context Persistence: " />
+                                           Text="{DynamicResource Navigation_Monitor_ContextPersistencePrefix}" />
                                 <TextBlock VerticalAlignment="Top"
                                            FontSize="11"
                                            Foreground="#A1A1AA"
@@ -293,9 +293,9 @@
                                    Margin="0,4,0,4"
                                    FontSize="12"
                                    Foreground="#71717A">
-                            <Run Text="In-process Cells: " />
+                            <Run Text="{DynamicResource Navigation_Monitor_WipPrefix}" />
                             <Run Text="{Binding CellCount, Mode=OneWay}" />
-                            <Run Text=" pcs" />
+                            <Run Text="{DynamicResource Navigation_Monitor_WipSuffix}" />
                         </TextBlock>
 
                         <DataGrid Grid.Row="7"

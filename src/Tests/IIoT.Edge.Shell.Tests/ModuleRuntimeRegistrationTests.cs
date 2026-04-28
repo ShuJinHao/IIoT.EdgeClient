@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Abstractions.Context;
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
@@ -12,10 +13,7 @@ using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Infrastructure.Persistence.Dapper;
 using IIoT.Edge.Infrastructure.Persistence.EfCore;
 using IIoT.Edge.Host.Bootstrap;
-using IIoT.Edge.Module.Abstractions;
-using IIoT.Edge.Module.Stacking.Constants;
-using IIoT.Edge.Module.Stacking.Payload;
-using IIoT.Edge.Module.Stacking.Runtime;
+using IIoT.Edge.Host.Bootstrap.Modules;
 using IIoT.Edge.Presentation.Navigation;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.DataPipeline;
@@ -25,8 +23,10 @@ using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.SharedKernel.Repository;
 using IIoT.Edge.Shell.Core;
 using IIoT.Edge.Shell.Modules;
+using IIoT.Edge.UI.Shared.PluginSystem;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using System.Reflection;
 using Xunit;
 
 namespace IIoT.Edge.Shell.Tests;
@@ -45,7 +45,7 @@ public sealed class ModuleRuntimeRegistrationTests
             Assert.Empty(discovery.Issues);
             Assert.Empty(activation.Issues);
             Assert.Equal(
-                ["DryRun", "Injection", "Stacking"],
+                ["Homogenization", "Injection", "Stacking"],
                 activation.Modules.Select(x => x.ModuleId).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray());
         }
         finally
@@ -55,7 +55,7 @@ public sealed class ModuleRuntimeRegistrationTests
     }
 
     [Fact]
-    public void DiscoverDirectoryPlugins_ShouldFindInjectionStackingAndDryRun()
+    public void DiscoverDirectoryPlugins_ShouldFindProductModules()
     {
         var pluginRoot = CreatePluginRuntimeRoot();
         try
@@ -63,7 +63,7 @@ public sealed class ModuleRuntimeRegistrationTests
             var discovery = DiscoverTestPlugins(pluginRoot);
 
             Assert.Equal(
-                ["DryRun", "Injection", "Stacking"],
+                ["Homogenization", "Injection", "Stacking"],
                 discovery.Modules.Select(x => x.ModuleId).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray());
         }
         finally
@@ -143,7 +143,7 @@ public sealed class ModuleRuntimeRegistrationTests
     }
 
     [Fact]
-    public void ValidationCatalog_ShouldRegisterInjectionStackingAndDryRunWithoutConflicts()
+    public void ValidationCatalog_ShouldRegisterProductModulesWithoutConflicts()
     {
         var pluginRoot = CreatePluginRuntimeRoot();
         try
@@ -156,10 +156,15 @@ public sealed class ModuleRuntimeRegistrationTests
 
             foreach (var module in modules)
             {
-                module.RegisterCellData(cellDataRegistry);
-                module.RegisterRuntime(runtimeRegistry);
-                module.RegisterIntegrations(integrationRegistry);
-                module.RegisterViews(new ModuleViewRegistry(viewRegistry, module.ModuleId));
+                module.Configure(new EdgeProcessModuleBuilder(
+                    module.ModuleId,
+                    module.ProcessType,
+                    new ServiceCollection(),
+                    CreateConfiguration(),
+                    new ModuleViewRegistry(viewRegistry, module.ModuleId),
+                    cellDataRegistry,
+                    runtimeRegistry,
+                    integrationRegistry));
             }
 
             Assert.Equal(3, modules.Count);
@@ -167,8 +172,8 @@ public sealed class ModuleRuntimeRegistrationTests
             Assert.Equal(3, runtimeRegistry.GetRegistrations().Count);
             Assert.Equal(3, integrationRegistry.GetCloudUploaders().Count);
             Assert.NotNull(viewRegistry.GetViewRegistration("Injection.DataView"));
-            Assert.NotNull(viewRegistry.GetViewRegistration("Stacking.PlaceholderDashboard"));
-            Assert.NotNull(viewRegistry.GetViewRegistration("DryRun.Dashboard"));
+            Assert.NotNull(viewRegistry.GetViewRegistration("Stacking.DataView"));
+            Assert.NotNull(viewRegistry.GetViewRegistration("Homogenization.DataView"));
         }
         finally
         {
@@ -199,22 +204,68 @@ public sealed class ModuleRuntimeRegistrationTests
     }
 
     [Fact]
+    public Task NavigationService_WhenViewModelFactoryIsRegistered_ShouldUseFactory()
+        => RunOnStaThreadAsync(() =>
+        {
+            var services = new ServiceCollection().BuildServiceProvider();
+            var registry = new ViewRegistry();
+            registry.RegisterRoute(
+                "Plugin.Factory",
+                typeof(TestNavigationView),
+                typeof(DefaultNavigationViewModel),
+                _ => new FactoryNavigationViewModel(),
+                cacheView: false);
+
+            var navigation = new NavigationService(services, registry, new SpyLogService());
+
+            navigation.NavigateTo("Plugin.Factory");
+
+            Assert.IsType<FactoryNavigationViewModel>(navigation.CurrentViewModel);
+            Assert.IsType<TestNavigationView>(navigation.CurrentView);
+            return Task.CompletedTask;
+        });
+
+    [Fact]
+    public Task NavigationService_WhenViewModelFactoryIsMissing_ShouldResolveViewModelFromContainer()
+        => RunOnStaThreadAsync(() =>
+        {
+            var services = new ServiceCollection()
+                .AddTransient<DefaultNavigationViewModel>()
+                .BuildServiceProvider();
+            var registry = new ViewRegistry();
+            registry.RegisterRoute(
+                "Plugin.Default",
+                typeof(TestNavigationView),
+                typeof(DefaultNavigationViewModel),
+                cacheView: false);
+
+            var navigation = new NavigationService(services, registry, new SpyLogService());
+
+            navigation.NavigateTo("Plugin.Default");
+
+            Assert.IsType<DefaultNavigationViewModel>(navigation.CurrentViewModel);
+            Assert.IsType<TestNavigationView>(navigation.CurrentView);
+            return Task.CompletedTask;
+        });
+
+    [Fact]
     public void HostBootstrap_ShouldRegisterDiagnosticsCoreView()
     {
         var services = new ServiceCollection();
         var viewRegistry = new ViewRegistry();
         var configuration = CreateConfiguration();
-        var dbDir = Path.Combine(Path.GetTempPath(), "edge-host-bootstrap-" + Guid.NewGuid().ToString("N"));
+        var hostRoot = Path.Combine(Path.GetTempPath(), "edge-host-bootstrap-" + Guid.NewGuid().ToString("N"));
         var pluginRoot = CreatePluginRuntimeRoot();
 
         try
         {
+            var runtimePaths = CreateRuntimePaths(hostRoot, configuration);
             var discovery = DiscoverTestPlugins(pluginRoot);
             var activation = ShellModuleCatalog.CreateEnabledModules(configuration, discovery.Modules);
             services.AddEdgeHostBootstrap(
                 viewRegistry,
                 configuration,
-                dbDir,
+                runtimePaths,
                 discovery.Modules,
                 [.. discovery.Issues, .. activation.Issues],
                 activation.EnabledModuleIds,
@@ -228,9 +279,9 @@ public sealed class ModuleRuntimeRegistrationTests
         }
         finally
         {
-            if (Directory.Exists(dbDir))
+            if (Directory.Exists(hostRoot))
             {
-                Directory.Delete(dbDir, recursive: true);
+                Directory.Delete(hostRoot, recursive: true);
             }
 
             DeleteDirectory(pluginRoot);
@@ -250,6 +301,9 @@ public sealed class ModuleRuntimeRegistrationTests
         Assert.Single(harness.PlcManager.RegisteredFactories);
         Assert.Equal(1, harness.ContextStore.LoadCallCount);
         Assert.Equal(1, harness.BackgroundCoordinator.StartCallCount);
+        Assert.Contains(
+            harness.Logger.Entries,
+            entry => entry.Message.Contains("[生命周期] 开始应用启动。", StringComparison.Ordinal));
         Assert.True(harness.PlcManager.RegisteredFactories.TryGetValue("PLC-A", out var factory));
 
         var tasks = factory!(
@@ -284,7 +338,7 @@ public sealed class ModuleRuntimeRegistrationTests
 
         Assert.Empty(injectionTasks);
         Assert.Single(stackingTasks);
-        Assert.IsType<StackingSignalCaptureTask>(stackingTasks[0]);
+        Assert.Equal("StackingSignalCaptureTask", stackingTasks[0].GetType().Name);
     }
 
     [Fact]
@@ -318,7 +372,7 @@ public sealed class ModuleRuntimeRegistrationTests
 
         var devices = await harness.GetNetworkDevicesAsync();
         var stackingDevice = Assert.Single(devices);
-        Assert.Equal(StackingModuleConstants.ModuleId, stackingDevice.ModuleId);
+        Assert.Equal("Stacking", stackingDevice.ModuleId);
         Assert.Equal("PLC-STACKING-DEV", stackingDevice.DeviceName);
 
         var mappings = await harness.GetIoMappingsAsync(stackingDevice.Id);
@@ -331,9 +385,10 @@ public sealed class ModuleRuntimeRegistrationTests
             mappings.OrderBy(x => x.SortOrder).Select(x => x.PlcAddress).ToArray());
 
         var context = Assert.Single(harness.ContextStore.GetAll());
-        var sampleCell = Assert.Single(context.CurrentCells.Values.OfType<StackingCellData>());
-        Assert.Equal("ST-DEV-0001", sampleCell.Barcode);
-        Assert.Equal("DevelopmentSample", sampleCell.RuntimeStatus);
+        var sampleCell = Assert.Single(
+            context.CurrentCells.Values.Where(x => string.Equals(x.ProcessType, "Stacking", StringComparison.OrdinalIgnoreCase)));
+        Assert.Equal("ST-DEV-0001", GetStringProperty(sampleCell, "Barcode"));
+        Assert.Equal("DevelopmentSample", GetStringProperty(sampleCell, "RuntimeStatus"));
     }
 
     [Fact]
@@ -358,7 +413,7 @@ public sealed class ModuleRuntimeRegistrationTests
         Assert.Equal(4, mappings.Count);
 
         var context = Assert.Single(harness.ContextStore.GetAll());
-        Assert.Single(context.CurrentCells.Values.OfType<StackingCellData>());
+        Assert.Single(context.CurrentCells.Values.Where(x => string.Equals(x.ProcessType, "Stacking", StringComparison.OrdinalIgnoreCase)));
     }
 
     [Fact]
@@ -413,7 +468,7 @@ public sealed class ModuleRuntimeRegistrationTests
         var result = await harness.Manager.StartAsync();
 
         Assert.False(result.Success);
-        Assert.Contains("missing Stacking.Ack", result.Message, StringComparison.Ordinal);
+        Assert.Contains("缺少信号 Stacking.Ack", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -435,7 +490,7 @@ public sealed class ModuleRuntimeRegistrationTests
         var result = await harness.Manager.StartAsync();
 
         Assert.False(result.Success);
-        Assert.Contains("Stacking.Ack direction mismatch", result.Message, StringComparison.Ordinal);
+        Assert.Contains("信号 Stacking.Ack 方向不一致", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -457,7 +512,7 @@ public sealed class ModuleRuntimeRegistrationTests
         var result = await harness.Manager.StartAsync();
 
         Assert.False(result.Success);
-        Assert.Contains("Stacking.ResultCode address count mismatch", result.Message, StringComparison.Ordinal);
+        Assert.Contains("信号 Stacking.ResultCode 地址长度不一致", result.Message, StringComparison.Ordinal);
     }
 
     private static IConfiguration CreateConfiguration(
@@ -490,6 +545,9 @@ public sealed class ModuleRuntimeRegistrationTests
             .Build();
     }
 
+    private static EdgeRuntimePaths CreateRuntimePaths(string baseDirectory, IConfiguration configuration)
+        => ShellRuntimePathResolver.Resolve(baseDirectory, configuration);
+
     private static ModuleCatalogDiscoveryResult DiscoverTestPlugins(string pluginRoot)
     {
         return ShellModuleCatalog.DiscoverModules(pluginRoot);
@@ -501,7 +559,7 @@ public sealed class ModuleRuntimeRegistrationTests
         Directory.CreateDirectory(pluginRoot);
 
         var runtimeModulesRoot = ShellModuleCatalog.GetPluginRootPath(AppContext.BaseDirectory);
-        foreach (var moduleId in new[] { "DryRun", "Injection", "Stacking" })
+        foreach (var moduleId in new[] { "Homogenization", "Injection", "Stacking" })
         {
             var sourceModuleDirectory = Path.Combine(runtimeModulesRoot, moduleId);
             if (!Directory.Exists(sourceModuleDirectory))
@@ -524,7 +582,7 @@ public sealed class ModuleRuntimeRegistrationTests
         {
             "Injection" => Path.Combine(FindRepoRoot(), "src", "Modules", "IIoT.Edge.Module.Injection"),
             "Stacking" => Path.Combine(FindRepoRoot(), "src", "Modules", "IIoT.Edge.Module.Stacking"),
-            "DryRun" => Path.Combine(FindRepoRoot(), "src", "Tools", "ModuleSamples", "IIoT.Edge.Module.DryRun"),
+            "Homogenization" => Path.Combine(FindRepoRoot(), "src", "Modules", "IIoT.Edge.Module.Homogenization"),
             _ => throw new InvalidOperationException($"Unsupported module id '{moduleId}'.")
         };
 
@@ -572,6 +630,11 @@ public sealed class ModuleRuntimeRegistrationTests
         }
     }
 
+    private static string? GetStringProperty(object target, string propertyName)
+        => target.GetType()
+            .GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public)
+            ?.GetValue(target) as string;
+
     private static void DeleteDirectory(string path)
     {
         try
@@ -586,6 +649,27 @@ public sealed class ModuleRuntimeRegistrationTests
         }
     }
 
+    private static Task RunOnStaThreadAsync(Func<Task> testBody)
+    {
+        var completion = new TaskCompletionSource<object?>();
+        var thread = new Thread(async () =>
+        {
+            try
+            {
+                await testBody().ConfigureAwait(false);
+                completion.SetResult(null);
+            }
+            catch (Exception ex)
+            {
+                completion.SetException(ex);
+            }
+        });
+
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        return completion.Task;
+    }
+
     private sealed class AppLifecycleHarness : IAsyncDisposable
     {
         private readonly ServiceProvider _serviceProvider;
@@ -598,6 +682,7 @@ public sealed class ModuleRuntimeRegistrationTests
             SpyPlcConnectionManager plcManager,
             SpyProductionContextStore contextStore,
             SpyBackgroundServiceCoordinator backgroundCoordinator,
+            SpyLogService logger,
             IStartupDiagnosticsStore startupDiagnosticsStore)
         {
             _serviceProvider = serviceProvider;
@@ -606,6 +691,7 @@ public sealed class ModuleRuntimeRegistrationTests
             PlcManager = plcManager;
             ContextStore = contextStore;
             BackgroundCoordinator = backgroundCoordinator;
+            Logger = logger;
             StartupDiagnosticsStore = startupDiagnosticsStore;
         }
 
@@ -616,6 +702,8 @@ public sealed class ModuleRuntimeRegistrationTests
         public SpyProductionContextStore ContextStore { get; }
 
         public SpyBackgroundServiceCoordinator BackgroundCoordinator { get; }
+
+        public SpyLogService Logger { get; }
 
         public IStartupDiagnosticsStore StartupDiagnosticsStore { get; }
 
@@ -659,17 +747,18 @@ public sealed class ModuleRuntimeRegistrationTests
         {
             var tempDirectory = Path.Combine(Path.GetTempPath(), "edge-shell-tests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(tempDirectory);
-            var dbPath = Path.Combine(tempDirectory, "edge.db");
-
-            var services = new ServiceCollection();
-            services.AddEfCorePersistenceInfrastructure(dbPath);
-            services.AddDapperPersistenceInfrastructure(tempDirectory);
 
             var configuration = CreateConfiguration(
                 enabledModules,
                 environmentName,
                 developmentSamplesEnabled,
                 seedStackingModule);
+            var runtimePaths = CreateRuntimePaths(tempDirectory, configuration);
+
+            var services = new ServiceCollection();
+            services.AddSingleton(runtimePaths);
+            services.AddEfCorePersistenceInfrastructure(Path.Combine(runtimePaths.DatabaseDirectory, "edge.db"));
+            services.AddDapperPersistenceInfrastructure(runtimePaths.DatabaseDirectory);
             var pluginRoot = CreatePluginRuntimeRoot(Path.Combine(tempDirectory, "Modules"));
 
             var shiftConfig = new ShiftConfig
@@ -694,10 +783,23 @@ public sealed class ModuleRuntimeRegistrationTests
             services.AddSingleton<IDataPipelineService, SpyDataPipelineService>();
             var discovery = DiscoverTestPlugins(pluginRoot);
             var activation = ShellModuleCatalog.CreateEnabledModules(configuration, discovery.Modules);
+            var moduleViewRegistry = new ViewRegistry();
+            var cellDataRegistry = new CellDataRegistry();
+            var runtimeRegistry = new StationRuntimeRegistry();
+            var integrationRegistry = new ProcessIntegrationRegistry();
+
             foreach (var module in activation.Modules)
             {
-                services.AddSingleton<IEdgeStationModule>(module);
-                module.RegisterServices(services);
+                services.AddSingleton<IEdgeProcessModule>(module);
+                module.Configure(new EdgeProcessModuleBuilder(
+                    module.ModuleId,
+                    module.ProcessType,
+                    services,
+                    configuration,
+                    new ModuleViewRegistry(moduleViewRegistry, module.ModuleId),
+                    cellDataRegistry,
+                    runtimeRegistry,
+                    integrationRegistry));
             }
 
             services.AddSingleton<IDevelopmentSampleInitializer, DevelopmentSampleInitializer>();
@@ -706,22 +808,12 @@ public sealed class ModuleRuntimeRegistrationTests
             var serviceProvider = services.BuildServiceProvider();
             serviceProvider.ApplyMigrations();
 
-            var cellDataRegistry = new CellDataRegistry();
-            var runtimeRegistry = new StationRuntimeRegistry();
-            var integrationRegistry = new ProcessIntegrationRegistry();
-
-            foreach (var module in activation.Modules)
-            {
-                module.RegisterCellData(cellDataRegistry);
-                module.RegisterRuntime(runtimeRegistry);
-                module.RegisterIntegrations(integrationRegistry);
-            }
-
             await SeedDevicesAsync(serviceProvider, deviceModuleIds).ConfigureAwait(false);
 
             var manager = new AppLifecycleManager(
                 serviceProvider,
                 configuration,
+                runtimePaths,
                 shiftConfig,
                 serviceProvider.GetRequiredService<IRepository<NetworkDeviceEntity>>(),
                 serviceProvider.GetRequiredService<IRepository<IoMappingEntity>>(),
@@ -748,6 +840,7 @@ public sealed class ModuleRuntimeRegistrationTests
                 plcManager,
                 contextStore,
                 backgroundCoordinator,
+                logger,
                 serviceProvider.GetRequiredService<IStartupDiagnosticsStore>());
         }
 
@@ -888,6 +981,9 @@ public sealed class ModuleRuntimeRegistrationTests
         public int SaveCallCount { get; private set; }
 
         public ProductionContext GetOrCreate(string deviceName)
+            => GetOrCreate(deviceName, moduleId: null);
+
+        public ProductionContext GetOrCreate(string deviceName, string? moduleId)
         {
             if (!_contexts.TryGetValue(deviceName, out var context))
             {
@@ -968,6 +1064,24 @@ public sealed class ModuleRuntimeRegistrationTests
         public void SaveToFile()
         {
         }
+    }
+
+    private sealed class TestNavigationView : System.Windows.Controls.ContentControl
+    {
+    }
+
+    private sealed class DefaultNavigationViewModel : ViewModelBase
+    {
+        public override string ViewId => "Plugin.Default";
+
+        public override string ViewTitle => "榛樿椤甸潰";
+    }
+
+    private sealed class FactoryNavigationViewModel : ViewModelBase
+    {
+        public override string ViewId => "Plugin.Factory";
+
+        public override string ViewTitle => "宸ュ巶椤甸潰";
     }
 
     private sealed class SpyLogService : ILogService

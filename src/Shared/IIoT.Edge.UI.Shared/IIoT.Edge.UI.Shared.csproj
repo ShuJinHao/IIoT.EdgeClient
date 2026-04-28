@@ -20,7 +20,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\IIoT.Edge.SharedKernel\IIoT.Edge.SharedKernel.csproj" />
-    <ProjectReference Include="..\..\Application\IIoT.Edge.Application\IIoT.Edge.Application.csproj" />
   </ItemGroup>
 
   <ItemGroup>

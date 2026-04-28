@@ -18,6 +18,20 @@ public static class CellDataTypeRegistry
     public static void Register<T>(string processType) where T : CellDataBase
         => _map[processType] = typeof(T);
 
+    public static void Register(string processType, Type cellDataType)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(processType);
+        ArgumentNullException.ThrowIfNull(cellDataType);
+
+        if (!typeof(CellDataBase).IsAssignableFrom(cellDataType))
+        {
+            throw new InvalidOperationException(
+                $"CellData type '{cellDataType.FullName}' must inherit from {nameof(CellDataBase)}.");
+        }
+
+        _map[processType] = cellDataType;
+    }
+
     /// <summary>
     /// 根据 processType 获取对应的 CLR 类型。
     /// </summary>

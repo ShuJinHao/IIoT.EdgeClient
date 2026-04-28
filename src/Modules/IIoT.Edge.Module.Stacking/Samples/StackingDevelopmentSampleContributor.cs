@@ -1,8 +1,7 @@
-using IIoT.Edge.Application.Abstractions.Context;
+﻿using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Domain.Hardware.Aggregates;
-using IIoT.Edge.Module.Abstractions;
 using IIoT.Edge.Module.Stacking.Constants;
 using IIoT.Edge.Module.Stacking.Payload;
 using IIoT.Edge.SharedKernel.Enums;

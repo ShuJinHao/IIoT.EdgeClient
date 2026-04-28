@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Plc;
+﻿using IIoT.Edge.Application.Abstractions.Plc;
 using PlcClient = S7.Net.Plc;
 using S7.Net;
 using S7.Net.Types;
@@ -32,7 +32,7 @@ public sealed class S7PlcService : IPlcService, IDisposable
             return true;
         }
 
-        _plc?.Close();
+        ReleasePlc(_plc);
         _plc = new PlcClient(CpuType.S71200, _ip, 0, 1);
 
         using var timeoutCts = new CancellationTokenSource(ConnectTimeout);
@@ -49,12 +49,14 @@ public sealed class S7PlcService : IPlcService, IDisposable
         }
         catch (OperationCanceledException ex) when (timeoutCts.IsCancellationRequested)
         {
-            _plc.Close();
+            ReleasePlc(_plc);
+            _plc = null;
             throw new TimeoutException($"Connect to S7 PLC {_ip}:{_port} timed out after {ConnectTimeout.TotalSeconds:0}s.", ex);
         }
         catch
         {
-            _plc.Close();
+            ReleasePlc(_plc);
+            _plc = null;
             throw;
         }
     }
@@ -166,8 +168,20 @@ public sealed class S7PlcService : IPlcService, IDisposable
 
     public void Dispose()
     {
-        Disconnect();
+        ReleasePlc(_plc);
         _plc = null;
+        _semaphore.Dispose();
+    }
+
+    private static void ReleasePlc(PlcClient? plc)
+    {
+        if (plc is null)
+        {
+            return;
+        }
+
+        plc.Close();
+        ((IDisposable)plc).Dispose();
     }
 
     private void EnsureInitialized()

@@ -1,4 +1,4 @@
-using AutoMapper;
+﻿using AutoMapper;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
@@ -7,11 +7,12 @@ using IIoT.Edge.Module.Stacking.Constants;
 using IIoT.Edge.Module.Stacking.Integration;
 using IIoT.Edge.Module.Stacking.Payload;
 using IIoT.Edge.Module.Stacking.Runtime;
+using IIoT.Edge.Runtime.Signals;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Text.Json;
 
 namespace IIoT.Edge.NonUiRegressionTests;
@@ -152,7 +153,7 @@ public sealed class StackingModuleBehaviorTests
 
         Assert.False(result.IsSuccess);
         Assert.Equal(0, cloudHttp.PostCallCount);
-        Assert.Contains(logger.Entries, x => x.Message.Contains("Stacking cloud upload is disabled", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, x => x.Message.Contains("叠片云端上传已被配置关闭", StringComparison.Ordinal));
 
         var productionContext = contextStore.GetOrCreate(deviceSession.DeviceName);
         Assert.False(productionContext.Get<bool>(StackingModuleConstants.CloudUploadEnabledKey));
@@ -160,7 +161,7 @@ public sealed class StackingModuleBehaviorTests
             StackingModuleConstants.CloudUploadDisabledStatus,
             productionContext.Get<string>(StackingModuleConstants.LastCloudUploadStatusKey));
         Assert.Equal(
-            "Stacking cloud upload is disabled by configuration.",
+            "叠片云端上传已被配置关闭。",
             productionContext.Get<string>(StackingModuleConstants.LastCloudUploadErrorKey));
     }
 
@@ -208,7 +209,8 @@ public sealed class StackingModuleBehaviorTests
             DeviceId = 7
         };
 
-        var task = new StackingSignalCaptureTask(buffer, context, pipeline, logger);
+        var signals = BufferLogicalSignalAccessor.Create(buffer, context, StackingPlcSignalProfile.LogicalSignals);
+        var task = new StackingSignalCaptureTask(buffer, signals, context, pipeline, logger);
         buffer.UpdateReadBuffer(new ushort[] { 3, 16, 1 });
 
         using var cts = new CancellationTokenSource();
@@ -243,7 +245,8 @@ public sealed class StackingModuleBehaviorTests
             DeviceId = 8
         };
 
-        var task = new StackingSignalCaptureTask(buffer, context, pipeline, logger);
+        var signals = BufferLogicalSignalAccessor.Create(buffer, context, StackingPlcSignalProfile.LogicalSignals);
+        var task = new StackingSignalCaptureTask(buffer, signals, context, pipeline, logger);
         buffer.UpdateReadBuffer(new ushort[] { 4, 18, 0 });
 
         using var cts = new CancellationTokenSource();
@@ -254,6 +257,43 @@ public sealed class StackingModuleBehaviorTests
 
         var cell = Assert.Single(context.CurrentCells.Values.OfType<StackingCellData>());
         Assert.Null(cell.CellResult);
+    }
+
+    [Fact]
+    public async Task StackingSignalCaptureTask_WhenReadOrderChanges_ShouldStillCaptureBySignalLabel()
+    {
+        var logger = new FakeLogService();
+        var pipeline = new FakeDataPipelineService();
+        var buffer = new PlcBuffer(8, 8);
+        var context = new ProductionContext
+        {
+            DeviceName = "PLC-STACKING-DEV",
+            DeviceId = 18
+        };
+
+        ProductionContextSignalBindings.Set(context,
+        [
+            new ModuleIoSnapshot(StackingPlcSignalProfile.LayerCount.Label, "DB1.DBW2", 1, "Int16", "Read", 1),
+            new ModuleIoSnapshot(StackingPlcSignalProfile.ResultCode.Label, "DB1.DBW4", 1, "Int16", "Read", 2),
+            new ModuleIoSnapshot(StackingPlcSignalProfile.Sequence.Label, "DB1.DBW0", 1, "Int16", "Read", 3),
+            new ModuleIoSnapshot(StackingPlcSignalProfile.Ack.Label, "DB1.DBW6", 1, "Int16", "Write", 1)
+        ]);
+
+        var signals = BufferLogicalSignalAccessor.Create(buffer, context, StackingPlcSignalProfile.LogicalSignals);
+        var task = new StackingSignalCaptureTask(buffer, signals, context, pipeline, logger);
+        buffer.UpdateReadBuffer([16, 1, 3]);
+
+        using var cts = new CancellationTokenSource();
+        var runTask = task.StartAsync(cts.Token);
+        await Task.Delay(160);
+        cts.Cancel();
+        await runTask;
+
+        var cell = Assert.Single(context.CurrentCells.Values.OfType<StackingCellData>());
+        Assert.Equal(3, cell.SequenceNo);
+        Assert.Equal(16, cell.LayerCount);
+        Assert.True(cell.CellResult);
+        Assert.Equal((ushort)3, buffer.GetWriteBuffer()[0]);
     }
 
     private static CellCompletedRecord CreateStackingRecord(

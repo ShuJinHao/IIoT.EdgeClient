@@ -19,6 +19,11 @@ public interface IProductionContextStore
     ProductionContext GetOrCreate(string deviceName);
 
     /// <summary>
+    /// 获取指定设备和模块对应的 Context，不存在时按模块工厂创建。
+    /// </summary>
+    ProductionContext GetOrCreate(string deviceName, string? moduleId);
+
+    /// <summary>
     /// 获取所有 Context，供界面展示和上传遍历使用。
     /// </summary>
     IReadOnlyCollection<ProductionContext> GetAll();

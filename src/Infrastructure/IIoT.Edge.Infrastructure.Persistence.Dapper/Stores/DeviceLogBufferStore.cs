@@ -2,14 +2,13 @@ using Dapper;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Connection;
-using IIoT.Edge.Infrastructure.Persistence.Dapper.Repository;
 using IIoT.Edge.SharedKernel.DataPipeline.DeviceLog;
 
 namespace IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
 
-public class DeviceLogBufferStore : DapperRepositoryBase<DeviceLogRecord>, IDeviceLogBufferStore
+public class DeviceLogBufferStore : ClaimBufferStoreBase<DeviceLogRecord>, IDeviceLogBufferStore
 {
-    private static readonly TimeSpan ClaimTimeout = TimeSpan.FromMinutes(10);
+    private const string ClaimTableName = "device_log_buffer_claims";
 
     public override string DbName => "pipeline_cloud";
     protected override string TableName => "device_log_buffer";
@@ -78,11 +77,7 @@ public class DeviceLogBufferStore : DapperRepositoryBase<DeviceLogRecord>, IDevi
         return await ExecuteInTransactionAsync<ClaimedDeviceLogBatch?>(async (conn, tx) =>
         {
             var now = DateTime.UtcNow;
-            await conn.ExecuteAsync(
-                "DELETE FROM device_log_buffer_claims WHERE ClaimedAt <= @ExpiredAt",
-                new { ExpiredAt = now.Subtract(ClaimTimeout).ToString("O") },
-                tx,
-                commandTimeout: CommandTimeout);
+            await DeleteExpiredClaimsAsync(conn, tx, ClaimTableName, now).ConfigureAwait(false);
 
             var ids = (await conn.QueryAsync<long>(
                 @"
@@ -102,18 +97,7 @@ public class DeviceLogBufferStore : DapperRepositoryBase<DeviceLogRecord>, IDevi
             }
 
             var claimToken = Guid.NewGuid().ToString("N");
-            var claimRows = ids.Select(id => new
-            {
-                RecordId = id,
-                ClaimToken = claimToken,
-                ClaimedAt = now.ToString("O")
-            });
-
-            await conn.ExecuteAsync(
-                "INSERT INTO device_log_buffer_claims (RecordId, ClaimToken, ClaimedAt) VALUES (@RecordId, @ClaimToken, @ClaimedAt)",
-                claimRows,
-                tx,
-                commandTimeout: CommandTimeout);
+            await InsertClaimRowsAsync(conn, tx, ClaimTableName, ids, claimToken, now).ConfigureAwait(false);
 
             var records = (await conn.QueryAsync<DeviceLogRecord>(
                 @"
@@ -129,7 +113,7 @@ public class DeviceLogBufferStore : DapperRepositoryBase<DeviceLogRecord>, IDevi
             if (records.Count == 0)
             {
                 await conn.ExecuteAsync(
-                    "DELETE FROM device_log_buffer_claims WHERE ClaimToken = @ClaimToken",
+                    $"DELETE FROM {ClaimTableName} WHERE ClaimToken = @ClaimToken",
                     new { ClaimToken = claimToken },
                     tx,
                     commandTimeout: CommandTimeout);
@@ -148,11 +132,7 @@ public class DeviceLogBufferStore : DapperRepositoryBase<DeviceLogRecord>, IDevi
     {
         await ExecuteInTransactionAsync<int>(async (conn, tx) =>
         {
-            var ids = (await conn.QueryAsync<long>(
-                "SELECT RecordId FROM device_log_buffer_claims WHERE ClaimToken = @ClaimToken",
-                new { ClaimToken = claimToken },
-                tx,
-                commandTimeout: CommandTimeout)).ToList();
+            var ids = await GetClaimedIdsAsync(conn, tx, ClaimTableName, claimToken).ConfigureAwait(false);
 
             if (ids.Count == 0)
             {
@@ -165,22 +145,17 @@ public class DeviceLogBufferStore : DapperRepositoryBase<DeviceLogRecord>, IDevi
                 tx,
                 commandTimeout: CommandTimeout);
 
-            await conn.ExecuteAsync(
-                "DELETE FROM device_log_buffer_claims WHERE RecordId IN @Ids",
-                new { Ids = ids },
-                tx,
-                commandTimeout: CommandTimeout);
+            await DeleteClaimRowsByIdsAsync(conn, tx, ClaimTableName, ids).ConfigureAwait(false);
 
             return ids.Count;
         });
     }
 
     public async Task ReleaseClaimAsync(string claimToken)
-        => await StrictExecuteAsync(
-            "DELETE FROM device_log_buffer_claims WHERE ClaimToken = @ClaimToken",
-            new { ClaimToken = claimToken },
-            requireAffectedRows: true,
-            failureMessage: $"Failed to release device log claim {claimToken}.");
+        => await ReleaseClaimCoreAsync(
+            ClaimTableName,
+            claimToken,
+            $"Failed to release device log claim {claimToken}.");
 
     public async Task DeleteBatchAsync(IEnumerable<long> ids)
     {

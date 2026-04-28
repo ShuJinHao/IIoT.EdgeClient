@@ -4,7 +4,6 @@ using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 using IIoT.Edge.Module.Injection.Payload;
-using IIoT.Edge.Module.Stacking.Payload;
 using IIoT.Edge.Runtime.DataPipeline.Services;
 using IIoT.Edge.Runtime.DataPipeline.Tasks;
 using IIoT.Edge.SharedKernel.DataPipeline;
@@ -20,7 +19,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
     public async Task CloudBatchRetry_WhenBatchSucceeds_ShouldDeleteBatchRecordsAndContinueOthers()
     {
         CellDataTypeRegistry.Register<InjectionCellData>("Injection");
-        CellDataTypeRegistry.Register<StackingCellData>("Stacking");
+        CellDataTypeRegistry.Register<StackingLikeCellData>("Stacking");
 
         var logger = new FakeLogService();
         var failedStore = new FakeFailedRecordStore();
@@ -33,7 +32,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
 
         failedStore.PendingRecords.Add(CreateFailedRecord(1, "Cloud", "Cloud", 0, "Injection", new InjectionCellData { Barcode = "INJ-1" }));
         failedStore.PendingRecords.Add(CreateFailedRecord(2, "Cloud", "Cloud", 1, "Injection", new InjectionCellData { Barcode = "INJ-2" }));
-        failedStore.PendingRecords.Add(CreateFailedRecord(3, "Cloud", "Cloud", 0, "Stacking", new StackingCellData { Barcode = "ST-3" }));
+        failedStore.PendingRecords.Add(CreateFailedRecord(3, "Cloud", "Cloud", 0, "Stacking", new StackingLikeCellData { Barcode = "ST-3" }));
 
         var task = new TestableCloudRetryTask(
             logger,
@@ -62,7 +61,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
     public async Task CloudBatchRetry_WhenBatchFails_ShouldBackoffBatchRecordsAndKeepThem()
     {
         CellDataTypeRegistry.Register<InjectionCellData>("Injection");
-        CellDataTypeRegistry.Register<StackingCellData>("Stacking");
+        CellDataTypeRegistry.Register<StackingLikeCellData>("Stacking");
 
         var logger = new FakeLogService();
         var failedStore = new FakeFailedRecordStore();
@@ -75,7 +74,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
 
         failedStore.PendingRecords.Add(CreateFailedRecord(10, "Cloud", "Cloud", 0, "Injection", new InjectionCellData { Barcode = "INJ-10" }));
         failedStore.PendingRecords.Add(CreateFailedRecord(11, "Cloud", "Cloud", 2, "Injection", new InjectionCellData { Barcode = "INJ-11" }));
-        failedStore.PendingRecords.Add(CreateFailedRecord(12, "Cloud", "Cloud", 0, "Stacking", new StackingCellData { Barcode = "ST-12" }));
+        failedStore.PendingRecords.Add(CreateFailedRecord(12, "Cloud", "Cloud", 0, "Stacking", new StackingLikeCellData { Barcode = "ST-12" }));
 
         var task = new TestableCloudRetryTask(
             logger,
@@ -114,7 +113,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task CloudBatchRetry_WhenRegistryMarksProcessAsBatch_ShouldBatchNonInjectionRecords()
     {
-        CellDataTypeRegistry.Register<StackingCellData>("Stacking");
+        CellDataTypeRegistry.Register<StackingLikeCellData>("Stacking");
 
         var failedStore = new FakeFailedRecordStore();
         var cloudBatch = new FakeCloudBatchConsumer();
@@ -122,8 +121,8 @@ public sealed class RetryTaskCloudMesBehaviorTests
         var integrationRegistry = new FakeProcessIntegrationRegistry();
         integrationRegistry.RegisterCloudUploader("Stacking", ProcessUploadMode.Batch);
 
-        failedStore.PendingRecords.Add(CreateFailedRecord(31, "Cloud", "Cloud", 0, "Stacking", new StackingCellData { Barcode = "ST-31" }));
-        failedStore.PendingRecords.Add(CreateFailedRecord(32, "Cloud", "Cloud", 0, "Stacking", new StackingCellData { Barcode = "ST-32" }));
+        failedStore.PendingRecords.Add(CreateFailedRecord(31, "Cloud", "Cloud", 0, "Stacking", new StackingLikeCellData { Barcode = "ST-31" }));
+        failedStore.PendingRecords.Add(CreateFailedRecord(32, "Cloud", "Cloud", 0, "Stacking", new StackingLikeCellData { Barcode = "ST-32" }));
 
         var task = new TestableCloudRetryTask(
             new FakeLogService(),
@@ -147,15 +146,15 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task CloudRetry_WhenRegistryMarksStackingAsSingle_ShouldRetryRecordsIndividually()
     {
-        CellDataTypeRegistry.Register<StackingCellData>("Stacking");
+        CellDataTypeRegistry.Register<StackingLikeCellData>("Stacking");
 
         var failedStore = new FakeFailedRecordStore();
         var integrationRegistry = new FakeProcessIntegrationRegistry();
         integrationRegistry.RegisterCloudUploader("Stacking", ProcessUploadMode.Single);
         var cloudConsumer = new FakeCloudConsumer();
 
-        failedStore.PendingRecords.Add(CreateFailedRecord(41, "Cloud", "Cloud", 0, "Stacking", new StackingCellData { Barcode = "ST-41" }));
-        failedStore.PendingRecords.Add(CreateFailedRecord(42, "Cloud", "Cloud", 0, "Stacking", new StackingCellData { Barcode = "ST-42" }));
+        failedStore.PendingRecords.Add(CreateFailedRecord(41, "Cloud", "Cloud", 0, "Stacking", new StackingLikeCellData { Barcode = "ST-41" }));
+        failedStore.PendingRecords.Add(CreateFailedRecord(42, "Cloud", "Cloud", 0, "Stacking", new StackingLikeCellData { Barcode = "ST-42" }));
 
         var task = new TestableCloudRetryTask(
             new FakeLogService(),
@@ -179,10 +178,10 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task CloudRetry_WhenUploadGateIsBlocked_ShouldKeepRecordsWithoutBackoff()
     {
-        CellDataTypeRegistry.Register<StackingCellData>("Stacking");
+        CellDataTypeRegistry.Register<StackingLikeCellData>("Stacking");
 
         var failedStore = new FakeFailedRecordStore();
-        failedStore.PendingRecords.Add(CreateFailedRecord(51, "Cloud", "Cloud", 0, "Stacking", new StackingCellData { Barcode = "ST-51" }));
+        failedStore.PendingRecords.Add(CreateFailedRecord(51, "Cloud", "Cloud", 0, "Stacking", new StackingLikeCellData { Barcode = "ST-51" }));
 
         var deviceService = new FakeDeviceService();
         deviceService.SetUploadGate(new EdgeUploadGateSnapshot
@@ -214,10 +213,10 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task CloudRetry_WhenUploadGateIsBlocked_ShouldReportWaitingForRecoveryRuntime()
     {
-        CellDataTypeRegistry.Register<StackingCellData>("Stacking");
+        CellDataTypeRegistry.Register<StackingLikeCellData>("Stacking");
 
         var failedStore = new FakeFailedRecordStore();
-        failedStore.PendingRecords.Add(CreateFailedRecord(52, "Cloud", "Cloud", 0, "Stacking", new StackingCellData { Barcode = "ST-52" }));
+        failedStore.PendingRecords.Add(CreateFailedRecord(52, "Cloud", "Cloud", 0, "Stacking", new StackingLikeCellData { Barcode = "ST-52" }));
 
         var deviceService = new FakeDeviceService();
         deviceService.SetUploadGate(new EdgeUploadGateSnapshot
@@ -380,7 +379,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task CloudRetry_WhenBacklogIsOlderThan24Hours_ShouldDrainRetryAndFallbackRecords()
     {
-        CellDataTypeRegistry.Register<StackingCellData>("Stacking");
+        CellDataTypeRegistry.Register<StackingLikeCellData>("Stacking");
 
         var oldTime = DateTime.UtcNow.AddHours(-25);
         var failedStore = new FakeFailedRecordStore();
@@ -389,7 +388,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
             Id = 701,
             Channel = "Cloud",
             ProcessType = "Stacking",
-            CellDataJson = SerializeCellData(new StackingCellData { Barcode = "ST-701" }),
+            CellDataJson = SerializeCellData(new StackingLikeCellData { Barcode = "ST-701" }),
             FailedTarget = "Cloud",
             ErrorMessage = "seed",
             RetryCount = 3,
@@ -402,7 +401,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         {
             Id = 901,
             ProcessType = "Stacking",
-            CellDataJson = SerializeCellData(new StackingCellData { Barcode = "ST-901" }),
+            CellDataJson = SerializeCellData(new StackingLikeCellData { Barcode = "ST-901" }),
             FailedTarget = "Cloud",
             ErrorMessage = "fallback-seed",
             CreatedAt = oldTime

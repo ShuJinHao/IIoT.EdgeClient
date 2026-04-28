@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Config;
+﻿using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Features.Config.UseCases.DeviceParam.Queries;
 using IIoT.Edge.Application.Features.Config.UseCases.SystemConfig.Queries;
 using IIoT.Edge.Domain.Config.Aggregates;
