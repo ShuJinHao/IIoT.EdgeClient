@@ -50,19 +50,19 @@ public sealed class RepositoryHygieneTests
     private static readonly string[] MojibakeMarkers =
     [
         "\uFFFD",
-        "\u951b",
-        "\u9347",
-        "\u95b0",
-        "\u93c8",
-        "\u7ead",
-        "閹" + "?",
-        "鐠" + "?",
-        "缁" + "?",
-        "閸" + "?",
-        "鏉" + "?",
-        "閻" + "?",
-        "娑" + "?",
-        "閺" + "?"
+        "\u6D93\u5D85",
+        "\u6D60\u64B3",
+        "\u93CD\u572D",
+        "\u6D30\u8930",
+        "\u6DC7\u6FE7",
+        "\u93C8\uE061",
+        "\u9359\u6A58",
+        "\u9356\uE15C",
+        "\u8FBE\u64B3",
+        "\u93C3\u72B3",
+        "\u7039\u6C56",
+        "\uE15C",
+        "\u20AC?"
     ];
 
     private static readonly Regex LongTaskDelayPattern = new(
@@ -71,6 +71,10 @@ public sealed class RepositoryHygieneTests
 
     private static readonly Regex DirectVisibleValidationIssuePattern = new(
         @"new\s+ValidationIssue\s*\(\s*""[^""]*[\u4e00-\u9fff]",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex ResourceLookupPattern = new(
+        @"(?:GetText|FormatText)\(\s*""([^""]+)""",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     [Fact]
@@ -293,6 +297,28 @@ public sealed class RepositoryHygieneTests
 
         Assert.Empty(zhKeys.Except(enKeys, StringComparer.Ordinal).Order(StringComparer.Ordinal));
         Assert.Empty(enKeys.Except(zhKeys, StringComparer.Ordinal).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void NavigationFeatureResourceLookups_ShouldExistInLanguageDictionaries()
+    {
+        var root = FindRepositoryRoot();
+        var navigationRoot = Path.Combine(root, "src", "Presentation", "IIoT.Edge.Presentation.Navigation");
+        var languageRoot = Path.Combine(navigationRoot, "Resources", "Languages");
+        var dictionaryKeys = GetXamlResourceKeys(Path.Combine(languageRoot, "zh-CN.xaml"))
+            .Union(GetXamlResourceKeys(Path.Combine(languageRoot, "en-US.xaml")), StringComparer.Ordinal)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var missingKeys = EnumerateFiles(Path.Combine(navigationRoot, "Features"), "*.cs")
+            .SelectMany(path => ResourceLookupPattern
+                .Matches(File.ReadAllText(path))
+                .Select(match => match.Groups[1].Value))
+            .Distinct(StringComparer.Ordinal)
+            .Where(key => !dictionaryKeys.Contains(key))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Empty(missingKeys);
     }
 
     [Fact]
