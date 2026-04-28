@@ -265,12 +265,13 @@ public sealed class IoViewViewModelBehaviorTests
         string moduleId,
         DeviceType deviceType = DeviceType.PLC,
         bool isEnabled = true)
-        => new(deviceName, deviceType, "127.0.0.1", 102)
-        {
-            Id = id,
-            ModuleId = moduleId,
-            IsEnabled = isEnabled
-        };
+    {
+        var entity = NetworkDeviceEntity.Create(deviceName, deviceType, "127.0.0.1", 102);
+        entity.Id = id;
+        entity.AssignModule(moduleId, "S7");
+        entity.SetEnabled(isEnabled);
+        return entity;
+    }
 
     private static IoMappingEntity CreateMapping(
         int networkDeviceId,
@@ -283,10 +284,11 @@ public sealed class IoViewViewModelBehaviorTests
         string groupName,
         string displayRole,
         int sortOrder)
-        => new(networkDeviceId, label, address, count, dataType, direction, category, groupName, displayRole)
-        {
-            SortOrder = sortOrder
-        };
+    {
+        var entity = IoMappingEntity.Create(networkDeviceId, label, address, count, dataType, direction, category, groupName, displayRole);
+        entity.UpdateSortOrder(sortOrder);
+        return entity;
+    }
 
     private static Task RunOnStaThreadAsync(Func<Task> action)
     {

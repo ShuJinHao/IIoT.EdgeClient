@@ -462,9 +462,9 @@ public sealed class ModuleRuntimeRegistrationTests
         var device = Assert.Single(await harness.GetNetworkDevicesAsync());
         await harness.ReplaceIoMappingsAsync(device.Id,
         [
-            new IoMappingEntity(device.Id, "Stacking.Sequence", "DB1.DBW0", 1, "Int16", "Read") { SortOrder = 1 },
-            new IoMappingEntity(device.Id, "Stacking.LayerCount", "DB1.DBW2", 1, "Int16", "Read") { SortOrder = 2 },
-            new IoMappingEntity(device.Id, "Stacking.ResultCode", "DB1.DBW4", 1, "Int16", "Read") { SortOrder = 3 }
+            CreateIoMapping(device.Id, "Stacking.Sequence", "DB1.DBW0", 1, "Int16", "Read", 1),
+            CreateIoMapping(device.Id, "Stacking.LayerCount", "DB1.DBW2", 1, "Int16", "Read", 2),
+            CreateIoMapping(device.Id, "Stacking.ResultCode", "DB1.DBW4", 1, "Int16", "Read", 3)
         ]);
 
         var result = await harness.Manager.StartAsync();
@@ -483,10 +483,10 @@ public sealed class ModuleRuntimeRegistrationTests
         var device = Assert.Single(await harness.GetNetworkDevicesAsync());
         await harness.ReplaceIoMappingsAsync(device.Id,
         [
-            new IoMappingEntity(device.Id, "Stacking.Sequence", "DB1.DBW0", 1, "Int16", "Read") { SortOrder = 1 },
-            new IoMappingEntity(device.Id, "Stacking.LayerCount", "DB1.DBW2", 1, "Int16", "Read") { SortOrder = 2 },
-            new IoMappingEntity(device.Id, "Stacking.ResultCode", "DB1.DBW4", 1, "Int16", "Read") { SortOrder = 3 },
-            new IoMappingEntity(device.Id, "Stacking.Ack", "DB1.DBW6", 1, "Int16", "Read") { SortOrder = 4 }
+            CreateIoMapping(device.Id, "Stacking.Sequence", "DB1.DBW0", 1, "Int16", "Read", 1),
+            CreateIoMapping(device.Id, "Stacking.LayerCount", "DB1.DBW2", 1, "Int16", "Read", 2),
+            CreateIoMapping(device.Id, "Stacking.ResultCode", "DB1.DBW4", 1, "Int16", "Read", 3),
+            CreateIoMapping(device.Id, "Stacking.Ack", "DB1.DBW6", 1, "Int16", "Read", 4)
         ]);
 
         var result = await harness.Manager.StartAsync();
@@ -505,10 +505,10 @@ public sealed class ModuleRuntimeRegistrationTests
         var device = Assert.Single(await harness.GetNetworkDevicesAsync());
         await harness.ReplaceIoMappingsAsync(device.Id,
         [
-            new IoMappingEntity(device.Id, "Stacking.Sequence", "DB1.DBW0", 1, "Int16", "Read") { SortOrder = 1 },
-            new IoMappingEntity(device.Id, "Stacking.LayerCount", "DB1.DBW2", 1, "Int16", "Read") { SortOrder = 2 },
-            new IoMappingEntity(device.Id, "Stacking.ResultCode", "DB1.DBW4", 2, "Int16", "Read") { SortOrder = 3 },
-            new IoMappingEntity(device.Id, "Stacking.Ack", "DB1.DBW6", 1, "Int16", "Write") { SortOrder = 4 }
+            CreateIoMapping(device.Id, "Stacking.Sequence", "DB1.DBW0", 1, "Int16", "Read", 1),
+            CreateIoMapping(device.Id, "Stacking.LayerCount", "DB1.DBW2", 1, "Int16", "Read", 2),
+            CreateIoMapping(device.Id, "Stacking.ResultCode", "DB1.DBW4", 2, "Int16", "Read", 3),
+            CreateIoMapping(device.Id, "Stacking.Ack", "DB1.DBW6", 1, "Int16", "Write", 4)
         ]);
 
         var result = await harness.Manager.StartAsync();
@@ -649,6 +649,20 @@ public sealed class ModuleRuntimeRegistrationTests
         catch
         {
         }
+    }
+
+    private static IoMappingEntity CreateIoMapping(
+        int networkDeviceId,
+        string label,
+        string plcAddress,
+        int addressCount,
+        string dataType,
+        string direction,
+        int sortOrder)
+    {
+        var entity = IoMappingEntity.Create(networkDeviceId, label, plcAddress, addressCount, dataType, direction);
+        entity.UpdateSortOrder(sortOrder);
+        return entity;
     }
 
     private static Task RunOnStaThreadAsync(Func<Task> testBody)
@@ -873,13 +887,10 @@ public sealed class ModuleRuntimeRegistrationTests
             for (var index = 0; index < moduleIds.Count; index++)
             {
                 var deviceName = $"PLC-{(char)('A' + index)}";
-                var device = new NetworkDeviceEntity(deviceName, DeviceType.PLC, "127.0.0.1", 102 + index)
-                {
-                    DeviceModel = PlcType.S7.ToString(),
-                    ModuleId = moduleIds[index],
-                    ConnectTimeout = 3000,
-                    IsEnabled = true
-                };
+                var device = NetworkDeviceEntity.Create(deviceName, DeviceType.PLC, "127.0.0.1", 102 + index);
+                device.AssignModule(moduleIds[index], PlcType.S7.ToString());
+                device.UpdateEndpoint("127.0.0.1", 102 + index, null, 3000);
+                device.Enable();
 
                 networkRepo.Add(device);
                 await networkRepo.SaveChangesAsync().ConfigureAwait(false);
@@ -888,24 +899,20 @@ public sealed class ModuleRuntimeRegistrationTests
                 {
                     foreach (var mapping in provider.GetDefaultIoTemplate())
                     {
-                        ioRepo.Add(new IoMappingEntity(
+                        var entity = IoMappingEntity.Create(
                             device.Id,
                             mapping.Label,
                             mapping.PlcAddress,
                             mapping.AddressCount,
                             mapping.DataType,
-                            mapping.Direction)
-                        {
-                            SortOrder = mapping.SortOrder
-                        });
+                            mapping.Direction);
+                        entity.UpdateSortOrder(mapping.SortOrder);
+                        ioRepo.Add(entity);
                     }
                 }
                 else
                 {
-                    ioRepo.Add(new IoMappingEntity(device.Id, $"Signal-{index + 1}", $"DB1.DBW{index * 2}", 1, "Int16", "Read")
-                    {
-                        SortOrder = index + 1
-                    });
+                    ioRepo.Add(CreateIoMapping(device.Id, $"Signal-{index + 1}", $"DB1.DBW{index * 2}", 1, "Int16", "Read", index + 1));
                 }
 
                 await ioRepo.SaveChangesAsync().ConfigureAwait(false);

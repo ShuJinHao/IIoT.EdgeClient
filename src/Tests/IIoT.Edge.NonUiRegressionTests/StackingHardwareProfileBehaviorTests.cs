@@ -128,11 +128,18 @@ public sealed class StackingHardwareProfileBehaviorTests
         string? Remark = null)
     {
         public IIoT.Edge.Domain.Hardware.Aggregates.IoMappingEntity ToEntity()
-            => new(NetworkDeviceId, Label, PlcAddress, AddressCount, DataType, Direction)
-            {
-                SortOrder = SortOrder,
-                Remark = Remark
-            };
+        {
+            var entity = IIoT.Edge.Domain.Hardware.Aggregates.IoMappingEntity.Create(
+                NetworkDeviceId,
+                Label,
+                PlcAddress,
+                AddressCount,
+                DataType,
+                Direction);
+            entity.UpdateSortOrder(SortOrder);
+            entity.UpdateMetadata(Label, DataType, Direction, "单点读数据", string.Empty, string.Empty, Remark);
+            return entity;
+        }
     }
 
     private sealed class StubPermissionService : IClientPermissionService

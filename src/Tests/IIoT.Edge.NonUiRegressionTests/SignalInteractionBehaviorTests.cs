@@ -178,16 +178,19 @@ public sealed class SignalInteractionBehaviorTests
     }
 
     private static NetworkDeviceEntity CreateDevice(int id, string deviceName)
-        => new(deviceName, DeviceType.PLC, "127.0.0.1", 102)
-        {
-            Id = id
-        };
+    {
+        var entity = NetworkDeviceEntity.Create(deviceName, DeviceType.PLC, "127.0.0.1", 102);
+        entity.Id = id;
+        entity.AssignModule("TestModule", "S7");
+        return entity;
+    }
 
     private static IoMappingEntity CreateIoMapping(int deviceId, string direction, string address, int addressCount)
-        => new(deviceId, $"{direction}-{address}", address, addressCount, "UInt16", direction)
-        {
-            SortOrder = 1
-        };
+    {
+        var entity = IoMappingEntity.Create(deviceId, $"{direction}-{address}", address, addressCount, "UInt16", direction);
+        entity.UpdateSortOrder(1);
+        return entity;
+    }
 
     private static async Task WaitUntilAsync(Func<bool> condition, int timeoutMs = 1500)
     {

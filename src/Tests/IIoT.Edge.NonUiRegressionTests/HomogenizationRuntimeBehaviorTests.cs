@@ -77,15 +77,13 @@ public sealed class HomogenizationRuntimeBehaviorTests
 
         var networkDevices = new InMemoryRepository<NetworkDeviceEntity>();
         var ioMappings = new InMemoryRepository<IoMappingEntity>();
-        var device = networkDevices.Add(new NetworkDeviceEntity("PLC-Homogenization-01", DeviceType.PLC, "127.0.0.1", 6000)
-        {
-            ModuleId = DependencyInjection.ModuleKey,
-            DeviceModel = "Mc",
-            ConnectTimeout = 3000,
-            IsEnabled = true
-        });
+        var device = NetworkDeviceEntity.Create("PLC-Homogenization-01", DeviceType.PLC, "127.0.0.1", 6000);
+        device.AssignModule(DependencyInjection.ModuleKey, "Mc");
+        device.UpdateEndpoint("127.0.0.1", 6000, null, 3000);
+        device.Enable();
+        networkDevices.Add(device);
 
-        ioMappings.Add(new IoMappingEntity(
+        var legacyMapping = IoMappingEntity.Create(
             device.Id,
             "Homogenization.InboundTrigger",
             "D999",
@@ -94,11 +92,17 @@ public sealed class HomogenizationRuntimeBehaviorTests
             "Read",
             "单点读数据",
             "单点读数据",
-            "")
-        {
-            SortOrder = 999,
-            Remark = "旧分类"
-        });
+            "");
+        legacyMapping.UpdateSortOrder(999);
+        legacyMapping.UpdateMetadata(
+            legacyMapping.Label,
+            legacyMapping.DataType,
+            legacyMapping.Direction,
+            legacyMapping.Category,
+            legacyMapping.GroupName,
+            legacyMapping.DisplayRole,
+            "旧分类");
+        ioMappings.Add(legacyMapping);
 
         var contributor = new HomogenizationDevelopmentSampleContributor(
             configuration,
@@ -134,24 +138,25 @@ public sealed class HomogenizationRuntimeBehaviorTests
         var networkDevices = new InMemoryRepository<NetworkDeviceEntity>();
         var ioMappings = new InMemoryRepository<IoMappingEntity>();
 
-        var otherDevice = networkDevices.Add(new NetworkDeviceEntity("PLC-Other", DeviceType.PLC, "10.0.0.2", 102)
-        {
-            ModuleId = "OtherModule",
-            DeviceModel = "S7",
-            ConnectTimeout = 3000,
-            IsEnabled = true
-        });
+        var otherDevice = NetworkDeviceEntity.Create("PLC-Other", DeviceType.PLC, "10.0.0.2", 102);
+        otherDevice.AssignModule("OtherModule", "S7");
+        otherDevice.UpdateEndpoint("10.0.0.2", 102, null, 3000);
+        otherDevice.Enable();
+        networkDevices.Add(otherDevice);
 
-        var oldHomogenizationDevice = networkDevices.Add(new NetworkDeviceEntity("PLC-Old-H", DeviceType.PLC, "10.0.0.3", 6000)
-        {
-            ModuleId = DependencyInjection.ModuleKey,
-            DeviceModel = "Mc",
-            ConnectTimeout = 3000,
-            IsEnabled = true
-        });
+        var oldHomogenizationDevice = NetworkDeviceEntity.Create("PLC-Old-H", DeviceType.PLC, "10.0.0.3", 6000);
+        oldHomogenizationDevice.AssignModule(DependencyInjection.ModuleKey, "Mc");
+        oldHomogenizationDevice.UpdateEndpoint("10.0.0.3", 6000, null, 3000);
+        oldHomogenizationDevice.Enable();
+        networkDevices.Add(oldHomogenizationDevice);
 
-        ioMappings.Add(new IoMappingEntity(otherDevice.Id, "Other.Signal", "DB1.DBW0", 1, "Int16", "Read") { SortOrder = 1 });
-        ioMappings.Add(new IoMappingEntity(oldHomogenizationDevice.Id, "Homogenization.Legacy", "D0", 1, "Int16", "Read") { SortOrder = 1 });
+        var otherMapping = IoMappingEntity.Create(otherDevice.Id, "Other.Signal", "DB1.DBW0", 1, "Int16", "Read");
+        otherMapping.UpdateSortOrder(1);
+        ioMappings.Add(otherMapping);
+
+        var legacyHomogenizationMapping = IoMappingEntity.Create(oldHomogenizationDevice.Id, "Homogenization.Legacy", "D0", 1, "Int16", "Read");
+        legacyHomogenizationMapping.UpdateSortOrder(1);
+        ioMappings.Add(legacyHomogenizationMapping);
 
         var contributor = new HomogenizationDevelopmentSampleContributor(
             configuration,
