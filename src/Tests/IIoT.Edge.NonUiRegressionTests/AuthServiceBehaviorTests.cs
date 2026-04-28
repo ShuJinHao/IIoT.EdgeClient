@@ -137,7 +137,9 @@ public sealed class AuthServiceBehaviorTests
         Assert.True(result.Success);
         Assert.True(service.IsAuthenticated);
 
-        await WaitUntilAsync(() => Volatile.Read(ref requestCount) == 2);
+        await WaitUntilAsync(() =>
+            Volatile.Read(ref requestCount) == 2
+            && string.Equals(service.CurrentUser?.RefreshToken, "refresh-token-2", StringComparison.Ordinal));
 
         Assert.True(service.IsAuthenticated);
         Assert.NotNull(service.CurrentUser);
