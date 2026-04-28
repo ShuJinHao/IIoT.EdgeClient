@@ -1,10 +1,10 @@
-using IIoT.Edge.Infrastructure.Integration.Auth;
-using IIoT.Edge.Infrastructure.Integration.Config;
-using IIoT.Edge.Infrastructure.Integration.Http;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
+using IIoT.Edge.Infrastructure.Integration.Auth;
+using IIoT.Edge.Infrastructure.Integration.Config;
+using IIoT.Edge.Infrastructure.Integration.Http;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 
@@ -101,7 +101,51 @@ public sealed class AuthServiceBehaviorTests
     }
 
     [Fact]
-    public async Task IsAuthenticated_WhenCloudSessionIsExpired_ShouldNotRefreshOnPropertyAccess()
+    public async Task IsAuthenticated_WhenCloudSessionIsExpired_ShouldKeepSessionAndRefreshInBackground()
+    {
+        var issuedTokens = new Queue<string>(new[]
+        {
+            CreateJwtToken(
+                expiresAtUtc: DateTimeOffset.UtcNow.AddMinutes(-1),
+                new Claim(JwtRegisteredClaimNames.UniqueName, "E002")),
+            CreateJwtToken(
+                expiresAtUtc: DateTimeOffset.UtcNow.AddMinutes(10),
+                new Claim(JwtRegisteredClaimNames.UniqueName, "E002"))
+        });
+        var requestCount = 0;
+
+        var service = CreateService(
+            request =>
+            {
+                var currentRequest = Interlocked.Increment(ref requestCount);
+                var token = issuedTokens.Dequeue();
+                var response = new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(token)
+                };
+                response.Headers.Add(CloudAuthHeaders.RefreshToken, currentRequest == 1 ? "refresh-token-1" : "refresh-token-2");
+                response.Headers.Add(CloudAuthHeaders.RefreshTokenExpiresAt, DateTimeOffset.UtcNow.AddDays(7).ToString("O"));
+                response.Headers.Add(CloudAuthHeaders.AccessTokenExpiresAt, currentRequest == 1
+                    ? DateTimeOffset.UtcNow.AddMinutes(-1).ToString("O")
+                    : DateTimeOffset.UtcNow.AddMinutes(10).ToString("O"));
+                return response;
+            },
+            new LocalAdminConfig { PasswordHash = "unused" });
+
+        var result = await service.LoginCloudAsync("E002", "pwd", Guid.NewGuid());
+
+        Assert.True(result.Success);
+        Assert.True(service.IsAuthenticated);
+
+        await WaitUntilAsync(() => Volatile.Read(ref requestCount) == 2);
+
+        Assert.True(service.IsAuthenticated);
+        Assert.NotNull(service.CurrentUser);
+        Assert.Equal("refresh-token-2", service.CurrentUser!.RefreshToken);
+    }
+
+    [Fact]
+    public async Task IsAuthenticated_WhenCloudRefreshTokenIsExpired_ShouldClearSession()
     {
         var issuedToken = CreateJwtToken(
             expiresAtUtc: DateTimeOffset.UtcNow.AddMinutes(-1),
@@ -109,7 +153,7 @@ public sealed class AuthServiceBehaviorTests
         var requestCount = 0;
 
         var service = CreateService(
-            request =>
+            _ =>
             {
                 requestCount++;
                 var response = new HttpResponseMessage(HttpStatusCode.OK)
@@ -117,7 +161,7 @@ public sealed class AuthServiceBehaviorTests
                     Content = JsonContent.Create(issuedToken)
                 };
                 response.Headers.Add(CloudAuthHeaders.RefreshToken, "refresh-token-1");
-                response.Headers.Add(CloudAuthHeaders.RefreshTokenExpiresAt, DateTimeOffset.UtcNow.AddDays(7).ToString("O"));
+                response.Headers.Add(CloudAuthHeaders.RefreshTokenExpiresAt, DateTimeOffset.UtcNow.AddMinutes(-1).ToString("O"));
                 response.Headers.Add(CloudAuthHeaders.AccessTokenExpiresAt, DateTimeOffset.UtcNow.AddMinutes(-1).ToString("O"));
                 return response;
             },
@@ -166,7 +210,6 @@ public sealed class AuthServiceBehaviorTests
         var result = await service.LoginCloudAsync("E002", "pwd", Guid.NewGuid());
 
         Assert.True(result.Success);
-        Assert.False(service.IsAuthenticated);
         Assert.True(await service.EnsureAuthenticatedAsync());
         Assert.True(service.IsAuthenticated);
         Assert.NotNull(service.CurrentUser);
@@ -213,7 +256,6 @@ public sealed class AuthServiceBehaviorTests
         var result = await service.LoginCloudAsync("E003", "pwd", Guid.NewGuid());
 
         Assert.True(result.Success);
-        Assert.False(service.IsAuthenticated);
         Assert.False(await service.EnsureAuthenticatedAsync());
         Assert.False(service.IsAuthenticated);
         Assert.Null(service.CurrentUser);
@@ -239,6 +281,16 @@ public sealed class AuthServiceBehaviorTests
             expires: expiresAtUtc.UtcDateTime);
 
         return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        while (!condition())
+        {
+            timeout.Token.ThrowIfCancellationRequested();
+            await Task.Delay(20, timeout.Token);
+        }
     }
 
     private sealed class StubMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> responseFactory)

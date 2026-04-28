@@ -16,6 +16,7 @@ public class AuthService : IAuthService
     private readonly LocalAdminConfig _localAdminConfig;
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
     private UserSession? _currentUser;
+    private int _backgroundRefreshStarted;
 
     public UserSession? CurrentUser => GetCachedActiveSession();
     public bool IsAuthenticated => GetCachedActiveSession() is not null;
@@ -143,11 +144,42 @@ public class AuthService : IAuthService
         if (_currentUser.ExpiresAtUtc.HasValue
             && _currentUser.ExpiresAtUtc.Value <= DateTimeOffset.UtcNow)
         {
-            return null;
+            if (!CanRefreshCloudSession(_currentUser))
+            {
+                SetSession(null);
+                return null;
+            }
+
+            TriggerBackgroundRefresh();
         }
 
         return _currentUser;
     }
+
+    private void TriggerBackgroundRefresh()
+    {
+        if (Interlocked.Exchange(ref _backgroundRefreshStarted, 1) == 1)
+        {
+            return;
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await RefreshCloudSessionAsync(CancellationToken.None).ConfigureAwait(false);
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _backgroundRefreshStarted, 0);
+            }
+        });
+    }
+
+    private static bool CanRefreshCloudSession(UserSession session)
+        => !string.IsNullOrWhiteSpace(session.RefreshToken)
+            && (!session.RefreshTokenExpiresAtUtc.HasValue
+                || session.RefreshTokenExpiresAtUtc.Value > DateTimeOffset.UtcNow);
 
     private async Task<bool> RefreshCloudSessionAsync(CancellationToken ct = default)
     {
@@ -170,9 +202,7 @@ public class AuthService : IAuthService
                 return true;
             }
 
-            if (string.IsNullOrWhiteSpace(_currentUser.RefreshToken)
-                || (_currentUser.RefreshTokenExpiresAtUtc.HasValue
-                    && _currentUser.RefreshTokenExpiresAtUtc.Value <= DateTimeOffset.UtcNow))
+            if (!CanRefreshCloudSession(_currentUser))
             {
                 SetSession(null);
                 return false;
