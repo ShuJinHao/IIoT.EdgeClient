@@ -2,21 +2,20 @@ using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Common.Crud;
 using IIoT.Edge.Application.Features.Config.ParamView;
 using IIoT.Edge.Application.Features.Config.ParamView.Models;
-using IIoT.Edge.Presentation.Navigation.Common.Crud;
+using IIoT.Edge.Presentation.Navigation.Localization;
+using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Config.ParamView;
 
-public class ParamViewModel : CrudPageViewModelBase
+public class ParamViewModel : LocalizedCrudPageViewModelBase
 {
     private readonly IParamViewCrudService _crudService;
     private readonly IClientPermissionService _permissionService;
     private readonly IEditorValidator<GeneralParamVm> _generalParamValidator = new GeneralParamValidator();
     private readonly IEditorValidator<DeviceParamVm> _deviceParamValidator = new DeviceParamValidator();
-    private readonly string _viewId;
-    private readonly string _viewTitle;
     private readonly AsyncCommand _saveCommand;
     private readonly BaseCommand _addGeneralParamCommand;
     private readonly BaseCommand _deleteGeneralParamCommand;
@@ -24,9 +23,6 @@ public class ParamViewModel : CrudPageViewModelBase
     private readonly BaseCommand _deleteDeviceParamCommand;
     private int _selectedTabIndex;
     private DeviceParamGroupVm? _selectedGroup;
-
-    public override string ViewId => _viewId;
-    public override string ViewTitle => _viewTitle;
 
     public bool CanEdit => _permissionService.CanEditParams;
 
@@ -65,21 +61,29 @@ public class ParamViewModel : CrudPageViewModelBase
 
     public ParamViewModel(
         IParamViewCrudService crudService,
-        IClientPermissionService permissionService)
-        : this(crudService, permissionService, "Config.ParamView", "参数配置")
+        IClientPermissionService permissionService,
+        IAppLanguageService languageService)
+        : this(
+            crudService,
+            permissionService,
+            languageService,
+            "Config.ParamView",
+            "Navigation_Title_ParamConfig",
+            "参数配置")
     {
     }
 
     public ParamViewModel(
         IParamViewCrudService crudService,
         IClientPermissionService permissionService,
+        IAppLanguageService languageService,
         string viewId,
-        string viewTitle)
+        string titleResourceKey,
+        string titleFallback)
+        : base(languageService, viewId, titleResourceKey, titleFallback)
     {
         _crudService = crudService;
         _permissionService = permissionService;
-        _viewId = viewId;
-        _viewTitle = viewTitle;
 
         _saveCommand = (AsyncCommand)CreateBusyCommand(SaveAsync, () => CanEdit);
         _addGeneralParamCommand = (BaseCommand)CreateAddCommand(GeneralParams, () => new GeneralParamVm(), () => CanEdit);

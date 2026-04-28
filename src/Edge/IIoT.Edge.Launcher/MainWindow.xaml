@@ -153,6 +153,12 @@
                                              materialDesign:HintAssist.Hint="密码"
                                              Style="{StaticResource LauncherHintPasswordBoxStyle}" />
 
+                                <PasswordBox x:Name="NewPasswordInput"
+                                             Margin="0,0,0,18"
+                                             materialDesign:HintAssist.FloatingScale="0.8"
+                                             materialDesign:HintAssist.Hint="新密码（修改密码时填写）"
+                                             Style="{StaticResource LauncherHintPasswordBoxStyle}" />
+
                                 <TextBlock Margin="0,0,0,14"
                                            FontSize="12"
                                            Foreground="{StaticResource Launcher.Text.Error}"
@@ -164,6 +170,12 @@
                                         IsDefault="True"
                                         IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBooleanConverter}}"
                                         Style="{StaticResource LauncherPrimaryButtonStyle}" />
+
+                                <Button Margin="0,10,0,0"
+                                        Click="ChangePasswordButton_Click"
+                                        Content="修改本地密码"
+                                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBooleanConverter}}"
+                                        Style="{StaticResource LauncherGhostButtonStyle}" />
 
                                 <TextBlock Margin="0,18,0,0"
                                            Style="{StaticResource LauncherBodyStyle}"

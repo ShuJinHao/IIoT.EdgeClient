@@ -84,7 +84,7 @@ public sealed class DiagnosticsViewModelBehaviorTests
                     new ProductionContextPersistenceDiagnostics(2, DateTime.Now.AddMinutes(-4)))
             };
 
-            var viewModel = new DiagnosticsViewModel(startupStore, diagnosticsQuery);
+            var viewModel = new DiagnosticsViewModel(startupStore, diagnosticsQuery, new TestAppLanguageService());
 
             await viewModel.RefreshAsync();
 
@@ -110,7 +110,7 @@ public sealed class DiagnosticsViewModelBehaviorTests
             startupStore.Update(StartupDiagnosticsReport.Empty());
 
             var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery();
-            var viewModel = new DiagnosticsViewModel(startupStore, diagnosticsQuery);
+            var viewModel = new DiagnosticsViewModel(startupStore, diagnosticsQuery, new TestAppLanguageService());
             await viewModel.RefreshAsync();
 
             diagnosticsQuery.ResetCounters();

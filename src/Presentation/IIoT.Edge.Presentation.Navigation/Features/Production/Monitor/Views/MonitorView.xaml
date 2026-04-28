@@ -8,7 +8,7 @@
         <TextBlock FontSize="18"
                    FontWeight="Bold"
                    Foreground="#E4E4E7"
-                   Text="{DynamicResource Navigation_Title_RealtimeMonitor}" />
+                    Text="{Binding ViewTitle}" />
     </sharedViews:PageActionShell.HeaderContent>
 
     <Grid Margin="16">

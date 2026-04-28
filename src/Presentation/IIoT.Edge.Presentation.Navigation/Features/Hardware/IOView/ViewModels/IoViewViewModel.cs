@@ -7,27 +7,25 @@ using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Features.Hardware.Queries;
 using IIoT.Edge.Domain.Hardware.Aggregates;
+using IIoT.Edge.Presentation.Navigation.Localization;
 using IIoT.Edge.SharedKernel.Enums;
+using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
-using IIoT.Edge.UI.Shared.PluginSystem;
 using MediatR;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
 
-public class IoViewViewModel : ViewModelBase
+public class IoViewViewModel : NavigationViewModelBase
 {
     private const string InteractionCategory = "信号交互";
+    private const string SingleReadCategory = "单点读数据";
+    private const string ContinuousReadCategory = "连续读数据";
 
     private readonly IPlcDataStore _dataStore;
     private readonly IPlcConnectionManager _plcConnectionManager;
     private readonly ISender _sender;
     private readonly DispatcherTimer _refreshTimer;
-    private readonly string _viewId;
-    private readonly string _viewTitle;
     private readonly string? _moduleIdFilter;
-
-    public override string ViewId => _viewId;
-    public override string ViewTitle => _viewTitle;
 
     public ObservableCollection<NetworkDeviceEntity> Devices { get; } = [];
 
@@ -86,8 +84,17 @@ public class IoViewViewModel : ViewModelBase
     public IoViewViewModel(
         IPlcDataStore dataStore,
         IPlcConnectionManager plcConnectionManager,
-        ISender sender)
-        : this(dataStore, plcConnectionManager, sender, "Hardware.IOView", "IO 交互", moduleIdFilter: null)
+        ISender sender,
+        IAppLanguageService languageService)
+        : this(
+            dataStore,
+            plcConnectionManager,
+            sender,
+            languageService,
+            "Hardware.IOView",
+            "Navigation_Title_IoInteract",
+            "IO 交互",
+            moduleIdFilter: null)
     {
     }
 
@@ -95,15 +102,16 @@ public class IoViewViewModel : ViewModelBase
         IPlcDataStore dataStore,
         IPlcConnectionManager plcConnectionManager,
         ISender sender,
+        IAppLanguageService languageService,
         string viewId,
-        string viewTitle,
+        string titleResourceKey,
+        string titleFallback,
         string? moduleIdFilter = null)
+        : base(languageService, viewId, titleResourceKey, titleFallback)
     {
         _dataStore = dataStore;
         _plcConnectionManager = plcConnectionManager;
         _sender = sender;
-        _viewId = viewId;
-        _viewTitle = viewTitle;
         _moduleIdFilter = moduleIdFilter;
 
         RefreshDevicesCommand = new AsyncCommand(LoadDevicesAsync);
@@ -395,7 +403,7 @@ public class IoViewViewModel : ViewModelBase
             return mapping.Category.Trim();
         }
 
-        return mapping.AddressCount > 1 ? "连续读数据" : "单点读数据";
+        return mapping.AddressCount > 1 ? ContinuousReadCategory : SingleReadCategory;
     }
 
     private static string ResolveGroupName(IoMappingEntity mapping, string category)
@@ -438,8 +446,8 @@ public class IoViewViewModel : ViewModelBase
             ? display
             : $"{string.Join("，", values.Take(8))} ...";
 
-        signal.DisplayValue = string.IsNullOrWhiteSpace(display) ? "(空)" : display;
-        signal.PreviewValue = string.IsNullOrWhiteSpace(preview) ? "(空)" : preview;
+        signal.DisplayValue = string.IsNullOrWhiteSpace(display) ? "-" : display;
+        signal.PreviewValue = string.IsNullOrWhiteSpace(preview) ? "-" : preview;
         signal.Value = DecodeSingleEditValue(signal.DataType, words);
         signal.ExpandedValues.Clear();
 
@@ -589,6 +597,33 @@ public class IoViewViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasDataSections));
         OnPropertyChanged(nameof(HasArraySections));
         OnPropertyChanged(nameof(HasNoSignals));
+    }
+
+    protected override void RefreshLocalization()
+    {
+        base.RefreshLocalization();
+        foreach (var section in DataSections)
+        {
+            section.NotifyLocalizationChanged();
+            foreach (var signal in section.Signals)
+            {
+                signal.NotifyLocalizationChanged();
+            }
+        }
+
+        foreach (var section in ArraySections)
+        {
+            section.NotifyLocalizationChanged();
+            foreach (var signal in section.Columns)
+            {
+                signal.NotifyLocalizationChanged();
+            }
+        }
+
+        foreach (var signal in InteractionRows.SelectMany(row => row.PlcSignals.Concat(row.HostSignals)))
+        {
+            signal.NotifyLocalizationChanged();
+        }
     }
 
     public override async Task OnActivatedAsync()

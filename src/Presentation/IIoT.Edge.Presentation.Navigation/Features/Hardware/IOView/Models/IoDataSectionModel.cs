@@ -1,8 +1,9 @@
 using System.Collections.ObjectModel;
+using IIoT.Edge.UI.Shared.Mvvm;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
 
-public sealed class IoDataSectionModel
+public sealed class IoDataSectionModel : BaseNotifyPropertyChanged
 {
     private static readonly HashSet<string> GenericCategories =
     [
@@ -23,14 +24,28 @@ public sealed class IoDataSectionModel
             if (string.IsNullOrWhiteSpace(GroupName)
                 || string.Equals(Category, GroupName, StringComparison.OrdinalIgnoreCase))
             {
-                return Category;
+                return LocalizeCategory(Category);
             }
 
             return GenericCategories.Contains(Category)
                 ? GroupName
-                : $"{Category} - {GroupName}";
+                : $"{LocalizeCategory(Category)} - {GroupName}";
         }
     }
 
     public ObservableCollection<IoSignalModel> Signals { get; } = [];
+
+    public void NotifyLocalizationChanged()
+        => OnPropertyChanged(nameof(Title));
+
+    private static string LocalizeCategory(string category)
+        => category switch
+        {
+            "单点读数据" => GetText("Navigation_Io_Category_SingleRead", category),
+            "连续读数据" => GetText("Navigation_Io_Category_ContinuousRead", category),
+            _ => category
+        };
+
+    private static string GetText(string key, string fallback)
+        => System.Windows.Application.Current?.TryFindResource(key) as string ?? fallback;
 }

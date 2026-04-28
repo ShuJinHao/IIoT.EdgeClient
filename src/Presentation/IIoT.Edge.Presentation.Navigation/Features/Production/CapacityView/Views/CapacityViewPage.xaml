@@ -24,7 +24,7 @@
                 FontSize="16"
                 FontWeight="Medium"
                 Foreground="#E4E4E7"
-                Text="{DynamicResource Navigation_Title_CapacityQuery}" />
+                Text="{Binding ViewTitle}" />
 
             <ComboBox
                 Grid.Column="1"

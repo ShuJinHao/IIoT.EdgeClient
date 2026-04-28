@@ -5,6 +5,7 @@ using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Resources;
 using IIoT.Edge.Module.Homogenization.Runtime;
+using IIoT.Edge.Presentation.Navigation.PluginSystem;
 using IIoT.Edge.UI.Shared.PluginSystem;
 using Microsoft.Extensions.Options;
 
@@ -25,7 +26,7 @@ public sealed class HomogenizationDataViewModel : PresentationViewModelBase
             moduleOptions.Value.Presentation.DataViewRefreshIntervalMs);
     }
 
-    public override string ViewId => HomogenizationViewIds.DataView;
+    public override string ViewId => StandardModuleViewIds.Create(DependencyInjection.ModuleKey).DataView;
 
     public override string ViewTitle => HomogenizationText.Get("Homogenization_Title_Data", "匀浆产品数据");
 

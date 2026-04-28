@@ -1,10 +1,10 @@
-using System.Threading;
+﻿using System.Threading;
 using System.Windows.Media;
 using System.Windows.Threading;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Common.Diagnostics;
-using IIoT.Edge.Presentation.Shell.Localization;
+using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
 using IIoT.Edge.UI.Shared.PluginSystem;
 
@@ -184,7 +184,7 @@ public class FooterViewModel : ViewModelBase
         var snapshot = await _diagnosticsQuery.GetCurrentAsync(ct);
         DeviceName = snapshot.DeviceName;
 
-        CloudStatus = EdgeSyncDiagnosticsFormatter.FormatCloudFooterStatus(snapshot.Cloud);
+        CloudStatus = FormatCloudFooterStatus(snapshot.Cloud);
         CloudStatusColor = snapshot.Cloud switch
         {
             _ when snapshot.Cloud.IsPersistenceFaulted => OfflineBrush,
@@ -194,7 +194,7 @@ public class FooterViewModel : ViewModelBase
             _ => OfflineBrush
         };
 
-        MesStatus = EdgeSyncDiagnosticsFormatter.FormatMesFooterStatus(snapshot.Mes);
+        MesStatus = FormatMesFooterStatus(snapshot.Mes);
         MesStatusColor = snapshot.Mes.RuntimeState switch
         {
             _ when snapshot.Mes.IsPersistenceFaulted => OfflineBrush,
@@ -205,4 +205,56 @@ public class FooterViewModel : ViewModelBase
             _ => OfflineBrush
         };
     }
+
+    private string FormatCloudFooterStatus(CloudSyncDiagnosticsSnapshot snapshot)
+    {
+        if (snapshot.IsPersistenceFaulted)
+        {
+            return _languageService.GetString("Shell_Footer_CloudPersistenceFault", "云端：存储故障");
+        }
+
+        if (snapshot.IsCapacityBlocked)
+        {
+            return _languageService.GetString("Shell_Footer_CloudCapacityBlocked", "云端：产能阻塞");
+        }
+
+        if (snapshot.GateState == EdgeUploadGateState.Ready)
+        {
+            return _languageService.GetString("Shell_Footer_CloudReady", "云端：已就绪");
+        }
+
+        if (snapshot.IsPausedWaitingForRecovery)
+        {
+            return _languageService.GetString("Shell_Footer_CloudWaitingRecovery", "云端：等待恢复");
+        }
+
+        return _languageService.Format(
+            "Shell_Footer_CloudBlockedFormat",
+            "云端：已阻塞（{0}）",
+            FormatBlockReason(snapshot.BlockReason));
+    }
+
+    private string FormatMesFooterStatus(MesSyncDiagnosticsSnapshot snapshot) => snapshot.RuntimeState switch
+    {
+        _ when snapshot.IsPersistenceFaulted => _languageService.GetString("Shell_Footer_MesPersistenceFault", "MES：存储故障"),
+        _ when snapshot.IsCapacityBlocked => _languageService.GetString("Shell_Footer_MesCapacityBlocked", "MES：产能阻塞"),
+        MesRetryRuntimeState.Retrying => _languageService.GetString("Shell_Footer_MesRetrying", "MES：重试中"),
+        MesRetryRuntimeState.Backoff => _languageService.GetString("Shell_Footer_MesBackoff", "MES：退避中"),
+        MesRetryRuntimeState.LastFailed => _languageService.GetString("Shell_Footer_MesLastFailed", "MES：最近失败"),
+        _ => _languageService.GetString("Shell_Footer_MesIdle", "MES：空闲")
+    };
+
+    private string FormatBlockReason(EdgeUploadBlockReason reason) => reason switch
+    {
+        EdgeUploadBlockReason.None => _languageService.GetString("Shell_BlockReason_None", "无"),
+        EdgeUploadBlockReason.DeviceUnidentified => _languageService.GetString("Shell_BlockReason_DeviceUnidentified", "设备未识别"),
+        EdgeUploadBlockReason.MissingUploadToken => _languageService.GetString("Shell_BlockReason_MissingUploadToken", "缺少上传令牌"),
+        EdgeUploadBlockReason.ExpiredUploadToken => _languageService.GetString("Shell_BlockReason_ExpiredUploadToken", "上传令牌已过期"),
+        EdgeUploadBlockReason.BootstrapHttpFailure => _languageService.GetString("Shell_BlockReason_BootstrapHttpFailure", "bootstrap HTTP 失败"),
+        EdgeUploadBlockReason.BootstrapTimeout => _languageService.GetString("Shell_BlockReason_BootstrapTimeout", "bootstrap 超时"),
+        EdgeUploadBlockReason.BootstrapNetworkFailure => _languageService.GetString("Shell_BlockReason_BootstrapNetworkFailure", "bootstrap 网络失败"),
+        EdgeUploadBlockReason.BootstrapPayloadInvalid => _languageService.GetString("Shell_BlockReason_BootstrapPayloadInvalid", "bootstrap 响应无效"),
+        EdgeUploadBlockReason.UploadTokenRejected => _languageService.GetString("Shell_BlockReason_UploadTokenRejected", "上传令牌被拒绝"),
+        _ => _languageService.GetString("Shell_Footer_Unknown", "未知")
+    };
 }

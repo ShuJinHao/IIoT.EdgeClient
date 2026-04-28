@@ -2,8 +2,9 @@ using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Common.Crud;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Models;
-using IIoT.Edge.Presentation.Navigation.Common.Crud;
+using IIoT.Edge.Presentation.Navigation.Localization;
 using IIoT.Edge.SharedKernel.Enums;
+using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -11,7 +12,7 @@ using System.Windows.Input;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView;
 
-public class HardwareConfigViewModel : CrudPageViewModelBase
+public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
 {
     private readonly IHardwareConfigCrudService _crudService;
     private readonly IClientPermissionService _permissionService;
@@ -27,14 +28,9 @@ public class HardwareConfigViewModel : CrudPageViewModelBase
     private readonly BaseCommand _deleteIoMappingCommand;
     private readonly AsyncCommand _saveCommand;
     private readonly BaseCommand _ioPrevPageCommand;
-    private readonly string _viewId;
-    private readonly string _viewTitle;
     private List<IoMappingVm> _loadedIoMappingSnapshot = [];
 
     private const int IoPageSize = 20;
-
-    public override string ViewId => _viewId;
-    public override string ViewTitle => _viewTitle;
 
     public IEnumerable<DeviceType> DeviceTypes => Enum.GetValues<DeviceType>();
     public IEnumerable<PlcType> PlcTypes => Enum.GetValues<PlcType>();
@@ -136,21 +132,29 @@ public class HardwareConfigViewModel : CrudPageViewModelBase
 
     public HardwareConfigViewModel(
         IHardwareConfigCrudService crudService,
-        IClientPermissionService permissionService)
-        : this(crudService, permissionService, "Hardware.HardwareConfigView", "硬件配置")
+        IClientPermissionService permissionService,
+        IAppLanguageService languageService)
+        : this(
+            crudService,
+            permissionService,
+            languageService,
+            "Hardware.HardwareConfigView",
+            "Navigation_Title_HardwareConfig",
+            "硬件配置")
     {
     }
 
     public HardwareConfigViewModel(
         IHardwareConfigCrudService crudService,
         IClientPermissionService permissionService,
+        IAppLanguageService languageService,
         string viewId,
-        string viewTitle)
+        string titleResourceKey,
+        string titleFallback)
+        : base(languageService, viewId, titleResourceKey, titleFallback)
     {
         _crudService = crudService;
         _permissionService = permissionService;
-        _viewId = viewId;
-        _viewTitle = viewTitle;
 
         _addNetworkDeviceCommand = (BaseCommand)CreateAddCommand(
             NetworkDevices,
@@ -170,7 +174,7 @@ public class HardwareConfigViewModel : CrudPageViewModelBase
                 Direction = "Read",
                 DataType = "Int16",
                 AddressCount = 1,
-                Category = "单点读数据"
+                Category = GetText("Navigation_Io_Category_SingleRead", "单点读数据")
             },
             () => CanEdit && SelectedNetworkDevice is not null);
         _deleteIoMappingCommand = (BaseCommand)CreateDeleteCommand(IoMappings, () => CanEdit);

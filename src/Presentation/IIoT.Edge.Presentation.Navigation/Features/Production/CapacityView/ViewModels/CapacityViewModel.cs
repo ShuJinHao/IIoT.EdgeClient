@@ -3,16 +3,15 @@ using System.Windows;
 using System.Windows.Input;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Features.Production.CapacityView;
+using IIoT.Edge.Presentation.Navigation.Localization;
+using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
-using IIoT.Edge.UI.Shared.PluginSystem;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Production.CapacityView;
 
-public class CapacityViewModel : PresentationViewModelBase
+public class CapacityViewModel : NavigationViewModelBase
 {
     private readonly ICapacityViewService _capacityViewService;
-    private readonly string _viewId;
-    private readonly string _viewTitle;
     private string _selectedDeviceName = string.Empty;
     private string _selectedQueryMode = CapacityQueryModes.Day;
     private DateTime _queryDate = DateTime.Today;
@@ -22,9 +21,6 @@ public class CapacityViewModel : PresentationViewModelBase
     private int _periodNg;
     private string _periodYield = "0%";
     private string _avgDaily = "0";
-
-    public override string ViewId => _viewId;
-    public override string ViewTitle => _viewTitle;
 
     public ObservableCollection<string> DeviceNames { get; } = [];
     public ObservableCollection<DailyCapacityVm> DailyRecords { get; } = [];
@@ -127,19 +123,25 @@ public class CapacityViewModel : PresentationViewModelBase
     public ICommand QueryCommand { get; }
     public ICommand ExportCommand { get; }
 
-    public CapacityViewModel(ICapacityViewService capacityViewService)
-        : this(capacityViewService, "Production.CapacityView", string.Empty)
+    public CapacityViewModel(ICapacityViewService capacityViewService, IAppLanguageService languageService)
+        : this(
+            capacityViewService,
+            languageService,
+            "Production.CapacityView",
+            "Navigation_Title_CapacityQuery",
+            "产能查询")
     {
     }
 
     public CapacityViewModel(
         ICapacityViewService capacityViewService,
+        IAppLanguageService languageService,
         string viewId,
-        string viewTitle)
+        string titleResourceKey,
+        string titleFallback)
+        : base(languageService, viewId, titleResourceKey, titleFallback)
     {
         _capacityViewService = capacityViewService;
-        _viewId = viewId;
-        _viewTitle = viewTitle;
 
         QueryCommand = new AsyncCommand(() => RunViewTaskAsync(QueryHistoryAsync, GetText("Navigation_Capacity_QueryFailed", "产能查询失败。")));
         ExportCommand = new BaseCommand(_ => { });
@@ -266,11 +268,5 @@ public class CapacityViewModel : PresentationViewModelBase
         }
 
         _ = dispatcher.InvokeAsync(action);
-    }
-
-    private static string GetText(string key, string fallback)
-    {
-        var value = System.Windows.Application.Current?.TryFindResource(key) as string;
-        return string.IsNullOrWhiteSpace(value) ? fallback : value;
     }
 }

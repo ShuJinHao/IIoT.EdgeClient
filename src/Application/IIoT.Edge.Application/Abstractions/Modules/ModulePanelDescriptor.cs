@@ -1,6 +1,6 @@
-namespace IIoT.Edge.Application.Abstractions.Modules;
+﻿namespace IIoT.Edge.Application.Abstractions.Modules;
 
-public enum EdgeAnchorablePosition
+public enum ModulePanelPosition
 {
     Left = 0,
     Right = 1,
@@ -8,7 +8,7 @@ public enum EdgeAnchorablePosition
     Main = 3
 }
 
-public sealed class EdgeAnchorableInfo
+public sealed class ModulePanelDescriptor
 {
     public string Title { get; set; } = string.Empty;
 
@@ -16,7 +16,7 @@ public sealed class EdgeAnchorableInfo
 
     public string ContentId { get; set; } = string.Empty;
 
-    public EdgeAnchorablePosition InitialPosition { get; set; } = EdgeAnchorablePosition.Main;
+    public ModulePanelPosition InitialPosition { get; set; } = ModulePanelPosition.Main;
 
     public bool IsVisible { get; set; } = true;
 }

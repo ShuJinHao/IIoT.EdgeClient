@@ -18,7 +18,7 @@
                 FontSize="16"
                 FontWeight="Medium"
                 Foreground="#E4E4E7"
-                Text="{DynamicResource Navigation_Title_ProductRecipe}" />
+                Text="{Binding ViewTitle}" />
             <Border
                 Padding="8,3"
                 Background="#18181B"

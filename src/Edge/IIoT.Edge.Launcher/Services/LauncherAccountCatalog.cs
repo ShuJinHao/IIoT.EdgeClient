@@ -10,6 +10,12 @@ public sealed class LauncherAccountCatalog : ILauncherAccountCatalog
 
     public const string SampleCatalogFileName = "launcher.accounts.sample.json";
 
+    public const string DevelopmentDefaultUserName = "edge-admin";
+
+    public const string DevelopmentDefaultDisplayName = "现场启动管理员";
+
+    public const string DevelopmentDefaultPassword = "123456";
+
     private readonly string _catalogPath;
 
     public LauncherAccountCatalog(string baseDirectory, string catalogFileName = DefaultCatalogFileName)
@@ -27,15 +33,54 @@ public sealed class LauncherAccountCatalog : ILauncherAccountCatalog
             throw new FileNotFoundException($"Launcher account catalog was not found: '{_catalogPath}'.", _catalogPath);
         }
 
-        var json = File.ReadAllText(_catalogPath);
-        var entries = JsonSerializer.Deserialize<List<LauncherAccountFileEntry>>(json, JsonOptions())
-            ?? [];
+        var entries = LoadFileEntries();
         if (entries.Count == 0)
         {
             throw new InvalidOperationException("Launcher account catalog is empty.");
         }
 
         return entries.Select(Map).ToArray();
+    }
+
+    public void UpdatePasswordHash(string userName, string passwordHash)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(passwordHash);
+
+        var entries = LoadFileEntries();
+        var entry = entries.FirstOrDefault(x =>
+            string.Equals(x.UserName, userName.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (entry is null)
+        {
+            throw new InvalidOperationException($"Launcher account '{userName}' was not found.");
+        }
+
+        entry.PasswordHash = passwordHash.Trim();
+        File.WriteAllText(
+            _catalogPath,
+            JsonSerializer.Serialize(entries, JsonOptionsIndented()));
+    }
+
+    public static void EnsureDevelopmentCatalog(string baseDirectory)
+    {
+        var path = GetCatalogPath(baseDirectory);
+        if (File.Exists(path))
+        {
+            return;
+        }
+
+        var entries = new[]
+        {
+            new LauncherAccountFileEntry
+            {
+                UserName = DevelopmentDefaultUserName,
+                DisplayName = DevelopmentDefaultDisplayName,
+                PasswordHash = LauncherPasswordHasher.ComputeSha256(DevelopmentDefaultPassword),
+                IsEnabled = true
+            }
+        };
+
+        File.WriteAllText(path, JsonSerializer.Serialize(entries, JsonOptionsIndented()));
     }
 
     private static LauncherAccountRecord Map(LauncherAccountFileEntry entry)
@@ -76,6 +121,25 @@ public sealed class LauncherAccountCatalog : ILauncherAccountCatalog
             PropertyNameCaseInsensitive = true,
             ReadCommentHandling = JsonCommentHandling.Skip
         };
+
+    private static JsonSerializerOptions JsonOptionsIndented()
+    {
+        var options = JsonOptions();
+        options.WriteIndented = true;
+        return options;
+    }
+
+    private List<LauncherAccountFileEntry> LoadFileEntries()
+    {
+        if (!File.Exists(_catalogPath))
+        {
+            throw new FileNotFoundException($"Launcher account catalog was not found: '{_catalogPath}'.", _catalogPath);
+        }
+
+        var json = File.ReadAllText(_catalogPath);
+        return JsonSerializer.Deserialize<List<LauncherAccountFileEntry>>(json, JsonOptions())
+            ?? [];
+    }
 
     private sealed class LauncherAccountFileEntry
     {

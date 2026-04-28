@@ -1,6 +1,6 @@
-using System.Globalization;
+﻿using System.Globalization;
 
-namespace IIoT.Edge.Presentation.Shell.Localization;
+namespace IIoT.Edge.UI.Shared.Localization;
 
 /// <summary>
 /// 界面语言下拉框选项。

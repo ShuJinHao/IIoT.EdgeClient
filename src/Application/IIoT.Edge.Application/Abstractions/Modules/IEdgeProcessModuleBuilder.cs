@@ -1,4 +1,4 @@
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 
 namespace IIoT.Edge.Application.Abstractions.Modules;
@@ -22,16 +22,29 @@ public interface IEdgeProcessModuleBuilder
         Func<IServiceProvider, object> viewModelFactory,
         bool cacheView = true);
 
-    void RegisterMenu(EdgeMenuInfo menuInfo);
+    void RegisterMenu(ModuleMenuDescriptor menuInfo);
 
-    void RegisterAnchorable(
-        EdgeAnchorableInfo info,
+    void RegisterDocumentPanel(
+        ModulePanelDescriptor descriptor,
         Type viewType,
         Type viewModelType,
         bool cacheView = true);
 
-    void RegisterAnchorable(
-        EdgeAnchorableInfo info,
+    void RegisterDocumentPanel(
+        ModulePanelDescriptor descriptor,
+        Type viewType,
+        Type viewModelType,
+        Func<IServiceProvider, object> viewModelFactory,
+        bool cacheView = true);
+
+    void RegisterToolPanel(
+        ModulePanelDescriptor descriptor,
+        Type viewType,
+        Type viewModelType,
+        bool cacheView = true);
+
+    void RegisterToolPanel(
+        ModulePanelDescriptor descriptor,
         Type viewType,
         Type viewModelType,
         Func<IServiceProvider, object> viewModelFactory,

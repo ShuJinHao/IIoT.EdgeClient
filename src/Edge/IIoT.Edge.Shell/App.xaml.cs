@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -7,7 +7,7 @@ using System.Windows;
 using System.Windows.Threading;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Host.Bootstrap;
-using IIoT.Edge.Presentation.Shell.Localization;
+using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.Shell.Core;
 using IIoT.Edge.Shell.Modules;
 using IIoT.Edge.Shell.ViewModels;

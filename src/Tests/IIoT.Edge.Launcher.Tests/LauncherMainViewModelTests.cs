@@ -102,6 +102,9 @@ public sealed class LauncherMainViewModelTests
         }
 
         public LauncherAuthenticationResult Authenticate(string? userName, string? password) => _result;
+
+        public LauncherPasswordChangeResult ChangePassword(string? userName, string? oldPassword, string? newPassword)
+            => LauncherPasswordChangeResult.Passed();
     }
 
     private sealed class StubShellLaunchService : IShellLaunchService

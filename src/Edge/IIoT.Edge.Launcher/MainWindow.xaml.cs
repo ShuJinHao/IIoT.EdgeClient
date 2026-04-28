@@ -45,9 +45,19 @@ public partial class MainWindow : Window
         if (_viewModel.IsAuthenticated)
         {
             PasswordInput.Clear();
+            NewPasswordInput.Clear();
         }
 
         UpdateVisualState();
+    }
+
+    private async void ChangePasswordButton_Click(object sender, RoutedEventArgs e)
+    {
+        await _viewModel.ChangePasswordAsync(
+            UserNameTextBox.Text,
+            PasswordInput.Password,
+            NewPasswordInput.Password);
+        NewPasswordInput.Clear();
     }
 
     private async void LaunchProfileButton_Click(object sender, RoutedEventArgs e)

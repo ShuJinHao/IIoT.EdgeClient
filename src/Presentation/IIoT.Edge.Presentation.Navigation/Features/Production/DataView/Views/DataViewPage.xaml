@@ -8,7 +8,7 @@
     Background="Transparent">
     <sharedViews:PageActionShell.HeaderContent>
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-            <TextBlock Margin="0,0,24,0" FontSize="16" FontWeight="Medium" Foreground="#E4E4E7" Text="{DynamicResource Navigation_Title_Data}" />
+        <TextBlock Margin="0,0,24,0" FontSize="16" FontWeight="Medium" Foreground="#E4E4E7" Text="{Binding ViewTitle}" />
             <DatePicker Width="130" Margin="0,0,8,0" FontSize="12" SelectedDate="{Binding DateFrom}" />
             <TextBlock Margin="0,0,8,0" VerticalAlignment="Center" Foreground="#A1A1AA" Text="{DynamicResource Navigation_Label_To}" />
             <DatePicker Width="130" Margin="0,0,12,0" FontSize="12" SelectedDate="{Binding DateTo}" />

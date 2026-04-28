@@ -1,26 +1,21 @@
 using IIoT.Edge.Application.Abstractions.Recipe;
 using IIoT.Edge.Application.Common.Crud;
 using IIoT.Edge.Application.Features.Formula.RecipeView;
-using IIoT.Edge.Presentation.Navigation.Common.Crud;
+using IIoT.Edge.Presentation.Navigation.Localization;
 using IIoT.Edge.SharedKernel.DataPipeline.Recipe;
+using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
-using WpfApplication = System.Windows.Application;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Formula.RecipeView;
 
-public class RecipeViewModel : CrudPageViewModelBase
+public class RecipeViewModel : LocalizedCrudPageViewModelBase
 {
     private readonly IRecipeViewCrudService _crudService;
     private readonly IRecipeService _recipeService;
     private readonly IEditorValidator<LocalRecipeParamEditModel> _localRecipeParamValidator = new LocalRecipeParamValidator();
-    private readonly string _viewId;
-    private readonly string _viewTitle;
     private bool _isSubscribed;
-
-    public override string ViewId => _viewId;
-    public override string ViewTitle => _viewTitle;
 
     public ObservableCollection<RecipeParamVm> Params { get; } = new();
 
@@ -72,21 +67,31 @@ public class RecipeViewModel : CrudPageViewModelBase
     public ICommand SaveLocalParamCommand { get; }
     public ICommand DeleteLocalParamCommand { get; }
 
-    public RecipeViewModel(IRecipeViewCrudService crudService, IRecipeService recipeService)
-        : this(crudService, recipeService, "Formula.RecipeView", string.Empty)
+    public RecipeViewModel(
+        IRecipeViewCrudService crudService,
+        IRecipeService recipeService,
+        IAppLanguageService languageService)
+        : this(
+            crudService,
+            recipeService,
+            languageService,
+            "Formula.RecipeView",
+            "Navigation_Title_ProductRecipe",
+            "产品配方")
     {
     }
 
     public RecipeViewModel(
         IRecipeViewCrudService crudService,
         IRecipeService recipeService,
+        IAppLanguageService languageService,
         string viewId,
-        string viewTitle)
+        string titleResourceKey,
+        string titleFallback)
+        : base(languageService, viewId, titleResourceKey, titleFallback)
     {
         _crudService = crudService;
         _recipeService = recipeService;
-        _viewId = viewId;
-        _viewTitle = viewTitle;
 
         SyncCloudCommand = CreateBusyCommand(OnSyncCloudAsync);
         SwitchSourceCommand = new BaseCommand(_ => OnSwitchSource());
@@ -242,8 +247,16 @@ public class RecipeViewModel : CrudPageViewModelBase
             }));
     }
 
-    private static string GetText(string key, string fallback)
-        => WpfApplication.Current?.TryFindResource(key) as string ?? fallback;
+    protected override void RefreshLocalization()
+    {
+        base.RefreshLocalization();
+        OnPropertyChanged(nameof(SourceLabel));
+        if (string.IsNullOrWhiteSpace(RecipeName)
+            || RecipeName is "未加载" or "Not Loaded")
+        {
+            RecipeName = GetText("Navigation_Recipe_NotLoaded", "未加载");
+        }
+    }
 }
 
 public class RecipeParamVm

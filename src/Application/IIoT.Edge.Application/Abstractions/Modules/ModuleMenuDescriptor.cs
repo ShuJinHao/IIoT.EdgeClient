@@ -1,6 +1,6 @@
-namespace IIoT.Edge.Application.Abstractions.Modules;
+﻿namespace IIoT.Edge.Application.Abstractions.Modules;
 
-public sealed class EdgeMenuInfo
+public sealed class ModuleMenuDescriptor
 {
     public string Title { get; set; } = string.Empty;
 

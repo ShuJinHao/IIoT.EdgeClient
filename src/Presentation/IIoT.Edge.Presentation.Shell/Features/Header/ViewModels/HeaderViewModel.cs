@@ -1,4 +1,4 @@
-using IIoT.Edge.Presentation.Shell.Localization;
+﻿using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
 using IIoT.Edge.UI.Shared.PluginSystem;
 using System.Linq;

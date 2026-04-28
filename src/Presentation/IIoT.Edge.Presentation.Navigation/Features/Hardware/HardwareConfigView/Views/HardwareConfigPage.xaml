@@ -9,7 +9,7 @@
     <sharedViews:PageActionShell>
 
     <sharedViews:PageActionShell.HeaderContent>
-        <TextBlock VerticalAlignment="Center" FontSize="16" FontWeight="Medium" Foreground="#E4E4E7" Text="{DynamicResource Navigation_Title_HardwareConfig}" />
+        <TextBlock VerticalAlignment="Center" FontSize="16" FontWeight="Medium" Foreground="#E4E4E7" Text="{Binding ViewTitle}" />
     </sharedViews:PageActionShell.HeaderContent>
     <sharedViews:PageActionShell.ActionContent>
         <Button Height="32" Padding="16,0" HorizontalAlignment="Right" Background="#0F766E" BorderThickness="0" Command="{Binding SaveCommand}" Style="{StaticResource MaterialDesignRaisedButton}">

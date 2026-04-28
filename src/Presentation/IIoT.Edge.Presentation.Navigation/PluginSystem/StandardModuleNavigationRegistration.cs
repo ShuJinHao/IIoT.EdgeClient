@@ -32,7 +32,7 @@ public static class StandardModuleNavigationRegistration
             viewId,
             typeof(DataViewPage),
             typeof(DataViewModel),
-            sp => ActivatorUtilities.CreateInstance<DataViewModel>(sp, viewId, title),
+            sp => ActivatorUtilities.CreateInstance<DataViewModel>(sp, viewId, titleResourceKey, title),
             cacheView);
         builder.RegisterMenu(CreateMenu(title, viewId, icon, order, titleResourceKey: titleResourceKey));
         return builder;
@@ -51,7 +51,7 @@ public static class StandardModuleNavigationRegistration
             viewId,
             typeof(CapacityViewPage),
             typeof(CapacityViewModel),
-            sp => ActivatorUtilities.CreateInstance<CapacityViewModel>(sp, viewId, title),
+            sp => ActivatorUtilities.CreateInstance<CapacityViewModel>(sp, viewId, "Navigation_Title_CapacityQuery", title),
             cacheView);
         builder.RegisterMenu(CreateMenu(
             "产能",
@@ -75,7 +75,7 @@ public static class StandardModuleNavigationRegistration
             viewId,
             typeof(IOViewPage),
             typeof(IoViewViewModel),
-            sp => ActivatorUtilities.CreateInstance<IoViewViewModel>(sp, viewId, title, builder.ModuleId),
+            sp => ActivatorUtilities.CreateInstance<IoViewViewModel>(sp, viewId, "Navigation_Title_IoInteract", title, builder.ModuleId),
             cacheView);
         builder.RegisterMenu(CreateMenu(
             "IO交互",
@@ -99,7 +99,7 @@ public static class StandardModuleNavigationRegistration
             viewId,
             typeof(MonitorViewPage),
             typeof(MonitorViewModel),
-            sp => ActivatorUtilities.CreateInstance<MonitorViewModel>(sp, viewId, title),
+            sp => ActivatorUtilities.CreateInstance<MonitorViewModel>(sp, viewId, "Navigation_Title_RealtimeMonitor", title),
             cacheView);
         builder.RegisterMenu(CreateMenu(
             "监控",
@@ -123,7 +123,7 @@ public static class StandardModuleNavigationRegistration
             viewId,
             typeof(RecipeViewPage),
             typeof(RecipeViewModel),
-            sp => ActivatorUtilities.CreateInstance<RecipeViewModel>(sp, viewId, title),
+            sp => ActivatorUtilities.CreateInstance<RecipeViewModel>(sp, viewId, "Navigation_Title_ProductRecipe", title),
             cacheView);
         builder.RegisterMenu(CreateMenu(
             "配方",
@@ -147,7 +147,7 @@ public static class StandardModuleNavigationRegistration
             viewId,
             typeof(ParamViewPage),
             typeof(ParamViewModel),
-            sp => ActivatorUtilities.CreateInstance<ParamViewModel>(sp, viewId, title),
+            sp => ActivatorUtilities.CreateInstance<ParamViewModel>(sp, viewId, "Navigation_Title_ParamConfig", title),
             cacheView);
         builder.RegisterMenu(CreateMenu(
             "参数配置",
@@ -172,7 +172,7 @@ public static class StandardModuleNavigationRegistration
             viewId,
             typeof(HardwareConfigPage),
             typeof(HardwareConfigViewModel),
-            sp => ActivatorUtilities.CreateInstance<HardwareConfigViewModel>(sp, viewId, title),
+            sp => ActivatorUtilities.CreateInstance<HardwareConfigViewModel>(sp, viewId, "Navigation_Title_HardwareConfig", title),
             cacheView);
         builder.RegisterMenu(CreateMenu(
             "硬件配置",
@@ -184,7 +184,7 @@ public static class StandardModuleNavigationRegistration
         return builder;
     }
 
-    private static EdgeMenuInfo CreateMenu(
+    private static ModuleMenuDescriptor CreateMenu(
         string title,
         string viewId,
         string icon,

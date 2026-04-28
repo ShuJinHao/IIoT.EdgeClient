@@ -78,7 +78,7 @@ internal sealed class TestEdgeProcessModuleBuilder(
             serviceProvider => ResolveViewModel(viewId, viewModelFactory, serviceProvider),
             cacheView);
 
-    public void RegisterMenu(EdgeMenuInfo menuInfo)
+    public void RegisterMenu(ModuleMenuDescriptor menuInfo)
         => viewRegistry.RegisterMenu(new MenuInfo
         {
             Title = menuInfo.Title,
@@ -89,49 +89,71 @@ internal sealed class TestEdgeProcessModuleBuilder(
             RequiredPermission = menuInfo.RequiredPermission
         });
 
-    public void RegisterAnchorable(
-        EdgeAnchorableInfo info,
+    public void RegisterDocumentPanel(
+        ModulePanelDescriptor info,
         Type viewType,
         Type viewModelType,
         bool cacheView = true)
-        => viewRegistry.RegisterAnchorable(
-            new AnchorableInfo
-            {
-                Title = info.Title,
-                ContentId = info.ContentId,
-                InitialPosition = info.InitialPosition switch
-                {
-                    EdgeAnchorablePosition.Left => AnchorablePosition.Left,
-                    EdgeAnchorablePosition.Right => AnchorablePosition.Right,
-                    EdgeAnchorablePosition.Bottom => AnchorablePosition.Bottom,
-                    _ => AnchorablePosition.Main
-                },
-                IsVisible = info.IsVisible
-            },
-            viewType,
-            viewModelType,
-            cacheView);
+        => RegisterPanel(info, viewType, viewModelType, cacheView);
 
-    public void RegisterAnchorable(
-        EdgeAnchorableInfo info,
+    public void RegisterDocumentPanel(
+        ModulePanelDescriptor info,
         Type viewType,
         Type viewModelType,
         Func<IServiceProvider, object> viewModelFactory,
         bool cacheView = true)
-        => viewRegistry.RegisterAnchorable(
-            new AnchorableInfo
+        => RegisterPanel(info, viewType, viewModelType, viewModelFactory, cacheView);
+
+    public void RegisterToolPanel(
+        ModulePanelDescriptor info,
+        Type viewType,
+        Type viewModelType,
+        bool cacheView = true)
+        => RegisterPanel(info, viewType, viewModelType, cacheView);
+
+    public void RegisterToolPanel(
+        ModulePanelDescriptor info,
+        Type viewType,
+        Type viewModelType,
+        Func<IServiceProvider, object> viewModelFactory,
+        bool cacheView = true)
+        => RegisterPanel(info, viewType, viewModelType, viewModelFactory, cacheView);
+
+    private static AnchorableInfo ToAnchorableInfo(ModulePanelDescriptor info)
+        => new()
+        {
+            Title = info.Title,
+            TitleResourceKey = info.TitleResourceKey,
+            ContentId = info.ContentId,
+            InitialPosition = info.InitialPosition switch
             {
-                Title = info.Title,
-                ContentId = info.ContentId,
-                InitialPosition = info.InitialPosition switch
-                {
-                    EdgeAnchorablePosition.Left => AnchorablePosition.Left,
-                    EdgeAnchorablePosition.Right => AnchorablePosition.Right,
-                    EdgeAnchorablePosition.Bottom => AnchorablePosition.Bottom,
-                    _ => AnchorablePosition.Main
-                },
-                IsVisible = info.IsVisible
+                ModulePanelPosition.Left => AnchorablePosition.Left,
+                ModulePanelPosition.Right => AnchorablePosition.Right,
+                ModulePanelPosition.Bottom => AnchorablePosition.Bottom,
+                _ => AnchorablePosition.Main
             },
+            IsVisible = info.IsVisible
+        };
+
+    private void RegisterPanel(
+        ModulePanelDescriptor info,
+        Type viewType,
+        Type viewModelType,
+        bool cacheView)
+        => viewRegistry.RegisterAnchorable(
+            ToAnchorableInfo(info),
+            viewType,
+            viewModelType,
+            cacheView);
+
+    private void RegisterPanel(
+        ModulePanelDescriptor info,
+        Type viewType,
+        Type viewModelType,
+        Func<IServiceProvider, object> viewModelFactory,
+        bool cacheView)
+        => viewRegistry.RegisterAnchorable(
+            ToAnchorableInfo(info),
             viewType,
             viewModelType,
             serviceProvider => ResolveViewModel(info.ContentId, viewModelFactory, serviceProvider),

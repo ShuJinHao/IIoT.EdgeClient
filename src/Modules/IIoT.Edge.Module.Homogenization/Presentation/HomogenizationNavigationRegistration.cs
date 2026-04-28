@@ -8,28 +8,29 @@ public static class HomogenizationNavigationRegistration
 {
     public static IEdgeProcessModuleBuilder RegisterHomogenizationViews(this IEdgeProcessModuleBuilder builder)
     {
+        var viewIds = StandardModuleViewIds.Create(DependencyInjection.ModuleKey);
         builder.RegisterRoute(
-            HomogenizationViewIds.DataView,
+            viewIds.DataView,
             typeof(HomogenizationDataPage),
             typeof(HomogenizationDataViewModel),
             cacheView: true);
 
-        builder.RegisterMenu(new EdgeMenuInfo
+        builder.RegisterMenu(new ModuleMenuDescriptor
         {
             Title = "数据",
             TitleResourceKey = "Homogenization_Menu_Data",
-            ViewId = HomogenizationViewIds.DataView,
+            ViewId = viewIds.DataView,
             Icon = "ChartBar",
             Order = 1,
             RequiredPermission = string.Empty
         });
 
         return builder
-            .RegisterStandardCapacityView(HomogenizationViewIds.CapacityView)
-            .RegisterStandardIoView(HomogenizationViewIds.IoView)
-            .RegisterStandardMonitorView(HomogenizationViewIds.Monitor)
-            .RegisterStandardRecipeView(HomogenizationViewIds.RecipeView)
-            .RegisterStandardParamView(HomogenizationViewIds.ParamView)
-            .RegisterStandardHardwareConfigView(HomogenizationViewIds.HardwareConfigView);
+            .RegisterStandardCapacityView(viewIds.CapacityView)
+            .RegisterStandardIoView(viewIds.IoView)
+            .RegisterStandardMonitorView(viewIds.Monitor)
+            .RegisterStandardRecipeView(viewIds.RecipeView)
+            .RegisterStandardParamView(viewIds.ParamView)
+            .RegisterStandardHardwareConfigView(viewIds.HardwareConfigView);
     }
 }

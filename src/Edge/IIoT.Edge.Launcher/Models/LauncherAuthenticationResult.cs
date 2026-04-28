@@ -11,3 +11,14 @@ public sealed record LauncherAuthenticationResult(
     public static LauncherAuthenticationResult Failed(string errorMessage)
         => new(false, null, errorMessage);
 }
+
+public sealed record LauncherPasswordChangeResult(
+    bool Success,
+    string? ErrorMessage)
+{
+    public static LauncherPasswordChangeResult Passed()
+        => new(true, null);
+
+    public static LauncherPasswordChangeResult Failed(string errorMessage)
+        => new(false, errorMessage);
+}

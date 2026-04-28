@@ -9,7 +9,9 @@ public class IoSignalModel : BaseNotifyPropertyChanged
     public string RawLabel { get; set; } = "";
     public string PlcAddress { get; set; } = "";
     public string Direction { get; set; } = "Read";
-    public string DirectionText => Direction == "Write" ? "上位机到 PLC" : "PLC 到上位机";
+    public string DirectionText => Direction == "Write"
+        ? GetText("Navigation_Io_Direction_HostToPlc", "上位机到 PLC")
+        : GetText("Navigation_Io_Direction_PlcToHost", "PLC 到上位机");
     public string DataType { get; set; } = "Int16";
     public string DisplayRole { get; set; } = "";
     public string MatrixColumnTitle => string.IsNullOrWhiteSpace(DisplayRole) ? Label : DisplayRole;
@@ -24,6 +26,9 @@ public class IoSignalModel : BaseNotifyPropertyChanged
     public bool HasExpandedValues => ExpandedValues.Count > 0;
 
     public ObservableCollection<IoSignalValueModel> ExpandedValues { get; } = [];
+
+    public void NotifyLocalizationChanged()
+        => OnPropertyChanged(nameof(DirectionText));
 
     private int _value;
     public int Value
@@ -72,6 +77,9 @@ public class IoSignalModel : BaseNotifyPropertyChanged
             OnPropertyChanged();
         }
     }
+
+    private static string GetText(string key, string fallback)
+        => System.Windows.Application.Current?.TryFindResource(key) as string ?? fallback;
 }
 
 public sealed class IoSignalValueModel

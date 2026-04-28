@@ -1,23 +1,18 @@
-using IIoT.Edge.Application.Common.Diagnostics;
 using IIoT.Edge.Application.Features.Production.Monitor;
+using IIoT.Edge.Presentation.Navigation.Localization;
+using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
-using IIoT.Edge.UI.Shared.PluginSystem;
 using System.Collections.ObjectModel;
 using System.Data;
 using System.Windows.Threading;
-using WpfApplication = System.Windows.Application;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Production.Monitor;
 
-public class MonitorViewModel : PresentationViewModelBase
+public class MonitorViewModel : NavigationViewModelBase
 {
     private readonly IMonitorViewService _monitorViewService;
     private readonly DispatcherTimer _refreshTimer;
-    private readonly string _viewId;
-    private readonly string _viewTitle;
-
-    public override string ViewId => _viewId;
-    public override string ViewTitle => _viewTitle;
+    private readonly LocalizedSyncDiagnosticsText _diagnosticsText;
 
     public ObservableCollection<DeviceTabVm> DeviceTabs { get; } = new();
 
@@ -28,19 +23,26 @@ public class MonitorViewModel : PresentationViewModelBase
         set { _selectedTabIndex = value; OnPropertyChanged(); }
     }
 
-    public MonitorViewModel(IMonitorViewService monitorViewService)
-        : this(monitorViewService, "Production.Monitor", string.Empty)
+    public MonitorViewModel(IMonitorViewService monitorViewService, IAppLanguageService languageService)
+        : this(
+            monitorViewService,
+            languageService,
+            "Production.Monitor",
+            "Navigation_Title_RealtimeMonitor",
+            "实时监控")
     {
     }
 
     public MonitorViewModel(
         IMonitorViewService monitorViewService,
+        IAppLanguageService languageService,
         string viewId,
-        string viewTitle)
+        string titleResourceKey,
+        string titleFallback)
+        : base(languageService, viewId, titleResourceKey, titleFallback)
     {
         _monitorViewService = monitorViewService;
-        _viewId = viewId;
-        _viewTitle = viewTitle;
+        _diagnosticsText = new LocalizedSyncDiagnosticsText(languageService);
 
         _refreshTimer = new DispatcherTimer
         {
@@ -95,16 +97,22 @@ public class MonitorViewModel : PresentationViewModelBase
                 tab.YieldAll = snapshot.YieldAll;
                 tab.DeviceDataSummary = snapshot.DeviceDataSummary;
                 tab.StepSummary = snapshot.StepSummary;
-                tab.CloudSyncStatus = EdgeSyncDiagnosticsFormatter.FormatCloudMonitorSummary(snapshot.CloudSync);
-                tab.MesSyncStatus = EdgeSyncDiagnosticsFormatter.FormatMesMonitorSummary(snapshot.MesSync);
-                tab.ContextPersistenceStatus = EdgeSyncDiagnosticsFormatter.FormatContextPersistenceSummary(snapshot.ContextPersistence);
+                tab.CloudSyncStatus = _diagnosticsText.FormatCloudMonitorSummary(snapshot.CloudSync);
+                tab.MesSyncStatus = _diagnosticsText.FormatMesMonitorSummary(snapshot.MesSync);
+                tab.ContextPersistenceStatus = _diagnosticsText.FormatContextPersistenceSummary(snapshot.ContextPersistence);
                 tab.CellCount = snapshot.CellCount;
                 tab.CellTable = snapshot.CellTable;
             });
     }
 
-    private static string GetText(string key, string fallback)
-        => WpfApplication.Current?.TryFindResource(key) as string ?? fallback;
+    protected override void RefreshLocalization()
+    {
+        base.RefreshLocalization();
+        foreach (var tab in DeviceTabs)
+        {
+            tab.RefreshFallbackText(this);
+        }
+    }
 }
 
 public class DeviceTabVm : BaseNotifyPropertyChanged
@@ -200,35 +208,35 @@ public class DeviceTabVm : BaseNotifyPropertyChanged
         set { _yieldAll = value; OnPropertyChanged(); }
     }
 
-    private string _deviceDataSummary = "暂无数据";
+    private string _deviceDataSummary = string.Empty;
     public string DeviceDataSummary
     {
         get => _deviceDataSummary;
         set { _deviceDataSummary = value; OnPropertyChanged(); }
     }
 
-    private string _stepSummary = "暂无步骤";
+    private string _stepSummary = string.Empty;
     public string StepSummary
     {
         get => _stepSummary;
         set { _stepSummary = value; OnPropertyChanged(); }
     }
 
-    private string _cloudSyncStatus = "云端状态未知";
+    private string _cloudSyncStatus = string.Empty;
     public string CloudSyncStatus
     {
         get => _cloudSyncStatus;
         set { _cloudSyncStatus = value; OnPropertyChanged(); }
     }
 
-    private string _mesSyncStatus = "MES 状态未知";
+    private string _mesSyncStatus = string.Empty;
     public string MesSyncStatus
     {
         get => _mesSyncStatus;
         set { _mesSyncStatus = value; OnPropertyChanged(); }
     }
 
-    private string _contextPersistenceStatus = "坏文件数：0";
+    private string _contextPersistenceStatus = string.Empty;
     public string ContextPersistenceStatus
     {
         get => _contextPersistenceStatus;
@@ -247,5 +255,33 @@ public class DeviceTabVm : BaseNotifyPropertyChanged
     {
         get => _cellTable;
         set { _cellTable = value; OnPropertyChanged(); }
+    }
+
+    public void RefreshFallbackText(MonitorViewModel owner)
+    {
+        if (string.IsNullOrWhiteSpace(DeviceDataSummary))
+        {
+            DeviceDataSummary = owner.GetText("Navigation_Monitor_NoDeviceData", "暂无数据");
+        }
+
+        if (string.IsNullOrWhiteSpace(StepSummary))
+        {
+            StepSummary = owner.GetText("Navigation_Monitor_NoTaskStep", "暂无步骤");
+        }
+
+        if (string.IsNullOrWhiteSpace(CloudSyncStatus))
+        {
+            CloudSyncStatus = owner.GetText("Navigation_Monitor_CloudUnknown", "云端状态未知");
+        }
+
+        if (string.IsNullOrWhiteSpace(MesSyncStatus))
+        {
+            MesSyncStatus = owner.GetText("Navigation_Monitor_MesUnknown", "MES 状态未知");
+        }
+
+        if (string.IsNullOrWhiteSpace(ContextPersistenceStatus))
+        {
+            ContextPersistenceStatus = owner.GetText("Navigation_Monitor_ContextPersistenceOk", "损坏文件数：0");
+        }
     }
 }

@@ -1,5 +1,5 @@
-using System.Globalization;
-using IIoT.Edge.Presentation.Shell.Localization;
+﻿using System.Globalization;
+using IIoT.Edge.UI.Shared.Localization;
 
 namespace IIoT.Edge.Shell.Tests;
 

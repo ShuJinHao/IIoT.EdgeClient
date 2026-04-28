@@ -133,6 +133,36 @@ public sealed class LauncherMainViewModel : ObservableObject
         }
     }
 
+    public async Task ChangePasswordAsync(string? userName, string? oldPassword, string? newPassword)
+    {
+        ErrorMessage = string.Empty;
+        StatusMessage = "正在修改本地密码...";
+        IsBusy = true;
+
+        try
+        {
+            await Task.Yield();
+            var result = _authService.ChangePassword(userName, oldPassword, newPassword);
+            if (!result.Success)
+            {
+                ErrorMessage = result.ErrorMessage ?? "本地密码修改失败。";
+                StatusMessage = "请修正密码信息后重试。";
+                return;
+            }
+
+            StatusMessage = "本地密码已修改，请使用新密码登录。";
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+            StatusMessage = "本地密码修改失败。";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
     public Task LaunchAsync(LauncherProfileDefinition profile)
     {
         ArgumentNullException.ThrowIfNull(profile);

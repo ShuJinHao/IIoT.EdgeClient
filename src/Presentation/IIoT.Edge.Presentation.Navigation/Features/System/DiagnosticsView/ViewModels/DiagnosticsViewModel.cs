@@ -3,20 +3,18 @@ using System.Threading;
 using System.Windows.Threading;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.Application.Common.Diagnostics;
-using IIoT.Edge.UI.Shared.PluginSystem;
+using IIoT.Edge.Presentation.Navigation.Localization;
+using IIoT.Edge.UI.Shared.Localization;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
 
-public sealed class DiagnosticsViewModel : PresentationViewModelBase
+public sealed class DiagnosticsViewModel : NavigationViewModelBase
 {
     private readonly IStartupDiagnosticsStore _diagnosticsStore;
     private readonly IEdgeSyncDiagnosticsQuery _syncDiagnosticsQuery;
+    private readonly LocalizedSyncDiagnosticsText _diagnosticsText;
     private readonly DispatcherTimer _refreshTimer;
     private int _refreshInProgress;
-
-    public override string ViewId => CoreViewIds.Diagnostics;
-    public override string ViewTitle => "系统诊断";
 
     public ObservableCollection<ModuleRegistrationRow> ModuleRegistrations { get; } = [];
     public ObservableCollection<PluginLifecycleRow> PluginStates { get; } = [];
@@ -279,16 +277,25 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
 
     public DiagnosticsViewModel(
         IStartupDiagnosticsStore diagnosticsStore,
-        IEdgeSyncDiagnosticsQuery syncDiagnosticsQuery)
+        IEdgeSyncDiagnosticsQuery syncDiagnosticsQuery,
+        IAppLanguageService languageService)
+        : base(languageService, CoreViewIds.Diagnostics, "Navigation_Menu_CoreDiagnostics", "系统诊断")
     {
         _diagnosticsStore = diagnosticsStore;
         _syncDiagnosticsQuery = syncDiagnosticsQuery;
+        _diagnosticsText = new LocalizedSyncDiagnosticsText(languageService);
         _refreshTimer = new DispatcherTimer
         {
             Interval = TimeSpan.FromSeconds(1)
         };
         _refreshTimer.Tick += OnRefreshTimerTick;
         _refreshTimer.Start();
+    }
+
+    protected override void RefreshLocalization()
+    {
+        base.RefreshLocalization();
+        _ = SafeRefreshAsync();
     }
 
     public override Task OnActivatedAsync() => RefreshAsync();
@@ -365,51 +372,51 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
         {
             EdgeUploadGateState.Ready => "已就绪",
             _ when syncDiagnostics.Cloud.IsPausedWaitingForRecovery => "等待恢复",
-            _ => $"已阻塞（{EdgeSyncDiagnosticsFormatter.FormatBlockReason(syncDiagnostics.Cloud.BlockReason)}）"
+            _ => FormatText("Navigation_Sync_StatusBlockedFormat", "已阻塞（{0}）", _diagnosticsText.FormatBlockReason(syncDiagnostics.Cloud.BlockReason))
         };
 
         CloudGateSummary = $"上传门禁：{cloudGate}";
-        CloudRuntimeSummary = $"云端运行：{EdgeSyncDiagnosticsFormatter.FormatCloudRuntimeState(syncDiagnostics.Cloud.RuntimeState)}";
+        CloudRuntimeSummary = $"云端运行：{_diagnosticsText.FormatCloudRuntimeState(syncDiagnostics.Cloud.RuntimeState)}";
         CloudResultSummary =
-            $"最近结果：{EdgeSyncDiagnosticsFormatter.FormatCloudOutcome(syncDiagnostics.Cloud.LastOutcome, syncDiagnostics.Cloud.LastReasonCode, syncDiagnostics.Cloud.LastProcessType)}";
+            $"最近结果：{_diagnosticsText.FormatCloudOutcome(syncDiagnostics.Cloud.LastOutcome, syncDiagnostics.Cloud.LastReasonCode, syncDiagnostics.Cloud.LastProcessType)}";
         CloudPendingSummary =
             $"待处理：重试={syncDiagnostics.Cloud.PendingRetryCount}，日志={syncDiagnostics.Cloud.PendingDeviceLogCount}，产能={syncDiagnostics.Cloud.PendingCapacityCount}";
-        CloudCapacitySummary = EdgeSyncDiagnosticsFormatter.FormatCapacityBlockedSummary(
+        CloudCapacitySummary = _diagnosticsText.FormatCapacityBlockedSummary(
             syncDiagnostics.Cloud.IsCapacityBlocked,
             syncDiagnostics.Cloud.BlockedChannel,
             syncDiagnostics.Cloud.BlockedReason,
             syncDiagnostics.Cloud.LastCapacityBlockAt);
-        CloudPersistenceSummary = EdgeSyncDiagnosticsFormatter.FormatPersistenceFaultSummary(
+        CloudPersistenceSummary = _diagnosticsText.FormatPersistenceFaultSummary(
             syncDiagnostics.Cloud.IsPersistenceFaulted,
             syncDiagnostics.Cloud.LastPersistenceFaultAt,
             syncDiagnostics.Cloud.PersistenceFaultMessage);
-        CloudLastAttemptSummary = $"最近尝试：{EdgeSyncDiagnosticsFormatter.FormatTimestamp(syncDiagnostics.Cloud.LastAttemptAt)}";
-        CloudLastSuccessSummary = $"最近成功：{EdgeSyncDiagnosticsFormatter.FormatTimestamp(syncDiagnostics.Cloud.LastSuccessAt)}";
-        CloudLastFailureSummary = $"最近失败：{EdgeSyncDiagnosticsFormatter.FormatTimestamp(syncDiagnostics.Cloud.LastFailureAt)}";
+        CloudLastAttemptSummary = $"最近尝试：{LocalizedSyncDiagnosticsText.FormatTimestamp(syncDiagnostics.Cloud.LastAttemptAt)}";
+        CloudLastSuccessSummary = $"最近成功：{LocalizedSyncDiagnosticsText.FormatTimestamp(syncDiagnostics.Cloud.LastSuccessAt)}";
+        CloudLastFailureSummary = $"最近失败：{LocalizedSyncDiagnosticsText.FormatTimestamp(syncDiagnostics.Cloud.LastFailureAt)}";
 
-        MesRuntimeSummary = $"MES运行：{EdgeSyncDiagnosticsFormatter.FormatMesRuntimeState(syncDiagnostics.Mes.RuntimeState)}";
+        MesRuntimeSummary = $"MES运行：{_diagnosticsText.FormatMesRuntimeState(syncDiagnostics.Mes.RuntimeState)}";
         MesPendingSummary = $"待处理：重试={syncDiagnostics.Mes.PendingRetryCount}";
-        MesCapacitySummary = EdgeSyncDiagnosticsFormatter.FormatCapacityBlockedSummary(
+        MesCapacitySummary = _diagnosticsText.FormatCapacityBlockedSummary(
             syncDiagnostics.Mes.IsCapacityBlocked,
             syncDiagnostics.Mes.BlockedChannel,
             syncDiagnostics.Mes.BlockedReason,
             syncDiagnostics.Mes.LastCapacityBlockAt);
-        MesPersistenceSummary = EdgeSyncDiagnosticsFormatter.FormatPersistenceFaultSummary(
+        MesPersistenceSummary = _diagnosticsText.FormatPersistenceFaultSummary(
             syncDiagnostics.Mes.IsPersistenceFaulted,
             syncDiagnostics.Mes.LastPersistenceFaultAt,
             syncDiagnostics.Mes.PersistenceFaultMessage);
-        MesLastAttemptSummary = $"最近尝试：{EdgeSyncDiagnosticsFormatter.FormatTimestamp(syncDiagnostics.Mes.LastAttemptAt)}";
-        MesLastSuccessSummary = $"最近成功：{EdgeSyncDiagnosticsFormatter.FormatTimestamp(syncDiagnostics.Mes.LastSuccessAt)}";
+        MesLastAttemptSummary = $"最近尝试：{LocalizedSyncDiagnosticsText.FormatTimestamp(syncDiagnostics.Mes.LastAttemptAt)}";
+        MesLastSuccessSummary = $"最近成功：{LocalizedSyncDiagnosticsText.FormatTimestamp(syncDiagnostics.Mes.LastSuccessAt)}";
         MesLastFailureSummary =
-            $"最近失败：{EdgeSyncDiagnosticsFormatter.FormatTimestamp(syncDiagnostics.Mes.LastFailureAt)}（{NormalizeText(syncDiagnostics.Mes.LastFailureReason)}）";
+            $"最近失败：{LocalizedSyncDiagnosticsText.FormatTimestamp(syncDiagnostics.Mes.LastFailureAt)}（{NormalizeText(syncDiagnostics.Mes.LastFailureReason)}）";
 
-        ContextPersistenceSummary = EdgeSyncDiagnosticsFormatter.FormatContextPersistenceSummary(syncDiagnostics.ContextPersistence);
+        ContextPersistenceSummary = _diagnosticsText.FormatContextPersistenceSummary(syncDiagnostics.ContextPersistence);
 
         ReplaceItems(
             ModuleRegistrations,
             report.ModuleRegistrations.Select(x => new ModuleRegistrationRow(
                 x.ModuleId,
-                EdgeSyncDiagnosticsFormatter.FormatProcessType(x.ProcessType),
+                _diagnosticsText.FormatProcessType(x.ProcessType),
                 x.AssemblyName,
                 x.IsEnabled,
                 x.HasCellDataRegistration,
@@ -422,10 +429,10 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
             PluginStates,
             report.PluginStates.Select(x => new PluginLifecycleRow(
                 x.ModuleId,
-                NormalizeText(x.DisplayName),
-                EdgeSyncDiagnosticsFormatter.FormatProcessType(x.ProcessType),
+                _diagnosticsText.FormatProcessType(x.ProcessType),
+                _diagnosticsText.FormatProcessType(x.ProcessType),
                 x.Version,
-                EdgeSyncDiagnosticsFormatter.FormatPluginLifecycleState(x.State),
+                _diagnosticsText.FormatPluginLifecycleState(x.State),
                 NormalizeText(x.Message))));
 
         ReplaceItems(
@@ -448,10 +455,10 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
         ReplaceItems(
             MesUploadDiagnostics,
             syncDiagnostics.Mes.Channels.Select(x => new MesChannelDiagnosticsRow(
-                EdgeSyncDiagnosticsFormatter.FormatProcessType(x.ProcessType),
-                EdgeSyncDiagnosticsFormatter.FormatMesChannelResult(x.LastResult),
-                EdgeSyncDiagnosticsFormatter.FormatTimestamp(x.LastAttemptAt),
-                EdgeSyncDiagnosticsFormatter.FormatTimestamp(x.LastSuccessAt),
+                _diagnosticsText.FormatProcessType(x.ProcessType),
+                _diagnosticsText.FormatMesChannelResult(x.LastResult),
+                LocalizedSyncDiagnosticsText.FormatTimestamp(x.LastAttemptAt),
+                LocalizedSyncDiagnosticsText.FormatTimestamp(x.LastSuccessAt),
                 NormalizeText(x.LastFailureReason))));
 
         SetStatus(report.Issues.Count == 0
@@ -459,17 +466,17 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
             : $"启动诊断发现 {report.Issues.Count} 个问题。");
     }
 
-    private static IReadOnlyDictionary<string, string> BuildModuleNameMap(StartupDiagnosticsReport report)
+    private IReadOnlyDictionary<string, string> BuildModuleNameMap(StartupDiagnosticsReport report)
     {
         var pairs = report.PluginStates
             .Select(x => new KeyValuePair<string, string>(
                 x.ModuleId,
                 !string.IsNullOrWhiteSpace(x.DisplayName)
-                    ? x.DisplayName
-                    : EdgeSyncDiagnosticsFormatter.FormatProcessType(x.ProcessType)))
+                    ? _diagnosticsText.FormatProcessType(x.ProcessType)
+                    : _diagnosticsText.FormatProcessType(x.ProcessType)))
             .Concat(report.ModuleRegistrations.Select(x => new KeyValuePair<string, string>(
                 x.ModuleId,
-                EdgeSyncDiagnosticsFormatter.FormatProcessType(x.ProcessType))));
+                _diagnosticsText.FormatProcessType(x.ProcessType))));
 
         return pairs
             .GroupBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
@@ -479,7 +486,7 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
                 StringComparer.OrdinalIgnoreCase);
     }
 
-    private static string BuildModuleSummary(
+    private string BuildModuleSummary(
         string label,
         string emptyText,
         IReadOnlyList<string> modules,
@@ -496,14 +503,14 @@ public sealed class DiagnosticsViewModel : PresentationViewModelBase
         return $"{label}：{string.Join("、", names)}";
     }
 
-    private static string ResolveModuleDisplayName(string moduleId, IReadOnlyDictionary<string, string> moduleNameMap)
+    private string ResolveModuleDisplayName(string moduleId, IReadOnlyDictionary<string, string> moduleNameMap)
     {
         if (moduleNameMap.TryGetValue(moduleId, out var displayName) && !string.IsNullOrWhiteSpace(displayName))
         {
             return displayName;
         }
 
-        return EdgeSyncDiagnosticsFormatter.FormatProcessType(moduleId);
+        return _diagnosticsText.FormatProcessType(moduleId);
     }
 
     private static string BuildConfigurationProfileSummary(ConfigurationProfileSnapshot profile)

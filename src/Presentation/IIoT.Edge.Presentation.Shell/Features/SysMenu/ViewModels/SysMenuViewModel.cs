@@ -1,7 +1,7 @@
-using IIoT.Edge.UI.Shared.Mvvm;
+﻿using IIoT.Edge.UI.Shared.Mvvm;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Auth;
-using IIoT.Edge.Presentation.Shell.Localization;
+using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Modularity;
 using IIoT.Edge.UI.Shared.PluginSystem;
 using MaterialDesignThemes.Wpf;

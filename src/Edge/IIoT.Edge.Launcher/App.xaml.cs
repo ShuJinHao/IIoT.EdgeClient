@@ -42,11 +42,6 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        var samplePath = LauncherAccountCatalog.GetCatalogPath(
-            baseDirectory,
-            LauncherAccountCatalog.SampleCatalogFileName);
-        throw new FileNotFoundException(
-            $"未找到正式账号文件 '{LauncherAccountCatalog.DefaultCatalogFileName}'。请先将 '{Path.GetFileName(samplePath)}' 复制为 '{LauncherAccountCatalog.DefaultCatalogFileName}'，并替换为现场本地账号后再启动。",
-            accountsPath);
+        LauncherAccountCatalog.EnsureDevelopmentCatalog(baseDirectory);
     }
 }

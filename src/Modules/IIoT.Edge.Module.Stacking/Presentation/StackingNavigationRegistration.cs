@@ -6,15 +6,18 @@ namespace IIoT.Edge.Module.Stacking.Presentation;
 public static class StackingNavigationRegistration
 {
     public static IEdgeProcessModuleBuilder RegisterStackingViews(this IEdgeProcessModuleBuilder builder)
-        => builder
+    {
+        var viewIds = StandardModuleViewIds.Create(DependencyInjection.ModuleKey);
+        return builder
             .RegisterStandardDataView(
-                StackingViewIds.DataView,
+                viewIds.DataView,
                 "叠片产品数据",
                 titleResourceKey: "Stacking_Title_Data")
-            .RegisterStandardCapacityView(StackingViewIds.CapacityView)
-            .RegisterStandardIoView(StackingViewIds.IoView)
-            .RegisterStandardMonitorView(StackingViewIds.Monitor)
-            .RegisterStandardRecipeView(StackingViewIds.RecipeView)
-            .RegisterStandardParamView(StackingViewIds.ParamView)
-            .RegisterStandardHardwareConfigView(StackingViewIds.HardwareConfigView);
+            .RegisterStandardCapacityView(viewIds.CapacityView)
+            .RegisterStandardIoView(viewIds.IoView)
+            .RegisterStandardMonitorView(viewIds.Monitor)
+            .RegisterStandardRecipeView(viewIds.RecipeView)
+            .RegisterStandardParamView(viewIds.ParamView)
+            .RegisterStandardHardwareConfigView(viewIds.HardwareConfigView);
+    }
 }

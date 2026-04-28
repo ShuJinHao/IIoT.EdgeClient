@@ -1,6 +1,6 @@
-using System.Globalization;
+﻿using System.Globalization;
 
-namespace IIoT.Edge.Presentation.Shell.Localization;
+namespace IIoT.Edge.UI.Shared.Localization;
 
 /// <summary>
 /// Shell 侧语言服务，负责切换 WPF 动态资源字典。

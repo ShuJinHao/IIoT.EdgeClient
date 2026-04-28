@@ -1,4 +1,4 @@
-using IIoT.Edge.UI.Shared.Mvvm;
+﻿using IIoT.Edge.UI.Shared.Mvvm;
 using IIoT.Edge.Presentation.Panels.Features.Equipment;
 using IIoT.Edge.Presentation.Panels.Features.SysLog;
 using IIoT.Edge.UI.Shared.Modularity;
@@ -6,7 +6,7 @@ using IIoT.Edge.Presentation.Shell.Features.Footer;
 using IIoT.Edge.Presentation.Shell.Features.Login;
 using IIoT.Edge.Presentation.Shell.Features.SysMenu;
 using IIoT.Edge.Presentation.Shell.Features.Header;
-using IIoT.Edge.Presentation.Shell.Localization;
+using IIoT.Edge.UI.Shared.Localization;
 using System.Windows;
 
 namespace IIoT.Edge.Shell.ViewModels;

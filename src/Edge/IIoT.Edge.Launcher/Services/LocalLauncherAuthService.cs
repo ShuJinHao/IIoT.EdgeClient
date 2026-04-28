@@ -37,4 +37,28 @@ public sealed class LocalLauncherAuthService : ILocalLauncherAuthService
 
         return LauncherAuthenticationResult.Passed(account.DisplayName);
     }
+
+    public LauncherPasswordChangeResult ChangePassword(string? userName, string? oldPassword, string? newPassword)
+    {
+        if (string.IsNullOrWhiteSpace(newPassword))
+        {
+            return LauncherPasswordChangeResult.Failed("新密码不能为空。");
+        }
+
+        if (newPassword.Length < 6)
+        {
+            return LauncherPasswordChangeResult.Failed("新密码至少需要 6 位。");
+        }
+
+        var authentication = Authenticate(userName, oldPassword);
+        if (!authentication.Success)
+        {
+            return LauncherPasswordChangeResult.Failed(authentication.ErrorMessage ?? "旧密码校验失败。");
+        }
+
+        _accountCatalog.UpdatePasswordHash(
+            userName!.Trim(),
+            LauncherPasswordHasher.ComputeSha256(newPassword));
+        return LauncherPasswordChangeResult.Passed();
+    }
 }

@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Modules;
+﻿using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.UI.Shared.Modularity;
 using IIoT.Edge.UI.Shared.PluginSystem;
 using Microsoft.Extensions.Configuration;
@@ -64,76 +64,96 @@ internal sealed class EdgeProcessModuleBuilder : IEdgeProcessModuleBuilder
             cacheView);
     }
 
-    public void RegisterMenu(EdgeMenuInfo menuInfo)
+    public void RegisterMenu(ModuleMenuDescriptor menuInfo)
     {
         ArgumentNullException.ThrowIfNull(menuInfo);
         _viewRegistry.RegisterMenu(new MenuInfo
         {
-                Title = menuInfo.Title,
-                TitleResourceKey = menuInfo.TitleResourceKey,
-                ViewId = menuInfo.ViewId,
+            Title = menuInfo.Title,
+            TitleResourceKey = menuInfo.TitleResourceKey,
+            ViewId = menuInfo.ViewId,
             Icon = menuInfo.Icon,
             Order = menuInfo.Order,
             RequiredPermission = menuInfo.RequiredPermission
         });
     }
 
-    public void RegisterAnchorable(
-        EdgeAnchorableInfo info,
+    public void RegisterDocumentPanel(
+        ModulePanelDescriptor info,
         Type viewType,
         Type viewModelType,
         bool cacheView = true)
+        => RegisterPanel(info, viewType, viewModelType, cacheView);
+
+    public void RegisterDocumentPanel(
+        ModulePanelDescriptor info,
+        Type viewType,
+        Type viewModelType,
+        Func<IServiceProvider, object> viewModelFactory,
+        bool cacheView = true)
+        => RegisterPanel(info, viewType, viewModelType, viewModelFactory, cacheView);
+
+    public void RegisterToolPanel(
+        ModulePanelDescriptor info,
+        Type viewType,
+        Type viewModelType,
+        bool cacheView = true)
+        => RegisterPanel(info, viewType, viewModelType, cacheView);
+
+    public void RegisterToolPanel(
+        ModulePanelDescriptor info,
+        Type viewType,
+        Type viewModelType,
+        Func<IServiceProvider, object> viewModelFactory,
+        bool cacheView = true)
+        => RegisterPanel(info, viewType, viewModelType, viewModelFactory, cacheView);
+
+    private void RegisterPanel(
+        ModulePanelDescriptor info,
+        Type viewType,
+        Type viewModelType,
+        bool cacheView)
     {
         ArgumentNullException.ThrowIfNull(info);
         _viewRegistry.RegisterAnchorable(
-            new AnchorableInfo
-            {
-                Title = info.Title,
-                TitleResourceKey = info.TitleResourceKey,
-                ContentId = info.ContentId,
-                InitialPosition = info.InitialPosition switch
-                {
-                    EdgeAnchorablePosition.Left => AnchorablePosition.Left,
-                    EdgeAnchorablePosition.Right => AnchorablePosition.Right,
-                    EdgeAnchorablePosition.Bottom => AnchorablePosition.Bottom,
-                    _ => AnchorablePosition.Main
-                },
-                IsVisible = info.IsVisible
-            },
+            ToAnchorableInfo(info),
             viewType,
             viewModelType,
             cacheView);
     }
 
-    public void RegisterAnchorable(
-        EdgeAnchorableInfo info,
+    private void RegisterPanel(
+        ModulePanelDescriptor info,
         Type viewType,
         Type viewModelType,
         Func<IServiceProvider, object> viewModelFactory,
-        bool cacheView = true)
+        bool cacheView)
     {
         ArgumentNullException.ThrowIfNull(info);
         ArgumentNullException.ThrowIfNull(viewModelFactory);
         _viewRegistry.RegisterAnchorable(
-            new AnchorableInfo
-            {
-                Title = info.Title,
-                TitleResourceKey = info.TitleResourceKey,
-                ContentId = info.ContentId,
-                InitialPosition = info.InitialPosition switch
-                {
-                    EdgeAnchorablePosition.Left => AnchorablePosition.Left,
-                    EdgeAnchorablePosition.Right => AnchorablePosition.Right,
-                    EdgeAnchorablePosition.Bottom => AnchorablePosition.Bottom,
-                    _ => AnchorablePosition.Main
-                },
-                IsVisible = info.IsVisible
-            },
+            ToAnchorableInfo(info),
             viewType,
             viewModelType,
             serviceProvider => ResolveViewModel(info.ContentId, viewModelFactory, serviceProvider),
             cacheView);
     }
+
+    private static AnchorableInfo ToAnchorableInfo(ModulePanelDescriptor info)
+        => new()
+        {
+            Title = info.Title,
+            TitleResourceKey = info.TitleResourceKey,
+            ContentId = info.ContentId,
+            InitialPosition = info.InitialPosition switch
+            {
+                ModulePanelPosition.Left => AnchorablePosition.Left,
+                ModulePanelPosition.Right => AnchorablePosition.Right,
+                ModulePanelPosition.Bottom => AnchorablePosition.Bottom,
+                _ => AnchorablePosition.Main
+            },
+            IsVisible = info.IsVisible
+        };
 
     public void RegisterCellData(Type cellDataType)
         => _cellDataRegistry.Register(ProcessType, cellDataType);
