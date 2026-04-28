@@ -14,7 +14,7 @@ public class RecipeViewModel : LocalizedCrudPageViewModelBase
 {
     private readonly IRecipeViewCrudService _crudService;
     private readonly IRecipeService _recipeService;
-    private readonly IEditorValidator<LocalRecipeParamEditModel> _localRecipeParamValidator = new LocalRecipeParamValidator();
+    private readonly IEditorValidator<LocalRecipeParamEditModel> _localRecipeParamValidator;
     private bool _isSubscribed;
 
     public ObservableCollection<RecipeParamVm> Params { get; } = new();
@@ -92,6 +92,7 @@ public class RecipeViewModel : LocalizedCrudPageViewModelBase
     {
         _crudService = crudService;
         _recipeService = recipeService;
+        _localRecipeParamValidator = new LocalRecipeParamValidator(GetText);
 
         SyncCloudCommand = CreateBusyCommand(OnSyncCloudAsync);
         SwitchSourceCommand = new BaseCommand(_ => OnSwitchSource());

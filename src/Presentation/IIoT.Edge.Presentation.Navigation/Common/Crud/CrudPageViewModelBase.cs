@@ -179,7 +179,7 @@ public abstract class CrudPageViewModelBase : ViewModelBase
 
     protected CrudOperationResult CreateValidationResult(
         IEnumerable<ValidationIssue> issues,
-        string message = "Please fix the invalid form fields first.")
+        string? message = null)
     {
         var validationIssues = issues
             .Where(issue => !string.IsNullOrWhiteSpace(issue.Message))
@@ -188,7 +188,7 @@ public abstract class CrudPageViewModelBase : ViewModelBase
 
         return validationIssues.Length == 0
             ? CrudOperationResult.Success()
-            : CrudOperationResult.ValidationFailure(validationIssues, message);
+            : CrudOperationResult.ValidationFailure(validationIssues, message ?? GetDefaultValidationMessage());
     }
 
     protected async Task ExecuteBusyAsync(Func<Task> execute)
@@ -207,7 +207,7 @@ public abstract class CrudPageViewModelBase : ViewModelBase
         }
         catch (Exception ex)
         {
-            SetError($"Operation failed: {ex.Message}");
+            SetError(FormatOperationFailedMessage(ex));
         }
         finally
         {
@@ -232,7 +232,7 @@ public abstract class CrudPageViewModelBase : ViewModelBase
         }
         catch (Exception ex)
         {
-            SetError($"Operation failed: {ex.Message}");
+            SetError(FormatOperationFailedMessage(ex));
         }
         finally
         {
@@ -266,7 +266,16 @@ public abstract class CrudPageViewModelBase : ViewModelBase
         }
 
         SetError(string.IsNullOrWhiteSpace(result.Message)
-            ? "Operation failed. Please try again later."
+            ? GetDefaultOperationFailedMessage()
             : result.Message);
     }
+
+    protected virtual string GetDefaultValidationMessage()
+        => "Please fix the invalid form fields first.";
+
+    protected virtual string FormatOperationFailedMessage(Exception ex)
+        => $"Operation failed: {ex.Message}";
+
+    protected virtual string GetDefaultOperationFailedMessage()
+        => "Operation failed. Please try again later.";
 }

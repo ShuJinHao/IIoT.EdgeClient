@@ -247,7 +247,10 @@ public sealed class HomogenizationRuntimeBehaviorTests
         using var cancellation = new CancellationTokenSource();
         var runningTasks = tasks.Select(task => task.StartAsync(cancellation.Token)).ToArray();
 
-        await Task.Delay(150);
+        await WaitUntilAsync(() =>
+            buffer.GetWriteBuffer()[writeOffsets[HomogenizationPlcSignalProfile.HeartbeatOut.Label]] == 7
+            && mesApi.LastRealtimeSnapshot is not null
+            && context.LastRealtimeSnapshot is not null);
         Assert.Equal((ushort)7, buffer.GetWriteBuffer()[writeOffsets[HomogenizationPlcSignalProfile.HeartbeatOut.Label]]);
         Assert.NotNull(mesApi.LastRealtimeSnapshot);
         Assert.Equal(123, mesApi.LastRealtimeSnapshot!.StirringSpeed);
@@ -389,7 +392,8 @@ public sealed class HomogenizationRuntimeBehaviorTests
         using var cancellation = new CancellationTokenSource();
         var runningTasks = tasks.Select(task => task.StartAsync(cancellation.Token)).ToArray();
 
-        await Task.Delay(150);
+        await WaitUntilAsync(() =>
+            buffer.GetWriteBuffer()[writeOffsets[HomogenizationPlcSignalProfile.HeartbeatOut.Label]] == 3);
         Assert.Equal(0, context.GetStep("Homogenization.Recipe"));
 
         mesApi.RecipeGate = NewGate();

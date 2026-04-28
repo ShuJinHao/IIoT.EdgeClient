@@ -95,8 +95,8 @@ public sealed class IoViewViewModelBehaviorTests
             await viewModel.LoadMappingsAsync();
 
             var row = Assert.Single(viewModel.InteractionRows);
-            Assert.Equal("D701，D702", row.PlcAddressSummary);
-            Assert.Equal("D601，D602", row.HostReplyAddressText);
+            Assert.Equal("D701、D702", row.PlcAddressSummary);
+            Assert.Equal("D601、D602", row.HostReplyAddressText);
             Assert.DoesNotContain(Environment.NewLine, row.PlcSignalSummary);
             Assert.DoesNotContain(Environment.NewLine, row.HostReplySummary);
             Assert.DoesNotContain(Environment.NewLine, row.PlcValueText);

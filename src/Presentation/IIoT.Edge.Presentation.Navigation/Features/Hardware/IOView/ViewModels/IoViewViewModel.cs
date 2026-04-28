@@ -441,10 +441,10 @@ public class IoViewViewModel : NavigationViewModelBase
     private static void ApplyDecodedValue(IoSignalModel signal, IReadOnlyList<ushort> words)
     {
         var values = DecodeWords(signal.DataType, words);
-        var display = values.Count == 0 ? string.Empty : string.Join("，", values);
+        var display = values.Count == 0 ? string.Empty : string.Join(", ", values);
         var preview = values.Count <= 8
             ? display
-            : $"{string.Join("，", values.Take(8))} ...";
+            : $"{string.Join(", ", values.Take(8))} ...";
 
         signal.DisplayValue = string.IsNullOrWhiteSpace(display) ? "-" : display;
         signal.PreviewValue = string.IsNullOrWhiteSpace(preview) ? "-" : preview;
@@ -620,9 +620,13 @@ public class IoViewViewModel : NavigationViewModelBase
             }
         }
 
-        foreach (var signal in InteractionRows.SelectMany(row => row.PlcSignals.Concat(row.HostSignals)))
+        foreach (var row in InteractionRows)
         {
-            signal.NotifyLocalizationChanged();
+            row.NotifyLocalizationChanged();
+            foreach (var signal in row.PlcSignals.Concat(row.HostSignals))
+            {
+                signal.NotifyLocalizationChanged();
+            }
         }
     }
 

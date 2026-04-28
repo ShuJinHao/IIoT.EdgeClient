@@ -16,6 +16,13 @@ internal sealed record LocalRecipeParamEditModel(
 /// </summary>
 internal sealed class LocalRecipeParamValidator : IEditorValidator<LocalRecipeParamEditModel>
 {
+    private readonly Func<string, string, string> _getText;
+
+    public LocalRecipeParamValidator(Func<string, string, string> getText)
+    {
+        _getText = getText;
+    }
+
     public Task<IReadOnlyCollection<ValidationIssue>> ValidateAsync(
         LocalRecipeParamEditModel model,
         CancellationToken cancellationToken = default)
@@ -23,7 +30,9 @@ internal sealed class LocalRecipeParamValidator : IEditorValidator<LocalRecipePa
         var issues = new List<ValidationIssue>();
 
         if (string.IsNullOrWhiteSpace(model.Key))
-            issues.Add(new ValidationIssue("本地配方参数名称不能为空。", nameof(model.Key)));
+            issues.Add(new ValidationIssue(
+                _getText("Navigation_Recipe_Validation_ParamNameRequired", "本地配方参数名称不能为空。"),
+                nameof(model.Key)));
 
         var hasMin = !string.IsNullOrWhiteSpace(model.Min);
         var hasMax = !string.IsNullOrWhiteSpace(model.Max);
@@ -34,13 +43,18 @@ internal sealed class LocalRecipeParamValidator : IEditorValidator<LocalRecipePa
         var maxValid = !hasMax || double.TryParse(model.Max, out maxValue);
 
         if (!minValid)
-            issues.Add(new ValidationIssue("最小值必须是有效数字。", nameof(model.Min)));
+            issues.Add(new ValidationIssue(
+                _getText("Navigation_Recipe_Validation_MinNumber", "最小值必须是有效数字。"),
+                nameof(model.Min)));
 
         if (!maxValid)
-            issues.Add(new ValidationIssue("最大值必须是有效数字。", nameof(model.Max)));
+            issues.Add(new ValidationIssue(
+                _getText("Navigation_Recipe_Validation_MaxNumber", "最大值必须是有效数字。"),
+                nameof(model.Max)));
 
         if (minValid && maxValid && hasMin && hasMax && minValue > maxValue)
-            issues.Add(new ValidationIssue("最小值不能大于最大值。"));
+            issues.Add(new ValidationIssue(
+                _getText("Navigation_Recipe_Validation_MinLessEqualMax", "最小值不能大于最大值。")));
 
         return Task.FromResult<IReadOnlyCollection<ValidationIssue>>(issues);
     }
