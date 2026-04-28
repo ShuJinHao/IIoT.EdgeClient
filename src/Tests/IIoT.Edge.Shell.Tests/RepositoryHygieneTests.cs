@@ -250,6 +250,33 @@ public sealed class RepositoryHygieneTests
     }
 
     [Fact]
+    public void ApplicationAbstractions_ShouldNotContainImplementationHelpers()
+    {
+        var root = FindRepositoryRoot();
+        var abstractionsRoot = Path.Combine(root, "src", "Application", "IIoT.Edge.Application", "Abstractions");
+        var forbiddenPatterns = new[]
+        {
+            new Regex(@"\b(static|internal\s+static|public\s+static)\s+class\b", RegexOptions.CultureInvariant),
+            new Regex(@"\bclass\s+\w*Helper\b", RegexOptions.CultureInvariant),
+            new Regex(@"\b(File|Directory)\.", RegexOptions.CultureInvariant),
+            new Regex(@"\bSHA256\b", RegexOptions.CultureInvariant),
+            new Regex(@"\bTask\.Delay\b", RegexOptions.CultureInvariant)
+        };
+
+        var matches = EnumerateFiles(abstractionsRoot, "*.cs")
+            .SelectMany(path =>
+            {
+                var text = File.ReadAllText(path);
+                return forbiddenPatterns
+                    .Where(pattern => pattern.IsMatch(text))
+                    .Select(pattern => $"{ToRepositoryPath(root, path)} contains implementation detail pattern {pattern}");
+            })
+            .ToArray();
+
+        Assert.Empty(matches);
+    }
+
+    [Fact]
     public void NavigationLanguageDictionaries_ShouldHaveSameResourceKeys()
     {
         var root = FindRepositoryRoot();
