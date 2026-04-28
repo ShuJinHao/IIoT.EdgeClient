@@ -24,7 +24,7 @@ public class EfRepository<T>(
 
     public void Update(T entity)
     {
-        lock (_lock) { _pendingOps.Add(db => db.Set<T>().Update(entity)); }
+        lock (_lock) { _pendingOps.Add(db => ApplyUpdate(db, entity)); }
     }
 
     public void Delete(T entity)
@@ -59,5 +59,39 @@ public class EfRepository<T>(
         return await db.Set<T>()
             .Where(predicate)
             .ExecuteDeleteAsync(cancellationToken);
+    }
+
+    private static void ApplyUpdate(EdgeDbContext db, T entity)
+    {
+        var keyValues = ResolvePrimaryKeyValues(db, entity);
+        var persisted = db.Set<T>().Find(keyValues)
+            ?? throw new InvalidOperationException(
+                $"无法更新不存在的实体 {typeof(T).Name}。");
+
+        db.Entry(persisted).CurrentValues.SetValues(entity);
+    }
+
+    private static object[] ResolvePrimaryKeyValues(EdgeDbContext db, T entity)
+    {
+        var entityType = db.Model.FindEntityType(typeof(T))
+            ?? throw new InvalidOperationException(
+                $"实体 {typeof(T).Name} 未注册到 EF 模型。");
+
+        var primaryKey = entityType.FindPrimaryKey()
+            ?? throw new InvalidOperationException(
+                $"实体 {typeof(T).Name} 未配置主键。");
+
+        return primaryKey.Properties
+            .Select(property =>
+            {
+                var propertyInfo = typeof(T).GetProperty(property.Name)
+                    ?? throw new InvalidOperationException(
+                        $"实体 {typeof(T).Name} 缺少主键属性 {property.Name}。");
+
+                return propertyInfo.GetValue(entity)
+                    ?? throw new InvalidOperationException(
+                        $"实体 {typeof(T).Name} 的主键 {property.Name} 不能为空。");
+            })
+            .ToArray();
     }
 }
