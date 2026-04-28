@@ -77,22 +77,25 @@ public sealed class StackingDevelopmentSampleContributor : IDevelopmentSampleCon
                 return;
             }
 
-            sampleDevice = new NetworkDeviceEntity(
+            sampleDevice = NetworkDeviceEntity.Create(
                 _options.StackingDeviceName,
                 DeviceType.PLC,
                 _options.StackingIpAddress,
-                _options.StackingPort > 0 ? _options.StackingPort : plcDefaults.Port1 ?? 102)
-            {
-                DeviceModel = string.IsNullOrWhiteSpace(_options.StackingPlcModel)
+                _options.StackingPort > 0 ? _options.StackingPort : plcDefaults.Port1 ?? 102);
+            sampleDevice.AssignModule(
+                StackingModuleConstants.ModuleId,
+                string.IsNullOrWhiteSpace(_options.StackingPlcModel)
                     ? plcDefaults.DeviceModel
-                    : _options.StackingPlcModel,
-                ModuleId = StackingModuleConstants.ModuleId,
-                ConnectTimeout = _options.StackingConnectTimeout > 0
+                    : _options.StackingPlcModel);
+            sampleDevice.UpdateEndpoint(
+                sampleDevice.IpAddress,
+                sampleDevice.Port1,
+                sampleDevice.Port2,
+                _options.StackingConnectTimeout > 0
                     ? _options.StackingConnectTimeout
-                    : plcDefaults.ConnectTimeout ?? 3000,
-                IsEnabled = true,
-                Remark = SampleRemark
-            };
+                    : plcDefaults.ConnectTimeout ?? 3000);
+            sampleDevice.Enable();
+            sampleDevice.UpdateRemark(SampleRemark);
 
             _networkDevices.Add(sampleDevice);
             await _networkDevices.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -230,16 +233,25 @@ public sealed class StackingDevelopmentSampleContributor : IDevelopmentSampleCon
         return templateEntries
             .Where(x => !existingLabels.Contains(x.Label))
             .OrderBy(x => x.SortOrder)
-            .Select(x => new IoMappingEntity(
-                networkDeviceId,
-                x.Label,
-                x.PlcAddress,
-                x.AddressCount,
-                x.DataType,
-                x.Direction)
+            .Select(x =>
             {
-                SortOrder = x.SortOrder,
-                Remark = SampleRemark
+                var entity = IoMappingEntity.Create(
+                    networkDeviceId,
+                    x.Label,
+                    x.PlcAddress,
+                    x.AddressCount,
+                    x.DataType,
+                    x.Direction);
+                entity.UpdateSortOrder(x.SortOrder);
+                entity.UpdateMetadata(
+                    x.Label,
+                    x.DataType,
+                    x.Direction,
+                    "单点读数据",
+                    string.Empty,
+                    string.Empty,
+                    SampleRemark);
+                return entity;
             })
             .ToList();
     }

@@ -48,6 +48,15 @@ public class SaveSerialDevicesHandler(
             .Select(x => x.Id)
             .ToHashSet();
 
+        foreach (var dto in request.Devices)
+        {
+            var validationError = Validate(dto);
+            if (validationError is not null)
+            {
+                return Result.Failure(validationError);
+            }
+        }
+
         foreach (var entity in existingDevices.Where(x => !submittedIds.Contains(x.Id)))
         {
             repo.Delete(entity);
@@ -55,39 +64,59 @@ public class SaveSerialDevicesHandler(
 
         foreach (var dto in request.Devices)
         {
-            if (dto.Id == 0)
+            try
             {
-                var entity = new SerialDeviceEntity(
-                    dto.DeviceName, dto.DeviceType, dto.PortName, dto.BaudRate)
+                if (dto.Id == 0)
                 {
-                    DataBits = dto.DataBits,
-                    StopBits = dto.StopBits,
-                    Parity = dto.Parity,
-                    SendCmd1 = dto.SendCmd1,
-                    SendCmd2 = dto.SendCmd2,
-                    IsEnabled = dto.IsEnabled,
-                    Remark = dto.Remark
-                };
-                repo.Add(entity);
+                    var entity = SerialDeviceEntity.Create(
+                        dto.DeviceName,
+                        dto.DeviceType,
+                        dto.PortName,
+                        dto.BaudRate);
+                    Apply(entity, dto);
+                    repo.Add(entity);
+                }
+                else if (existingById.TryGetValue(dto.Id, out var entity))
+                {
+                    Apply(entity, dto);
+                    repo.Update(entity);
+                }
             }
-            else if (existingById.TryGetValue(dto.Id, out var entity))
+            catch (ArgumentException ex)
             {
-                entity.DeviceName = dto.DeviceName;
-                entity.DeviceType = dto.DeviceType;
-                entity.PortName = dto.PortName;
-                entity.BaudRate = dto.BaudRate;
-                entity.DataBits = dto.DataBits;
-                entity.StopBits = dto.StopBits;
-                entity.Parity = dto.Parity;
-                entity.SendCmd1 = dto.SendCmd1;
-                entity.SendCmd2 = dto.SendCmd2;
-                entity.IsEnabled = dto.IsEnabled;
-                entity.Remark = dto.Remark;
-                repo.Update(entity);
+                return Result.Failure(ex.Message);
             }
         }
 
         await repo.SaveChangesAsync(cancellationToken);
         return Result.Success();
+    }
+
+    private static void Apply(SerialDeviceEntity entity, SerialDeviceDto dto)
+    {
+        entity.Rename(dto.DeviceName);
+        entity.ChangeDeviceType(dto.DeviceType);
+        entity.UpdatePort(dto.PortName, dto.BaudRate, dto.DataBits, dto.StopBits, dto.Parity);
+        entity.UpdateCommands(dto.SendCmd1, dto.SendCmd2);
+        entity.SetEnabled(dto.IsEnabled);
+        entity.UpdateRemark(dto.Remark);
+    }
+
+    private static string? Validate(SerialDeviceDto dto)
+    {
+        try
+        {
+            var entity = SerialDeviceEntity.Create(
+                dto.DeviceName,
+                dto.DeviceType,
+                dto.PortName,
+                dto.BaudRate);
+            Apply(entity, dto);
+            return null;
+        }
+        catch (ArgumentException ex)
+        {
+            return ex.Message;
+        }
     }
 }

@@ -51,6 +51,15 @@ public class SaveIoMappingsHandler(
             .Select(x => x.Id)
             .ToHashSet();
 
+        foreach (var dto in request.Mappings)
+        {
+            var validationError = Validate(request.NetworkDeviceId, dto);
+            if (validationError is not null)
+            {
+                return Result.Failure(validationError);
+            }
+        }
+
         foreach (var entity in existingMappings.Where(x => !submittedIds.Contains(x.Id)))
         {
             repo.Delete(entity);
@@ -58,37 +67,75 @@ public class SaveIoMappingsHandler(
 
         foreach (var dto in request.Mappings)
         {
-            if (dto.Id == 0)
+            try
             {
-                var entity = new IoMappingEntity(
-                    request.NetworkDeviceId, dto.Label, dto.PlcAddress,
-                    dto.AddressCount, dto.DataType, dto.Direction,
-                    Normalize(dto.Category, "单点读数据"), dto.GroupName ?? string.Empty, dto.DisplayRole ?? string.Empty)
+                if (dto.Id == 0)
                 {
-                    SortOrder = dto.SortOrder,
-                    Remark = dto.Remark
-                };
-                repo.Add(entity);
+                    var entity = IoMappingEntity.Create(
+                        request.NetworkDeviceId,
+                        dto.Label,
+                        dto.PlcAddress,
+                        dto.AddressCount,
+                        dto.DataType,
+                        dto.Direction,
+                        Normalize(dto.Category, "单点读数据"),
+                        dto.GroupName ?? string.Empty,
+                        dto.DisplayRole ?? string.Empty);
+                    Apply(entity, request.NetworkDeviceId, dto);
+                    repo.Add(entity);
+                }
+                else if (existingById.TryGetValue(dto.Id, out var entity))
+                {
+                    Apply(entity, request.NetworkDeviceId, dto);
+                    repo.Update(entity);
+                }
             }
-            else if (existingById.TryGetValue(dto.Id, out var entity))
+            catch (ArgumentException ex)
             {
-                entity.NetworkDeviceId = request.NetworkDeviceId;
-                entity.Label = dto.Label;
-                entity.PlcAddress = dto.PlcAddress;
-                entity.AddressCount = dto.AddressCount;
-                entity.DataType = dto.DataType;
-                entity.Direction = dto.Direction;
-                entity.Category = Normalize(dto.Category, "单点读数据");
-                entity.GroupName = dto.GroupName ?? string.Empty;
-                entity.DisplayRole = dto.DisplayRole ?? string.Empty;
-                entity.SortOrder = dto.SortOrder;
-                entity.Remark = dto.Remark;
-                repo.Update(entity);
+                return Result.Failure(ex.Message);
             }
         }
 
         await repo.SaveChangesAsync(cancellationToken);
         return Result.Success();
+    }
+
+    private static void Apply(IoMappingEntity entity, int networkDeviceId, IoMappingDto dto)
+    {
+        entity.BindNetworkDevice(networkDeviceId);
+        entity.UpdateAddress(dto.PlcAddress, dto.AddressCount);
+        entity.UpdateMetadata(
+            dto.Label,
+            dto.DataType,
+            dto.Direction,
+            Normalize(dto.Category, "单点读数据"),
+            dto.GroupName,
+            dto.DisplayRole,
+            dto.Remark);
+        entity.UpdateSortOrder(dto.SortOrder);
+    }
+
+    private static string? Validate(int networkDeviceId, IoMappingDto dto)
+    {
+        try
+        {
+            var entity = IoMappingEntity.Create(
+                networkDeviceId,
+                dto.Label,
+                dto.PlcAddress,
+                dto.AddressCount,
+                dto.DataType,
+                dto.Direction,
+                Normalize(dto.Category, "单点读数据"),
+                dto.GroupName,
+                dto.DisplayRole);
+            Apply(entity, networkDeviceId, dto);
+            return null;
+        }
+        catch (ArgumentException ex)
+        {
+            return ex.Message;
+        }
     }
 
     private static string Normalize(string? value, string fallback)

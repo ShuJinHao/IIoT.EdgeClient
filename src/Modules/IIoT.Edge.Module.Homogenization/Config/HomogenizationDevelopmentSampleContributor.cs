@@ -170,20 +170,23 @@ public sealed class HomogenizationDevelopmentSampleContributor : IDevelopmentSam
         }
 
         var defaults = hardwareProfile.GetDefaultPlcSettings();
-        var device = new NetworkDeviceEntity(
+        var device = NetworkDeviceEntity.Create(
             seedDevice.DeviceName,
             DeviceType.PLC,
             string.IsNullOrWhiteSpace(seedDevice.IpAddress) ? "127.0.0.1" : seedDevice.IpAddress,
-            seedDevice.Port1 > 0 ? seedDevice.Port1 : defaults.Port1 ?? 6000)
-        {
-            DeviceModel = string.IsNullOrWhiteSpace(seedDevice.DeviceModel)
+            seedDevice.Port1 > 0 ? seedDevice.Port1 : defaults.Port1 ?? 6000);
+        device.AssignModule(
+            DependencyInjection.ModuleKey,
+            string.IsNullOrWhiteSpace(seedDevice.DeviceModel)
                 ? defaults.DeviceModel
-                : seedDevice.DeviceModel,
-            ModuleId = DependencyInjection.ModuleKey,
-            ConnectTimeout = seedDevice.ConnectTimeout > 0 ? seedDevice.ConnectTimeout : defaults.ConnectTimeout ?? 3000,
-            IsEnabled = seedDevice.IsEnabled,
-            Remark = string.IsNullOrWhiteSpace(seedDevice.Remark) ? SeedRemark : seedDevice.Remark
-        };
+                : seedDevice.DeviceModel);
+        device.UpdateEndpoint(
+            device.IpAddress,
+            device.Port1,
+            device.Port2,
+            seedDevice.ConnectTimeout > 0 ? seedDevice.ConnectTimeout : defaults.ConnectTimeout ?? 3000);
+        device.SetEnabled(seedDevice.IsEnabled);
+        device.UpdateRemark(string.IsNullOrWhiteSpace(seedDevice.Remark) ? SeedRemark : seedDevice.Remark);
 
         _networkDevices.Add(device);
         await _networkDevices.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -220,7 +223,7 @@ public sealed class HomogenizationDevelopmentSampleContributor : IDevelopmentSam
                 continue;
             }
 
-            _ioMappings.Add(new IoMappingEntity(
+            var entity = IoMappingEntity.Create(
                 device.Id,
                 mapping.Label,
                 mapping.PlcAddress,
@@ -229,11 +232,17 @@ public sealed class HomogenizationDevelopmentSampleContributor : IDevelopmentSam
                 mapping.Direction,
                 mapping.Category,
                 mapping.GroupName,
-                mapping.DisplayRole)
-            {
-                SortOrder = mapping.SortOrder,
-                Remark = string.IsNullOrWhiteSpace(mapping.Remark) ? SeedRemark : mapping.Remark
-            });
+                mapping.DisplayRole);
+            entity.UpdateSortOrder(mapping.SortOrder);
+            entity.UpdateMetadata(
+                mapping.Label,
+                mapping.DataType,
+                mapping.Direction,
+                mapping.Category,
+                mapping.GroupName,
+                mapping.DisplayRole,
+                string.IsNullOrWhiteSpace(mapping.Remark) ? SeedRemark : mapping.Remark);
+            _ioMappings.Add(entity);
             addedCount++;
         }
 
@@ -255,38 +264,24 @@ public sealed class HomogenizationDevelopmentSampleContributor : IDevelopmentSam
         var changed = false;
 
         var category = string.IsNullOrWhiteSpace(seed.Category) ? "单点读数据" : seed.Category.Trim();
-        if (!string.Equals(existing.Category, category, StringComparison.Ordinal))
-        {
-            existing.Category = category;
-            changed = true;
-        }
-
         var groupName = seed.GroupName?.Trim() ?? string.Empty;
-        if (!string.Equals(existing.GroupName, groupName, StringComparison.Ordinal))
-        {
-            existing.GroupName = groupName;
-            changed = true;
-        }
-
         var displayRole = seed.DisplayRole?.Trim() ?? string.Empty;
-        if (!string.Equals(existing.DisplayRole, displayRole, StringComparison.Ordinal))
-        {
-            existing.DisplayRole = displayRole;
-            changed = true;
-        }
-
-        if (existing.SortOrder != seed.SortOrder)
-        {
-            existing.SortOrder = seed.SortOrder;
-            changed = true;
-        }
-
         var seedRemark = string.IsNullOrWhiteSpace(seed.Remark) ? SeedRemark : seed.Remark.Trim();
-        if (!string.Equals(existing.Remark, seedRemark, StringComparison.Ordinal))
-        {
-            existing.Remark = seedRemark;
-            changed = true;
-        }
+        changed = existing.SortOrder != seed.SortOrder
+            || !string.Equals(existing.Category, category, StringComparison.Ordinal)
+            || !string.Equals(existing.GroupName, groupName, StringComparison.Ordinal)
+            || !string.Equals(existing.DisplayRole, displayRole, StringComparison.Ordinal)
+            || !string.Equals(existing.Remark, seedRemark, StringComparison.Ordinal);
+
+        existing.UpdateSortOrder(seed.SortOrder);
+        existing.UpdateMetadata(
+            existing.Label,
+            existing.DataType,
+            existing.Direction,
+            category,
+            groupName,
+            displayRole,
+            seedRemark);
 
         return changed;
     }

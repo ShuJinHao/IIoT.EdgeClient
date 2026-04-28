@@ -24,6 +24,129 @@ namespace IIoT.Edge.NonUiRegressionTests;
 
 public sealed class HardwareConfigFullSyncBehaviorTests
 {
+    [Theory]
+    [InlineData("", "192.168.0.10", 102)]
+    [InlineData("PLC-A", "", 102)]
+    [InlineData("PLC-A", "192.168.0.10", 0)]
+    public void NetworkDeviceEntity_WhenRequiredFieldsInvalid_ShouldReject(
+        string deviceName,
+        string ipAddress,
+        int port)
+    {
+        Assert.ThrowsAny<ArgumentException>(() =>
+            NetworkDeviceEntity.Create(deviceName, DeviceType.PLC, ipAddress, port));
+    }
+
+    [Fact]
+    public void NetworkDeviceEntity_WhenPlcModuleMissing_ShouldRejectBinding()
+    {
+        var entity = NetworkDeviceEntity.Create("PLC-A", DeviceType.PLC, "192.168.0.10", 102);
+
+        var exception = Assert.Throws<ArgumentException>(() => entity.AssignModule(string.Empty, "S7"));
+
+        Assert.StartsWith("PLC 设备必须绑定模块。", exception.Message);
+    }
+
+    [Theory]
+    [InlineData("", 9600, 8, "One", "None")]
+    [InlineData("COM1", 0, 8, "One", "None")]
+    [InlineData("COM1", 9600, 0, "One", "None")]
+    [InlineData("COM1", 9600, 8, "", "None")]
+    [InlineData("COM1", 9600, 8, "One", "")]
+    public void SerialDeviceEntity_WhenPortFieldsInvalid_ShouldReject(
+        string portName,
+        int baudRate,
+        int dataBits,
+        string stopBits,
+        string parity)
+    {
+        Assert.ThrowsAny<ArgumentException>(() =>
+            SerialDeviceEntity.Create("Scanner-A", "Scanner", portName, baudRate)
+                .UpdatePort(portName, baudRate, dataBits, stopBits, parity));
+    }
+
+    [Theory]
+    [InlineData(0, "Signal.A", "D0", 1, "Int16", "Read")]
+    [InlineData(1, "", "D0", 1, "Int16", "Read")]
+    [InlineData(1, "Signal.A", "", 1, "Int16", "Read")]
+    [InlineData(1, "Signal.A", "D0", 0, "Int16", "Read")]
+    [InlineData(1, "Signal.A", "D0", 1, "", "Read")]
+    [InlineData(1, "Signal.A", "D0", 1, "Int16", "")]
+    public void IoMappingEntity_WhenRequiredFieldsInvalid_ShouldReject(
+        int networkDeviceId,
+        string label,
+        string plcAddress,
+        int addressCount,
+        string dataType,
+        string direction)
+    {
+        Assert.ThrowsAny<ArgumentException>(() =>
+            IoMappingEntity.Create(networkDeviceId, label, plcAddress, addressCount, dataType, direction));
+    }
+
+    [Fact]
+    public async Task SaveNetworkDevicesHandler_WhenPlcModuleMissing_ShouldReturnDomainFailure()
+    {
+        var repo = new InMemoryRepository<NetworkDeviceEntity>();
+        var handler = new SaveNetworkDevicesHandler(repo);
+
+        var result = await handler.Handle(
+            new SaveNetworkDevicesCommand(
+                [
+                    new NetworkDeviceDto(
+                        0,
+                        "PLC-A",
+                        DeviceType.PLC,
+                        "S7",
+                        string.Empty,
+                        "192.168.0.10",
+                        102,
+                        null,
+                        null,
+                        null,
+                        3000,
+                        true,
+                        null)
+                ]),
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.StartsWith("PLC 设备必须绑定模块。", result.ErrorMessage);
+        Assert.Empty(repo.Items);
+    }
+
+    [Fact]
+    public async Task SaveNetworkDevicesHandler_WhenSubmissionInvalid_ShouldNotDeleteExistingRows()
+    {
+        var repo = new InMemoryRepository<NetworkDeviceEntity>(
+            CreateNetworkDevice(id: 1, name: "PLC-A"),
+            CreateNetworkDevice(id: 2, name: "PLC-B"));
+        var handler = new SaveNetworkDevicesHandler(repo);
+
+        var result = await handler.Handle(
+            new SaveNetworkDevicesCommand(
+                [
+                    new NetworkDeviceDto(
+                        1,
+                        "PLC-A",
+                        DeviceType.PLC,
+                        "S7",
+                        string.Empty,
+                        "192.168.0.10",
+                        102,
+                        null,
+                        null,
+                        null,
+                        3000,
+                        true,
+                        null)
+                ]),
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal([1, 2], repo.Items.Select(x => x.Id).OrderBy(x => x));
+    }
+
     [Fact]
     public async Task SaveNetworkDevicesHandler_WhenDeviceMissingFromSubmission_ShouldDeleteIt()
     {
@@ -346,14 +469,14 @@ public sealed class HardwareConfigFullSyncBehaviorTests
         string name,
         string ipAddress = "192.168.0.10",
         int port1 = 102)
-        => new(name, DeviceType.PLC, ipAddress, port1)
-        {
-            Id = id,
-            DeviceModel = "S7",
-            ModuleId = "Injection",
-            ConnectTimeout = 3000,
-            IsEnabled = true
-        };
+    {
+        var entity = NetworkDeviceEntity.Create(name, DeviceType.PLC, ipAddress, port1);
+        entity.Id = id;
+        entity.AssignModule("Injection", "S7");
+        entity.UpdateEndpoint(ipAddress, port1, null, 3000);
+        entity.Enable();
+        return entity;
+    }
 
     private static NetworkDeviceVm CreateNetworkVm(
         int id,
@@ -374,14 +497,13 @@ public sealed class HardwareConfigFullSyncBehaviorTests
         };
 
     private static SerialDeviceEntity CreateSerialDevice(int id, string name)
-        => new(name, "Scanner", "COM1", 9600)
-        {
-            Id = id,
-            DataBits = 8,
-            StopBits = "One",
-            Parity = "None",
-            IsEnabled = true
-        };
+    {
+        var entity = SerialDeviceEntity.Create(name, "Scanner", "COM1", 9600);
+        entity.Id = id;
+        entity.UpdatePort("COM1", 9600, 8, "One", "None");
+        entity.Enable();
+        return entity;
+    }
 
     private static IoMappingEntity CreateIoMapping(
         int id,
@@ -389,12 +511,13 @@ public sealed class HardwareConfigFullSyncBehaviorTests
         string label,
         string plcAddress = "DB1.DBW0",
         string? remark = null)
-        => new(deviceId, label, plcAddress, 1, "Int16", "Read")
-        {
-            Id = id,
-            SortOrder = 1,
-            Remark = remark
-        };
+    {
+        var entity = IoMappingEntity.Create(deviceId, label, plcAddress, 1, "Int16", "Read");
+        entity.Id = id;
+        entity.UpdateSortOrder(1);
+        entity.UpdateMetadata(label, "Int16", "Read", "单点读数据", string.Empty, string.Empty, remark);
+        return entity;
+    }
 
     private sealed class InMemoryRepository<T>(params T[] seedItems) : IRepository<T>
         where T : class, IEntity<int>, IAggregateRoot
@@ -546,26 +669,41 @@ public sealed class HardwareConfigFullSyncBehaviorTests
             => throw new NotSupportedException(request.GetType().FullName);
 
         private static NetworkDeviceEntity Clone(NetworkDeviceEntity entity)
-            => new(entity.DeviceName, entity.DeviceType, entity.IpAddress, entity.Port1)
-            {
-                Id = entity.Id,
-                DeviceModel = entity.DeviceModel,
-                ModuleId = entity.ModuleId,
-                Port2 = entity.Port2,
-                SendCmd1 = entity.SendCmd1,
-                SendCmd2 = entity.SendCmd2,
-                ConnectTimeout = entity.ConnectTimeout,
-                IsEnabled = entity.IsEnabled,
-                Remark = entity.Remark
-            };
+        {
+            var clone = NetworkDeviceEntity.Create(entity.DeviceName, entity.DeviceType, entity.IpAddress, entity.Port1);
+            clone.Id = entity.Id;
+            clone.AssignModule(entity.ModuleId, entity.DeviceModel);
+            clone.UpdateEndpoint(entity.IpAddress, entity.Port1, entity.Port2, entity.ConnectTimeout);
+            clone.UpdateCommands(entity.SendCmd1, entity.SendCmd2);
+            clone.SetEnabled(entity.IsEnabled);
+            clone.UpdateRemark(entity.Remark);
+            return clone;
+        }
 
         private static IoMappingEntity Clone(IoMappingEntity entity)
-            => new(entity.NetworkDeviceId, entity.Label, entity.PlcAddress, entity.AddressCount, entity.DataType, entity.Direction)
-            {
-                Id = entity.Id,
-                SortOrder = entity.SortOrder,
-                Remark = entity.Remark
-            };
+        {
+            var clone = IoMappingEntity.Create(
+                entity.NetworkDeviceId,
+                entity.Label,
+                entity.PlcAddress,
+                entity.AddressCount,
+                entity.DataType,
+                entity.Direction,
+                entity.Category,
+                entity.GroupName,
+                entity.DisplayRole);
+            clone.Id = entity.Id;
+            clone.UpdateSortOrder(entity.SortOrder);
+            clone.UpdateMetadata(
+                entity.Label,
+                entity.DataType,
+                entity.Direction,
+                entity.Category,
+                entity.GroupName,
+                entity.DisplayRole,
+                entity.Remark);
+            return clone;
+        }
     }
 
     private sealed class FakePlcConnectionManager : IPlcConnectionManager

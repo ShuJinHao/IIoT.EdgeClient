@@ -205,14 +205,14 @@ public sealed class LocalParameterConfigBehaviorTests
         };
 
     private static NetworkDeviceEntity CreateNetworkDevice(int id, string name)
-        => new(name, DeviceType.PLC, "192.168.0.10", 102)
-        {
-            Id = id,
-            DeviceModel = "S7",
-            ModuleId = "Injection",
-            ConnectTimeout = 3000,
-            IsEnabled = true
-        };
+    {
+        var entity = NetworkDeviceEntity.Create(name, DeviceType.PLC, "192.168.0.10", 102);
+        entity.Id = id;
+        entity.AssignModule("Injection", "S7");
+        entity.UpdateEndpoint("192.168.0.10", 102, null, 3000);
+        entity.Enable();
+        return entity;
+    }
 
     private sealed class ParameterConfigTestHost : IDisposable
     {

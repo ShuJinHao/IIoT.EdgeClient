@@ -50,6 +50,15 @@ public class SaveNetworkDevicesHandler(
             .Select(x => x.Id)
             .ToHashSet();
 
+        foreach (var dto in request.Devices)
+        {
+            var validationError = Validate(dto);
+            if (validationError is not null)
+            {
+                return Result.Failure(validationError);
+            }
+        }
+
         foreach (var entity in existingDevices.Where(x => !submittedIds.Contains(x.Id)))
         {
             repo.Delete(entity);
@@ -57,41 +66,60 @@ public class SaveNetworkDevicesHandler(
 
         foreach (var dto in request.Devices)
         {
-            if (dto.Id == 0)
+            try
             {
-                var entity = new NetworkDeviceEntity(
-                    dto.DeviceName, dto.DeviceType, dto.IpAddress, dto.Port1)
+                if (dto.Id == 0)
                 {
-                    DeviceModel = dto.DeviceModel,
-                    ModuleId = dto.ModuleId,
-                    Port2 = dto.Port2,
-                    SendCmd1 = dto.SendCmd1,
-                    SendCmd2 = dto.SendCmd2,
-                    ConnectTimeout = dto.ConnectTimeout,
-                    IsEnabled = dto.IsEnabled,
-                    Remark = dto.Remark
-                };
-                repo.Add(entity);
+                    var entity = NetworkDeviceEntity.Create(
+                        dto.DeviceName,
+                        dto.DeviceType,
+                        dto.IpAddress,
+                        dto.Port1);
+                    Apply(entity, dto);
+                    repo.Add(entity);
+                }
+                else if (existingById.TryGetValue(dto.Id, out var entity))
+                {
+                    Apply(entity, dto);
+                    repo.Update(entity);
+                }
             }
-            else if (existingById.TryGetValue(dto.Id, out var entity))
+            catch (ArgumentException ex)
             {
-                entity.DeviceName = dto.DeviceName;
-                entity.DeviceType = dto.DeviceType;
-                entity.DeviceModel = dto.DeviceModel;
-                entity.ModuleId = dto.ModuleId;
-                entity.IpAddress = dto.IpAddress;
-                entity.Port1 = dto.Port1;
-                entity.Port2 = dto.Port2;
-                entity.SendCmd1 = dto.SendCmd1;
-                entity.SendCmd2 = dto.SendCmd2;
-                entity.ConnectTimeout = dto.ConnectTimeout;
-                entity.IsEnabled = dto.IsEnabled;
-                entity.Remark = dto.Remark;
-                repo.Update(entity);
+                return Result.Failure(ex.Message);
             }
         }
 
         await repo.SaveChangesAsync(cancellationToken);
         return Result.Success();
+    }
+
+    private static void Apply(NetworkDeviceEntity entity, NetworkDeviceDto dto)
+    {
+        entity.Rename(dto.DeviceName);
+        entity.ChangeType(dto.DeviceType);
+        entity.AssignModule(dto.ModuleId, dto.DeviceModel);
+        entity.UpdateEndpoint(dto.IpAddress, dto.Port1, dto.Port2, dto.ConnectTimeout);
+        entity.UpdateCommands(dto.SendCmd1, dto.SendCmd2);
+        entity.SetEnabled(dto.IsEnabled);
+        entity.UpdateRemark(dto.Remark);
+    }
+
+    private static string? Validate(NetworkDeviceDto dto)
+    {
+        try
+        {
+            var entity = NetworkDeviceEntity.Create(
+                dto.DeviceName,
+                dto.DeviceType,
+                dto.IpAddress,
+                dto.Port1);
+            Apply(entity, dto);
+            return null;
+        }
+        catch (ArgumentException ex)
+        {
+            return ex.Message;
+        }
     }
 }
