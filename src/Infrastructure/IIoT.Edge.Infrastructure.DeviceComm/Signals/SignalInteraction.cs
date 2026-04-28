@@ -149,8 +149,12 @@ public class SignalInteraction : ISignalInteraction
         {
             try
             {
-                await ExecuteOneCycleAsync().ConfigureAwait(false);
+                await ExecuteOneCycleAsync(ct).ConfigureAwait(false);
                 await Task.Delay(TaskLoopInterval, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
             }
             catch (Exception ex)
             {
@@ -161,16 +165,18 @@ public class SignalInteraction : ISignalInteraction
         }
     }
 
-    internal Task ExecuteOneCycleAsync() => DoCoreAsync();
+    internal Task ExecuteOneCycleAsync() => DoCoreAsync(CancellationToken.None);
 
-    private async Task DoCoreAsync()
+    internal Task ExecuteOneCycleAsync(CancellationToken ct) => DoCoreAsync(ct);
+
+    private async Task DoCoreAsync(CancellationToken ct)
     {
         if (!_plcService.IsConnected)
         {
             await ConnectAsync().ConfigureAwait(false);
             if (!_plcService.IsConnected)
             {
-                await Task.Delay(GetBackoffDelay()).ConfigureAwait(false);
+                await Task.Delay(GetBackoffDelay(), ct).ConfigureAwait(false);
                 return;
             }
         }

@@ -177,6 +177,25 @@ public sealed class SignalInteractionBehaviorTests
         Assert.Equal(readCountBeforeCancel, plcService.ReadAsyncCallCount);
     }
 
+    [Fact]
+    public async Task SignalInteraction_ExecuteOneCycleAsync_WhenCanceledDuringBackoff_ShouldPropagateCancellation()
+    {
+        var plcService = new ScriptedPlcService();
+        plcService.ConnectOutcomes.Enqueue(false);
+
+        var interaction = new SignalInteraction(
+            plcService,
+            new PlcDataStore(),
+            CreateDevice(4, "PLC-D"),
+            [],
+            new FakeLogService());
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(20));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => interaction.ExecuteOneCycleAsync(cts.Token));
+        Assert.Equal(1, plcService.ConnectAsyncCallCount);
+    }
+
     private static NetworkDeviceEntity CreateDevice(int id, string deviceName)
     {
         var entity = NetworkDeviceEntity.Create(deviceName, DeviceType.PLC, "127.0.0.1", 102);
