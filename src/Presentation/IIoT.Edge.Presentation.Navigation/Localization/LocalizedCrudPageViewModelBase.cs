@@ -36,6 +36,15 @@ public abstract class LocalizedCrudPageViewModelBase : CrudPageViewModelBase
     protected internal string FormatText(string key, string fallback, params object[] args)
         => _languageService.Format(key, fallback, args);
 
+    protected override string GetDefaultValidationMessage()
+        => GetText("Navigation_Validation_FixInvalidFields", "请先修正无效表单字段。");
+
+    protected override string FormatOperationFailedMessage(Exception ex)
+        => FormatText("Navigation_Error_OperationFailedFormat", "操作失败：{0}", ex.Message);
+
+    protected override string GetDefaultOperationFailedMessage()
+        => GetText("Navigation_Error_OperationFailedGeneric", "操作失败，请稍后重试。");
+
     protected virtual void RefreshLocalization()
         => OnPropertyChanged(nameof(ViewTitle));
 }

@@ -398,10 +398,13 @@ public sealed class CloudHttpClientBehaviorTests
     public async Task GetAsync_WhenConcurrentRequestsNeedRefresh_ShouldUseSingleRefreshFlight()
     {
         var sendCount = 0;
+        var refreshStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseRefresh = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var deviceService = new FakeDeviceService();
         deviceService.RefreshBootstrapHandler = async _ =>
         {
-            await Task.Delay(100);
+            refreshStarted.TrySetResult();
+            await releaseRefresh.Task;
             deviceService.SetOnline(new DeviceSession
             {
                 DeviceId = Guid.NewGuid(),
@@ -429,7 +432,9 @@ public sealed class CloudHttpClientBehaviorTests
             new FakeLogService());
 
         var first = client.GetAsync("/api/v1/edge/capacity/summary");
+        await refreshStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
         var second = client.GetAsync("/api/v1/edge/capacity/summary");
+        releaseRefresh.SetResult();
         var results = await Task.WhenAll(first, second);
 
         Assert.All(results, result => Assert.True(result.IsSuccess));

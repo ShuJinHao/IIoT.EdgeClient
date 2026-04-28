@@ -330,7 +330,10 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
         await WaitForAsync(() => service.CurrentState == NetworkState.Online);
 
         await service.StopAsync();
-        await Task.Delay(TimeSpan.FromMilliseconds(1200));
+        await AssertRequestCountRemainsAsync(
+            () => Volatile.Read(ref requestCount),
+            expected: 1,
+            TimeSpan.FromMilliseconds(1200));
 
         Assert.Equal(1, Volatile.Read(ref requestCount));
     }
@@ -361,7 +364,10 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
         await requestStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
 
         await service.StopAsync().WaitAsync(TimeSpan.FromSeconds(2));
-        await Task.Delay(TimeSpan.FromMilliseconds(200));
+        await AssertRequestCountRemainsAsync(
+            () => Volatile.Read(ref requestCount),
+            expected: 1,
+            TimeSpan.FromMilliseconds(200));
 
         Assert.Equal(1, Volatile.Read(ref requestCount));
     }
@@ -393,6 +399,21 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
         }
 
         Assert.True(predicate(), "Condition was not satisfied before timeout.");
+    }
+
+    private static async Task AssertRequestCountRemainsAsync(
+        Func<int> getCount,
+        int expected,
+        TimeSpan duration)
+    {
+        var deadline = DateTime.UtcNow.Add(duration);
+        while (DateTime.UtcNow < deadline)
+        {
+            Assert.Equal(expected, getCount());
+            await Task.Delay(20);
+        }
+
+        Assert.Equal(expected, getCount());
     }
 
     private static FakeLocalSystemRuntimeConfigService CreateRuntimeConfig()

@@ -216,7 +216,7 @@ public sealed class StackingModuleBehaviorTests
 
         using var cts = new CancellationTokenSource();
         var runTask = task.StartAsync(cts.Token);
-        await Task.Delay(160);
+        await WaitUntilAsync(() => context.CurrentCells.Values.OfType<StackingCellData>().Any());
         cts.Cancel();
         await runTask;
 
@@ -252,7 +252,7 @@ public sealed class StackingModuleBehaviorTests
 
         using var cts = new CancellationTokenSource();
         var runTask = task.StartAsync(cts.Token);
-        await Task.Delay(160);
+        await WaitUntilAsync(() => context.CurrentCells.Values.OfType<StackingCellData>().Any());
         cts.Cancel();
         await runTask;
 
@@ -286,7 +286,7 @@ public sealed class StackingModuleBehaviorTests
 
         using var cts = new CancellationTokenSource();
         var runTask = task.StartAsync(cts.Token);
-        await Task.Delay(160);
+        await WaitUntilAsync(() => buffer.GetWriteBuffer()[0] == 3);
         cts.Cancel();
         await runTask;
 
@@ -315,6 +315,22 @@ public sealed class StackingModuleBehaviorTests
                 CompletedTime = new DateTime(2026, 4, 16, 12, 0, sequenceNo, DateTimeKind.Utc)
             }
         };
+
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (condition())
+            {
+                return;
+            }
+
+            await Task.Delay(20);
+        }
+
+        Assert.True(condition(), "Condition was not satisfied before timeout.");
+    }
 
     private static string ReadPayloadCellResult(object payload)
     {

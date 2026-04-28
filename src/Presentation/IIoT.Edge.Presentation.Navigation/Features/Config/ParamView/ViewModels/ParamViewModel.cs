@@ -14,8 +14,8 @@ public class ParamViewModel : LocalizedCrudPageViewModelBase
 {
     private readonly IParamViewCrudService _crudService;
     private readonly IClientPermissionService _permissionService;
-    private readonly IEditorValidator<GeneralParamVm> _generalParamValidator = new GeneralParamValidator();
-    private readonly IEditorValidator<DeviceParamVm> _deviceParamValidator = new DeviceParamValidator();
+    private readonly IEditorValidator<GeneralParamVm> _generalParamValidator;
+    private readonly IEditorValidator<DeviceParamVm> _deviceParamValidator;
     private readonly AsyncCommand _saveCommand;
     private readonly BaseCommand _addGeneralParamCommand;
     private readonly BaseCommand _deleteGeneralParamCommand;
@@ -84,6 +84,8 @@ public class ParamViewModel : LocalizedCrudPageViewModelBase
     {
         _crudService = crudService;
         _permissionService = permissionService;
+        _generalParamValidator = new GeneralParamValidator(GetText);
+        _deviceParamValidator = new DeviceParamValidator(GetText);
 
         _saveCommand = (AsyncCommand)CreateBusyCommand(SaveAsync, () => CanEdit);
         _addGeneralParamCommand = (BaseCommand)CreateAddCommand(GeneralParams, () => new GeneralParamVm(), () => CanEdit);
@@ -140,7 +142,9 @@ public class ParamViewModel : LocalizedCrudPageViewModelBase
     {
         if (SelectedGroup is null)
         {
-            return CrudOperationResult.Failure("Please select a device group first.");
+            return CrudOperationResult.Failure(GetText(
+                "Navigation_Param_SelectDeviceGroupFirst",
+                "请先选择设备参数组。"));
         }
 
         var issues = new List<ValidationIssue>();
