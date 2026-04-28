@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Modules.Hardware;
 using System.Text;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc.Store;

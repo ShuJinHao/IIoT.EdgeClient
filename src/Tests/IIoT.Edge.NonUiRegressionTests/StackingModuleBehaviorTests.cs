@@ -1,4 +1,5 @@
-﻿using AutoMapper;
+using IIoT.Edge.Application.Modules.Hardware;
+using AutoMapper;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;

@@ -1,4 +1,4 @@
-﻿namespace IIoT.Edge.Application.Abstractions.Modules;
+namespace IIoT.Edge.Application.Modules.Descriptors;
 
 public enum ModulePanelPosition
 {

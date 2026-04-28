@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Modules.Hardware;
 using System.Linq.Expressions;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;

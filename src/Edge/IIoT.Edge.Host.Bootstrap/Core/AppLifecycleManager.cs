@@ -1,4 +1,6 @@
-﻿using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Application.Modules.Hardware;
+using IIoT.Edge.Application.Modules.Diagnostics;
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;

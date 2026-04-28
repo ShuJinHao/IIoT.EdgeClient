@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Modules.Hardware;
 using System.Runtime.CompilerServices;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.SharedKernel.Context;

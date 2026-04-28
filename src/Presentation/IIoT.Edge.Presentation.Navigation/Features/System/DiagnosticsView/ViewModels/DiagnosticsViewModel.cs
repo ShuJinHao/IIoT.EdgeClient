@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Modules.Diagnostics;
 using System.Collections.ObjectModel;
 using System.Threading;
 using System.Windows.Threading;
@@ -22,7 +23,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
     public ObservableCollection<StartupDiagnosticIssueRow> Issues { get; } = [];
     public ObservableCollection<MesChannelDiagnosticsRow> MesUploadDiagnostics { get; } = [];
 
-    private string _discoveredModulesSummary = "正在检查已发现模块...";
+    private string _discoveredModulesSummary = string.Empty;
     public string DiscoveredModulesSummary
     {
         get => _discoveredModulesSummary;
@@ -33,7 +34,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         }
     }
 
-    private string _enabledModulesSummary = "正在检查已启用模块...";
+    private string _enabledModulesSummary = string.Empty;
     public string EnabledModulesSummary
     {
         get => _enabledModulesSummary;
@@ -44,7 +45,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         }
     }
 
-    private string _activatedModulesSummary = "正在检查已激活模块...";
+    private string _activatedModulesSummary = string.Empty;
     public string ActivatedModulesSummary
     {
         get => _activatedModulesSummary;
@@ -55,7 +56,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         }
     }
 
-    private string _configurationProfileSummary = "配置概况：--";
+    private string _configurationProfileSummary = string.Empty;
     public string ConfigurationProfileSummary
     {
         get => _configurationProfileSummary;
@@ -66,7 +67,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         }
     }
 
-    private string _lastUpdatedSummary = "启动诊断尚未生成。";
+    private string _lastUpdatedSummary = string.Empty;
     public string LastUpdatedSummary
     {
         get => _lastUpdatedSummary;
@@ -77,7 +78,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         }
     }
 
-    private string _deviceSummary = "设备：未知";
+    private string _deviceSummary = string.Empty;
     public string DeviceSummary
     {
         get => _deviceSummary;
@@ -88,7 +89,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         }
     }
 
-    private string _cloudGateSummary = "上传门禁：--";
+    private string _cloudGateSummary = string.Empty;
     public string CloudGateSummary
     {
         get => _cloudGateSummary;
@@ -99,7 +100,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         }
     }
 
-    private string _cloudRuntimeSummary = "云端运行：空闲";
+    private string _cloudRuntimeSummary = string.Empty;
     public string CloudRuntimeSummary
     {
         get => _cloudRuntimeSummary;
@@ -110,7 +111,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         }
     }
 
-    private string _cloudResultSummary = "最近结果：--";
+    private string _cloudResultSummary = string.Empty;
     public string CloudResultSummary
     {
         get => _cloudResultSummary;
@@ -121,7 +122,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         }
     }
 
-    private string _cloudPendingSummary = "待处理：重试=0，日志=0，产能=0";
+    private string _cloudPendingSummary = string.Empty;
     public string CloudPendingSummary
     {
         get => _cloudPendingSummary;
@@ -132,7 +133,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         }
     }
 
-    private string _cloudCapacitySummary = "产能阻塞：否";
+    private string _cloudCapacitySummary = string.Empty;
     public string CloudCapacitySummary
     {
         get => _cloudCapacitySummary;
@@ -143,7 +144,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         }
     }
 
-    private string _cloudPersistenceSummary = "存储故障：否";
+    private string _cloudPersistenceSummary = string.Empty;
     public string CloudPersistenceSummary
     {
         get => _cloudPersistenceSummary;
@@ -154,7 +155,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         }
     }
 
-    private string _cloudLastAttemptSummary = "最近尝试：--";
+    private string _cloudLastAttemptSummary = string.Empty;
     public string CloudLastAttemptSummary
     {
         get => _cloudLastAttemptSummary;
@@ -165,7 +166,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         }
     }
 
-    private string _cloudLastSuccessSummary = "最近成功：--";
+    private string _cloudLastSuccessSummary = string.Empty;
     public string CloudLastSuccessSummary
     {
         get => _cloudLastSuccessSummary;
@@ -176,7 +177,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         }
     }
 
-    private string _cloudLastFailureSummary = "最近失败：--";
+    private string _cloudLastFailureSummary = string.Empty;
     public string CloudLastFailureSummary
     {
         get => _cloudLastFailureSummary;
@@ -187,7 +188,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         }
     }
 
-    private string _mesRuntimeSummary = "MES运行：空闲";
+    private string _mesRuntimeSummary = string.Empty;
     public string MesRuntimeSummary
     {
         get => _mesRuntimeSummary;
@@ -198,7 +199,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         }
     }
 
-    private string _mesPendingSummary = "待处理：重试=0";
+    private string _mesPendingSummary = string.Empty;
     public string MesPendingSummary
     {
         get => _mesPendingSummary;
@@ -209,7 +210,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         }
     }
 
-    private string _mesCapacitySummary = "产能阻塞：否";
+    private string _mesCapacitySummary = string.Empty;
     public string MesCapacitySummary
     {
         get => _mesCapacitySummary;
@@ -220,7 +221,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         }
     }
 
-    private string _mesPersistenceSummary = "存储故障：否";
+    private string _mesPersistenceSummary = string.Empty;
     public string MesPersistenceSummary
     {
         get => _mesPersistenceSummary;
@@ -231,7 +232,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         }
     }
 
-    private string _mesLastAttemptSummary = "最近尝试：--";
+    private string _mesLastAttemptSummary = string.Empty;
     public string MesLastAttemptSummary
     {
         get => _mesLastAttemptSummary;
@@ -242,7 +243,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         }
     }
 
-    private string _mesLastSuccessSummary = "最近成功：--";
+    private string _mesLastSuccessSummary = string.Empty;
     public string MesLastSuccessSummary
     {
         get => _mesLastSuccessSummary;
@@ -253,7 +254,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         }
     }
 
-    private string _mesLastFailureSummary = "最近失败：--";
+    private string _mesLastFailureSummary = string.Empty;
     public string MesLastFailureSummary
     {
         get => _mesLastFailureSummary;
@@ -264,7 +265,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         }
     }
 
-    private string _contextPersistenceSummary = "损坏文件数：0";
+    private string _contextPersistenceSummary = string.Empty;
     public string ContextPersistenceSummary
     {
         get => _contextPersistenceSummary;
@@ -289,6 +290,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
             Interval = TimeSpan.FromSeconds(1)
         };
         _refreshTimer.Tick += OnRefreshTimerTick;
+        ApplyInitialSummaries();
         _refreshTimer.Start();
     }
 
@@ -344,43 +346,52 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         var moduleNameMap = BuildModuleNameMap(report);
 
         DiscoveredModulesSummary = BuildModuleSummary(
-            "已发现模块",
-            "当前未发现模块。",
+            GetText("Navigation_Diagnostics_DiscoveredLabel", "已发现模块"),
+            GetText("Navigation_Diagnostics_NoDiscoveredModules", "当前未发现模块。"),
             report.DiscoveredModules,
             moduleNameMap);
 
         EnabledModulesSummary = BuildModuleSummary(
-            "已启用模块",
-            "当前没有配置为启用的模块。",
+            GetText("Navigation_Diagnostics_EnabledLabel", "已启用模块"),
+            GetText("Navigation_Diagnostics_NoEnabledModules", "当前没有配置为启用的模块。"),
             report.EnabledModules,
             moduleNameMap);
 
         ActivatedModulesSummary = BuildModuleSummary(
-            "已激活模块",
-            "当前没有已激活模块。",
+            GetText("Navigation_Diagnostics_ActivatedLabel", "已激活模块"),
+            GetText("Navigation_Diagnostics_NoActivatedModules", "当前没有已激活模块。"),
             report.ActivatedModules,
             moduleNameMap);
 
         ConfigurationProfileSummary = BuildConfigurationProfileSummary(report.ConfigurationProfile);
         LastUpdatedSummary = report.GeneratedAt == DateTime.MinValue
-            ? "启动诊断尚未生成。"
-            : $"最近生成：{report.GeneratedAt:yyyy-MM-dd HH:mm:ss}";
+            ? GetText("Navigation_Diagnostics_StartupPending", "启动诊断尚未生成。")
+            : FormatText("Navigation_Diagnostics_LastGeneratedFormat", "最近生成：{0:yyyy-MM-dd HH:mm:ss}", report.GeneratedAt);
 
-        DeviceSummary = $"设备：{syncDiagnostics.DeviceName}";
+        DeviceSummary = FormatText("Navigation_Diagnostics_DeviceFormat", "设备：{0}", syncDiagnostics.DeviceName);
 
         var cloudGate = syncDiagnostics.Cloud.GateState switch
         {
-            EdgeUploadGateState.Ready => "已就绪",
-            _ when syncDiagnostics.Cloud.IsPausedWaitingForRecovery => "等待恢复",
+            EdgeUploadGateState.Ready => GetText("Navigation_Sync_StatusReady", "已就绪"),
+            _ when syncDiagnostics.Cloud.IsPausedWaitingForRecovery => GetText("Navigation_Sync_StatusWaitingRecovery", "等待恢复"),
             _ => FormatText("Navigation_Sync_StatusBlockedFormat", "已阻塞（{0}）", _diagnosticsText.FormatBlockReason(syncDiagnostics.Cloud.BlockReason))
         };
 
-        CloudGateSummary = $"上传门禁：{cloudGate}";
-        CloudRuntimeSummary = $"云端运行：{_diagnosticsText.FormatCloudRuntimeState(syncDiagnostics.Cloud.RuntimeState)}";
-        CloudResultSummary =
-            $"最近结果：{_diagnosticsText.FormatCloudOutcome(syncDiagnostics.Cloud.LastOutcome, syncDiagnostics.Cloud.LastReasonCode, syncDiagnostics.Cloud.LastProcessType)}";
-        CloudPendingSummary =
-            $"待处理：重试={syncDiagnostics.Cloud.PendingRetryCount}，日志={syncDiagnostics.Cloud.PendingDeviceLogCount}，产能={syncDiagnostics.Cloud.PendingCapacityCount}";
+        CloudGateSummary = FormatText("Navigation_Sync_UploadGateFormat", "上传门禁：{0}", cloudGate);
+        CloudRuntimeSummary = FormatText(
+            "Navigation_Diagnostics_CloudRuntimeFormat",
+            "云端运行：{0}",
+            _diagnosticsText.FormatCloudRuntimeState(syncDiagnostics.Cloud.RuntimeState));
+        CloudResultSummary = FormatText(
+            "Navigation_Sync_LastResultFormat",
+            "最近结果：{0}",
+            _diagnosticsText.FormatCloudOutcome(syncDiagnostics.Cloud.LastOutcome, syncDiagnostics.Cloud.LastReasonCode, syncDiagnostics.Cloud.LastProcessType));
+        CloudPendingSummary = FormatText(
+            "Navigation_Sync_PendingCloudFormat",
+            "待处理：重试={0}，日志={1}，产能={2}",
+            syncDiagnostics.Cloud.PendingRetryCount,
+            syncDiagnostics.Cloud.PendingDeviceLogCount,
+            syncDiagnostics.Cloud.PendingCapacityCount);
         CloudCapacitySummary = _diagnosticsText.FormatCapacityBlockedSummary(
             syncDiagnostics.Cloud.IsCapacityBlocked,
             syncDiagnostics.Cloud.BlockedChannel,
@@ -390,12 +401,15 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
             syncDiagnostics.Cloud.IsPersistenceFaulted,
             syncDiagnostics.Cloud.LastPersistenceFaultAt,
             syncDiagnostics.Cloud.PersistenceFaultMessage);
-        CloudLastAttemptSummary = $"最近尝试：{LocalizedSyncDiagnosticsText.FormatTimestamp(syncDiagnostics.Cloud.LastAttemptAt)}";
-        CloudLastSuccessSummary = $"最近成功：{LocalizedSyncDiagnosticsText.FormatTimestamp(syncDiagnostics.Cloud.LastSuccessAt)}";
-        CloudLastFailureSummary = $"最近失败：{LocalizedSyncDiagnosticsText.FormatTimestamp(syncDiagnostics.Cloud.LastFailureAt)}";
+        CloudLastAttemptSummary = FormatText("Navigation_Sync_LastAttemptFormat", "最近尝试：{0}", LocalizedSyncDiagnosticsText.FormatTimestamp(syncDiagnostics.Cloud.LastAttemptAt));
+        CloudLastSuccessSummary = FormatText("Navigation_Sync_LastSuccessFormat", "最近成功：{0}", LocalizedSyncDiagnosticsText.FormatTimestamp(syncDiagnostics.Cloud.LastSuccessAt));
+        CloudLastFailureSummary = FormatText("Navigation_Sync_LastFailureFormat", "最近失败：{0}", LocalizedSyncDiagnosticsText.FormatTimestamp(syncDiagnostics.Cloud.LastFailureAt));
 
-        MesRuntimeSummary = $"MES运行：{_diagnosticsText.FormatMesRuntimeState(syncDiagnostics.Mes.RuntimeState)}";
-        MesPendingSummary = $"待处理：重试={syncDiagnostics.Mes.PendingRetryCount}";
+        MesRuntimeSummary = FormatText(
+            "Navigation_Diagnostics_MesRuntimeFormat",
+            "MES运行：{0}",
+            _diagnosticsText.FormatMesRuntimeState(syncDiagnostics.Mes.RuntimeState));
+        MesPendingSummary = FormatText("Navigation_Sync_PendingMesFormat", "待处理：重试={0}", syncDiagnostics.Mes.PendingRetryCount);
         MesCapacitySummary = _diagnosticsText.FormatCapacityBlockedSummary(
             syncDiagnostics.Mes.IsCapacityBlocked,
             syncDiagnostics.Mes.BlockedChannel,
@@ -405,10 +419,13 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
             syncDiagnostics.Mes.IsPersistenceFaulted,
             syncDiagnostics.Mes.LastPersistenceFaultAt,
             syncDiagnostics.Mes.PersistenceFaultMessage);
-        MesLastAttemptSummary = $"最近尝试：{LocalizedSyncDiagnosticsText.FormatTimestamp(syncDiagnostics.Mes.LastAttemptAt)}";
-        MesLastSuccessSummary = $"最近成功：{LocalizedSyncDiagnosticsText.FormatTimestamp(syncDiagnostics.Mes.LastSuccessAt)}";
-        MesLastFailureSummary =
-            $"最近失败：{LocalizedSyncDiagnosticsText.FormatTimestamp(syncDiagnostics.Mes.LastFailureAt)}（{NormalizeText(syncDiagnostics.Mes.LastFailureReason)}）";
+        MesLastAttemptSummary = FormatText("Navigation_Sync_LastAttemptFormat", "最近尝试：{0}", LocalizedSyncDiagnosticsText.FormatTimestamp(syncDiagnostics.Mes.LastAttemptAt));
+        MesLastSuccessSummary = FormatText("Navigation_Sync_LastSuccessFormat", "最近成功：{0}", LocalizedSyncDiagnosticsText.FormatTimestamp(syncDiagnostics.Mes.LastSuccessAt));
+        MesLastFailureSummary = FormatText(
+            "Navigation_Sync_LastFailureWithReasonFormat",
+            "最近失败：{0}（{1}）",
+            LocalizedSyncDiagnosticsText.FormatTimestamp(syncDiagnostics.Mes.LastFailureAt),
+            NormalizeText(syncDiagnostics.Mes.LastFailureReason));
 
         ContextPersistenceSummary = _diagnosticsText.FormatContextPersistenceSummary(syncDiagnostics.ContextPersistence);
 
@@ -462,8 +479,8 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
                 NormalizeText(x.LastFailureReason))));
 
         SetStatus(report.Issues.Count == 0
-            ? "启动诊断正常。"
-            : $"启动诊断发现 {report.Issues.Count} 个问题。");
+            ? GetText("Navigation_Diagnostics_StartupOk", "启动诊断正常。")
+            : FormatText("Navigation_Diagnostics_StartupIssueCountFormat", "启动诊断发现 {0} 个问题。", report.Issues.Count));
     }
 
     private IReadOnlyDictionary<string, string> BuildModuleNameMap(StartupDiagnosticsReport report)
@@ -500,7 +517,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         var names = modules
             .Select(x => ResolveModuleDisplayName(x, moduleNameMap))
             .Distinct(StringComparer.OrdinalIgnoreCase);
-        return $"{label}：{string.Join("、", names)}";
+        return FormatText("Navigation_Diagnostics_ModuleSummaryFormat", "{0}：{1}", label, string.Join(GetText("Navigation_ListSeparator", "、"), names));
     }
 
     private string ResolveModuleDisplayName(string moduleId, IReadOnlyDictionary<string, string> moduleNameMap)
@@ -513,17 +530,55 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         return _diagnosticsText.FormatProcessType(moduleId);
     }
 
-    private static string BuildConfigurationProfileSummary(ConfigurationProfileSnapshot profile)
+    private string BuildConfigurationProfileSummary(ConfigurationProfileSnapshot profile)
     {
         if (string.IsNullOrWhiteSpace(profile.MachineProfile))
         {
-            return $"环境：{profile.EnvironmentName}；机型：未配置；运行目录：{profile.RuntimeDataRoot}";
+            return FormatText(
+                "Navigation_Diagnostics_ProfileNoMachineFormat",
+                "环境：{0}；机型：未配置；运行目录：{1}",
+                profile.EnvironmentName,
+                profile.RuntimeDataRoot);
         }
 
+        var profileFileName = NormalizeText(profile.MachineProfileFileName);
         var loadState = profile.IsMachineProfileLoaded
-            ? $"已从 {profile.MachineProfileFileName} 加载"
-            : $"未找到 {profile.MachineProfileFileName}";
-        return $"环境：{profile.EnvironmentName}；机型：{profile.MachineProfile}（{loadState}）；运行目录：{profile.RuntimeDataRoot}";
+            ? FormatText("Navigation_Diagnostics_ProfileLoadedFormat", "已从 {0} 加载", profileFileName)
+            : FormatText("Navigation_Diagnostics_ProfileMissingFormat", "未找到 {0}", profileFileName);
+        return FormatText(
+            "Navigation_Diagnostics_ProfileWithMachineFormat",
+            "环境：{0}；机型：{1}（{2}）；运行目录：{3}",
+            profile.EnvironmentName,
+            profile.MachineProfile,
+            loadState,
+            profile.RuntimeDataRoot);
+    }
+
+    private void ApplyInitialSummaries()
+    {
+        DiscoveredModulesSummary = GetText("Navigation_Diagnostics_DiscoveredChecking", "正在检查已发现模块...");
+        EnabledModulesSummary = GetText("Navigation_Diagnostics_EnabledChecking", "正在检查已启用模块...");
+        ActivatedModulesSummary = GetText("Navigation_Diagnostics_ActivatedChecking", "正在检查已激活模块...");
+        ConfigurationProfileSummary = GetText("Navigation_Diagnostics_ConfigPlaceholder", "配置概况：--");
+        LastUpdatedSummary = GetText("Navigation_Diagnostics_StartupPending", "启动诊断尚未生成。");
+        DeviceSummary = FormatText("Navigation_Diagnostics_DeviceFormat", "设备：{0}", GetText("Navigation_Unknown", "未知"));
+        CloudGateSummary = FormatText("Navigation_Sync_UploadGateFormat", "上传门禁：{0}", "--");
+        CloudRuntimeSummary = FormatText("Navigation_Diagnostics_CloudRuntimeFormat", "云端运行：{0}", GetText("Navigation_Runtime_Idle", "空闲"));
+        CloudResultSummary = FormatText("Navigation_Sync_LastResultFormat", "最近结果：{0}", "--");
+        CloudPendingSummary = FormatText("Navigation_Sync_PendingCloudFormat", "待处理：重试={0}，日志={1}，产能={2}", 0, 0, 0);
+        CloudCapacitySummary = _diagnosticsText.FormatCapacityBlockedSummary(false, null, string.Empty, null);
+        CloudPersistenceSummary = _diagnosticsText.FormatPersistenceFaultSummary(false, null, null);
+        CloudLastAttemptSummary = FormatText("Navigation_Sync_LastAttemptFormat", "最近尝试：{0}", "--");
+        CloudLastSuccessSummary = FormatText("Navigation_Sync_LastSuccessFormat", "最近成功：{0}", "--");
+        CloudLastFailureSummary = FormatText("Navigation_Sync_LastFailureFormat", "最近失败：{0}", "--");
+        MesRuntimeSummary = FormatText("Navigation_Diagnostics_MesRuntimeFormat", "MES运行：{0}", GetText("Navigation_Runtime_Idle", "空闲"));
+        MesPendingSummary = FormatText("Navigation_Sync_PendingMesFormat", "待处理：重试={0}", 0);
+        MesCapacitySummary = _diagnosticsText.FormatCapacityBlockedSummary(false, null, string.Empty, null);
+        MesPersistenceSummary = _diagnosticsText.FormatPersistenceFaultSummary(false, null, null);
+        MesLastAttemptSummary = FormatText("Navigation_Sync_LastAttemptFormat", "最近尝试：{0}", "--");
+        MesLastSuccessSummary = FormatText("Navigation_Sync_LastSuccessFormat", "最近成功：{0}", "--");
+        MesLastFailureSummary = FormatText("Navigation_Sync_LastFailureFormat", "最近失败：{0}", "--");
+        ContextPersistenceSummary = _diagnosticsText.FormatContextPersistenceSummary(new(0, null));
     }
 
     private static string NormalizeText(string? value)

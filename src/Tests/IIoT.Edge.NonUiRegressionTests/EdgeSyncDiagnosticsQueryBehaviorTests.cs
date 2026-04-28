@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Context;
 using IIoT.Edge.Application.Common.Diagnostics;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 using IIoT.Edge.Application.Abstractions.Context;

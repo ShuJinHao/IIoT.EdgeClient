@@ -193,6 +193,7 @@
     <sys:String x:Key="Navigation_Sync_LastAttemptFormat">Last attempt: {0}</sys:String>
     <sys:String x:Key="Navigation_Sync_LastSuccessFormat">Last success: {0}</sys:String>
     <sys:String x:Key="Navigation_Sync_LastFailureFormat">Last failure: {0}</sys:String>
+    <sys:String x:Key="Navigation_Sync_LastFailureWithReasonFormat">Last failure: {0} ({1})</sys:String>
     <sys:String x:Key="Navigation_Sync_FailureReasonFormat">Failure reason: {0}</sys:String>
     <sys:String x:Key="Navigation_Sync_PendingCloudFormat">Pending: retry={0}, logs={1}, capacity={2}</sys:String>
     <sys:String x:Key="Navigation_Sync_PendingMesFormat">Pending: retry={0}</sys:String>
@@ -251,6 +252,29 @@
     <sys:String x:Key="Navigation_Diagnostics_Context">Production Context Diagnostics</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_Startup">Startup Diagnostics</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_PluginLifecycle">Plugin Lifecycle</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_DiscoveredChecking">Checking discovered modules...</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_EnabledChecking">Checking enabled modules...</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_ActivatedChecking">Checking activated modules...</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_ConfigPlaceholder">Configuration: --</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_StartupPending">Startup diagnostics not generated.</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_LastGeneratedFormat">Last generated: {0:yyyy-MM-dd HH:mm:ss}</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_DeviceFormat">Device: {0}</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_CloudRuntimeFormat">Cloud runtime: {0}</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_MesRuntimeFormat">MES runtime: {0}</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_DiscoveredLabel">Discovered modules</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_EnabledLabel">Enabled modules</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_ActivatedLabel">Activated modules</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_NoDiscoveredModules">No modules discovered.</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_NoEnabledModules">No modules configured as enabled.</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_NoActivatedModules">No modules activated.</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_ModuleSummaryFormat">{0}: {1}</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_StartupOk">Startup diagnostics are normal.</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_StartupIssueCountFormat">Startup diagnostics found {0} issues.</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_ProfileNoMachineFormat">Environment: {0}; profile: not configured; runtime path: {1}</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_ProfileLoadedFormat">loaded from {0}</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_ProfileMissingFormat">missing {0}</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_ProfileWithMachineFormat">Environment: {0}; profile: {1} ({2}); runtime path: {3}</sys:String>
+    <sys:String x:Key="Navigation_ListSeparator">, </sys:String>
     <sys:String x:Key="Navigation_Column_ModuleId">Module ID</sys:String>
     <sys:String x:Key="Navigation_Column_Process">Process</sys:String>
     <sys:String x:Key="Navigation_Column_Assembly">Assembly</sys:String>

@@ -1,4 +1,5 @@
-﻿using IIoT.Edge.Module.Homogenization.Presentation.Views;
+using IIoT.Edge.Application.Modules.Descriptors;
+using IIoT.Edge.Module.Homogenization.Presentation.Views;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Presentation.Navigation.PluginSystem;
 
