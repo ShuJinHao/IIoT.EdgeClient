@@ -20,14 +20,7 @@ public sealed class LongRunningBackgroundTaskGroupService : IManagedBackgroundSe
     public string ServiceName { get; }
 
     public Task StartAsync(CancellationToken cancellationToken)
-    {
-        foreach (var service in _services)
-        {
-            _ = service.StartAsync(cancellationToken);
-        }
-
-        return Task.CompletedTask;
-    }
+        => Task.WhenAll(_services.Select(service => service.StartAsync(cancellationToken)));
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {

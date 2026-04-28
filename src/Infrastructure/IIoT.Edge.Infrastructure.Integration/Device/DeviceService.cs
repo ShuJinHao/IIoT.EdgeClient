@@ -11,7 +11,9 @@ namespace IIoT.Edge.Infrastructure.Integration.Device;
 
 public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
 {
-    private readonly HttpClient _httpClient;
+    public const string HttpClientName = "CloudDevice";
+
+    private readonly IHttpClientFactory _httpClientFactory;
     private readonly ICloudApiEndpointProvider _endpointProvider;
     private readonly DeviceSessionFileCacheStore _cacheStore;
     private readonly ILocalSystemRuntimeConfigService _runtimeConfig;
@@ -42,13 +44,13 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
     public event Action<EdgeUploadGateSnapshot>? UploadGateChanged;
 
     public DeviceService(
-        HttpClient httpClient,
+        IHttpClientFactory httpClientFactory,
         ICloudApiEndpointProvider endpointProvider,
         DeviceSessionFileCacheStore cacheStore,
         ILocalSystemRuntimeConfigService runtimeConfig,
         ILogService logger)
     {
-        _httpClient = httpClient;
+        _httpClientFactory = httpClientFactory;
         _endpointProvider = endpointProvider;
         _cacheStore = cacheStore;
         _runtimeConfig = runtimeConfig;
@@ -221,7 +223,7 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
             var url = _endpointProvider.BuildUrl(
                 $"{deviceInstancePath}?clientCode={Uri.EscapeDataString(clientCode)}");
 
-            using var response = await _httpClient.GetAsync(url, ct).ConfigureAwait(false);
+            using var response = await CreateHttpClient().GetAsync(url, ct).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
                 var errorMessage = await TryReadFirstErrorAsync(response, ct).ConfigureAwait(false);
@@ -317,7 +319,7 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
                 _endpointProvider.BuildUrl(_endpointProvider.GetBootstrapRefreshPath()));
             request.Headers.TryAddWithoutValidation(CloudAuthHeaders.RefreshToken, session.RefreshToken);
 
-            using var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
+            using var response = await CreateHttpClient().SendAsync(request, ct).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
                 var errorMessage = await TryReadFirstErrorAsync(response, ct).ConfigureAwait(false);
@@ -627,6 +629,9 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
 
     private static string SanitizeValue(string value)
         => value.Replace(' ', '_');
+
+    private HttpClient CreateHttpClient()
+        => _httpClientFactory.CreateClient(HttpClientName);
 
     private enum DeviceRefreshResult
     {

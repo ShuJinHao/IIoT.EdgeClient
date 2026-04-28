@@ -89,7 +89,12 @@ public static class DependencyInjection
 
         services.AddMediatR(cfg =>
         {
-            cfg.LicenseKey = configuration["MediatR:LicenseKey"] ?? string.Empty;
+            var licenseKey = ResolveMediatRLicenseKey(configuration);
+            if (!string.IsNullOrWhiteSpace(licenseKey))
+            {
+                cfg.LicenseKey = licenseKey;
+            }
+
             cfg.RegisterServicesFromAssemblies(
                 [
                     typeof(IIoT.Edge.Application.DependencyInjection).Assembly,
@@ -175,6 +180,15 @@ public static class DependencyInjection
 
         return services;
     }
+
+    private static string? ResolveMediatRLicenseKey(IConfiguration configuration)
+        => FirstNonEmpty(
+            Environment.GetEnvironmentVariable("MediatR__LicenseKey"),
+            Environment.GetEnvironmentVariable("MEDIATR_LICENSE_KEY"),
+            configuration["MediatR:LicenseKey"]);
+
+    private static string? FirstNonEmpty(params string?[] values)
+        => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
 
     private static void RegisterHostViews(IViewRegistry registry)
     {

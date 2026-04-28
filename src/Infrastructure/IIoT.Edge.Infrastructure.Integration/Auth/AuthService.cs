@@ -11,7 +11,9 @@ namespace IIoT.Edge.Infrastructure.Integration.Auth;
 
 public class AuthService : IAuthService
 {
-    private readonly HttpClient _httpClient;
+    public const string HttpClientName = "CloudAuth";
+
+    private readonly IHttpClientFactory _httpClientFactory;
     private readonly ICloudApiEndpointProvider _endpointProvider;
     private readonly LocalAdminConfig _localAdminConfig;
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
@@ -23,11 +25,11 @@ public class AuthService : IAuthService
     public event Action<UserSession?>? AuthStateChanged;
 
     public AuthService(
-        HttpClient httpClient,
+        IHttpClientFactory httpClientFactory,
         ICloudApiEndpointProvider endpointProvider,
         LocalAdminConfig localAdminConfig)
     {
-        _httpClient = httpClient;
+        _httpClientFactory = httpClientFactory;
         _endpointProvider = endpointProvider;
         _localAdminConfig = localAdminConfig;
     }
@@ -87,8 +89,9 @@ public class AuthService : IAuthService
     {
         try
         {
+            var httpClient = CreateHttpClient();
             var loginUrl = _endpointProvider.BuildUrl(_endpointProvider.GetIdentityDeviceLoginPath());
-            using var response = await _httpClient.PostAsJsonAsync(loginUrl, new
+            using var response = await httpClient.PostAsJsonAsync(loginUrl, new
             {
                 employeeNo,
                 password,
@@ -213,7 +216,7 @@ public class AuthService : IAuthService
                 _endpointProvider.BuildUrl(_endpointProvider.GetHumanIdentityRefreshPath()));
             request.Headers.TryAddWithoutValidation(CloudAuthHeaders.RefreshToken, _currentUser.RefreshToken);
 
-            using var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
+            using var response = await CreateHttpClient().SendAsync(request, ct).ConfigureAwait(false);
             var refreshedSession = await TryReadSessionAsync(response).ConfigureAwait(false);
             if (refreshedSession is null)
             {
@@ -285,6 +288,9 @@ public class AuthService : IAuthService
             return null;
         }
     }
+
+    private HttpClient CreateHttpClient()
+        => _httpClientFactory.CreateClient(HttpClientName);
 
     private static UserSession? ParseJwtToken(
         string token,

@@ -57,10 +57,11 @@ public static class DependencyInjection
                 ?? string.Empty
         });
 
-        services.AddHttpClient<AuthService>(client => client.Timeout = timeout);
-        services.AddSingleton<IAuthService>(sp => sp.GetRequiredService<AuthService>());
+        services.AddHttpClient(AuthService.HttpClientName, client => client.Timeout = timeout);
+        services.AddSingleton<IAuthService, AuthService>();
 
-        services.AddHttpClient<DeviceService>(client => client.Timeout = timeout);
+        services.AddHttpClient(DeviceService.HttpClientName, client => client.Timeout = timeout);
+        services.AddSingleton<DeviceService>();
         services.AddSingleton<IDeviceService>(sp => sp.GetRequiredService<DeviceService>());
         services.AddSingleton<IDeviceAccessTokenProvider>(sp => sp.GetRequiredService<DeviceService>());
 

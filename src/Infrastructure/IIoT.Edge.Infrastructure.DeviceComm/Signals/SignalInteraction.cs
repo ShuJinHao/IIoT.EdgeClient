@@ -70,7 +70,7 @@ public class SignalInteraction : ISignalInteraction
 
     private bool ShouldLogDisconnect()
     {
-        var now = DateTime.Now;
+        var now = DateTime.UtcNow;
         if ((now - _lastDisconnectLogTime).TotalSeconds >= DisconnectLogIntervalSeconds)
         {
             _lastDisconnectLogTime = now;

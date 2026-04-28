@@ -269,7 +269,7 @@ public sealed class AuthServiceBehaviorTests
         LocalAdminConfig config)
     {
         return new AuthService(
-            new HttpClient(new StubMessageHandler(responseFactory)),
+            new TestHttpClientFactory(new HttpClient(new StubMessageHandler(responseFactory))),
             new FakeCloudApiEndpointProvider(),
             config);
     }

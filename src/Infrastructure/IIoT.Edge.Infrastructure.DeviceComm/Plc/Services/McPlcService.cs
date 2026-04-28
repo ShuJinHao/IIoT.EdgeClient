@@ -32,7 +32,7 @@ public sealed class McPlcService : IPlcService, IDisposable
             return true;
         }
 
-        _mcProtocol?.Close();
+        _mcProtocol?.Dispose();
         _mcProtocol = new McProtocolTcp(_ip, _port, _frameType);
 
         try
@@ -47,12 +47,14 @@ public sealed class McPlcService : IPlcService, IDisposable
         }
         catch (TimeoutException ex)
         {
-            _mcProtocol.Close();
+            _mcProtocol.Dispose();
+            _mcProtocol = null;
             throw new TimeoutException($"Connect to MC PLC {_ip}:{_port} timed out after {ConnectTimeout.TotalSeconds:0}s.", ex);
         }
         catch
         {
-            _mcProtocol.Close();
+            _mcProtocol.Dispose();
+            _mcProtocol = null;
             throw;
         }
     }
@@ -130,6 +132,7 @@ public sealed class McPlcService : IPlcService, IDisposable
         Disconnect();
         _mcProtocol?.Dispose();
         _mcProtocol = null;
+        _semaphore.Dispose();
     }
 
     private void EnsureInitialized()

@@ -17,6 +17,11 @@ using IIoT.Edge.SharedKernel.DataPipeline.DeviceLog;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 
+internal sealed class TestHttpClientFactory(HttpClient client) : IHttpClientFactory
+{
+    public HttpClient CreateClient(string name) => client;
+}
+
 internal sealed class FakeLogService : ILogService
 {
     public List<LogEntry> Entries { get; } = new();
@@ -1194,7 +1199,7 @@ internal sealed class FakeCloudDiagnosticsStore : ICloudUploadDiagnosticsStore
 
     public void RecordResult(string? processType, CloudCallResult result)
     {
-        var now = DateTime.Now;
+        var now = DateTime.UtcNow;
         Snapshot = Snapshot with
         {
             LastAttemptAt = now,
@@ -1225,7 +1230,7 @@ internal sealed class FakeCloudDiagnosticsStore : ICloudUploadDiagnosticsStore
             IsCapacityBlocked = true,
             BlockedChannel = channel,
             BlockedReason = blockedReason,
-            LastCapacityBlockAt = occurredAt ?? DateTime.Now
+            LastCapacityBlockAt = occurredAt ?? DateTime.UtcNow
         };
     }
 
@@ -1268,7 +1273,7 @@ internal sealed class FakeMesRetryDiagnosticsStore : IMesRetryDiagnosticsStore
             IsCapacityBlocked = true,
             BlockedChannel = channel,
             BlockedReason = blockedReason,
-            LastCapacityBlockAt = occurredAt ?? DateTime.Now
+            LastCapacityBlockAt = occurredAt ?? DateTime.UtcNow
         };
     }
 
@@ -1390,7 +1395,7 @@ internal sealed class FakeMesUploadDiagnosticsStore : IMesUploadDiagnosticsStore
 
     public void RecordSuccess(string processType)
     {
-        var now = DateTime.Now;
+        var now = DateTime.UtcNow;
         _entries[processType] = new MesChannelDiagnostics(
             processType,
             now,
@@ -1401,7 +1406,7 @@ internal sealed class FakeMesUploadDiagnosticsStore : IMesUploadDiagnosticsStore
 
     public void RecordFailure(string processType, string failureReason)
     {
-        var now = DateTime.Now;
+        var now = DateTime.UtcNow;
         var lastSuccessAt = _entries.TryGetValue(processType, out var existing)
             ? existing.LastSuccessAt
             : null;

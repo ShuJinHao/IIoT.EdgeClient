@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Xunit;
 
@@ -49,14 +50,14 @@ public sealed class RepositoryHygieneTests
     private static readonly string[] MojibakeMarkers =
     [
         "\uFFFD",
-        "鎿" + "嶄",
-        "璁" + "惧",
-        "绯" + "荤",
-        "鍗" + "曠",
-        "杩" + "炵",
-        "鐨" + "勪",
-        "涓" + "嶅",
-        "鏃" + "犳"
+        "閹" + "?",
+        "鐠" + "?",
+        "缁" + "?",
+        "閸" + "?",
+        "鏉" + "?",
+        "閻" + "?",
+        "娑" + "?",
+        "閺" + "?"
     ];
 
     [Fact]
@@ -95,8 +96,8 @@ public sealed class RepositoryHygieneTests
 
         Assert.False(Directory.Exists(Path.Combine(root, ".codex-temp")), ".codex-temp 不应留在仓库根目录。");
         Assert.False(Directory.Exists(Path.Combine(root, "%EDGE_SHARED_NUGET_FEED%")), "不应保留未展开环境变量形成的本地 NuGet 源目录。");
-        Assert.False(File.Exists(Path.Combine(root, "IIoT.EdgeClient.DevTools.slnx")), "默认仓库根目录只保留主方案。");
-        Assert.False(File.Exists(Path.Combine(root, "PACKAGE-README.md")), "不再保留 SDK/包化 README。");
+        Assert.False(File.Exists(Path.Combine(root, "IIoT.EdgeClient.DevTools.slnx")), "仓库根目录只保留主方案。");
+        Assert.False(File.Exists(Path.Combine(root, "PACKAGE-README.md")), "不再保留 SDK 或包化 README。");
         Assert.False(File.Exists(Path.Combine(root, "scripts", "Pack" + "Edge" + "Packages.ps1")), "不再保留 NuGet 包化脚本。");
         Assert.False(File.Exists(Path.Combine(root, "scripts", "Run" + "Single" + "Repo" + "Release" + "Rehearsal.ps1")), "不再保留包化发布演练脚本。");
         Assert.False(Directory.Exists(Path.Combine(root, "tools")), "根目录不再保留 tools 目录，正式脚本统一放入 scripts。");
@@ -138,6 +139,53 @@ public sealed class RepositoryHygieneTests
             .Select(path => ToRepositoryPath(root, path))
             .ToArray();
         Assert.Empty(duplicateFontDirectories);
+    }
+
+    [Fact]
+    public void ShellAppSettings_ShouldNotContainCommittedLicenseOrJwtSecrets()
+    {
+        var root = FindRepositoryRoot();
+        var appsettingsPath = Path.Combine(root, "src", "Edge", "IIoT.Edge.Shell", "appsettings.json");
+        var appsettings = File.ReadAllText(appsettingsPath);
+
+        Assert.DoesNotContain("\"LicenseKey\"", appsettings, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("MediatR", appsettings, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotMatch(new Regex(@"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+", RegexOptions.CultureInvariant), appsettings);
+    }
+
+    [Fact]
+    public void IntegrationDependencyInjection_ShouldNotCacheTypedHttpClientsAsSingletons()
+    {
+        var root = FindRepositoryRoot();
+        var dependencyInjection = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "Infrastructure",
+            "IIoT.Edge.Infrastructure.Integration",
+            "DependencyInjection.cs"));
+
+        Assert.DoesNotContain("AddHttpClient<AuthService>", dependencyInjection, StringComparison.Ordinal);
+        Assert.DoesNotContain("AddHttpClient<DeviceService>", dependencyInjection, StringComparison.Ordinal);
+        Assert.DoesNotContain("GetRequiredService<AuthService>", dependencyInjection, StringComparison.Ordinal);
+        Assert.Contains("AddHttpClient(AuthService.HttpClientName", dependencyInjection, StringComparison.Ordinal);
+        Assert.Contains("AddHttpClient(DeviceService.HttpClientName", dependencyInjection, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EfCoreSqliteConnection_ShouldEnableWalMode()
+    {
+        var root = FindRepositoryRoot();
+        var sqliteConnection = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "Infrastructure",
+            "IIoT.Edge.Infrastructure.Persistence.EfCore",
+            "EdgeSqliteConnection.cs"));
+
+        Assert.Contains("PRAGMA journal_mode=WAL;", sqliteConnection, StringComparison.Ordinal);
+        Assert.Contains("BusyTimeoutMilliseconds = 5000", sqliteConnection, StringComparison.Ordinal);
+        Assert.Contains("PRAGMA busy_timeout={BusyTimeoutMilliseconds};", sqliteConnection, StringComparison.Ordinal);
+        Assert.DoesNotContain("Data Source=edge_design.db", sqliteConnection, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

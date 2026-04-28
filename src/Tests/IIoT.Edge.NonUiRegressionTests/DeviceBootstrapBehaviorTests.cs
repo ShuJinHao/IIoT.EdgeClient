@@ -48,7 +48,7 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
         });
 
         var service = new DeviceService(
-            new HttpClient(handler),
+            new TestHttpClientFactory(new HttpClient(handler)),
             new FakeEndpointProvider("LINE-A-01"),
             new DeviceSessionFileCacheStore(),
             CreateRuntimeConfig(),
@@ -108,7 +108,7 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
         });
 
         var service = new DeviceService(
-            new HttpClient(handler),
+            new TestHttpClientFactory(new HttpClient(handler)),
             new FakeEndpointProvider("LINE-R-01"),
             new DeviceSessionFileCacheStore(),
             CreateRuntimeConfig(),
@@ -183,7 +183,7 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
         });
 
         var service = new DeviceService(
-            new HttpClient(handler),
+            new TestHttpClientFactory(new HttpClient(handler)),
             new FakeEndpointProvider("LINE-C-03"),
             new DeviceSessionFileCacheStore(),
             CreateRuntimeConfig(),
@@ -223,7 +223,7 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
         });
 
         var service = new DeviceService(
-            new HttpClient(handler),
+            new TestHttpClientFactory(new HttpClient(handler)),
             new FakeEndpointProvider("LINE-D-04"),
             new DeviceSessionFileCacheStore(),
             CreateRuntimeConfig(),
@@ -267,7 +267,7 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
         });
 
         var service = new DeviceService(
-            new HttpClient(handler),
+            new TestHttpClientFactory(new HttpClient(handler)),
             new FakeEndpointProvider("LINE-HB-01"),
             new DeviceSessionFileCacheStore(),
             new FakeLocalSystemRuntimeConfigService
@@ -311,7 +311,7 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
         });
 
         var service = new DeviceService(
-            new HttpClient(handler),
+            new TestHttpClientFactory(new HttpClient(handler)),
             new FakeEndpointProvider("LINE-HB-STOP-01"),
             new DeviceSessionFileCacheStore(),
             new FakeLocalSystemRuntimeConfigService
@@ -349,7 +349,7 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
         });
 
         var service = new DeviceService(
-            new HttpClient(handler),
+            new TestHttpClientFactory(new HttpClient(handler)),
             new FakeEndpointProvider("LINE-HB-STOP-02"),
             new DeviceSessionFileCacheStore(),
             CreateRuntimeConfig(),
