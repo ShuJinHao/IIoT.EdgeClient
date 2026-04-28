@@ -118,10 +118,12 @@ public sealed class DiagnosticsViewModelBehaviorTests
             await viewModel.RefreshAsync();
 
             diagnosticsQuery.ResetCounters();
-            diagnosticsQuery.Delay = TimeSpan.FromMilliseconds(120);
+            diagnosticsQuery.BlockUntilReleased();
 
             var first = viewModel.RefreshAsync();
+            await diagnosticsQuery.WaitUntilEnteredAsync();
             var second = viewModel.RefreshAsync();
+            diagnosticsQuery.ReleaseBlockedCall();
             await Task.WhenAll(first, second);
 
             Assert.Equal(1, diagnosticsQuery.TotalCalls);
@@ -292,6 +294,8 @@ public sealed class DiagnosticsViewModelBehaviorTests
         private int _activeCalls;
         private int _maxConcurrentCalls;
         private int _totalCalls;
+        private TaskCompletionSource? _enteredGate;
+        private TaskCompletionSource? _releaseGate;
 
         public EdgeSyncDiagnosticsSnapshot Current { get; set; } = new(
             "未知",
@@ -333,8 +337,6 @@ public sealed class DiagnosticsViewModelBehaviorTests
                 null),
             new ProductionContextPersistenceDiagnostics(0, null));
 
-        public TimeSpan Delay { get; set; }
-
         public int MaxConcurrentCalls => _maxConcurrentCalls;
 
         public int TotalCalls => _totalCalls;
@@ -346,6 +348,18 @@ public sealed class DiagnosticsViewModelBehaviorTests
             _totalCalls = 0;
         }
 
+        public void BlockUntilReleased()
+        {
+            _enteredGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            _releaseGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+
+        public Task WaitUntilEnteredAsync()
+            => _enteredGate?.Task ?? Task.CompletedTask;
+
+        public void ReleaseBlockedCall()
+            => _releaseGate?.TrySetResult();
+
         public async Task<EdgeSyncDiagnosticsSnapshot> GetCurrentAsync(CancellationToken ct = default)
         {
             Interlocked.Increment(ref _totalCalls);
@@ -354,9 +368,10 @@ public sealed class DiagnosticsViewModelBehaviorTests
 
             try
             {
-                if (Delay > TimeSpan.Zero)
+                if (_releaseGate is { } releaseGate)
                 {
-                    await Task.Delay(Delay, ct);
+                    _enteredGate?.TrySetResult();
+                    await releaseGate.Task.WaitAsync(ct);
                 }
 
                 return Current;

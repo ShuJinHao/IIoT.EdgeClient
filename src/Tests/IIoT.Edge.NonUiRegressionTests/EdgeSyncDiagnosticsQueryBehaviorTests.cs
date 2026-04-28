@@ -193,10 +193,16 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
             UploadAccessTokenExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(30)
         });
 
+        var countRelease = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cloudRetryCountStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var mesRetryCountStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var deviceLogCountStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var capacityCountStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
         var cloudRetryStore = new FakeFailedRecordStore
         {
-            CloudCountDelay = TimeSpan.FromMilliseconds(120),
-            MesCountDelay = TimeSpan.FromMilliseconds(120)
+            CloudCountStarted = cloudRetryCountStarted,
+            CloudCountWait = countRelease.Task
         };
         cloudRetryStore.PendingRecords.Add(new FailedCellRecord
         {
@@ -211,7 +217,8 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
 
         var mesRetryStore = new FakeFailedRecordStore
         {
-            MesCountDelay = TimeSpan.FromMilliseconds(120)
+            MesCountStarted = mesRetryCountStarted,
+            MesCountWait = countRelease.Task
         };
         mesRetryStore.PendingRecords.Add(new FailedCellRecord
         {
@@ -226,13 +233,15 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
 
         var deviceLogBufferStore = new FakeDeviceLogBufferStore
         {
-            CountDelay = TimeSpan.FromMilliseconds(120)
+            CountStarted = deviceLogCountStarted,
+            CountWait = countRelease.Task
         };
         deviceLogBufferStore.Records.Add(new DeviceLogRecord { Id = 10, CreatedAt = DateTime.UtcNow.ToString("O") });
 
         var capacityBufferStore = new FakeCapacityBufferStore
         {
-            CountDelay = TimeSpan.FromMilliseconds(120)
+            CountStarted = capacityCountStarted,
+            CountWait = countRelease.Task
         };
         capacityBufferStore.Records.Add(new CapacityRecord
         {
@@ -257,9 +266,15 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
             capacityBufferStore);
 
         var snapshotTask = query.GetCurrentAsync();
+        await Task.WhenAll(
+            cloudRetryCountStarted.Task,
+            mesRetryCountStarted.Task,
+            deviceLogCountStarted.Task,
+            capacityCountStarted.Task);
 
         Assert.False(snapshotTask.IsCompleted);
 
+        countRelease.SetResult();
         var snapshot = await snapshotTask;
         Assert.Equal(1, snapshot.Cloud.PendingRetryCount);
         Assert.Equal(1, snapshot.Cloud.PendingDeviceLogCount);

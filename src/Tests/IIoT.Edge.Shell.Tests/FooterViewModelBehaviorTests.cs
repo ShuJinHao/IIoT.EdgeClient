@@ -209,10 +209,12 @@ public sealed class FooterViewModelBehaviorTests
             await viewModel.RefreshDiagnosticsAsync();
 
             diagnosticsQuery.ResetCounters();
-            diagnosticsQuery.Delay = TimeSpan.FromMilliseconds(120);
+            diagnosticsQuery.BlockUntilReleased();
 
             var first = viewModel.RefreshDiagnosticsAsync();
+            await diagnosticsQuery.WaitUntilEnteredAsync();
             var second = viewModel.RefreshDiagnosticsAsync();
+            diagnosticsQuery.ReleaseBlockedCall();
             await Task.WhenAll(first, second);
 
             Assert.Equal(1, diagnosticsQuery.TotalCalls);
@@ -266,6 +268,8 @@ public sealed class FooterViewModelBehaviorTests
         private int _activeCalls;
         private int _maxConcurrentCalls;
         private int _totalCalls;
+        private TaskCompletionSource? _enteredGate;
+        private TaskCompletionSource? _releaseGate;
 
         public EdgeSyncDiagnosticsSnapshot Current { get; set; } = new(
             "未知",
@@ -307,8 +311,6 @@ public sealed class FooterViewModelBehaviorTests
                 null),
             new ProductionContextPersistenceDiagnostics(0, null));
 
-        public TimeSpan Delay { get; set; }
-
         public int MaxConcurrentCalls => _maxConcurrentCalls;
 
         public int TotalCalls => _totalCalls;
@@ -320,6 +322,18 @@ public sealed class FooterViewModelBehaviorTests
             _totalCalls = 0;
         }
 
+        public void BlockUntilReleased()
+        {
+            _enteredGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            _releaseGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+
+        public Task WaitUntilEnteredAsync()
+            => _enteredGate?.Task ?? Task.CompletedTask;
+
+        public void ReleaseBlockedCall()
+            => _releaseGate?.TrySetResult();
+
         public async Task<EdgeSyncDiagnosticsSnapshot> GetCurrentAsync(CancellationToken ct = default)
         {
             Interlocked.Increment(ref _totalCalls);
@@ -328,9 +342,10 @@ public sealed class FooterViewModelBehaviorTests
 
             try
             {
-                if (Delay > TimeSpan.Zero)
+                if (_releaseGate is { } releaseGate)
                 {
-                    await Task.Delay(Delay, ct);
+                    _enteredGate?.TrySetResult();
+                    await releaseGate.Task.WaitAsync(ct);
                 }
 
                 return Current;

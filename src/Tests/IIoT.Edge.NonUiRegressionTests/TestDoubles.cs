@@ -235,8 +235,10 @@ internal sealed class FakeFailedRecordStore : ICloudRetryRecordStore, IMesRetryR
     public Exception? SaveException { get; set; }
     public Exception? CloudCountException { get; set; }
     public Exception? MesCountException { get; set; }
-    public TimeSpan CloudCountDelay { get; set; }
-    public TimeSpan MesCountDelay { get; set; }
+    public TaskCompletionSource? CloudCountStarted { get; set; }
+    public TaskCompletionSource? MesCountStarted { get; set; }
+    public Task? CloudCountWait { get; set; }
+    public Task? MesCountWait { get; set; }
     public Queue<Exception> SaveExceptions { get; } = new();
     public DateTime? LastDeleteExpiredOlderThanUtc { get; private set; }
     public int DeleteExpiredAbandonedResult { get; set; }
@@ -402,7 +404,7 @@ internal sealed class FakeFailedRecordStore : ICloudRetryRecordStore, IMesRetryR
             throw ex;
         }
 
-        await MaybeDelayAsync(channel);
+        await MaybeWaitAsync(channel);
         return PendingRecords.Count(x => x.Channel == channel);
     }
 
@@ -413,7 +415,7 @@ internal sealed class FakeFailedRecordStore : ICloudRetryRecordStore, IMesRetryR
             throw ex;
         }
 
-        await MaybeDelayAsync(channel);
+        await MaybeWaitAsync(channel);
         return PendingRecords.Count(x =>
             x.Channel == channel
             && string.Equals(x.ProcessType, processType, StringComparison.OrdinalIgnoreCase));
@@ -452,18 +454,26 @@ internal sealed class FakeFailedRecordStore : ICloudRetryRecordStore, IMesRetryR
         };
     }
 
-    private Task MaybeDelayAsync(string channel)
+    private async Task MaybeWaitAsync(string channel)
     {
-        var delay = channel switch
+        var started = channel switch
         {
-            "Cloud" => CloudCountDelay,
-            "MES" => MesCountDelay,
-            _ => TimeSpan.Zero
+            "Cloud" => CloudCountStarted,
+            "MES" => MesCountStarted,
+            _ => null
+        };
+        var wait = channel switch
+        {
+            "Cloud" => CloudCountWait,
+            "MES" => MesCountWait,
+            _ => null
         };
 
-        return delay > TimeSpan.Zero
-            ? Task.Delay(delay)
-            : Task.CompletedTask;
+        started?.TrySetResult();
+        if (wait is not null)
+        {
+            await wait;
+        }
     }
 
     private void ClearClaimForRecord(long id)
@@ -724,7 +734,8 @@ internal sealed class FakeDeviceLogBufferStore : IDeviceLogBufferStore
     public List<string> ReleasedClaimTokens { get; } = new();
     public Exception? SaveBatchException { get; set; }
     public Exception? CountException { get; set; }
-    public TimeSpan CountDelay { get; set; }
+    public TaskCompletionSource? CountStarted { get; set; }
+    public Task? CountWait { get; set; }
 
     public Task SaveBatchAsync(IEnumerable<DeviceLogRecord> records)
     {
@@ -840,9 +851,10 @@ internal sealed class FakeDeviceLogBufferStore : IDeviceLogBufferStore
             throw CountException;
         }
 
-        if (CountDelay > TimeSpan.Zero)
+        CountStarted?.TrySetResult();
+        if (CountWait is not null)
         {
-            await Task.Delay(CountDelay);
+            await CountWait;
         }
 
         return Records.Count;
@@ -986,7 +998,8 @@ internal sealed class FakeCapacityBufferStore : ICapacityBufferStore
     public List<(string ClaimToken, string Date, int Hour, int MinuteBucket, string ShiftCode, string PlcName)> DeletedSummaries { get; } = new();
     public int ClearAllCallCount { get; private set; }
     public Exception? CountException { get; set; }
-    public TimeSpan CountDelay { get; set; }
+    public TaskCompletionSource? CountStarted { get; set; }
+    public Task? CountWait { get; set; }
 
     public Task SaveAsync(CapacityRecord record)
     {
@@ -1087,9 +1100,10 @@ internal sealed class FakeCapacityBufferStore : ICapacityBufferStore
             throw CountException;
         }
 
-        if (CountDelay > TimeSpan.Zero)
+        CountStarted?.TrySetResult();
+        if (CountWait is not null)
         {
-            await Task.Delay(CountDelay);
+            await CountWait;
         }
 
         return Records.Count;
