@@ -1,3 +1,5 @@
+using IIoT.Edge.Application.Modules.Diagnostics;
+
 namespace IIoT.Edge.Application.Abstractions.Modules;
 
 public interface IStartupDiagnosticsStore

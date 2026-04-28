@@ -1,6 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Modules;
-
-namespace IIoT.Edge.Application.Modules;
+namespace IIoT.Edge.Application.Modules.Hardware;
 
 public sealed record ModuleHardwareSignalRequirement(
     string Label,

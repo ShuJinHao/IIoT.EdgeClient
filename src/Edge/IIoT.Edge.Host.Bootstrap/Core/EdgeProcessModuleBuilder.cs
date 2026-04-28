@@ -1,4 +1,5 @@
-﻿using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Modules.Descriptors;
+using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.UI.Shared.Modularity;
 using IIoT.Edge.UI.Shared.PluginSystem;
 using Microsoft.Extensions.Configuration;

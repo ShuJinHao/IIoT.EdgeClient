@@ -1,3 +1,5 @@
+using IIoT.Edge.Application.Modules.Diagnostics;
+using IIoT.Edge.Application.Context;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Modules;

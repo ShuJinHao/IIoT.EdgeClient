@@ -1,4 +1,4 @@
-﻿
+using IIoT.Edge.Application.Context;
 using IIoT.Edge.SharedKernel.Context;
 
 namespace IIoT.Edge.Application.Abstractions.Context;

@@ -7,7 +7,7 @@ namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
 /// <summary>
 /// 连续数组型 IO 的页面展示分组，只承载矩阵行列和展开状态，不参与业务计算。
 /// </summary>
-public sealed class IoArrayMatrixSectionModel : BaseNotifyPropertyChanged
+public sealed class IoContinuousReadMatrixSectionModel : BaseNotifyPropertyChanged
 {
     private const string SinglePointDataCategory = "单点读数据";
     private const string ContinuousDataCategory = "连续读数据";
@@ -20,7 +20,7 @@ public sealed class IoArrayMatrixSectionModel : BaseNotifyPropertyChanged
 
     private bool _isExpanded;
 
-    public IoArrayMatrixSectionModel()
+    public IoContinuousReadMatrixSectionModel()
     {
         ToggleExpandedCommand = new BaseCommand(_ => IsExpanded = !IsExpanded);
     }
@@ -33,7 +33,7 @@ public sealed class IoArrayMatrixSectionModel : BaseNotifyPropertyChanged
 
     public ObservableCollection<IoSignalModel> Columns { get; } = [];
 
-    public ObservableCollection<IoArrayMatrixRowModel> Rows { get; } = [];
+    public ObservableCollection<IoContinuousReadMatrixRowModel> Rows { get; } = [];
 
     public ICommand ToggleExpandedCommand { get; }
 
@@ -115,14 +115,14 @@ public sealed class IoArrayMatrixSectionModel : BaseNotifyPropertyChanged
 
         for (var rowIndex = 0; rowIndex < rowCount; rowIndex++)
         {
-            var row = new IoArrayMatrixRowModel
+            var row = new IoContinuousReadMatrixRowModel
             {
                 Index = rowIndex + 1
             };
 
             foreach (var column in Columns)
             {
-                row.Values.Add(new IoArrayMatrixCellModel
+                row.Values.Add(new IoContinuousReadMatrixCellModel
                 {
                     ColumnName = column.MatrixColumnTitle,
                     Value = rowIndex < column.ExpandedValues.Count
@@ -149,14 +149,14 @@ public sealed class IoArrayMatrixSectionModel : BaseNotifyPropertyChanged
         => System.Windows.Application.Current?.TryFindResource(key) as string ?? fallback;
 }
 
-public sealed class IoArrayMatrixRowModel
+public sealed class IoContinuousReadMatrixRowModel
 {
     public int Index { get; init; }
 
-    public ObservableCollection<IoArrayMatrixCellModel> Values { get; } = [];
+    public ObservableCollection<IoContinuousReadMatrixCellModel> Values { get; } = [];
 }
 
-public sealed class IoArrayMatrixCellModel
+public sealed class IoContinuousReadMatrixCellModel
 {
     public string ColumnName { get; init; } = string.Empty;
 

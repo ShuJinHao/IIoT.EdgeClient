@@ -33,7 +33,7 @@ public class IoViewViewModel : NavigationViewModelBase
 
     public ObservableCollection<IoDataSectionModel> DataSections { get; } = [];
 
-    public ObservableCollection<IoArrayMatrixSectionModel> ArraySections { get; } = [];
+    public ObservableCollection<IoContinuousReadMatrixSectionModel> ArraySections { get; } = [];
 
     public bool HasInteractionRows => InteractionRows.Count > 0;
 
@@ -177,7 +177,7 @@ public class IoViewViewModel : NavigationViewModelBase
         var writeIndex = 0;
         var interactionRows = new Dictionary<string, IoInteractionRowModel>(StringComparer.OrdinalIgnoreCase);
         var dataSections = new Dictionary<string, IoDataSectionModel>(StringComparer.OrdinalIgnoreCase);
-        var arraySections = new Dictionary<string, IoArrayMatrixSectionModel>(StringComparer.OrdinalIgnoreCase);
+        var arraySections = new Dictionary<string, IoContinuousReadMatrixSectionModel>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var mapping in result.Value.Items.OrderBy(static x => x.SortOrder))
         {
@@ -354,8 +354,8 @@ public class IoViewViewModel : NavigationViewModelBase
         return section;
     }
 
-    private static IoArrayMatrixSectionModel GetOrCreateArraySection(
-        IDictionary<string, IoArrayMatrixSectionModel> sections,
+    private static IoContinuousReadMatrixSectionModel GetOrCreateArraySection(
+        IDictionary<string, IoContinuousReadMatrixSectionModel> sections,
         IoMappingEntity mapping,
         string category)
     {
@@ -366,7 +366,7 @@ public class IoViewViewModel : NavigationViewModelBase
             return section;
         }
 
-        section = new IoArrayMatrixSectionModel
+        section = new IoContinuousReadMatrixSectionModel
         {
             Category = category,
             GroupName = groupName,
