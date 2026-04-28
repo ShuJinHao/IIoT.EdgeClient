@@ -25,7 +25,16 @@ public sealed class LongRunningBackgroundTaskService : IManagedBackgroundService
         }
 
         _linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        _executionTask = Task.Run(() => _task.StartAsync(_linkedCts.Token), CancellationToken.None);
+        try
+        {
+            _executionTask = _task.StartAsync(_linkedCts.Token);
+        }
+        catch
+        {
+            _linkedCts.Dispose();
+            _linkedCts = null;
+            throw;
+        }
 
         // 只观察启动瞬间失败，不等待长跑循环结束。
         var startupProbe = Task.Delay(StartupFaultObservationWindow, cancellationToken);
