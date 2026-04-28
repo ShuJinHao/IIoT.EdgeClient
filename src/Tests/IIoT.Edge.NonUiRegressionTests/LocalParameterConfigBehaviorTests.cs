@@ -123,6 +123,66 @@ public sealed class LocalParameterConfigBehaviorTests
     }
 
     [Fact]
+    public async Task SaveSystemConfigsHandler_WhenConfigInvalid_ShouldReturnFailureAndPreserveExistingRows()
+    {
+        using var host = new ParameterConfigTestHost(
+            systemConfigs:
+            [
+                CreateSystemConfig(1, SystemConfigKey.心跳间隔, "30")
+            ]);
+        var handler = new SaveSystemConfigsHandler(host.SystemRepo, host.Cache, host.ChangePublisher);
+
+        var result = await handler.Handle(
+            new SaveSystemConfigsCommand(
+                [
+                    new SystemConfigDto(string.Empty, "45")
+                ]),
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.StartsWith("系统配置键不能为空。", result.ErrorMessage);
+        Assert.Collection(
+            host.SystemRepo.Items,
+            item =>
+            {
+                Assert.Equal(1, item.Id);
+                Assert.Equal(SystemConfigKey.心跳间隔.ToString(), item.Key);
+                Assert.Equal("30", item.Value);
+            });
+    }
+
+    [Fact]
+    public async Task SaveDeviceParamsHandler_WhenParamInvalid_ShouldReturnFailureAndPreserveExistingRows()
+    {
+        const int deviceId = 7;
+        using var host = new ParameterConfigTestHost(
+            deviceParams:
+            [
+                CreateDeviceParam(1, deviceId, DeviceParamKey.切刀速度, "100")
+            ]);
+        var handler = new SaveDeviceParamsHandler(host.DeviceParamRepo, host.Cache, host.ChangePublisher);
+
+        var result = await handler.Handle(
+            new SaveDeviceParamsCommand(
+                deviceId,
+                [
+                    new DeviceParamDto(string.Empty, "120")
+                ]),
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.StartsWith("设备参数名不能为空。", result.ErrorMessage);
+        Assert.Collection(
+            host.DeviceParamRepo.Items,
+            item =>
+            {
+                Assert.Equal(1, item.Id);
+                Assert.Equal(DeviceParamKey.切刀速度.ToString(), item.Name);
+                Assert.Equal("100", item.Value);
+            });
+    }
+
+    [Fact]
     public async Task ParamViewCrudService_WhenSaved_ShouldReloadLatestLocalParameterSnapshots()
     {
         const int deviceId = 9;
@@ -189,25 +249,26 @@ public sealed class LocalParameterConfigBehaviorTests
     }
 
     private static SystemConfigEntity CreateSystemConfig(int id, SystemConfigKey key, string value)
-        => new(key.ToString(), value)
-        {
-            Id = id,
-            SortOrder = id
-        };
+    {
+        var entity = SystemConfigEntity.Create(key.ToString(), value);
+        entity.WithId(id);
+        entity.UpdateSortOrder(id);
+        return entity;
+    }
 
     private static DeviceParamEntity CreateDeviceParam(int id, int deviceId, DeviceParamKey key, string value)
-        => new(deviceId, key.ToString(), value, "pcs")
-        {
-            Id = id,
-            MinValue = "0",
-            MaxValue = "200",
-            SortOrder = id
-        };
+    {
+        var entity = DeviceParamEntity.Create(deviceId, key.ToString(), value, "pcs");
+        entity.WithId(id);
+        entity.UpdateBounds("0", "200");
+        entity.UpdateSortOrder(id);
+        return entity;
+    }
 
     private static NetworkDeviceEntity CreateNetworkDevice(int id, string name)
     {
         var entity = NetworkDeviceEntity.Create(name, DeviceType.PLC, "192.168.0.10", 102);
-        entity.Id = id;
+        entity.WithId(id);
         entity.AssignModule("Injection", "S7");
         entity.UpdateEndpoint("192.168.0.10", 102, null, 3000);
         entity.Enable();
@@ -426,6 +487,8 @@ public sealed class LocalParameterConfigBehaviorTests
         private readonly List<T> _items = [.. seedItems];
         private int _nextId = seedItems.Length == 0 ? 1 : seedItems.Max(x => x.Id) + 1;
 
+        public IReadOnlyList<T> Items => _items;
+
         public IQueryable<T> GetQueryable() => _items.AsQueryable();
 
         public Task<T?> GetByIdAsync<TKey>(TKey id, CancellationToken cancellationToken = default)
@@ -478,7 +541,7 @@ public sealed class LocalParameterConfigBehaviorTests
         {
             if (entity.Id == 0)
             {
-                entity.Id = _nextId++;
+                EntityIdTestHelper.SetId(entity, _nextId++);
             }
 
             _items.Add(entity);

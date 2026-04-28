@@ -10,5 +10,5 @@ public interface IEntity;
 /// </summary>
 public interface IEntity<TId> : IEntity
 {
-    TId Id { get; set; }
+    TId Id { get; }
 }

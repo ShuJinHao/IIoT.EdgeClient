@@ -35,22 +35,32 @@ public class SaveSystemConfigsHandler(
         SaveSystemConfigsCommand request,
         CancellationToken cancellationToken)
     {
-        var valid = request.Configs
-            .Where(x => !string.IsNullOrWhiteSpace(x.Key))
-            .GroupBy(x => x.Key)
-            .Select(g => g.Last())
-            .ToList();
-
-        await repo.ExecuteDeleteAsync(_ => true);
-
-        for (int i = 0; i < valid.Count; i++)
+        List<SystemConfigEntity> configs;
+        try
         {
-            var c = valid[i];
-            repo.Add(new SystemConfigEntity(c.Key, c.Value, c.Description)
-            {
-                SortOrder = i + 1
-            });
+            configs = request.Configs
+                .GroupBy(x => x.Key?.Trim() ?? string.Empty)
+                .Select(g => g.Last())
+                .Select((dto, index) =>
+                {
+                    var entity = SystemConfigEntity.Create(dto.Key, dto.Value, dto.Description);
+                    entity.UpdateSortOrder(index + 1);
+                    return entity;
+                })
+                .ToList();
         }
+        catch (ArgumentException ex)
+        {
+            return Result.Failure(ex.Message);
+        }
+
+        await repo.ExecuteDeleteAsync(_ => true, cancellationToken);
+
+        foreach (var config in configs)
+        {
+            repo.Add(config);
+        }
+
         await repo.SaveChangesAsync(cancellationToken);
 
         cache.Remove(CacheKey);

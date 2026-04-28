@@ -53,10 +53,8 @@ public sealed class EquipmentQueriesBehaviorTests
     }
 
     private static NetworkDeviceEntity CreateDevice(int id, string deviceName)
-        => new(deviceName, DeviceType.PLC, "127.0.0.1", 102)
-        {
-            Id = id
-        };
+        => NetworkDeviceEntity.Create(deviceName, DeviceType.PLC, "127.0.0.1", 102)
+            .WithId(id);
 
     private sealed class HardwareSender(NetworkDeviceEntity device) : ISender
     {

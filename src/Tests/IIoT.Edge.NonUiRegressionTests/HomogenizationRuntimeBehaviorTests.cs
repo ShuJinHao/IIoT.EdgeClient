@@ -729,7 +729,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
         {
             if (entity.Id == 0)
             {
-                entity.Id = _nextId++;
+                EntityIdTestHelper.SetId(entity, _nextId++);
             }
 
             Items.Add(entity);

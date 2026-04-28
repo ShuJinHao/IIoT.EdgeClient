@@ -38,25 +38,37 @@ public class SaveDeviceParamsHandler(
         SaveDeviceParamsCommand request,
         CancellationToken cancellationToken)
     {
-        var valid = request.Params
-            .Where(x => !string.IsNullOrWhiteSpace(x.Name))
-            .GroupBy(x => x.Name)
-            .Select(g => g.Last())
-            .ToList();
-
-        await repo.ExecuteDeleteAsync(x => x.NetworkDeviceId == request.DeviceId);
-
-        for (int i = 0; i < valid.Count; i++)
+        List<DeviceParamEntity> parameters;
+        try
         {
-            var p = valid[i];
-            repo.Add(new DeviceParamEntity(
-                request.DeviceId, p.Name, p.Value, p.Unit)
-            {
-                MinValue = p.MinValue,
-                MaxValue = p.MaxValue,
-                SortOrder = i + 1
-            });
+            parameters = request.Params
+                .GroupBy(x => x.Name?.Trim() ?? string.Empty)
+                .Select(g => g.Last())
+                .Select((dto, index) =>
+                {
+                    var entity = DeviceParamEntity.Create(
+                        request.DeviceId,
+                        dto.Name,
+                        dto.Value,
+                        dto.Unit);
+                    entity.UpdateBounds(dto.MinValue, dto.MaxValue);
+                    entity.UpdateSortOrder(index + 1);
+                    return entity;
+                })
+                .ToList();
         }
+        catch (ArgumentException ex)
+        {
+            return Result.Failure(ex.Message);
+        }
+
+        await repo.ExecuteDeleteAsync(x => x.NetworkDeviceId == request.DeviceId, cancellationToken);
+
+        foreach (var parameter in parameters)
+        {
+            repo.Add(parameter);
+        }
+
         await repo.SaveChangesAsync(cancellationToken);
 
         cache.Remove(CachePrefix + request.DeviceId);
