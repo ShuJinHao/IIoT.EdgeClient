@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Consumers;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 using IIoT.Edge.Application.Abstractions.DataPipeline.SyncTask;
@@ -25,6 +26,7 @@ public sealed class CloudRetryTask : ScheduledTaskBase
     private readonly ICloudUploadDiagnosticsStore _diagnosticsStore;
     private readonly IProcessIntegrationRegistry? _processIntegrationRegistry;
     private readonly DataPipelineCapacityGuard? _capacityGuard;
+    private readonly TimeSpan _consumerCallTimeout;
     private bool _wasUnavailable = true;
     private DateOnly? _lastAbandonedCleanupDateUtc;
 
@@ -48,7 +50,8 @@ public sealed class CloudRetryTask : ScheduledTaskBase
         ICapacitySyncTask capacitySync,
         ICloudUploadDiagnosticsStore diagnosticsStore,
         IProcessIntegrationRegistry? processIntegrationRegistry = null,
-        DataPipelineCapacityGuard? capacityGuard = null)
+        DataPipelineCapacityGuard? capacityGuard = null,
+        DataPipelineRuntimeOptions? runtimeOptions = null)
         : base(logger)
     {
         _retryStore = retryStore;
@@ -63,6 +66,7 @@ public sealed class CloudRetryTask : ScheduledTaskBase
         _diagnosticsStore = diagnosticsStore;
         _processIntegrationRegistry = processIntegrationRegistry;
         _capacityGuard = capacityGuard;
+        _consumerCallTimeout = (runtimeOptions ?? new DataPipelineRuntimeOptions()).GetConsumerCallTimeout();
     }
 
     internal Task ExecuteOneIterationAsync(CancellationToken ct = default)
@@ -278,7 +282,27 @@ public sealed class CloudRetryTask : ScheduledTaskBase
                         continue;
                     }
 
-                    var result = await _cloudBatchConsumer.ProcessBatchAsync(completedRecords).ConfigureAwait(false);
+                    CloudCallResult result;
+                    try
+                    {
+                        result = await DataPipelineConsumerCall
+                            .ExecuteAsync(
+                                ct => _cloudBatchConsumer.ProcessBatchAsync(completedRecords, ct),
+                                _consumerCallTimeout,
+                                CurrentCancellationToken)
+                            .ConfigureAwait(false);
+                    }
+                    catch (TimeoutException)
+                    {
+                        foreach (var source in validSourceRecords)
+                        {
+                            await HandleRetryFailureAsync(source, "timeout_exceeded").ConfigureAwait(false);
+                        }
+
+                        Logger.Warn($"[Retry-Cloud] {processGroup.Key} batch retry timed out. Count:{validSourceRecords.Count}");
+                        continue;
+                    }
+
                     if (result.IsSuccess)
                     {
                         foreach (var source in validSourceRecords)
@@ -377,9 +401,21 @@ public sealed class CloudRetryTask : ScheduledTaskBase
             return RetryProcessResult.Continue;
         }
 
-        var result = await _cloudConsumer
-            .ProcessWithResultAsync(new CellCompletedRecord { CellData = cellData })
-            .ConfigureAwait(false);
+        CloudCallResult result;
+        try
+        {
+            result = await DataPipelineConsumerCall
+                .ExecuteAsync(
+                    ct => _cloudConsumer.ProcessWithResultAsync(new CellCompletedRecord { CellData = cellData }, ct),
+                    _consumerCallTimeout,
+                    CurrentCancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            await HandleRetryFailureAsync(record, "timeout_exceeded").ConfigureAwait(false);
+            return RetryProcessResult.Continue;
+        }
 
         if (result.IsSuccess)
         {

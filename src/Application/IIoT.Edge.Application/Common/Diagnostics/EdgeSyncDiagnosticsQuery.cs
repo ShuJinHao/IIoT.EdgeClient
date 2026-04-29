@@ -3,6 +3,7 @@ using IIoT.Edge.Application.Context;
 using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Common.Persistence;
 
@@ -19,6 +20,7 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
     private readonly IDeviceLogBufferStore _deviceLogBufferStore;
     private readonly ICapacityBufferStore _capacityBufferStore;
     private readonly IProductionContextStore _productionContextStore;
+    private readonly IExternalHeartbeatStateStore? _heartbeatStateStore;
 
     public EdgeSyncDiagnosticsQuery(
         IProductionContextStore productionContextStore,
@@ -29,7 +31,8 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
         ICloudRetryRecordStore cloudRetryStore,
         IMesRetryRecordStore mesRetryStore,
         IDeviceLogBufferStore deviceLogBufferStore,
-        ICapacityBufferStore capacityBufferStore)
+        ICapacityBufferStore capacityBufferStore,
+        IExternalHeartbeatStateStore? heartbeatStateStore = null)
     {
         _productionContextStore = productionContextStore;
         _deviceService = deviceService;
@@ -40,6 +43,7 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
         _mesRetryStore = mesRetryStore;
         _deviceLogBufferStore = deviceLogBufferStore;
         _capacityBufferStore = capacityBufferStore;
+        _heartbeatStateStore = heartbeatStateStore;
     }
 
     public async Task<EdgeSyncDiagnosticsSnapshot> GetCurrentAsync(CancellationToken ct = default)
@@ -82,7 +86,8 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
             LastCapacityBlockAt: cloudDiagnostics.LastCapacityBlockAt,
             IsPersistenceFaulted: cloudPending.IsPersistenceFaulted,
             LastPersistenceFaultAt: cloudPending.LastPersistenceFaultAt,
-            PersistenceFaultMessage: cloudPending.PersistenceFaultMessage);
+            PersistenceFaultMessage: cloudPending.PersistenceFaultMessage,
+            Heartbeat: GetHeartbeat(ExternalSystemKind.Cloud));
 
         var mes = new MesSyncDiagnosticsSnapshot(
             RuntimeState: mesRuntime.RuntimeState,
@@ -98,7 +103,8 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
             LastCapacityBlockAt: mesRuntime.LastCapacityBlockAt,
             IsPersistenceFaulted: mesPending.IsPersistenceFaulted,
             LastPersistenceFaultAt: mesPending.LastPersistenceFaultAt,
-            PersistenceFaultMessage: mesPending.PersistenceFaultMessage);
+            PersistenceFaultMessage: mesPending.PersistenceFaultMessage,
+            Heartbeat: GetHeartbeat(ExternalSystemKind.Mes));
 
         return new EdgeSyncDiagnosticsSnapshot(
             DeviceName: _deviceService.CurrentDevice?.DeviceName ?? "未知",
@@ -127,6 +133,9 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
             fault.LastFaultAt,
             fault.FaultMessage);
     }
+
+    private ExternalHeartbeatSnapshot? GetHeartbeat(ExternalSystemKind kind)
+        => _heartbeatStateStore?.Get(kind);
 
     private async Task<PendingDiagnosticsSnapshot> GetMesPendingDiagnosticsAsync(CancellationToken ct)
     {
@@ -212,6 +221,11 @@ public static class EdgeSyncDiagnosticsFormatter
             return "云端：产能阻塞";
         }
 
+        if (IsHeartbeatWaiting(snapshot.Heartbeat))
+        {
+            return "云端：等待心跳恢复";
+        }
+
         if (snapshot.GateState == EdgeUploadGateState.Ready)
         {
             return "云端：已就绪";
@@ -229,6 +243,7 @@ public static class EdgeSyncDiagnosticsFormatter
     {
         _ when snapshot.IsPersistenceFaulted => "MES：存储故障",
         _ when snapshot.IsCapacityBlocked => "MES：产能阻塞",
+        _ when IsHeartbeatWaiting(snapshot.Heartbeat) => "MES：等待心跳恢复",
         MesRetryRuntimeState.Retrying => "MES：重试中",
         MesRetryRuntimeState.Backoff => "MES：退避中",
         MesRetryRuntimeState.LastFailed => "MES：最近失败",
@@ -251,6 +266,7 @@ public static class EdgeSyncDiagnosticsFormatter
             $"最近成功：{FormatTimestamp(snapshot.LastSuccessAt)}",
             $"最近失败：{FormatTimestamp(snapshot.LastFailureAt)}",
             $"待处理：重试={snapshot.PendingRetryCount}，日志={snapshot.PendingDeviceLogCount}，产能={snapshot.PendingCapacityCount}",
+            FormatHeartbeatSummary(snapshot.Heartbeat),
             FormatPersistenceFaultSummary(
                 snapshot.IsPersistenceFaulted,
                 snapshot.LastPersistenceFaultAt,
@@ -272,6 +288,7 @@ public static class EdgeSyncDiagnosticsFormatter
             $"最近失败：{FormatTimestamp(snapshot.LastFailureAt)}",
             $"失败原因：{NormalizeText(snapshot.LastFailureReason)}",
             $"待处理：重试={snapshot.PendingRetryCount}",
+            FormatHeartbeatSummary(snapshot.Heartbeat),
             FormatPersistenceFaultSummary(
                 snapshot.IsPersistenceFaulted,
                 snapshot.LastPersistenceFaultAt,
@@ -282,6 +299,21 @@ public static class EdgeSyncDiagnosticsFormatter
                 snapshot.BlockedReason,
                 snapshot.LastCapacityBlockAt)
         ]);
+    }
+
+    public static string FormatHeartbeatSummary(ExternalHeartbeatSnapshot? snapshot)
+    {
+        if (snapshot is null)
+        {
+            return "心跳：未配置";
+        }
+
+        return snapshot.State switch
+        {
+            ExternalHeartbeatState.Ready => "心跳：已就绪",
+            ExternalHeartbeatState.NotReady => $"心跳：等待恢复（{NormalizeText(snapshot.ReasonCode)}）",
+            _ => "心跳：未知"
+        };
     }
 
     public static string FormatPersistenceFaultSummary(
@@ -422,6 +454,9 @@ public static class EdgeSyncDiagnosticsFormatter
         => string.IsNullOrWhiteSpace(value)
             ? "--"
             : value;
+
+    private static bool IsHeartbeatWaiting(ExternalHeartbeatSnapshot? heartbeat)
+        => heartbeat is not null && !heartbeat.IsReady;
 
     private static string NormalizeProcessType(string? processType)
     {

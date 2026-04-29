@@ -7,6 +7,7 @@ using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 using IIoT.Edge.Application.Abstractions.DataPipeline.SyncTask;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Auth;
+using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Common.Models;
@@ -191,7 +192,7 @@ internal sealed class FakeCellDataConsumer : ICellDataConsumer
     {
         Name = name;
         Order = order;
-        RetryChannel = retryChannel;
+        RetryChannel = ParseRetryChannel(retryChannel);
         _result = result;
         FailureMode = failureMode;
         _processAsync = processAsync;
@@ -200,12 +201,13 @@ internal sealed class FakeCellDataConsumer : ICellDataConsumer
     public string Name { get; }
     public int Order { get; }
     public ConsumerFailureMode FailureMode { get; }
-    public string? RetryChannel { get; }
+    public DataPipelineRetryChannel RetryChannel { get; }
 
     public int ProcessCallCount { get; private set; }
 
-    public async Task<bool> ProcessAsync(CellCompletedRecord record)
+    public async Task<bool> ProcessAsync(CellCompletedRecord record, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         ProcessCallCount++;
 
         if (_processAsync is not null)
@@ -214,6 +216,54 @@ internal sealed class FakeCellDataConsumer : ICellDataConsumer
         }
 
         return _result;
+    }
+
+    private static DataPipelineRetryChannel ParseRetryChannel(string? retryChannel)
+        => retryChannel?.ToUpperInvariant() switch
+        {
+            "CLOUD" => DataPipelineRetryChannel.Cloud,
+            "MES" => DataPipelineRetryChannel.Mes,
+            _ => DataPipelineRetryChannel.None
+        };
+}
+
+internal sealed class FakeExternalHeartbeatStateStore : IExternalHeartbeatStateStore
+{
+    private readonly Dictionary<ExternalSystemKind, ExternalHeartbeatSnapshot> _snapshots = new();
+
+    public ExternalHeartbeatSnapshot Get(ExternalSystemKind system)
+        => _snapshots.TryGetValue(system, out var snapshot)
+            ? snapshot
+            : ExternalHeartbeatSnapshot.Unknown(system);
+
+    public void MarkReady(ExternalSystemKind system, DateTime? occurredAtUtc = null, string? message = null)
+    {
+        var occurredAt = occurredAtUtc ?? DateTime.UtcNow;
+        _snapshots[system] = Get(system) with
+        {
+            State = ExternalHeartbeatState.Ready,
+            ReasonCode = "ready",
+            Message = message,
+            LastAttemptAtUtc = occurredAt,
+            LastSuccessAtUtc = occurredAt
+        };
+    }
+
+    public void MarkNotReady(
+        ExternalSystemKind system,
+        string reasonCode,
+        string? message = null,
+        DateTime? occurredAtUtc = null)
+    {
+        var occurredAt = occurredAtUtc ?? DateTime.UtcNow;
+        _snapshots[system] = Get(system) with
+        {
+            State = ExternalHeartbeatState.NotReady,
+            ReasonCode = reasonCode,
+            Message = message,
+            LastAttemptAtUtc = occurredAt,
+            LastFailureAtUtc = occurredAt
+        };
     }
 }
 
@@ -1183,8 +1233,11 @@ internal sealed class FakeCloudBatchConsumer : ICloudBatchConsumer
 
     public void EnqueueResult(CloudCallResult result) => _results.Enqueue(result);
 
-    public Task<CloudCallResult> ProcessBatchAsync(IReadOnlyList<CellCompletedRecord> records)
+    public Task<CloudCallResult> ProcessBatchAsync(
+        IReadOnlyList<CellCompletedRecord> records,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         ProcessBatchCallCount++;
         ReceivedBatches.Add(records.ToList());
 
@@ -1310,7 +1363,7 @@ internal sealed class FakeCloudConsumer : ICloudConsumer
     public string Name { get; init; } = "Cloud";
     public int Order { get; init; } = 20;
     public ConsumerFailureMode FailureMode => ConsumerFailureMode.Durable;
-    public string? RetryChannel => "Cloud";
+    public DataPipelineRetryChannel RetryChannel => DataPipelineRetryChannel.Cloud;
     public int ProcessCallCount { get; private set; }
     public List<CellCompletedRecord> ProcessedRecords { get; } = new();
 
@@ -1322,11 +1375,14 @@ internal sealed class FakeCloudConsumer : ICloudConsumer
 
     public void EnqueueResult(CloudCallResult result) => _results.Enqueue(result);
 
-    public async Task<bool> ProcessAsync(CellCompletedRecord record)
-        => (await ProcessWithResultAsync(record).ConfigureAwait(false)).IsSuccess;
+    public async Task<bool> ProcessAsync(CellCompletedRecord record, CancellationToken cancellationToken = default)
+        => (await ProcessWithResultAsync(record, cancellationToken).ConfigureAwait(false)).IsSuccess;
 
-    public Task<CloudCallResult> ProcessWithResultAsync(CellCompletedRecord record)
+    public Task<CloudCallResult> ProcessWithResultAsync(
+        CellCompletedRecord record,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         ProcessCallCount++;
         ProcessedRecords.Add(record);
 
@@ -1346,14 +1402,15 @@ internal sealed class FakeMesConsumer : IMesConsumer
     public string Name { get; init; } = "MES";
     public int Order { get; init; } = 30;
     public ConsumerFailureMode FailureMode => ConsumerFailureMode.Durable;
-    public string? RetryChannel => "MES";
+    public DataPipelineRetryChannel RetryChannel => DataPipelineRetryChannel.Mes;
     public int ProcessCallCount { get; private set; }
     public List<CellCompletedRecord> ProcessedRecords { get; } = new();
 
     public void EnqueueResult(bool success) => _results.Enqueue(success);
 
-    public Task<bool> ProcessAsync(CellCompletedRecord record)
+    public Task<bool> ProcessAsync(CellCompletedRecord record, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         ProcessCallCount++;
         ProcessedRecords.Add(record);
 

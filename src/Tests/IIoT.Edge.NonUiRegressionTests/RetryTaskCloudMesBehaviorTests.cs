@@ -3,6 +3,7 @@ using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
+using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Module.Injection.Payload;
 using IIoT.Edge.Runtime.DataPipeline.Services;
 using IIoT.Edge.Runtime.DataPipeline.Tasks;
@@ -294,6 +295,60 @@ public sealed class RetryTaskCloudMesBehaviorTests
         Assert.Empty(failedStore.Updates);
         Assert.Empty(failedStore.ReleasedClaimTokens);
         Assert.Equal(MesRetryRuntimeState.Idle, diagnosticsStore.Snapshot.RuntimeState);
+    }
+
+    [Fact]
+    public async Task MesRetry_WhenHeartbeatIsNotReady_ShouldLeaveBacklogUntouched()
+    {
+        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+
+        var failedStore = new FakeFailedRecordStore();
+        failedStore.PendingRecords.Add(CreateFailedRecord(602, "MES", "MES", 0, "Injection", new InjectionCellData { Barcode = "MES-602" }));
+        var diagnosticsStore = new FakeMesRetryDiagnosticsStore();
+        var heartbeatStore = new FakeExternalHeartbeatStateStore();
+        heartbeatStore.MarkNotReady(ExternalSystemKind.Mes, "mes_heartbeat_timeout");
+        var mesConsumer = new FakeMesConsumer();
+
+        var task = new TestableMesRetryTask(
+            new FakeLogService(),
+            failedStore,
+            new FakeMesFallbackBufferStore(),
+            mesConsumer,
+            diagnosticsStore,
+            heartbeatStore: heartbeatStore);
+
+        await task.ExecuteOnceAsync();
+
+        Assert.Single(failedStore.PendingRecords);
+        Assert.Empty(failedStore.DeletedIds);
+        Assert.Empty(failedStore.Updates);
+        Assert.Equal(0, mesConsumer.ProcessCallCount);
+        Assert.Equal(MesRetryRuntimeState.Backoff, diagnosticsStore.Snapshot.RuntimeState);
+    }
+
+    [Fact]
+    public async Task MesRetry_WhenHeartbeatRecovers_ShouldUploadPendingRecords()
+    {
+        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+
+        var failedStore = new FakeFailedRecordStore();
+        failedStore.PendingRecords.Add(CreateFailedRecord(603, "MES", "MES", 0, "Injection", new InjectionCellData { Barcode = "MES-603" }));
+        var heartbeatStore = new FakeExternalHeartbeatStateStore();
+        heartbeatStore.MarkReady(ExternalSystemKind.Mes);
+        var mesConsumer = new FakeMesConsumer();
+
+        var task = new TestableMesRetryTask(
+            new FakeLogService(),
+            failedStore,
+            new FakeMesFallbackBufferStore(),
+            mesConsumer,
+            heartbeatStore: heartbeatStore);
+
+        await task.ExecuteOnceAsync();
+
+        Assert.Equal(1, mesConsumer.ProcessCallCount);
+        Assert.Contains(603L, failedStore.DeletedIds);
+        Assert.Empty(failedStore.Updates);
     }
 
     [Fact]
@@ -943,7 +998,8 @@ public sealed class RetryTaskCloudMesBehaviorTests
             FakeMesDeadLetterStore? deadLetterStore = null,
             FakeCriticalPersistenceFallbackWriter? criticalWriter = null,
             FakeLocalSystemRuntimeConfigService? runtimeConfig = null,
-            DataPipelineCapacityGuard? capacityGuard = null)
+            DataPipelineCapacityGuard? capacityGuard = null,
+            FakeExternalHeartbeatStateStore? heartbeatStore = null)
         {
             fallbackStore.RetryStore = retryStore;
             _inner = new MesRetryTask(
@@ -955,7 +1011,8 @@ public sealed class RetryTaskCloudMesBehaviorTests
                 mesConsumer,
                 runtimeConfig ?? new FakeLocalSystemRuntimeConfigService(),
                 diagnosticsStore ?? new FakeMesRetryDiagnosticsStore(),
-                capacityGuard);
+                capacityGuard,
+                heartbeatStore);
         }
 
         public Task ExecuteOnceAsync()

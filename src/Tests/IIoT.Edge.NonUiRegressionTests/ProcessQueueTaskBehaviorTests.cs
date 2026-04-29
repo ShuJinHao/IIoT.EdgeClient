@@ -104,6 +104,43 @@ public sealed class ProcessQueueTaskBehaviorTests
     }
 
     [Fact]
+    public async Task DurableConsumerTimeout_ShouldPersistRetryRecordWithTimeoutReason()
+    {
+        var pipeline = new FakeDataPipelineService();
+        var cloudRetryStore = new FakeFailedRecordStore();
+        await pipeline.EnqueueAsync(CreateRecord());
+
+        var cloudConsumer = new FakeCellDataConsumer(
+            name: "Cloud",
+            order: 10,
+            retryChannel: "Cloud",
+            result: true,
+            failureMode: ConsumerFailureMode.Durable,
+            processAsync: _ => Task.Delay(TimeSpan.FromSeconds(5)).ContinueWith(_ => true));
+
+        var task = new TestableProcessQueueTask(
+            new FakeLogService(),
+            pipeline,
+            [cloudConsumer],
+            cloudRetryStore,
+            new FakeFailedRecordStore(),
+            new FakeCloudFallbackBufferStore(),
+            new FakeMesFallbackBufferStore(),
+            new FakeCloudDeadLetterStore(),
+            new FakeMesDeadLetterStore(),
+            new FakeCriticalPersistenceFallbackWriter(),
+            runtimeOptions: new DataPipelineRuntimeOptions
+            {
+                ConsumerCallTimeoutSeconds = 1
+            });
+
+        await task.ExecuteOnceAsync();
+
+        var retry = Assert.Single(cloudRetryStore.PendingRecords);
+        Assert.Equal("timeout_exceeded", retry.ErrorMessage);
+    }
+
+    [Fact]
     public async Task CloudRetryStoreFailure_ShouldWriteToFallbackBuffer()
     {
         var logger = new FakeLogService();
@@ -543,7 +580,8 @@ public sealed class ProcessQueueTaskBehaviorTests
         FakeCloudDeadLetterStore cloudDeadLetterStore,
         FakeMesDeadLetterStore mesDeadLetterStore,
         FakeCriticalPersistenceFallbackWriter criticalWriter,
-        DataPipelineCapacityGuard? capacityGuard = null)
+        DataPipelineCapacityGuard? capacityGuard = null,
+        DataPipelineRuntimeOptions? runtimeOptions = null)
         : ProcessQueueTask(
             logger,
             pipelineService,
@@ -555,7 +593,8 @@ public sealed class ProcessQueueTaskBehaviorTests
             cloudDeadLetterStore,
             mesDeadLetterStore,
             criticalWriter,
-            capacityGuard)
+            capacityGuard,
+            runtimeOptions)
     {
         public Task ExecuteOnceAsync() => base.ExecuteAsync();
     }

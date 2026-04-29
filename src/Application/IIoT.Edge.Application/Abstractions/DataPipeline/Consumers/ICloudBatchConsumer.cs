@@ -8,5 +8,7 @@ namespace IIoT.Edge.Application.Abstractions.DataPipeline.Consumers;
 /// </summary>
 public interface ICloudBatchConsumer
 {
-    Task<CloudCallResult> ProcessBatchAsync(IReadOnlyList<CellCompletedRecord> records);
+    Task<CloudCallResult> ProcessBatchAsync(
+        IReadOnlyList<CellCompletedRecord> records,
+        CancellationToken cancellationToken = default);
 }

@@ -2,6 +2,7 @@
 using System.Windows.Media;
 using System.Windows.Threading;
 using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Common.Diagnostics;
 using IIoT.Edge.UI.Shared.Localization;
@@ -189,6 +190,7 @@ public class FooterViewModel : ViewModelBase
         {
             _ when snapshot.Cloud.IsPersistenceFaulted => OfflineBrush,
             _ when snapshot.Cloud.IsCapacityBlocked => OfflineBrush,
+            _ when IsHeartbeatWaiting(snapshot.Cloud.Heartbeat) => RefreshingBrush,
             _ when snapshot.Cloud.GateState == EdgeUploadGateState.Ready => OnlineBrush,
             _ when snapshot.Cloud.IsPausedWaitingForRecovery => RefreshingBrush,
             _ => OfflineBrush
@@ -199,6 +201,7 @@ public class FooterViewModel : ViewModelBase
         {
             _ when snapshot.Mes.IsPersistenceFaulted => OfflineBrush,
             _ when snapshot.Mes.IsCapacityBlocked => OfflineBrush,
+            _ when IsHeartbeatWaiting(snapshot.Mes.Heartbeat) => RefreshingBrush,
             MesRetryRuntimeState.Retrying => OnlineBrush,
             MesRetryRuntimeState.Idle => OnlineBrush,
             MesRetryRuntimeState.Backoff => RefreshingBrush,
@@ -216,6 +219,11 @@ public class FooterViewModel : ViewModelBase
         if (snapshot.IsCapacityBlocked)
         {
             return _languageService.GetString("Shell_Footer_CloudCapacityBlocked", "云端：产能阻塞");
+        }
+
+        if (IsHeartbeatWaiting(snapshot.Heartbeat))
+        {
+            return _languageService.GetString("Shell_Footer_CloudHeartbeatWaiting", "云端：等待心跳恢复");
         }
 
         if (snapshot.GateState == EdgeUploadGateState.Ready)
@@ -238,6 +246,7 @@ public class FooterViewModel : ViewModelBase
     {
         _ when snapshot.IsPersistenceFaulted => _languageService.GetString("Shell_Footer_MesPersistenceFault", "MES：存储故障"),
         _ when snapshot.IsCapacityBlocked => _languageService.GetString("Shell_Footer_MesCapacityBlocked", "MES：产能阻塞"),
+        _ when IsHeartbeatWaiting(snapshot.Heartbeat) => _languageService.GetString("Shell_Footer_MesHeartbeatWaiting", "MES：等待心跳恢复"),
         MesRetryRuntimeState.Retrying => _languageService.GetString("Shell_Footer_MesRetrying", "MES：重试中"),
         MesRetryRuntimeState.Backoff => _languageService.GetString("Shell_Footer_MesBackoff", "MES：退避中"),
         MesRetryRuntimeState.LastFailed => _languageService.GetString("Shell_Footer_MesLastFailed", "MES：最近失败"),
@@ -257,4 +266,7 @@ public class FooterViewModel : ViewModelBase
         EdgeUploadBlockReason.UploadTokenRejected => _languageService.GetString("Shell_BlockReason_UploadTokenRejected", "上传令牌被拒绝"),
         _ => _languageService.GetString("Shell_Footer_Unknown", "未知")
     };
+
+    private static bool IsHeartbeatWaiting(ExternalHeartbeatSnapshot? heartbeat)
+        => heartbeat is not null && !heartbeat.IsReady;
 }

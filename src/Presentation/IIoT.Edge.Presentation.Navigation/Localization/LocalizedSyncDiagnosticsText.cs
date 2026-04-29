@@ -2,6 +2,7 @@ using IIoT.Edge.Application.Modules.Diagnostics;
 using IIoT.Edge.Application.Context;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Context;
+using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.UI.Shared.Localization;
 
@@ -33,6 +34,7 @@ internal sealed class LocalizedSyncDiagnosticsText(IAppLanguageService languageS
                 snapshot.PendingRetryCount,
                 snapshot.PendingDeviceLogCount,
                 snapshot.PendingCapacityCount),
+            FormatHeartbeatSummary(snapshot.Heartbeat),
             FormatPersistenceFaultSummary(
                 snapshot.IsPersistenceFaulted,
                 snapshot.LastPersistenceFaultAt,
@@ -53,6 +55,7 @@ internal sealed class LocalizedSyncDiagnosticsText(IAppLanguageService languageS
             Format("Navigation_Sync_LastFailureFormat", "最近失败：{0}", FormatTimestamp(snapshot.LastFailureAt)),
             Format("Navigation_Sync_FailureReasonFormat", "失败原因：{0}", NormalizeText(snapshot.LastFailureReason)),
             Format("Navigation_Sync_PendingMesFormat", "待处理：重试={0}", snapshot.PendingRetryCount),
+            FormatHeartbeatSummary(snapshot.Heartbeat),
             FormatPersistenceFaultSummary(
                 snapshot.IsPersistenceFaulted,
                 snapshot.LastPersistenceFaultAt,
@@ -63,6 +66,26 @@ internal sealed class LocalizedSyncDiagnosticsText(IAppLanguageService languageS
                 snapshot.BlockedReason,
                 snapshot.LastCapacityBlockAt)
         ]);
+
+    public string FormatHeartbeatSummary(ExternalHeartbeatSnapshot? snapshot)
+    {
+        if (snapshot is null)
+        {
+            return Text("Navigation_Heartbeat_NotConfigured", "心跳：未配置");
+        }
+
+        var stateText = snapshot.State switch
+        {
+            ExternalHeartbeatState.Ready => Text("Navigation_Heartbeat_Ready", "心跳：已就绪"),
+            ExternalHeartbeatState.NotReady => Format(
+                "Navigation_Heartbeat_NotReadyFormat",
+                "心跳：等待恢复（{0}）",
+                NormalizeText(snapshot.ReasonCode)),
+            _ => Text("Navigation_Heartbeat_Unknown", "心跳：未知")
+        };
+
+        return stateText;
+    }
 
     public string FormatPersistenceFaultSummary(
         bool isPersistenceFaulted,

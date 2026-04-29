@@ -1,6 +1,7 @@
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
+using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Runtime.Base;
@@ -20,6 +21,8 @@ public sealed class MesRetryTask : ScheduledTaskBase
     private readonly ILocalSystemRuntimeConfigService _runtimeConfig;
     private readonly IMesRetryDiagnosticsStore _diagnosticsStore;
     private readonly DataPipelineCapacityGuard? _capacityGuard;
+    private readonly IExternalHeartbeatStateStore? _heartbeatStateStore;
+    private readonly TimeSpan _consumerCallTimeout;
 
     private const int MaxRetryCount = 20;
     private static readonly DateTime AbandonedRetryTimeUtc = DateTime.SpecifyKind(DateTime.MaxValue, DateTimeKind.Utc);
@@ -36,7 +39,9 @@ public sealed class MesRetryTask : ScheduledTaskBase
         IMesConsumer mesConsumer,
         ILocalSystemRuntimeConfigService runtimeConfig,
         IMesRetryDiagnosticsStore diagnosticsStore,
-        DataPipelineCapacityGuard? capacityGuard = null)
+        DataPipelineCapacityGuard? capacityGuard = null,
+        IExternalHeartbeatStateStore? heartbeatStateStore = null,
+        DataPipelineRuntimeOptions? runtimeOptions = null)
         : base(logger)
     {
         _retryStore = retryStore;
@@ -47,6 +52,8 @@ public sealed class MesRetryTask : ScheduledTaskBase
         _runtimeConfig = runtimeConfig;
         _diagnosticsStore = diagnosticsStore;
         _capacityGuard = capacityGuard;
+        _heartbeatStateStore = heartbeatStateStore;
+        _consumerCallTimeout = (runtimeOptions ?? new DataPipelineRuntimeOptions()).GetConsumerCallTimeout();
     }
 
     internal Task ExecuteOneIterationAsync(CancellationToken ct = default)
@@ -66,6 +73,12 @@ public sealed class MesRetryTask : ScheduledTaskBase
             }
 
             _diagnosticsStore.SetRuntimeState(MesRetryRuntimeState.Idle);
+            return;
+        }
+
+        if (!IsMesHeartbeatReady())
+        {
+            _diagnosticsStore.SetRuntimeState(MesRetryRuntimeState.Backoff);
             return;
         }
 
@@ -230,7 +243,22 @@ public sealed class MesRetryTask : ScheduledTaskBase
         }
 
         var completedRecord = new CellCompletedRecord { CellData = cellData };
-        var success = await _mesConsumer.ProcessAsync(completedRecord).ConfigureAwait(false);
+        bool success;
+        try
+        {
+            success = await DataPipelineConsumerCall
+                .ExecuteAsync(
+                    ct => _mesConsumer.ProcessAsync(completedRecord, ct),
+                    _consumerCallTimeout,
+                    CurrentCancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            await HandleRetryFailureAsync(record, "timeout_exceeded").ConfigureAwait(false);
+            return false;
+        }
+
         if (success)
         {
             await _retryStore.DeleteAsync(record.Id).ConfigureAwait(false);
@@ -265,6 +293,10 @@ public sealed class MesRetryTask : ScheduledTaskBase
                 ? MesRetryRuntimeState.Backoff
                 : MesRetryRuntimeState.Idle);
     }
+
+    private bool IsMesHeartbeatReady()
+        => _heartbeatStateStore is null
+            || _heartbeatStateStore.Get(ExternalSystemKind.Mes).IsReady;
 
     private static TimeSpan CalculateBackoff(int retryCount)
     {

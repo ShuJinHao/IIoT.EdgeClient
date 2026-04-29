@@ -1,6 +1,7 @@
 using IIoT.Edge.Application.Context;
 using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Abstractions.Integration;
 
 namespace IIoT.Edge.Application.Abstractions.Modules;
 
@@ -24,7 +25,8 @@ public sealed record CloudSyncDiagnosticsSnapshot(
     DateTime? LastCapacityBlockAt,
     bool IsPersistenceFaulted,
     DateTime? LastPersistenceFaultAt,
-    string? PersistenceFaultMessage);
+    string? PersistenceFaultMessage,
+    ExternalHeartbeatSnapshot? Heartbeat = null);
 
 public sealed record MesSyncDiagnosticsSnapshot(
     MesRetryRuntimeState RuntimeState,
@@ -40,7 +42,8 @@ public sealed record MesSyncDiagnosticsSnapshot(
     DateTime? LastCapacityBlockAt,
     bool IsPersistenceFaulted,
     DateTime? LastPersistenceFaultAt,
-    string? PersistenceFaultMessage);
+    string? PersistenceFaultMessage,
+    ExternalHeartbeatSnapshot? Heartbeat = null);
 
 public sealed record EdgeSyncDiagnosticsSnapshot(
     string DeviceName,

@@ -24,11 +24,13 @@
     <sys:String x:Key="Shell_Footer_MesIdle">MES：空闲</sys:String>
     <sys:String x:Key="Shell_Footer_CloudPersistenceFault">云端：存储故障</sys:String>
     <sys:String x:Key="Shell_Footer_CloudCapacityBlocked">云端：产能阻塞</sys:String>
+    <sys:String x:Key="Shell_Footer_CloudHeartbeatWaiting">云端：等待心跳恢复</sys:String>
     <sys:String x:Key="Shell_Footer_CloudReady">云端：已就绪</sys:String>
     <sys:String x:Key="Shell_Footer_CloudWaitingRecovery">云端：等待恢复</sys:String>
     <sys:String x:Key="Shell_Footer_CloudBlockedFormat">云端：已阻塞（{0}）</sys:String>
     <sys:String x:Key="Shell_Footer_MesPersistenceFault">MES：存储故障</sys:String>
     <sys:String x:Key="Shell_Footer_MesCapacityBlocked">MES：产能阻塞</sys:String>
+    <sys:String x:Key="Shell_Footer_MesHeartbeatWaiting">MES：等待心跳恢复</sys:String>
     <sys:String x:Key="Shell_Footer_MesRetrying">MES：重试中</sys:String>
     <sys:String x:Key="Shell_Footer_MesBackoff">MES：退避中</sys:String>
     <sys:String x:Key="Shell_Footer_MesLastFailed">MES：最近失败</sys:String>

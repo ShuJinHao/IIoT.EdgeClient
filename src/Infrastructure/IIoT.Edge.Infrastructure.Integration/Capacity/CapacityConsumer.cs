@@ -1,5 +1,6 @@
 ﻿using IIoT.Edge.Application.Abstractions.DataPipeline.Consumers;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
+using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Events;
 using IIoT.Edge.Application.Abstractions.Logging;
@@ -21,7 +22,7 @@ public class CapacityConsumer : ICapacityConsumer
     public int Order => 10;
     public IIoT.Edge.Application.Abstractions.DataPipeline.ConsumerFailureMode FailureMode
         => IIoT.Edge.Application.Abstractions.DataPipeline.ConsumerFailureMode.BestEffort;
-    public string? RetryChannel => null;
+    public DataPipelineRetryChannel RetryChannel => DataPipelineRetryChannel.None;
 
     public CapacityConsumer(
         ITodayCapacityStore todayCapacityStore,
@@ -37,7 +38,7 @@ public class CapacityConsumer : ICapacityConsumer
         _logger = logger;
     }
 
-    public async Task<bool> ProcessAsync(CellCompletedRecord record)
+    public async Task<bool> ProcessAsync(CellCompletedRecord record, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -52,7 +53,7 @@ public class CapacityConsumer : ICapacityConsumer
             await _publisher.Publish(new CapacityUpdatedNotification
             {
                 Snapshot = snapshot
-            });
+            }, cancellationToken);
 
             if (!_deviceService.CanUploadToCloud)
             {

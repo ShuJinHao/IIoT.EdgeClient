@@ -9,6 +9,7 @@ public abstract class ScheduledTaskBase : IBackgroundTask
 {
     protected readonly ProductionContext? Context;
     protected readonly ILogService Logger;
+    protected CancellationToken CurrentCancellationToken { get; private set; }
 
     public abstract string TaskName { get; }
     protected abstract int ExecuteInterval { get; }
@@ -41,6 +42,7 @@ public abstract class ScheduledTaskBase : IBackgroundTask
 
     private async Task TaskCoreAsync(CancellationToken ct)
     {
+        CurrentCancellationToken = ct;
         var deviceInfo = Context is not null ? $"[{Context.DeviceName}] " : string.Empty;
         Logger.Info($"{deviceInfo}{TaskName} started. Interval: {ExecuteInterval}ms");
 
