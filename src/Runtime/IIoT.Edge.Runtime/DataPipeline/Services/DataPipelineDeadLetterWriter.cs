@@ -10,9 +10,7 @@ internal static class DataPipelineDeadLetterWriter
         Func<DeadLetterRecord, Task> saveAsync,
         ICriticalPersistenceFallbackWriter criticalFallbackWriter,
         ILogService logger,
-        string logPrefix,
-        string deadLetterName,
-        string criticalSource,
+        DataPipelineDeadLetterChannel channel,
         string processType,
         string cellDataJson,
         string failedTarget,
@@ -35,16 +33,21 @@ internal static class DataPipelineDeadLetterWriter
                 CreatedAt = DateTime.UtcNow
             }).ConfigureAwait(false);
 
-            logger.Fatal($"[{logPrefix}] {processType} record {sourceRecordId} moved into {deadLetterName} dead-letter store.");
+            logger.Fatal($"[{channel.LogPrefix}] {processType} record {sourceRecordId} moved into {channel.DeadLetterName} dead-letter store.");
             return true;
         }
         catch (Exception ex)
         {
             criticalFallbackWriter.Write(
-                criticalSource,
+                channel.CriticalSource,
                 $"{failureReason} Dead-letter save failed: {ex.Message}",
                 ex);
             return false;
         }
     }
 }
+
+internal readonly record struct DataPipelineDeadLetterChannel(
+    string LogPrefix,
+    string DeadLetterName,
+    string CriticalSource);

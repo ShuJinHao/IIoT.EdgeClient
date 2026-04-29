@@ -14,6 +14,11 @@ namespace IIoT.Edge.Runtime.DataPipeline.Tasks;
 
 public sealed class CloudRetryTask : ScheduledTaskBase
 {
+    private static readonly DataPipelineDeadLetterChannel DeadLetterChannel = new(
+        LogPrefix: "Retry-Cloud",
+        DeadLetterName: "Cloud",
+        CriticalSource: "Retry.CloudDeadLetterPersistFailed");
+
     private readonly ICloudRetryRecordStore _retryStore;
     private readonly ICloudFallbackBufferStore _fallbackStore;
     private readonly ICloudDeadLetterStore _deadLetterStore;
@@ -548,9 +553,7 @@ public sealed class CloudRetryTask : ScheduledTaskBase
             _deadLetterStore.SaveAsync,
             _criticalFallbackWriter,
             Logger,
-            logPrefix: "Retry-Cloud",
-            deadLetterName: "Cloud",
-            criticalSource: "Retry.CloudDeadLetterPersistFailed",
+            DeadLetterChannel,
             processType,
             cellDataJson,
             failedTarget,

@@ -13,6 +13,11 @@ namespace IIoT.Edge.Runtime.DataPipeline.Tasks;
 
 public sealed class MesRetryTask : ScheduledTaskBase
 {
+    private static readonly DataPipelineDeadLetterChannel DeadLetterChannel = new(
+        LogPrefix: "Retry-MES",
+        DeadLetterName: "MES",
+        CriticalSource: "Retry.MesDeadLetterPersistFailed");
+
     private readonly IMesRetryRecordStore _retryStore;
     private readonly IMesFallbackBufferStore _fallbackStore;
     private readonly IMesDeadLetterStore _deadLetterStore;
@@ -338,9 +343,7 @@ public sealed class MesRetryTask : ScheduledTaskBase
             _deadLetterStore.SaveAsync,
             _criticalFallbackWriter,
             Logger,
-            logPrefix: "Retry-MES",
-            deadLetterName: "MES",
-            criticalSource: "Retry.MesDeadLetterPersistFailed",
+            DeadLetterChannel,
             processType,
             cellDataJson,
             failedTarget,
