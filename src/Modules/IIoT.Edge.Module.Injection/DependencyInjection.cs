@@ -7,24 +7,25 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace IIoT.Edge.Module.Injection;
 
-public sealed class DependencyInjection : IEdgeProcessModule
+public sealed class DependencyInjection : EdgeProcessModuleBase<InjectionCellData>
 {
     public const string ModuleKey = "Injection";
 
-    public string ModuleId => ModuleKey;
+    public override string ModuleId => ModuleKey;
 
-    public string ProcessType => ModuleKey;
+    public override string ProcessType => ModuleKey;
 
-    public string DisplayName => "注液";
+    public override string DisplayName => "注液";
 
-    public void Configure(IEdgeProcessModuleBuilder builder)
-    {
-        builder.Services.AddSingleton<IProcessCloudUploader, InjectionCloudUploader>();
+    protected override ProcessUploadMode CloudUploadMode => ProcessUploadMode.Batch;
 
-        builder.RegisterCellData(typeof(InjectionCellData));
-        builder.RegisterRuntimeFactory(new InjectionStationRuntimeFactory());
-        builder.RegisterCloudUploader(ProcessUploadMode.Batch);
-        builder.RegisterInjectionViews();
-    }
+    protected override IStationRuntimeFactory CreateRuntimeFactory()
+        => new InjectionStationRuntimeFactory();
+
+    protected override void ConfigureModuleServices(IEdgeProcessModuleBuilder builder)
+        => builder.Services.AddSingleton<IProcessCloudUploader, InjectionCloudUploader>();
+
+    protected override void RegisterModuleViews(IEdgeProcessModuleBuilder builder)
+        => builder.RegisterInjectionViews();
 }
 

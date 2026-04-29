@@ -16,20 +16,28 @@ namespace IIoT.Edge.Module.Homogenization;
 /// <summary>
 /// 匀浆工序模块入口，负责按标准模块契约注册运行时、上传器、硬件模板和导航页面。
 /// </summary>
-public sealed class DependencyInjection : IEdgeProcessModule
+public sealed class DependencyInjection : EdgeProcessModuleBase<HomogenizationCellData>
 {
     public const string ModuleKey = "Homogenization";
 
-    public string ModuleId => ModuleKey;
+    public override string ModuleId => ModuleKey;
 
-    public string ProcessType => ModuleKey;
+    public override string ProcessType => ModuleKey;
 
-    public string DisplayName => HomogenizationText.Get("Homogenization_DisplayName", "匀浆");
+    public override string DisplayName => HomogenizationText.Get("Homogenization_DisplayName", "匀浆");
+
+    protected override ProcessUploadMode CloudUploadMode => ProcessUploadMode.Single;
+
+    protected override MesUploadMode? MesUploadMode
+        => IIoT.Edge.Application.Abstractions.Modules.MesUploadMode.Single;
+
+    protected override IStationRuntimeFactory CreateRuntimeFactory()
+        => new HomogenizationStationRuntimeFactory();
 
     /// <summary>
     /// 使用宿主统一的 IConfiguration/Options 管线绑定匀浆配置，不在模块内自行创建配置源。
     /// </summary>
-    public void Configure(IEdgeProcessModuleBuilder builder)
+    protected override void ConfigureModuleServices(IEdgeProcessModuleBuilder builder)
     {
         var section = builder.Configuration.GetSection($"Modules:{ModuleKey}");
         builder.Services.AddOptions<HomogenizationModuleOptions>()
@@ -53,12 +61,9 @@ public sealed class DependencyInjection : IEdgeProcessModule
         builder.Services.AddSingleton<HomogenizationCellDataValidator>();
         builder.Services.AddSingleton<IDevelopmentSampleContributor, HomogenizationDevelopmentSampleContributor>();
         builder.Services.AddSingleton<HomogenizationDataViewModel>();
-
-        builder.RegisterCellData(typeof(HomogenizationCellData));
-        builder.RegisterRuntimeFactory(new HomogenizationStationRuntimeFactory());
-        builder.RegisterCloudUploader(ProcessUploadMode.Single);
-        builder.RegisterMesUploader(MesUploadMode.Single);
-        builder.RegisterHomogenizationViews();
     }
+
+    protected override void RegisterModuleViews(IEdgeProcessModuleBuilder builder)
+        => builder.RegisterHomogenizationViews();
 }
 

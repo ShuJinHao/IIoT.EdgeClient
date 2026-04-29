@@ -19,6 +19,60 @@ namespace IIoT.Edge.Presentation.Navigation.PluginSystem;
 /// </summary>
 public static class StandardModuleNavigationRegistration
 {
+    public static IEdgeProcessModuleBuilder RegisterStandardModuleViews(
+        this IEdgeProcessModuleBuilder builder,
+        string moduleId,
+        string dataViewTitle,
+        string dataViewTitleResourceKey,
+        Type? customDataViewType = null,
+        Type? customDataViewModelType = null,
+        string? dataMenuTitle = null,
+        string? dataMenuTitleResourceKey = null,
+        bool cacheDataView = true)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(moduleId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(dataViewTitle);
+        ArgumentException.ThrowIfNullOrWhiteSpace(dataViewTitleResourceKey);
+
+        if ((customDataViewType is null) != (customDataViewModelType is null))
+        {
+            throw new ArgumentException("自定义数据页必须同时提供 View 和 ViewModel 类型。");
+        }
+
+        var viewIds = StandardModuleViewIds.Create(moduleId);
+
+        if (customDataViewType is null || customDataViewModelType is null)
+        {
+            builder.RegisterStandardDataView(
+                viewIds.DataView,
+                dataViewTitle,
+                cacheView: cacheDataView,
+                titleResourceKey: dataViewTitleResourceKey);
+        }
+        else
+        {
+            builder.RegisterRoute(
+                viewIds.DataView,
+                customDataViewType,
+                customDataViewModelType,
+                cacheDataView);
+            builder.RegisterMenu(CreateMenu(
+                dataMenuTitle ?? dataViewTitle,
+                viewIds.DataView,
+                "ChartBar",
+                1,
+                titleResourceKey: dataMenuTitleResourceKey ?? dataViewTitleResourceKey));
+        }
+
+        return builder
+            .RegisterStandardCapacityView(viewIds.CapacityView)
+            .RegisterStandardIoView(viewIds.IoView)
+            .RegisterStandardMonitorView(viewIds.Monitor)
+            .RegisterStandardRecipeView(viewIds.RecipeView)
+            .RegisterStandardParamView(viewIds.ParamView)
+            .RegisterStandardHardwareConfigView(viewIds.HardwareConfigView);
+    }
+
     public static IEdgeProcessModuleBuilder RegisterStandardDataView(
         this IEdgeProcessModuleBuilder builder,
         string viewId,
