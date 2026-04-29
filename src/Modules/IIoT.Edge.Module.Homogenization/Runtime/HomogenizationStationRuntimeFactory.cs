@@ -40,7 +40,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
 
         var logger = serviceProvider.GetRequiredService<ILogService>();
         var deviceService = serviceProvider.GetRequiredService<IDeviceService>();
-        var mesApiService = serviceProvider.GetRequiredService<IHomogenizationMesApiService>();
+        var mesChannel = serviceProvider.GetRequiredService<IHomogenizationMesChannel>();
         var diagnosticsStore = serviceProvider.GetRequiredService<IMesUploadDiagnosticsStore>();
         var dataPipelineService = serviceProvider.GetRequiredService<IDataPipelineService>();
         var validator = serviceProvider.GetService<HomogenizationCellDataValidator>() ?? new HomogenizationCellDataValidator();
@@ -53,7 +53,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 buffer,
                 homogenizationContext,
                 deviceService,
-                mesApiService,
+                mesChannel,
                 diagnosticsStore,
                 logger,
                 moduleOptions,
@@ -71,7 +71,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 buffer,
                 homogenizationContext,
                 deviceService,
-                mesApiService,
+                mesChannel,
                 diagnosticsStore,
                 logger,
                 moduleOptions,
@@ -80,7 +80,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 buffer,
                 homogenizationContext,
                 deviceService,
-                mesApiService,
+                mesChannel,
                 diagnosticsStore,
                 logger,
                 moduleOptions,
@@ -95,7 +95,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 buffer,
                 homogenizationContext,
                 deviceService,
-                mesApiService,
+                mesChannel,
                 diagnosticsStore,
                 logger,
                 moduleOptions,

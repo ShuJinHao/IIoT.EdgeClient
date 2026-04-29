@@ -1,9 +1,10 @@
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Consumers;
 using IIoT.Edge.Application.Abstractions.Device;
-using IIoT.Edge.Application.Common.Device;
+using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Common.Device;
 using IIoT.Edge.SharedKernel.DataPipeline;
 
 namespace IIoT.Edge.Infrastructure.Integration.PassStation;
@@ -11,6 +12,7 @@ namespace IIoT.Edge.Infrastructure.Integration.PassStation;
 public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
 {
     private readonly IDeviceService _deviceService;
+    private readonly ICloudUploadGate _uploadGate;
     private readonly ILogService _logger;
     private readonly ICloudUploadDiagnosticsStore _diagnosticsStore;
     private readonly Dictionary<string, IProcessCloudUploader> _uploaders;
@@ -18,16 +20,17 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
     public DataPipelineRetryChannel RetryChannel => DataPipelineRetryChannel.Cloud;
     public string Name => "Cloud";
     public int Order => 20;
-    public IIoT.Edge.Application.Abstractions.DataPipeline.ConsumerFailureMode FailureMode
-        => IIoT.Edge.Application.Abstractions.DataPipeline.ConsumerFailureMode.Durable;
+    public ConsumerFailureMode FailureMode => ConsumerFailureMode.Durable;
 
     public CloudConsumer(
         IDeviceService deviceService,
+        ICloudUploadGate uploadGate,
         IEnumerable<IProcessCloudUploader> uploaders,
         ICloudUploadDiagnosticsStore diagnosticsStore,
         ILogService logger)
     {
         _deviceService = deviceService;
+        _uploadGate = uploadGate;
         _diagnosticsStore = diagnosticsStore;
         _logger = logger;
         _uploaders = uploaders.ToDictionary(x => x.ProcessType, StringComparer.OrdinalIgnoreCase);
@@ -50,13 +53,14 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
             return CloudCallResult.Success();
         }
 
-        if (!_deviceService.CanUploadToCloud)
+        var gate = _uploadGate.GetSnapshot();
+        if (!gate.CanUpload)
         {
             var blockedResult = CloudCallResult.Failure(
                 CloudCallOutcome.SkippedUploadNotReady,
-                _deviceService.CurrentUploadGate.Reason.ToReasonCode());
+                gate.ReasonCode);
             _logger.Warn(
-                $"[Cloud] Upload gate is blocked ({_deviceService.CurrentUploadGate.Reason.ToReasonCode()}). Move {records.Count} record(s) to retry queue.");
+                $"[Cloud] Upload gate is blocked ({gate.ReasonCode}). Move {records.Count} record(s) to retry queue.");
             _diagnosticsStore.RecordResult(records[0].CellData.ProcessType, blockedResult);
             return blockedResult;
         }

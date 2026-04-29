@@ -1,7 +1,7 @@
-﻿using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.Module.Homogenization;
+using IIoT.Edge.Application.Modules;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Integration;
 using IIoT.Edge.Module.Homogenization.Payload;
@@ -16,13 +16,10 @@ public sealed class HomogenizationMesIntegrationTests
     [Fact]
     public async Task UploadInboundAsync_ShouldBuildTrayBasedRequest()
     {
-        var httpClient = new CapturingMesHttpClient
-        {
-            Response = """{"code":200,"msg":"OK"}"""
-        };
-        var service = CreateService(httpClient, stationNo: "ST-H-01");
+        var httpClient = new CapturingMesHttpClient();
+        var channel = CreateChannel(httpClient, stationNo: "ST-H-01");
 
-        var result = await service.UploadInboundAsync(CreateDevice(), "TRAY-001");
+        var result = await channel.UploadInboundAsync(CreateDevice(), "TRAY-001");
 
         Assert.True(result.IsSuccess);
         Assert.Equal("/dev/dev/getIn/check", httpClient.LastUrl);
@@ -42,77 +39,166 @@ public sealed class HomogenizationMesIntegrationTests
         {
             Response = """{"code":500,"msg":"MES rejected outbound"}"""
         };
-        var service = CreateService(httpClient, stationNo: "ST-H-02");
+        var channel = CreateChannel(httpClient, stationNo: "ST-H-02");
 
-        var result = await service.UploadOutboundAsync(
+        var result = await channel.UploadOutboundAsync(
             CreateDevice(),
-            new HomogenizationCellData
-            {
-                TrayCode = "TRAY-002",
-                DeviceCode = "CLIENT-H",
-                DeviceName = "PLC-H",
-                InboundTime = new DateTime(2026, 4, 23, 8, 0, 0),
-                CompletedTime = new DateTime(2026, 4, 23, 8, 30, 0),
-                RealtimeSnapshot = new HomogenizationRealtimeSnapshot
-                {
-                    StirringSpeed = 120,
-                    Temperature = 25,
-                    Vacuum = -10
-                },
-                CntActualKg = 15,
-                NmpActualKg = 18
-            });
+            CreateCellData("TRAY-002"));
 
         Assert.Equal(MesCallOutcome.BusinessRejected, result.Outcome);
         Assert.Equal("/dev/dev/electrode/exit/push", httpClient.LastUrl);
     }
 
     [Fact]
-    public async Task HomogenizationMesUploader_ShouldUploadAllOutboundRecords()
+    public async Task UploadRealtimeAsync_ShouldBuildRealtimeRequest()
     {
-        var service = new CapturingHomogenizationMesApiService();
-        var uploader = new HomogenizationMesUploader(service, new FakeLogService());
-        var device = CreateDevice();
+        var httpClient = new CapturingMesHttpClient();
+        var channel = CreateChannel(httpClient, stationNo: "ST-H-03");
+
+        var result = await channel.UploadRealtimeAsync(
+            CreateDevice(),
+            new HomogenizationRealtimeSnapshot
+            {
+                CapturedAt = new DateTime(2026, 4, 29, 8, 1, 2),
+                StirringSpeed = 120,
+                StirringCurrent = 11,
+                DispersionSpeed = 220,
+                DispersionCurrent = 12,
+                Temperature = 25,
+                Vacuum = -9
+            });
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("/dev/dev/run/info", httpClient.LastUrl);
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(httpClient.LastPayload));
+        var root = document.RootElement;
+        var device = root.GetProperty("data").GetProperty("devices")[0];
+        Assert.Equal("ST-H-03", device.GetProperty("stationNo").GetString());
+        Assert.Equal("2026-04-29 08:01:02", device.GetProperty("collectTime").GetString());
+        Assert.Equal("rt_stir_speed", device.GetProperty("data")[0].GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task UploadRecipeAsync_ShouldBuildRecipeRequest()
+    {
+        var httpClient = new CapturingMesHttpClient();
+        var channel = CreateChannel(httpClient, stationNo: "ST-H-04");
+
+        var result = await channel.UploadRecipeAsync(
+            CreateDevice(),
+            new HomogenizationRecipeSnapshot
+            {
+                StirringSpeed = [10],
+                DispersionSpeed = [20],
+                Ncm = [1.1],
+                Sp1 = [2.2],
+                Nmp = [3.3],
+                GlueSolution = [4.4],
+                Cnt = [5.5],
+                Vacuum = [true],
+                Time = [30],
+                Temperature = [45],
+                StopStep = [false]
+            });
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("/dev/dev/process/param", httpClient.LastUrl);
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(httpClient.LastPayload));
+        var items = document.RootElement.GetProperty("data").GetProperty("devices");
+        Assert.Equal("recipe_stir_speed_01", items[0].GetProperty("code").GetString());
+        Assert.Equal("10", items[0].GetProperty("val").GetString());
+    }
+
+    [Fact]
+    public async Task UploadEquipmentStatusAsync_ShouldBuildStatusRequest()
+    {
+        var httpClient = new CapturingMesHttpClient();
+        var channel = CreateChannel(httpClient, stationNo: "ST-H-05");
+
+        var result = await channel.UploadEquipmentStatusAsync(
+            CreateDevice(),
+            new HomogenizationEquipmentStatusSnapshot
+            {
+                StatusCode = 1,
+                Messages = ["运行"]
+            });
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("/dev/dev/realTime/status", httpClient.LastUrl);
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(httpClient.LastPayload));
+        var device = document.RootElement.GetProperty("data").GetProperty("devices")[0];
+        Assert.Equal("ST-H-05", device.GetProperty("stationNo").GetString());
+        Assert.Equal(1, device.GetProperty("status").GetInt32());
+    }
+
+    [Fact]
+    public async Task HomogenizationMesChannel_AsProcessMesUploader_ShouldUploadAllOutboundRecords()
+    {
+        var httpClient = new CapturingMesHttpClient();
+        var uploader = (IProcessMesUploader)CreateChannel(httpClient, stationNo: "ST-H-06");
 
         var result = await uploader.UploadAsync(
-            new ProcessMesUploadContext(device),
+            new ProcessMesUploadContext(CreateDevice()),
             [
                 new IIoT.Edge.SharedKernel.DataPipeline.CellCompletedRecord
                 {
-                    CellData = new HomogenizationCellData { TrayCode = "TRAY-01" }
+                    CellData = CreateCellData("TRAY-01")
                 },
                 new IIoT.Edge.SharedKernel.DataPipeline.CellCompletedRecord
                 {
-                    CellData = new HomogenizationCellData { TrayCode = "TRAY-02" }
+                    CellData = CreateCellData("TRAY-02")
                 }
             ]);
 
         Assert.True(result.IsSuccess);
-        Assert.Equal(2, service.OutboundTrayCodes.Count);
-        Assert.Contains("TRAY-01", service.OutboundTrayCodes);
-        Assert.Contains("TRAY-02", service.OutboundTrayCodes);
+        Assert.Equal(2, httpClient.Requests.Count);
+        Assert.All(httpClient.Requests, request => Assert.Equal("/dev/dev/electrode/exit/push", request.Url));
     }
 
-    private static HomogenizationMesApiService CreateService(
+    private static HomogenizationMesChannel CreateChannel(
         CapturingMesHttpClient httpClient,
         string stationNo)
     {
-        return new HomogenizationMesApiService(
+        var runtimeConfig = new FakeLocalSystemRuntimeConfigService
+        {
+            Current = SystemRuntimeConfigSnapshot.Default with
+            {
+                MesBaseUrl = "https://mes.local",
+                MesUploadEnabled = true
+            }
+        };
+        var logger = new FakeLogService();
+        var executor = new MesRequestExecutor(
             httpClient,
             new FakeMesEndpointProvider(),
-            new FakeLocalSystemRuntimeConfigService
-            {
-                Current = SystemRuntimeConfigSnapshot.Default with
-                {
-                    MesBaseUrl = "https://mes.local",
-                    MesUploadEnabled = true
-                }
-            },
+            runtimeConfig,
+            logger);
+
+        return new HomogenizationMesChannel(
+            executor,
             new MutableLocalParameterConfigService(stationNo),
-            new FakeLogService(),
+            logger,
             Options.Create(CreateMesOptions()),
             Options.Create(CreateCodeOptions()));
     }
+
+    private static HomogenizationCellData CreateCellData(string trayCode)
+        => new()
+        {
+            TrayCode = trayCode,
+            DeviceCode = "CLIENT-H",
+            DeviceName = "PLC-H",
+            InboundTime = new DateTime(2026, 4, 23, 8, 0, 0),
+            CompletedTime = new DateTime(2026, 4, 23, 8, 30, 0),
+            RealtimeSnapshot = new HomogenizationRealtimeSnapshot
+            {
+                StirringSpeed = 120,
+                Temperature = 25,
+                Vacuum = -10
+            },
+            CntActualKg = 15,
+            NmpActualKg = 18
+        };
 
     private static HomogenizationMesOptions CreateMesOptions()
         => new()
@@ -133,6 +219,29 @@ public sealed class HomogenizationMesIntegrationTests
         {
             Mes = new HomogenizationMesCodeOptions
             {
+                RealtimeItems = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["StirringSpeed"] = Item("rt_stir_speed", "搅拌转速", "short", "RPM"),
+                    ["StirringCurrent"] = Item("rt_stir_current", "搅拌电流", "short", "A"),
+                    ["DispersionSpeed"] = Item("rt_dispersion_speed", "分散转速", "short", "RPM"),
+                    ["DispersionCurrent"] = Item("rt_dispersion_current", "分散电流", "short", "A"),
+                    ["Temperature"] = Item("rt_temperature", "温度", "short", "C"),
+                    ["Vacuum"] = Item("rt_vacuum", "真空度", "short", "Kpa")
+                },
+                RecipeItems = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["StirringSpeed"] = Item("recipe_stir_speed", "搅拌转速", "short", "RPM"),
+                    ["DispersionSpeed"] = Item("recipe_dispersion_speed", "分散转速", "short", "RPM"),
+                    ["Ncm"] = Item("recipe_ncm", "NCM", "decimal", "kg"),
+                    ["Sp1"] = Item("recipe_sp1", "SP1", "decimal", "kg"),
+                    ["Nmp"] = Item("recipe_nmp", "NMP", "decimal", "kg"),
+                    ["GlueSolution"] = Item("recipe_glue_solution", "胶液", "decimal", "kg"),
+                    ["Cnt"] = Item("recipe_cnt", "CNT", "decimal", "kg"),
+                    ["Vacuum"] = Item("recipe_vacuum", "真空", "bool"),
+                    ["Time"] = Item("recipe_time", "时间", "ushort", "min"),
+                    ["Temperature"] = Item("recipe_temperature", "温度", "short", "C"),
+                    ["StopStep"] = Item("recipe_stop_step", "停止步骤", "bool")
+                },
                 OutboundProduceItems = new(StringComparer.OrdinalIgnoreCase)
                 {
                     ["DeviceCode"] = Item("gluingDeviceCode", "设备编码", "string"),
@@ -181,8 +290,9 @@ public sealed class HomogenizationMesIntegrationTests
 
     private sealed class CapturingMesHttpClient : IMesHttpClient
     {
-        public string? LastUrl { get; private set; }
-        public object? LastPayload { get; private set; }
+        public List<(string Url, object Payload)> Requests { get; } = [];
+        public string? LastUrl => Requests.LastOrDefault().Url;
+        public object? LastPayload => Requests.LastOrDefault().Payload;
         public string Response { get; set; } = """{"code":200,"msg":"OK"}""";
 
         public Task<bool> PostAsync(
@@ -198,8 +308,7 @@ public sealed class HomogenizationMesIntegrationTests
             IReadOnlyDictionary<string, string>? headers = null,
             CancellationToken cancellationToken = default)
         {
-            LastUrl = url;
-            LastPayload = payload;
+            Requests.Add((url, payload));
             return Task.FromResult<string?>(Response);
         }
 
@@ -219,7 +328,11 @@ public sealed class HomogenizationMesIntegrationTests
 
     private sealed class MutableLocalParameterConfigService(string stationNo) : ILocalParameterConfigService
     {
-        public event EventHandler<ParameterConfigChangedEventArgs>? ParameterConfigChanged;
+        public event EventHandler<ParameterConfigChangedEventArgs>? ParameterConfigChanged
+        {
+            add { }
+            remove { }
+        }
 
         public Task<IReadOnlyList<LocalSystemConfigSnapshot>> GetSystemConfigsAsync(
             CancellationToken cancellationToken = default)
@@ -244,43 +357,4 @@ public sealed class HomogenizationMesIntegrationTests
             CancellationToken cancellationToken = default)
             => Task.FromResult<string?>(null);
     }
-
-    private sealed class CapturingHomogenizationMesApiService : IHomogenizationMesApiService
-    {
-        public List<string> OutboundTrayCodes { get; } = [];
-
-        public Task<MesCallResult> UploadInboundAsync(
-            DeviceSession? device,
-            string trayCode,
-            CancellationToken cancellationToken = default)
-            => Task.FromResult(MesCallResult.Success());
-
-        public Task<MesCallResult> UploadOutboundAsync(
-            DeviceSession? device,
-            HomogenizationCellData cellData,
-            CancellationToken cancellationToken = default)
-        {
-            OutboundTrayCodes.Add(cellData.TrayCode);
-            return Task.FromResult(MesCallResult.Success());
-        }
-
-        public Task<MesCallResult> UploadRealtimeAsync(
-            DeviceSession? device,
-            HomogenizationRealtimeSnapshot snapshot,
-            CancellationToken cancellationToken = default)
-            => Task.FromResult(MesCallResult.Success());
-
-        public Task<MesCallResult> UploadRecipeAsync(
-            DeviceSession? device,
-            HomogenizationRecipeSnapshot snapshot,
-            CancellationToken cancellationToken = default)
-            => Task.FromResult(MesCallResult.Success());
-
-        public Task<MesCallResult> UploadEquipmentStatusAsync(
-            DeviceSession? device,
-            HomogenizationEquipmentStatusSnapshot snapshot,
-            CancellationToken cancellationToken = default)
-            => Task.FromResult(MesCallResult.Success());
-    }
 }
-

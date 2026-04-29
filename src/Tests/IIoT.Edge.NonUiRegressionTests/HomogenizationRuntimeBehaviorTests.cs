@@ -188,7 +188,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
         var logger = new FakeLogService();
         var pipeline = new BlockingDataPipelineService();
         var diagnostics = new FakeMesUploadDiagnosticsStore();
-        var mesApi = new CapturingHomogenizationMesApiService();
+        var mesApi = new CapturingHomogenizationMesChannel();
         var deviceService = new FakeDeviceService();
         deviceService.SetOnline(new DeviceSession
         {
@@ -202,7 +202,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
         services.AddSingleton<ILogService>(logger);
         services.AddSingleton<IDeviceService>(deviceService);
         services.AddSingleton<IMesUploadDiagnosticsStore>(diagnostics);
-        services.AddSingleton<IHomogenizationMesApiService>(mesApi);
+        services.AddSingleton<IHomogenizationMesChannel>(mesApi);
         services.AddSingleton<IDataPipelineService>(pipeline);
         services.AddSingleton(new HomogenizationCellDataValidator());
         services.AddSingleton(Options.Create(new HomogenizationModuleOptions()));
@@ -335,7 +335,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
         var logger = new FakeLogService();
         var diagnostics = new FakeMesUploadDiagnosticsStore();
         var pipeline = new FakeDataPipelineService();
-        var mesApi = new CapturingHomogenizationMesApiService();
+        var mesApi = new CapturingHomogenizationMesChannel();
         var deviceService = new FakeDeviceService();
         deviceService.SetOnline(new DeviceSession
         {
@@ -349,7 +349,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
         services.AddSingleton<ILogService>(logger);
         services.AddSingleton<IDeviceService>(deviceService);
         services.AddSingleton<IMesUploadDiagnosticsStore>(diagnostics);
-        services.AddSingleton<IHomogenizationMesApiService>(mesApi);
+        services.AddSingleton<IHomogenizationMesChannel>(mesApi);
         services.AddSingleton<IDataPipelineService>(pipeline);
         services.AddSingleton(new HomogenizationCellDataValidator());
         services.AddSingleton(Options.Create(new HomogenizationModuleOptions()));
@@ -599,7 +599,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
         Assert.True(condition());
     }
 
-    private sealed class CapturingHomogenizationMesApiService : IHomogenizationMesApiService
+    private sealed class CapturingHomogenizationMesChannel : IHomogenizationMesChannel
     {
         public List<string> InboundTrayCodes { get; } = [];
 

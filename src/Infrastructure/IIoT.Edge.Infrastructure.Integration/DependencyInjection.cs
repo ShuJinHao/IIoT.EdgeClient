@@ -19,6 +19,7 @@ using IIoT.Edge.Infrastructure.Integration.Http;
 using IIoT.Edge.Infrastructure.Integration.Mes;
 using IIoT.Edge.Infrastructure.Integration.PassStation;
 using IIoT.Edge.Infrastructure.Integration.Recipe;
+using IIoT.Edge.Application.Modules;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http.Resilience;
@@ -85,6 +86,9 @@ public static class DependencyInjection
         services.AddHttpClient("MesApi", client => client.Timeout = mesTimeout);
         services.AddSingleton<IMesHttpClient, MesHttpClient>();
         services.AddSingleton<IMesHeartbeatProbe, MesHeartbeatProbe>();
+        services.AddSingleton<ICloudUploadGate, CloudUploadGate>();
+        services.AddSingleton<IMesUploadGate, MesUploadGate>();
+        services.AddSingleton<MesRequestExecutor>();
         services.AddSingleton<MesHeartbeatTask>();
 
         services.AddSingleton<ICloudConsumer, CloudConsumer>();

@@ -22,7 +22,7 @@ public sealed class MesFrameworkBehaviorTests
     {
         var consumer = new MesConsumer(
             CreateOnlineDeviceService(),
-            new FakeLocalSystemRuntimeConfigService(),
+            CreateReadyMesGate(),
             uploaders: [],
             new FakeMesUploadDiagnosticsStore(),
             new FakeLogService());
@@ -42,7 +42,7 @@ public sealed class MesFrameworkBehaviorTests
 
         var consumer = new MesConsumer(
             deviceService,
-            new FakeLocalSystemRuntimeConfigService(),
+            CreateReadyMesGate(),
             [uploader],
             diagnosticsStore,
             new FakeLogService());
@@ -64,7 +64,7 @@ public sealed class MesFrameworkBehaviorTests
         var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
         var consumer = new MesConsumer(
             CreateOnlineDeviceService(),
-            new FakeLocalSystemRuntimeConfigService(),
+            CreateReadyMesGate(),
             [uploader],
             diagnosticsStore,
             new FakeLogService());
@@ -94,7 +94,7 @@ public sealed class MesFrameworkBehaviorTests
         };
         var consumer = new MesConsumer(
             CreateOnlineDeviceService(),
-            runtimeConfig,
+            CreateReadyMesGate(runtimeConfig),
             [uploader],
             diagnosticsStore,
             new FakeLogService());
@@ -116,11 +116,10 @@ public sealed class MesFrameworkBehaviorTests
 
         var consumer = new MesConsumer(
             CreateOnlineDeviceService(),
-            new FakeLocalSystemRuntimeConfigService(),
+            CreateMesGate(heartbeatStore: heartbeatStore),
             [uploader],
             diagnosticsStore,
-            new FakeLogService(),
-            heartbeatStore);
+            new FakeLogService());
 
         var success = await consumer.ProcessAsync(CreateRecord("Injection"));
 
@@ -142,11 +141,10 @@ public sealed class MesFrameworkBehaviorTests
 
         var consumer = new MesConsumer(
             CreateOnlineDeviceService(),
-            new FakeLocalSystemRuntimeConfigService(),
+            CreateMesGate(heartbeatStore: heartbeatStore),
             [uploader],
             diagnosticsStore,
-            new FakeLogService(),
-            heartbeatStore);
+            new FakeLogService());
 
         var success = await consumer.ProcessAsync(CreateRecord("Injection"));
 
@@ -285,6 +283,20 @@ public sealed class MesFrameworkBehaviorTests
         });
         return deviceService;
     }
+
+    private static MesUploadGate CreateReadyMesGate(FakeLocalSystemRuntimeConfigService? runtimeConfig = null)
+    {
+        var heartbeatStore = new FakeExternalHeartbeatStateStore();
+        heartbeatStore.MarkReady(ExternalSystemKind.Mes);
+        return CreateMesGate(runtimeConfig, heartbeatStore);
+    }
+
+    private static MesUploadGate CreateMesGate(
+        FakeLocalSystemRuntimeConfigService? runtimeConfig = null,
+        FakeExternalHeartbeatStateStore? heartbeatStore = null)
+        => new(
+            runtimeConfig ?? new FakeLocalSystemRuntimeConfigService(),
+            heartbeatStore ?? new FakeExternalHeartbeatStateStore());
 
     private static CellCompletedRecord CreateRecord(string processType)
     {

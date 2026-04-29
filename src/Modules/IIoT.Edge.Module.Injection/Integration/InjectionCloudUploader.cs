@@ -18,16 +18,10 @@ public sealed class InjectionCloudUploader : ProcessCloudUploaderBase<InjectionC
         ICloudHttpClient cloudHttp,
         IMapper mapper,
         ILogService logger)
-        : base(cloudHttp, logger)
+        : base(DependencyInjection.ModuleKey, ProcessUploadMode.Batch, UploadPathValue, cloudHttp, logger)
     {
         _mapper = mapper;
     }
-
-    public override string ProcessType => DependencyInjection.ModuleKey;
-
-    public override ProcessUploadMode UploadMode => ProcessUploadMode.Batch;
-
-    protected override string UploadPath => UploadPathValue;
 
     protected override object BuildPayload(
         ProcessCloudUploadContext context,

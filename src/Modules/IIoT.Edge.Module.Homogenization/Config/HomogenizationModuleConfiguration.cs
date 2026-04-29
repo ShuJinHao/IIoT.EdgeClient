@@ -1,4 +1,5 @@
 using IIoT.Edge.Module.Homogenization.Resources;
+using IIoT.Edge.Application.Modules.Mes;
 using Microsoft.Extensions.Options;
 
 namespace IIoT.Edge.Module.Homogenization.Config;
@@ -80,7 +81,7 @@ public sealed class HomogenizationMesOptions
 /// <summary>
 /// 匀浆 MES 接口相对路径配置。
 /// </summary>
-public sealed class HomogenizationMesPathOptions
+public sealed class HomogenizationMesPathOptions : IMesUploadPathOptions
 {
     /// <summary>
     /// 进站校验接口路径。

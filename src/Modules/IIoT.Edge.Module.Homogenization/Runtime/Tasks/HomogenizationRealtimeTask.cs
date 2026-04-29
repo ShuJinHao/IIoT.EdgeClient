@@ -18,7 +18,7 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
 {
     private readonly HomogenizationContext _context;
     private readonly IDeviceService _deviceService;
-    private readonly IHomogenizationMesApiService _mesApiService;
+    private readonly IHomogenizationMesChannel _mesApiService;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
     private readonly HomogenizationCodeOptions _codeOptions;
     private readonly int _taskLoopInterval;
@@ -28,7 +28,7 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
         IPlcBuffer buffer,
         HomogenizationContext context,
         IDeviceService deviceService,
-        IHomogenizationMesApiService mesApiService,
+        IHomogenizationMesChannel mesApiService,
         IMesUploadDiagnosticsStore diagnosticsStore,
         ILogService logger,
         IOptions<HomogenizationModuleOptions> moduleOptions,
