@@ -9,26 +9,29 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace IIoT.Edge.Module.Stacking;
 
-public sealed class DependencyInjection : IEdgeProcessModule
+public sealed class DependencyInjection : EdgeProcessModuleBase<StackingCellData>
 {
     public const string ModuleKey = StackingModuleConstants.ModuleId;
 
-    public string ModuleId => ModuleKey;
+    public override string ModuleId => ModuleKey;
 
-    public string ProcessType => StackingModuleConstants.ProcessType;
+    public override string ProcessType => StackingModuleConstants.ProcessType;
 
-    public string DisplayName => "叠片";
+    public override string DisplayName => "叠片";
 
-    public void Configure(IEdgeProcessModuleBuilder builder)
+    protected override ProcessUploadMode CloudUploadMode => ProcessUploadMode.Single;
+
+    protected override IStationRuntimeFactory CreateRuntimeFactory()
+        => new StackingStationRuntimeFactory();
+
+    protected override void ConfigureModuleServices(IEdgeProcessModuleBuilder builder)
     {
         builder.Services.AddSingleton<IProcessCloudUploader, StackingCloudUploader>();
         builder.Services.AddSingleton<IModuleHardwareProfileProvider, StackingHardwareProfileProvider>();
         builder.Services.AddSingleton<IDevelopmentSampleContributor, StackingDevelopmentSampleContributor>();
-
-        builder.RegisterCellData(typeof(StackingCellData));
-        builder.RegisterRuntimeFactory(new StackingStationRuntimeFactory());
-        builder.RegisterCloudUploader(ProcessUploadMode.Single);
-        builder.RegisterStackingViews();
     }
+
+    protected override void RegisterModuleViews(IEdgeProcessModuleBuilder builder)
+        => builder.RegisterStackingViews();
 }
 
