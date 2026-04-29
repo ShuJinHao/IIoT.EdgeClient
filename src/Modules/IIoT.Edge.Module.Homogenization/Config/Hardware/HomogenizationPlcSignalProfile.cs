@@ -1,3 +1,5 @@
+using IIoT.Edge.Application.Modules.Hardware;
+
 namespace IIoT.Edge.Module.Homogenization.Config.Hardware;
 
 public static class HomogenizationPlcSignalProfile
@@ -123,4 +125,7 @@ public sealed record HomogenizationSignalDefinition(
     string DisplayName,
     string Category,
     string GroupName,
-    string DisplayRole);
+    string DisplayRole) : IModulePlcSignalDefinition
+{
+    public string DefaultAddress => string.Empty;
+}

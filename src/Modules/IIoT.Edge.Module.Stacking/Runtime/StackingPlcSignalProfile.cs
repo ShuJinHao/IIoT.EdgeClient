@@ -1,5 +1,6 @@
-﻿using IIoT.Edge.Module.Stacking.Constants;
 using IIoT.Edge.Application.Abstractions.Plc.Signals;
+using IIoT.Edge.Application.Modules.Hardware;
+using IIoT.Edge.Module.Stacking.Constants;
 
 namespace IIoT.Edge.Module.Stacking.Runtime;
 
@@ -10,7 +11,14 @@ public sealed record StackingSignalDefinition(
     int AddressCount,
     string DataType,
     int SortOrder,
-    string DisplayName);
+    string DisplayName) : IModulePlcSignalDefinition
+{
+    public string Category => "单点读数据";
+
+    public string GroupName => string.Empty;
+
+    public string DisplayRole => string.Empty;
+}
 
 public static class StackingPlcSignalProfile
 {
