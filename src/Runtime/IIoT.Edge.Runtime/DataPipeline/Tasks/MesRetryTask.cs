@@ -334,31 +334,18 @@ public sealed class MesRetryTask : ScheduledTaskBase
         long sourceRecordId,
         DeadLetterStage stage,
         string failureReason)
-    {
-        try
-        {
-            await _deadLetterStore.SaveAsync(new DeadLetterRecord
-            {
-                ProcessType = processType,
-                CellDataJson = cellDataJson,
-                FailedTarget = failedTarget,
-                SourceTable = sourceTable,
-                SourceRecordId = sourceRecordId,
-                FailureStage = stage.ToString(),
-                FailureReason = failureReason,
-                CreatedAt = DateTime.UtcNow
-            }).ConfigureAwait(false);
-
-            Logger.Fatal($"[Retry-MES] {processType} record {sourceRecordId} moved into MES dead-letter store.");
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _criticalFallbackWriter.Write(
-                "Retry.MesDeadLetterPersistFailed",
-                $"{failureReason} Dead-letter save failed: {ex.Message}",
-                ex);
-            return false;
-        }
-    }
+        => await DataPipelineDeadLetterWriter.TryPersistAsync(
+            _deadLetterStore.SaveAsync,
+            _criticalFallbackWriter,
+            Logger,
+            logPrefix: "Retry-MES",
+            deadLetterName: "MES",
+            criticalSource: "Retry.MesDeadLetterPersistFailed",
+            processType,
+            cellDataJson,
+            failedTarget,
+            sourceTable,
+            sourceRecordId,
+            stage,
+            failureReason).ConfigureAwait(false);
 }

@@ -544,33 +544,20 @@ public sealed class CloudRetryTask : ScheduledTaskBase
         long sourceRecordId,
         DeadLetterStage stage,
         string failureReason)
-    {
-        try
-        {
-            await _deadLetterStore.SaveAsync(new DeadLetterRecord
-            {
-                ProcessType = processType,
-                CellDataJson = cellDataJson,
-                FailedTarget = failedTarget,
-                SourceTable = sourceTable,
-                SourceRecordId = sourceRecordId,
-                FailureStage = stage.ToString(),
-                FailureReason = failureReason,
-                CreatedAt = DateTime.UtcNow
-            }).ConfigureAwait(false);
-
-            Logger.Fatal($"[Retry-Cloud] {processType} record {sourceRecordId} moved into Cloud dead-letter store.");
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _criticalFallbackWriter.Write(
-                "Retry.CloudDeadLetterPersistFailed",
-                $"{failureReason} Dead-letter save failed: {ex.Message}",
-                ex);
-            return false;
-        }
-    }
+        => await DataPipelineDeadLetterWriter.TryPersistAsync(
+            _deadLetterStore.SaveAsync,
+            _criticalFallbackWriter,
+            Logger,
+            logPrefix: "Retry-Cloud",
+            deadLetterName: "Cloud",
+            criticalSource: "Retry.CloudDeadLetterPersistFailed",
+            processType,
+            cellDataJson,
+            failedTarget,
+            sourceTable,
+            sourceRecordId,
+            stage,
+            failureReason).ConfigureAwait(false);
 
     private enum RetryProcessResult
     {

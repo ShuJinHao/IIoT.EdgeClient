@@ -266,6 +266,70 @@ public sealed class RetryTaskCloudMesBehaviorTests
     }
 
     [Fact]
+    public async Task CloudRetry_WhenUploadGateIsBlocked_ShouldNotBlockMesFallbackRecovery()
+    {
+        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+
+        var cloudRetryStore = new FakeFailedRecordStore();
+        var cloudFallbackStore = new FakeCloudFallbackBufferStore();
+        cloudFallbackStore.Records.Add(new CloudFallbackRecord
+        {
+            Id = 501,
+            ProcessType = "Injection",
+            CellDataJson = SerializeCellData(new InjectionCellData { Barcode = "CLOUD-501" }),
+            FailedTarget = "Cloud",
+            ErrorMessage = "cloud-seed",
+            CreatedAt = DateTime.UtcNow.AddMinutes(-2)
+        });
+
+        var blockedDeviceService = new FakeDeviceService();
+        blockedDeviceService.SetUploadGate(new EdgeUploadGateSnapshot
+        {
+            State = EdgeUploadGateState.Blocked,
+            Reason = EdgeUploadBlockReason.UploadTokenRejected
+        });
+
+        var cloudConsumer = new FakeCloudConsumer();
+        var cloudTask = new TestableCloudRetryTask(
+            new FakeLogService(),
+            cloudRetryStore,
+            cloudFallbackStore,
+            blockedDeviceService,
+            cloudConsumer,
+            new FakeCloudBatchConsumer(),
+            new FakeDeviceLogSyncTask(),
+            new FakeCapacitySyncTask());
+
+        var mesRetryStore = new FakeFailedRecordStore();
+        var mesFallbackStore = new FakeMesFallbackBufferStore();
+        mesFallbackStore.Records.Add(new MesFallbackRecord
+        {
+            Id = 601,
+            ProcessType = "Injection",
+            CellDataJson = SerializeCellData(new InjectionCellData { Barcode = "MES-601" }),
+            FailedTarget = "MES",
+            ErrorMessage = "mes-seed",
+            CreatedAt = DateTime.UtcNow.AddMinutes(-2)
+        });
+        var mesConsumer = new FakeMesConsumer();
+        var mesTask = new TestableMesRetryTask(
+            new FakeLogService(),
+            mesRetryStore,
+            mesFallbackStore,
+            mesConsumer);
+
+        await cloudTask.ExecuteOnceAsync();
+        await mesTask.ExecuteOnceAsync();
+
+        Assert.Equal(501L, Assert.Single(cloudFallbackStore.Records).Id);
+        Assert.Empty(cloudFallbackStore.DeletedIds);
+        Assert.Equal(0, cloudConsumer.ProcessCallCount);
+        Assert.Contains(601L, mesFallbackStore.DeletedIds);
+        Assert.Equal(1, mesConsumer.ProcessCallCount);
+        Assert.Empty(mesRetryStore.PendingRecords);
+    }
+
+    [Fact]
     public async Task MesRetry_WhenMesUploadDisabled_ShouldLeaveBacklogUntouched()
     {
         CellDataTypeRegistry.Register<InjectionCellData>("Injection");
@@ -298,6 +362,45 @@ public sealed class RetryTaskCloudMesBehaviorTests
     }
 
     [Fact]
+    public async Task MesRetry_WhenMesUploadDisabled_ShouldLeaveFallbackBacklogUntouched()
+    {
+        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+
+        var failedStore = new FakeFailedRecordStore();
+        var fallbackStore = new FakeMesFallbackBufferStore();
+        fallbackStore.Records.Add(new MesFallbackRecord
+        {
+            Id = 604,
+            ProcessType = "Injection",
+            CellDataJson = SerializeCellData(new InjectionCellData { Barcode = "MES-604" }),
+            FailedTarget = "MES",
+            ErrorMessage = "seed",
+            CreatedAt = DateTime.UtcNow.AddMinutes(-2)
+        });
+        var mesConsumer = new FakeMesConsumer();
+
+        var task = new TestableMesRetryTask(
+            new FakeLogService(),
+            failedStore,
+            fallbackStore,
+            mesConsumer,
+            runtimeConfig: new FakeLocalSystemRuntimeConfigService
+            {
+                Current = SystemRuntimeConfigSnapshot.Default with
+                {
+                    MesUploadEnabled = false
+                }
+            });
+
+        await task.ExecuteOnceAsync();
+
+        Assert.Equal(604L, Assert.Single(fallbackStore.Records).Id);
+        Assert.Empty(fallbackStore.DeletedIds);
+        Assert.Empty(failedStore.PendingRecords);
+        Assert.Equal(0, mesConsumer.ProcessCallCount);
+    }
+
+    [Fact]
     public async Task MesRetry_WhenHeartbeatIsNotReady_ShouldLeaveBacklogUntouched()
     {
         CellDataTypeRegistry.Register<InjectionCellData>("Injection");
@@ -327,6 +430,41 @@ public sealed class RetryTaskCloudMesBehaviorTests
     }
 
     [Fact]
+    public async Task MesRetry_WhenHeartbeatIsNotReady_ShouldLeaveFallbackBacklogUntouched()
+    {
+        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+
+        var failedStore = new FakeFailedRecordStore();
+        var fallbackStore = new FakeMesFallbackBufferStore();
+        fallbackStore.Records.Add(new MesFallbackRecord
+        {
+            Id = 605,
+            ProcessType = "Injection",
+            CellDataJson = SerializeCellData(new InjectionCellData { Barcode = "MES-605" }),
+            FailedTarget = "MES",
+            ErrorMessage = "seed",
+            CreatedAt = DateTime.UtcNow.AddMinutes(-2)
+        });
+        var heartbeatStore = new FakeExternalHeartbeatStateStore();
+        heartbeatStore.MarkNotReady(ExternalSystemKind.Mes, "mes_heartbeat_timeout");
+        var mesConsumer = new FakeMesConsumer();
+
+        var task = new TestableMesRetryTask(
+            new FakeLogService(),
+            failedStore,
+            fallbackStore,
+            mesConsumer,
+            heartbeatStore: heartbeatStore);
+
+        await task.ExecuteOnceAsync();
+
+        Assert.Equal(605L, Assert.Single(fallbackStore.Records).Id);
+        Assert.Empty(fallbackStore.DeletedIds);
+        Assert.Empty(failedStore.PendingRecords);
+        Assert.Equal(0, mesConsumer.ProcessCallCount);
+    }
+
+    [Fact]
     public async Task MesRetry_WhenHeartbeatRecovers_ShouldUploadPendingRecords()
     {
         CellDataTypeRegistry.Register<InjectionCellData>("Injection");
@@ -349,6 +487,40 @@ public sealed class RetryTaskCloudMesBehaviorTests
         Assert.Equal(1, mesConsumer.ProcessCallCount);
         Assert.Contains(603L, failedStore.DeletedIds);
         Assert.Empty(failedStore.Updates);
+    }
+
+    [Fact]
+    public async Task MesRetry_WhenHeartbeatRecovers_ShouldRecoverFallbackAndUpload()
+    {
+        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+
+        var failedStore = new FakeFailedRecordStore();
+        var fallbackStore = new FakeMesFallbackBufferStore();
+        fallbackStore.Records.Add(new MesFallbackRecord
+        {
+            Id = 606,
+            ProcessType = "Injection",
+            CellDataJson = SerializeCellData(new InjectionCellData { Barcode = "MES-606" }),
+            FailedTarget = "MES",
+            ErrorMessage = "seed",
+            CreatedAt = DateTime.UtcNow.AddMinutes(-2)
+        });
+        var heartbeatStore = new FakeExternalHeartbeatStateStore();
+        heartbeatStore.MarkReady(ExternalSystemKind.Mes);
+        var mesConsumer = new FakeMesConsumer();
+
+        var task = new TestableMesRetryTask(
+            new FakeLogService(),
+            failedStore,
+            fallbackStore,
+            mesConsumer,
+            heartbeatStore: heartbeatStore);
+
+        await task.ExecuteOnceAsync();
+
+        Assert.Contains(606L, fallbackStore.DeletedIds);
+        Assert.Equal(1, mesConsumer.ProcessCallCount);
+        Assert.Empty(failedStore.PendingRecords);
     }
 
     [Fact]
@@ -538,6 +710,53 @@ public sealed class RetryTaskCloudMesBehaviorTests
     }
 
     [Fact]
+    public async Task MesRetry_WhenFallbackRehydrateHitsRetryCapacity_ShouldKeepFallbackRecordBuffered()
+    {
+        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+
+        var logger = new FakeLogService();
+        var failedStore = new FakeFailedRecordStore();
+        failedStore.PendingRecords.Add(CreateFailedRecord(402, "MES", "MES", 0, "Injection", new InjectionCellData { Barcode = "MES-402" }));
+
+        var mesFallbackStore = new FakeMesFallbackBufferStore();
+        mesFallbackStore.Records.Add(new MesFallbackRecord
+        {
+            Id = 502,
+            ProcessType = "Injection",
+            CellDataJson = SerializeCellData(new InjectionCellData { Barcode = "MES-502" }),
+            FailedTarget = "MES",
+            ErrorMessage = "fallback-seed",
+            CreatedAt = DateTime.UtcNow.AddMinutes(-3)
+        });
+
+        var diagnosticsStore = new FakeMesRetryDiagnosticsStore();
+        var capacityGuard = CreateCapacityGuard(
+            logger,
+            new FakeFailedRecordStore(),
+            failedStore,
+            new FakeCloudFallbackBufferStore(),
+            mesFallbackStore,
+            new FakeCloudDiagnosticsStore(),
+            diagnosticsStore,
+            configure: options => options.Mes.RetryTotalLimit = 1);
+
+        var mesConsumer = new FakeMesConsumer();
+        var task = new TestableMesRetryTask(
+            logger,
+            failedStore,
+            mesFallbackStore,
+            mesConsumer,
+            diagnosticsStore,
+            capacityGuard: capacityGuard);
+
+        await task.ExecuteOnceAsync();
+
+        Assert.DoesNotContain(502L, mesFallbackStore.DeletedIds);
+        Assert.Equal(502L, Assert.Single(mesFallbackStore.Records).Id);
+        Assert.Equal(1, mesConsumer.ProcessCallCount);
+    }
+
+    [Fact]
     public async Task MesRetry_WhenRetryCapacityRecovers_ShouldClearBlockedDiagnostics()
     {
         CellDataTypeRegistry.Register<InjectionCellData>("Injection");
@@ -700,6 +919,67 @@ public sealed class RetryTaskCloudMesBehaviorTests
     }
 
     [Fact]
+    public async Task FallbackDeserializeFailure_ShouldUseSeparateDeadLetterStoresAndSourceTables()
+    {
+        var cloudFallbackStore = new FakeCloudFallbackBufferStore();
+        cloudFallbackStore.Records.Add(new CloudFallbackRecord
+        {
+            Id = 701,
+            ProcessType = "Injection",
+            CellDataJson = "{bad-json",
+            FailedTarget = "Cloud",
+            ErrorMessage = "cloud-seed",
+            CreatedAt = DateTime.UtcNow.AddMinutes(-2)
+        });
+        var cloudDeadLetterStore = new FakeCloudDeadLetterStore();
+        var cloudTask = new TestableCloudRetryTask(
+            new FakeLogService(),
+            new FakeFailedRecordStore(),
+            cloudFallbackStore,
+            CreateOnlineDeviceService(),
+            new FakeCloudConsumer(),
+            new FakeCloudBatchConsumer(),
+            new FakeDeviceLogSyncTask(),
+            new FakeCapacitySyncTask(),
+            deadLetterStore: cloudDeadLetterStore);
+
+        var mesFallbackStore = new FakeMesFallbackBufferStore();
+        mesFallbackStore.Records.Add(new MesFallbackRecord
+        {
+            Id = 801,
+            ProcessType = "Injection",
+            CellDataJson = "{bad-json",
+            FailedTarget = "MES",
+            ErrorMessage = "mes-seed",
+            CreatedAt = DateTime.UtcNow.AddMinutes(-2)
+        });
+        var mesDeadLetterStore = new FakeMesDeadLetterStore();
+        var mesTask = new TestableMesRetryTask(
+            new FakeLogService(),
+            new FakeFailedRecordStore(),
+            mesFallbackStore,
+            new FakeMesConsumer(),
+            deadLetterStore: mesDeadLetterStore);
+
+        await cloudTask.ExecuteOnceAsync();
+        await mesTask.ExecuteOnceAsync();
+
+        var cloudDeadLetter = Assert.Single(cloudDeadLetterStore.Records);
+        Assert.Equal("Cloud", cloudDeadLetter.FailedTarget);
+        Assert.Equal("cloud_fallback_records", cloudDeadLetter.SourceTable);
+        Assert.Equal(701L, cloudDeadLetter.SourceRecordId);
+        Assert.Equal(nameof(DeadLetterStage.FallbackRecoverDeserialize), cloudDeadLetter.FailureStage);
+        Assert.Contains(701L, cloudFallbackStore.DeletedIds);
+
+        var mesDeadLetter = Assert.Single(mesDeadLetterStore.Records);
+        Assert.Equal("MES", mesDeadLetter.FailedTarget);
+        Assert.Equal("mes_fallback_records", mesDeadLetter.SourceTable);
+        Assert.Equal(801L, mesDeadLetter.SourceRecordId);
+        Assert.Equal(nameof(DeadLetterStage.FallbackRecoverDeserialize), mesDeadLetter.FailureStage);
+        Assert.Contains(801L, mesFallbackStore.DeletedIds);
+    }
+
+    [Fact]
     public async Task CloudRetry_WhenDeserializeFails_ShouldMoveRecordToDeadLetterAndDeleteSource()
     {
         var failedStore = new FakeFailedRecordStore();
@@ -731,7 +1011,73 @@ public sealed class RetryTaskCloudMesBehaviorTests
 
         var deadLetter = Assert.Single(deadLetterStore.Records);
         Assert.Equal(nameof(DeadLetterStage.RetryDeserialize), deadLetter.FailureStage);
+        Assert.Equal("failed_cloud_records", deadLetter.SourceTable);
+        Assert.Equal("Cloud", deadLetter.FailedTarget);
         Assert.Contains(301L, failedStore.DeletedIds);
+    }
+
+    [Fact]
+    public async Task MesRetry_WhenDeserializeFails_ShouldMoveRecordToMesDeadLetterAndDeleteSource()
+    {
+        var failedStore = new FakeFailedRecordStore();
+        failedStore.PendingRecords.Add(new FailedCellRecord
+        {
+            Id = 305,
+            Channel = "MES",
+            ProcessType = "Injection",
+            CellDataJson = "{bad-json",
+            FailedTarget = "MES",
+            ErrorMessage = "seed",
+            NextRetryTime = DateTime.UtcNow.AddMinutes(-1),
+            CreatedAt = DateTime.UtcNow.AddMinutes(-2)
+        });
+
+        var deadLetterStore = new FakeMesDeadLetterStore();
+        var task = new TestableMesRetryTask(
+            new FakeLogService(),
+            failedStore,
+            new FakeMesFallbackBufferStore(),
+            new FakeMesConsumer(),
+            deadLetterStore: deadLetterStore);
+
+        await task.ExecuteOnceAsync();
+
+        var deadLetter = Assert.Single(deadLetterStore.Records);
+        Assert.Equal(nameof(DeadLetterStage.RetryDeserialize), deadLetter.FailureStage);
+        Assert.Equal("failed_mes_records", deadLetter.SourceTable);
+        Assert.Equal("MES", deadLetter.FailedTarget);
+        Assert.Contains(305L, failedStore.DeletedIds);
+    }
+
+    [Fact]
+    public async Task MesRetry_ShouldNotResetAbandonedRecordsOnRecovery()
+    {
+        var failedStore = new FakeFailedRecordStore();
+        failedStore.PendingRecords.Add(new FailedCellRecord
+        {
+            Id = 306,
+            Channel = "MES",
+            ProcessType = "Injection",
+            CellDataJson = "{bad-json",
+            FailedTarget = "MES",
+            ErrorMessage = "abandoned",
+            RetryCount = 21,
+            NextRetryTime = DateTime.SpecifyKind(DateTime.MaxValue, DateTimeKind.Utc),
+            CreatedAt = DateTime.UtcNow.AddDays(-31)
+        });
+
+        var task = new TestableMesRetryTask(
+            new FakeLogService(),
+            failedStore,
+            new FakeMesFallbackBufferStore(),
+            new FakeMesConsumer());
+
+        await task.ExecuteOnceAsync();
+
+        Assert.Equal(0, failedStore.ResetAllAbandonedCallCount);
+        Assert.Single(failedStore.PendingRecords);
+        Assert.Empty(failedStore.DeletedIds);
+        Assert.Empty(failedStore.Updates);
     }
 
     [Fact]
