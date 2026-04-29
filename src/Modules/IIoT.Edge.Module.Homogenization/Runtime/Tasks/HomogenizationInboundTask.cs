@@ -2,9 +2,9 @@ using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Module.Homogenization.Abstractions;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
-using IIoT.Edge.Module.Homogenization.Integration;
 using IIoT.Edge.Module.Homogenization.Resources;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using Microsoft.Extensions.Options;
@@ -17,14 +17,14 @@ namespace IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
 {
     private readonly IDeviceService _deviceService;
-    private readonly IHomogenizationMesChannel _mesApiService;
+    private readonly IHomogenizationMesChannel _mesChannel;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
 
     public HomogenizationInboundTask(
         IPlcBuffer buffer,
         HomogenizationContext context,
         IDeviceService deviceService,
-        IHomogenizationMesChannel mesApiService,
+        IHomogenizationMesChannel mesChannel,
         IMesUploadDiagnosticsStore diagnosticsStore,
         ILogService logger,
         IOptions<HomogenizationModuleOptions> moduleOptions,
@@ -32,7 +32,7 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
         : base(buffer, context, logger, codeOptions, moduleOptions)
     {
         _deviceService = deviceService;
-        _mesApiService = mesApiService;
+        _mesChannel = mesChannel;
         _diagnosticsStore = diagnosticsStore;
     }
 
@@ -101,7 +101,7 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
             return;
         }
 
-        var result = await _mesApiService
+        var result = await _mesChannel
             .UploadInboundAsync(_deviceService.CurrentDevice, trayCode, cancellationToken)
             .ConfigureAwait(false);
 

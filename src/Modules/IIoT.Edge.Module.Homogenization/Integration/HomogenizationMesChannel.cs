@@ -4,6 +4,7 @@ using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Modules;
 using IIoT.Edge.Application.Modules.Mes;
+using IIoT.Edge.Module.Homogenization.Abstractions;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.SharedKernel.DataPipeline;

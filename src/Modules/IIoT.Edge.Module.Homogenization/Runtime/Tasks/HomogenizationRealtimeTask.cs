@@ -2,8 +2,8 @@ using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Module.Homogenization.Abstractions;
 using IIoT.Edge.Module.Homogenization.Config;
-using IIoT.Edge.Module.Homogenization.Integration;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using IIoT.Edge.Runtime.Base;
@@ -18,7 +18,7 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
 {
     private readonly HomogenizationContext _context;
     private readonly IDeviceService _deviceService;
-    private readonly IHomogenizationMesChannel _mesApiService;
+    private readonly IHomogenizationMesChannel _mesChannel;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
     private readonly HomogenizationCodeOptions _codeOptions;
     private readonly int _taskLoopInterval;
@@ -28,7 +28,7 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
         IPlcBuffer buffer,
         HomogenizationContext context,
         IDeviceService deviceService,
-        IHomogenizationMesChannel mesApiService,
+        IHomogenizationMesChannel mesChannel,
         IMesUploadDiagnosticsStore diagnosticsStore,
         ILogService logger,
         IOptions<HomogenizationModuleOptions> moduleOptions,
@@ -37,7 +37,7 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
     {
         _context = context;
         _deviceService = deviceService;
-        _mesApiService = mesApiService;
+        _mesChannel = mesChannel;
         _diagnosticsStore = diagnosticsStore;
         _codeOptions = codeOptions.Value;
         var runtime = moduleOptions.Value.Runtime;
@@ -54,7 +54,7 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
     protected override Task<MesCallResult> UploadSnapshotAsync(
         HomogenizationRealtimeSnapshot snapshot,
         CancellationToken cancellationToken)
-        => _mesApiService.UploadRealtimeAsync(_deviceService.CurrentDevice, snapshot, cancellationToken);
+        => _mesChannel.UploadRealtimeAsync(_deviceService.CurrentDevice, snapshot, cancellationToken);
 
     protected override Task OnSnapshotUploadedAsync(
         HomogenizationRealtimeSnapshot snapshot,

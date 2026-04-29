@@ -2,7 +2,6 @@ using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Module.Homogenization.Config;
-using IIoT.Edge.Module.Homogenization.Integration;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using IIoT.Edge.Runtime.Base;
 using Microsoft.Extensions.Options;

@@ -11,8 +11,14 @@ using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 
 namespace IIoT.Edge.Runtime.DataPipeline.Tasks;
 
+/// <summary>
+/// MES 独立补传任务。只处理 MES retry/fallback/deadletter，不复用云端补偿队列。
+/// </summary>
 public sealed class MesRetryTask : ScheduledTaskBase
 {
+    /// <summary>
+    /// MES deadletter 的日志标识和最终兜底来源，集中在一起防止和 Cloud 链路混用。
+    /// </summary>
     private static readonly DataPipelineDeadLetterChannel DeadLetterChannel = new(
         LogPrefix: "Retry-MES",
         DeadLetterName: "MES",
@@ -69,6 +75,7 @@ public sealed class MesRetryTask : ScheduledTaskBase
 
     protected override async Task ExecuteAsync()
     {
+        // MES 总开关关闭时不能领取补传记录，只刷新容量状态，保留 backlog 等待后续恢复。
         if (!_runtimeConfig.Current.MesUploadEnabled)
         {
             if (_capacityGuard is not null)
@@ -81,12 +88,14 @@ public sealed class MesRetryTask : ScheduledTaskBase
             return;
         }
 
+        // MES 心跳未恢复前不调用 MES 上传接口，也不把本地 retry/fallback 记录挪动到其他链路。
         if (!IsMesHeartbeatReady())
         {
             _diagnosticsStore.SetRuntimeState(MesRetryRuntimeState.Backoff);
             return;
         }
 
+        // 心跳恢复后先尝试把 fallback 搬回 MES retry，再领取 retry 批次补传。
         await RecoverFallbackRecordsAsync().ConfigureAwait(false);
 
         var claimedBatch = await _retryStore.ClaimPendingBatchAsync(batchSize: 5).ConfigureAwait(false);
@@ -166,6 +175,7 @@ public sealed class MesRetryTask : ScheduledTaskBase
             var cellData = DeserializeCellData(fallback.ProcessType, fallback.CellDataJson);
             if (cellData is null)
             {
+                // fallback 中的数据无法反序列化时，只能进入 MES deadletter；成功落库后再删除 fallback 原记录。
                 var persisted = await TryPersistDeadLetterAsync(
                     fallback.ProcessType,
                     fallback.CellDataJson,
@@ -191,6 +201,7 @@ public sealed class MesRetryTask : ScheduledTaskBase
 
                 if (!string.IsNullOrWhiteSpace(retryBlockedReason))
                 {
+                    // retry 容量已满时，fallback 继续留在 MES fallback 表，避免跨链路挪到 Cloud。
                     Logger.Warn(
                         $"[Retry-MES] MES fallback record {fallback.Id} remains buffered because retry capacity is blocked by {retryBlockedReason}.");
                     continue;
@@ -226,6 +237,7 @@ public sealed class MesRetryTask : ScheduledTaskBase
         var cellData = DeserializeCellData(record.ProcessType, record.CellDataJson);
         if (cellData is null)
         {
+            // retry 记录损坏时写入 MES deadletter；只有 deadletter 落库成功，才删除 MES retry 原记录。
             var persisted = await TryPersistDeadLetterAsync(
                 record.ProcessType,
                 record.CellDataJson,

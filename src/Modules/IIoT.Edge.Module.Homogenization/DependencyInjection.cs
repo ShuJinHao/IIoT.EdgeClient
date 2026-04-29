@@ -1,5 +1,6 @@
 ﻿using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Module.Homogenization.Abstractions;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
 using IIoT.Edge.Module.Homogenization.Integration;

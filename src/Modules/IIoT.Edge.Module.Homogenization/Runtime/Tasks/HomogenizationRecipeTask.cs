@@ -2,9 +2,9 @@ using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Module.Homogenization.Abstractions;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
-using IIoT.Edge.Module.Homogenization.Integration;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using Microsoft.Extensions.Options;
 
@@ -16,14 +16,14 @@ namespace IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
 {
     private readonly IDeviceService _deviceService;
-    private readonly IHomogenizationMesChannel _mesApiService;
+    private readonly IHomogenizationMesChannel _mesChannel;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
 
     public HomogenizationRecipeTask(
         IPlcBuffer buffer,
         HomogenizationContext context,
         IDeviceService deviceService,
-        IHomogenizationMesChannel mesApiService,
+        IHomogenizationMesChannel mesChannel,
         IMesUploadDiagnosticsStore diagnosticsStore,
         ILogService logger,
         IOptions<HomogenizationModuleOptions> moduleOptions,
@@ -31,7 +31,7 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
         : base(buffer, context, logger, codeOptions, moduleOptions)
     {
         _deviceService = deviceService;
-        _mesApiService = mesApiService;
+        _mesChannel = mesChannel;
         _diagnosticsStore = diagnosticsStore;
     }
 
@@ -92,7 +92,7 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
     private async Task ProcessTriggerAsync(CancellationToken cancellationToken)
     {
         var snapshot = Codec.CaptureRecipeSnapshot();
-        var result = await _mesApiService
+        var result = await _mesChannel
             .UploadRecipeAsync(_deviceService.CurrentDevice, snapshot, cancellationToken)
             .ConfigureAwait(false);
 
