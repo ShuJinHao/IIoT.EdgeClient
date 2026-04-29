@@ -1,47 +1,35 @@
-﻿using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Modules;
+using IIoT.Edge.Application.Modules.Mes;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Payload;
-using IIoT.Edge.SharedKernel.Enums;
+using IIoT.Edge.SharedKernel.DataPipeline;
 using Microsoft.Extensions.Options;
 
 namespace IIoT.Edge.Module.Homogenization.Integration;
 
-public sealed class HomogenizationMesApiService : IHomogenizationMesApiService
+public sealed class HomogenizationMesChannel
+    : MesUploadChannelBase<HomogenizationCellData>, IHomogenizationMesChannel
 {
-    private readonly IMesHttpClient _mesHttpClient;
-    private readonly IMesEndpointProvider _mesEndpointProvider;
-    private readonly ILocalSystemRuntimeConfigService _runtimeConfig;
-    private readonly ILocalParameterConfigService _parameterConfigService;
-    private readonly ILogService _logger;
     private readonly HomogenizationMesOptions _mesOptions;
     private readonly HomogenizationMesCodeOptions _mesCodes;
-    private readonly MesRequestExecutor _mesRequestExecutor;
 
-    public HomogenizationMesApiService(
-        IMesHttpClient mesHttpClient,
-        IMesEndpointProvider mesEndpointProvider,
-        ILocalSystemRuntimeConfigService runtimeConfig,
+    public HomogenizationMesChannel(
+        MesRequestExecutor requestExecutor,
         ILocalParameterConfigService parameterConfigService,
         ILogService logger,
         IOptions<HomogenizationMesOptions> mesOptions,
         IOptions<HomogenizationCodeOptions> codeOptions)
+        : base(DependencyInjection.ModuleKey, logger, requestExecutor, parameterConfigService)
     {
-        _mesHttpClient = mesHttpClient;
-        _mesEndpointProvider = mesEndpointProvider;
-        _runtimeConfig = runtimeConfig;
-        _parameterConfigService = parameterConfigService;
-        _logger = logger;
         _mesOptions = mesOptions.Value;
         _mesCodes = codeOptions.Value.Mes;
-        _mesRequestExecutor = new MesRequestExecutor(mesHttpClient, mesEndpointProvider, runtimeConfig, logger);
     }
+
+    protected override string SignToken => _mesOptions.SignToken;
 
     public Task<MesCallResult> UploadInboundAsync(
         DeviceSession? device,
@@ -53,27 +41,23 @@ public sealed class HomogenizationMesApiService : IHomogenizationMesApiService
             return Task.FromResult(MesCallResult.InvalidContext("托盘码不能为空。"));
         }
 
-        return ExecuteAsync(
+        return ExecuteMesAsync(
             device,
             _mesOptions.Paths.Inbound,
-            stationNo =>
+            envelope => new
             {
-                var envelope = CreateEnvelope(device!, stationNo, _mesOptions.SignToken);
-                return Task.FromResult<object>(new
+                upperComputerNo = envelope.UpperComputerNo,
+                timestamp = envelope.Timestamp,
+                sign = envelope.Sign,
+                stationNo = envelope.StationNo,
+                data = new
                 {
-                    upperComputerNo = envelope.UpperComputerNo,
-                    timestamp = envelope.Timestamp,
-                    sign = envelope.Sign,
-                    stationNo = envelope.StationNo,
-                    data = new
-                    {
-                        stackTrayNo = trayCode,
-                        weldTrayNo = trayCode,
-                        productNo = trayCode,
-                        devices = (object?)null,
-                        boms = (object?)null
-                    }
-                });
+                    stackTrayNo = trayCode,
+                    weldTrayNo = trayCode,
+                    productNo = trayCode,
+                    devices = (object?)null,
+                    boms = (object?)null
+                }
             },
             cancellationToken);
     }
@@ -90,27 +74,23 @@ public sealed class HomogenizationMesApiService : IHomogenizationMesApiService
             return Task.FromResult(MesCallResult.InvalidContext("出料托盘码不能为空。"));
         }
 
-        return ExecuteAsync(
+        return ExecuteMesAsync(
             device,
             _mesOptions.Paths.Outbound,
-            stationNo =>
+            envelope => new
             {
-                var envelope = CreateEnvelope(device!, stationNo, _mesOptions.SignToken);
-                return Task.FromResult<object>(new
+                upperComputerNo = envelope.UpperComputerNo,
+                timestamp = envelope.Timestamp,
+                sign = envelope.Sign,
+                stationNo = envelope.StationNo,
+                outboundTime = FormatTimestamp(cellData.CompletedTime ?? DateTime.UtcNow),
+                serialNumber = cellData.TrayCode,
+                data = new
                 {
-                    upperComputerNo = envelope.UpperComputerNo,
-                    timestamp = envelope.Timestamp,
-                    sign = envelope.Sign,
-                    stationNo = envelope.StationNo,
-                    outboundTime = FormatTimestamp(cellData.CompletedTime ?? DateTime.UtcNow),
-                    serialNumber = cellData.TrayCode,
-                    data = new
-                    {
-                        boundNo = cellData.TrayCode,
-                        lastBoundNo = cellData.TrayCode,
-                        produce = BuildOutboundProduce(cellData)
-                    }
-                });
+                    boundNo = cellData.TrayCode,
+                    lastBoundNo = cellData.TrayCode,
+                    produce = BuildOutboundProduce(cellData)
+                }
             },
             cancellationToken);
     }
@@ -122,31 +102,27 @@ public sealed class HomogenizationMesApiService : IHomogenizationMesApiService
     {
         ArgumentNullException.ThrowIfNull(snapshot);
 
-        return ExecuteAsync(
+        return ExecuteMesAsync(
             device,
             _mesOptions.Paths.Realtime,
-            stationNo =>
+            envelope => new
             {
-                var envelope = CreateEnvelope(device!, stationNo, _mesOptions.SignToken);
-                return Task.FromResult<object>(new
+                upperComputerNo = envelope.UpperComputerNo,
+                timestamp = envelope.Timestamp,
+                sign = envelope.Sign,
+                stationNo = envelope.StationNo,
+                data = new
                 {
-                    upperComputerNo = envelope.UpperComputerNo,
-                    timestamp = envelope.Timestamp,
-                    sign = envelope.Sign,
-                    stationNo = envelope.StationNo,
-                    data = new
+                    devices = new[]
                     {
-                        devices = new[]
+                        new
                         {
-                            new
-                            {
-                                stationNo = envelope.StationNo,
-                                collectTime = FormatTimestamp(snapshot.CapturedAt),
-                                data = BuildRealtimeItems(snapshot)
-                            }
+                            stationNo = envelope.StationNo,
+                            collectTime = FormatTimestamp(snapshot.CapturedAt),
+                            data = BuildRealtimeItems(snapshot)
                         }
                     }
-                });
+                }
             },
             cancellationToken);
     }
@@ -158,23 +134,19 @@ public sealed class HomogenizationMesApiService : IHomogenizationMesApiService
     {
         ArgumentNullException.ThrowIfNull(snapshot);
 
-        return ExecuteAsync(
+        return ExecuteMesAsync(
             device,
             _mesOptions.Paths.Recipe,
-            stationNo =>
+            envelope => new
             {
-                var envelope = CreateEnvelope(device!, stationNo, _mesOptions.SignToken);
-                return Task.FromResult<object>(new
+                upperComputerNo = envelope.UpperComputerNo,
+                timestamp = envelope.Timestamp,
+                sign = envelope.Sign,
+                stationNo = envelope.StationNo,
+                data = new
                 {
-                    upperComputerNo = envelope.UpperComputerNo,
-                    timestamp = envelope.Timestamp,
-                    sign = envelope.Sign,
-                    stationNo = envelope.StationNo,
-                    data = new
-                    {
-                        devices = BuildRecipeItems(snapshot)
-                    }
-                });
+                    devices = BuildRecipeItems(snapshot)
+                }
             },
             cancellationToken);
     }
@@ -186,91 +158,36 @@ public sealed class HomogenizationMesApiService : IHomogenizationMesApiService
     {
         ArgumentNullException.ThrowIfNull(snapshot);
 
-        return ExecuteAsync(
+        return ExecuteMesAsync(
             device,
             _mesOptions.Paths.EquipmentStatus,
-            stationNo =>
+            envelope => new
             {
-                var envelope = CreateEnvelope(device!, stationNo, _mesOptions.SignToken);
-                return Task.FromResult<object>(new
+                upperComputerNo = envelope.UpperComputerNo,
+                timestamp = envelope.Timestamp,
+                sign = envelope.Sign,
+                data = new
                 {
-                    upperComputerNo = envelope.UpperComputerNo,
-                    timestamp = envelope.Timestamp,
-                    sign = envelope.Sign,
-                    data = new
+                    devices = new[]
                     {
-                        devices = new[]
+                        new
                         {
-                            new
-                            {
-                                stationNo = envelope.StationNo,
-                                status = snapshot.StatusCode,
-                                msg = snapshot.Messages
-                            }
+                            stationNo = envelope.StationNo,
+                            status = snapshot.StatusCode,
+                            msg = snapshot.Messages
                         }
                     }
-                });
+                }
             },
             cancellationToken);
     }
 
-    private Task<MesCallResult> ExecuteAsync(
+    protected override Task<MesCallResult> UploadOutboundRecordAsync(
         DeviceSession? device,
-        string relativePath,
-        Func<string, Task<object>> payloadFactory,
+        HomogenizationCellData cellData,
+        CellCompletedRecord record,
         CancellationToken cancellationToken)
-        => _mesRequestExecutor.ExecuteAsync(
-            device,
-            relativePath,
-            async (currentDevice, ct) =>
-            {
-                var stationNo = await ResolveStationNoAsync(currentDevice, ct).ConfigureAwait(false);
-                return await payloadFactory(stationNo).ConfigureAwait(false);
-            },
-            cancellationToken);
-
-    private async Task<string> ResolveStationNoAsync(DeviceSession device, CancellationToken cancellationToken)
-    {
-        var configuredValue = await _parameterConfigService
-            .GetSystemConfigValueAsync(SystemConfigKey.工站编号, cancellationToken)
-            .ConfigureAwait(false);
-
-        if (!string.IsNullOrWhiteSpace(configuredValue))
-        {
-            return configuredValue.Trim();
-        }
-
-        return string.IsNullOrWhiteSpace(device.DeviceName)
-            ? device.ClientCode
-            : device.DeviceName;
-    }
-
-    private static MesEnvelope CreateEnvelope(DeviceSession device, string stationNo, string signToken)
-    {
-        var upperComputerNo = string.IsNullOrWhiteSpace(device.ClientCode)
-            ? device.DeviceName
-            : device.ClientCode;
-        var timestamp = FormatTimestamp(DateTime.UtcNow);
-        var sign = BuildSign(upperComputerNo, timestamp, signToken);
-        return new MesEnvelope(upperComputerNo, timestamp, sign, stationNo);
-    }
-
-    private static string FormatTimestamp(DateTime time)
-        => time.ToString("yyyy-MM-dd HH:mm:ss");
-
-    private static string BuildSign(string upperComputerNo, string timestamp, string signToken)
-    {
-        var bytes = Encoding.UTF8.GetBytes($"{upperComputerNo}{timestamp}{signToken}");
-        var hash = MD5.HashData(bytes);
-        var builder = new StringBuilder(hash.Length * 2);
-
-        foreach (var value in hash)
-        {
-            builder.Append(value.ToString("X2"));
-        }
-
-        return builder.ToString();
-    }
+        => UploadOutboundAsync(device, cellData, cancellationToken);
 
     private IReadOnlyList<object> BuildRealtimeItems(HomogenizationRealtimeSnapshot snapshot)
         =>
@@ -308,8 +225,8 @@ public sealed class HomogenizationMesApiService : IHomogenizationMesApiService
 
         AddProduceItem(produce, _mesCodes.GetOutboundItem("DeviceCode"), cellData.DeviceCode);
         AddProduceItem(produce, _mesCodes.GetOutboundItem("DeviceName"), cellData.DeviceName);
-        AddProduceItem(produce, _mesCodes.GetOutboundItem("StartTime"), cellData.InboundTime?.ToString("yyyy-MM-dd HH:mm:ss"));
-        AddProduceItem(produce, _mesCodes.GetOutboundItem("CompleteTime"), cellData.CompletedTime?.ToString("yyyy-MM-dd HH:mm:ss"));
+        AddProduceItem(produce, _mesCodes.GetOutboundItem("StartTime"), cellData.InboundTime);
+        AddProduceItem(produce, _mesCodes.GetOutboundItem("CompleteTime"), cellData.CompletedTime);
         AddProduceItem(produce, _mesCodes.GetOutboundItem("StirringSpeed"), cellData.RealtimeSnapshot?.StirringSpeed);
         AddProduceItem(produce, _mesCodes.GetOutboundItem("Temperature"), cellData.RealtimeSnapshot?.Temperature);
         AddProduceItem(produce, _mesCodes.GetOutboundItem("Vacuum"), cellData.RealtimeSnapshot?.Vacuum);
@@ -365,8 +282,8 @@ public sealed class HomogenizationMesApiService : IHomogenizationMesApiService
 
         var text = value switch
         {
-            DateTime time => time.ToString("yyyy-MM-dd HH:mm:ss"),
-            DateTimeOffset timeOffset => timeOffset.ToString("yyyy-MM-dd HH:mm:ss"),
+            DateTime time => FormatTimestamp(time),
+            DateTimeOffset timeOffset => FormatTimestamp(timeOffset.DateTime),
             _ => value.ToString()
         };
 
@@ -382,11 +299,4 @@ public sealed class HomogenizationMesApiService : IHomogenizationMesApiService
             val = text
         });
     }
-
-    private sealed record MesEnvelope(
-        string UpperComputerNo,
-        string Timestamp,
-        string Sign,
-        string StationNo);
 }
-

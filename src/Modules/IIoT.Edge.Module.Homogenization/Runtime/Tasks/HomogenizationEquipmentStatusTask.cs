@@ -16,14 +16,14 @@ namespace IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
 {
     private readonly IDeviceService _deviceService;
-    private readonly IHomogenizationMesApiService _mesApiService;
+    private readonly IHomogenizationMesChannel _mesApiService;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
 
     public HomogenizationEquipmentStatusTask(
         IPlcBuffer buffer,
         HomogenizationContext context,
         IDeviceService deviceService,
-        IHomogenizationMesApiService mesApiService,
+        IHomogenizationMesChannel mesApiService,
         IMesUploadDiagnosticsStore diagnosticsStore,
         ILogService logger,
         IOptions<HomogenizationModuleOptions> moduleOptions,

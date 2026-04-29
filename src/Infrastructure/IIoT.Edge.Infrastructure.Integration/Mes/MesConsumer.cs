@@ -1,4 +1,3 @@
-using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Integration;
@@ -11,10 +10,9 @@ namespace IIoT.Edge.Infrastructure.Integration.Mes;
 public sealed class MesConsumer : IMesConsumer
 {
     private readonly IDeviceService _deviceService;
-    private readonly ILocalSystemRuntimeConfigService _runtimeConfig;
+    private readonly IMesUploadGate _uploadGate;
     private readonly ILogService _logger;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
-    private readonly IExternalHeartbeatStateStore? _heartbeatStore;
     private readonly Dictionary<string, IProcessMesUploader> _uploaders;
 
     public string Name => "MES";
@@ -24,17 +22,15 @@ public sealed class MesConsumer : IMesConsumer
 
     public MesConsumer(
         IDeviceService deviceService,
-        ILocalSystemRuntimeConfigService runtimeConfig,
+        IMesUploadGate uploadGate,
         IEnumerable<IProcessMesUploader> uploaders,
         IMesUploadDiagnosticsStore diagnosticsStore,
-        ILogService logger,
-        IExternalHeartbeatStateStore? heartbeatStore = null)
+        ILogService logger)
     {
         _deviceService = deviceService;
-        _runtimeConfig = runtimeConfig;
+        _uploadGate = uploadGate;
         _diagnosticsStore = diagnosticsStore;
         _logger = logger;
-        _heartbeatStore = heartbeatStore;
         _uploaders = uploaders.ToDictionary(x => x.ProcessType, StringComparer.OrdinalIgnoreCase);
     }
 
@@ -45,19 +41,19 @@ public sealed class MesConsumer : IMesConsumer
             return true;
         }
 
-        if (!_runtimeConfig.Current.MesUploadEnabled)
+        var gate = _uploadGate.GetSnapshot();
+        if (!gate.CanUpload && string.Equals(gate.ReasonCode, "mes_upload_disabled", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
 
-        var heartbeat = _heartbeatStore?.Get(ExternalSystemKind.Mes);
-        if (heartbeat is not null && !heartbeat.IsReady)
+        if (!gate.CanUpload)
         {
-            var reason = string.IsNullOrWhiteSpace(heartbeat.ReasonCode)
-                ? "mes_heartbeat_not_ready"
-                : heartbeat.ReasonCode;
+            var reason = string.IsNullOrWhiteSpace(gate.ReasonCode)
+                ? "mes_upload_gate_blocked"
+                : gate.ReasonCode;
             _diagnosticsStore.RecordFailure(record.CellData.ProcessType, reason);
-            _logger.Warn($"[MES] 心跳未就绪（{reason}），本次数据转入 MES 补偿队列。ProcessType={record.CellData.ProcessType}");
+            _logger.Warn($"[MES] 上传门控未就绪（{reason}），本次数据转入 MES 补偿队列。ProcessType={record.CellData.ProcessType}");
             return false;
         }
 

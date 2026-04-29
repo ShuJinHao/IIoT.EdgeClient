@@ -43,8 +43,11 @@ public sealed class DependencyInjection : IEdgeProcessModule
         builder.Services.AddSingleton<IValidateOptions<HomogenizationCodeOptions>, HomogenizationCodeOptionsValidator>();
 
         builder.Services.AddSingleton<IProcessCloudUploader, HomogenizationCloudUploader>();
-        builder.Services.AddSingleton<IProcessMesUploader, HomogenizationMesUploader>();
-        builder.Services.AddSingleton<IHomogenizationMesApiService, HomogenizationMesApiService>();
+        builder.Services.AddSingleton<HomogenizationMesChannel>();
+        builder.Services.AddSingleton<IHomogenizationMesChannel>(sp =>
+            sp.GetRequiredService<HomogenizationMesChannel>());
+        builder.Services.AddSingleton<IProcessMesUploader>(sp =>
+            sp.GetRequiredService<HomogenizationMesChannel>());
         builder.Services.AddSingleton<IProductionContextFactory, HomogenizationContextFactory>();
         builder.Services.AddSingleton<IModuleHardwareProfileProvider, HomogenizationHardwareProfileProvider>();
         builder.Services.AddSingleton<HomogenizationCellDataValidator>();

@@ -25,18 +25,12 @@ public sealed class StackingCloudUploader : ProcessCloudUploaderBase<StackingCel
         ILogService logger,
         IConfiguration configuration,
         IProductionContextStore contextStore)
-        : base(cloudHttp, logger)
+        : base(StackingModuleConstants.ProcessType, ProcessUploadMode.Single, UploadPathValue, cloudHttp, logger)
     {
         _mapper = mapper;
         _configuration = configuration;
         _contextStore = contextStore;
     }
-
-    public override string ProcessType => StackingModuleConstants.ProcessType;
-
-    public override ProcessUploadMode UploadMode => ProcessUploadMode.Single;
-
-    protected override string UploadPath => UploadPathValue;
 
     protected override Task<CloudCallResult?> CheckBeforeUploadAsync(
         ProcessCloudUploadContext context,

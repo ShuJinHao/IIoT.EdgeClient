@@ -1,4 +1,4 @@
-﻿using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Common.Http;
@@ -11,19 +11,33 @@ public abstract class ProcessCloudUploaderBase<TCellData, TPayload> : IProcessCl
     where TCellData : CellDataBase
 {
     private readonly ICloudHttpClient _cloudHttp;
+    private readonly string _processType;
+    private readonly ProcessUploadMode _uploadMode;
+    private readonly string _uploadPath;
     protected readonly ILogService Logger;
 
-    protected ProcessCloudUploaderBase(ICloudHttpClient cloudHttp, ILogService logger)
+    protected ProcessCloudUploaderBase(
+        string processType,
+        ProcessUploadMode uploadMode,
+        string uploadPath,
+        ICloudHttpClient cloudHttp,
+        ILogService logger)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(processType);
+        ArgumentException.ThrowIfNullOrWhiteSpace(uploadPath);
+
+        _processType = processType;
+        _uploadMode = uploadMode;
+        _uploadPath = uploadPath;
         _cloudHttp = cloudHttp;
         Logger = logger;
     }
 
-    public abstract string ProcessType { get; }
+    public string ProcessType => _processType;
 
-    public abstract ProcessUploadMode UploadMode { get; }
+    public ProcessUploadMode UploadMode => _uploadMode;
 
-    protected abstract string UploadPath { get; }
+    protected string UploadPath => _uploadPath;
 
     protected virtual string UploaderName => GetType().Name;
 

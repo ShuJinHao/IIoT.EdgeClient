@@ -9,16 +9,12 @@ namespace IIoT.Edge.Module.Homogenization.Integration;
 
 public sealed class HomogenizationCloudUploader : ProcessCloudUploaderBase<HomogenizationCellData, object>
 {
+    private const string UploadPathValue = "/api/v1/edge/pass-stations/homogenization";
+
     public HomogenizationCloudUploader(ICloudHttpClient cloudHttp, ILogService logger)
-        : base(cloudHttp, logger)
+        : base(DependencyInjection.ModuleKey, ProcessUploadMode.Single, UploadPathValue, cloudHttp, logger)
     {
     }
-
-    public override string ProcessType => DependencyInjection.ModuleKey;
-
-    public override ProcessUploadMode UploadMode => ProcessUploadMode.Single;
-
-    protected override string UploadPath => "/api/v1/edge/pass-stations/homogenization";
 
     protected override Task<CloudCallResult?> CheckBeforeUploadAsync(
         ProcessCloudUploadContext context,

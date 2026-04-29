@@ -26,7 +26,7 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
         AddDefaultRuntimeServices(services);
         services.AddSingleton<IDeviceService, ContractDeviceService>();
         services.AddSingleton<IMesUploadDiagnosticsStore, ContractMesUploadDiagnosticsStore>();
-        services.AddSingleton<IHomogenizationMesApiService, ContractHomogenizationMesApiService>();
+        services.AddSingleton<IHomogenizationMesChannel, ContractHomogenizationMesChannel>();
         services.AddSingleton<HomogenizationCellDataValidator>();
         services.AddSingleton(Options.Create(new HomogenizationModuleOptions()));
         services.AddSingleton(Options.Create(new HomogenizationCodeOptions()));
@@ -41,6 +41,25 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
             result.Services,
             descriptor => descriptor.ServiceType == typeof(IDevelopmentSampleContributor)
                           && descriptor.ImplementationType == typeof(HomogenizationDevelopmentSampleContributor));
+    }
+
+    [Fact]
+    public void RegisterServices_ShouldRegisterMesChannelAsProcessUploader()
+    {
+        var result = new ModuleContractFixture().RegisterModule(new DependencyInjection());
+
+        Assert.Contains(
+            result.Services,
+            descriptor => descriptor.ServiceType == typeof(HomogenizationMesChannel)
+                          && descriptor.ImplementationType == typeof(HomogenizationMesChannel));
+        Assert.Contains(
+            result.Services,
+            descriptor => descriptor.ServiceType == typeof(IHomogenizationMesChannel)
+                          && descriptor.ImplementationFactory is not null);
+        Assert.Contains(
+            result.Services,
+            descriptor => descriptor.ServiceType == typeof(IProcessMesUploader)
+                          && descriptor.ImplementationFactory is not null);
     }
 
     [Fact]
@@ -108,9 +127,23 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
         public Task StopAsync() => Task.CompletedTask;
         public Task RefreshBootstrapAsync(CancellationToken ct = default) => Task.CompletedTask;
         public void MarkUploadGateBlocked(EdgeUploadBlockReason reason, DateTimeOffset occurredAtUtc) { }
-        public event Action<NetworkState>? NetworkStateChanged;
-        public event Action<DeviceSession?>? DeviceIdentified;
-        public event Action<EdgeUploadGateSnapshot>? UploadGateChanged;
+        public event Action<NetworkState>? NetworkStateChanged
+        {
+            add { }
+            remove { }
+        }
+
+        public event Action<DeviceSession?>? DeviceIdentified
+        {
+            add { }
+            remove { }
+        }
+
+        public event Action<EdgeUploadGateSnapshot>? UploadGateChanged
+        {
+            add { }
+            remove { }
+        }
     }
 
     private sealed class ContractMesUploadDiagnosticsStore : IMesUploadDiagnosticsStore
@@ -121,7 +154,7 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
         public void RecordFailure(string processType, string failureReason) { }
     }
 
-    private sealed class ContractHomogenizationMesApiService : IHomogenizationMesApiService
+    private sealed class ContractHomogenizationMesChannel : IHomogenizationMesChannel
     {
         public Task<MesCallResult> UploadInboundAsync(
             DeviceSession? device,

@@ -8,14 +8,18 @@ namespace IIoT.Edge.Application.Modules;
 public abstract class ProcessMesUploaderBase<TCellData> : IProcessMesUploader
     where TCellData : CellDataBase
 {
+    private readonly string _processType;
     protected readonly ILogService Logger;
 
-    protected ProcessMesUploaderBase(ILogService logger)
+    protected ProcessMesUploaderBase(string processType, ILogService logger)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(processType);
+
+        _processType = processType;
         Logger = logger;
     }
 
-    public abstract string ProcessType { get; }
+    public string ProcessType => _processType;
 
     public virtual MesUploadMode UploadMode => MesUploadMode.Single;
 
