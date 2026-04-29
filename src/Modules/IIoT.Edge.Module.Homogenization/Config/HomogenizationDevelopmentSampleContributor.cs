@@ -4,13 +4,14 @@ using System.Text.Json;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Domain.Hardware.Aggregates;
+using IIoT.Edge.Application.Modules.Samples;
 using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.SharedKernel.Repository;
 using Microsoft.Extensions.Configuration;
 
 namespace IIoT.Edge.Module.Homogenization.Config;
 
-public sealed class HomogenizationDevelopmentSampleContributor : IDevelopmentSampleContributor
+public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSampleContributorBase
 {
     private const string SeedRemark = "匀浆 IO 种子";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -18,8 +19,7 @@ public sealed class HomogenizationDevelopmentSampleContributor : IDevelopmentSam
     private readonly ILogService _logger;
     private readonly IRepository<NetworkDeviceEntity> _networkDevices;
     private readonly IRepository<IoMappingEntity> _ioMappings;
-    private readonly HomogenizationIoSeedOptions _options = new();
-    private readonly Dictionary<string, IModuleHardwareProfileProvider> _hardwareProfiles;
+    private readonly HomogenizationIoSeedOptions _options;
 
     public HomogenizationDevelopmentSampleContributor(
         IConfiguration configuration,
@@ -27,25 +27,24 @@ public sealed class HomogenizationDevelopmentSampleContributor : IDevelopmentSam
         IRepository<IoMappingEntity> ioMappings,
         ILogService logger,
         IEnumerable<IModuleHardwareProfileProvider> hardwareProfiles)
+        : base(configuration, hardwareProfiles)
     {
         _networkDevices = networkDevices;
         _ioMappings = ioMappings;
         _logger = logger;
-        _hardwareProfiles = hardwareProfiles.ToDictionary(x => x.ModuleId, StringComparer.OrdinalIgnoreCase);
-
-        configuration.GetSection(HomogenizationIoSeedOptions.SectionName).Bind(_options);
+        _options = BindOptions<HomogenizationIoSeedOptions>(HomogenizationIoSeedOptions.SectionName);
     }
 
-    public string ModuleId => DependencyInjection.ModuleKey;
+    public override string ModuleId => DependencyInjection.ModuleKey;
 
-    public async Task EnsureConfigurationSamplesAsync(CancellationToken cancellationToken = default)
+    protected override bool ShouldEnsureConfigurationSamples()
+        => _options.Enabled;
+
+    protected override void OnConfigurationSamplesSkipped()
+        => _logger.Info("[匀浆][IO种子] 自动播种已关闭。");
+
+    protected override async Task EnsureConfigurationSamplesCoreAsync(CancellationToken cancellationToken)
     {
-        if (!_options.Enabled)
-        {
-            _logger.Info("[匀浆][IO种子] 自动播种已关闭。");
-            return;
-        }
-
         _logger.Info("[匀浆][IO种子] 开始检查匀浆设备和 IO 映射。");
 
         var seedFile = await LoadSeedFileAsync(cancellationToken).ConfigureAwait(false);
@@ -79,9 +78,6 @@ public sealed class HomogenizationDevelopmentSampleContributor : IDevelopmentSam
 
         _logger.Info($"[匀浆][IO种子] 播种检查完成。设备导入 {importedDeviceCount} 台，IO 映射导入 {importedMappingCount} 条。");
     }
-
-    public Task EnsureRuntimeSamplesAsync(CancellationToken cancellationToken = default)
-        => Task.CompletedTask;
 
     private async Task<HomogenizationIoSeedFile> LoadSeedFileAsync(CancellationToken cancellationToken)
     {
@@ -318,14 +314,7 @@ public sealed class HomogenizationDevelopmentSampleContributor : IDevelopmentSam
     }
 
     private IModuleHardwareProfileProvider GetHardwareProfile()
-    {
-        if (_hardwareProfiles.TryGetValue(DependencyInjection.ModuleKey, out var provider))
-        {
-            return provider;
-        }
-
-        throw new InvalidOperationException($"匀浆 IO 种子导入需要模块“{DependencyInjection.ModuleKey}”的硬件模板提供器。");
-    }
+        => GetHardwareProfile($"匀浆 IO 种子导入需要模块“{DependencyInjection.ModuleKey}”的硬件模板提供器。");
 
     private sealed class HomogenizationIoSeedOptions
     {

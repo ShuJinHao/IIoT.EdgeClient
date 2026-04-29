@@ -2,6 +2,7 @@ using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Modules.Samples;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Module.Stacking.Constants;
 using IIoT.Edge.Module.Stacking.Payload;
@@ -11,17 +12,15 @@ using Microsoft.Extensions.Configuration;
 
 namespace IIoT.Edge.Module.Stacking.Samples;
 
-public sealed class StackingDevelopmentSampleContributor : IDevelopmentSampleContributor
+public sealed class StackingDevelopmentSampleContributor : DevelopmentSampleContributorBase
 {
     private const string SampleRemark = "Development sample bootstrap";
 
-    private readonly IConfiguration _configuration;
     private readonly IRepository<NetworkDeviceEntity> _networkDevices;
     private readonly IRepository<IoMappingEntity> _ioMappings;
     private readonly IProductionContextStore _contextStore;
     private readonly ILogService _logger;
-    private readonly Dictionary<string, IModuleHardwareProfileProvider> _hardwareProfiles;
-    private readonly StackingDevelopmentSampleOptions _options = new();
+    private readonly StackingDevelopmentSampleOptions _options;
 
     public StackingDevelopmentSampleContributor(
         IConfiguration configuration,
@@ -30,26 +29,25 @@ public sealed class StackingDevelopmentSampleContributor : IDevelopmentSampleCon
         IProductionContextStore contextStore,
         ILogService logger,
         IEnumerable<IModuleHardwareProfileProvider> hardwareProfiles)
+        : base(configuration, hardwareProfiles)
     {
-        _configuration = configuration;
         _networkDevices = networkDevices;
         _ioMappings = ioMappings;
         _contextStore = contextStore;
         _logger = logger;
-        _hardwareProfiles = hardwareProfiles.ToDictionary(x => x.ModuleId, StringComparer.OrdinalIgnoreCase);
-
-        configuration.GetSection(StackingDevelopmentSampleOptions.SectionName).Bind(_options);
+        _options = BindOptions<StackingDevelopmentSampleOptions>(StackingDevelopmentSampleOptions.SectionName);
     }
 
-    public string ModuleId => StackingModuleConstants.ModuleId;
+    public override string ModuleId => StackingModuleConstants.ModuleId;
 
-    public async Task EnsureConfigurationSamplesAsync(CancellationToken cancellationToken = default)
+    protected override bool ShouldEnsureConfigurationSamples()
+        => ShouldSeedStackingSamples();
+
+    protected override bool ShouldEnsureRuntimeSamples()
+        => ShouldSeedStackingSamples();
+
+    protected override async Task EnsureConfigurationSamplesCoreAsync(CancellationToken cancellationToken)
     {
-        if (!ShouldSeedStackingSamples())
-        {
-            return;
-        }
-
         var existingStackingDevices = await _networkDevices.GetListAsync(
             x => x.DeviceType == DeviceType.PLC && x.ModuleId == StackingModuleConstants.ModuleId,
             cancellationToken).ConfigureAwait(false);
@@ -107,13 +105,8 @@ public sealed class StackingDevelopmentSampleContributor : IDevelopmentSampleCon
         await EnsureSampleMappingsAsync(sampleDevice, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task EnsureRuntimeSamplesAsync(CancellationToken cancellationToken = default)
+    protected override async Task EnsureRuntimeSamplesCoreAsync(CancellationToken cancellationToken)
     {
-        if (!ShouldSeedStackingSamples())
-        {
-            return;
-        }
-
         var sampleDevice = await _networkDevices.GetAsync(
             x => x.DeviceType == DeviceType.PLC
                 && x.ModuleId == StackingModuleConstants.ModuleId
@@ -202,7 +195,7 @@ public sealed class StackingDevelopmentSampleContributor : IDevelopmentSampleCon
             return false;
         }
 
-        var enabledModules = _configuration
+        var enabledModules = Configuration
             .GetSection("Modules:Enabled")
             .Get<string[]>()
             ?? [];
@@ -211,19 +204,12 @@ public sealed class StackingDevelopmentSampleContributor : IDevelopmentSampleCon
     }
 
     private string GetEnvironmentName()
-        => _configuration["Shell:Environment"]?.Trim()
+        => Configuration["Shell:Environment"]?.Trim()
             ?? "Production";
 
     private IModuleHardwareProfileProvider GetStackingHardwareProfile()
-    {
-        if (_hardwareProfiles.TryGetValue(StackingModuleConstants.ModuleId, out var provider))
-        {
-            return provider;
-        }
-
-        throw new InvalidOperationException(
+        => GetHardwareProfile(
             $"Development sample bootstrap requires a hardware profile provider for module '{StackingModuleConstants.ModuleId}'.");
-    }
 
     private static List<IoMappingEntity> BuildStackingMappings(
         int networkDeviceId,
