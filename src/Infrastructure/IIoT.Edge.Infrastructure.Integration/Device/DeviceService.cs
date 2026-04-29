@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Common.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Infrastructure.Integration.Config;
@@ -18,6 +19,7 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
     private readonly DeviceSessionFileCacheStore _cacheStore;
     private readonly ILocalSystemRuntimeConfigService _runtimeConfig;
     private readonly ILogService _logger;
+    private readonly IExternalHeartbeatStateStore? _heartbeatStateStore;
     private readonly object _stateLock = new();
     private readonly object _lifecycleLock = new();
     private readonly SemaphoreSlim _identifyGate = new(1, 1);
@@ -48,13 +50,15 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
         ICloudApiEndpointProvider endpointProvider,
         DeviceSessionFileCacheStore cacheStore,
         ILocalSystemRuntimeConfigService runtimeConfig,
-        ILogService logger)
+        ILogService logger,
+        IExternalHeartbeatStateStore? heartbeatStateStore = null)
     {
         _httpClientFactory = httpClientFactory;
         _endpointProvider = endpointProvider;
         _cacheStore = cacheStore;
         _runtimeConfig = runtimeConfig;
         _logger = logger;
+        _heartbeatStateStore = heartbeatStateStore;
     }
 
     public Task StartAsync(CancellationToken ct)
@@ -134,6 +138,11 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
         }
 
         UpdateUploadGate(nextGate);
+        _heartbeatStateStore?.MarkNotReady(
+            ExternalSystemKind.Cloud,
+            nextGate.Reason.ToReasonCode(),
+            null,
+            occurredAtUtc.UtcDateTime);
     }
 
     private async Task HeartbeatLoopAsync(CancellationToken ct)
@@ -460,6 +469,7 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
         }
 
         UpdateUploadGate(nextGate);
+        _heartbeatStateStore?.MarkReady(ExternalSystemKind.Cloud, attemptedAtUtc.UtcDateTime);
     }
 
     private void GoOffline(
@@ -524,6 +534,11 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
         }
 
         UpdateUploadGate(nextGate);
+        _heartbeatStateStore?.MarkNotReady(
+            ExternalSystemKind.Cloud,
+            nextGate.Reason.ToReasonCode(),
+            null,
+            attemptedAtUtc.UtcDateTime);
     }
 
     private bool SetCurrentDevice(DeviceSession session, bool persistToCache)

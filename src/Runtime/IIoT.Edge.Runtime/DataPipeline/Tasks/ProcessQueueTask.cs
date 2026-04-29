@@ -23,6 +23,7 @@ public class ProcessQueueTask : ScheduledTaskBase
     private readonly IMesDeadLetterStore _mesDeadLetterStore;
     private readonly ICriticalPersistenceFallbackWriter _criticalFallbackWriter;
     private readonly DataPipelineCapacityGuard? _capacityGuard;
+    private readonly TimeSpan _consumerCallTimeout;
 
     public override string TaskName => "ProcessQueueTask";
     protected override int ExecuteInterval => 0;
@@ -38,7 +39,8 @@ public class ProcessQueueTask : ScheduledTaskBase
         ICloudDeadLetterStore cloudDeadLetterStore,
         IMesDeadLetterStore mesDeadLetterStore,
         ICriticalPersistenceFallbackWriter criticalFallbackWriter,
-        DataPipelineCapacityGuard? capacityGuard = null)
+        DataPipelineCapacityGuard? capacityGuard = null,
+        DataPipelineRuntimeOptions? runtimeOptions = null)
         : base(logger)
     {
         _pipelineService = pipelineService;
@@ -51,6 +53,7 @@ public class ProcessQueueTask : ScheduledTaskBase
         _criticalFallbackWriter = criticalFallbackWriter;
         _consumers = consumers.OrderBy(c => c.Order).ToList();
         _capacityGuard = capacityGuard;
+        _consumerCallTimeout = (runtimeOptions ?? new DataPipelineRuntimeOptions()).GetConsumerCallTimeout();
     }
 
     protected override async Task ExecuteAsync()
@@ -60,7 +63,7 @@ public class ProcessQueueTask : ScheduledTaskBase
                && _pipelineService.TryDequeue(out var record)
                && record is not null)
         {
-            await ProcessOneAsync(record).ConfigureAwait(false);
+            await ProcessOneAsync(record, CurrentCancellationToken).ConfigureAwait(false);
             drainedCount++;
         }
     }
@@ -70,7 +73,7 @@ public class ProcessQueueTask : ScheduledTaskBase
         await _pipelineService.WaitToReadAsync(ct).ConfigureAwait(false);
     }
 
-    private async Task ProcessOneAsync(CellCompletedRecord record)
+    private async Task ProcessOneAsync(CellCompletedRecord record, CancellationToken cancellationToken)
     {
         var label = record.CellData.DisplayLabel;
         Logger.Info($"[{record.CellData.ProcessType}] Start processing {label}");
@@ -79,7 +82,12 @@ public class ProcessQueueTask : ScheduledTaskBase
         {
             try
             {
-                var success = await consumer.ProcessAsync(record).ConfigureAwait(false);
+                var success = await DataPipelineConsumerCall
+                    .ExecuteAsync(
+                        ct => consumer.ProcessAsync(record, ct),
+                        _consumerCallTimeout,
+                        cancellationToken)
+                    .ConfigureAwait(false);
                 if (!success)
                 {
                     await HandleFailureAsync(record, consumer, "Consumer returned false.").ConfigureAwait(false);
@@ -87,7 +95,7 @@ public class ProcessQueueTask : ScheduledTaskBase
             }
             catch (Exception ex)
             {
-                await HandleFailureAsync(record, consumer, ex.Message).ConfigureAwait(false);
+                await HandleFailureAsync(record, consumer, ResolveFailureMessage(ex)).ConfigureAwait(false);
             }
         }
 
@@ -107,7 +115,7 @@ public class ProcessQueueTask : ScheduledTaskBase
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(consumer.RetryChannel))
+        if (consumer.RetryChannel == DataPipelineRetryChannel.None)
         {
             var details =
                 $"[{record.CellData.ProcessType}] Durable consumer {consumer.Name} failed for {label}, but RetryChannel is not configured.";
@@ -119,16 +127,16 @@ public class ProcessQueueTask : ScheduledTaskBase
         Logger.Warn(
             $"[{record.CellData.ProcessType}] {consumer.Name} failed for {label}. Move to retry channel {consumer.RetryChannel}.");
 
-        if (string.Equals(consumer.RetryChannel, "Cloud", StringComparison.OrdinalIgnoreCase))
+        switch (consumer.RetryChannel)
         {
-            await PersistCloudFailureAsync(record, consumer.Name, errorMessage).ConfigureAwait(false);
-            return;
-        }
-
-        if (string.Equals(consumer.RetryChannel, "MES", StringComparison.OrdinalIgnoreCase))
-        {
-            await PersistMesFailureAsync(record, consumer.Name, errorMessage).ConfigureAwait(false);
-            return;
+            case DataPipelineRetryChannel.Cloud:
+                await PersistCloudFailureAsync(record, consumer.Name, errorMessage).ConfigureAwait(false);
+                return;
+            case DataPipelineRetryChannel.Mes:
+                await PersistMesFailureAsync(record, consumer.Name, errorMessage).ConfigureAwait(false);
+                return;
+            case DataPipelineRetryChannel.None:
+                return;
         }
 
         var unsupportedDetails =
@@ -136,6 +144,9 @@ public class ProcessQueueTask : ScheduledTaskBase
         Logger.Error(unsupportedDetails);
         _criticalFallbackWriter.Write("DataPipeline.ProcessQueue.UnsupportedRetryChannel", unsupportedDetails);
     }
+
+    private static string ResolveFailureMessage(Exception ex)
+        => ex is TimeoutException ? "timeout_exceeded" : ex.Message;
 
     private async Task PersistCloudFailureAsync(
         CellCompletedRecord record,

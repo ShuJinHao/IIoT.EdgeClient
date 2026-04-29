@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Consumers;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Common.Device;
@@ -14,7 +15,7 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
     private readonly ICloudUploadDiagnosticsStore _diagnosticsStore;
     private readonly Dictionary<string, IProcessCloudUploader> _uploaders;
 
-    public string? RetryChannel => "Cloud";
+    public DataPipelineRetryChannel RetryChannel => DataPipelineRetryChannel.Cloud;
     public string Name => "Cloud";
     public int Order => 20;
     public IIoT.Edge.Application.Abstractions.DataPipeline.ConsumerFailureMode FailureMode
@@ -32,13 +33,17 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
         _uploaders = uploaders.ToDictionary(x => x.ProcessType, StringComparer.OrdinalIgnoreCase);
     }
 
-    public async Task<bool> ProcessAsync(CellCompletedRecord record)
-        => (await ProcessWithResultAsync(record).ConfigureAwait(false)).IsSuccess;
+    public async Task<bool> ProcessAsync(CellCompletedRecord record, CancellationToken cancellationToken = default)
+        => (await ProcessWithResultAsync(record, cancellationToken).ConfigureAwait(false)).IsSuccess;
 
-    public Task<CloudCallResult> ProcessWithResultAsync(CellCompletedRecord record)
-        => ProcessBatchAsync([record]);
+    public Task<CloudCallResult> ProcessWithResultAsync(
+        CellCompletedRecord record,
+        CancellationToken cancellationToken = default)
+        => ProcessBatchAsync([record], cancellationToken);
 
-    public async Task<CloudCallResult> ProcessBatchAsync(IReadOnlyList<CellCompletedRecord> records)
+    public async Task<CloudCallResult> ProcessBatchAsync(
+        IReadOnlyList<CellCompletedRecord> records,
+        CancellationToken cancellationToken = default)
     {
         if (records.Count == 0)
         {
@@ -78,7 +83,7 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
                 return uploaderMissing;
             }
 
-            var result = await uploader.UploadAsync(context, group.ToList()).ConfigureAwait(false);
+            var result = await uploader.UploadAsync(context, group.ToList(), cancellationToken).ConfigureAwait(false);
             _diagnosticsStore.RecordResult(group.Key, result);
             if (!result.IsSuccess)
             {

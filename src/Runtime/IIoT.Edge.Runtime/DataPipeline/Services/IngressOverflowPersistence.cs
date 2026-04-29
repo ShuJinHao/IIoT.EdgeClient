@@ -59,10 +59,10 @@ internal sealed class IngressOverflowPersistence : IIngressOverflowPersistence
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (string.IsNullOrWhiteSpace(consumer.RetryChannel))
+            if (consumer.RetryChannel == DataPipelineRetryChannel.None)
             {
                 var details =
-                    $"[DataPipeline] Overflow persistence skipped durable consumer '{consumer.Name}' because RetryChannel is empty. ProcessType={record.CellData.ProcessType}.";
+                    $"[DataPipeline] Overflow persistence skipped durable consumer '{consumer.Name}' because RetryChannel is not configured. ProcessType={record.CellData.ProcessType}.";
                 _logger.Error(details);
                 _criticalFallbackWriter.Write("DataPipeline.Overflow.InvalidRetryChannel", details);
                 continue;
@@ -92,24 +92,23 @@ internal sealed class IngressOverflowPersistence : IIngressOverflowPersistence
     private async Task<bool> PersistForChannelAsync(
         CellCompletedRecord record,
         string failedTarget,
-        string retryChannel,
+        DataPipelineRetryChannel retryChannel,
         DeadLetterStage stage)
     {
-        if (string.Equals(retryChannel, "Cloud", StringComparison.OrdinalIgnoreCase))
+        switch (retryChannel)
         {
-            return await PersistCloudAsync(record, failedTarget, stage).ConfigureAwait(false);
+            case DataPipelineRetryChannel.Cloud:
+                return await PersistCloudAsync(record, failedTarget, stage).ConfigureAwait(false);
+            case DataPipelineRetryChannel.Mes:
+                return await PersistMesAsync(record, failedTarget, stage).ConfigureAwait(false);
+            case DataPipelineRetryChannel.None:
+            default:
+                var details =
+                    $"[DataPipeline] Overflow persistence found unsupported retry channel '{retryChannel}' for consumer '{failedTarget}'.";
+                _logger.Error(details);
+                _criticalFallbackWriter.Write("DataPipeline.Overflow.UnsupportedRetryChannel", details);
+                return false;
         }
-
-        if (string.Equals(retryChannel, "MES", StringComparison.OrdinalIgnoreCase))
-        {
-            return await PersistMesAsync(record, failedTarget, stage).ConfigureAwait(false);
-        }
-
-        var details =
-            $"[DataPipeline] Overflow persistence found unsupported retry channel '{retryChannel}' for consumer '{failedTarget}'.";
-        _logger.Error(details);
-        _criticalFallbackWriter.Write("DataPipeline.Overflow.UnsupportedRetryChannel", details);
-        return false;
     }
 
     private async Task<bool> PersistCloudAsync(

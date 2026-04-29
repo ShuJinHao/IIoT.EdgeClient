@@ -8,5 +8,7 @@ namespace IIoT.Edge.Application.Abstractions.DataPipeline.Consumers;
 /// </summary>
 public interface ICloudConsumer : ICellDataConsumer
 {
-    Task<CloudCallResult> ProcessWithResultAsync(CellCompletedRecord record);
+    Task<CloudCallResult> ProcessWithResultAsync(
+        CellCompletedRecord record,
+        CancellationToken cancellationToken = default);
 }

@@ -197,6 +197,10 @@
     <sys:String x:Key="Navigation_Sync_FailureReasonFormat">Failure reason: {0}</sys:String>
     <sys:String x:Key="Navigation_Sync_PendingCloudFormat">Pending: retry={0}, logs={1}, capacity={2}</sys:String>
     <sys:String x:Key="Navigation_Sync_PendingMesFormat">Pending: retry={0}</sys:String>
+    <sys:String x:Key="Navigation_Heartbeat_NotConfigured">Heartbeat: not configured</sys:String>
+    <sys:String x:Key="Navigation_Heartbeat_Ready">Heartbeat: ready</sys:String>
+    <sys:String x:Key="Navigation_Heartbeat_NotReadyFormat">Heartbeat: waiting for recovery ({0})</sys:String>
+    <sys:String x:Key="Navigation_Heartbeat_Unknown">Heartbeat: unknown</sys:String>
     <sys:String x:Key="Navigation_Sync_PersistenceFaultNo">Persistence fault: no</sys:String>
     <sys:String x:Key="Navigation_Sync_PersistenceFaultYesFormat">Persistence fault: yes, last {0}, reason: {1}</sys:String>
     <sys:String x:Key="Navigation_Sync_CapacityBlockedNo">Capacity blocked: no</sys:String>

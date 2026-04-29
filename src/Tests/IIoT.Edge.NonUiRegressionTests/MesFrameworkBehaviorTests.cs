@@ -1,5 +1,6 @@
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Infrastructure.Integration.Config;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Infrastructure.Integration.Http;
@@ -106,6 +107,55 @@ public sealed class MesFrameworkBehaviorTests
     }
 
     [Fact]
+    public async Task MesConsumer_WhenHeartbeatIsNotReady_ShouldReturnFalseWithoutCallingUploader()
+    {
+        var uploader = new FakeMesUploader("Injection");
+        var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
+        var heartbeatStore = new FakeExternalHeartbeatStateStore();
+        heartbeatStore.MarkNotReady(ExternalSystemKind.Mes, "mes_heartbeat_timeout");
+
+        var consumer = new MesConsumer(
+            CreateOnlineDeviceService(),
+            new FakeLocalSystemRuntimeConfigService(),
+            [uploader],
+            diagnosticsStore,
+            new FakeLogService(),
+            heartbeatStore);
+
+        var success = await consumer.ProcessAsync(CreateRecord("Injection"));
+
+        Assert.False(success);
+        Assert.Equal(0, uploader.UploadCallCount);
+        var diagnostics = diagnosticsStore.Get("Injection");
+        Assert.NotNull(diagnostics);
+        Assert.Equal("Failed", diagnostics!.LastResult);
+        Assert.Equal("mes_heartbeat_timeout", diagnostics.LastFailureReason);
+    }
+
+    [Fact]
+    public async Task MesConsumer_WhenHeartbeatRecovers_ShouldAllowUpload()
+    {
+        var uploader = new FakeMesUploader("Injection");
+        var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
+        var heartbeatStore = new FakeExternalHeartbeatStateStore();
+        heartbeatStore.MarkReady(ExternalSystemKind.Mes);
+
+        var consumer = new MesConsumer(
+            CreateOnlineDeviceService(),
+            new FakeLocalSystemRuntimeConfigService(),
+            [uploader],
+            diagnosticsStore,
+            new FakeLogService(),
+            heartbeatStore);
+
+        var success = await consumer.ProcessAsync(CreateRecord("Injection"));
+
+        Assert.True(success);
+        Assert.Equal(1, uploader.UploadCallCount);
+        Assert.Equal("Success", diagnosticsStore.Get("Injection")!.LastResult);
+    }
+
+    [Fact]
     public async Task MesHttpClient_ShouldUseEndpointProviderAndMergeHeaders()
     {
         using var handler = new CaptureHandler();
@@ -171,6 +221,58 @@ public sealed class MesFrameworkBehaviorTests
         Assert.Equal("https://options-mes.test/api/mes/outbound", url);
     }
 
+    [Fact]
+    public async Task MesHeartbeatProbe_WhenEndpointReturnsOk_ShouldMarkReadyAndUseGet()
+    {
+        using var handler = new CaptureHandler();
+        var probe = new MesHeartbeatProbe(
+            new FakeHttpClientFactory(new HttpClient(handler)),
+            new FakeMesEndpointProvider(),
+            new TestOptionsMonitor<MesApiConfig>(new MesApiConfig { HeartbeatPath = "/api/mes/heartbeat" }),
+            new FakeLogService());
+
+        var snapshot = await probe.ProbeAsync();
+
+        Assert.True(snapshot.IsReady);
+        Assert.NotNull(handler.LastRequest);
+        Assert.Equal(HttpMethod.Get, handler.LastRequest!.Method);
+        Assert.Equal("https://mes.test/api/mes/heartbeat", handler.LastRequest.RequestUri!.ToString());
+    }
+
+    [Fact]
+    public async Task MesHeartbeatProbe_WhenHeartbeatPathMissing_ShouldReturnNotReadyWithoutRequest()
+    {
+        using var handler = new CaptureHandler();
+        var probe = new MesHeartbeatProbe(
+            new FakeHttpClientFactory(new HttpClient(handler)),
+            new FakeMesEndpointProvider(),
+            new TestOptionsMonitor<MesApiConfig>(new MesApiConfig { HeartbeatPath = "" }),
+            new FakeLogService());
+
+        var snapshot = await probe.ProbeAsync();
+
+        Assert.False(snapshot.IsReady);
+        Assert.Equal("mes_heartbeat_path_missing", snapshot.ReasonCode);
+        Assert.Null(handler.LastRequest);
+    }
+
+    [Fact]
+    public async Task MesHeartbeatProbe_WhenRequestTimesOut_ShouldReturnNotReady()
+    {
+        using var handler = new CaptureHandler { Delay = TimeSpan.FromSeconds(5) };
+        using var httpClient = new HttpClient(handler) { Timeout = TimeSpan.FromMilliseconds(50) };
+        var probe = new MesHeartbeatProbe(
+            new FakeHttpClientFactory(httpClient),
+            new FakeMesEndpointProvider(),
+            new TestOptionsMonitor<MesApiConfig>(new MesApiConfig { HeartbeatPath = "/api/mes/heartbeat" }),
+            new FakeLogService());
+
+        var snapshot = await probe.ProbeAsync();
+
+        Assert.False(snapshot.IsReady);
+        Assert.Equal("mes_heartbeat_timeout", snapshot.ReasonCode);
+    }
+
     private static FakeDeviceService CreateOnlineDeviceService()
     {
         var deviceService = new FakeDeviceService();
@@ -220,14 +322,21 @@ public sealed class MesFrameworkBehaviorTests
     private sealed class CaptureHandler : HttpMessageHandler
     {
         public HttpRequestMessage? LastRequest { get; private set; }
+        public HttpStatusCode StatusCode { get; init; } = HttpStatusCode.OK;
+        public TimeSpan? Delay { get; init; }
 
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             LastRequest = request;
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            if (Delay.HasValue)
+            {
+                await Task.Delay(Delay.Value, cancellationToken);
+            }
+
+            return new HttpResponseMessage(StatusCode)
             {
                 Content = new StringContent("{}", Encoding.UTF8, "application/json")
-            });
+            };
         }
     }
 

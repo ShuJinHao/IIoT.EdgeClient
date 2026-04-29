@@ -1,6 +1,7 @@
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Consumers;
 using System.Reflection;
 
@@ -20,7 +21,7 @@ public class ExcelConsumer : IExcelConsumer
     private readonly object _fileLock = new();
     public IIoT.Edge.Application.Abstractions.DataPipeline.ConsumerFailureMode FailureMode
         => IIoT.Edge.Application.Abstractions.DataPipeline.ConsumerFailureMode.BestEffort;
-    public string? RetryChannel => null;
+    public DataPipelineRetryChannel RetryChannel => DataPipelineRetryChannel.None;
     public string Name => "Excel";
     public int Order => 30;
 
@@ -31,7 +32,7 @@ public class ExcelConsumer : IExcelConsumer
         Directory.CreateDirectory(_excelDirectory);
     }
 
-    public Task<bool> ProcessAsync(CellCompletedRecord record)
+    public Task<bool> ProcessAsync(CellCompletedRecord record, CancellationToken cancellationToken = default)
     {
         try
         {

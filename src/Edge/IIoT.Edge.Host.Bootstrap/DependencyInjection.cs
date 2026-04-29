@@ -5,6 +5,7 @@ using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 using IIoT.Edge.Application.Abstractions.DataPipeline.SyncTask;
 using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Tasks;
@@ -12,6 +13,7 @@ using IIoT.Edge.Application.Common.Tasks;
 using IIoT.Edge.Host.Bootstrap.Modules;
 using IIoT.Edge.Infrastructure.DeviceComm;
 using IIoT.Edge.Infrastructure.Integration;
+using IIoT.Edge.Infrastructure.Integration.Mes;
 using IIoT.Edge.Infrastructure.Integration.Recipe;
 using IIoT.Edge.Infrastructure.Persistence.Dapper;
 using IIoT.Edge.Infrastructure.Persistence.EfCore;
@@ -73,8 +75,10 @@ public static class DependencyInjection
         services.AddSingleton<ICloudUploadDiagnosticsStore, CloudUploadDiagnosticsStore>();
         services.AddSingleton<IMesUploadDiagnosticsStore, MesUploadDiagnosticsStore>();
         services.AddSingleton<IMesRetryDiagnosticsStore, MesRetryDiagnosticsStore>();
+        services.AddSingleton<IExternalHeartbeatStateStore, ExternalHeartbeatStateStore>();
         services.AddSingleton<ICriticalPersistenceFallbackWriter, CriticalPersistenceFallbackWriter>();
         services.Configure<DataPipelineCapacityOptions>(configuration.GetSection(DataPipelineCapacityOptions.SectionName));
+        services.AddSingleton(configuration.GetSection(DataPipelineRuntimeOptions.SectionName).Get<DataPipelineRuntimeOptions>() ?? new DataPipelineRuntimeOptions());
 
         var shiftConfig = new ShiftConfig();
         configuration.GetSection("Shift").Bind(shiftConfig);
@@ -141,6 +145,12 @@ public static class DependencyInjection
                 "Device.Heartbeat",
                 ct => sp.GetRequiredService<IDeviceService>().StartAsync(ct),
                 _ => sp.GetRequiredService<IDeviceService>().StopAsync()));
+
+        services.AddSingleton<IManagedBackgroundService>(sp =>
+            new DelegatingBackgroundService(
+                "MES.Heartbeat",
+                ct => sp.GetRequiredService<MesHeartbeatTask>().StartAsync(ct),
+                _ => sp.GetRequiredService<MesHeartbeatTask>().StopAsync()));
 
         services.AddSingleton<IManagedBackgroundService>(sp =>
             new DelegatingBackgroundService(

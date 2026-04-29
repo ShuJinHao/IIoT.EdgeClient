@@ -24,11 +24,13 @@
     <sys:String x:Key="Shell_Footer_MesIdle">MES: idle</sys:String>
     <sys:String x:Key="Shell_Footer_CloudPersistenceFault">Cloud: persistence fault</sys:String>
     <sys:String x:Key="Shell_Footer_CloudCapacityBlocked">Cloud: capacity blocked</sys:String>
+    <sys:String x:Key="Shell_Footer_CloudHeartbeatWaiting">Cloud: waiting for heartbeat</sys:String>
     <sys:String x:Key="Shell_Footer_CloudReady">Cloud: ready</sys:String>
     <sys:String x:Key="Shell_Footer_CloudWaitingRecovery">Cloud: waiting for recovery</sys:String>
     <sys:String x:Key="Shell_Footer_CloudBlockedFormat">Cloud: blocked ({0})</sys:String>
     <sys:String x:Key="Shell_Footer_MesPersistenceFault">MES: persistence fault</sys:String>
     <sys:String x:Key="Shell_Footer_MesCapacityBlocked">MES: capacity blocked</sys:String>
+    <sys:String x:Key="Shell_Footer_MesHeartbeatWaiting">MES: waiting for heartbeat</sys:String>
     <sys:String x:Key="Shell_Footer_MesRetrying">MES: retrying</sys:String>
     <sys:String x:Key="Shell_Footer_MesBackoff">MES: backing off</sys:String>
     <sys:String x:Key="Shell_Footer_MesLastFailed">MES: last failed</sys:String>

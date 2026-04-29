@@ -4,6 +4,7 @@ using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Consumers;
 using IIoT.Edge.Application.Abstractions.DataPipeline.SyncTask;
 using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Recipe;
@@ -83,6 +84,8 @@ public static class DependencyInjection
         services.AddSingleton<ICloudHttpClient, CloudHttpClient>();
         services.AddHttpClient("MesApi", client => client.Timeout = mesTimeout);
         services.AddSingleton<IMesHttpClient, MesHttpClient>();
+        services.AddSingleton<IMesHeartbeatProbe, MesHeartbeatProbe>();
+        services.AddSingleton<MesHeartbeatTask>();
 
         services.AddSingleton<ICloudConsumer, CloudConsumer>();
         services.AddSingleton<ICloudBatchConsumer>(sp =>

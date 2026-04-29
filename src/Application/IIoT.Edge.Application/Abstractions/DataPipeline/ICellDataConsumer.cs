@@ -13,9 +13,9 @@ namespace IIoT.Edge.Application.Abstractions.DataPipeline;
 ///   Durable：必须进入本地补偿链路，不能静默丢失
 ///
 /// RetryChannel 用于决定 Durable 失败后的补传通道：
-///   null：失败后不进入重传队列，例如纯本地操作的 Excel、界面通知
-///   "Cloud"：进入 Cloud 通道的补传队列
-///   "MES"：进入 MES 通道的补传队列
+///   None：失败后不进入重传队列，例如纯本地操作的 Excel、界面通知
+///   Cloud：进入 Cloud 通道的补传队列
+///   Mes：进入 MES 通道的补传队列
 /// </summary>
 public interface ICellDataConsumer
 {
@@ -37,13 +37,13 @@ public interface ICellDataConsumer
 
     /// <summary>
     /// 失败后进入哪个补传通道。
-    /// null 表示不补传；"Cloud" 和 "MES" 表示按对应通道补传。
+    /// None 表示不补传；Cloud 和 Mes 表示按对应通道补传。
     /// </summary>
-    string? RetryChannel { get; }
+    DataPipelineRetryChannel RetryChannel { get; }
 
     /// <summary>
     /// 处理一条电芯完成记录。
     /// 返回 true 表示成功，返回 false 表示失败，是否补传由 RetryChannel 决定。
     /// </summary>
-    Task<bool> ProcessAsync(CellCompletedRecord record);
+    Task<bool> ProcessAsync(CellCompletedRecord record, CancellationToken cancellationToken = default);
 }

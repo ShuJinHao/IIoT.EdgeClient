@@ -128,7 +128,17 @@ public sealed class PlcLifecycleCoordinator
         }
 
         RequestShutdown();
-        DisposeCoreAsync().GetAwaiter().GetResult();
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await DisposeCoreAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"PLC lifecycle dispose cleanup failed: {ex.Message}");
+            }
+        });
     }
 
     public async ValueTask DisposeAsync()
@@ -206,6 +216,7 @@ public sealed class PlcLifecycleCoordinator
                     }
                     catch (Exception ex)
                     {
+                        _statusStore.MarkDisconnected(runtime.DeviceId, runtime.DeviceName, ex.Message);
                         _logger.Error($"[{runtime.DeviceName}] Task failed: {ex.Message}");
                     }
                 }, CancellationToken.None));

@@ -1,5 +1,6 @@
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Consumers;
 using IIoT.Edge.Application.Abstractions.Events;
 using MediatR;
@@ -23,7 +24,7 @@ public class UiNotifyConsumer : IUiNotifyConsumer
     public int Order => 50;
     public IIoT.Edge.Application.Abstractions.DataPipeline.ConsumerFailureMode FailureMode
         => IIoT.Edge.Application.Abstractions.DataPipeline.ConsumerFailureMode.BestEffort;
-    public string? RetryChannel => null;
+    public DataPipelineRetryChannel RetryChannel => DataPipelineRetryChannel.None;
 
     public UiNotifyConsumer(
         IPublisher publisher,
@@ -33,11 +34,11 @@ public class UiNotifyConsumer : IUiNotifyConsumer
         _logger = logger;
     }
 
-    public async Task<bool> ProcessAsync(CellCompletedRecord record)
+    public async Task<bool> ProcessAsync(CellCompletedRecord record, CancellationToken cancellationToken = default)
     {
         try
         {
-            await _publisher.Publish(new CellCompletedEvent(record));
+            await _publisher.Publish(new CellCompletedEvent(record), cancellationToken);
             return true;
         }
         catch (Exception ex)
