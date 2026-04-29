@@ -3,6 +3,7 @@ using IIoT.Edge.Application.Features.Hardware.HardwareConfigView;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Models;
 using IIoT.Edge.Application.Features.Hardware.Queries;
 using IIoT.Edge.Application.Features.Hardware.UseCases.IoMapping.Commands;
+using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Module.Stacking.Runtime;
 using IIoT.Edge.SharedKernel.Enums;
 using MediatR;
@@ -28,6 +29,24 @@ public sealed class StackingHardwareProfileBehaviorTests
         Assert.Equal(
             ["DB1.DBW0", "DB1.DBW2", "DB1.DBW4", "DB1.DBW6"],
             template.OrderBy(x => x.SortOrder).Select(x => x.PlcAddress).ToArray());
+    }
+
+    [Fact]
+    public void StackingHardwareProfileProvider_ShouldRejectOutOfSequenceMappings()
+    {
+        var provider = new StackingHardwareProfileProvider();
+        var mappings = CreateValidSnapshots(provider)
+            .Select(static mapping => mapping.Label switch
+            {
+                "Stacking.Sequence" => mapping with { SortOrder = 2 },
+                "Stacking.LayerCount" => mapping with { SortOrder = 1 },
+                _ => mapping
+            })
+            .ToArray();
+
+        var validation = provider.ValidatePlcConfiguration("Stacking-PLC", "S7", mappings);
+
+        Assert.False(validation.IsValid);
     }
 
     [Fact]
@@ -60,6 +79,20 @@ public sealed class StackingHardwareProfileBehaviorTests
         Assert.Contains(sender.CurrentMappings, x => x.Label == "Stacking.Ack" && x.Direction == "Write");
         Assert.Equal("模块模板已存在，无需补充映射。", secondApply.Message);
     }
+
+    private static ModuleIoSnapshot[] CreateValidSnapshots(StackingHardwareProfileProvider provider)
+        => provider.GetDefaultIoTemplate()
+            .Select(static template => new ModuleIoSnapshot(
+                template.Label,
+                template.PlcAddress,
+                template.AddressCount,
+                template.DataType,
+                template.Direction,
+                template.SortOrder,
+                template.Category,
+                template.GroupName,
+                template.DisplayRole))
+            .ToArray();
 
     private sealed class FakeSender(List<FakeIoMappingEntity> mappings) : ISender
     {
