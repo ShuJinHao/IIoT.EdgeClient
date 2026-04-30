@@ -22,7 +22,7 @@ public class ProcessQueueTask : ScheduledTaskBase
     private readonly ICloudDeadLetterStore _cloudDeadLetterStore;
     private readonly IMesDeadLetterStore _mesDeadLetterStore;
     private readonly ICriticalPersistenceFallbackWriter _criticalFallbackWriter;
-    private readonly DataPipelineCapacityGuard? _capacityGuard;
+    private readonly DataPipelineCapacityGuard _capacityGuard;
     private readonly TimeSpan _consumerCallTimeout;
 
     public override string TaskName => "ProcessQueueTask";
@@ -39,10 +39,12 @@ public class ProcessQueueTask : ScheduledTaskBase
         ICloudDeadLetterStore cloudDeadLetterStore,
         IMesDeadLetterStore mesDeadLetterStore,
         ICriticalPersistenceFallbackWriter criticalFallbackWriter,
-        DataPipelineCapacityGuard? capacityGuard = null,
+        DataPipelineCapacityGuard capacityGuard,
         DataPipelineRuntimeOptions? runtimeOptions = null)
         : base(logger)
     {
+        ArgumentNullException.ThrowIfNull(capacityGuard);
+
         _pipelineService = pipelineService;
         _cloudRetryStore = cloudRetryStore;
         _mesRetryStore = mesRetryStore;
@@ -156,9 +158,9 @@ public class ProcessQueueTask : ScheduledTaskBase
         // Cloud 链路失败只写 Cloud retry/fallback/deadletter。补偿表里保存完整 CellDataJson，
         // 不拆插件字段，后续 CloudRetryTask 反序列化后再回到对应 uploader。
         var label = record.CellData.DisplayLabel;
-        var retryBlockedReason = _capacityGuard is null
-            ? null
-            : await _capacityGuard.GetCloudRetryBlockReasonAsync(record.CellData.ProcessType).ConfigureAwait(false);
+        var retryBlockedReason = await _capacityGuard
+            .GetCloudRetryBlockReasonAsync(record.CellData.ProcessType)
+            .ConfigureAwait(false);
 
         if (!string.IsNullOrWhiteSpace(retryBlockedReason))
         {
@@ -181,9 +183,9 @@ public class ProcessQueueTask : ScheduledTaskBase
         {
             Logger.Error($"[{record.CellData.ProcessType}] Save retry record failed for {label}: {ex.Message}");
 
-            var fallbackBlockedReason = _capacityGuard is null
-                ? null
-                : await _capacityGuard.GetCloudFallbackBlockReasonAsync(record.CellData.ProcessType).ConfigureAwait(false);
+            var fallbackBlockedReason = await _capacityGuard
+                .GetCloudFallbackBlockReasonAsync(record.CellData.ProcessType)
+                .ConfigureAwait(false);
 
             if (!string.IsNullOrWhiteSpace(fallbackBlockedReason))
             {
@@ -226,9 +228,9 @@ public class ProcessQueueTask : ScheduledTaskBase
         // MES 链路失败只写 MES retry/fallback/deadletter。这里不调用 MES 接口，
         // 也不把数据转交 Cloud；MesRetryTask 会在 MES 心跳恢复后按 CellDataJson 补传。
         var label = record.CellData.DisplayLabel;
-        var retryBlockedReason = _capacityGuard is null
-            ? null
-            : await _capacityGuard.GetMesRetryBlockReasonAsync(record.CellData.ProcessType).ConfigureAwait(false);
+        var retryBlockedReason = await _capacityGuard
+            .GetMesRetryBlockReasonAsync(record.CellData.ProcessType)
+            .ConfigureAwait(false);
 
         if (!string.IsNullOrWhiteSpace(retryBlockedReason))
         {
@@ -252,9 +254,9 @@ public class ProcessQueueTask : ScheduledTaskBase
         {
             Logger.Error($"[{record.CellData.ProcessType}] Save retry record failed for {label}: {ex.Message}");
 
-            var fallbackBlockedReason = _capacityGuard is null
-                ? null
-                : await _capacityGuard.GetMesFallbackBlockReasonAsync(record.CellData.ProcessType).ConfigureAwait(false);
+            var fallbackBlockedReason = await _capacityGuard
+                .GetMesFallbackBlockReasonAsync(record.CellData.ProcessType)
+                .ConfigureAwait(false);
 
             if (!string.IsNullOrWhiteSpace(fallbackBlockedReason))
             {

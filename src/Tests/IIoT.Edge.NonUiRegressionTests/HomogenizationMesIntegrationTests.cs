@@ -194,6 +194,7 @@ public sealed class HomogenizationMesIntegrationTests
             executor,
             new MutableLocalParameterConfigService(stationNo),
             logger,
+            new FakeProductionTimeProvider(),
             Options.Create(CreateMesOptions()),
             Options.Create(CreateCodeOptions()));
     }

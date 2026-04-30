@@ -10,6 +10,7 @@ using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Application.Common.Models;
 using IIoT.Edge.Infrastructure.Integration.Config;
 using IIoT.Edge.SharedKernel.Context;
@@ -22,6 +23,58 @@ namespace IIoT.Edge.NonUiRegressionTests;
 internal sealed class TestHttpClientFactory(HttpClient client) : IHttpClientFactory
 {
     public HttpClient CreateClient(string name) => client;
+}
+
+internal sealed class FakeProductionTimeProvider : IProductionTimeProvider
+{
+    public TimeZoneInfo BusinessTimeZone { get; } = ResolveChinaTimeZone();
+
+    public DateTime UtcNow => DateTime.UtcNow;
+
+    public DateTime BusinessNow => ToBusinessTime(UtcNow);
+
+    public DateTime ToUtc(DateTime value)
+    {
+        if (value.Kind == DateTimeKind.Utc)
+        {
+            return value;
+        }
+
+        var businessTime = value.Kind == DateTimeKind.Local
+            ? TimeZoneInfo.ConvertTime(value, BusinessTimeZone)
+            : DateTime.SpecifyKind(value, DateTimeKind.Unspecified);
+        return TimeZoneInfo.ConvertTimeToUtc(businessTime, BusinessTimeZone);
+    }
+
+    public DateTime ToBusinessTime(DateTime value)
+    {
+        var utc = value.Kind == DateTimeKind.Utc
+            ? value
+            : ToUtc(value);
+        return DateTime.SpecifyKind(TimeZoneInfo.ConvertTimeFromUtc(utc, BusinessTimeZone), DateTimeKind.Unspecified);
+    }
+
+    public string FormatBusinessTimestamp(DateTime value)
+        => ToBusinessTime(value).ToString("yyyy-MM-dd HH:mm:ss");
+
+    private static TimeZoneInfo ResolveChinaTimeZone()
+    {
+        foreach (var id in new[] { "China Standard Time", "Asia/Shanghai" })
+        {
+            try
+            {
+                return TimeZoneInfo.FindSystemTimeZoneById(id);
+            }
+            catch (TimeZoneNotFoundException)
+            {
+            }
+            catch (InvalidTimeZoneException)
+            {
+            }
+        }
+
+        return TimeZoneInfo.Local;
+    }
 }
 
 internal sealed class FakeLogService : ILogService
@@ -474,6 +527,11 @@ internal sealed class FakeFailedRecordStore : ICloudRetryRecordStore, IMesRetryR
     public Task ResetAllAbandonedAsync()
     {
         ResetAllAbandonedCallCount++;
+        foreach (var record in PendingRecords.Where(x => x.NextRetryTime == DateTime.SpecifyKind(DateTime.MaxValue, DateTimeKind.Utc)))
+        {
+            record.NextRetryTime = DateTime.UtcNow;
+        }
+
         return Task.CompletedTask;
     }
 
@@ -631,6 +689,7 @@ internal sealed class FakeCloudFallbackBufferStore : ICloudFallbackBufferStore
     }
 
     public Task<int> GetCountAsync() => Task.FromResult(Records.Count);
+
 }
 
 internal sealed class FakeMesFallbackBufferStore : IMesFallbackBufferStore
@@ -709,6 +768,7 @@ internal sealed class FakeMesFallbackBufferStore : IMesFallbackBufferStore
     }
 
     public Task<int> GetCountAsync() => Task.FromResult(Records.Count);
+
 }
 
 internal sealed class FakeCloudDeadLetterStore : ICloudDeadLetterStore
@@ -728,6 +788,12 @@ internal sealed class FakeCloudDeadLetterStore : ICloudDeadLetterStore
     }
 
     public Task<int> GetCountAsync() => Task.FromResult(Records.Count);
+
+    public Task<IReadOnlyList<DeadLetterGroupSummary>> GetGroupSummaryAsync()
+        => Task.FromResult<IReadOnlyList<DeadLetterGroupSummary>>(DeadLetterTestHelpers.BuildGroupSummary(Records));
+
+    public Task<IReadOnlyList<DeadLetterRecord>> GetLatestAsync(int count = 20)
+        => Task.FromResult<IReadOnlyList<DeadLetterRecord>>(DeadLetterTestHelpers.GetLatest(Records, count));
 }
 
 internal sealed class FakeMesDeadLetterStore : IMesDeadLetterStore
@@ -747,6 +813,34 @@ internal sealed class FakeMesDeadLetterStore : IMesDeadLetterStore
     }
 
     public Task<int> GetCountAsync() => Task.FromResult(Records.Count);
+
+    public Task<IReadOnlyList<DeadLetterGroupSummary>> GetGroupSummaryAsync()
+        => Task.FromResult<IReadOnlyList<DeadLetterGroupSummary>>(DeadLetterTestHelpers.BuildGroupSummary(Records));
+
+    public Task<IReadOnlyList<DeadLetterRecord>> GetLatestAsync(int count = 20)
+        => Task.FromResult<IReadOnlyList<DeadLetterRecord>>(DeadLetterTestHelpers.GetLatest(Records, count));
+}
+
+internal static class DeadLetterTestHelpers
+{
+    public static List<DeadLetterGroupSummary> BuildGroupSummary(IEnumerable<DeadLetterRecord> records)
+        => records
+            .GroupBy(x => new { x.ProcessType, x.FailureStage })
+            .Select(x => new DeadLetterGroupSummary
+            {
+                ProcessType = x.Key.ProcessType,
+                FailureStage = x.Key.FailureStage,
+                Count = x.Count(),
+                LastCreatedAt = x.Max(y => y.CreatedAt)
+            })
+            .ToList();
+
+    public static List<DeadLetterRecord> GetLatest(IEnumerable<DeadLetterRecord> records, int count)
+        => records
+            .OrderByDescending(x => x.CreatedAt)
+            .ThenByDescending(x => x.Id)
+            .Take(count)
+            .ToList();
 }
 
 internal sealed class FakeCriticalPersistenceFallbackWriter : ICriticalPersistenceFallbackWriter

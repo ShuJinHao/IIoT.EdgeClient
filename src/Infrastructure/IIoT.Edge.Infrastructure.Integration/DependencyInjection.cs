@@ -8,6 +8,7 @@ using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Recipe;
+using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Infrastructure.Integration.Auth;
 using IIoT.Edge.Infrastructure.Integration.Capacity;
 using IIoT.Edge.Infrastructure.Integration.Config;
@@ -108,7 +109,10 @@ public static class DependencyInjection
         services.AddSingleton<RecipeSyncTask>();
 
         services.AddSingleton<IExcelConsumer>(sp =>
-            new ExcelConsumer(runtimePaths.ExcelDirectory, sp.GetRequiredService<ILogService>()));
+            new ExcelConsumer(
+                runtimePaths.ExcelDirectory,
+                sp.GetRequiredService<ILogService>(),
+                sp.GetRequiredService<IProductionTimeProvider>()));
         services.AddSingleton<ICellDataConsumer>(sp =>
             sp.GetRequiredService<IExcelConsumer>());
 

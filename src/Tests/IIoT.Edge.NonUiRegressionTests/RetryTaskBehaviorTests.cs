@@ -1,8 +1,12 @@
+using IIoT.Edge.Application.Abstractions.DataPipeline;
+using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Runtime.DataPipeline.Services;
 using IIoT.Edge.Runtime.DataPipeline.Tasks;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
+using Microsoft.Extensions.Options;
 using System.Text.Json;
 namespace IIoT.Edge.NonUiRegressionTests;
 
@@ -284,6 +288,7 @@ public sealed class RetryTaskBehaviorTests
             FakeCriticalPersistenceFallbackWriter? criticalWriter = null)
         {
             fallbackStore.RetryStore = failedStore;
+            var cloudDiagnosticsStore = diagnosticsStore ?? new FakeCloudDiagnosticsStore();
             _inner = new CloudRetryTask(
                 logger,
                 failedStore,
@@ -295,10 +300,36 @@ public sealed class RetryTaskBehaviorTests
                 cloudBatchConsumer,
                 deviceLogSync,
                 capacitySync,
-                diagnosticsStore ?? new FakeCloudDiagnosticsStore());
+                cloudDiagnosticsStore,
+                CreateCapacityGuard(
+                    logger,
+                    failedStore,
+                    new FakeFailedRecordStore(),
+                    fallbackStore,
+                    new FakeMesFallbackBufferStore(),
+                    cloudDiagnosticsStore,
+                    new FakeMesRetryDiagnosticsStore()));
         }
 
         public Task ExecuteOnceAsync()
             => _inner.ExecuteOneIterationAsync();
     }
+
+    private static DataPipelineCapacityGuard CreateCapacityGuard(
+        FakeLogService logger,
+        ICloudRetryRecordStore cloudRetryStore,
+        IMesRetryRecordStore mesRetryStore,
+        ICloudFallbackBufferStore cloudFallbackStore,
+        IMesFallbackBufferStore mesFallbackStore,
+        FakeCloudDiagnosticsStore cloudDiagnosticsStore,
+        FakeMesRetryDiagnosticsStore mesDiagnosticsStore)
+        => new(
+            Options.Create(new DataPipelineCapacityOptions()),
+            cloudRetryStore,
+            mesRetryStore,
+            cloudFallbackStore,
+            mesFallbackStore,
+            cloudDiagnosticsStore,
+            mesDiagnosticsStore,
+            logger);
 }

@@ -21,6 +21,9 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
     private readonly ICapacityBufferStore _capacityBufferStore;
     private readonly IProductionContextStore _productionContextStore;
     private readonly IExternalHeartbeatStateStore? _heartbeatStateStore;
+    private readonly ICloudDeadLetterStore? _cloudDeadLetterStore;
+    private readonly IMesDeadLetterStore? _mesDeadLetterStore;
+    private readonly IReadOnlyDictionary<string, string> _processDisplayNames;
 
     public EdgeSyncDiagnosticsQuery(
         IProductionContextStore productionContextStore,
@@ -32,7 +35,10 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
         IMesRetryRecordStore mesRetryStore,
         IDeviceLogBufferStore deviceLogBufferStore,
         ICapacityBufferStore capacityBufferStore,
-        IExternalHeartbeatStateStore? heartbeatStateStore = null)
+        IExternalHeartbeatStateStore? heartbeatStateStore = null,
+        ICloudDeadLetterStore? cloudDeadLetterStore = null,
+        IMesDeadLetterStore? mesDeadLetterStore = null,
+        IEnumerable<IEdgeProcessModule>? modules = null)
     {
         _productionContextStore = productionContextStore;
         _deviceService = deviceService;
@@ -44,6 +50,9 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
         _deviceLogBufferStore = deviceLogBufferStore;
         _capacityBufferStore = capacityBufferStore;
         _heartbeatStateStore = heartbeatStateStore;
+        _cloudDeadLetterStore = cloudDeadLetterStore;
+        _mesDeadLetterStore = mesDeadLetterStore;
+        _processDisplayNames = BuildProcessDisplayNames(modules);
     }
 
     public async Task<EdgeSyncDiagnosticsSnapshot> GetCurrentAsync(CancellationToken ct = default)
@@ -58,10 +67,14 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
 
         var cloudPendingTask = GetCloudPendingDiagnosticsAsync(ct);
         var mesPendingTask = GetMesPendingDiagnosticsAsync(ct);
-        await Task.WhenAll(cloudPendingTask, mesPendingTask).ConfigureAwait(false);
+        var cloudDeadLetterTask = GetDeadLetterDiagnosticsAsync(_cloudDeadLetterStore, ct);
+        var mesDeadLetterTask = GetDeadLetterDiagnosticsAsync(_mesDeadLetterStore, ct);
+        await Task.WhenAll(cloudPendingTask, mesPendingTask, cloudDeadLetterTask, mesDeadLetterTask).ConfigureAwait(false);
 
         var cloudPending = await cloudPendingTask.ConfigureAwait(false);
         var mesPending = await mesPendingTask.ConfigureAwait(false);
+        var cloudDeadLetters = await cloudDeadLetterTask.ConfigureAwait(false);
+        var mesDeadLetters = await mesDeadLetterTask.ConfigureAwait(false);
 
         var cloud = new CloudSyncDiagnosticsSnapshot(
             GateState: _deviceService.CurrentUploadGate.State,
@@ -87,7 +100,9 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
             IsPersistenceFaulted: cloudPending.IsPersistenceFaulted,
             LastPersistenceFaultAt: cloudPending.LastPersistenceFaultAt,
             PersistenceFaultMessage: cloudPending.PersistenceFaultMessage,
-            Heartbeat: GetHeartbeat(ExternalSystemKind.Cloud));
+            Heartbeat: GetHeartbeat(ExternalSystemKind.Cloud),
+            DeadLetters: cloudDeadLetters,
+            LastProcessDisplayName: ResolveProcessDisplayName(cloudDiagnostics.LastProcessType));
 
         var mes = new MesSyncDiagnosticsSnapshot(
             RuntimeState: mesRuntime.RuntimeState,
@@ -104,7 +119,8 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
             IsPersistenceFaulted: mesPending.IsPersistenceFaulted,
             LastPersistenceFaultAt: mesPending.LastPersistenceFaultAt,
             PersistenceFaultMessage: mesPending.PersistenceFaultMessage,
-            Heartbeat: GetHeartbeat(ExternalSystemKind.Mes));
+            Heartbeat: GetHeartbeat(ExternalSystemKind.Mes),
+            DeadLetters: mesDeadLetters);
 
         return new EdgeSyncDiagnosticsSnapshot(
             DeviceName: _deviceService.CurrentDevice?.DeviceName ?? "未知",
@@ -137,6 +153,21 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
     private ExternalHeartbeatSnapshot? GetHeartbeat(ExternalSystemKind kind)
         => _heartbeatStateStore?.Get(kind);
 
+    private static IReadOnlyDictionary<string, string> BuildProcessDisplayNames(IEnumerable<IEdgeProcessModule>? modules)
+        => (modules ?? [])
+            .Where(x => !string.IsNullOrWhiteSpace(x.ProcessType) && !string.IsNullOrWhiteSpace(x.DisplayName))
+            .GroupBy(x => x.ProcessType, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                x => x.Key,
+                x => x.Select(y => y.DisplayName).First(),
+                StringComparer.OrdinalIgnoreCase);
+
+    private string? ResolveProcessDisplayName(string? processType)
+        => !string.IsNullOrWhiteSpace(processType)
+           && _processDisplayNames.TryGetValue(processType, out var displayName)
+            ? displayName
+            : null;
+
     private async Task<PendingDiagnosticsSnapshot> GetMesPendingDiagnosticsAsync(CancellationToken ct)
     {
         var retryCount = await TryGetCountAsync(() => _mesRetryStore.GetCountAsync(), ct).ConfigureAwait(false);
@@ -168,6 +199,43 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
                 IsFaulted: true,
                 LastFaultAt: DateTime.UtcNow,
                 FaultMessage: ex.Message);
+        }
+    }
+
+    private static async Task<DeadLetterDiagnosticsSnapshot> GetDeadLetterDiagnosticsAsync(
+        IDeadLetterDiagnosticsStore? store,
+        CancellationToken ct)
+    {
+        if (store is null)
+        {
+            return DeadLetterDiagnosticsSnapshot.Empty;
+        }
+
+        try
+        {
+            ct.ThrowIfCancellationRequested();
+            var countTask = store.GetCountAsync();
+            var groupTask = store.GetGroupSummaryAsync();
+            var latestTask = store.GetLatestAsync(count: 10);
+            await Task.WhenAll(countTask, groupTask, latestTask).ConfigureAwait(false);
+
+            return new DeadLetterDiagnosticsSnapshot(
+                TotalCount: await countTask.ConfigureAwait(false),
+                GroupSummary: await groupTask.ConfigureAwait(false),
+                LatestRecords: await latestTask.ConfigureAwait(false),
+                IsPersistenceFaulted: false,
+                LastPersistenceFaultAt: null,
+                PersistenceFaultMessage: null);
+        }
+        catch (PersistenceAccessException ex)
+        {
+            return new DeadLetterDiagnosticsSnapshot(
+                TotalCount: 0,
+                GroupSummary: [],
+                LatestRecords: [],
+                IsPersistenceFaulted: true,
+                LastPersistenceFaultAt: DateTime.UtcNow,
+                PersistenceFaultMessage: ex.Message);
         }
     }
 
@@ -262,10 +330,11 @@ public static class EdgeSyncDiagnosticsFormatter
         return string.Join(Environment.NewLine, [
             $"上传门禁：{gateText}",
             $"运行状态：{FormatCloudRuntimeState(snapshot.RuntimeState)}",
-            $"最近结果：{FormatCloudOutcome(snapshot.LastOutcome, snapshot.LastReasonCode, snapshot.LastProcessType)}",
+            $"最近结果：{FormatCloudOutcome(snapshot.LastOutcome, snapshot.LastReasonCode, snapshot.LastProcessType, snapshot.LastProcessDisplayName)}",
             $"最近成功：{FormatTimestamp(snapshot.LastSuccessAt)}",
             $"最近失败：{FormatTimestamp(snapshot.LastFailureAt)}",
             $"待处理：重试={snapshot.PendingRetryCount}，日志={snapshot.PendingDeviceLogCount}，产能={snapshot.PendingCapacityCount}",
+            FormatDeadLetterSummary(snapshot.DeadLetters),
             FormatHeartbeatSummary(snapshot.Heartbeat),
             FormatPersistenceFaultSummary(
                 snapshot.IsPersistenceFaulted,
@@ -288,6 +357,7 @@ public static class EdgeSyncDiagnosticsFormatter
             $"最近失败：{FormatTimestamp(snapshot.LastFailureAt)}",
             $"失败原因：{NormalizeText(snapshot.LastFailureReason)}",
             $"待处理：重试={snapshot.PendingRetryCount}",
+            FormatDeadLetterSummary(snapshot.DeadLetters),
             FormatHeartbeatSummary(snapshot.Heartbeat),
             FormatPersistenceFaultSummary(
                 snapshot.IsPersistenceFaulted,
@@ -343,6 +413,25 @@ public static class EdgeSyncDiagnosticsFormatter
         return $"产能阻塞：是（{FormatBlockedChannel(blockedChannel)} / {FormatCapacityBlockedReason(blockedReason)}），最近 {FormatTimestamp(lastCapacityBlockAt)}";
     }
 
+    public static string FormatDeadLetterSummary(DeadLetterDiagnosticsSnapshot? diagnostics)
+    {
+        diagnostics ??= DeadLetterDiagnosticsSnapshot.Empty;
+        if (diagnostics.IsPersistenceFaulted)
+        {
+            return $"死信：读取失败（{NormalizeText(diagnostics.PersistenceFaultMessage)}）";
+        }
+
+        if (diagnostics.TotalCount <= 0)
+        {
+            return "死信：0";
+        }
+
+        var groups = diagnostics.GroupSummary
+            .Take(3)
+            .Select(x => $"{NormalizeProcessType(x.ProcessType)}/{NormalizeText(x.FailureStage)}={x.Count}");
+        return $"死信：{diagnostics.TotalCount}（{string.Join("，", groups)}）";
+    }
+
     public static string FormatContextPersistenceSummary(ProductionContextPersistenceDiagnostics diagnostics)
         => string.Join(Environment.NewLine, [
             $"损坏文件数：{diagnostics.CorruptFileCount}",
@@ -396,9 +485,12 @@ public static class EdgeSyncDiagnosticsFormatter
     public static string FormatCloudOutcome(
         CloudCallOutcome outcome,
         string reasonCode,
-        string? processType)
+        string? processType,
+        string? processDisplayName = null)
     {
-        var processText = NormalizeProcessType(processType);
+        var processText = string.IsNullOrWhiteSpace(processDisplayName)
+            ? NormalizeProcessType(processType)
+            : processDisplayName;
         var reasonText = NormalizeText(reasonCode);
         var outcomeText = outcome switch
         {
@@ -459,18 +551,7 @@ public static class EdgeSyncDiagnosticsFormatter
         => heartbeat is not null && !heartbeat.IsReady;
 
     private static string NormalizeProcessType(string? processType)
-    {
-        if (string.IsNullOrWhiteSpace(processType))
-        {
-            return "--";
-        }
-
-        return processType switch
-        {
-            "Homogenization" => "匀浆",
-            "Injection" => "注液",
-            "Stacking" => "叠片",
-            _ => processType
-        };
-    }
+        => string.IsNullOrWhiteSpace(processType)
+            ? "--"
+            : processType;
 }

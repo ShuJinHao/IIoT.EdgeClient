@@ -10,10 +10,19 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace IIoT.Edge.Module.Stacking.Runtime;
 
+/// <summary>
+/// 叠片运行时工厂，负责把 PLC 缓冲区、逻辑信号访问器和采集任务组装起来。
+/// </summary>
 public sealed class StackingStationRuntimeFactory : IStationRuntimeFactory
 {
+    /// <summary>
+    /// 工厂所属模块标识。
+    /// </summary>
     public string ModuleId => StackingModuleConstants.ModuleId;
 
+    /// <summary>
+    /// 创建叠片采集任务；任务只依赖插件信号清单和 DataPipeline，不把叠片流程写入宿主。
+    /// </summary>
     public List<IPlcTask> CreateTasks(
         IServiceProvider serviceProvider,
         IPlcBuffer buffer,

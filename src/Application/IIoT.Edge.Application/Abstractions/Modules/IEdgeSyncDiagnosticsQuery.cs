@@ -2,8 +2,20 @@ using IIoT.Edge.Application.Context;
 using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Integration;
+using IIoT.Edge.SharedKernel.DataPipeline;
 
 namespace IIoT.Edge.Application.Abstractions.Modules;
+
+public sealed record DeadLetterDiagnosticsSnapshot(
+    int TotalCount,
+    IReadOnlyList<DeadLetterGroupSummary> GroupSummary,
+    IReadOnlyList<DeadLetterRecord> LatestRecords,
+    bool IsPersistenceFaulted,
+    DateTime? LastPersistenceFaultAt,
+    string? PersistenceFaultMessage)
+{
+    public static DeadLetterDiagnosticsSnapshot Empty { get; } = new(0, [], [], false, null, null);
+}
 
 public sealed record CloudSyncDiagnosticsSnapshot(
     EdgeUploadGateState GateState,
@@ -26,7 +38,9 @@ public sealed record CloudSyncDiagnosticsSnapshot(
     bool IsPersistenceFaulted,
     DateTime? LastPersistenceFaultAt,
     string? PersistenceFaultMessage,
-    ExternalHeartbeatSnapshot? Heartbeat = null);
+    ExternalHeartbeatSnapshot? Heartbeat = null,
+    DeadLetterDiagnosticsSnapshot? DeadLetters = null,
+    string? LastProcessDisplayName = null);
 
 public sealed record MesSyncDiagnosticsSnapshot(
     MesRetryRuntimeState RuntimeState,
@@ -43,7 +57,8 @@ public sealed record MesSyncDiagnosticsSnapshot(
     bool IsPersistenceFaulted,
     DateTime? LastPersistenceFaultAt,
     string? PersistenceFaultMessage,
-    ExternalHeartbeatSnapshot? Heartbeat = null);
+    ExternalHeartbeatSnapshot? Heartbeat = null,
+    DeadLetterDiagnosticsSnapshot? DeadLetters = null);
 
 public sealed record EdgeSyncDiagnosticsSnapshot(
     string DeviceName,

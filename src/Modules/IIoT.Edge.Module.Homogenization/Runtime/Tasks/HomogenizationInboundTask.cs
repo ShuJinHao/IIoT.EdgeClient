@@ -41,6 +41,9 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
         _diagnosticsStore = diagnosticsStore;
     }
 
+    /// <summary>
+    /// 进站握手任务名称，用于运行日志和任务诊断。
+    /// </summary>
     public override string TaskName => "Homogenization.Inbound";
 
     private static string TriggerLabel => HomogenizationPlcSignalProfile.InboundTrigger.Label;

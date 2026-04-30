@@ -31,12 +31,15 @@ public sealed class MesRetryTask : ScheduledTaskBase
     private readonly IMesConsumer _mesConsumer;
     private readonly ILocalSystemRuntimeConfigService _runtimeConfig;
     private readonly IMesRetryDiagnosticsStore _diagnosticsStore;
-    private readonly DataPipelineCapacityGuard? _capacityGuard;
-    private readonly IExternalHeartbeatStateStore? _heartbeatStateStore;
+    private readonly DataPipelineCapacityGuard _capacityGuard;
+    private readonly IExternalHeartbeatStateStore _heartbeatStateStore;
     private readonly TimeSpan _consumerCallTimeout;
+    private bool _wasUnavailable = true;
+    private DateOnly? _lastAbandonedCleanupDateUtc;
 
     private const int MaxRetryCount = 20;
     private static readonly DateTime AbandonedRetryTimeUtc = DateTime.SpecifyKind(DateTime.MaxValue, DateTimeKind.Utc);
+    private static readonly TimeSpan AbandonedRetention = TimeSpan.FromDays(30);
 
     public override string TaskName => "MesRetryTask";
     protected override int ExecuteInterval => 5000;
@@ -50,11 +53,14 @@ public sealed class MesRetryTask : ScheduledTaskBase
         IMesConsumer mesConsumer,
         ILocalSystemRuntimeConfigService runtimeConfig,
         IMesRetryDiagnosticsStore diagnosticsStore,
-        DataPipelineCapacityGuard? capacityGuard = null,
-        IExternalHeartbeatStateStore? heartbeatStateStore = null,
+        DataPipelineCapacityGuard capacityGuard,
+        IExternalHeartbeatStateStore heartbeatStateStore,
         DataPipelineRuntimeOptions? runtimeOptions = null)
         : base(logger)
     {
+        ArgumentNullException.ThrowIfNull(capacityGuard);
+        ArgumentNullException.ThrowIfNull(heartbeatStateStore);
+
         _retryStore = retryStore;
         _fallbackStore = fallbackStore;
         _deadLetterStore = deadLetterStore;
@@ -78,13 +84,11 @@ public sealed class MesRetryTask : ScheduledTaskBase
         // MES 总开关关闭时不能领取补传记录，只刷新容量状态，保留 backlog 等待后续恢复。
         if (!_runtimeConfig.Current.MesUploadEnabled)
         {
-            if (_capacityGuard is not null)
-            {
-                await _capacityGuard.RefreshMesRetryCapacityStatusAsync().ConfigureAwait(false);
-                await _capacityGuard.RefreshMesFallbackCapacityStatusAsync().ConfigureAwait(false);
-            }
+            await _capacityGuard.RefreshMesRetryCapacityStatusAsync().ConfigureAwait(false);
+            await _capacityGuard.RefreshMesFallbackCapacityStatusAsync().ConfigureAwait(false);
 
             _diagnosticsStore.SetRuntimeState(MesRetryRuntimeState.Idle);
+            _wasUnavailable = true;
             return;
         }
 
@@ -92,8 +96,17 @@ public sealed class MesRetryTask : ScheduledTaskBase
         if (!IsMesHeartbeatReady())
         {
             _diagnosticsStore.SetRuntimeState(MesRetryRuntimeState.Backoff);
+            _wasUnavailable = true;
             return;
         }
+
+        if (_wasUnavailable)
+        {
+            await RecoverAbandonedRecordsAsync().ConfigureAwait(false);
+            _wasUnavailable = false;
+        }
+
+        await CleanupExpiredAbandonedRecordsAsync().ConfigureAwait(false);
 
         // 心跳恢复后先尝试把 fallback 搬回 MES retry，再领取 retry 批次补传。
         await RecoverFallbackRecordsAsync().ConfigureAwait(false);
@@ -101,11 +114,8 @@ public sealed class MesRetryTask : ScheduledTaskBase
         var claimedBatch = await _retryStore.ClaimPendingBatchAsync(batchSize: 5).ConfigureAwait(false);
         if (claimedBatch is null || claimedBatch.Records.Count == 0)
         {
-            if (_capacityGuard is not null)
-            {
-                await _capacityGuard.RefreshMesRetryCapacityStatusAsync().ConfigureAwait(false);
-                await _capacityGuard.RefreshMesFallbackCapacityStatusAsync().ConfigureAwait(false);
-            }
+            await _capacityGuard.RefreshMesRetryCapacityStatusAsync().ConfigureAwait(false);
+            await _capacityGuard.RefreshMesFallbackCapacityStatusAsync().ConfigureAwait(false);
 
             await ApplyIdleOrBackoffStateAsync().ConfigureAwait(false);
             return;
@@ -141,21 +151,15 @@ public sealed class MesRetryTask : ScheduledTaskBase
 
         if (hadFailure)
         {
-            if (_capacityGuard is not null)
-            {
-                await _capacityGuard.RefreshMesRetryCapacityStatusAsync().ConfigureAwait(false);
-                await _capacityGuard.RefreshMesFallbackCapacityStatusAsync().ConfigureAwait(false);
-            }
+            await _capacityGuard.RefreshMesRetryCapacityStatusAsync().ConfigureAwait(false);
+            await _capacityGuard.RefreshMesFallbackCapacityStatusAsync().ConfigureAwait(false);
 
             _diagnosticsStore.SetRuntimeState(MesRetryRuntimeState.LastFailed);
             return;
         }
 
-        if (_capacityGuard is not null)
-        {
-            await _capacityGuard.RefreshMesRetryCapacityStatusAsync().ConfigureAwait(false);
-            await _capacityGuard.RefreshMesFallbackCapacityStatusAsync().ConfigureAwait(false);
-        }
+        await _capacityGuard.RefreshMesRetryCapacityStatusAsync().ConfigureAwait(false);
+        await _capacityGuard.RefreshMesFallbackCapacityStatusAsync().ConfigureAwait(false);
 
         await ApplyIdleOrBackoffStateAsync().ConfigureAwait(false);
     }
@@ -195,9 +199,9 @@ public sealed class MesRetryTask : ScheduledTaskBase
 
             try
             {
-                var retryBlockedReason = _capacityGuard is null
-                    ? null
-                    : await _capacityGuard.GetMesRetryBlockReasonAsync(fallback.ProcessType).ConfigureAwait(false);
+                var retryBlockedReason = await _capacityGuard
+                    .GetMesRetryBlockReasonAsync(fallback.ProcessType)
+                    .ConfigureAwait(false);
 
                 if (!string.IsNullOrWhiteSpace(retryBlockedReason))
                 {
@@ -226,10 +230,7 @@ public sealed class MesRetryTask : ScheduledTaskBase
             Logger.Info($"[Retry-MES] Recovered {recoveredIds.Count} MES fallback record(s) into the main retry store.");
         }
 
-        if (_capacityGuard is not null)
-        {
-            await _capacityGuard.RefreshMesFallbackCapacityStatusAsync().ConfigureAwait(false);
-        }
+        await _capacityGuard.RefreshMesFallbackCapacityStatusAsync().ConfigureAwait(false);
     }
 
     private async Task<bool> ProcessOneAsync(FailedCellRecord record)
@@ -311,9 +312,48 @@ public sealed class MesRetryTask : ScheduledTaskBase
                 : MesRetryRuntimeState.Idle);
     }
 
+    private async Task RecoverAbandonedRecordsAsync()
+    {
+        try
+        {
+            await _retryStore.ResetAllAbandonedAsync().ConfigureAwait(false);
+            Logger.Info("[Retry-MES] MES heartbeat recovered. Abandoned records were reset for retry.");
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"[Retry-MES] Failed to reset abandoned records: {ex.Message}");
+        }
+    }
+
+    private async Task CleanupExpiredAbandonedRecordsAsync()
+    {
+        var todayUtc = DateOnly.FromDateTime(DateTime.UtcNow);
+        if (_lastAbandonedCleanupDateUtc == todayUtc)
+        {
+            return;
+        }
+
+        _lastAbandonedCleanupDateUtc = todayUtc;
+
+        try
+        {
+            var deleted = await _retryStore
+                .DeleteExpiredAbandonedAsync(DateTime.UtcNow.Subtract(AbandonedRetention))
+                .ConfigureAwait(false);
+
+            if (deleted > 0)
+            {
+                Logger.Info($"[Retry-MES] Deleted {deleted} expired abandoned retry record(s).");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"[Retry-MES] Failed to cleanup expired abandoned records: {ex.Message}");
+        }
+    }
+
     private bool IsMesHeartbeatReady()
-        => _heartbeatStateStore is null
-            || _heartbeatStateStore.Get(ExternalSystemKind.Mes).IsReady;
+        => _heartbeatStateStore.Get(ExternalSystemKind.Mes).IsReady;
 
     private static TimeSpan CalculateBackoff(int retryCount)
     {

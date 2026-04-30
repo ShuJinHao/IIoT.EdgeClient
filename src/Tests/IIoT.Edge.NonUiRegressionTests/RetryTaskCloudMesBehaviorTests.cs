@@ -17,6 +17,84 @@ namespace IIoT.Edge.NonUiRegressionTests;
 public sealed class RetryTaskCloudMesBehaviorTests
 {
     [Fact]
+    public async Task MesRetry_WhenHeartbeatRecovers_ShouldResetAbandonedRecordsAndRetryThem()
+    {
+        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+
+        var logger = new FakeLogService();
+        var retryStore = new FakeFailedRecordStore();
+        var fallbackStore = new FakeMesFallbackBufferStore();
+        var heartbeatStore = new FakeExternalHeartbeatStateStore();
+        heartbeatStore.MarkReady(ExternalSystemKind.Mes);
+        var mesConsumer = new FakeMesConsumer();
+        retryStore.PendingRecords.Add(new FailedCellRecord
+        {
+            Id = 1,
+            Channel = "MES",
+            ProcessType = "Injection",
+            CellDataJson = SerializeCellData(new InjectionCellData
+            {
+                Barcode = "BC-MES-001",
+                DeviceName = "PLC-A",
+                CompletedTime = DateTime.UtcNow
+            }),
+            FailedTarget = "MES",
+            ErrorMessage = "abandoned",
+            RetryCount = 21,
+            NextRetryTime = DateTime.SpecifyKind(DateTime.MaxValue, DateTimeKind.Utc),
+            CreatedAt = DateTime.UtcNow
+        });
+
+        var task = new TestableMesRetryTask(
+            logger,
+            retryStore,
+            fallbackStore,
+            mesConsumer,
+            heartbeatStore: heartbeatStore);
+
+        await task.ExecuteOnceAsync();
+
+        Assert.Equal(1, retryStore.ResetAllAbandonedCallCount);
+        Assert.Equal(1, mesConsumer.ProcessCallCount);
+        Assert.Contains(1, retryStore.DeletedIds);
+    }
+
+    [Fact]
+    public async Task MesRetry_WhenAbandonedRecordsExpired_ShouldCleanupDaily()
+    {
+        var logger = new FakeLogService();
+        var retryStore = new FakeFailedRecordStore();
+        var fallbackStore = new FakeMesFallbackBufferStore();
+        var heartbeatStore = new FakeExternalHeartbeatStateStore();
+        heartbeatStore.MarkReady(ExternalSystemKind.Mes);
+        retryStore.PendingRecords.Add(new FailedCellRecord
+        {
+            Id = 1,
+            Channel = "MES",
+            ProcessType = "Injection",
+            CellDataJson = "{}",
+            FailedTarget = "MES",
+            ErrorMessage = "abandoned",
+            RetryCount = 21,
+            NextRetryTime = DateTime.SpecifyKind(DateTime.MaxValue, DateTimeKind.Utc),
+            CreatedAt = DateTime.UtcNow.AddDays(-31)
+        });
+
+        var task = new TestableMesRetryTask(
+            logger,
+            retryStore,
+            fallbackStore,
+            new FakeMesConsumer(),
+            heartbeatStore: heartbeatStore);
+        task.MarkAvailableForCleanupTest();
+
+        await task.ExecuteOnceAsync();
+
+        Assert.Equal(1, retryStore.DeleteExpiredAbandonedCallCount);
+        Assert.Empty(retryStore.PendingRecords);
+    }
+
+    [Fact]
     public async Task CloudBatchRetry_WhenBatchSucceeds_ShouldDeleteBatchRecordsAndContinueOthers()
     {
         CellDataTypeRegistry.Register<InjectionCellData>("Injection");
@@ -1050,7 +1128,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
     }
 
     [Fact]
-    public async Task MesRetry_ShouldNotResetAbandonedRecordsOnRecovery()
+    public async Task MesRetry_ShouldResetAbandonedRecordsOnRecovery()
     {
         var failedStore = new FakeFailedRecordStore();
         failedStore.PendingRecords.Add(new FailedCellRecord
@@ -1074,10 +1152,9 @@ public sealed class RetryTaskCloudMesBehaviorTests
 
         await task.ExecuteOnceAsync();
 
-        Assert.Equal(0, failedStore.ResetAllAbandonedCallCount);
-        Assert.Single(failedStore.PendingRecords);
-        Assert.Empty(failedStore.DeletedIds);
-        Assert.Empty(failedStore.Updates);
+        Assert.Equal(1, failedStore.ResetAllAbandonedCallCount);
+        Assert.Empty(failedStore.PendingRecords);
+        Assert.Contains(306, failedStore.DeletedIds);
     }
 
     [Fact]
@@ -1311,6 +1388,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
             DataPipelineCapacityGuard? capacityGuard = null)
         {
             fallbackStore.RetryStore = retryStore;
+            var cloudDiagnosticsStore = diagnosticsStore ?? new FakeCloudDiagnosticsStore();
             _inner = new CloudRetryTask(
                 logger,
                 retryStore,
@@ -1322,9 +1400,16 @@ public sealed class RetryTaskCloudMesBehaviorTests
                 cloudBatchConsumer,
                 deviceLogSync,
                 capacitySync,
-                diagnosticsStore ?? new FakeCloudDiagnosticsStore(),
-                processIntegrationRegistry,
-                capacityGuard);
+                cloudDiagnosticsStore,
+                capacityGuard ?? CreateCapacityGuard(
+                    logger,
+                    retryStore,
+                    new FakeFailedRecordStore(),
+                    fallbackStore,
+                    new FakeMesFallbackBufferStore(),
+                    cloudDiagnosticsStore,
+                    new FakeMesRetryDiagnosticsStore()),
+                processIntegrationRegistry);
         }
 
         public Task ExecuteOnceAsync()
@@ -1348,6 +1433,13 @@ public sealed class RetryTaskCloudMesBehaviorTests
             FakeExternalHeartbeatStateStore? heartbeatStore = null)
         {
             fallbackStore.RetryStore = retryStore;
+            var mesDiagnosticsStore = diagnosticsStore ?? new FakeMesRetryDiagnosticsStore();
+            var mesHeartbeatStore = heartbeatStore ?? new FakeExternalHeartbeatStateStore();
+            if (heartbeatStore is null)
+            {
+                mesHeartbeatStore.MarkReady(ExternalSystemKind.Mes);
+            }
+
             _inner = new MesRetryTask(
                 logger,
                 retryStore,
@@ -1356,12 +1448,29 @@ public sealed class RetryTaskCloudMesBehaviorTests
                 criticalWriter ?? new FakeCriticalPersistenceFallbackWriter(),
                 mesConsumer,
                 runtimeConfig ?? new FakeLocalSystemRuntimeConfigService(),
-                diagnosticsStore ?? new FakeMesRetryDiagnosticsStore(),
-                capacityGuard,
-                heartbeatStore);
+                mesDiagnosticsStore,
+                capacityGuard ?? CreateCapacityGuard(
+                    logger,
+                    new FakeFailedRecordStore(),
+                    retryStore,
+                    new FakeCloudFallbackBufferStore(),
+                    fallbackStore,
+                    new FakeCloudDiagnosticsStore(),
+                    mesDiagnosticsStore),
+                mesHeartbeatStore);
         }
 
         public Task ExecuteOnceAsync()
             => _inner.ExecuteOneIterationAsync();
+
+        public void MarkAvailableForCleanupTest()
+        {
+            typeof(MesRetryTask)
+                .GetField("_wasUnavailable", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .SetValue(_inner, false);
+            typeof(MesRetryTask)
+                .GetField("_lastAbandonedCleanupDateUtc", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .SetValue(_inner, DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1)));
+        }
     }
 }

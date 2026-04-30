@@ -11,6 +11,9 @@ using IIoT.Edge.Module.Homogenization.Runtime;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using HomogenizationCloudUploadChannel = IIoT.Edge.Application.Modules.Cloud.ICloudUploadChannel<
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
+    object>;
 using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesScenarioChannel<
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
     string,
@@ -33,7 +36,7 @@ public sealed class DependencyInjection : EdgeProcessModuleBase<HomogenizationCe
 
     public override string DisplayName => HomogenizationText.Get("Homogenization_DisplayName", "匀浆");
 
-    protected override ProcessUploadMode CloudUploadMode => ProcessUploadMode.Single;
+    protected override ProcessUploadMode CloudUploadMode => ProcessUploadMode.Batch;
 
     protected override MesUploadMode? MesUploadMode
         => IIoT.Edge.Application.Abstractions.Modules.MesUploadMode.Single;
@@ -57,7 +60,11 @@ public sealed class DependencyInjection : EdgeProcessModuleBase<HomogenizationCe
         builder.Services.AddSingleton<IValidateOptions<HomogenizationMesOptions>, HomogenizationMesOptionsValidator>();
         builder.Services.AddSingleton<IValidateOptions<HomogenizationCodeOptions>, HomogenizationCodeOptionsValidator>();
 
-        builder.Services.AddSingleton<IProcessCloudUploader, HomogenizationCloudUploader>();
+        builder.Services.AddSingleton<HomogenizationCloudUploader>();
+        builder.Services.AddSingleton<HomogenizationCloudUploadChannel>(sp =>
+            sp.GetRequiredService<HomogenizationCloudUploader>());
+        builder.Services.AddSingleton<IProcessCloudUploader>(sp =>
+            sp.GetRequiredService<HomogenizationCloudUploader>());
         builder.Services.AddSingleton<HomogenizationMesChannel>();
         builder.Services.AddSingleton<HomogenizationMesScenarioChannel>(sp =>
             sp.GetRequiredService<HomogenizationMesChannel>());

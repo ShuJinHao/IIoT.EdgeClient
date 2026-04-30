@@ -15,7 +15,6 @@
     <None Remove="Assets\fonts\iconfont.ttf" />
     <None Remove="Assets\images\icon.ico" />
     <None Remove="Assets\images\login1.png" />
-    <None Remove="Assets\images\logo.png" />
   </ItemGroup>
 
   <ItemGroup>
@@ -37,9 +36,6 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Resource>
     <Resource Include="Assets\images\login1.png">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Resource>
-    <Resource Include="Assets\images\logo.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Resource>
   </ItemGroup>

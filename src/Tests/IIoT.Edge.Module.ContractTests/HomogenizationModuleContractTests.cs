@@ -9,6 +9,9 @@ using IIoT.Edge.Module.Homogenization.Runtime;
 using IIoT.Edge.SharedKernel.Context;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
+using HomogenizationCloudUploadChannel = IIoT.Edge.Application.Modules.Cloud.ICloudUploadChannel<
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
+    object>;
 using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesScenarioChannel<
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
     string,
@@ -66,6 +69,25 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
         Assert.Contains(
             result.Services,
             descriptor => descriptor.ServiceType == typeof(IProcessMesUploader)
+                          && descriptor.ImplementationFactory is not null);
+    }
+
+    [Fact]
+    public void RegisterServices_ShouldRegisterCloudChannelAbstractionAndProcessUploader()
+    {
+        var result = new ModuleContractFixture().RegisterModule(new DependencyInjection());
+
+        Assert.Contains(
+            result.Services,
+            descriptor => descriptor.ServiceType == typeof(HomogenizationCloudUploader)
+                          && descriptor.ImplementationType == typeof(HomogenizationCloudUploader));
+        Assert.Contains(
+            result.Services,
+            descriptor => descriptor.ServiceType == typeof(HomogenizationCloudUploadChannel)
+                          && descriptor.ImplementationFactory is not null);
+        Assert.Contains(
+            result.Services,
+            descriptor => descriptor.ServiceType == typeof(IProcessCloudUploader)
                           && descriptor.ImplementationFactory is not null);
     }
 

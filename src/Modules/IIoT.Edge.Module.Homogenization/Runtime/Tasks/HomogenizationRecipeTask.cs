@@ -40,6 +40,9 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
         _diagnosticsStore = diagnosticsStore;
     }
 
+    /// <summary>
+    /// 配方上传任务名称，用于运行日志和任务诊断。
+    /// </summary>
     public override string TaskName => "Homogenization.Recipe";
 
     private static string TriggerLabel => HomogenizationPlcSignalProfile.RecipeTrigger.Label;

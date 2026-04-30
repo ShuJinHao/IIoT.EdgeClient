@@ -5,9 +5,13 @@ using IIoT.Edge.Application.Common.Http;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 
-namespace IIoT.Edge.Application.Modules;
+namespace IIoT.Edge.Application.Modules.Cloud;
 
-public abstract class ProcessCloudUploaderBase<TCellData, TPayload> : IProcessCloudUploader
+/// <summary>
+/// Cloud 上传通道基类。负责类型校验、单条/批量发送、幂等键和结果回调，插件只实现 payload 映射。
+/// </summary>
+public abstract class CloudUploadChannelBase<TCellData, TPayload>
+    : ICloudUploadChannel<TCellData, TPayload>
     where TCellData : CellDataBase
 {
     private readonly ICloudHttpClient _cloudHttp;
@@ -16,7 +20,7 @@ public abstract class ProcessCloudUploaderBase<TCellData, TPayload> : IProcessCl
     private readonly string _uploadPath;
     protected readonly ILogService Logger;
 
-    protected ProcessCloudUploaderBase(
+    protected CloudUploadChannelBase(
         string processType,
         ProcessUploadMode uploadMode,
         string uploadPath,
@@ -41,11 +45,17 @@ public abstract class ProcessCloudUploaderBase<TCellData, TPayload> : IProcessCl
 
     protected virtual string UploaderName => GetType().Name;
 
+    /// <summary>
+    /// 插件侧唯一必须实现的 Cloud payload 映射点；字段含义应留在具体插件中说明。
+    /// </summary>
     protected abstract TPayload BuildPayload(
         ProcessCloudUploadContext context,
         IReadOnlyList<TCellData> cellData,
         IReadOnlyList<CellCompletedRecord> records);
 
+    /// <summary>
+    /// 上传成功后的插件钩子，用于写诊断或运行态，不参与 Cloud/MES 补偿调度。
+    /// </summary>
     protected virtual Task OnUploadSucceededAsync(
         ProcessCloudUploadContext context,
         IReadOnlyList<TCellData> cellData,
@@ -53,6 +63,9 @@ public abstract class ProcessCloudUploaderBase<TCellData, TPayload> : IProcessCl
         CancellationToken cancellationToken)
         => Task.CompletedTask;
 
+    /// <summary>
+    /// 上传失败后的插件钩子，用于写诊断或运行态；实际 retry/fallback 由 Runtime DataPipeline 处理。
+    /// </summary>
     protected virtual Task OnUploadFailedAsync(
         ProcessCloudUploadContext context,
         IReadOnlyList<CellCompletedRecord> records,

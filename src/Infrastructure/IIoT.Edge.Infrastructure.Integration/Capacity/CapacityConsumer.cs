@@ -4,6 +4,7 @@ using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Events;
 using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
 using MediatR;
@@ -17,6 +18,7 @@ public class CapacityConsumer : ICapacityConsumer
     private readonly ICapacityBufferStore _capacityBufferStore;
     private readonly IPublisher _publisher;
     private readonly ILogService _logger;
+    private readonly IProductionTimeProvider _productionTime;
 
     public string Name => "Capacity";
     public int Order => 10;
@@ -29,13 +31,15 @@ public class CapacityConsumer : ICapacityConsumer
         IDeviceService deviceService,
         ICapacityBufferStore capacityBufferStore,
         IPublisher publisher,
-        ILogService logger)
+        ILogService logger,
+        IProductionTimeProvider productionTime)
     {
         _todayCapacityStore = todayCapacityStore;
         _deviceService = deviceService;
         _capacityBufferStore = capacityBufferStore;
         _publisher = publisher;
         _logger = logger;
+        _productionTime = productionTime;
     }
 
     public async Task<bool> ProcessAsync(CellCompletedRecord record, CancellationToken cancellationToken = default)
@@ -44,7 +48,7 @@ public class CapacityConsumer : ICapacityConsumer
         {
             var cellData = record.CellData;
             var deviceName = cellData.DeviceName;
-            var completedTime = cellData.CompletedTime ?? DateTime.UtcNow;
+            var completedTime = _productionTime.ToBusinessTime(cellData.CompletedTime ?? _productionTime.UtcNow);
             var isOk = cellData.CellResult ?? false;
 
             var shiftCode = _todayCapacityStore.Increment(deviceName, completedTime, isOk);
@@ -63,7 +67,7 @@ public class CapacityConsumer : ICapacityConsumer
                     CellResult = isOk,
                     ShiftCode = shiftCode,
                     CompletedTime = completedTime,
-                    CreatedAt = DateTime.UtcNow,
+                    CreatedAt = _productionTime.UtcNow,
                     PlcName = deviceName
                 });
             }

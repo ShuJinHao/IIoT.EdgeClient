@@ -2,6 +2,7 @@ using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Application.Modules;
 using IIoT.Edge.Application.Modules.Mes;
 using IIoT.Edge.Module.Homogenization.Config;
@@ -29,14 +30,18 @@ public sealed class HomogenizationMesChannel
         MesRequestExecutor requestExecutor,
         ILocalParameterConfigService parameterConfigService,
         ILogService logger,
+        IProductionTimeProvider productionTime,
         IOptions<HomogenizationMesOptions> mesOptions,
         IOptions<HomogenizationCodeOptions> codeOptions)
-        : base(DependencyInjection.ModuleKey, logger, requestExecutor, parameterConfigService)
+        : base(DependencyInjection.ModuleKey, logger, requestExecutor, parameterConfigService, productionTime)
     {
         _mesOptions = mesOptions.Value;
         _mesCodes = codeOptions.Value.Mes;
     }
 
+    /// <summary>
+    /// 匀浆 MES 签名令牌，来自插件配置，用于 Application 基类统一生成 sign。
+    /// </summary>
     protected override string SignToken => _mesOptions.SignToken;
 
     /// <summary>
@@ -298,7 +303,7 @@ public sealed class HomogenizationMesChannel
         }
     }
 
-    private static void AddProduceItem(ICollection<object> produce, HomogenizationMesItemCodeOptions item, object? value)
+    private void AddProduceItem(ICollection<object> produce, HomogenizationMesItemCodeOptions item, object? value)
     {
         if (value is null)
         {

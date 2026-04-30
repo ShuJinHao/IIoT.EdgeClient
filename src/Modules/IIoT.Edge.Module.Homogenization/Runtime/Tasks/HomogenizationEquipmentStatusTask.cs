@@ -40,6 +40,9 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
         _diagnosticsStore = diagnosticsStore;
     }
 
+    /// <summary>
+    /// 设备状态上传任务名称，用于运行日志和任务诊断。
+    /// </summary>
     public override string TaskName => "Homogenization.EquipmentStatus";
 
     private static string TriggerLabel => HomogenizationPlcSignalProfile.EquipmentStatusTrigger.Label;

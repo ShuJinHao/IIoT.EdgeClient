@@ -24,6 +24,9 @@ namespace IIoT.Edge.Module.Homogenization.Runtime;
 /// </summary>
 public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
 {
+    /// <summary>
+    /// 工厂归属的匀浆模块标识。
+    /// </summary>
     public string ModuleId => DependencyInjection.ModuleKey;
 
     /// <summary>

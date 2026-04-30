@@ -3,6 +3,7 @@ using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Consumers;
+using IIoT.Edge.Application.Abstractions.Time;
 using System.Reflection;
 
 namespace IIoT.Edge.Infrastructure.Integration.Export.Excel;
@@ -18,6 +19,7 @@ public class ExcelConsumer : IExcelConsumer
 {
     private readonly string _excelDirectory;
     private readonly ILogService _logger;
+    private readonly IProductionTimeProvider _productionTime;
     private readonly object _fileLock = new();
     public IIoT.Edge.Application.Abstractions.DataPipeline.ConsumerFailureMode FailureMode
         => IIoT.Edge.Application.Abstractions.DataPipeline.ConsumerFailureMode.BestEffort;
@@ -25,10 +27,14 @@ public class ExcelConsumer : IExcelConsumer
     public string Name => "Excel";
     public int Order => 30;
 
-    public ExcelConsumer(string excelDirectory, ILogService logger)
+    public ExcelConsumer(
+        string excelDirectory,
+        ILogService logger,
+        IProductionTimeProvider productionTime)
     {
         _excelDirectory = excelDirectory;
         _logger = logger;
+        _productionTime = productionTime;
         Directory.CreateDirectory(_excelDirectory);
     }
 
@@ -38,9 +44,9 @@ public class ExcelConsumer : IExcelConsumer
         {
             var cellData = record.CellData;
             var columns = GetColumnNames(cellData.GetType());
-            var rowData = BuildRowData(cellData, columns);
+            var rowData = BuildRowData(cellData, columns, _productionTime);
 
-            var completedTime = cellData.CompletedTime ?? DateTime.Now;
+            var completedTime = _productionTime.ToBusinessTime(cellData.CompletedTime ?? _productionTime.UtcNow);
             var fileName = $"{completedTime:yyyy-MM-dd}_生产数据.xlsx";
             var filePath = Path.Combine(_excelDirectory, fileName);
 
@@ -76,7 +82,8 @@ public class ExcelConsumer : IExcelConsumer
     /// </summary>
     private static Dictionary<string, string> BuildRowData(
         CellDataBase cellData,
-        List<string> columns)
+        List<string> columns,
+        IProductionTimeProvider productionTime)
     {
         var rowData = new Dictionary<string, string>();
         var type = cellData.GetType();
@@ -90,7 +97,7 @@ public class ExcelConsumer : IExcelConsumer
             {
                 null => "",
                 bool b => b ? "OK" : "NG",
-                DateTime dt => dt.ToString("yyyy-MM-dd HH:mm:ss"),
+                DateTime dt => productionTime.FormatBusinessTimestamp(dt),
                 _ => value.ToString() ?? ""
             };
         }

@@ -593,7 +593,14 @@ public sealed class ProcessQueueTaskBehaviorTests
             cloudDeadLetterStore,
             mesDeadLetterStore,
             criticalWriter,
-            capacityGuard,
+            capacityGuard ?? CreateCapacityGuard(
+                logger,
+                cloudRetryStore,
+                mesRetryStore,
+                fallbackStore,
+                mesFallbackStore,
+                new FakeCloudDiagnosticsStore(),
+                new FakeMesRetryDiagnosticsStore()),
             runtimeOptions)
     {
         public Task ExecuteOnceAsync() => base.ExecuteAsync();

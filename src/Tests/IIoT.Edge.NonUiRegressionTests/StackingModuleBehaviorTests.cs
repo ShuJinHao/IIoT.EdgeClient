@@ -66,10 +66,10 @@ public sealed class StackingModuleBehaviorTests
         var configuration = CreateConfiguration(cloudUploadEnabled: true);
         var uploader = new StackingCloudUploader(
             cloudHttp,
-            CreateMapper(),
             logger,
             configuration,
-            contextStore);
+            contextStore,
+            new FakeProductionTimeProvider());
         var deviceSession = new DeviceSession
         {
             DeviceId = Guid.NewGuid(),
@@ -127,10 +127,10 @@ public sealed class StackingModuleBehaviorTests
         var contextStore = new FakeProductionContextStore();
         var uploader = new StackingCloudUploader(
             cloudHttp,
-            CreateMapper(),
             logger,
             CreateConfiguration(cloudUploadEnabled: false),
-            contextStore);
+            contextStore,
+            new FakeProductionTimeProvider());
         var deviceSession = new DeviceSession
         {
             DeviceId = Guid.NewGuid(),
@@ -172,10 +172,10 @@ public sealed class StackingModuleBehaviorTests
         var cloudHttp = new FakeCloudHttpClient();
         var uploader = new StackingCloudUploader(
             cloudHttp,
-            CreateMapper(),
             new FakeLogService(),
             CreateConfiguration(cloudUploadEnabled: true),
-            new FakeProductionContextStore());
+            new FakeProductionContextStore(),
+            new FakeProductionTimeProvider());
         var deviceSession = new DeviceSession
         {
             DeviceId = Guid.NewGuid(),

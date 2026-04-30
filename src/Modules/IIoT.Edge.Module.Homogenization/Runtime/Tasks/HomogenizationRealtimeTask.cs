@@ -49,8 +49,14 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
         _taskLoopInterval = Math.Max(runtime.MinRealtimeLoopIntervalMs, runtime.RealtimeLoopIntervalMs);
     }
 
+    /// <summary>
+    /// 实时上传任务名称，用于运行日志和任务诊断。
+    /// </summary>
     public override string TaskName => "Homogenization.Realtime";
 
+    /// <summary>
+    /// 实时快照采集和上传循环间隔，按配置最小值保护。
+    /// </summary>
     protected override int TaskLoopInterval => _taskLoopInterval;
 
     protected override HomogenizationRealtimeSnapshot CaptureSnapshot()
