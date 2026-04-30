@@ -205,15 +205,27 @@ public sealed class HomogenizationMesCodeOptions
     /// </summary>
     public Dictionary<string, string> EquipmentStatusTexts { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// 按匀浆实时快照字段名获取对应 MES item code。
+    /// </summary>
     public HomogenizationMesItemCodeOptions GetRealtimeItem(string key)
         => GetItem(RealtimeItems, key, "实时数据");
 
+    /// <summary>
+    /// 按匀浆配方快照字段名获取对应 MES item code。
+    /// </summary>
     public HomogenizationMesItemCodeOptions GetRecipeItem(string key)
         => GetItem(RecipeItems, key, "配方参数");
 
+    /// <summary>
+    /// 按匀浆出料字段名获取对应 MES produce item code。
+    /// </summary>
     public HomogenizationMesItemCodeOptions GetOutboundItem(string key)
         => GetItem(OutboundProduceItems, key, "出料数据");
 
+    /// <summary>
+    /// 将 PLC 设备状态码转换为 MES 设备状态文本，未知状态返回插件默认文案。
+    /// </summary>
     public string ResolveEquipmentStatusText(short statusCode)
         => EquipmentStatusTexts.TryGetValue(statusCode.ToString(), out var text) && !string.IsNullOrWhiteSpace(text)
             ? text
@@ -341,6 +353,9 @@ public sealed class HomogenizationMesItemCodeOptions
     public string Unit { get; set; } = string.Empty;
 }
 
+/// <summary>
+/// 匀浆模块界面和运行循环配置校验器，防止无效间隔导致任务空转或 UI 缓存不可用。
+/// </summary>
 public sealed class HomogenizationModuleOptionsValidator : IValidateOptions<HomogenizationModuleOptions>
 {
     public ValidateOptionsResult Validate(string? name, HomogenizationModuleOptions options)
@@ -382,6 +397,9 @@ public sealed class HomogenizationModuleOptionsValidator : IValidateOptions<Homo
     }
 }
 
+/// <summary>
+/// 匀浆 MES 接口配置校验器，确保签名令牌和五类接口路径在启动时可用。
+/// </summary>
 public sealed class HomogenizationMesOptionsValidator : IValidateOptions<HomogenizationMesOptions>
 {
     public ValidateOptionsResult Validate(string? name, HomogenizationMesOptions options)
@@ -401,6 +419,9 @@ public sealed class HomogenizationMesOptionsValidator : IValidateOptions<Homogen
     }
 }
 
+/// <summary>
+/// 匀浆 PLC/MES code 配置校验器，确保触发应答码和 MES 字段码表完整。
+/// </summary>
 public sealed class HomogenizationCodeOptionsValidator : IValidateOptions<HomogenizationCodeOptions>
 {
     public ValidateOptionsResult Validate(string? name, HomogenizationCodeOptions options)
@@ -414,13 +435,19 @@ public sealed class HomogenizationCodeOptionsValidator : IValidateOptions<Homoge
     }
 }
 
+/// <summary>
+/// 匀浆配置校验辅助方法，所有提示文案仍走插件资源。
+/// </summary>
 internal static class HomogenizationOptionValidation
 {
+    /// <summary>
+    /// 校验字符串配置不能为空，主要用于 MES 路径和通道名称。
+    /// </summary>
     public static void Require(string value, string name, ICollection<string> errors)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
-            errors.Add(HomogenizationText.Format("Homogenization_Validate_RequiredFormat", "{0}必须大于 0。", name));
+            errors.Add(HomogenizationText.Format("Homogenization_Validate_StringRequiredFormat", "{0} 不能为空。", name));
         }
     }
 }

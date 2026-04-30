@@ -5,12 +5,17 @@ using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Module.Homogenization.Config;
-using IIoT.Edge.Module.Homogenization.Integration;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 using IIoT.Edge.SharedKernel.Context;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesScenarioChannel<
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
+    string,
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRealtimeSnapshot,
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRecipeSnapshot,
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot>;
 
 namespace IIoT.Edge.Module.Homogenization.Runtime;
 
@@ -19,6 +24,9 @@ namespace IIoT.Edge.Module.Homogenization.Runtime;
 /// </summary>
 public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
 {
+    /// <summary>
+    /// 工厂归属的匀浆模块标识。
+    /// </summary>
     public string ModuleId => DependencyInjection.ModuleKey;
 
     /// <summary>
@@ -40,7 +48,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
 
         var logger = serviceProvider.GetRequiredService<ILogService>();
         var deviceService = serviceProvider.GetRequiredService<IDeviceService>();
-        var mesChannel = serviceProvider.GetRequiredService<IHomogenizationMesChannel>();
+        var mesChannel = serviceProvider.GetRequiredService<HomogenizationMesScenarioChannel>();
         var diagnosticsStore = serviceProvider.GetRequiredService<IMesUploadDiagnosticsStore>();
         var dataPipelineService = serviceProvider.GetRequiredService<IDataPipelineService>();
         var validator = serviceProvider.GetService<HomogenizationCellDataValidator>() ?? new HomogenizationCellDataValidator();

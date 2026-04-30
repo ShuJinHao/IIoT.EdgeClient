@@ -12,9 +12,15 @@ using Microsoft.Extensions.Configuration;
 
 namespace IIoT.Edge.Module.Stacking.Samples;
 
+/// <summary>
+/// 叠片开发样本导入器，只在开发环境按配置写入样本 PLC、IO 映射和运行态电芯数据。
+/// </summary>
 public sealed class StackingDevelopmentSampleContributor : DevelopmentSampleContributorBase
 {
-    private const string SampleRemark = "Development sample bootstrap";
+    /// <summary>
+    /// 写入样本设备和 IO 映射时使用的备注，便于审核时区分开发样本和现场配置。
+    /// </summary>
+    private const string SampleRemark = "开发样本初始化";
 
     private readonly IRepository<NetworkDeviceEntity> _networkDevices;
     private readonly IRepository<IoMappingEntity> _ioMappings;
@@ -38,11 +44,20 @@ public sealed class StackingDevelopmentSampleContributor : DevelopmentSampleCont
         _options = BindOptions<StackingDevelopmentSampleOptions>(StackingDevelopmentSampleOptions.SectionName);
     }
 
+    /// <summary>
+    /// 样本导入器归属的叠片模块标识。
+    /// </summary>
     public override string ModuleId => StackingModuleConstants.ModuleId;
 
+    /// <summary>
+    /// 配置样本只在开发环境且模块启用时导入，避免污染正式现场配置。
+    /// </summary>
     protected override bool ShouldEnsureConfigurationSamples()
         => ShouldSeedStackingSamples();
 
+    /// <summary>
+    /// 运行态样本只服务本地演示，真实生产数据必须来自 PLC 采集。
+    /// </summary>
     protected override bool ShouldEnsureRuntimeSamples()
         => ShouldSeedStackingSamples();
 
@@ -57,7 +72,7 @@ public sealed class StackingDevelopmentSampleContributor : DevelopmentSampleCont
 
         if (existingStackingDevices.Count > 0 && sampleDevice is null)
         {
-            _logger.Info("[DevSamples] Existing Stacking PLC configuration detected. Skip sample device bootstrap.");
+            _logger.Info("[开发样本] 已存在叠片 PLC 配置，跳过样本设备初始化。");
             return;
         }
 
@@ -71,7 +86,7 @@ public sealed class StackingDevelopmentSampleContributor : DevelopmentSampleCont
             if (conflictingDevice is not null)
             {
                 _logger.Warn(
-                    $"[DevSamples] Skip Stacking sample bootstrap because device name '{_options.StackingDeviceName}' is already occupied by module '{conflictingDevice.ModuleId}'.");
+                    $"[开发样本] 设备名称 '{_options.StackingDeviceName}' 已被模块 '{conflictingDevice.ModuleId}' 使用，跳过叠片样本初始化。");
                 return;
             }
 
@@ -99,7 +114,7 @@ public sealed class StackingDevelopmentSampleContributor : DevelopmentSampleCont
             await _networkDevices.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
             _logger.Info(
-                $"[DevSamples] Seeded development PLC device '{sampleDevice.DeviceName}' for module {StackingModuleConstants.ModuleId}.");
+                $"[开发样本] 已为模块 {StackingModuleConstants.ModuleId} 写入叠片 PLC 样本设备 '{sampleDevice.DeviceName}'。");
         }
 
         await EnsureSampleMappingsAsync(sampleDevice, cancellationToken).ConfigureAwait(false);
@@ -129,7 +144,7 @@ public sealed class StackingDevelopmentSampleContributor : DevelopmentSampleCont
                 TrayCode = _options.SampleTrayCode,
                 LayerCount = _options.SampleLayerCount,
                 SequenceNo = 1,
-                RuntimeStatus = "DevelopmentSample",
+                RuntimeStatus = "开发样本",
                 DeviceName = sampleDevice.DeviceName,
                 DeviceCode = sampleDevice.DeviceName,
                 PlcDeviceId = sampleDevice.Id,
@@ -139,7 +154,7 @@ public sealed class StackingDevelopmentSampleContributor : DevelopmentSampleCont
 
             context.AddCell(sampleCell.Barcode, sampleCell);
             _logger.Info(
-                $"[DevSamples] Seeded Stacking runtime sample cell '{sampleCell.Barcode}' for '{sampleDevice.DeviceName}'.");
+                $"[开发样本] 已为设备 '{sampleDevice.DeviceName}' 写入叠片运行样本电芯 '{sampleCell.Barcode}'。");
         }
 
         if (!context.Has(StackingModuleConstants.LastPublishedSequenceKey))
@@ -180,7 +195,7 @@ public sealed class StackingDevelopmentSampleContributor : DevelopmentSampleCont
 
         await _ioMappings.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         _logger.Info(
-            $"[DevSamples] Seeded {addedCount} IO mappings for '{sampleDevice.DeviceName}'.");
+            $"[开发样本] 已为设备 '{sampleDevice.DeviceName}' 写入 {addedCount} 条 IO 映射样本。");
     }
 
     private bool ShouldSeedStackingSamples()
@@ -209,7 +224,7 @@ public sealed class StackingDevelopmentSampleContributor : DevelopmentSampleCont
 
     private IModuleHardwareProfileProvider GetStackingHardwareProfile()
         => GetHardwareProfile(
-            $"Development sample bootstrap requires a hardware profile provider for module '{StackingModuleConstants.ModuleId}'.");
+            $"叠片开发样本初始化需要模块 '{StackingModuleConstants.ModuleId}' 的硬件模板提供者。");
 
     private static List<IoMappingEntity> BuildStackingMappings(
         int networkDeviceId,

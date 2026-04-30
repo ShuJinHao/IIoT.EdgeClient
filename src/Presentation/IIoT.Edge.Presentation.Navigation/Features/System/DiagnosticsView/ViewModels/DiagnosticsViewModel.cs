@@ -385,13 +385,21 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         CloudResultSummary = FormatText(
             "Navigation_Sync_LastResultFormat",
             "最近结果：{0}",
-            _diagnosticsText.FormatCloudOutcome(syncDiagnostics.Cloud.LastOutcome, syncDiagnostics.Cloud.LastReasonCode, syncDiagnostics.Cloud.LastProcessType));
+            _diagnosticsText.FormatCloudOutcome(
+                syncDiagnostics.Cloud.LastOutcome,
+                syncDiagnostics.Cloud.LastReasonCode,
+                syncDiagnostics.Cloud.LastProcessType,
+                syncDiagnostics.Cloud.LastProcessDisplayName));
         CloudPendingSummary = FormatText(
             "Navigation_Sync_PendingCloudFormat",
             "待处理：重试={0}，日志={1}，产能={2}",
             syncDiagnostics.Cloud.PendingRetryCount,
             syncDiagnostics.Cloud.PendingDeviceLogCount,
-            syncDiagnostics.Cloud.PendingCapacityCount);
+            syncDiagnostics.Cloud.PendingCapacityCount)
+            + FormatText(
+                "Navigation_Sync_DeadLetterSuffixFormat",
+                "，死信={0}",
+                syncDiagnostics.Cloud.DeadLetters?.TotalCount ?? 0);
         CloudCapacitySummary = _diagnosticsText.FormatCapacityBlockedSummary(
             syncDiagnostics.Cloud.IsCapacityBlocked,
             syncDiagnostics.Cloud.BlockedChannel,
@@ -409,7 +417,11 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
             "Navigation_Diagnostics_MesRuntimeFormat",
             "MES运行：{0}",
             _diagnosticsText.FormatMesRuntimeState(syncDiagnostics.Mes.RuntimeState));
-        MesPendingSummary = FormatText("Navigation_Sync_PendingMesFormat", "待处理：重试={0}", syncDiagnostics.Mes.PendingRetryCount);
+        MesPendingSummary = FormatText("Navigation_Sync_PendingMesFormat", "待处理：重试={0}", syncDiagnostics.Mes.PendingRetryCount)
+            + FormatText(
+                "Navigation_Sync_DeadLetterSuffixFormat",
+                "，死信={0}",
+                syncDiagnostics.Mes.DeadLetters?.TotalCount ?? 0);
         MesCapacitySummary = _diagnosticsText.FormatCapacityBlockedSummary(
             syncDiagnostics.Mes.IsCapacityBlocked,
             syncDiagnostics.Mes.BlockedChannel,

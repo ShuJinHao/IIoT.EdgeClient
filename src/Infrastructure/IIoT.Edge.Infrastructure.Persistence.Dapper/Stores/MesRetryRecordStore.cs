@@ -4,11 +4,26 @@ using IIoT.Edge.Infrastructure.Persistence.Dapper.Connection;
 
 namespace IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
 
+/// <summary>
+/// MES 主补传表。只保存完整 CellDataJson 和失败目标，不为插件业务字段建列。
+/// </summary>
 public sealed class MesRetryRecordStore : RetryRecordStoreBase, IMesRetryRecordStore
 {
+    /// <summary>
+    /// MES 使用独立 SQLite 数据库文件，避免和 Cloud 补偿链路混库。
+    /// </summary>
     public override string DbName => "pipeline_mes";
+
+    /// <summary>
+    /// MES 正常补传队列表；MesRetryTask 从这里领取记录并调用 MES consumer。
+    /// </summary>
     protected override string TableName => "failed_mes_records";
+
     protected override string ChannelName => "MES";
+
+    /// <summary>
+    /// 领取锁表，防止多个任务实例重复补传同一条 MES 记录。
+    /// </summary>
     protected override string ClaimTableName => "failed_mes_record_claims";
 
     protected override string CreateTableSql => @"

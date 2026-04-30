@@ -44,4 +44,32 @@ public abstract class DeadLetterStoreBase : DapperRepositoryBase<DeadLetterRecor
 
     public Task<int> GetCountAsync()
         => SafeCountAsync($"SELECT COUNT(*) FROM {TableName}");
+
+    public async Task<IReadOnlyList<DeadLetterGroupSummary>> GetGroupSummaryAsync()
+    {
+        var sql = $@"
+            SELECT
+                ProcessType,
+                FailureStage,
+                COUNT(*) AS Count,
+                MAX(CreatedAt) AS LastCreatedAt
+            FROM {TableName}
+            GROUP BY ProcessType, FailureStage
+            ORDER BY Count DESC, LastCreatedAt DESC";
+
+        return await SafeQueryListAsync<DeadLetterGroupSummary>(sql).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<DeadLetterRecord>> GetLatestAsync(int count = 20)
+    {
+        var sql = $@"
+            SELECT *
+            FROM {TableName}
+            ORDER BY CreatedAt DESC, Id DESC
+            LIMIT @Count";
+
+        return await SafeQueryListAsync<DeadLetterRecord>(
+            sql,
+            new { Count = Math.Clamp(count, 1, 100) }).ConfigureAwait(false);
+    }
 }

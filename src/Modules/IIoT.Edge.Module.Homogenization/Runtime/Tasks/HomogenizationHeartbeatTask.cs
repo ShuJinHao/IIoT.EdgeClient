@@ -30,12 +30,24 @@ internal sealed class HomogenizationHeartbeatTask : HeartbeatMirrorPlcTaskBase
         _taskLoopInterval = Math.Max(runtime.MinEventLoopIntervalMs, runtime.EventLoopIntervalMs);
     }
 
+    /// <summary>
+    /// 心跳镜像任务名称，用于运行日志和任务诊断。
+    /// </summary>
     public override string TaskName => "Homogenization.Heartbeat";
 
+    /// <summary>
+    /// 心跳镜像循环间隔，复用匀浆触发-应答任务间隔配置。
+    /// </summary>
     protected override int TaskLoopInterval => _taskLoopInterval;
 
+    /// <summary>
+    /// PLC 输入心跳信号标签。
+    /// </summary>
     protected override string InputLabel => HomogenizationPlcSignalProfile.HeartbeatIn.Label;
 
+    /// <summary>
+    /// 上位机写回 PLC 的输出心跳信号标签。
+    /// </summary>
     protected override string OutputLabel => HomogenizationPlcSignalProfile.HeartbeatOut.Label;
 
     protected override ushort ReadWord(string label)

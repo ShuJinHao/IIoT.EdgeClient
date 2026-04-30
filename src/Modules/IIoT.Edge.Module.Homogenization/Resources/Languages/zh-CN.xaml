@@ -13,6 +13,7 @@
     <sys:String x:Key="Homogenization_Outbound_PendingUpload">出料待上传</sys:String>
     <sys:String x:Key="Homogenization_EquipmentStatus_Unknown">未知</sys:String>
     <sys:String x:Key="Homogenization_Validate_RequiredFormat">{0} 必须大于 0。</sys:String>
+    <sys:String x:Key="Homogenization_Validate_StringRequiredFormat">{0} 不能为空。</sys:String>
     <sys:String x:Key="Homogenization_Validate_MesSignTokenRequired">匀浆 MES 签名令牌不能为空。</sys:String>
     <sys:String x:Key="Homogenization_Validate_PlcResetAndTriggerCannotEqual">PLC 复位信号不能与触发信号相同。</sys:String>
     <sys:String x:Key="Homogenization_Validate_MesItemMissingFormat">{0} 缺少 {1} 编码配置。</sys:String>

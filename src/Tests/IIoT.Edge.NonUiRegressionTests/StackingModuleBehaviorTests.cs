@@ -66,10 +66,10 @@ public sealed class StackingModuleBehaviorTests
         var configuration = CreateConfiguration(cloudUploadEnabled: true);
         var uploader = new StackingCloudUploader(
             cloudHttp,
-            CreateMapper(),
             logger,
             configuration,
-            contextStore);
+            contextStore,
+            new FakeProductionTimeProvider());
         var deviceSession = new DeviceSession
         {
             DeviceId = Guid.NewGuid(),
@@ -120,17 +120,17 @@ public sealed class StackingModuleBehaviorTests
     }
 
     [Fact]
-    public async Task StackingCloudUploader_WhenDisabled_ShouldReturnFalseAndRecordDisabledDiagnostic()
+    public async Task StackingCloudUploader_WhenDisabled_ShouldSkipWithoutRetryFailureAndRecordDiagnostic()
     {
         var logger = new FakeLogService();
         var cloudHttp = new FakeCloudHttpClient();
         var contextStore = new FakeProductionContextStore();
         var uploader = new StackingCloudUploader(
             cloudHttp,
-            CreateMapper(),
             logger,
             CreateConfiguration(cloudUploadEnabled: false),
-            contextStore);
+            contextStore,
+            new FakeProductionTimeProvider());
         var deviceSession = new DeviceSession
         {
             DeviceId = Guid.NewGuid(),
@@ -152,7 +152,7 @@ public sealed class StackingModuleBehaviorTests
                 }
             ]);
 
-        Assert.False(result.IsSuccess);
+        Assert.True(result.IsSuccess);
         Assert.Equal(0, cloudHttp.PostCallCount);
         Assert.Contains(logger.Entries, x => x.Message.Contains("叠片云端上传已被配置关闭", StringComparison.Ordinal));
 
@@ -172,10 +172,10 @@ public sealed class StackingModuleBehaviorTests
         var cloudHttp = new FakeCloudHttpClient();
         var uploader = new StackingCloudUploader(
             cloudHttp,
-            CreateMapper(),
             new FakeLogService(),
             CreateConfiguration(cloudUploadEnabled: true),
-            new FakeProductionContextStore());
+            new FakeProductionContextStore(),
+            new FakeProductionTimeProvider());
         var deviceSession = new DeviceSession
         {
             DeviceId = Guid.NewGuid(),

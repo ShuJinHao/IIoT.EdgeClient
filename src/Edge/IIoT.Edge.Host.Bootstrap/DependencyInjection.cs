@@ -9,7 +9,9 @@ using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Tasks;
+using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Application.Common.Tasks;
+using IIoT.Edge.Application.Common.Time;
 using IIoT.Edge.Host.Bootstrap.Modules;
 using IIoT.Edge.Infrastructure.DeviceComm;
 using IIoT.Edge.Infrastructure.Integration;
@@ -65,6 +67,12 @@ public static class DependencyInjection
 
         services.AddSingleton(configuration);
         services.AddSingleton(runtimePaths);
+        var productionTimeOptions =
+            configuration.GetSection(ProductionTimeOptions.SectionName).Get<ProductionTimeOptions>()
+            ?? new ProductionTimeOptions();
+        productionTimeOptions.Validate();
+        services.AddSingleton(productionTimeOptions);
+        services.AddSingleton<IProductionTimeProvider, ProductionTimeProvider>();
         services.AddSingleton(viewRegistry);
         services.AddSingleton<IViewRegistry>(viewRegistry);
         services.AddSingleton<IReadOnlyCollection<ModulePluginDescriptor>>(discoveredModuleList);

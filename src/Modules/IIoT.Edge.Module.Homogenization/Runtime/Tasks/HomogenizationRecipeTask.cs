@@ -4,9 +4,14 @@ using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
-using IIoT.Edge.Module.Homogenization.Integration;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using Microsoft.Extensions.Options;
+using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesScenarioChannel<
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
+    string,
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRealtimeSnapshot,
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRecipeSnapshot,
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot>;
 
 namespace IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 
@@ -16,14 +21,14 @@ namespace IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
 {
     private readonly IDeviceService _deviceService;
-    private readonly IHomogenizationMesChannel _mesApiService;
+    private readonly HomogenizationMesScenarioChannel _mesChannel;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
 
     public HomogenizationRecipeTask(
         IPlcBuffer buffer,
         HomogenizationContext context,
         IDeviceService deviceService,
-        IHomogenizationMesChannel mesApiService,
+        HomogenizationMesScenarioChannel mesChannel,
         IMesUploadDiagnosticsStore diagnosticsStore,
         ILogService logger,
         IOptions<HomogenizationModuleOptions> moduleOptions,
@@ -31,10 +36,13 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
         : base(buffer, context, logger, codeOptions, moduleOptions)
     {
         _deviceService = deviceService;
-        _mesApiService = mesApiService;
+        _mesChannel = mesChannel;
         _diagnosticsStore = diagnosticsStore;
     }
 
+    /// <summary>
+    /// 配方上传任务名称，用于运行日志和任务诊断。
+    /// </summary>
     public override string TaskName => "Homogenization.Recipe";
 
     private static string TriggerLabel => HomogenizationPlcSignalProfile.RecipeTrigger.Label;
@@ -92,7 +100,7 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
     private async Task ProcessTriggerAsync(CancellationToken cancellationToken)
     {
         var snapshot = Codec.CaptureRecipeSnapshot();
-        var result = await _mesApiService
+        var result = await _mesChannel
             .UploadRecipeAsync(_deviceService.CurrentDevice, snapshot, cancellationToken)
             .ConfigureAwait(false);
 

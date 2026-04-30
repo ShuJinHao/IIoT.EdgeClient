@@ -13,6 +13,7 @@
     <sys:String x:Key="Homogenization_Outbound_PendingUpload">Outbound pending upload</sys:String>
     <sys:String x:Key="Homogenization_EquipmentStatus_Unknown">Unknown</sys:String>
     <sys:String x:Key="Homogenization_Validate_RequiredFormat">{0} must be greater than 0.</sys:String>
+    <sys:String x:Key="Homogenization_Validate_StringRequiredFormat">{0} is required.</sys:String>
     <sys:String x:Key="Homogenization_Validate_MesSignTokenRequired">Homogenization MES sign token is required.</sys:String>
     <sys:String x:Key="Homogenization_Validate_PlcResetAndTriggerCannotEqual">PLC reset signal cannot equal trigger signal.</sys:String>
     <sys:String x:Key="Homogenization_Validate_MesItemMissingFormat">{0} is missing code configuration for {1}.</sys:String>

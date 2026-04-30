@@ -1,5 +1,6 @@
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Modules.Mes;
 using IIoT.Edge.Module.Homogenization;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Integration;
@@ -8,6 +9,15 @@ using IIoT.Edge.Module.Homogenization.Runtime;
 using IIoT.Edge.SharedKernel.Context;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
+using HomogenizationCloudUploadChannel = IIoT.Edge.Application.Modules.Cloud.ICloudUploadChannel<
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
+    object>;
+using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesScenarioChannel<
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
+    string,
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRealtimeSnapshot,
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRecipeSnapshot,
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot>;
 
 namespace IIoT.Edge.Module.ContractTests;
 
@@ -26,7 +36,7 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
         AddDefaultRuntimeServices(services);
         services.AddSingleton<IDeviceService, ContractDeviceService>();
         services.AddSingleton<IMesUploadDiagnosticsStore, ContractMesUploadDiagnosticsStore>();
-        services.AddSingleton<IHomogenizationMesChannel, ContractHomogenizationMesChannel>();
+        services.AddSingleton<HomogenizationMesScenarioChannel, ContractHomogenizationMesChannel>();
         services.AddSingleton<HomogenizationCellDataValidator>();
         services.AddSingleton(Options.Create(new HomogenizationModuleOptions()));
         services.AddSingleton(Options.Create(new HomogenizationCodeOptions()));
@@ -54,11 +64,30 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
                           && descriptor.ImplementationType == typeof(HomogenizationMesChannel));
         Assert.Contains(
             result.Services,
-            descriptor => descriptor.ServiceType == typeof(IHomogenizationMesChannel)
+            descriptor => descriptor.ServiceType == typeof(HomogenizationMesScenarioChannel)
                           && descriptor.ImplementationFactory is not null);
         Assert.Contains(
             result.Services,
             descriptor => descriptor.ServiceType == typeof(IProcessMesUploader)
+                          && descriptor.ImplementationFactory is not null);
+    }
+
+    [Fact]
+    public void RegisterServices_ShouldRegisterCloudChannelAbstractionAndProcessUploader()
+    {
+        var result = new ModuleContractFixture().RegisterModule(new DependencyInjection());
+
+        Assert.Contains(
+            result.Services,
+            descriptor => descriptor.ServiceType == typeof(HomogenizationCloudUploader)
+                          && descriptor.ImplementationType == typeof(HomogenizationCloudUploader));
+        Assert.Contains(
+            result.Services,
+            descriptor => descriptor.ServiceType == typeof(HomogenizationCloudUploadChannel)
+                          && descriptor.ImplementationFactory is not null);
+        Assert.Contains(
+            result.Services,
+            descriptor => descriptor.ServiceType == typeof(IProcessCloudUploader)
                           && descriptor.ImplementationFactory is not null);
     }
 
@@ -154,8 +183,17 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
         public void RecordFailure(string processType, string failureReason) { }
     }
 
-    private sealed class ContractHomogenizationMesChannel : IHomogenizationMesChannel
+    private sealed class ContractHomogenizationMesChannel : HomogenizationMesScenarioChannel
     {
+        public string ProcessType => DependencyInjection.ModuleKey;
+        public MesUploadMode UploadMode => MesUploadMode.Single;
+
+        public Task<MesCallResult> UploadAsync(
+            ProcessMesUploadContext context,
+            IReadOnlyList<IIoT.Edge.SharedKernel.DataPipeline.CellCompletedRecord> records,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(MesCallResult.Success());
+
         public Task<MesCallResult> UploadInboundAsync(
             DeviceSession? device,
             string trayCode,

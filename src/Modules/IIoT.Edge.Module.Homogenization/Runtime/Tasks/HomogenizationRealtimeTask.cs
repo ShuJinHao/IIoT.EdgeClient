@@ -3,11 +3,16 @@ using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Module.Homogenization.Config;
-using IIoT.Edge.Module.Homogenization.Integration;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using IIoT.Edge.Runtime.Base;
 using Microsoft.Extensions.Options;
+using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesScenarioChannel<
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
+    string,
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRealtimeSnapshot,
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRecipeSnapshot,
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot>;
 
 namespace IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 
@@ -18,7 +23,7 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
 {
     private readonly HomogenizationContext _context;
     private readonly IDeviceService _deviceService;
-    private readonly IHomogenizationMesChannel _mesApiService;
+    private readonly HomogenizationMesScenarioChannel _mesChannel;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
     private readonly HomogenizationCodeOptions _codeOptions;
     private readonly int _taskLoopInterval;
@@ -28,7 +33,7 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
         IPlcBuffer buffer,
         HomogenizationContext context,
         IDeviceService deviceService,
-        IHomogenizationMesChannel mesApiService,
+        HomogenizationMesScenarioChannel mesChannel,
         IMesUploadDiagnosticsStore diagnosticsStore,
         ILogService logger,
         IOptions<HomogenizationModuleOptions> moduleOptions,
@@ -37,15 +42,21 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
     {
         _context = context;
         _deviceService = deviceService;
-        _mesApiService = mesApiService;
+        _mesChannel = mesChannel;
         _diagnosticsStore = diagnosticsStore;
         _codeOptions = codeOptions.Value;
         var runtime = moduleOptions.Value.Runtime;
         _taskLoopInterval = Math.Max(runtime.MinRealtimeLoopIntervalMs, runtime.RealtimeLoopIntervalMs);
     }
 
+    /// <summary>
+    /// 实时上传任务名称，用于运行日志和任务诊断。
+    /// </summary>
     public override string TaskName => "Homogenization.Realtime";
 
+    /// <summary>
+    /// 实时快照采集和上传循环间隔，按配置最小值保护。
+    /// </summary>
     protected override int TaskLoopInterval => _taskLoopInterval;
 
     protected override HomogenizationRealtimeSnapshot CaptureSnapshot()
@@ -54,7 +65,7 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
     protected override Task<MesCallResult> UploadSnapshotAsync(
         HomogenizationRealtimeSnapshot snapshot,
         CancellationToken cancellationToken)
-        => _mesApiService.UploadRealtimeAsync(_deviceService.CurrentDevice, snapshot, cancellationToken);
+        => _mesChannel.UploadRealtimeAsync(_deviceService.CurrentDevice, snapshot, cancellationToken);
 
     protected override Task OnSnapshotUploadedAsync(
         HomogenizationRealtimeSnapshot snapshot,

@@ -390,7 +390,7 @@ public sealed class ModuleRuntimeRegistrationTests
         var sampleCell = Assert.Single(
             context.CurrentCells.Values.Where(x => string.Equals(x.ProcessType, "Stacking", StringComparison.OrdinalIgnoreCase)));
         Assert.Equal("ST-DEV-0001", GetStringProperty(sampleCell, "Barcode"));
-        Assert.Equal("DevelopmentSample", GetStringProperty(sampleCell, "RuntimeStatus"));
+        Assert.Equal("开发样本", GetStringProperty(sampleCell, "RuntimeStatus"));
     }
 
     [Fact]

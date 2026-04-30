@@ -2,17 +2,33 @@ using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Modules;
+using IIoT.Edge.Application.Modules.Mes;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Integration;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.SharedKernel.Enums;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
+using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesScenarioChannel<
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
+    string,
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRealtimeSnapshot,
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRecipeSnapshot,
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot>;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 
 public sealed class HomogenizationMesIntegrationTests
 {
+    [Fact]
+    public void HomogenizationMesChannel_ShouldExposeGenericScenarioContractAndProcessUploader()
+    {
+        var channel = CreateChannel(new CapturingMesHttpClient(), stationNo: "ST-H-00");
+
+        Assert.IsAssignableFrom<HomogenizationMesScenarioChannel>(channel);
+        Assert.IsAssignableFrom<IProcessMesUploader>(channel);
+    }
+
     [Fact]
     public async Task UploadInboundAsync_ShouldBuildTrayBasedRequest()
     {
@@ -178,6 +194,7 @@ public sealed class HomogenizationMesIntegrationTests
             executor,
             new MutableLocalParameterConfigService(stationNo),
             logger,
+            new FakeProductionTimeProvider(),
             Options.Create(CreateMesOptions()),
             Options.Create(CreateCodeOptions()));
     }

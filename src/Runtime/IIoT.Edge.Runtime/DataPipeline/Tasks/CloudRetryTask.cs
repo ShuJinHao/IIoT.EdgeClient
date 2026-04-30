@@ -14,6 +14,11 @@ namespace IIoT.Edge.Runtime.DataPipeline.Tasks;
 
 public sealed class CloudRetryTask : ScheduledTaskBase
 {
+    private static readonly DataPipelineDeadLetterChannel DeadLetterChannel = new(
+        LogPrefix: "Retry-Cloud",
+        DeadLetterName: "Cloud",
+        CriticalSource: "Retry.CloudDeadLetterPersistFailed");
+
     private readonly ICloudRetryRecordStore _retryStore;
     private readonly ICloudFallbackBufferStore _fallbackStore;
     private readonly ICloudDeadLetterStore _deadLetterStore;
@@ -25,7 +30,7 @@ public sealed class CloudRetryTask : ScheduledTaskBase
     private readonly ICapacitySyncTask _capacitySync;
     private readonly ICloudUploadDiagnosticsStore _diagnosticsStore;
     private readonly IProcessIntegrationRegistry? _processIntegrationRegistry;
-    private readonly DataPipelineCapacityGuard? _capacityGuard;
+    private readonly DataPipelineCapacityGuard _capacityGuard;
     private readonly TimeSpan _consumerCallTimeout;
     private bool _wasUnavailable = true;
     private DateOnly? _lastAbandonedCleanupDateUtc;
@@ -49,11 +54,13 @@ public sealed class CloudRetryTask : ScheduledTaskBase
         IDeviceLogSyncTask deviceLogSync,
         ICapacitySyncTask capacitySync,
         ICloudUploadDiagnosticsStore diagnosticsStore,
+        DataPipelineCapacityGuard capacityGuard,
         IProcessIntegrationRegistry? processIntegrationRegistry = null,
-        DataPipelineCapacityGuard? capacityGuard = null,
         DataPipelineRuntimeOptions? runtimeOptions = null)
         : base(logger)
     {
+        ArgumentNullException.ThrowIfNull(capacityGuard);
+
         _retryStore = retryStore;
         _fallbackStore = fallbackStore;
         _deadLetterStore = deadLetterStore;
@@ -127,11 +134,8 @@ public sealed class CloudRetryTask : ScheduledTaskBase
             Logger.Warn("[Retry-Cloud] Capacity buffer retry paused or failed.");
         }
 
-        if (_capacityGuard is not null)
-        {
-            await _capacityGuard.RefreshCloudRetryCapacityStatusAsync().ConfigureAwait(false);
-            await _capacityGuard.RefreshCloudFallbackCapacityStatusAsync().ConfigureAwait(false);
-        }
+        await _capacityGuard.RefreshCloudRetryCapacityStatusAsync().ConfigureAwait(false);
+        await _capacityGuard.RefreshCloudFallbackCapacityStatusAsync().ConfigureAwait(false);
 
         await ApplyIdleOrBackoffStateAsync().ConfigureAwait(false);
     }
@@ -183,9 +187,9 @@ public sealed class CloudRetryTask : ScheduledTaskBase
 
             try
             {
-                var retryBlockedReason = _capacityGuard is null
-                    ? null
-                    : await _capacityGuard.GetCloudRetryBlockReasonAsync(fallback.ProcessType).ConfigureAwait(false);
+                var retryBlockedReason = await _capacityGuard
+                    .GetCloudRetryBlockReasonAsync(fallback.ProcessType)
+                    .ConfigureAwait(false);
 
                 if (!string.IsNullOrWhiteSpace(retryBlockedReason))
                 {
@@ -213,10 +217,7 @@ public sealed class CloudRetryTask : ScheduledTaskBase
             Logger.Info($"[Retry-Cloud] Recovered {recoveredIds.Count} Cloud fallback record(s) into the main retry store.");
         }
 
-        if (_capacityGuard is not null)
-        {
-            await _capacityGuard.RefreshCloudFallbackCapacityStatusAsync().ConfigureAwait(false);
-        }
+        await _capacityGuard.RefreshCloudFallbackCapacityStatusAsync().ConfigureAwait(false);
     }
 
     private async Task<bool> RetryFailedCellRecordsAsync()
@@ -544,33 +545,18 @@ public sealed class CloudRetryTask : ScheduledTaskBase
         long sourceRecordId,
         DeadLetterStage stage,
         string failureReason)
-    {
-        try
-        {
-            await _deadLetterStore.SaveAsync(new DeadLetterRecord
-            {
-                ProcessType = processType,
-                CellDataJson = cellDataJson,
-                FailedTarget = failedTarget,
-                SourceTable = sourceTable,
-                SourceRecordId = sourceRecordId,
-                FailureStage = stage.ToString(),
-                FailureReason = failureReason,
-                CreatedAt = DateTime.UtcNow
-            }).ConfigureAwait(false);
-
-            Logger.Fatal($"[Retry-Cloud] {processType} record {sourceRecordId} moved into Cloud dead-letter store.");
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _criticalFallbackWriter.Write(
-                "Retry.CloudDeadLetterPersistFailed",
-                $"{failureReason} Dead-letter save failed: {ex.Message}",
-                ex);
-            return false;
-        }
-    }
+        => await DataPipelineDeadLetterWriter.TryPersistAsync(
+            _deadLetterStore.SaveAsync,
+            _criticalFallbackWriter,
+            Logger,
+            DeadLetterChannel,
+            processType,
+            cellDataJson,
+            failedTarget,
+            sourceTable,
+            sourceRecordId,
+            stage,
+            failureReason).ConfigureAwait(false);
 
     private enum RetryProcessResult
     {

@@ -19,7 +19,7 @@ internal sealed class IngressOverflowPersistence : IIngressOverflowPersistence
     private readonly IMesDeadLetterStore _mesDeadLetterStore;
     private readonly ICriticalPersistenceFallbackWriter _criticalFallbackWriter;
     private readonly ILogService _logger;
-    private readonly DataPipelineCapacityGuard? _capacityGuard;
+    private readonly DataPipelineCapacityGuard _capacityGuard;
 
     public IngressOverflowPersistence(
         IEnumerable<ICellDataConsumer> consumers,
@@ -31,8 +31,10 @@ internal sealed class IngressOverflowPersistence : IIngressOverflowPersistence
         IMesDeadLetterStore mesDeadLetterStore,
         ICriticalPersistenceFallbackWriter criticalFallbackWriter,
         ILogService logger,
-        DataPipelineCapacityGuard? capacityGuard = null)
+        DataPipelineCapacityGuard capacityGuard)
     {
+        ArgumentNullException.ThrowIfNull(capacityGuard);
+
         var consumerList = consumers.OrderBy(x => x.Order).ToList();
         _durableConsumers = consumerList
             .Where(x => x.FailureMode == ConsumerFailureMode.Durable)
@@ -118,9 +120,9 @@ internal sealed class IngressOverflowPersistence : IIngressOverflowPersistence
     {
         const string sourceTable = "ingress_overflow";
         const string errorMessage = "queue_overflow";
-        var retryBlockedReason = _capacityGuard is null
-            ? null
-            : await _capacityGuard.GetCloudRetryBlockReasonAsync(record.CellData.ProcessType).ConfigureAwait(false);
+        var retryBlockedReason = await _capacityGuard
+            .GetCloudRetryBlockReasonAsync(record.CellData.ProcessType)
+            .ConfigureAwait(false);
 
         if (!string.IsNullOrWhiteSpace(retryBlockedReason))
         {
@@ -146,9 +148,9 @@ internal sealed class IngressOverflowPersistence : IIngressOverflowPersistence
             _logger.Error(
                 $"[DataPipeline] Queue overflow failed to persist Cloud retry record for {record.CellData.DisplayLabel}: {ex.Message}");
 
-            var fallbackBlockedReason = _capacityGuard is null
-                ? null
-                : await _capacityGuard.GetCloudFallbackBlockReasonAsync(record.CellData.ProcessType).ConfigureAwait(false);
+        var fallbackBlockedReason = await _capacityGuard
+            .GetCloudFallbackBlockReasonAsync(record.CellData.ProcessType)
+            .ConfigureAwait(false);
 
             if (!string.IsNullOrWhiteSpace(fallbackBlockedReason))
             {
@@ -188,11 +190,13 @@ internal sealed class IngressOverflowPersistence : IIngressOverflowPersistence
         string failedTarget,
         DeadLetterStage stage)
     {
+        // 内存队列溢出时，MES durable consumer 仍然写 MES 独立补偿链路。
+        // 表中保存完整 CellDataJson，MesRetryTask 之后按原插件类型反序列化补传。
         const string sourceTable = "ingress_overflow";
         const string errorMessage = "queue_overflow";
-        var retryBlockedReason = _capacityGuard is null
-            ? null
-            : await _capacityGuard.GetMesRetryBlockReasonAsync(record.CellData.ProcessType).ConfigureAwait(false);
+        var retryBlockedReason = await _capacityGuard
+            .GetMesRetryBlockReasonAsync(record.CellData.ProcessType)
+            .ConfigureAwait(false);
 
         if (!string.IsNullOrWhiteSpace(retryBlockedReason))
         {
@@ -218,9 +222,9 @@ internal sealed class IngressOverflowPersistence : IIngressOverflowPersistence
             _logger.Error(
                 $"[DataPipeline] Queue overflow failed to persist MES retry record for {record.CellData.DisplayLabel}: {ex.Message}");
 
-            var fallbackBlockedReason = _capacityGuard is null
-                ? null
-                : await _capacityGuard.GetMesFallbackBlockReasonAsync(record.CellData.ProcessType).ConfigureAwait(false);
+        var fallbackBlockedReason = await _capacityGuard
+            .GetMesFallbackBlockReasonAsync(record.CellData.ProcessType)
+            .ConfigureAwait(false);
 
             if (!string.IsNullOrWhiteSpace(fallbackBlockedReason))
             {

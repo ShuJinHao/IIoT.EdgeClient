@@ -281,4 +281,65 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
         Assert.Equal(1, snapshot.Cloud.PendingCapacityCount);
         Assert.Equal(1, snapshot.Mes.PendingRetryCount);
     }
+
+    [Fact]
+    public async Task GetCurrentAsync_ShouldExposeDeadLetterDiagnostics()
+    {
+        var deviceService = new FakeDeviceService();
+        deviceService.SetOnline(new DeviceSession
+        {
+            DeviceId = Guid.NewGuid(),
+            DeviceName = "Edge-04",
+            ClientCode = "LINE-04",
+            ProcessId = Guid.NewGuid(),
+            UploadAccessToken = "token",
+            UploadAccessTokenExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(30)
+        });
+
+        var cloudDeadLetters = new FakeCloudDeadLetterStore();
+        await cloudDeadLetters.SaveAsync(new DeadLetterRecord
+        {
+            Id = 1,
+            ProcessType = "Injection",
+            FailedTarget = "Cloud",
+            SourceTable = "failed_cloud_records",
+            FailureStage = "RetryDeserialize",
+            FailureReason = "bad json",
+            CellDataJson = "{}",
+            CreatedAt = DateTime.UtcNow
+        });
+
+        var mesDeadLetters = new FakeMesDeadLetterStore();
+        await mesDeadLetters.SaveAsync(new DeadLetterRecord
+        {
+            Id = 2,
+            ProcessType = "Homogenization",
+            FailedTarget = "MES",
+            SourceTable = "failed_mes_records",
+            FailureStage = "RetryDeserialize",
+            FailureReason = "bad json",
+            CellDataJson = "{}",
+            CreatedAt = DateTime.UtcNow
+        });
+
+        var query = new EdgeSyncDiagnosticsQuery(
+            new FakeProductionContextStore(),
+            deviceService,
+            new FakeCloudDiagnosticsStore(),
+            new FakeMesRetryDiagnosticsStore(),
+            new FakeMesUploadDiagnosticsStore(),
+            new FakeFailedRecordStore(),
+            new FakeFailedRecordStore(),
+            new FakeDeviceLogBufferStore(),
+            new FakeCapacityBufferStore(),
+            cloudDeadLetterStore: cloudDeadLetters,
+            mesDeadLetterStore: mesDeadLetters);
+
+        var snapshot = await query.GetCurrentAsync();
+
+        Assert.Equal(1, snapshot.Cloud.DeadLetters?.TotalCount);
+        Assert.Equal("Injection", snapshot.Cloud.DeadLetters?.GroupSummary.Single().ProcessType);
+        Assert.Equal(1, snapshot.Mes.DeadLetters?.TotalCount);
+        Assert.Equal("Homogenization", snapshot.Mes.DeadLetters?.LatestRecords.Single().ProcessType);
+    }
 }

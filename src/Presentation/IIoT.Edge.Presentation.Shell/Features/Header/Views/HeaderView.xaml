@@ -21,16 +21,9 @@
 
             <StackPanel
                 Grid.Column="0"
-                Margin="20,0,0,0"
+                Margin="16,0,0,0"
                 Orientation="Horizontal">
-                <Image
-                    Height="22"
-                    VerticalAlignment="Center"
-                    RenderOptions.BitmapScalingMode="HighQuality"
-                    Source="pack://application:,,,/IIoT.Edge.UI.Shared;component/Assets/images/logo.png" />
-
                 <TextBlock
-                    Margin="12,0,0,0"
                     VerticalAlignment="Center"
                     FontSize="14"
                     FontWeight="SemiBold"

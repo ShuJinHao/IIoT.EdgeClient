@@ -19,7 +19,7 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
 
     public DataPipelineRetryChannel RetryChannel => DataPipelineRetryChannel.Cloud;
     public string Name => "Cloud";
-    public int Order => 20;
+    public int Order => 25;
     public ConsumerFailureMode FailureMode => ConsumerFailureMode.Durable;
 
     public CloudConsumer(

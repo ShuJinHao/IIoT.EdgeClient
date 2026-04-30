@@ -10,13 +10,22 @@ using IIoT.Edge.SharedKernel.DataPipeline;
 
 namespace IIoT.Edge.Module.Stacking.Runtime;
 
+/// <summary>
+/// 叠片 PLC 采集任务。读取序号、层数和结果码，序号递增时生成一条 StackingCellData 并进入 DataPipeline。
+/// </summary>
 public sealed class StackingSignalCaptureTask : PlcTaskBase
 {
     private readonly IDataPipelineService _pipelineService;
     private readonly ILogicalSignalAccessor _signals;
 
+    /// <summary>
+    /// 叠片信号采集任务名称，用于运行日志和任务诊断。
+    /// </summary>
     public override string TaskName => StackingModuleConstants.RuntimeTaskName;
 
+    /// <summary>
+    /// 叠片样本任务以较短周期观察 PLC 序号变化，真实现场可按模块配置扩展。
+    /// </summary>
     protected override int TaskLoopInterval => 50;
 
     public StackingSignalCaptureTask(
@@ -54,6 +63,7 @@ public sealed class StackingSignalCaptureTask : PlcTaskBase
         var lastPublishedSequence = Context.Get<int>(StackingModuleConstants.LastPublishedSequenceKey);
         if (sequence <= lastPublishedSequence)
         {
+            // PLC 序号没有递增时不重复发布，避免同一叠片记录反复进入 Cloud/MES 补偿链路。
             return;
         }
 

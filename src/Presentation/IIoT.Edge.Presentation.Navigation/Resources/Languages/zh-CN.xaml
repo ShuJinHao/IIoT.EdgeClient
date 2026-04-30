@@ -197,6 +197,7 @@
     <sys:String x:Key="Navigation_Sync_FailureReasonFormat">失败原因：{0}</sys:String>
     <sys:String x:Key="Navigation_Sync_PendingCloudFormat">待处理：重试={0}，日志={1}，产能={2}</sys:String>
     <sys:String x:Key="Navigation_Sync_PendingMesFormat">待处理：重试={0}</sys:String>
+    <sys:String x:Key="Navigation_Sync_DeadLetterSuffixFormat">，死信={0}</sys:String>
     <sys:String x:Key="Navigation_Heartbeat_NotConfigured">心跳：未配置</sys:String>
     <sys:String x:Key="Navigation_Heartbeat_Ready">心跳：已就绪</sys:String>
     <sys:String x:Key="Navigation_Heartbeat_NotReadyFormat">心跳：等待恢复（{0}）</sys:String>

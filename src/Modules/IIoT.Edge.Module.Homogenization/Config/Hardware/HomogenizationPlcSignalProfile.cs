@@ -2,6 +2,9 @@ using IIoT.Edge.Application.Modules.Hardware;
 
 namespace IIoT.Edge.Module.Homogenization.Config.Hardware;
 
+/// <summary>
+/// 匀浆 PLC 信号清单。这里是插件业务数据，定义每个 PLC 信号的方向、长度、类型、分组和 UI 展示角色。
+/// </summary>
 public static class HomogenizationPlcSignalProfile
 {
     private const string Interaction = "信号交互";
@@ -49,6 +52,9 @@ public static class HomogenizationPlcSignalProfile
     public static readonly HomogenizationSignalDefinition RecipeAck = Signal("Homogenization.RecipeAck", "Write", 1, "Int16", 104, "配方应答", Interaction, "工艺参数上传", "上位机应答");
     public static readonly HomogenizationSignalDefinition EquipmentStatusAck = Signal("Homogenization.EquipmentStatusAck", "Write", 1, "Int16", 105, "设备状态应答", Interaction, "设备状态上传", "上位机应答");
 
+    /// <summary>
+    /// 匀浆全部 PLC 信号，顺序用于硬件模板导入和协议摘要展示。
+    /// </summary>
     public static IReadOnlyList<HomogenizationSignalDefinition> Signals { get; } =
     [
         HeartbeatIn,
@@ -93,11 +99,17 @@ public static class HomogenizationPlcSignalProfile
         EquipmentStatusAck
     ];
 
+    /// <summary>
+    /// 匀浆只读信号，包含 PLC 触发、托盘码、配方、实时数据和出料数据。
+    /// </summary>
     public static IReadOnlyList<HomogenizationSignalDefinition> ReadSignals { get; } =
         Signals.Where(static x => string.Equals(x.Direction, "Read", StringComparison.OrdinalIgnoreCase))
             .OrderBy(static x => x.SortOrder)
             .ToArray();
 
+    /// <summary>
+    /// 匀浆写入信号，包含心跳输出和各业务握手应答。
+    /// </summary>
     public static IReadOnlyList<HomogenizationSignalDefinition> WriteSignals { get; } =
         Signals.Where(static x => string.Equals(x.Direction, "Write", StringComparison.OrdinalIgnoreCase))
             .OrderBy(static x => x.SortOrder)
@@ -116,6 +128,9 @@ public static class HomogenizationPlcSignalProfile
         => new(label, direction, addressCount, dataType, sortOrder, displayName, category, groupName, displayRole);
 }
 
+/// <summary>
+/// 匀浆 PLC 单个信号定义，保存硬件模板、运行时编解码和 UI 展示需要的业务元数据。
+/// </summary>
 public sealed record HomogenizationSignalDefinition(
     string Label,
     string Direction,
@@ -127,5 +142,8 @@ public sealed record HomogenizationSignalDefinition(
     string GroupName,
     string DisplayRole) : IModulePlcSignalDefinition
 {
+    /// <summary>
+    /// 匀浆信号地址由样本配置或用户导入模板决定，插件模板本身不硬编码地址。
+    /// </summary>
     public string DefaultAddress => string.Empty;
 }

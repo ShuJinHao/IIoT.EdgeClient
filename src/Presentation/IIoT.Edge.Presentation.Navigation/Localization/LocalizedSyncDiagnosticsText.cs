@@ -164,7 +164,8 @@ internal sealed class LocalizedSyncDiagnosticsText(IAppLanguageService languageS
     public string FormatCloudOutcome(
         CloudCallOutcome outcome,
         string reasonCode,
-        string? processType)
+        string? processType,
+        string? processDisplayName = null)
     {
         var outcomeText = outcome switch
         {
@@ -181,7 +182,7 @@ internal sealed class LocalizedSyncDiagnosticsText(IAppLanguageService languageS
             "Navigation_Outcome_ProcessReasonFormat",
             "{0}（{1} / {2}）",
             outcomeText,
-            FormatProcessType(processType),
+            string.IsNullOrWhiteSpace(processDisplayName) ? FormatProcessType(processType) : processDisplayName,
             NormalizeText(reasonCode));
     }
 

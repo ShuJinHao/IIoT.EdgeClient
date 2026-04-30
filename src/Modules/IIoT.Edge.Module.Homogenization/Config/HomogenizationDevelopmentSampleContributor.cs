@@ -11,6 +11,9 @@ using Microsoft.Extensions.Configuration;
 
 namespace IIoT.Edge.Module.Homogenization.Config;
 
+/// <summary>
+/// 匀浆开发样本导入器，只在开发样本开关打开时写入匀浆设备和 IO 映射，生产配置仍以用户维护为准。
+/// </summary>
 public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSampleContributorBase
 {
     private const string SeedRemark = "匀浆 IO 种子";
@@ -35,6 +38,9 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
         _options = BindOptions<HomogenizationIoSeedOptions>(HomogenizationIoSeedOptions.SectionName);
     }
 
+    /// <summary>
+    /// 样本导入器归属的匀浆模块标识。
+    /// </summary>
     public override string ModuleId => DependencyInjection.ModuleKey;
 
     protected override bool ShouldEnsureConfigurationSamples()
@@ -316,59 +322,134 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
     private IModuleHardwareProfileProvider GetHardwareProfile()
         => GetHardwareProfile($"匀浆 IO 种子导入需要模块“{DependencyInjection.ModuleKey}”的硬件模板提供器。");
 
+    /// <summary>
+    /// 匀浆 IO 种子导入开关。JSON 文件不能写注释，字段含义在这里说明。
+    /// </summary>
     private sealed class HomogenizationIoSeedOptions
     {
         public const string SectionName = "Modules:Homogenization:IoSeed";
 
+        /// <summary>
+        /// 是否启用匀浆开发样本自动导入。
+        /// </summary>
         public bool Enabled { get; set; }
 
+        /// <summary>
+        /// 导入前是否删除旧的匀浆样本设备和 IO 映射，仅用于开发环境重置样本。
+        /// </summary>
         public bool ResetBeforeImport { get; set; }
     }
 
+    /// <summary>
+    /// 匀浆 IO 种子文件结构，承载一个或多个开发样本设备。
+    /// </summary>
     private sealed class HomogenizationIoSeedFile
     {
+        /// <summary>
+        /// 需要导入的匀浆样本设备列表。
+        /// </summary>
         public List<HomogenizationIoSeedDevice> Devices { get; set; } = [];
     }
 
+    /// <summary>
+    /// 匀浆样本设备配置，对应一台 PLC 设备及其 IO 映射。
+    /// </summary>
     private sealed class HomogenizationIoSeedDevice
     {
+        /// <summary>
+        /// 样本设备名称，作为设备表唯一识别和 UI 展示名称。
+        /// </summary>
         public string DeviceName { get; set; } = string.Empty;
 
+        /// <summary>
+        /// 设备型号说明，用于设备资料展示和硬件模板校验。
+        /// </summary>
         public string? DeviceModel { get; set; }
 
+        /// <summary>
+        /// PLC IP 地址，开发样本默认指向本地或测试 PLC。
+        /// </summary>
         public string IpAddress { get; set; } = string.Empty;
 
+        /// <summary>
+        /// PLC 通讯端口。
+        /// </summary>
         public int Port1 { get; set; }
 
+        /// <summary>
+        /// PLC 连接超时时间，单位毫秒。
+        /// </summary>
         public int ConnectTimeout { get; set; }
 
+        /// <summary>
+        /// 样本设备是否启用。
+        /// </summary>
         public bool IsEnabled { get; set; } = true;
 
+        /// <summary>
+        /// 样本设备备注，写入设备资料用于标识开发种子来源。
+        /// </summary>
         public string? Remark { get; set; }
 
+        /// <summary>
+        /// 该设备下需要导入的匀浆 IO 映射列表。
+        /// </summary>
         public List<HomogenizationIoSeedMapping> Mappings { get; set; } = [];
     }
 
+    /// <summary>
+    /// 匀浆单条 IO 映射种子，描述 PLC 地址和信号业务元数据的绑定关系。
+    /// </summary>
     private sealed class HomogenizationIoSeedMapping
     {
+        /// <summary>
+        /// 信号标签，必须匹配匀浆硬件模板中的 Label。
+        /// </summary>
         public string Label { get; set; } = string.Empty;
 
+        /// <summary>
+        /// PLC 实际地址，由开发样本提供给本地 SQLite 配置。
+        /// </summary>
         public string PlcAddress { get; set; } = string.Empty;
 
+        /// <summary>
+        /// 地址长度，和硬件模板的 AddressCount 保持一致。
+        /// </summary>
         public int AddressCount { get; set; } = 1;
 
+        /// <summary>
+        /// 数据类型，例如 Int16、UInt16、Float、Bool、Ascii。
+        /// </summary>
         public string DataType { get; set; } = "Int16";
 
+        /// <summary>
+        /// 信号方向，Read 表示 PLC 到上位机，Write 表示上位机应答 PLC。
+        /// </summary>
         public string Direction { get; set; } = "Read";
 
+        /// <summary>
+        /// UI 分类，例如信号交互、连续读数据、单点读数据。
+        /// </summary>
         public string Category { get; set; } = "单点读数据";
 
+        /// <summary>
+        /// UI 分组名称，用于将同一业务场景下的信号放在一起。
+        /// </summary>
         public string GroupName { get; set; } = string.Empty;
 
+        /// <summary>
+        /// UI 展示角色，说明该信号在业务中的含义。
+        /// </summary>
         public string DisplayRole { get; set; } = string.Empty;
 
+        /// <summary>
+        /// 模板排序号，决定导入和展示顺序。
+        /// </summary>
         public int SortOrder { get; set; }
 
+        /// <summary>
+        /// IO 映射备注，写入本地配置用于说明样本来源。
+        /// </summary>
         public string? Remark { get; set; }
     }
 }

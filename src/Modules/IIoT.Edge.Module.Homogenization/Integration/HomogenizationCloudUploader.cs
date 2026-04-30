@@ -1,18 +1,26 @@
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.Application.Modules;
+using IIoT.Edge.Application.Modules.Cloud;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.SharedKernel.DataPipeline;
 
 namespace IIoT.Edge.Module.Homogenization.Integration;
 
-public sealed class HomogenizationCloudUploader : ProcessCloudUploaderBase<HomogenizationCellData, object>
+/// <summary>
+/// 匀浆 Cloud 上传器。云端匀浆过站契约尚未按锁定规则开放，当前显式跳过上传并避免进入 Cloud retry。
+/// </summary>
+public sealed class HomogenizationCloudUploader : CloudUploadChannelBase<HomogenizationCellData, object>
 {
-    private const string UploadPathValue = "/api/v1/edge/pass-stations/homogenization";
+    /// <summary>
+    /// 占位路径不会被调用；真正上传必须在云端契约单独确认后再启用。
+    /// </summary>
+    private const string UploadPathValue = "/disabled/homogenization-cloud-upload";
 
-    public HomogenizationCloudUploader(ICloudHttpClient cloudHttp, ILogService logger)
-        : base(DependencyInjection.ModuleKey, ProcessUploadMode.Single, UploadPathValue, cloudHttp, logger)
+    public HomogenizationCloudUploader(
+        ICloudHttpClient cloudHttp,
+        ILogService logger)
+        : base(DependencyInjection.ModuleKey, ProcessUploadMode.Batch, UploadPathValue, cloudHttp, logger)
     {
     }
 
@@ -20,12 +28,15 @@ public sealed class HomogenizationCloudUploader : ProcessCloudUploaderBase<Homog
         ProcessCloudUploadContext context,
         IReadOnlyList<CellCompletedRecord> records,
         CancellationToken cancellationToken)
-        => Task.FromResult<CloudCallResult?>(
-            CloudCallResult.Failure(CloudCallOutcome.Exception, "homogenization_cloud_upload_not_implemented"));
+    {
+        Logger.Warn(
+            $"[Cloud] 匀浆云端上传未启用：云端匀浆过站契约尚未单独确认，已跳过 {records.Count} 条记录且不写入 Cloud retry。");
+        return Task.FromResult<CloudCallResult?>(CloudCallResult.Success());
+    }
 
     protected override object BuildPayload(
         ProcessCloudUploadContext context,
         IReadOnlyList<HomogenizationCellData> cellData,
         IReadOnlyList<CellCompletedRecord> records)
-        => throw new NotSupportedException("匀浆云端上传尚未接入。");
+        => throw new InvalidOperationException("匀浆云端上传未启用，不应构建 Cloud payload。");
 }

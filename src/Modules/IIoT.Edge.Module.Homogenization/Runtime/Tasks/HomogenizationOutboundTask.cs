@@ -37,6 +37,9 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
         _validator = validator;
     }
 
+    /// <summary>
+    /// 出料握手任务名称，用于运行日志和任务诊断。
+    /// </summary>
     public override string TaskName => "Homogenization.Outbound";
 
     private static string TriggerLabel => HomogenizationPlcSignalProfile.OutboundTrigger.Label;
