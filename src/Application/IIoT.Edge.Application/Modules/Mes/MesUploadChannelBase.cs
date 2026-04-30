@@ -11,6 +11,9 @@ using IIoT.Edge.SharedKernel.Enums;
 
 namespace IIoT.Edge.Application.Modules.Mes;
 
+/// <summary>
+/// MES 上传通道基础骨架。负责设备上下文、工站编号、签名和 HTTP 执行，不保存插件业务字段。
+/// </summary>
 public abstract class MesUploadChannelBase<TCellData> : ProcessMesUploaderBase<TCellData>
     where TCellData : CellDataBase
 {
@@ -30,6 +33,9 @@ public abstract class MesUploadChannelBase<TCellData> : ProcessMesUploaderBase<T
 
     protected abstract string SignToken { get; }
 
+    /// <summary>
+    /// 出料补传入口。DataPipeline 补偿链路反序列化完整 CellDataJson 后，会回到这里继续调用插件映射。
+    /// </summary>
     protected abstract Task<MesCallResult> UploadOutboundRecordAsync(
         DeviceSession? device,
         TCellData cellData,
@@ -58,11 +64,15 @@ public abstract class MesUploadChannelBase<TCellData> : ProcessMesUploaderBase<T
             {
                 var stationNo = await ResolveStationNoAsync(currentDevice, ct).ConfigureAwait(false);
                 var envelope = CreateEnvelope(currentDevice, stationNo, SignToken);
+                // payloadFactory 是插件侧字段映射边界，Application 不知道也不保存具体业务字段。
                 return payloadFactory(envelope);
             },
             cancellationToken);
     }
 
+    /// <summary>
+    /// 工站号优先取本地参数配置；没有配置时回退到设备名/ClientCode，保持现有 MES 寻址规则。
+    /// </summary>
     protected async Task<string> ResolveStationNoAsync(DeviceSession device, CancellationToken cancellationToken)
     {
         var configuredValue = await _parameterConfigService

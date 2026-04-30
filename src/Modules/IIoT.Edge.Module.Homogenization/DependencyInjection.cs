@@ -1,6 +1,6 @@
 ﻿using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.Module.Homogenization.Abstractions;
+using IIoT.Edge.Application.Modules.Mes;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
 using IIoT.Edge.Module.Homogenization.Integration;
@@ -11,6 +11,12 @@ using IIoT.Edge.Module.Homogenization.Runtime;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesScenarioChannel<
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
+    string,
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRealtimeSnapshot,
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRecipeSnapshot,
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot>;
 
 namespace IIoT.Edge.Module.Homogenization;
 
@@ -53,7 +59,7 @@ public sealed class DependencyInjection : EdgeProcessModuleBase<HomogenizationCe
 
         builder.Services.AddSingleton<IProcessCloudUploader, HomogenizationCloudUploader>();
         builder.Services.AddSingleton<HomogenizationMesChannel>();
-        builder.Services.AddSingleton<IHomogenizationMesChannel>(sp =>
+        builder.Services.AddSingleton<HomogenizationMesScenarioChannel>(sp =>
             sp.GetRequiredService<HomogenizationMesChannel>());
         builder.Services.AddSingleton<IProcessMesUploader>(sp =>
             sp.GetRequiredService<HomogenizationMesChannel>());

@@ -2,12 +2,17 @@ using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
-using IIoT.Edge.Module.Homogenization.Abstractions;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using IIoT.Edge.Runtime.Base;
 using Microsoft.Extensions.Options;
+using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesScenarioChannel<
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
+    string,
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRealtimeSnapshot,
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRecipeSnapshot,
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot>;
 
 namespace IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 
@@ -18,7 +23,7 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
 {
     private readonly HomogenizationContext _context;
     private readonly IDeviceService _deviceService;
-    private readonly IHomogenizationMesChannel _mesChannel;
+    private readonly HomogenizationMesScenarioChannel _mesChannel;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
     private readonly HomogenizationCodeOptions _codeOptions;
     private readonly int _taskLoopInterval;
@@ -28,7 +33,7 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
         IPlcBuffer buffer,
         HomogenizationContext context,
         IDeviceService deviceService,
-        IHomogenizationMesChannel mesChannel,
+        HomogenizationMesScenarioChannel mesChannel,
         IMesUploadDiagnosticsStore diagnosticsStore,
         ILogService logger,
         IOptions<HomogenizationModuleOptions> moduleOptions,

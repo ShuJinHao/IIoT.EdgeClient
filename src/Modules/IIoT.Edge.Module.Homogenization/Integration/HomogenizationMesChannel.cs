@@ -4,7 +4,6 @@ using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Modules;
 using IIoT.Edge.Application.Modules.Mes;
-using IIoT.Edge.Module.Homogenization.Abstractions;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.SharedKernel.DataPipeline;
@@ -12,8 +11,16 @@ using Microsoft.Extensions.Options;
 
 namespace IIoT.Edge.Module.Homogenization.Integration;
 
+/// <summary>
+/// 匀浆 MES 通道实现。通用签名、工站和请求执行由 Application 基类处理，本类只保留匀浆字段映射和 MES code 选择。
+/// </summary>
 public sealed class HomogenizationMesChannel
-    : MesUploadChannelBase<HomogenizationCellData>, IHomogenizationMesChannel
+    : MesScenarioChannelBase<
+        HomogenizationCellData,
+        string,
+        HomogenizationRealtimeSnapshot,
+        HomogenizationRecipeSnapshot,
+        HomogenizationEquipmentStatusSnapshot>
 {
     private readonly HomogenizationMesOptions _mesOptions;
     private readonly HomogenizationMesCodeOptions _mesCodes;
@@ -32,7 +39,10 @@ public sealed class HomogenizationMesChannel
 
     protected override string SignToken => _mesOptions.SignToken;
 
-    public Task<MesCallResult> UploadInboundAsync(
+    /// <summary>
+    /// 进站校验只需要托盘码；托盘码如何读取、何时触发仍由匀浆 PLC 任务负责。
+    /// </summary>
+    public override Task<MesCallResult> UploadInboundAsync(
         DeviceSession? device,
         string trayCode,
         CancellationToken cancellationToken = default)
@@ -45,6 +55,7 @@ public sealed class HomogenizationMesChannel
         return ExecuteMesAsync(
             device,
             _mesOptions.Paths.Inbound,
+            // 进站接口沿用 MES 文档中的托盘字段结构，不把这些匀浆业务字段上移到共享层。
             envelope => new
             {
                 upperComputerNo = envelope.UpperComputerNo,
@@ -63,7 +74,10 @@ public sealed class HomogenizationMesChannel
             cancellationToken);
     }
 
-    public Task<MesCallResult> UploadOutboundAsync(
+    /// <summary>
+    /// 出料上传使用完整匀浆电芯数据构造 produce 列表，失败补偿时保存的也是这条电芯记录 JSON。
+    /// </summary>
+    public override Task<MesCallResult> UploadOutboundAsync(
         DeviceSession? device,
         HomogenizationCellData cellData,
         CancellationToken cancellationToken = default)
@@ -78,6 +92,7 @@ public sealed class HomogenizationMesChannel
         return ExecuteMesAsync(
             device,
             _mesOptions.Paths.Outbound,
+            // 出料 payload 字段来自 HomogenizationCellData 和匀浆 MES code 配置。
             envelope => new
             {
                 upperComputerNo = envelope.UpperComputerNo,
@@ -96,7 +111,10 @@ public sealed class HomogenizationMesChannel
             cancellationToken);
     }
 
-    public Task<MesCallResult> UploadRealtimeAsync(
+    /// <summary>
+    /// 实时上传把匀浆实时快照转换为 MES item 数组，字段 code 仍从插件配置读取。
+    /// </summary>
+    public override Task<MesCallResult> UploadRealtimeAsync(
         DeviceSession? device,
         HomogenizationRealtimeSnapshot snapshot,
         CancellationToken cancellationToken = default)
@@ -128,7 +146,10 @@ public sealed class HomogenizationMesChannel
             cancellationToken);
     }
 
-    public Task<MesCallResult> UploadRecipeAsync(
+    /// <summary>
+    /// 配方上传把每个配方数组展开为带序号的 MES item，数组长度和字段含义由匀浆插件控制。
+    /// </summary>
+    public override Task<MesCallResult> UploadRecipeAsync(
         DeviceSession? device,
         HomogenizationRecipeSnapshot snapshot,
         CancellationToken cancellationToken = default)
@@ -152,7 +173,10 @@ public sealed class HomogenizationMesChannel
             cancellationToken);
     }
 
-    public Task<MesCallResult> UploadEquipmentStatusAsync(
+    /// <summary>
+    /// 设备状态上传只封装匀浆状态快照，状态码到文本的解释保留在匀浆配置。
+    /// </summary>
+    public override Task<MesCallResult> UploadEquipmentStatusAsync(
         DeviceSession? device,
         HomogenizationEquipmentStatusSnapshot snapshot,
         CancellationToken cancellationToken = default)

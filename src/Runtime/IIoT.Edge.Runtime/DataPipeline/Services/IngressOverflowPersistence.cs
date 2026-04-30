@@ -188,6 +188,8 @@ internal sealed class IngressOverflowPersistence : IIngressOverflowPersistence
         string failedTarget,
         DeadLetterStage stage)
     {
+        // 内存队列溢出时，MES durable consumer 仍然写 MES 独立补偿链路。
+        // 表中保存完整 CellDataJson，MesRetryTask 之后按原插件类型反序列化补传。
         const string sourceTable = "ingress_overflow";
         const string errorMessage = "queue_overflow";
         var retryBlockedReason = _capacityGuard is null

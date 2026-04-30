@@ -153,6 +153,8 @@ public class ProcessQueueTask : ScheduledTaskBase
         string failedTarget,
         string errorMessage)
     {
+        // Cloud 链路失败只写 Cloud retry/fallback/deadletter。补偿表里保存完整 CellDataJson，
+        // 不拆插件字段，后续 CloudRetryTask 反序列化后再回到对应 uploader。
         var label = record.CellData.DisplayLabel;
         var retryBlockedReason = _capacityGuard is null
             ? null
@@ -221,6 +223,8 @@ public class ProcessQueueTask : ScheduledTaskBase
         string failedTarget,
         string errorMessage)
     {
+        // MES 链路失败只写 MES retry/fallback/deadletter。这里不调用 MES 接口，
+        // 也不把数据转交 Cloud；MesRetryTask 会在 MES 心跳恢复后按 CellDataJson 补传。
         var label = record.CellData.DisplayLabel;
         var retryBlockedReason = _capacityGuard is null
             ? null
@@ -241,6 +245,7 @@ public class ProcessQueueTask : ScheduledTaskBase
 
         try
         {
+            // 首选写入 pipeline_mes.failed_mes_records，作为正常 MES 补传队列。
             await _mesRetryStore.SaveAsync(record, failedTarget, errorMessage).ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -266,6 +271,7 @@ public class ProcessQueueTask : ScheduledTaskBase
 
             try
             {
+                // retry 主表不可用时写入 pipeline_mes.mes_fallback_records，等待 MesRetryTask 恢复回 retry。
                 await _mesFallbackStore.SaveAsync(record, failedTarget, errorMessage).ConfigureAwait(false);
                 Logger.Error(
                     $"[{record.CellData.ProcessType}] Main retry store unavailable. Persisted {label} to MES fallback buffer.");

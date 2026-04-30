@@ -7,7 +7,6 @@ using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Module.Homogenization;
-using IIoT.Edge.Module.Homogenization.Abstractions;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
 using IIoT.Edge.Module.Homogenization.Payload;
@@ -22,6 +21,12 @@ using IIoT.Edge.SharedKernel.Specification;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesScenarioChannel<
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
+    string,
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRealtimeSnapshot,
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRecipeSnapshot,
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot>;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 
@@ -202,7 +207,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
         services.AddSingleton<ILogService>(logger);
         services.AddSingleton<IDeviceService>(deviceService);
         services.AddSingleton<IMesUploadDiagnosticsStore>(diagnostics);
-        services.AddSingleton<IHomogenizationMesChannel>(mesApi);
+        services.AddSingleton<HomogenizationMesScenarioChannel>(mesApi);
         services.AddSingleton<IDataPipelineService>(pipeline);
         services.AddSingleton(new HomogenizationCellDataValidator());
         services.AddSingleton(Options.Create(new HomogenizationModuleOptions()));
@@ -349,7 +354,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
         services.AddSingleton<ILogService>(logger);
         services.AddSingleton<IDeviceService>(deviceService);
         services.AddSingleton<IMesUploadDiagnosticsStore>(diagnostics);
-        services.AddSingleton<IHomogenizationMesChannel>(mesApi);
+        services.AddSingleton<HomogenizationMesScenarioChannel>(mesApi);
         services.AddSingleton<IDataPipelineService>(pipeline);
         services.AddSingleton(new HomogenizationCellDataValidator());
         services.AddSingleton(Options.Create(new HomogenizationModuleOptions()));
@@ -599,9 +604,13 @@ public sealed class HomogenizationRuntimeBehaviorTests
         Assert.True(condition());
     }
 
-    private sealed class CapturingHomogenizationMesChannel : IHomogenizationMesChannel
+    private sealed class CapturingHomogenizationMesChannel : HomogenizationMesScenarioChannel
     {
         public List<string> InboundTrayCodes { get; } = [];
+
+        public string ProcessType => DependencyInjection.ModuleKey;
+
+        public MesUploadMode UploadMode => MesUploadMode.Single;
 
         public TaskCompletionSource<bool>? InboundGate { get; set; }
 
@@ -656,6 +665,12 @@ public sealed class HomogenizationRuntimeBehaviorTests
             LastEquipmentStatusSnapshot = snapshot;
             return CompleteAfterGateAsync(EquipmentStatusGate, cancellationToken);
         }
+
+        public Task<MesCallResult> UploadAsync(
+            ProcessMesUploadContext context,
+            IReadOnlyList<CellCompletedRecord> records,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(MesCallResult.Success());
 
         private static async Task<MesCallResult> CompleteAfterGateAsync(
             TaskCompletionSource<bool>? gate,
