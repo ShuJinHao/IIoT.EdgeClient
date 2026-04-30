@@ -5,7 +5,8 @@ public sealed record MesChannelDiagnostics(
     DateTime? LastAttemptAt,
     DateTime? LastSuccessAt,
     string LastResult,
-    string? LastFailureReason);
+    string? LastFailureReason,
+    string? ProcessDisplayName = null);
 
 public interface IMesUploadDiagnosticsStore
 {

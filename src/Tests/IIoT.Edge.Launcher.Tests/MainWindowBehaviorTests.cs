@@ -13,6 +13,16 @@ namespace IIoT.Edge.Launcher.Tests;
 public sealed class MainWindowBehaviorTests
 {
     [Fact]
+    public void MainWindow_ShouldNotHardcodeProcessChipsInHero()
+    {
+        var xaml = File.ReadAllText(ResolveLauncherXamlPath());
+
+        Assert.DoesNotContain("Text=\"叠片\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Text=\"注液\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Text=\"匀浆\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public Task MainWindow_ShouldInitializeComponentSuccessfully()
         => RunOnStaThreadAsync(() =>
         {
@@ -119,6 +129,28 @@ public sealed class MainWindowBehaviorTests
         thread.Start();
 
         return completion.Task;
+    }
+
+    private static string ResolveLauncherXamlPath()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine(
+                directory.FullName,
+                "src",
+                "Edge",
+                "IIoT.Edge.Launcher",
+                "MainWindow.xaml");
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException("未找到 Launcher MainWindow.xaml。");
     }
 
     private sealed class StubLauncherProfileCatalog : ILauncherProfileCatalog

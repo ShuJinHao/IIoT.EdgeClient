@@ -6,6 +6,7 @@ using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Common.Persistence;
+using IIoT.Edge.SharedKernel.DataPipeline;
 
 namespace IIoT.Edge.Application.Common.Diagnostics;
 
@@ -23,7 +24,7 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
     private readonly IExternalHeartbeatStateStore? _heartbeatStateStore;
     private readonly ICloudDeadLetterStore? _cloudDeadLetterStore;
     private readonly IMesDeadLetterStore? _mesDeadLetterStore;
-    private readonly IReadOnlyDictionary<string, string> _processDisplayNames;
+    private readonly IReadOnlyList<IEdgeProcessModule> _processModules;
 
     public EdgeSyncDiagnosticsQuery(
         IProductionContextStore productionContextStore,
@@ -52,14 +53,18 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
         _heartbeatStateStore = heartbeatStateStore;
         _cloudDeadLetterStore = cloudDeadLetterStore;
         _mesDeadLetterStore = mesDeadLetterStore;
-        _processDisplayNames = BuildProcessDisplayNames(modules);
+        _processModules = (modules ?? [])
+            .Where(static x => !string.IsNullOrWhiteSpace(x.ProcessType))
+            .ToArray();
     }
 
     public async Task<EdgeSyncDiagnosticsSnapshot> GetCurrentAsync(CancellationToken ct = default)
     {
         var cloudDiagnostics = _cloudDiagnosticsStore.Snapshot;
         var mesRuntime = _mesRetryDiagnosticsStore.Snapshot;
-        var mesChannels = _mesUploadDiagnosticsStore.GetAll();
+        var mesChannels = _mesUploadDiagnosticsStore.GetAll()
+            .Select(WithProcessDisplayName)
+            .ToArray();
         var latestMesFailure = mesChannels
             .Where(x => string.Equals(x.LastResult, "Failed", StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(x => x.LastAttemptAt ?? DateTime.MinValue)
@@ -153,20 +158,32 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
     private ExternalHeartbeatSnapshot? GetHeartbeat(ExternalSystemKind kind)
         => _heartbeatStateStore?.Get(kind);
 
-    private static IReadOnlyDictionary<string, string> BuildProcessDisplayNames(IEnumerable<IEdgeProcessModule>? modules)
-        => (modules ?? [])
-            .Where(x => !string.IsNullOrWhiteSpace(x.ProcessType) && !string.IsNullOrWhiteSpace(x.DisplayName))
-            .GroupBy(x => x.ProcessType, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(
-                x => x.Key,
-                x => x.Select(y => y.DisplayName).First(),
-                StringComparer.OrdinalIgnoreCase);
-
     private string? ResolveProcessDisplayName(string? processType)
-        => !string.IsNullOrWhiteSpace(processType)
-           && _processDisplayNames.TryGetValue(processType, out var displayName)
-            ? displayName
-            : null;
+    {
+        if (string.IsNullOrWhiteSpace(processType))
+        {
+            return null;
+        }
+
+        foreach (var module in _processModules)
+        {
+            if (!string.Equals(module.ProcessType, processType, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var displayName = module.DisplayName;
+            if (!string.IsNullOrWhiteSpace(displayName))
+            {
+                return displayName;
+            }
+        }
+
+        return null;
+    }
+
+    private MesChannelDiagnostics WithProcessDisplayName(MesChannelDiagnostics diagnostics)
+        => diagnostics with { ProcessDisplayName = ResolveProcessDisplayName(diagnostics.ProcessType) };
 
     private async Task<PendingDiagnosticsSnapshot> GetMesPendingDiagnosticsAsync(CancellationToken ct)
     {
@@ -202,7 +219,7 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
         }
     }
 
-    private static async Task<DeadLetterDiagnosticsSnapshot> GetDeadLetterDiagnosticsAsync(
+    private async Task<DeadLetterDiagnosticsSnapshot> GetDeadLetterDiagnosticsAsync(
         IDeadLetterDiagnosticsStore? store,
         CancellationToken ct)
     {
@@ -219,9 +236,11 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
             var latestTask = store.GetLatestAsync(count: 10);
             await Task.WhenAll(countTask, groupTask, latestTask).ConfigureAwait(false);
 
+            var groups = await groupTask.ConfigureAwait(false);
+
             return new DeadLetterDiagnosticsSnapshot(
                 TotalCount: await countTask.ConfigureAwait(false),
-                GroupSummary: await groupTask.ConfigureAwait(false),
+                GroupSummary: groups.Select(WithProcessDisplayName).ToArray(),
                 LatestRecords: await latestTask.ConfigureAwait(false),
                 IsPersistenceFaulted: false,
                 LastPersistenceFaultAt: null,
@@ -238,6 +257,16 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
                 PersistenceFaultMessage: ex.Message);
         }
     }
+
+    private DeadLetterGroupSummary WithProcessDisplayName(DeadLetterGroupSummary summary)
+        => new()
+        {
+            ProcessType = summary.ProcessType,
+            ProcessDisplayName = ResolveProcessDisplayName(summary.ProcessType) ?? summary.ProcessDisplayName,
+            FailureStage = summary.FailureStage,
+            Count = summary.Count,
+            LastCreatedAt = summary.LastCreatedAt
+        };
 
     private sealed record PendingDiagnosticsSnapshot(
         int PendingRetryCount,
@@ -428,7 +457,13 @@ public static class EdgeSyncDiagnosticsFormatter
 
         var groups = diagnostics.GroupSummary
             .Take(3)
-            .Select(x => $"{NormalizeProcessType(x.ProcessType)}/{NormalizeText(x.FailureStage)}={x.Count}");
+            .Select(x =>
+            {
+                var processText = string.IsNullOrWhiteSpace(x.ProcessDisplayName)
+                    ? NormalizeProcessType(x.ProcessType)
+                    : x.ProcessDisplayName;
+                return $"{processText}/{NormalizeText(x.FailureStage)}={x.Count}";
+            });
         return $"死信：{diagnostics.TotalCount}（{string.Join("，", groups)}）";
     }
 

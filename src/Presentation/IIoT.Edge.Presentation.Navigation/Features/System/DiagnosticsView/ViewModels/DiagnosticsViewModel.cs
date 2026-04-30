@@ -445,7 +445,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
             ModuleRegistrations,
             report.ModuleRegistrations.Select(x => new ModuleRegistrationRow(
                 x.ModuleId,
-                _diagnosticsText.FormatProcessType(x.ProcessType),
+                ResolveProcessDisplayName(x.ModuleId, x.ProcessType, moduleNameMap),
                 x.AssemblyName,
                 x.IsEnabled,
                 x.HasCellDataRegistration,
@@ -458,7 +458,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
             PluginStates,
             report.PluginStates.Select(x => new PluginLifecycleRow(
                 x.ModuleId,
-                _diagnosticsText.FormatProcessType(x.ProcessType),
+                ResolveProcessDisplayName(x.ProcessType, x.DisplayName),
                 _diagnosticsText.FormatProcessType(x.ProcessType),
                 x.Version,
                 _diagnosticsText.FormatPluginLifecycleState(x.State),
@@ -484,7 +484,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         ReplaceItems(
             MesUploadDiagnostics,
             syncDiagnostics.Mes.Channels.Select(x => new MesChannelDiagnosticsRow(
-                _diagnosticsText.FormatProcessType(x.ProcessType),
+                ResolveProcessDisplayName(x.ProcessType, x.ProcessDisplayName),
                 _diagnosticsText.FormatMesChannelResult(x.LastResult),
                 LocalizedSyncDiagnosticsText.FormatTimestamp(x.LastAttemptAt),
                 LocalizedSyncDiagnosticsText.FormatTimestamp(x.LastSuccessAt),
@@ -500,9 +500,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         var pairs = report.PluginStates
             .Select(x => new KeyValuePair<string, string>(
                 x.ModuleId,
-                !string.IsNullOrWhiteSpace(x.DisplayName)
-                    ? _diagnosticsText.FormatProcessType(x.ProcessType)
-                    : _diagnosticsText.FormatProcessType(x.ProcessType)))
+                ResolveProcessDisplayName(x.ProcessType, x.DisplayName)))
             .Concat(report.ModuleRegistrations.Select(x => new KeyValuePair<string, string>(
                 x.ModuleId,
                 _diagnosticsText.FormatProcessType(x.ProcessType))));
@@ -541,6 +539,24 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
 
         return _diagnosticsText.FormatProcessType(moduleId);
     }
+
+    private string ResolveProcessDisplayName(
+        string moduleId,
+        string? processType,
+        IReadOnlyDictionary<string, string> moduleNameMap)
+    {
+        if (moduleNameMap.TryGetValue(moduleId, out var displayName) && !string.IsNullOrWhiteSpace(displayName))
+        {
+            return displayName;
+        }
+
+        return _diagnosticsText.FormatProcessType(processType);
+    }
+
+    private string ResolveProcessDisplayName(string? processType, string? processDisplayName)
+        => string.IsNullOrWhiteSpace(processDisplayName)
+            ? _diagnosticsText.FormatProcessType(processType)
+            : processDisplayName;
 
     private string BuildConfigurationProfileSummary(ConfigurationProfileSnapshot profile)
     {

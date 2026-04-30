@@ -25,7 +25,11 @@ internal sealed class LocalizedSyncDiagnosticsText(IAppLanguageService languageS
             Format(
                 "Navigation_Sync_LastResultFormat",
                 "最近结果：{0}",
-                FormatCloudOutcome(snapshot.LastOutcome, snapshot.LastReasonCode, snapshot.LastProcessType)),
+                FormatCloudOutcome(
+                    snapshot.LastOutcome,
+                    snapshot.LastReasonCode,
+                    snapshot.LastProcessType,
+                    snapshot.LastProcessDisplayName)),
             Format("Navigation_Sync_LastSuccessFormat", "最近成功：{0}", FormatTimestamp(snapshot.LastSuccessAt)),
             Format("Navigation_Sync_LastFailureFormat", "最近失败：{0}", FormatTimestamp(snapshot.LastFailureAt)),
             Format(
@@ -213,13 +217,7 @@ internal sealed class LocalizedSyncDiagnosticsText(IAppLanguageService languageS
             return "--";
         }
 
-        return processType switch
-        {
-            "Homogenization" => Text("Navigation_Process_Homogenization", "匀浆"),
-            "Injection" => Text("Navigation_Process_Injection", "注液"),
-            "Stacking" => Text("Navigation_Process_Stacking", "叠片"),
-            _ => processType
-        };
+        return processType;
     }
 
     public static string FormatTimestamp(DateTime? value)
