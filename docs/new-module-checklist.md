@@ -4,6 +4,15 @@ Use this checklist whenever a new device/process module is added under `src/Modu
 
 Before implementation, read `docs/插件开发约定.md` and follow the single `IEdgeProcessModule` contract.
 
+## Client/cloud separation gate
+
+- First confirm whether the task is client-only or has explicit current-task approval for cloud alignment.
+- For client-only work, the final diff must not contain `IIoT.CloudPlatform` paths.
+- Do not treat Cloud upload, end-to-end closure, review assumptions, or audit suggestions as permission to modify cloud code.
+- Client-side Cloud upload work may add or adjust generic channel, payload mapping, retry, fallback, and dead-letter integration, but must not add cloud endpoints, events, workers, SQL, migrations, or query registration.
+- If the cloud contract is not ready, the client implementation must be configurable or explicitly skipped without posting to a missing endpoint or filling retry buffers with permanent failures.
+- Stacking and future process startup entries must be added through `scripts/edge-runtime.publish.json`, generated `launcher.profiles.json`, and the matching machine profile; do not add process-specific launcher XAML.
+
 ## Required implementation pieces
 
 - Module entry implementing `IEdgeProcessModule`.
