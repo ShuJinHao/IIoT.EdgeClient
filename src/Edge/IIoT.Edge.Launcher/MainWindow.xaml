@@ -308,50 +308,6 @@
                                         </Border>
                                     </WrapPanel>
 
-                                    <WrapPanel Grid.Row="3"
-                                               Margin="0,26,0,0">
-                                        <Border Margin="0,0,14,0"
-                                                Style="{StaticResource LauncherStatusChipStyle}">
-                                            <StackPanel Orientation="Horizontal">
-                                                <materialDesign:PackIcon Width="16"
-                                                                         Height="16"
-                                                                         Foreground="#2DD4BF"
-                                                                         Kind="LayersTriple" />
-                                                <TextBlock Margin="8,0,0,0"
-                                                           VerticalAlignment="Center"
-                                                           FontSize="12"
-                                                           Foreground="{StaticResource Launcher.Text.Secondary}"
-                                                           Text="叠片" />
-                                            </StackPanel>
-                                        </Border>
-                                        <Border Margin="0,0,14,0"
-                                                Style="{StaticResource LauncherStatusChipStyle}">
-                                            <StackPanel Orientation="Horizontal">
-                                                <materialDesign:PackIcon Width="16"
-                                                                         Height="16"
-                                                                         Foreground="#FB923C"
-                                                                         Kind="Syringe" />
-                                                <TextBlock Margin="8,0,0,0"
-                                                           VerticalAlignment="Center"
-                                                           FontSize="12"
-                                                           Foreground="{StaticResource Launcher.Text.Secondary}"
-                                                           Text="注液" />
-                                            </StackPanel>
-                                        </Border>
-                                        <Border Style="{StaticResource LauncherStatusChipStyle}">
-                                            <StackPanel Orientation="Horizontal">
-                                                <materialDesign:PackIcon Width="16"
-                                                                         Height="16"
-                                                                         Foreground="#A3E635"
-                                                                         Kind="BeakerOutline" />
-                                                <TextBlock Margin="8,0,0,0"
-                                                           VerticalAlignment="Center"
-                                                           FontSize="12"
-                                                           Foreground="{StaticResource Launcher.Text.Secondary}"
-                                                           Text="匀浆" />
-                                            </StackPanel>
-                                        </Border>
-                                    </WrapPanel>
                                 </Grid>
 
                                 <Border Grid.Row="2"

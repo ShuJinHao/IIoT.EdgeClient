@@ -6,6 +6,7 @@ using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Common.Persistence;
+using IIoT.Edge.SharedKernel.DataPipeline;
 
 namespace IIoT.Edge.Application.Common.Diagnostics;
 
@@ -59,7 +60,9 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
     {
         var cloudDiagnostics = _cloudDiagnosticsStore.Snapshot;
         var mesRuntime = _mesRetryDiagnosticsStore.Snapshot;
-        var mesChannels = _mesUploadDiagnosticsStore.GetAll();
+        var mesChannels = _mesUploadDiagnosticsStore.GetAll()
+            .Select(WithProcessDisplayName)
+            .ToArray();
         var latestMesFailure = mesChannels
             .Where(x => string.Equals(x.LastResult, "Failed", StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(x => x.LastAttemptAt ?? DateTime.MinValue)
@@ -168,6 +171,9 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
             ? displayName
             : null;
 
+    private MesChannelDiagnostics WithProcessDisplayName(MesChannelDiagnostics diagnostics)
+        => diagnostics with { ProcessDisplayName = ResolveProcessDisplayName(diagnostics.ProcessType) };
+
     private async Task<PendingDiagnosticsSnapshot> GetMesPendingDiagnosticsAsync(CancellationToken ct)
     {
         var retryCount = await TryGetCountAsync(() => _mesRetryStore.GetCountAsync(), ct).ConfigureAwait(false);
@@ -202,7 +208,7 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
         }
     }
 
-    private static async Task<DeadLetterDiagnosticsSnapshot> GetDeadLetterDiagnosticsAsync(
+    private async Task<DeadLetterDiagnosticsSnapshot> GetDeadLetterDiagnosticsAsync(
         IDeadLetterDiagnosticsStore? store,
         CancellationToken ct)
     {
@@ -219,9 +225,11 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
             var latestTask = store.GetLatestAsync(count: 10);
             await Task.WhenAll(countTask, groupTask, latestTask).ConfigureAwait(false);
 
+            var groups = await groupTask.ConfigureAwait(false);
+
             return new DeadLetterDiagnosticsSnapshot(
                 TotalCount: await countTask.ConfigureAwait(false),
-                GroupSummary: await groupTask.ConfigureAwait(false),
+                GroupSummary: groups.Select(WithProcessDisplayName).ToArray(),
                 LatestRecords: await latestTask.ConfigureAwait(false),
                 IsPersistenceFaulted: false,
                 LastPersistenceFaultAt: null,
@@ -238,6 +246,16 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
                 PersistenceFaultMessage: ex.Message);
         }
     }
+
+    private DeadLetterGroupSummary WithProcessDisplayName(DeadLetterGroupSummary summary)
+        => new()
+        {
+            ProcessType = summary.ProcessType,
+            ProcessDisplayName = ResolveProcessDisplayName(summary.ProcessType) ?? summary.ProcessDisplayName,
+            FailureStage = summary.FailureStage,
+            Count = summary.Count,
+            LastCreatedAt = summary.LastCreatedAt
+        };
 
     private sealed record PendingDiagnosticsSnapshot(
         int PendingRetryCount,
@@ -428,7 +446,13 @@ public static class EdgeSyncDiagnosticsFormatter
 
         var groups = diagnostics.GroupSummary
             .Take(3)
-            .Select(x => $"{NormalizeProcessType(x.ProcessType)}/{NormalizeText(x.FailureStage)}={x.Count}");
+            .Select(x =>
+            {
+                var processText = string.IsNullOrWhiteSpace(x.ProcessDisplayName)
+                    ? NormalizeProcessType(x.ProcessType)
+                    : x.ProcessDisplayName;
+                return $"{processText}/{NormalizeText(x.FailureStage)}={x.Count}";
+            });
         return $"死信：{diagnostics.TotalCount}（{string.Join("，", groups)}）";
     }
 

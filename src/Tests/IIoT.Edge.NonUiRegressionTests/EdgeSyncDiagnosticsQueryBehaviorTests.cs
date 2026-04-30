@@ -342,4 +342,79 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
         Assert.Equal(1, snapshot.Mes.DeadLetters?.TotalCount);
         Assert.Equal("Homogenization", snapshot.Mes.DeadLetters?.LatestRecords.Single().ProcessType);
     }
+
+    [Fact]
+    public async Task GetCurrentAsync_ShouldResolveRegisteredProcessDisplayNames()
+    {
+        var cloudDiagnostics = new FakeCloudDiagnosticsStore();
+        cloudDiagnostics.RecordResult(
+            "CustomProcess",
+            CloudCallResult.Failure(CloudCallOutcome.Exception, "custom_failure"));
+
+        var mesDiagnostics = new FakeMesUploadDiagnosticsStore();
+        mesDiagnostics.RecordFailure("CustomProcess", "mes timeout");
+        mesDiagnostics.RecordFailure("UnknownProcess", "unknown timeout");
+
+        var cloudDeadLetters = new FakeCloudDeadLetterStore();
+        await cloudDeadLetters.SaveAsync(new DeadLetterRecord
+        {
+            Id = 1,
+            ProcessType = "CustomProcess",
+            FailedTarget = "Cloud",
+            SourceTable = "failed_cloud_records",
+            FailureStage = "RetryDeserialize",
+            FailureReason = "bad json",
+            CellDataJson = "{}",
+            CreatedAt = DateTime.UtcNow
+        });
+        await cloudDeadLetters.SaveAsync(new DeadLetterRecord
+        {
+            Id = 2,
+            ProcessType = "UnknownProcess",
+            FailedTarget = "Cloud",
+            SourceTable = "failed_cloud_records",
+            FailureStage = "RetryDeserialize",
+            FailureReason = "bad json",
+            CellDataJson = "{}",
+            CreatedAt = DateTime.UtcNow
+        });
+
+        var query = new EdgeSyncDiagnosticsQuery(
+            new FakeProductionContextStore(),
+            new FakeDeviceService(),
+            cloudDiagnostics,
+            new FakeMesRetryDiagnosticsStore(),
+            mesDiagnostics,
+            new FakeFailedRecordStore(),
+            new FakeFailedRecordStore(),
+            new FakeDeviceLogBufferStore(),
+            new FakeCapacityBufferStore(),
+            cloudDeadLetterStore: cloudDeadLetters,
+            modules: [new StubProcessModule("CustomProcess", "自定义工序")]);
+
+        var snapshot = await query.GetCurrentAsync();
+
+        Assert.Equal("自定义工序", snapshot.Cloud.LastProcessDisplayName);
+        Assert.Equal(
+            "自定义工序",
+            snapshot.Mes.Channels.Single(x => x.ProcessType == "CustomProcess").ProcessDisplayName);
+        Assert.Null(snapshot.Mes.Channels.Single(x => x.ProcessType == "UnknownProcess").ProcessDisplayName);
+        Assert.Equal(
+            "自定义工序",
+            snapshot.Cloud.DeadLetters?.GroupSummary.Single(x => x.ProcessType == "CustomProcess").ProcessDisplayName);
+        Assert.Null(snapshot.Cloud.DeadLetters?.GroupSummary.Single(x => x.ProcessType == "UnknownProcess").ProcessDisplayName);
+    }
+
+    private sealed class StubProcessModule(string processType, string displayName) : IEdgeProcessModule
+    {
+        public string ModuleId => processType;
+
+        public string ProcessType => processType;
+
+        public string DisplayName => displayName;
+
+        public void Configure(IEdgeProcessModuleBuilder builder)
+        {
+        }
+    }
 }
