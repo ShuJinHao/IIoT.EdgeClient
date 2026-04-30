@@ -53,8 +53,7 @@ public sealed class StackingCloudUploader : CloudUploadChannelBase<StackingCellD
         const string message = "叠片云端上传已被配置关闭。";
         UpdateDiagnostics(deviceName, false, StackingModuleConstants.CloudUploadDisabledStatus, message);
         Logger.Warn($"[Cloud] {message}");
-        return Task.FromResult<CloudCallResult?>(
-            CloudCallResult.Failure(CloudCallOutcome.Exception, "cloud_upload_disabled"));
+        return Task.FromResult<CloudCallResult?>(CloudCallResult.Success());
     }
 
     protected override object BuildPayload(

@@ -120,7 +120,7 @@ public sealed class StackingModuleBehaviorTests
     }
 
     [Fact]
-    public async Task StackingCloudUploader_WhenDisabled_ShouldReturnFalseAndRecordDisabledDiagnostic()
+    public async Task StackingCloudUploader_WhenDisabled_ShouldSkipWithoutRetryFailureAndRecordDiagnostic()
     {
         var logger = new FakeLogService();
         var cloudHttp = new FakeCloudHttpClient();
@@ -152,7 +152,7 @@ public sealed class StackingModuleBehaviorTests
                 }
             ]);
 
-        Assert.False(result.IsSuccess);
+        Assert.True(result.IsSuccess);
         Assert.Equal(0, cloudHttp.PostCallCount);
         Assert.Contains(logger.Entries, x => x.Message.Contains("叠片云端上传已被配置关闭", StringComparison.Ordinal));
 
