@@ -24,7 +24,7 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
     private readonly IExternalHeartbeatStateStore? _heartbeatStateStore;
     private readonly ICloudDeadLetterStore? _cloudDeadLetterStore;
     private readonly IMesDeadLetterStore? _mesDeadLetterStore;
-    private readonly IReadOnlyDictionary<string, string> _processDisplayNames;
+    private readonly IReadOnlyList<IEdgeProcessModule> _processModules;
 
     public EdgeSyncDiagnosticsQuery(
         IProductionContextStore productionContextStore,
@@ -53,7 +53,9 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
         _heartbeatStateStore = heartbeatStateStore;
         _cloudDeadLetterStore = cloudDeadLetterStore;
         _mesDeadLetterStore = mesDeadLetterStore;
-        _processDisplayNames = BuildProcessDisplayNames(modules);
+        _processModules = (modules ?? [])
+            .Where(static x => !string.IsNullOrWhiteSpace(x.ProcessType))
+            .ToArray();
     }
 
     public async Task<EdgeSyncDiagnosticsSnapshot> GetCurrentAsync(CancellationToken ct = default)
@@ -156,20 +158,29 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
     private ExternalHeartbeatSnapshot? GetHeartbeat(ExternalSystemKind kind)
         => _heartbeatStateStore?.Get(kind);
 
-    private static IReadOnlyDictionary<string, string> BuildProcessDisplayNames(IEnumerable<IEdgeProcessModule>? modules)
-        => (modules ?? [])
-            .Where(x => !string.IsNullOrWhiteSpace(x.ProcessType) && !string.IsNullOrWhiteSpace(x.DisplayName))
-            .GroupBy(x => x.ProcessType, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(
-                x => x.Key,
-                x => x.Select(y => y.DisplayName).First(),
-                StringComparer.OrdinalIgnoreCase);
-
     private string? ResolveProcessDisplayName(string? processType)
-        => !string.IsNullOrWhiteSpace(processType)
-           && _processDisplayNames.TryGetValue(processType, out var displayName)
-            ? displayName
-            : null;
+    {
+        if (string.IsNullOrWhiteSpace(processType))
+        {
+            return null;
+        }
+
+        foreach (var module in _processModules)
+        {
+            if (!string.Equals(module.ProcessType, processType, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var displayName = module.DisplayName;
+            if (!string.IsNullOrWhiteSpace(displayName))
+            {
+                return displayName;
+            }
+        }
+
+        return null;
+    }
 
     private MesChannelDiagnostics WithProcessDisplayName(MesChannelDiagnostics diagnostics)
         => diagnostics with { ProcessDisplayName = ResolveProcessDisplayName(diagnostics.ProcessType) };

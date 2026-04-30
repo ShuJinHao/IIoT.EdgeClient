@@ -379,6 +379,7 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
             CreatedAt = DateTime.UtcNow
         });
 
+        var module = new StubProcessModule("CustomProcess", "Custom Display");
         var query = new EdgeSyncDiagnosticsQuery(
             new FakeProductionContextStore(),
             new FakeDeviceService(),
@@ -390,19 +391,30 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
             new FakeDeviceLogBufferStore(),
             new FakeCapacityBufferStore(),
             cloudDeadLetterStore: cloudDeadLetters,
-            modules: [new StubProcessModule("CustomProcess", "自定义工序")]);
+            modules: [module]);
 
         var snapshot = await query.GetCurrentAsync();
 
-        Assert.Equal("自定义工序", snapshot.Cloud.LastProcessDisplayName);
+        Assert.Equal("Custom Display", snapshot.Cloud.LastProcessDisplayName);
         Assert.Equal(
-            "自定义工序",
+            "Custom Display",
             snapshot.Mes.Channels.Single(x => x.ProcessType == "CustomProcess").ProcessDisplayName);
         Assert.Null(snapshot.Mes.Channels.Single(x => x.ProcessType == "UnknownProcess").ProcessDisplayName);
         Assert.Equal(
-            "自定义工序",
+            "Custom Display",
             snapshot.Cloud.DeadLetters?.GroupSummary.Single(x => x.ProcessType == "CustomProcess").ProcessDisplayName);
         Assert.Null(snapshot.Cloud.DeadLetters?.GroupSummary.Single(x => x.ProcessType == "UnknownProcess").ProcessDisplayName);
+
+        module.DisplayName = "Custom Display EN";
+        var refreshedSnapshot = await query.GetCurrentAsync();
+
+        Assert.Equal("Custom Display EN", refreshedSnapshot.Cloud.LastProcessDisplayName);
+        Assert.Equal(
+            "Custom Display EN",
+            refreshedSnapshot.Mes.Channels.Single(x => x.ProcessType == "CustomProcess").ProcessDisplayName);
+        Assert.Equal(
+            "Custom Display EN",
+            refreshedSnapshot.Cloud.DeadLetters?.GroupSummary.Single(x => x.ProcessType == "CustomProcess").ProcessDisplayName);
     }
 
     private sealed class StubProcessModule(string processType, string displayName) : IEdgeProcessModule
@@ -411,7 +423,7 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
 
         public string ProcessType => processType;
 
-        public string DisplayName => displayName;
+        public string DisplayName { get; set; } = displayName;
 
         public void Configure(IEdgeProcessModuleBuilder builder)
         {
