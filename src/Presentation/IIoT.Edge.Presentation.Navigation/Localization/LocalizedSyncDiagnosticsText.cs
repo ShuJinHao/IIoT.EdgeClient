@@ -4,6 +4,7 @@ using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Common.Diagnostics;
 using IIoT.Edge.UI.Shared.Localization;
 
 namespace IIoT.Edge.Presentation.Navigation.Localization;
@@ -12,10 +13,13 @@ internal sealed class LocalizedSyncDiagnosticsText(IAppLanguageService languageS
 {
     public string FormatCloudMonitorSummary(CloudSyncDiagnosticsSnapshot snapshot)
     {
-        var gateText = snapshot.GateState switch
+        var gateText = EdgeSyncDiagnosticStatusClassifier.ClassifyCloud(snapshot) switch
         {
-            EdgeUploadGateState.Ready => Text("Navigation_Sync_StatusReady", "已就绪"),
-            _ when snapshot.IsPausedWaitingForRecovery => Text("Navigation_Sync_StatusWaitingRecovery", "等待恢复"),
+            CloudSyncDiagnosticStatus.PersistenceFaulted => Text("Navigation_Sync_StatusPersistenceFaulted", "存储故障"),
+            CloudSyncDiagnosticStatus.CapacityBlocked => Text("Navigation_Sync_StatusCapacityBlocked", "产能阻塞"),
+            CloudSyncDiagnosticStatus.WaitingHeartbeat => Text("Navigation_Sync_StatusWaitingHeartbeat", "等待心跳恢复"),
+            CloudSyncDiagnosticStatus.Ready => Text("Navigation_Sync_StatusReady", "已就绪"),
+            CloudSyncDiagnosticStatus.WaitingRecovery => Text("Navigation_Sync_StatusWaitingRecovery", "等待恢复"),
             _ => Format("Navigation_Sync_StatusBlockedFormat", "已阻塞（{0}）", FormatBlockReason(snapshot.BlockReason))
         };
 

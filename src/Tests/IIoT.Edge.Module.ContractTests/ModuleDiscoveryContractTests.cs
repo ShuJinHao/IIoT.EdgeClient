@@ -1,4 +1,9 @@
+using IIoT.Edge.Application.Abstractions.Plc;
+using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Modules.Descriptors;
+using IIoT.Edge.SharedKernel.Context;
+using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using Microsoft.Extensions.Configuration;
 using System.IO;
 
@@ -109,6 +114,21 @@ public sealed class ModuleDiscoveryContractTests
         }
     }
 
+    [Fact]
+    public void RegisterMockNewModule_ShouldRequireZeroHostChanges()
+    {
+        var result = new ModuleContractFixture().RegisterModule(new MockEdgeProcessModule());
+
+        Assert.True(result.CellDataRegistry.IsRegistered(MockEdgeProcessModule.Process));
+        Assert.True(result.RuntimeRegistry.HasFactory(MockEdgeProcessModule.Module));
+        Assert.True(result.IntegrationRegistry.HasCloudUploader(MockEdgeProcessModule.Process));
+        Assert.False(result.IntegrationRegistry.HasMesUploader(MockEdgeProcessModule.Process));
+        Assert.NotNull(result.ViewRegistry.GetViewRegistration("MockProcess.DataView"));
+        Assert.Contains(
+            result.ViewRegistry.GetAllMenus(),
+            x => x.ViewId == "MockProcess.DataView" && x.Title == "模拟工序");
+    }
+
     private static ModuleCatalogDiscoveryResult DiscoverPlugins(string pluginRoot)
     {
         var discovery = DirectoryModuleCatalog.DiscoverModules(pluginRoot);
@@ -118,5 +138,48 @@ public sealed class ModuleDiscoveryContractTests
 
     private sealed class NonModuleEntry
     {
+    }
+
+    private sealed class MockEdgeProcessModule : EdgeProcessModuleBase<MockCellData>
+    {
+        public const string Module = "MockProcess";
+        public const string Process = "MockProcess";
+
+        public override string ModuleId => Module;
+
+        public override string DisplayName => "模拟工序";
+
+        protected override ProcessUploadMode CloudUploadMode => ProcessUploadMode.Single;
+
+        protected override IStationRuntimeFactory CreateRuntimeFactory()
+            => new MockRuntimeFactory();
+
+        protected override void RegisterModuleViews(IEdgeProcessModuleBuilder builder)
+        {
+            builder.RegisterRoute("MockProcess.DataView", typeof(object), typeof(object));
+            builder.RegisterMenu(new ModuleMenuDescriptor
+            {
+                Title = "模拟工序",
+                ViewId = "MockProcess.DataView",
+                Icon = "Shape",
+                Order = 99
+            });
+        }
+    }
+
+    private sealed class MockCellData : CellDataBase
+    {
+        public override string ProcessType => MockEdgeProcessModule.Process;
+    }
+
+    private sealed class MockRuntimeFactory : IStationRuntimeFactory
+    {
+        public string ModuleId => MockEdgeProcessModule.Module;
+
+        public List<IPlcTask> CreateTasks(
+            IServiceProvider serviceProvider,
+            IPlcBuffer buffer,
+            ProductionContext context)
+            => [];
     }
 }

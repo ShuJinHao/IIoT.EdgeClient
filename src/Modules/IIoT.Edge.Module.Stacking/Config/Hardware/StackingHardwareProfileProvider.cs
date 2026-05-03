@@ -3,7 +3,7 @@ using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Module.Stacking.Constants;
 using IIoT.Edge.SharedKernel.Enums;
 
-namespace IIoT.Edge.Module.Stacking.Runtime;
+namespace IIoT.Edge.Module.Stacking.Config.Hardware;
 
 /// <summary>
 /// 叠片硬件模板提供者，把插件内信号清单转换为默认 IO 模板和协议摘要。

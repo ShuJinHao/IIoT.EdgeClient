@@ -307,52 +307,37 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
 public static class EdgeSyncDiagnosticsFormatter
 {
     public static string FormatCloudFooterStatus(CloudSyncDiagnosticsSnapshot snapshot)
-    {
-        if (snapshot.IsPersistenceFaulted)
+        => EdgeSyncDiagnosticStatusClassifier.ClassifyCloud(snapshot) switch
         {
-            return "云端：存储故障";
-        }
+            CloudSyncDiagnosticStatus.PersistenceFaulted => "云端：存储故障",
+            CloudSyncDiagnosticStatus.CapacityBlocked => "云端：产能阻塞",
+            CloudSyncDiagnosticStatus.WaitingHeartbeat => "云端：等待心跳恢复",
+            CloudSyncDiagnosticStatus.Ready => "云端：已就绪",
+            CloudSyncDiagnosticStatus.WaitingRecovery => "云端：等待恢复",
+            _ => $"云端：已阻塞（{FormatBlockReason(snapshot.BlockReason)}）"
+        };
 
-        if (snapshot.IsCapacityBlocked)
+    public static string FormatMesFooterStatus(MesSyncDiagnosticsSnapshot snapshot)
+        => EdgeSyncDiagnosticStatusClassifier.ClassifyMes(snapshot) switch
         {
-            return "云端：产能阻塞";
-        }
-
-        if (IsHeartbeatWaiting(snapshot.Heartbeat))
-        {
-            return "云端：等待心跳恢复";
-        }
-
-        if (snapshot.GateState == EdgeUploadGateState.Ready)
-        {
-            return "云端：已就绪";
-        }
-
-        if (snapshot.IsPausedWaitingForRecovery)
-        {
-            return "云端：等待恢复";
-        }
-
-        return $"云端：已阻塞（{FormatBlockReason(snapshot.BlockReason)}）";
-    }
-
-    public static string FormatMesFooterStatus(MesSyncDiagnosticsSnapshot snapshot) => snapshot.RuntimeState switch
-    {
-        _ when snapshot.IsPersistenceFaulted => "MES：存储故障",
-        _ when snapshot.IsCapacityBlocked => "MES：产能阻塞",
-        _ when IsHeartbeatWaiting(snapshot.Heartbeat) => "MES：等待心跳恢复",
-        MesRetryRuntimeState.Retrying => "MES：重试中",
-        MesRetryRuntimeState.Backoff => "MES：退避中",
-        MesRetryRuntimeState.LastFailed => "MES：最近失败",
-        _ => "MES：空闲"
-    };
+            MesSyncDiagnosticStatus.PersistenceFaulted => "MES：存储故障",
+            MesSyncDiagnosticStatus.CapacityBlocked => "MES：产能阻塞",
+            MesSyncDiagnosticStatus.WaitingHeartbeat => "MES：等待心跳恢复",
+            MesSyncDiagnosticStatus.Retrying => "MES：重试中",
+            MesSyncDiagnosticStatus.Backoff => "MES：退避中",
+            MesSyncDiagnosticStatus.LastFailed => "MES：最近失败",
+            _ => "MES：空闲"
+        };
 
     public static string FormatCloudMonitorSummary(CloudSyncDiagnosticsSnapshot snapshot)
     {
-        var gateText = snapshot.GateState switch
+        var gateText = EdgeSyncDiagnosticStatusClassifier.ClassifyCloud(snapshot) switch
         {
-            EdgeUploadGateState.Ready => "已就绪",
-            _ when snapshot.IsPausedWaitingForRecovery => "等待恢复",
+            CloudSyncDiagnosticStatus.PersistenceFaulted => "存储故障",
+            CloudSyncDiagnosticStatus.CapacityBlocked => "产能阻塞",
+            CloudSyncDiagnosticStatus.WaitingHeartbeat => "等待心跳恢复",
+            CloudSyncDiagnosticStatus.Ready => "已就绪",
+            CloudSyncDiagnosticStatus.WaitingRecovery => "等待恢复",
             _ => $"已阻塞（{FormatBlockReason(snapshot.BlockReason)}）"
         };
 
@@ -581,9 +566,6 @@ public static class EdgeSyncDiagnosticsFormatter
         => string.IsNullOrWhiteSpace(value)
             ? "--"
             : value;
-
-    private static bool IsHeartbeatWaiting(ExternalHeartbeatSnapshot? heartbeat)
-        => heartbeat is not null && !heartbeat.IsReady;
 
     private static string NormalizeProcessType(string? processType)
         => string.IsNullOrWhiteSpace(processType)

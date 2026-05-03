@@ -2,6 +2,7 @@
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Module.Stacking.Constants;
+using IIoT.Edge.Module.Stacking.Config.Hardware;
 using IIoT.Edge.Module.Stacking.Payload;
 using IIoT.Edge.Application.Abstractions.Plc.Signals;
 using IIoT.Edge.Runtime.Base;

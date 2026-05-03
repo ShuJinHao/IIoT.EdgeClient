@@ -190,7 +190,8 @@ public sealed class SignalInteractionBehaviorTests
             [],
             new FakeLogService());
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(20));
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => interaction.ExecuteOneCycleAsync(cts.Token));
         Assert.Equal(1, plcService.ConnectAsyncCallCount);

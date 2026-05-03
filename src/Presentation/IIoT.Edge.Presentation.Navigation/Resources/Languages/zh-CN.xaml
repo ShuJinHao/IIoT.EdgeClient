@@ -184,6 +184,9 @@
     <sys:String x:Key="Navigation_Monitor_CloudUnknown">云端状态未知</sys:String>
     <sys:String x:Key="Navigation_Monitor_MesUnknown">MES 状态未知</sys:String>
     <sys:String x:Key="Navigation_Monitor_ContextPersistenceOk">损坏文件数：0</sys:String>
+    <sys:String x:Key="Navigation_Sync_StatusPersistenceFaulted">存储故障</sys:String>
+    <sys:String x:Key="Navigation_Sync_StatusCapacityBlocked">产能阻塞</sys:String>
+    <sys:String x:Key="Navigation_Sync_StatusWaitingHeartbeat">等待心跳恢复</sys:String>
     <sys:String x:Key="Navigation_Sync_StatusReady">已就绪</sys:String>
     <sys:String x:Key="Navigation_Sync_StatusWaitingRecovery">等待恢复</sys:String>
     <sys:String x:Key="Navigation_Sync_StatusBlockedFormat">已阻塞（{0}）</sys:String>
@@ -237,9 +240,6 @@
     <sys:String x:Key="Navigation_PluginState_HostVersionIncompatible">宿主版本不兼容</sys:String>
     <sys:String x:Key="Navigation_PluginState_LoadFailed">加载失败</sys:String>
     <sys:String x:Key="Navigation_PluginState_Activated">已激活</sys:String>
-    <sys:String x:Key="Navigation_Process_Homogenization">匀浆</sys:String>
-    <sys:String x:Key="Navigation_Process_Injection">注液</sys:String>
-    <sys:String x:Key="Navigation_Process_Stacking">叠片</sys:String>
     <sys:String x:Key="Navigation_BlockedChannel_Retry">重试队列</sys:String>
     <sys:String x:Key="Navigation_BlockedChannel_Fallback">兜底队列</sys:String>
     <sys:String x:Key="Navigation_CapacityReason_Total">总量上限</sys:String>

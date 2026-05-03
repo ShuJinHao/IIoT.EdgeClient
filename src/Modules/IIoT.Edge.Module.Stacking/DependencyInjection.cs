@@ -1,5 +1,6 @@
 ﻿using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Module.Stacking.Constants;
+using IIoT.Edge.Module.Stacking.Config.Hardware;
 using IIoT.Edge.Module.Stacking.Integration;
 using IIoT.Edge.Module.Stacking.Payload;
 using IIoT.Edge.Module.Stacking.Presentation;

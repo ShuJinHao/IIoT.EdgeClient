@@ -2,7 +2,7 @@ using IIoT.Edge.Application.Abstractions.Plc.Signals;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Module.Stacking.Constants;
 
-namespace IIoT.Edge.Module.Stacking.Runtime;
+namespace IIoT.Edge.Module.Stacking.Config.Hardware;
 
 /// <summary>
 /// 叠片 PLC 信号定义，描述默认地址、方向、类型和硬件配置页展示名。

@@ -13,6 +13,12 @@ Before implementation, read `docs/插件开发约定.md` and follow the single `
 - If the cloud contract is not ready, the client implementation must be configurable or explicitly skipped without posting to a missing endpoint or filling retry buffers with permanent failures.
 - Stacking and future process startup entries must be added through `scripts/edge-runtime.publish.json`, generated `launcher.profiles.json`, and the matching machine profile; do not add process-specific launcher XAML.
 
+## Cloud contract placeholder rule
+
+- When a process has no confirmed cloud contract, the uploader must return `CloudCallResult.Success()` from its pre-check and record a disabled/skipped diagnostic status.
+- Do not return `Failure` for a disabled or unimplemented cloud uploader. That path is reserved for retryable upload failures and will fill the Cloud retry buffer.
+- The current homogenization and stacking disabled-upload behavior is the reference pattern: skip locally, do not call HTTP, do not create Cloud retry records.
+
 ## Required implementation pieces
 
 - Module entry implementing `IEdgeProcessModule`.

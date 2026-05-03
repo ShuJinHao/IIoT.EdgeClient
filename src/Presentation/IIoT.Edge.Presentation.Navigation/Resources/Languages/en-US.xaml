@@ -184,6 +184,9 @@
     <sys:String x:Key="Navigation_Monitor_CloudUnknown">Cloud status unknown</sys:String>
     <sys:String x:Key="Navigation_Monitor_MesUnknown">MES status unknown</sys:String>
     <sys:String x:Key="Navigation_Monitor_ContextPersistenceOk">Corrupt files: 0</sys:String>
+    <sys:String x:Key="Navigation_Sync_StatusPersistenceFaulted">Persistence fault</sys:String>
+    <sys:String x:Key="Navigation_Sync_StatusCapacityBlocked">Capacity blocked</sys:String>
+    <sys:String x:Key="Navigation_Sync_StatusWaitingHeartbeat">Waiting for heartbeat</sys:String>
     <sys:String x:Key="Navigation_Sync_StatusReady">Ready</sys:String>
     <sys:String x:Key="Navigation_Sync_StatusWaitingRecovery">Waiting for recovery</sys:String>
     <sys:String x:Key="Navigation_Sync_StatusBlockedFormat">Blocked ({0})</sys:String>
@@ -237,9 +240,6 @@
     <sys:String x:Key="Navigation_PluginState_HostVersionIncompatible">Host version incompatible</sys:String>
     <sys:String x:Key="Navigation_PluginState_LoadFailed">Load failed</sys:String>
     <sys:String x:Key="Navigation_PluginState_Activated">Activated</sys:String>
-    <sys:String x:Key="Navigation_Process_Homogenization">Homogenization</sys:String>
-    <sys:String x:Key="Navigation_Process_Injection">Injection</sys:String>
-    <sys:String x:Key="Navigation_Process_Stacking">Stacking</sys:String>
     <sys:String x:Key="Navigation_BlockedChannel_Retry">retry queue</sys:String>
     <sys:String x:Key="Navigation_BlockedChannel_Fallback">fallback queue</sys:String>
     <sys:String x:Key="Navigation_CapacityReason_Total">total limit</sys:String>

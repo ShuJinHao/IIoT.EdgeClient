@@ -4,6 +4,7 @@ using System.Threading;
 using System.Windows.Threading;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Common.Diagnostics;
 using IIoT.Edge.Presentation.Navigation.Localization;
 using IIoT.Edge.UI.Shared.Localization;
 
@@ -370,10 +371,13 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
 
         DeviceSummary = FormatText("Navigation_Diagnostics_DeviceFormat", "设备：{0}", syncDiagnostics.DeviceName);
 
-        var cloudGate = syncDiagnostics.Cloud.GateState switch
+        var cloudGate = EdgeSyncDiagnosticStatusClassifier.ClassifyCloud(syncDiagnostics.Cloud) switch
         {
-            EdgeUploadGateState.Ready => GetText("Navigation_Sync_StatusReady", "已就绪"),
-            _ when syncDiagnostics.Cloud.IsPausedWaitingForRecovery => GetText("Navigation_Sync_StatusWaitingRecovery", "等待恢复"),
+            CloudSyncDiagnosticStatus.PersistenceFaulted => GetText("Navigation_Sync_StatusPersistenceFaulted", "存储故障"),
+            CloudSyncDiagnosticStatus.CapacityBlocked => GetText("Navigation_Sync_StatusCapacityBlocked", "产能阻塞"),
+            CloudSyncDiagnosticStatus.WaitingHeartbeat => GetText("Navigation_Sync_StatusWaitingHeartbeat", "等待心跳恢复"),
+            CloudSyncDiagnosticStatus.Ready => GetText("Navigation_Sync_StatusReady", "已就绪"),
+            CloudSyncDiagnosticStatus.WaitingRecovery => GetText("Navigation_Sync_StatusWaitingRecovery", "等待恢复"),
             _ => FormatText("Navigation_Sync_StatusBlockedFormat", "已阻塞（{0}）", _diagnosticsText.FormatBlockReason(syncDiagnostics.Cloud.BlockReason))
         };
 

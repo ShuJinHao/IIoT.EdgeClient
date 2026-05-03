@@ -300,6 +300,27 @@ public sealed class RepositoryHygieneTests
     }
 
     [Fact]
+    public void NavigationLanguageDictionaries_ShouldNotKeepHostProcessDisplayKeys()
+    {
+        var root = FindRepositoryRoot();
+        var languageRoot = Path.Combine(
+            root,
+            "src",
+            "Presentation",
+            "IIoT.Edge.Presentation.Navigation",
+            "Resources",
+            "Languages");
+
+        var processKeys = GetXamlResourceKeys(Path.Combine(languageRoot, "zh-CN.xaml"))
+            .Union(GetXamlResourceKeys(Path.Combine(languageRoot, "en-US.xaml")), StringComparer.Ordinal)
+            .Where(key => key.StartsWith("Navigation_Process_", StringComparison.Ordinal))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Empty(processKeys);
+    }
+
+    [Fact]
     public void NavigationFeatureResourceLookups_ShouldExistInLanguageDictionaries()
     {
         var root = FindRepositoryRoot();
