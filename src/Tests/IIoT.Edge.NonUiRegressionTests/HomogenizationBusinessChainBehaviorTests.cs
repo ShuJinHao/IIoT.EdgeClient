@@ -1,0 +1,548 @@
+using IIoT.Edge.Application.Abstractions.DataPipeline;
+using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Modules.Hardware;
+using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
+using IIoT.Edge.Module.Homogenization;
+using IIoT.Edge.Module.Homogenization.Config;
+using IIoT.Edge.Module.Homogenization.Config.Hardware;
+using IIoT.Edge.Module.Homogenization.Payload;
+using IIoT.Edge.Module.Homogenization.Runtime;
+using IIoT.Edge.Runtime.Signals;
+using IIoT.Edge.SharedKernel.DataPipeline;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesScenarioChannel<
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
+    string,
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRealtimeSnapshot,
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRecipeSnapshot,
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot>;
+
+namespace IIoT.Edge.NonUiRegressionTests;
+
+public sealed class HomogenizationBusinessChainBehaviorTests
+{
+    [Fact]
+    public async Task Inbound_WhenTrayCodeIsEmpty_ShouldAckExceptionAndNotCallMes()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create();
+        await harness.StartAsync();
+
+        harness.SetAscii(HomogenizationPlcSignalProfile.TrayCode.Label, string.Empty, 30);
+        harness.SetWord(HomogenizationPlcSignalProfile.InboundTrigger.Label, TestCodeOptions.Plc.SignalTrigger);
+
+        await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.Inbound") == 30);
+
+        Assert.Empty(harness.Mes.InboundTrayCodes);
+        Assert.Equal(TestCodeOptions.Plc.AckException, harness.ReadWriteWord(HomogenizationPlcSignalProfile.InboundAck.Label));
+        Assert.Equal(string.Empty, harness.Context.LastInboundTrayCode);
+        Assert.Contains("托盘码不能为空", harness.Context.LastInboundResult, StringComparison.Ordinal);
+        Assert.Equal("Failed", harness.Diagnostics.Get(TestCodeOptions.Mes.Channels.Inbound)!.LastResult);
+    }
+
+    [Fact]
+    public async Task Inbound_WhenMesRejects_ShouldAckMesNgAndRecordFailure()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create();
+        harness.Mes.InboundResult = MesCallResult.BusinessRejected("MES 拒绝进站。");
+        await harness.StartAsync();
+
+        harness.SetAscii(HomogenizationPlcSignalProfile.TrayCode.Label, "TRAY-MES-NG", 30);
+        harness.SetWord(HomogenizationPlcSignalProfile.InboundTrigger.Label, TestCodeOptions.Plc.SignalTrigger);
+
+        await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.Inbound") == 30);
+
+        Assert.Contains("TRAY-MES-NG", harness.Mes.InboundTrayCodes);
+        Assert.Equal(TestCodeOptions.Plc.AckMesNg, harness.ReadWriteWord(HomogenizationPlcSignalProfile.InboundAck.Label));
+        Assert.Equal("TRAY-MES-NG", harness.Context.LastInboundTrayCode);
+        Assert.Equal("MES 拒绝进站。", harness.Context.LastInboundResult);
+        Assert.Equal("MES 拒绝进站。", harness.Diagnostics.Get(TestCodeOptions.Mes.Channels.Inbound)!.LastFailureReason);
+
+        harness.SetWord(HomogenizationPlcSignalProfile.InboundTrigger.Label, TestCodeOptions.Plc.SignalReset);
+        await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.Inbound") == 0);
+
+        Assert.Equal(TestCodeOptions.Plc.SignalReset, harness.ReadWriteWord(HomogenizationPlcSignalProfile.InboundAck.Label));
+    }
+
+    [Fact]
+    public async Task Inbound_WhenMesThrows_ShouldAckExceptionAndRecordFailure()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create();
+        harness.Mes.InboundException = new InvalidOperationException("MES 通信异常");
+        await harness.StartAsync();
+
+        harness.SetAscii(HomogenizationPlcSignalProfile.TrayCode.Label, "TRAY-MES-EX", 30);
+        harness.SetWord(HomogenizationPlcSignalProfile.InboundTrigger.Label, TestCodeOptions.Plc.SignalTrigger);
+
+        await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.Inbound") == 30);
+
+        Assert.Equal(TestCodeOptions.Plc.AckException, harness.ReadWriteWord(HomogenizationPlcSignalProfile.InboundAck.Label));
+        Assert.Equal(string.Empty, harness.Context.LastInboundTrayCode);
+        Assert.Contains("MES 通信异常", harness.Context.LastInboundResult, StringComparison.Ordinal);
+        Assert.Contains("MES 通信异常", harness.Diagnostics.Get(TestCodeOptions.Mes.Channels.Inbound)!.LastFailureReason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Outbound_WhenNoLocalInboundSuccess_ShouldStillEnterDataPipelineForMesGate()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create();
+        harness.Context.LastInboundAt = null;
+        harness.Context.LastRecipeSnapshot = new HomogenizationRecipeSnapshot
+        {
+            StirringSpeed = [10],
+            DispersionSpeed = [20],
+            Ncm = [1.1],
+            Time = [30]
+        };
+        harness.Context.LastEquipmentStatusSnapshot = new HomogenizationEquipmentStatusSnapshot
+        {
+            StatusCode = 1,
+            StatusText = "空闲",
+            Messages = ["空闲"]
+        };
+        await harness.StartAsync();
+
+        harness.SetAscii(HomogenizationPlcSignalProfile.TrayCode.Label, "TRAY-OUT-001", 30);
+        harness.SetWord(HomogenizationPlcSignalProfile.RealtimeStirringSpeed.Label, 120);
+        harness.SetWord(HomogenizationPlcSignalProfile.RealtimeTemperature.Label, 26);
+        harness.SetWord(HomogenizationPlcSignalProfile.RealtimeVacuum.Label, unchecked((ushort)(short)-9));
+        harness.SetWord(HomogenizationPlcSignalProfile.OutboundCntActual.Label, 15);
+        harness.SetWord(HomogenizationPlcSignalProfile.OutboundNmpActual.Label, 18);
+        harness.SetWord(HomogenizationPlcSignalProfile.OutboundGlueActual.Label, 31);
+        harness.SetWord(HomogenizationPlcSignalProfile.OutboundTrigger.Label, TestCodeOptions.Plc.SignalTrigger);
+
+        await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.Outbound") == 30);
+
+        var record = Assert.Single(harness.Pipeline.Records);
+        var cellData = Assert.IsType<HomogenizationCellData>(record.CellData);
+        Assert.Equal("TRAY-OUT-001", cellData.TrayCode);
+        Assert.Null(cellData.InboundTime);
+        Assert.Equal(120, cellData.RealtimeSnapshot!.StirringSpeed);
+        Assert.Equal(26, cellData.RealtimeSnapshot.Temperature);
+        Assert.Equal(-9, cellData.RealtimeSnapshot.Vacuum);
+        Assert.Equal(15d, cellData.CntActualKg);
+        Assert.Equal(18d, cellData.NmpActualKg);
+        Assert.Equal(31d, cellData.GlueActualKg);
+        Assert.Same(harness.Context.LastRecipeSnapshot, cellData.RecipeSnapshot);
+        Assert.Same(harness.Context.LastEquipmentStatusSnapshot, cellData.EquipmentStatusSnapshot);
+        Assert.Equal(TestCodeOptions.Plc.AckOk, harness.ReadWriteWord(HomogenizationPlcSignalProfile.OutboundAck.Label));
+        Assert.Equal("出料已接收。", harness.Context.LastOutboundResult);
+    }
+
+    [Fact]
+    public async Task Outbound_WhenTrayCodeIsEmpty_ShouldAckExceptionAndNotEnqueue()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create();
+        await harness.StartAsync();
+
+        harness.SetAscii(HomogenizationPlcSignalProfile.TrayCode.Label, string.Empty, 30);
+        harness.SetWord(HomogenizationPlcSignalProfile.OutboundTrigger.Label, TestCodeOptions.Plc.SignalTrigger);
+
+        await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.Outbound") == 30);
+
+        Assert.Empty(harness.Pipeline.Records);
+        Assert.Equal(TestCodeOptions.Plc.AckException, harness.ReadWriteWord(HomogenizationPlcSignalProfile.OutboundAck.Label));
+        Assert.Contains("托盘码不能为空", harness.Context.LastOutboundResult, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Outbound_WhenDataPipelineOverflows_ShouldAckOkAndRecordOverflowStatus()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create(
+            pipeline: new CapturingDataPipelineService
+            {
+                Result = DataPipelineEnqueueResult.OverflowPersisted(1, 0)
+            });
+        await harness.StartAsync();
+
+        harness.SetAscii(HomogenizationPlcSignalProfile.TrayCode.Label, "TRAY-OVERFLOW", 30);
+        harness.SetWord(HomogenizationPlcSignalProfile.OutboundTrigger.Label, TestCodeOptions.Plc.SignalTrigger);
+
+        await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.Outbound") == 30);
+
+        Assert.Single(harness.Pipeline.Records);
+        Assert.Equal(TestCodeOptions.Plc.AckOk, harness.ReadWriteWord(HomogenizationPlcSignalProfile.OutboundAck.Label));
+        Assert.Equal("出料已接收，数据已进入溢出持久化。", harness.Context.LastOutboundResult);
+    }
+
+    [Fact]
+    public async Task RecipeAndEquipmentStatus_WhenMesRejects_ShouldAckMesNgAndRecordDiagnostics()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create();
+        harness.Mes.RecipeResult = MesCallResult.BusinessRejected("MES 拒绝配方。");
+        harness.Mes.EquipmentStatusResult = MesCallResult.BusinessRejected("MES 拒绝设备状态。");
+        await harness.StartAsync();
+
+        harness.SetWord(HomogenizationPlcSignalProfile.RecipeStirringSpeed.Label, 55);
+        harness.SetWord(HomogenizationPlcSignalProfile.RecipeTrigger.Label, TestCodeOptions.Plc.SignalTrigger);
+        await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.Recipe") == 30);
+
+        Assert.NotNull(harness.Context.LastRecipeSnapshot);
+        Assert.Equal(TestCodeOptions.Plc.AckMesNg, harness.ReadWriteWord(HomogenizationPlcSignalProfile.RecipeAck.Label));
+        Assert.Equal("MES 拒绝配方。", harness.Diagnostics.Get(TestCodeOptions.Mes.Channels.Recipe)!.LastFailureReason);
+
+        harness.SetWord(HomogenizationPlcSignalProfile.EquipmentStatusValue.Label, 1);
+        harness.SetWord(HomogenizationPlcSignalProfile.EquipmentStatusTrigger.Label, TestCodeOptions.Plc.SignalTrigger);
+        await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.EquipmentStatus") == 30);
+
+        Assert.NotNull(harness.Context.LastEquipmentStatusSnapshot);
+        Assert.Equal(TestCodeOptions.Plc.AckMesNg, harness.ReadWriteWord(HomogenizationPlcSignalProfile.EquipmentStatusAck.Label));
+        Assert.Equal("MES 拒绝设备状态。", harness.Diagnostics.Get(TestCodeOptions.Mes.Channels.EquipmentStatus)!.LastFailureReason);
+    }
+
+    [Fact]
+    public async Task Realtime_WhenMesFails_ShouldRecordFailureWithoutStoppingRuntime()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create();
+        harness.Mes.RealtimeResult = MesCallResult.TransportFailure("MES 实时数据上传失败。");
+
+        harness.SetWord(HomogenizationPlcSignalProfile.RealtimeStirringSpeed.Label, 101);
+        harness.SetWord(HomogenizationPlcSignalProfile.RealtimeTemperature.Label, 27);
+        await harness.StartAsync();
+
+        await WaitUntilAsync(() => harness.Context.LastRealtimeResult == "MES 实时数据上传失败。");
+
+        Assert.NotNull(harness.Context.LastRealtimeSnapshot);
+        Assert.Equal(101, harness.Context.LastRealtimeSnapshot!.StirringSpeed);
+        Assert.Equal(27, harness.Context.LastRealtimeSnapshot.Temperature);
+        Assert.Equal("Failed", harness.Diagnostics.Get(TestCodeOptions.Mes.Channels.Realtime)!.LastResult);
+    }
+
+    private static HomogenizationCodeOptions TestCodeOptions => new()
+    {
+        Plc = new HomogenizationPlcCodeOptions
+        {
+            SignalReset = 10,
+            SignalTrigger = 11,
+            AckOk = 11,
+            AckException = 12,
+            AckMesNg = 13
+        },
+        Mes = new HomogenizationMesCodeOptions
+        {
+            Channels = new HomogenizationMesChannelOptions
+            {
+                Inbound = "Homogenization.Inbound",
+                Outbound = "Homogenization",
+                Realtime = "Homogenization.Realtime",
+                Recipe = "Homogenization.Recipe",
+                EquipmentStatus = "Homogenization.EquipmentStatus"
+            },
+            EquipmentStatusTexts = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["-1"] = "报警",
+                ["0"] = "运行中",
+                ["1"] = "空闲",
+                ["2"] = "离线"
+            }
+        }
+    };
+
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (condition())
+            {
+                return;
+            }
+
+            await Task.Yield();
+        }
+
+        Assert.True(condition());
+    }
+
+    private sealed class HomogenizationRuntimeHarness : IAsyncDisposable
+    {
+        private readonly ServiceProvider _provider;
+        private readonly CancellationTokenSource _cancellation = new();
+        private Task[] _runningTasks = [];
+
+        private HomogenizationRuntimeHarness(
+            ServiceProvider provider,
+            PlcBuffer buffer,
+            ushort[] readValues,
+            IReadOnlyDictionary<string, int> readOffsets,
+            IReadOnlyDictionary<string, int> writeOffsets,
+            HomogenizationContext context,
+            CapturingHomogenizationMesChannel mes,
+            CapturingDataPipelineService pipeline,
+            FakeMesUploadDiagnosticsStore diagnostics)
+        {
+            _provider = provider;
+            Buffer = buffer;
+            ReadValues = readValues;
+            ReadOffsets = readOffsets;
+            WriteOffsets = writeOffsets;
+            Context = context;
+            Mes = mes;
+            Pipeline = pipeline;
+            Diagnostics = diagnostics;
+        }
+
+        public PlcBuffer Buffer { get; }
+
+        public ushort[] ReadValues { get; }
+
+        public IReadOnlyDictionary<string, int> ReadOffsets { get; }
+
+        public IReadOnlyDictionary<string, int> WriteOffsets { get; }
+
+        public HomogenizationContext Context { get; }
+
+        public CapturingHomogenizationMesChannel Mes { get; }
+
+        public CapturingDataPipelineService Pipeline { get; }
+
+        public FakeMesUploadDiagnosticsStore Diagnostics { get; }
+
+        public static HomogenizationRuntimeHarness Create(
+            CapturingHomogenizationMesChannel? mes = null,
+            CapturingDataPipelineService? pipeline = null)
+        {
+            mes ??= new CapturingHomogenizationMesChannel();
+            pipeline ??= new CapturingDataPipelineService();
+
+            var bindings = BuildBindings();
+            var readOffsets = BuildOffsets(bindings, "Read");
+            var writeOffsets = BuildOffsets(bindings, "Write");
+            var buffer = new PlcBuffer(GetBufferSize(bindings, "Read"), GetBufferSize(bindings, "Write"));
+            var readValues = new ushort[GetBufferSize(bindings, "Read")];
+            var context = new HomogenizationContext
+            {
+                DeviceName = "PLC-H",
+                DeviceId = 7
+            };
+            var diagnostics = new FakeMesUploadDiagnosticsStore();
+            var deviceService = new FakeDeviceService();
+            deviceService.SetOnline(new DeviceSession
+            {
+                DeviceId = Guid.NewGuid(),
+                DeviceName = "PLC-H",
+                ClientCode = "CLIENT-H",
+                ProcessId = Guid.NewGuid()
+            });
+
+            ProductionContextSignalBindings.Set(context, bindings);
+            SetWord(readValues, readOffsets, HomogenizationPlcSignalProfile.HeartbeatIn.Label, 1);
+            SetWord(readValues, readOffsets, HomogenizationPlcSignalProfile.InboundTrigger.Label, TestCodeOptions.Plc.SignalReset);
+            SetWord(readValues, readOffsets, HomogenizationPlcSignalProfile.OutboundTrigger.Label, TestCodeOptions.Plc.SignalReset);
+            SetWord(readValues, readOffsets, HomogenizationPlcSignalProfile.RecipeTrigger.Label, TestCodeOptions.Plc.SignalReset);
+            SetWord(readValues, readOffsets, HomogenizationPlcSignalProfile.EquipmentStatusTrigger.Label, TestCodeOptions.Plc.SignalReset);
+            buffer.UpdateReadBuffer(readValues);
+
+            var services = new ServiceCollection();
+            services.AddSingleton<ILogService>(new FakeLogService());
+            services.AddSingleton<IDeviceService>(deviceService);
+            services.AddSingleton<IMesUploadDiagnosticsStore>(diagnostics);
+            services.AddSingleton<HomogenizationMesScenarioChannel>(mes);
+            services.AddSingleton<IDataPipelineService>(pipeline);
+            services.AddSingleton(new HomogenizationCellDataValidator());
+            services.AddSingleton(Options.Create(new HomogenizationModuleOptions
+            {
+                Runtime = new HomogenizationRuntimeOptions
+                {
+                    EventLoopIntervalMs = 20,
+                    MinEventLoopIntervalMs = 10,
+                    RealtimeLoopIntervalMs = 10_000,
+                    MinRealtimeLoopIntervalMs = 200
+                }
+            }));
+            services.AddSingleton(Options.Create(TestCodeOptions));
+
+            return new HomogenizationRuntimeHarness(
+                services.BuildServiceProvider(),
+                buffer,
+                readValues,
+                readOffsets,
+                writeOffsets,
+                context,
+                mes,
+                pipeline,
+                diagnostics);
+        }
+
+        public Task StartAsync()
+        {
+            var tasks = new HomogenizationStationRuntimeFactory().CreateTasks(_provider, Buffer, Context);
+            _runningTasks = tasks.Select(task => task.StartAsync(_cancellation.Token)).ToArray();
+            return Task.CompletedTask;
+        }
+
+        public void SetWord(string label, ushort value)
+        {
+            SetWord(ReadValues, ReadOffsets, label, value);
+            Buffer.UpdateReadBuffer(ReadValues);
+        }
+
+        public void SetAscii(string label, string value, int wordCount)
+        {
+            SetAscii(ReadValues, ReadOffsets, label, value, wordCount);
+            Buffer.UpdateReadBuffer(ReadValues);
+        }
+
+        public ushort ReadWriteWord(string label)
+            => Buffer.GetWriteBuffer()[WriteOffsets[label]];
+
+        public async ValueTask DisposeAsync()
+        {
+            _cancellation.Cancel();
+            await Task.WhenAll(_runningTasks);
+            _cancellation.Dispose();
+            await _provider.DisposeAsync();
+        }
+
+        private static IReadOnlyList<ModuleIoSnapshot> BuildBindings()
+            => HomogenizationPlcSignalProfile.Signals
+                .OrderBy(static signal => signal.SortOrder)
+                .Select(static signal => new ModuleIoSnapshot(
+                    signal.Label,
+                    $"D{signal.SortOrder}",
+                    signal.AddressCount,
+                    signal.DataType,
+                    signal.Direction,
+                    signal.SortOrder))
+                .ToArray();
+
+        private static Dictionary<string, int> BuildOffsets(IReadOnlyList<ModuleIoSnapshot> bindings, string direction)
+        {
+            var offsets = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            var currentOffset = 0;
+
+            foreach (var binding in bindings
+                         .Where(binding => string.Equals(binding.Direction, direction, StringComparison.OrdinalIgnoreCase))
+                         .OrderBy(binding => binding.SortOrder))
+            {
+                offsets[binding.Label] = currentOffset;
+                currentOffset += Math.Max(1, binding.AddressCount);
+            }
+
+            return offsets;
+        }
+
+        private static int GetBufferSize(IReadOnlyList<ModuleIoSnapshot> bindings, string direction)
+            => bindings
+                .Where(binding => string.Equals(binding.Direction, direction, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(binding => binding.SortOrder)
+                .Sum(static binding => Math.Max(1, binding.AddressCount));
+
+        private static void SetWord(ushort[] buffer, IReadOnlyDictionary<string, int> offsets, string label, ushort value)
+            => buffer[offsets[label]] = value;
+
+        private static void SetAscii(ushort[] buffer, IReadOnlyDictionary<string, int> offsets, string label, string value, int wordCount)
+        {
+            var bytes = System.Text.Encoding.ASCII.GetBytes(value);
+            for (var wordIndex = 0; wordIndex < wordCount; wordIndex++)
+            {
+                var lowIndex = wordIndex * 2;
+                var highIndex = lowIndex + 1;
+                var low = lowIndex < bytes.Length ? bytes[lowIndex] : (byte)0;
+                var high = highIndex < bytes.Length ? bytes[highIndex] : (byte)0;
+                buffer[offsets[label] + wordIndex] = (ushort)(low | (high << 8));
+            }
+        }
+    }
+
+    private sealed class CapturingHomogenizationMesChannel : HomogenizationMesScenarioChannel
+    {
+        public List<string> InboundTrayCodes { get; } = [];
+
+        public string ProcessType => DependencyInjection.ModuleKey;
+
+        public MesUploadMode UploadMode => MesUploadMode.Single;
+
+        public MesCallResult InboundResult { get; set; } = MesCallResult.Success();
+
+        public MesCallResult RealtimeResult { get; set; } = MesCallResult.Success();
+
+        public MesCallResult RecipeResult { get; set; } = MesCallResult.Success();
+
+        public MesCallResult EquipmentStatusResult { get; set; } = MesCallResult.Success();
+
+        public Exception? InboundException { get; set; }
+
+        public Task<MesCallResult> UploadInboundAsync(
+            DeviceSession? device,
+            string trayCode,
+            CancellationToken cancellationToken = default)
+        {
+            InboundTrayCodes.Add(trayCode);
+            if (InboundException is not null)
+            {
+                throw InboundException;
+            }
+
+            return Task.FromResult(InboundResult);
+        }
+
+        public Task<MesCallResult> UploadOutboundAsync(
+            DeviceSession? device,
+            HomogenizationCellData cellData,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(MesCallResult.Success());
+
+        public Task<MesCallResult> UploadRealtimeAsync(
+            DeviceSession? device,
+            HomogenizationRealtimeSnapshot snapshot,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(RealtimeResult);
+
+        public Task<MesCallResult> UploadRecipeAsync(
+            DeviceSession? device,
+            HomogenizationRecipeSnapshot snapshot,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(RecipeResult);
+
+        public Task<MesCallResult> UploadEquipmentStatusAsync(
+            DeviceSession? device,
+            HomogenizationEquipmentStatusSnapshot snapshot,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(EquipmentStatusResult);
+
+        public Task<MesCallResult> UploadAsync(
+            ProcessMesUploadContext context,
+            IReadOnlyList<CellCompletedRecord> records,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(MesCallResult.Success());
+    }
+
+    private sealed class CapturingDataPipelineService : IDataPipelineService
+    {
+        public List<CellCompletedRecord> Records { get; } = [];
+
+        public DataPipelineEnqueueResult Result { get; set; } = DataPipelineEnqueueResult.Accepted();
+
+        public int PendingCount => Records.Count;
+
+        public int OverflowCount => Result.WasOverflow ? 1 : 0;
+
+        public int SpillCount => 0;
+
+        public ValueTask<DataPipelineEnqueueResult> EnqueueAsync(
+            CellCompletedRecord record,
+            CancellationToken cancellationToken = default)
+        {
+            Records.Add(record);
+            return ValueTask.FromResult(Result);
+        }
+
+        public bool TryDequeue(out CellCompletedRecord? record)
+        {
+            record = Records.Count == 0 ? null : Records[0];
+            if (Records.Count > 0)
+            {
+                Records.RemoveAt(0);
+                return true;
+            }
+
+            return false;
+        }
+
+        public ValueTask<bool> WaitToReadAsync(CancellationToken cancellationToken = default)
+            => ValueTask.FromResult(Records.Count > 0);
+    }
+}

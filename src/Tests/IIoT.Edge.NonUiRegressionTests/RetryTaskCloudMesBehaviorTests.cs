@@ -4,6 +4,7 @@ using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 using IIoT.Edge.Application.Abstractions.Integration;
+using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Injection.Payload;
 using IIoT.Edge.Runtime.DataPipeline.Services;
 using IIoT.Edge.Runtime.DataPipeline.Tasks;
@@ -341,6 +342,74 @@ public sealed class RetryTaskCloudMesBehaviorTests
         Assert.Equal(1, mesConsumer.ProcessCallCount);
         Assert.Contains(61L, failedStore.DeletedIds);
         Assert.Empty(failedStore.Updates);
+    }
+
+    [Fact]
+    public async Task MesRetry_WhenHomogenizationOutboundRecordIsRetried_ShouldKeepFullPayload()
+    {
+        CellDataTypeRegistry.Register<HomogenizationCellData>("Homogenization");
+
+        var failedStore = new FakeFailedRecordStore();
+        failedStore.PendingRecords.Add(CreateFailedRecord(
+            601,
+            "MES",
+            "MES",
+            0,
+            "Homogenization",
+            new HomogenizationCellData
+            {
+                TrayCode = "TRAY-H-RETRY",
+                DeviceName = "PLC-H",
+                DeviceCode = "CLIENT-H",
+                CompletedTime = new DateTime(2026, 5, 3, 8, 30, 0, DateTimeKind.Utc),
+                CntActualKg = 15,
+                NmpActualKg = 18,
+                GlueActualKg = 31,
+                RealtimeSnapshot = new HomogenizationRealtimeSnapshot
+                {
+                    StirringSpeed = 120,
+                    Temperature = 26,
+                    Vacuum = -9
+                },
+                RecipeSnapshot = new HomogenizationRecipeSnapshot
+                {
+                    StirringSpeed = [10],
+                    DispersionSpeed = [20],
+                    Time = [30]
+                },
+                EquipmentStatusSnapshot = new HomogenizationEquipmentStatusSnapshot
+                {
+                    StatusCode = 1,
+                    StatusText = "空闲",
+                    Messages = ["空闲"]
+                }
+            }));
+
+        var mesConsumer = new FakeMesConsumer();
+        var task = new TestableMesRetryTask(
+            new FakeLogService(),
+            failedStore,
+            new FakeMesFallbackBufferStore(),
+            mesConsumer);
+
+        await task.ExecuteOnceAsync();
+
+        var processed = Assert.IsType<HomogenizationCellData>(
+            Assert.Single(mesConsumer.ProcessedRecords).CellData);
+        Assert.Equal("TRAY-H-RETRY", processed.TrayCode);
+        Assert.Equal("CLIENT-H", processed.DeviceCode);
+        Assert.Equal(15d, processed.CntActualKg);
+        Assert.Equal(18d, processed.NmpActualKg);
+        Assert.Equal(31d, processed.GlueActualKg);
+        Assert.Equal(120, processed.RealtimeSnapshot!.StirringSpeed);
+        Assert.Equal(26, processed.RealtimeSnapshot.Temperature);
+        Assert.Equal(-9, processed.RealtimeSnapshot.Vacuum);
+        Assert.Equal(10, processed.RecipeSnapshot!.StirringSpeed[0]);
+        Assert.Equal(20, processed.RecipeSnapshot.DispersionSpeed[0]);
+        Assert.Equal(30, processed.RecipeSnapshot.Time[0]);
+        Assert.Equal(1, processed.EquipmentStatusSnapshot!.StatusCode);
+        Assert.Equal("空闲", processed.EquipmentStatusSnapshot.StatusText);
+        Assert.Contains(601L, failedStore.DeletedIds);
     }
 
     [Fact]

@@ -30,7 +30,7 @@ public sealed class HomogenizationCloudUploader : CloudUploadChannelBase<Homogen
         CancellationToken cancellationToken)
     {
         Logger.Warn(
-            $"[Cloud] 匀浆云端上传未启用：云端匀浆过站契约尚未单独确认，已跳过 {records.Count} 条记录且不写入 Cloud retry。");
+            $"[Cloud] 匀浆云端上传未启用：云端匀浆过站契约尚未单独确认，已跳过 {records.Count} 条记录且不写入云端重试队列。");
         return Task.FromResult<CloudCallResult?>(CloudCallResult.Success());
     }
 
@@ -38,5 +38,5 @@ public sealed class HomogenizationCloudUploader : CloudUploadChannelBase<Homogen
         ProcessCloudUploadContext context,
         IReadOnlyList<HomogenizationCellData> cellData,
         IReadOnlyList<CellCompletedRecord> records)
-        => throw new InvalidOperationException("匀浆云端上传未启用，不应构建 Cloud payload。");
+        => throw new InvalidOperationException("匀浆云端上传未启用，不应构建云端 payload。");
 }
