@@ -1,82 +1,63 @@
 using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Features.Config.LocalParameterConfig;
-using IIoT.Edge.SharedKernel.Enums;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 
 public sealed class LocalSystemRuntimeConfigBehaviorTests
 {
     [Fact]
-    public async Task EnsureInitializedAsync_WhenSystemConfigsAreValid_ShouldBuildTypedSnapshot()
+    public async Task EnsureInitializedAsync_WhenMesRoleEnabled_ShouldBuildRuntimeSnapshot()
     {
-        var parameterConfigService = new MutableLocalParameterConfigService
-        {
-            SystemConfigs =
-            [
-                new LocalSystemConfigSnapshot(1, SystemConfigKey.MES服务地址.ToString(), "https://mes.local", null, 1),
-                new LocalSystemConfigSnapshot(2, SystemConfigKey.启用MES上报.ToString(), "false", null, 2),
-                new LocalSystemConfigSnapshot(3, SystemConfigKey.心跳间隔.ToString(), "15", null, 3),
-                new LocalSystemConfigSnapshot(4, SystemConfigKey.云端同步周期.ToString(), "45", null, 4)
-            ]
-        };
-        var service = new LocalSystemRuntimeConfigService(parameterConfigService, new FakeLogService());
+        var parameterConfigService = new MutableLocalParameterConfigService();
+        var roleProvider = new MutableModuleParamRoleProvider { MesEnabled = true };
+        var registry = new FakeProcessIntegrationRegistry(["Homogenization"]);
+        var service = new LocalSystemRuntimeConfigService(
+            parameterConfigService,
+            roleProvider,
+            registry,
+            new FakeLogService());
 
         await service.EnsureInitializedAsync();
 
-        Assert.Equal("https://mes.local", service.Current.MesBaseUrl);
-        Assert.False(service.Current.MesUploadEnabled);
-        Assert.Equal(TimeSpan.FromSeconds(15), service.Current.OnlineHeartbeatInterval);
-        Assert.Equal(TimeSpan.FromSeconds(45), service.Current.CloudSyncInterval);
-    }
-
-    [Fact]
-    public async Task EnsureInitializedAsync_WhenSystemConfigsAreInvalid_ShouldFallbackToDefaults()
-    {
-        var parameterConfigService = new MutableLocalParameterConfigService
-        {
-            SystemConfigs =
-            [
-                new LocalSystemConfigSnapshot(1, SystemConfigKey.MES服务地址.ToString(), "not-a-url", null, 1),
-                new LocalSystemConfigSnapshot(2, SystemConfigKey.启用MES上报.ToString(), "bad-bool", null, 2),
-                new LocalSystemConfigSnapshot(3, SystemConfigKey.心跳间隔.ToString(), "0", null, 3),
-                new LocalSystemConfigSnapshot(4, SystemConfigKey.云端同步周期.ToString(), "-5", null, 4)
-            ]
-        };
-        var service = new LocalSystemRuntimeConfigService(parameterConfigService, new FakeLogService());
-
-        await service.EnsureInitializedAsync();
-
-        Assert.Null(service.Current.MesBaseUrl);
         Assert.True(service.Current.MesUploadEnabled);
         Assert.Equal(TimeSpan.FromSeconds(60), service.Current.OnlineHeartbeatInterval);
         Assert.Equal(TimeSpan.FromSeconds(60), service.Current.CloudSyncInterval);
     }
 
     [Fact]
-    public async Task ParameterConfigChanged_WhenSystemConfigChanges_ShouldRefreshCurrentSnapshot()
+    public async Task EnsureInitializedAsync_WhenNoMesModuleRegistered_ShouldFailClosed()
     {
-        var parameterConfigService = new MutableLocalParameterConfigService
-        {
-            SystemConfigs =
-            [
-                new LocalSystemConfigSnapshot(1, SystemConfigKey.心跳间隔.ToString(), "30", null, 1)
-            ]
-        };
-        var service = new LocalSystemRuntimeConfigService(parameterConfigService, new FakeLogService());
+        var service = new LocalSystemRuntimeConfigService(
+            new MutableLocalParameterConfigService(),
+            new MutableModuleParamRoleProvider { MesEnabled = true },
+            new FakeProcessIntegrationRegistry([]),
+            new FakeLogService());
 
         await service.EnsureInitializedAsync();
 
-        parameterConfigService.SystemConfigs =
-        [
-            new LocalSystemConfigSnapshot(1, SystemConfigKey.心跳间隔.ToString(), "12", null, 1),
-            new LocalSystemConfigSnapshot(2, SystemConfigKey.云端同步周期.ToString(), "18", null, 2)
-        ];
+        Assert.False(service.Current.MesUploadEnabled);
+    }
 
-        parameterConfigService.NotifySystemChanged();
-        await WaitForAsync(() => service.Current.OnlineHeartbeatInterval == TimeSpan.FromSeconds(12));
+    [Fact]
+    public async Task ParameterConfigChanged_WhenModuleParamsChange_ShouldRefreshCurrentSnapshot()
+    {
+        var parameterConfigService = new MutableLocalParameterConfigService();
+        var roleProvider = new MutableModuleParamRoleProvider { MesEnabled = false };
+        var service = new LocalSystemRuntimeConfigService(
+            parameterConfigService,
+            roleProvider,
+            new FakeProcessIntegrationRegistry(["Homogenization"]),
+            new FakeLogService());
 
-        Assert.Equal(TimeSpan.FromSeconds(12), service.Current.OnlineHeartbeatInterval);
-        Assert.Equal(TimeSpan.FromSeconds(18), service.Current.CloudSyncInterval);
+        await service.EnsureInitializedAsync();
+        Assert.False(service.Current.MesUploadEnabled);
+
+        roleProvider.MesEnabled = true;
+        parameterConfigService.NotifyModuleChanged();
+        await WaitForAsync(() => service.Current.MesUploadEnabled);
+
+        Assert.True(service.Current.MesUploadEnabled);
     }
 
     private static async Task WaitForAsync(Func<bool> predicate)
@@ -97,34 +78,99 @@ public sealed class LocalSystemRuntimeConfigBehaviorTests
 
     private sealed class MutableLocalParameterConfigService : ILocalParameterConfigService
     {
-        public IReadOnlyList<LocalSystemConfigSnapshot> SystemConfigs { get; set; } = [];
-
         public event EventHandler<ParameterConfigChangedEventArgs>? ParameterConfigChanged;
 
         public Task<IReadOnlyList<LocalSystemConfigSnapshot>> GetSystemConfigsAsync(
             CancellationToken cancellationToken = default)
-            => Task.FromResult(SystemConfigs);
+            => Task.FromResult<IReadOnlyList<LocalSystemConfigSnapshot>>([]);
 
-        public Task<string?> GetSystemConfigValueAsync(
-            SystemConfigKey key,
+        public void NotifyModuleChanged()
+            => ParameterConfigChanged?.Invoke(
+                this,
+                new ParameterConfigChangedEventArgs(ParameterConfigChangeScope.Module));
+    }
+
+    private sealed class MutableModuleParamRoleProvider : IModuleParamRoleProvider
+    {
+        public bool MesEnabled { get; set; }
+
+        public Task<ModuleParamRoleValue?> GetAsync(
+            string moduleId,
+            ModuleParamCategory category,
+            ModuleParamRole role,
             CancellationToken cancellationToken = default)
-            => Task.FromResult(
-                SystemConfigs.FirstOrDefault(x => string.Equals(x.Key, key.ToString(), StringComparison.OrdinalIgnoreCase))?.Value);
+            => Task.FromResult<ModuleParamRoleValue?>(null);
 
-        public Task<IReadOnlyList<LocalDeviceParameterSnapshot>> GetDeviceParamsAsync(
-            int deviceId,
+        public Task<IReadOnlyList<ModuleParamRoleValue>> GetAllAsync(
+            ModuleParamCategory category,
+            ModuleParamRole role,
+            IReadOnlyCollection<string>? moduleIds = null,
             CancellationToken cancellationToken = default)
-            => Task.FromResult<IReadOnlyList<LocalDeviceParameterSnapshot>>([]);
+            => Task.FromResult<IReadOnlyList<ModuleParamRoleValue>>([]);
 
-        public Task<string?> GetDeviceParamValueAsync(
-            int deviceId,
-            DeviceParamKey key,
+        public Task<string?> GetStringAsync(
+            string moduleId,
+            ModuleParamCategory category,
+            ModuleParamRole role,
+            string? defaultValue = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(defaultValue);
+
+        public Task<string?> FirstStringAsync(
+            ModuleParamCategory category,
+            ModuleParamRole role,
+            IReadOnlyCollection<string>? moduleIds = null,
             CancellationToken cancellationToken = default)
             => Task.FromResult<string?>(null);
 
-        public void NotifySystemChanged()
-            => ParameterConfigChanged?.Invoke(
-                this,
-                new ParameterConfigChangedEventArgs(ParameterConfigChangeScope.System));
+        public Task<bool> GetBoolAsync(
+            string moduleId,
+            ModuleParamCategory category,
+            ModuleParamRole role,
+            bool defaultValue = false,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(MesEnabled);
+
+        public Task<bool> AnyBoolAsync(
+            ModuleParamCategory category,
+            ModuleParamRole role,
+            IReadOnlyCollection<string>? moduleIds = null,
+            bool defaultValue = false,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult((moduleIds?.Count ?? 0) > 0 && MesEnabled);
+    }
+
+    private sealed class FakeProcessIntegrationRegistry(IEnumerable<string> mesProcessTypes) : IProcessIntegrationRegistry
+    {
+        private readonly Dictionary<string, MesUploaderRegistration> _mesUploaders = mesProcessTypes
+            .ToDictionary(
+                static processType => processType,
+                static processType => new MesUploaderRegistration(processType, MesUploadMode.Single),
+                StringComparer.OrdinalIgnoreCase);
+
+        public void RegisterCloudUploader(string processType, ProcessUploadMode uploadMode)
+            => throw new NotSupportedException();
+
+        public void RegisterMesUploader(string processType, MesUploadMode uploadMode)
+            => throw new NotSupportedException();
+
+        public bool HasCloudUploader(string processType) => false;
+
+        public bool HasMesUploader(string processType) => _mesUploaders.ContainsKey(processType);
+
+        public bool TryGetCloudUploader(string processType, out CloudUploaderRegistration registration)
+        {
+            registration = default!;
+            return false;
+        }
+
+        public bool TryGetMesUploader(string processType, out MesUploaderRegistration registration)
+            => _mesUploaders.TryGetValue(processType, out registration!);
+
+        public IReadOnlyDictionary<string, CloudUploaderRegistration> GetCloudUploaders()
+            => new Dictionary<string, CloudUploaderRegistration>();
+
+        public IReadOnlyDictionary<string, MesUploaderRegistration> GetMesUploaders()
+            => _mesUploaders;
     }
 }

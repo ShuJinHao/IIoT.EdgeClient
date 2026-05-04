@@ -141,6 +141,7 @@ public sealed class MonitorQueriesBehaviorTests
                 cloudRetryStore,
                 mesRetryStore,
                 new FakeDeviceLogBufferStore(),
-                new FakeCapacityBufferStore()));
+                new FakeCapacityBufferStore()),
+            new FakeProductionTimeProvider());
     }
 }

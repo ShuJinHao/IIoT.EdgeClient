@@ -2,6 +2,7 @@ using IIoT.Edge.Application.Modules.Hardware;
 using System.Text;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
 using IIoT.Edge.Module.Homogenization.Payload;
@@ -17,13 +18,18 @@ namespace IIoT.Edge.Module.Homogenization.Runtime;
 internal sealed class HomogenizationSignalCodec
 {
     private readonly IPlcBuffer _buffer;
+    private readonly IProductionTimeProvider _productionTime;
     private readonly IReadOnlyDictionary<string, SignalBinding> _readBindings;
     private readonly IReadOnlyDictionary<string, SignalBinding> _writeBindings;
 
-    public HomogenizationSignalCodec(IPlcBuffer buffer, ProductionContext context)
+    public HomogenizationSignalCodec(
+        IPlcBuffer buffer,
+        ProductionContext context,
+        IProductionTimeProvider productionTime)
     {
         ArgumentNullException.ThrowIfNull(context);
         _buffer = buffer ?? throw new ArgumentNullException(nameof(buffer));
+        _productionTime = productionTime;
 
         var bindings = ProductionContextSignalBindings.Get(context);
         if (bindings.Count == 0)
@@ -124,7 +130,7 @@ internal sealed class HomogenizationSignalCodec
     public HomogenizationRealtimeSnapshot CaptureRealtimeSnapshot()
         => new()
         {
-            CapturedAt = DateTime.UtcNow,
+            CapturedAt = _productionTime.BusinessNow,
             StirringSpeed = ReadInt16(HomogenizationPlcSignalProfile.RealtimeStirringSpeed.Label),
             StirringCurrent = ReadInt16(HomogenizationPlcSignalProfile.RealtimeStirringCurrent.Label),
             DispersionSpeed = ReadInt16(HomogenizationPlcSignalProfile.RealtimeDispersionSpeed.Label),
@@ -139,7 +145,7 @@ internal sealed class HomogenizationSignalCodec
     public HomogenizationRecipeSnapshot CaptureRecipeSnapshot()
         => new()
         {
-            CapturedAt = DateTime.UtcNow,
+            CapturedAt = _productionTime.BusinessNow,
             StirringSpeed = ReadIntList(HomogenizationPlcSignalProfile.RecipeStirringSpeed.Label, 30),
             DispersionSpeed = ReadIntList(HomogenizationPlcSignalProfile.RecipeDispersionSpeed.Label, 30),
             Ncm = ReadFloatList(HomogenizationPlcSignalProfile.RecipeNcm.Label, 30),
@@ -177,7 +183,7 @@ internal sealed class HomogenizationSignalCodec
 
         return new HomogenizationEquipmentStatusSnapshot
         {
-            CapturedAt = DateTime.UtcNow,
+            CapturedAt = _productionTime.BusinessNow,
             StatusCode = statusCode,
             StatusText = statusText,
             Messages = messages

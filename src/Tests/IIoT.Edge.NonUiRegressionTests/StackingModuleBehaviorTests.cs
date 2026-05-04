@@ -1,5 +1,4 @@
 using IIoT.Edge.Application.Modules.Hardware;
-using AutoMapper;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
@@ -9,12 +8,12 @@ using IIoT.Edge.Module.Stacking.Config.Hardware;
 using IIoT.Edge.Module.Stacking.Integration;
 using IIoT.Edge.Module.Stacking.Payload;
 using IIoT.Edge.Module.Stacking.Runtime;
+using IIoT.Edge.Module.Stacking.Runtime.Tasks;
 using IIoT.Edge.Runtime.Signals;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging.Abstractions;
 using System.Text.Json;
 
 namespace IIoT.Edge.NonUiRegressionTests;
@@ -110,7 +109,7 @@ public sealed class StackingModuleBehaviorTests
         Assert.Equal("OK", payload.RootElement.GetProperty("item").GetProperty("cellResult").GetString());
 
         var productionContext = contextStore.GetOrCreate(deviceSession.DeviceName);
-        Assert.True(productionContext.Get<bool>(StackingModuleConstants.CloudUploadEnabledKey));
+        Assert.True(productionContext.Get<bool>(StackingModuleConstants.CloudUploadConfiguredKey));
         Assert.Equal(
             StackingModuleConstants.CloudUploadSuccessStatus,
             productionContext.Get<string>(StackingModuleConstants.LastCloudUploadStatusKey));
@@ -158,7 +157,7 @@ public sealed class StackingModuleBehaviorTests
         Assert.Contains(logger.Entries, x => x.Message.Contains("叠片云端上传已被配置关闭", StringComparison.Ordinal));
 
         var productionContext = contextStore.GetOrCreate(deviceSession.DeviceName);
-        Assert.False(productionContext.Get<bool>(StackingModuleConstants.CloudUploadEnabledKey));
+        Assert.False(productionContext.Get<bool>(StackingModuleConstants.CloudUploadConfiguredKey));
         Assert.Equal(
             StackingModuleConstants.CloudUploadDisabledStatus,
             productionContext.Get<string>(StackingModuleConstants.LastCloudUploadStatusKey));
@@ -347,10 +346,4 @@ public sealed class StackingModuleBehaviorTests
                 ["Modules:Stacking:CloudUploadEnabled"] = cloudUploadEnabled.ToString()
             })
             .Build();
-
-    private static IMapper CreateMapper()
-        => new MapperConfiguration(
-                cfg => cfg.AddProfile<StackingCloudProfile>(),
-                NullLoggerFactory.Instance)
-            .CreateMapper();
 }

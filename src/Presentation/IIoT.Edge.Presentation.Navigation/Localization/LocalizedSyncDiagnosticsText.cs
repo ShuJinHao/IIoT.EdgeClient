@@ -4,12 +4,15 @@ using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Application.Common.Diagnostics;
 using IIoT.Edge.UI.Shared.Localization;
 
 namespace IIoT.Edge.Presentation.Navigation.Localization;
 
-internal sealed class LocalizedSyncDiagnosticsText(IAppLanguageService languageService)
+internal sealed class LocalizedSyncDiagnosticsText(
+    IAppLanguageService languageService,
+    IProductionTimeProvider? productionTime = null)
 {
     public string FormatCloudMonitorSummary(CloudSyncDiagnosticsSnapshot snapshot)
     {
@@ -224,7 +227,7 @@ internal sealed class LocalizedSyncDiagnosticsText(IAppLanguageService languageS
         return processType;
     }
 
-    public static string FormatTimestamp(DateTime? value)
+    public string FormatTimestamp(DateTime? value)
         => value is null
             ? "--"
             : NormalizeTimestamp(value.Value).ToString("yyyy-MM-dd HH:mm:ss");
@@ -249,10 +252,30 @@ internal sealed class LocalizedSyncDiagnosticsText(IAppLanguageService languageS
     private string Format(string key, string fallback, params object[] args)
         => languageService.Format(key, fallback, args);
 
-    private static DateTime NormalizeTimestamp(DateTime value) => value.Kind switch
+    private DateTime NormalizeTimestamp(DateTime value)
     {
-        DateTimeKind.Utc => value.ToLocalTime(),
-        DateTimeKind.Unspecified => DateTime.SpecifyKind(value, DateTimeKind.Utc).ToLocalTime(),
+        if (productionTime is not null)
+        {
+            return productionTime.ToBusinessTime(value);
+        }
+
+        return value.Kind switch
+        {
+            DateTimeKind.Utc => DateTime.SpecifyKind(value, DateTimeKind.Unspecified),
+            DateTimeKind.Local => DateTime.SpecifyKind(value, DateTimeKind.Unspecified),
+            _ => value
+        };
+    }
+
+    public static string FormatTimestampFallback(DateTime? value)
+        => value is null
+            ? "--"
+            : NormalizeTimestampFallback(value.Value).ToString("yyyy-MM-dd HH:mm:ss");
+
+    private static DateTime NormalizeTimestampFallback(DateTime value) => value.Kind switch
+    {
+        DateTimeKind.Utc => DateTime.SpecifyKind(value, DateTimeKind.Unspecified),
+        DateTimeKind.Local => DateTime.SpecifyKind(value, DateTimeKind.Unspecified),
         _ => value
     };
 

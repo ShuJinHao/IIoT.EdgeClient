@@ -1,9 +1,12 @@
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
+using IIoT.Edge.Module.Homogenization.Config.Parameters;
 using IIoT.Edge.Module.Homogenization.Resources;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using Microsoft.Extensions.Options;
@@ -24,6 +27,8 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
     private readonly IDeviceService _deviceService;
     private readonly HomogenizationMesScenarioChannel _mesChannel;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
+    private readonly IModuleParamProvider<MesParam, CloudParam, BusinessParam> _parameters;
+    private readonly HomogenizationTrayCodeGuard _trayCodeGuard;
 
     public HomogenizationInboundTask(
         IPlcBuffer buffer,
@@ -31,14 +36,19 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
         IDeviceService deviceService,
         HomogenizationMesScenarioChannel mesChannel,
         IMesUploadDiagnosticsStore diagnosticsStore,
+        IModuleParamProvider<MesParam, CloudParam, BusinessParam> parameters,
+        HomogenizationTrayCodeGuard trayCodeGuard,
         ILogService logger,
+        IProductionTimeProvider productionTime,
         IOptions<HomogenizationModuleOptions> moduleOptions,
         IOptions<HomogenizationCodeOptions> codeOptions)
-        : base(buffer, context, logger, codeOptions, moduleOptions)
+        : base(buffer, context, logger, productionTime, codeOptions, moduleOptions)
     {
         _deviceService = deviceService;
         _mesChannel = mesChannel;
         _diagnosticsStore = diagnosticsStore;
+        _parameters = parameters;
+        _trayCodeGuard = trayCodeGuard;
     }
 
     /// <summary>
@@ -109,6 +119,17 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
             return;
         }
 
+        var parameters = await _parameters.GetAsync(cancellationToken).ConfigureAwait(false);
+        if (_trayCodeGuard.IsDuplicateEnabled(parameters)
+            && _trayCodeGuard.IsDuplicate(ModuleContext, HomogenizationTrayCodeStage.Inbound, trayCode))
+        {
+            var message = _trayCodeGuard.FormatDuplicateMessage(HomogenizationTrayCodeStage.Inbound, trayCode);
+            Codec.WriteWord(AckLabel, CodeOptions.Plc.AckMesNg);
+            _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Inbound, message);
+            RecordInboundResult(trayCode, message);
+            return;
+        }
+
         var result = await _mesChannel
             .UploadInboundAsync(_deviceService.CurrentDevice, trayCode, cancellationToken)
             .ConfigureAwait(false);
@@ -116,6 +137,12 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
         if (result.IsSuccess)
         {
             _diagnosticsStore.RecordSuccess(CodeOptions.Mes.Channels.Inbound);
+            _trayCodeGuard.MarkProcessed(
+                ModuleContext,
+                HomogenizationTrayCodeStage.Inbound,
+                trayCode,
+                "进站已通过",
+                ProductionTime.BusinessNow);
         }
         else
         {
@@ -129,7 +156,7 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
     private void RecordInboundResult(string trayCode, string result)
     {
         ModuleContext.LastInboundTrayCode = trayCode;
-        ModuleContext.LastInboundAt = DateTime.UtcNow;
+        ModuleContext.LastInboundAt = ProductionTime.BusinessNow;
         ModuleContext.LastInboundResult = result;
     }
 }

@@ -8,7 +8,7 @@ public sealed class HomogenizationEquipmentStatusSnapshot
     /// <summary>
     /// 状态采集时间，用于 UI 最近状态和诊断记录。
     /// </summary>
-    public DateTime CapturedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CapturedAt { get; set; }
 
     /// <summary>
     /// PLC 原始设备状态码，直接作为 MES status 字段来源。

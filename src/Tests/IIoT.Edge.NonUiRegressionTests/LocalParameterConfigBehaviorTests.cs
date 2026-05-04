@@ -1,302 +1,138 @@
-﻿using System.Linq.Expressions;
+using System.Linq.Expressions;
 using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Cache;
 using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Application.Features.Config;
 using IIoT.Edge.Application.Features.Config.LocalParameterConfig;
+using IIoT.Edge.Application.Features.Config.ModuleParameters;
 using IIoT.Edge.Application.Features.Config.ParamView;
 using IIoT.Edge.Application.Features.Config.ParamView.Models;
-using IIoT.Edge.Application.Features.Config.UseCases.DeviceParam.Commands;
-using IIoT.Edge.Application.Features.Config.UseCases.DeviceParam.Queries;
-using IIoT.Edge.Application.Features.Config.UseCases.SystemConfig.Commands;
+using IIoT.Edge.Application.Features.Config.UseCases.ModuleParam;
 using IIoT.Edge.Application.Features.Config.UseCases.SystemConfig.Queries;
-using IIoT.Edge.Application.Features.Hardware.Queries;
 using IIoT.Edge.Domain.Config.Aggregates;
-using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.SharedKernel.Domain;
-using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.SharedKernel.Repository;
 using IIoT.Edge.SharedKernel.Result;
 using IIoT.Edge.SharedKernel.Specification;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 
 public sealed class LocalParameterConfigBehaviorTests
 {
+    private const string ModuleId = "Homogenization";
+
     [Fact]
-    public async Task LocalParameterConfigService_WhenSystemConfigsSaved_ShouldInvalidateCacheAndRaiseSystemEvent()
+    public async Task LocalParameterConfigService_WhenSystemConfigsLoaded_ShouldUseSharedCacheKey()
     {
+        var key = ModuleParamKeys.StorageKey(ModuleId, ModuleParamCategory.Mes, "服务地址");
         using var host = new ParameterConfigTestHost(
             systemConfigs:
             [
-                CreateSystemConfig(1, SystemConfigKey.心跳间隔, "30")
+                CreateSystemConfig(1, key, "http://mes.local")
             ]);
-        var events = new List<ParameterConfigChangedEventArgs>();
-        host.LocalParameterConfigService.ParameterConfigChanged += (_, args) => events.Add(args);
 
-        await host.LocalParameterConfigService.GetSystemConfigsAsync();
-        Assert.True(host.Cache.Contains(ParameterConfigTestHost.SystemCacheKey));
+        var first = await host.LocalParameterConfigService.GetSystemConfigsAsync();
+        var second = await host.LocalParameterConfigService.GetSystemConfigsAsync();
 
-        var handler = new SaveSystemConfigsHandler(host.SystemRepo, host.Cache, host.ChangePublisher);
-        var result = await handler.Handle(
-            new SaveSystemConfigsCommand(
-                [
-                    new SystemConfigDto(SystemConfigKey.心跳间隔.ToString(), "45")
-                ]),
-            CancellationToken.None);
-
-        Assert.True(result.IsSuccess);
-        Assert.False(host.Cache.Contains(ParameterConfigTestHost.SystemCacheKey));
-
-        var value = await host.LocalParameterConfigService.GetSystemConfigValueAsync(SystemConfigKey.心跳间隔);
-        var snapshots = await host.LocalParameterConfigService.GetSystemConfigsAsync();
-
-        Assert.Equal("45", value);
-        Assert.True(host.Cache.Contains(ParameterConfigTestHost.SystemCacheKey));
-        Assert.Collection(
-            snapshots,
-            snapshot =>
-            {
-                Assert.Equal(SystemConfigKey.心跳间隔.ToString(), snapshot.Key);
-                Assert.Equal("45", snapshot.Value);
-            });
-        Assert.Collection(
-            events,
-            evt =>
-            {
-                Assert.Equal(ParameterConfigChangeScope.System, evt.Scope);
-                Assert.Null(evt.DeviceId);
-            });
+        Assert.True(host.Cache.Contains(ParameterCacheKeys.SystemAll));
+        Assert.Equal(first.Single().Key, second.Single().Key);
+        Assert.Equal(first.Single().Value, second.Single().Value);
     }
 
     [Fact]
-    public async Task LocalParameterConfigService_WhenDeviceParamsSaved_ShouldInvalidateCacheAndRaiseDeviceEvent()
+    public async Task SaveModuleParamsHandler_WhenSaved_ShouldInvalidateSystemAndModuleCachesAndRaiseModuleEvent()
     {
-        const int deviceId = 7;
-
-        using var host = new ParameterConfigTestHost(
-            deviceParams:
-            [
-                CreateDeviceParam(1, deviceId, DeviceParamKey.切刀速度, "100")
-            ]);
-        var events = new List<ParameterConfigChangedEventArgs>();
-        host.LocalParameterConfigService.ParameterConfigChanged += (_, args) => events.Add(args);
-
-        await host.LocalParameterConfigService.GetDeviceParamsAsync(deviceId);
-        Assert.True(host.Cache.Contains(ParameterConfigTestHost.GetDeviceParamCacheKey(deviceId)));
-
-        var handler = new SaveDeviceParamsHandler(host.DeviceParamRepo, host.Cache, host.ChangePublisher);
-        var result = await handler.Handle(
-            new SaveDeviceParamsCommand(
-                deviceId,
-                [
-                    new DeviceParamDto(DeviceParamKey.切刀速度.ToString(), "120", "pcs", "0", "200")
-                ]),
-            CancellationToken.None);
-
-        Assert.True(result.IsSuccess);
-        Assert.False(host.Cache.Contains(ParameterConfigTestHost.GetDeviceParamCacheKey(deviceId)));
-
-        var value = await host.LocalParameterConfigService.GetDeviceParamValueAsync(deviceId, DeviceParamKey.切刀速度);
-        var snapshots = await host.LocalParameterConfigService.GetDeviceParamsAsync(deviceId);
-
-        Assert.Equal("120", value);
-        Assert.True(host.Cache.Contains(ParameterConfigTestHost.GetDeviceParamCacheKey(deviceId)));
-        Assert.Collection(
-            snapshots,
-            snapshot =>
-            {
-                Assert.Equal(deviceId, snapshot.DeviceId);
-                Assert.Equal(DeviceParamKey.切刀速度.ToString(), snapshot.Name);
-                Assert.Equal("120", snapshot.Value);
-                Assert.Equal("pcs", snapshot.Unit);
-            });
-        Assert.Collection(
-            events,
-            evt =>
-            {
-                Assert.Equal(ParameterConfigChangeScope.Device, evt.Scope);
-                Assert.Equal(deviceId, evt.DeviceId);
-            });
-    }
-
-    [Fact]
-    public async Task SaveSystemConfigsHandler_WhenConfigInvalid_ShouldReturnFailureAndPreserveExistingRows()
-    {
+        var key = ModuleParamKeys.StorageKey(ModuleId, ModuleParamCategory.Mes, "服务地址");
         using var host = new ParameterConfigTestHost(
             systemConfigs:
             [
-                CreateSystemConfig(1, SystemConfigKey.心跳间隔, "30")
+                CreateSystemConfig(1, key, "http://old-mes")
             ]);
-        var handler = new SaveSystemConfigsHandler(host.SystemRepo, host.Cache, host.ChangePublisher);
+        var events = new List<ParameterConfigChangedEventArgs>();
+        host.LocalParameterConfigService.ParameterConfigChanged += (_, args) => events.Add(args);
+        host.Cache.Set(ParameterCacheKeys.SystemAll, host.SystemRepo.Items.ToList());
+        host.Cache.Set(ParameterCacheKeys.ModuleSnapshot(ModuleId), new ModuleParamValueSnapshot(ModuleId, new Dictionary<string, string>()));
 
+        var handler = new SaveModuleParamsHandler(host.SystemRepo, host.Cache, host.ChangePublisher);
         var result = await handler.Handle(
-            new SaveSystemConfigsCommand(
-                [
-                    new SystemConfigDto(string.Empty, "45")
-                ]),
+            new SaveModuleParamsCommand(
+            [
+                new ModuleParamDto(key, "http://new-mes")
+            ]),
             CancellationToken.None);
 
-        Assert.False(result.IsSuccess);
-        Assert.StartsWith("系统配置键不能为空。", result.ErrorMessage);
+        Assert.True(result.IsSuccess);
+        Assert.False(host.Cache.Contains(ParameterCacheKeys.SystemAll));
+        Assert.False(host.Cache.Contains(ParameterCacheKeys.ModuleSnapshot(ModuleId)));
         Assert.Collection(
             host.SystemRepo.Items,
             item =>
             {
-                Assert.Equal(1, item.Id);
-                Assert.Equal(SystemConfigKey.心跳间隔.ToString(), item.Key);
-                Assert.Equal("30", item.Value);
+                Assert.Equal(key, item.Key);
+                Assert.Equal("http://new-mes", item.Value);
             });
-    }
-
-    [Fact]
-    public async Task SaveDeviceParamsHandler_WhenParamInvalid_ShouldReturnFailureAndPreserveExistingRows()
-    {
-        const int deviceId = 7;
-        using var host = new ParameterConfigTestHost(
-            deviceParams:
-            [
-                CreateDeviceParam(1, deviceId, DeviceParamKey.切刀速度, "100")
-            ]);
-        var handler = new SaveDeviceParamsHandler(host.DeviceParamRepo, host.Cache, host.ChangePublisher);
-
-        var result = await handler.Handle(
-            new SaveDeviceParamsCommand(
-                deviceId,
-                [
-                    new DeviceParamDto(string.Empty, "120")
-                ]),
-            CancellationToken.None);
-
-        Assert.False(result.IsSuccess);
-        Assert.StartsWith("设备参数名不能为空。", result.ErrorMessage);
         Assert.Collection(
-            host.DeviceParamRepo.Items,
-            item =>
+            events,
+            evt =>
             {
-                Assert.Equal(1, item.Id);
-                Assert.Equal(DeviceParamKey.切刀速度.ToString(), item.Name);
-                Assert.Equal("100", item.Value);
+                Assert.Equal(ParameterConfigChangeScope.Module, evt.Scope);
             });
     }
 
     [Fact]
-    public async Task ParamViewCrudService_WhenSaved_ShouldReloadLatestLocalParameterSnapshots()
+    public async Task ParamViewCrudService_WhenSaved_ShouldOnlyPersistModuleParameters()
     {
-        const int deviceId = 9;
-
+        var moduleKey = ModuleParamKeys.StorageKey(ModuleId, ModuleParamCategory.Business, "启用托盘码重码验证");
         using var host = new ParameterConfigTestHost(
             systemConfigs:
             [
-                CreateSystemConfig(1, SystemConfigKey.MES服务地址, "http://old-mes")
-            ],
-            deviceParams:
-            [
-                CreateDeviceParam(1, deviceId, DeviceParamKey.切刀速度, "100")
-            ],
-            networkDevices:
-            [
-                CreateNetworkDevice(deviceId, "PLC-A")
+                CreateSystemConfig(1, moduleKey, "false")
             ]);
         var service = new ParamViewCrudService(host.Sender, host.PermissionService);
 
-        var initialView = await service.LoadAsync();
-        var initialDeviceParams = await service.LoadDeviceParamsAsync(deviceId);
-
-        Assert.Equal("http://old-mes", initialView.GeneralParams.Single().Value);
-        Assert.Equal("100", initialDeviceParams.Single().Value);
-
         var saveResult = await service.SaveAsync(
             [
-                new GeneralParamVm
+                new ModuleParamVm
                 {
-                    Name = SystemConfigKey.MES服务地址.ToString(),
-                    Value = "http://new-mes",
-                    Description = "MES endpoint"
-                }
-            ],
-            deviceId,
-            [
-                new DeviceParamVm
-                {
-                    Name = DeviceParamKey.切刀速度.ToString(),
-                    Value = "125",
-                    Unit = "pcs",
-                    Min = "0",
-                    Max = "200"
+                    ModuleId = ModuleId,
+                    Category = ModuleParamCategory.Business,
+                    Key = moduleKey,
+                    Name = "启用托盘码重码验证",
+                    Value = "true"
                 }
             ]);
 
         Assert.True(saveResult.IsSuccess);
-        Assert.Equal("已保存到本地参数配置。", saveResult.Message);
-
-        var savedSystemValue = await host.LocalParameterConfigService.GetSystemConfigValueAsync(SystemConfigKey.MES服务地址);
-        var reloadedDeviceParams = await service.LoadDeviceParamsAsync(deviceId);
-
-        Assert.Equal("http://new-mes", savedSystemValue);
-        Assert.Collection(
-            reloadedDeviceParams,
-            item =>
-            {
-                Assert.Equal(DeviceParamKey.切刀速度.ToString(), item.Name);
-                Assert.Equal("125", item.Value);
-                Assert.Equal("pcs", item.Unit);
-                Assert.Equal("0", item.Min);
-                Assert.Equal("200", item.Max);
-            });
+        var savedSystemValue = (await host.LocalParameterConfigService.GetSystemConfigsAsync())
+            .Single(x => x.Key == moduleKey)
+            .Value;
+        Assert.Equal("true", savedSystemValue);
     }
 
-    private static SystemConfigEntity CreateSystemConfig(int id, SystemConfigKey key, string value)
+    private static SystemConfigEntity CreateSystemConfig(int id, string key, string value)
     {
-        var entity = SystemConfigEntity.Create(key.ToString(), value);
+        var entity = SystemConfigEntity.Create(key, value);
         entity.WithId(id);
         entity.UpdateSortOrder(id);
-        return entity;
-    }
-
-    private static DeviceParamEntity CreateDeviceParam(int id, int deviceId, DeviceParamKey key, string value)
-    {
-        var entity = DeviceParamEntity.Create(deviceId, key.ToString(), value, "pcs");
-        entity.WithId(id);
-        entity.UpdateBounds("0", "200");
-        entity.UpdateSortOrder(id);
-        return entity;
-    }
-
-    private static NetworkDeviceEntity CreateNetworkDevice(int id, string name)
-    {
-        var entity = NetworkDeviceEntity.Create(name, DeviceType.PLC, "192.168.0.10", 102);
-        entity.WithId(id);
-        entity.AssignModule("Injection", "S7");
-        entity.UpdateEndpoint("192.168.0.10", 102, null, 3000);
-        entity.Enable();
         return entity;
     }
 
     private sealed class ParameterConfigTestHost : IDisposable
     {
-        public const string SystemCacheKey = "Config:SystemAll";
-
         private readonly ServiceProvider _serviceProvider;
 
         public ParameterConfigTestHost(
-            IEnumerable<SystemConfigEntity>? systemConfigs = null,
-            IEnumerable<DeviceParamEntity>? deviceParams = null,
-            IEnumerable<NetworkDeviceEntity>? networkDevices = null)
+            IEnumerable<SystemConfigEntity>? systemConfigs = null)
         {
             SystemRepo = new InMemoryRepository<SystemConfigEntity>(systemConfigs?.ToArray() ?? []);
-            DeviceParamRepo = new InMemoryRepository<DeviceParamEntity>(deviceParams?.ToArray() ?? []);
             Cache = new TestEdgeCacheService();
             PermissionService = new StubPermissionService { CanEditParams = true };
 
-            var devices = (networkDevices ?? []).ToList();
             var services = new ServiceCollection();
             services.AddSingleton<IRepository<SystemConfigEntity>>(SystemRepo);
             services.AddSingleton<IReadRepository<SystemConfigEntity>>(sp => sp.GetRequiredService<IRepository<SystemConfigEntity>>());
-            services.AddSingleton<IRepository<DeviceParamEntity>>(DeviceParamRepo);
-            services.AddSingleton<IReadRepository<DeviceParamEntity>>(sp => sp.GetRequiredService<IRepository<DeviceParamEntity>>());
             services.AddSingleton<IEdgeCacheService>(Cache);
             services.AddSingleton<IClientPermissionService>(PermissionService);
             services.AddSingleton<LocalParameterConfigService>();
@@ -304,11 +140,9 @@ public sealed class LocalParameterConfigBehaviorTests
             services.AddSingleton<ILocalParameterConfigChangePublisher>(sp => sp.GetRequiredService<LocalParameterConfigService>());
             services.AddSingleton<ISender>(sp => new ParameterConfigSender(
                 sp.GetRequiredService<IRepository<SystemConfigEntity>>(),
-                sp.GetRequiredService<IRepository<DeviceParamEntity>>(),
                 sp.GetRequiredService<IEdgeCacheService>(),
                 sp.GetRequiredService<ILocalParameterConfigService>(),
                 sp.GetRequiredService<ILocalParameterConfigChangePublisher>(),
-                devices,
                 sp.GetRequiredService<IClientPermissionService>()));
 
             _serviceProvider = services.BuildServiceProvider(new ServiceProviderOptions
@@ -323,8 +157,6 @@ public sealed class LocalParameterConfigBehaviorTests
 
         public InMemoryRepository<SystemConfigEntity> SystemRepo { get; }
 
-        public InMemoryRepository<DeviceParamEntity> DeviceParamRepo { get; }
-
         public TestEdgeCacheService Cache { get; }
 
         public StubPermissionService PermissionService { get; }
@@ -335,18 +167,14 @@ public sealed class LocalParameterConfigBehaviorTests
 
         public ISender Sender { get; }
 
-        public static string GetDeviceParamCacheKey(int deviceId) => $"Config:DeviceParam:{deviceId}";
-
         public void Dispose() => _serviceProvider.Dispose();
     }
 
     private sealed class ParameterConfigSender(
         IRepository<SystemConfigEntity> systemRepo,
-        IRepository<DeviceParamEntity> deviceParamRepo,
         IEdgeCacheService cache,
         ILocalParameterConfigService localParameterConfigService,
         ILocalParameterConfigChangePublisher changePublisher,
-        IReadOnlyList<NetworkDeviceEntity> networkDevices,
         IClientPermissionService permissionService)
         : ISender
     {
@@ -355,14 +183,8 @@ public sealed class LocalParameterConfigBehaviorTests
             return request switch
             {
                 GetAllSystemConfigsQuery query => HandleGetAllSystemConfigs<TResponse>(query, cancellationToken),
-                GetSystemConfigValueQuery query => HandleGetSystemConfigValue<TResponse>(query, cancellationToken),
-                SaveSystemConfigsCommand command => HandleSaveSystemConfigs<TResponse>(command, cancellationToken),
-                GetDeviceParamsQuery query => HandleGetDeviceParams<TResponse>(query, cancellationToken),
-                GetDeviceParamValueQuery query => HandleGetDeviceParamValue<TResponse>(query, cancellationToken),
-                SaveDeviceParamsCommand command => HandleSaveDeviceParams<TResponse>(command, cancellationToken),
-                GetAllNetworkDevicesQuery query => HandleGetAllNetworkDevices<TResponse>(query),
+                SaveModuleParamsCommand command => HandleSaveModuleParams<TResponse>(command, cancellationToken),
                 LoadParamViewQuery query => HandleLoadParamView<TResponse>(query, cancellationToken),
-                LoadDeviceParamsQuery query => HandleLoadDeviceParams<TResponse>(query, cancellationToken),
                 SaveParamViewCommand command => HandleSaveParamView<TResponse>(command, cancellationToken),
                 _ => throw new NotSupportedException(request.GetType().FullName)
             };
@@ -389,35 +211,15 @@ public sealed class LocalParameterConfigBehaviorTests
             => (TResponse)(object)await new GetAllSystemConfigsHandler(systemRepo, cache)
                 .Handle(query, cancellationToken);
 
-        private async Task<TResponse> HandleGetSystemConfigValue<TResponse>(GetSystemConfigValueQuery query, CancellationToken cancellationToken)
-            => (TResponse)(object)await new GetSystemConfigValueHandler(this)
-                .Handle(query, cancellationToken);
-
-        private async Task<TResponse> HandleSaveSystemConfigs<TResponse>(SaveSystemConfigsCommand command, CancellationToken cancellationToken)
-            => (TResponse)(object)await new SaveSystemConfigsHandler(systemRepo, cache, changePublisher)
+        private async Task<TResponse> HandleSaveModuleParams<TResponse>(SaveModuleParamsCommand command, CancellationToken cancellationToken)
+            => (TResponse)(object)await new SaveModuleParamsHandler(systemRepo, cache, changePublisher)
                 .Handle(command, cancellationToken);
-
-        private async Task<TResponse> HandleGetDeviceParams<TResponse>(GetDeviceParamsQuery query, CancellationToken cancellationToken)
-            => (TResponse)(object)await new GetDeviceParamsHandler(deviceParamRepo, cache)
-                .Handle(query, cancellationToken);
-
-        private async Task<TResponse> HandleGetDeviceParamValue<TResponse>(GetDeviceParamValueQuery query, CancellationToken cancellationToken)
-            => (TResponse)(object)await new GetDeviceParamValueHandler(this)
-                .Handle(query, cancellationToken);
-
-        private async Task<TResponse> HandleSaveDeviceParams<TResponse>(SaveDeviceParamsCommand command, CancellationToken cancellationToken)
-            => (TResponse)(object)await new SaveDeviceParamsHandler(deviceParamRepo, cache, changePublisher)
-                .Handle(command, cancellationToken);
-
-        private Task<TResponse> HandleGetAllNetworkDevices<TResponse>(GetAllNetworkDevicesQuery query)
-            => Task.FromResult((TResponse)(object)Result.Success(networkDevices.ToList()));
 
         private async Task<TResponse> HandleLoadParamView<TResponse>(LoadParamViewQuery query, CancellationToken cancellationToken)
-            => (TResponse)(object)await new LoadParamViewHandler(this, localParameterConfigService)
-                .Handle(query, cancellationToken);
-
-        private async Task<TResponse> HandleLoadDeviceParams<TResponse>(LoadDeviceParamsQuery query, CancellationToken cancellationToken)
-            => (TResponse)(object)await new LoadDeviceParamsHandler(localParameterConfigService)
+            => (TResponse)(object)await new LoadParamViewHandler(
+                    localParameterConfigService,
+                    new ModuleParamRegistry(),
+                    [])
                 .Handle(query, cancellationToken);
 
         private async Task<TResponse> HandleSaveParamView<TResponse>(SaveParamViewCommand command, CancellationToken cancellationToken)
@@ -443,42 +245,6 @@ public sealed class LocalParameterConfigBehaviorTests
             => string.Equals(permission, Permissions.ParamConfig, StringComparison.OrdinalIgnoreCase)
                 ? CanEditParams
                 : CanEditHardware;
-    }
-
-    private sealed class TestEdgeCacheService : IEdgeCacheService
-    {
-        private readonly Dictionary<string, object> _entries = new(StringComparer.OrdinalIgnoreCase);
-
-        public T? Get<T>(string key)
-            => _entries.TryGetValue(key, out var value) && value is T typed
-                ? typed
-                : default;
-
-        public void Set<T>(string key, T value)
-        {
-            if (value is not null)
-            {
-                _entries[key] = value!;
-            }
-        }
-
-        public void Remove(string key) => _entries.Remove(key);
-
-        public void RemoveByPrefix(string prefix)
-        {
-            var keys = _entries.Keys
-                .Where(x => x.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-            foreach (var key in keys)
-            {
-                _entries.Remove(key);
-            }
-        }
-
-        public void Clear() => _entries.Clear();
-
-        public bool Contains(string key) => _entries.ContainsKey(key);
     }
 
     private sealed class InMemoryRepository<T>(params T[] seedItems) : IRepository<T>
@@ -580,6 +346,81 @@ public sealed class LocalParameterConfigBehaviorTests
             }
 
             return Task.FromResult(toDelete.Count);
+        }
+    }
+
+    private sealed class TestEdgeCacheService : IEdgeCacheService
+    {
+        private readonly Dictionary<string, object?> _entries = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, SemaphoreSlim> _locks = new(StringComparer.OrdinalIgnoreCase);
+
+        public T? Get<T>(string key)
+            => _entries.TryGetValue(key, out var value) && value is T typed
+                ? typed
+                : default;
+
+        public void Set<T>(string key, T value)
+        {
+            _entries[key] = value;
+        }
+
+        public void Remove(string key) => _entries.Remove(key);
+
+        public void RemoveByPrefix(string prefix)
+        {
+            foreach (var key in _entries.Keys.Where(key => key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)).ToArray())
+            {
+                _entries.Remove(key);
+            }
+        }
+
+        public void Clear() => _entries.Clear();
+
+        public bool Contains(string key) => _entries.ContainsKey(key);
+
+        public async Task<T?> GetOrCreateAsync<T>(
+            string key,
+            Func<CancellationToken, Task<T?>> factory,
+            TimeSpan? absoluteExpirationRelativeToNow = null,
+            TimeSpan? nullValueExpirationRelativeToNow = null,
+            CancellationToken cancellationToken = default)
+        {
+            if (_entries.TryGetValue(key, out var cached))
+            {
+                return cached is T typed ? typed : default;
+            }
+
+            var gate = GetLock(key);
+            await gate.WaitAsync(cancellationToken);
+            try
+            {
+                if (_entries.TryGetValue(key, out cached))
+                {
+                    return cached is T typed ? typed : default;
+                }
+
+                var value = await factory(cancellationToken);
+                _entries[key] = value;
+                return value;
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }
+
+        private SemaphoreSlim GetLock(string key)
+        {
+            lock (_locks)
+            {
+                if (!_locks.TryGetValue(key, out var gate))
+                {
+                    gate = new SemaphoreSlim(1, 1);
+                    _locks[key] = gate;
+                }
+
+                return gate;
+            }
         }
     }
 }

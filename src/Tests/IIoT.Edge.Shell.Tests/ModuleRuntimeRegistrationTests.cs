@@ -10,6 +10,7 @@ using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Recipe;
 using IIoT.Edge.Application.Abstractions.Tasks;
 using IIoT.Edge.Application.Common.Models;
+using IIoT.Edge.Application.Features.Config.ModuleParameters;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Infrastructure.Persistence.Dapper;
@@ -155,6 +156,7 @@ public sealed class ModuleRuntimeRegistrationTests
             var cellDataRegistry = new CellDataRegistry();
             var runtimeRegistry = new StationRuntimeRegistry();
             var integrationRegistry = new ProcessIntegrationRegistry();
+            var moduleParamRegistry = new ModuleParamRegistry();
 
             foreach (var module in modules)
             {
@@ -166,13 +168,15 @@ public sealed class ModuleRuntimeRegistrationTests
                     new ModuleViewRegistry(viewRegistry, module.ModuleId),
                     cellDataRegistry,
                     runtimeRegistry,
-                    integrationRegistry));
+                    integrationRegistry,
+                    moduleParamRegistry));
             }
 
             Assert.Equal(3, modules.Count);
             Assert.Equal(3, cellDataRegistry.GetRegistrations().Count);
             Assert.Equal(3, runtimeRegistry.GetRegistrations().Count);
             Assert.Equal(3, integrationRegistry.GetCloudUploaders().Count);
+            Assert.Equal(3, moduleParamRegistry.GetRegistrations().Count);
             Assert.NotNull(viewRegistry.GetViewRegistration("Injection.DataView"));
             Assert.NotNull(viewRegistry.GetViewRegistration("Stacking.DataView"));
             Assert.NotNull(viewRegistry.GetViewRegistration("Homogenization.DataView"));
@@ -803,6 +807,7 @@ public sealed class ModuleRuntimeRegistrationTests
             var cellDataRegistry = new CellDataRegistry();
             var runtimeRegistry = new StationRuntimeRegistry();
             var integrationRegistry = new ProcessIntegrationRegistry();
+            var moduleParamRegistry = new ModuleParamRegistry();
 
             foreach (var module in activation.Modules)
             {
@@ -815,7 +820,8 @@ public sealed class ModuleRuntimeRegistrationTests
                     new ModuleViewRegistry(moduleViewRegistry, module.ModuleId),
                     cellDataRegistry,
                     runtimeRegistry,
-                    integrationRegistry));
+                    integrationRegistry,
+                    moduleParamRegistry));
             }
 
             services.AddSingleton<IDevelopmentSampleInitializer, DevelopmentSampleInitializer>();

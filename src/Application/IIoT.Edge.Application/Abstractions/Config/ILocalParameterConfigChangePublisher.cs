@@ -6,7 +6,5 @@ namespace IIoT.Edge.Application.Abstractions.Config;
 /// </summary>
 public interface ILocalParameterConfigChangePublisher
 {
-    void NotifySystemChanged();
-
-    void NotifyDeviceChanged(int deviceId);
+    void NotifyModuleChanged();
 }

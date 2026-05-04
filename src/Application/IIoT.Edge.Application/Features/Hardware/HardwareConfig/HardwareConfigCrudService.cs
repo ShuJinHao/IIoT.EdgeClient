@@ -19,8 +19,6 @@ public interface IHardwareConfigCrudService
 
     Task<IoMappingPageResult> LoadIoMappingsAsync(
         int networkDeviceId,
-        int pageIndex,
-        int pageSize,
         CancellationToken cancellationToken = default);
 
     Task<ModuleTemplateInfoResult> GetModuleTemplateInfoAsync(
@@ -55,11 +53,9 @@ public sealed class HardwareConfigCrudService(
 
     public Task<IoMappingPageResult> LoadIoMappingsAsync(
         int networkDeviceId,
-        int pageIndex,
-        int pageSize,
         CancellationToken cancellationToken = default)
         => sender.Send(
-            new LoadIoMappingsQuery(networkDeviceId, pageIndex, pageSize),
+            new LoadIoMappingsQuery(networkDeviceId),
             cancellationToken);
 
     public Task<ModuleTemplateInfoResult> GetModuleTemplateInfoAsync(
@@ -71,13 +67,13 @@ public sealed class HardwareConfigCrudService(
             || string.IsNullOrWhiteSpace(selectedNetworkDevice.ModuleId)
             || !_hardwareProfiles.TryGetValue(selectedNetworkDevice.ModuleId, out var provider))
         {
-            return Task.FromResult(new ModuleTemplateInfoResult(false, selectedNetworkDevice?.ModuleId, string.Empty));
+            return Task.FromResult(new ModuleTemplateInfoResult(false, selectedNetworkDevice?.ModuleId));
         }
 
+        var hasTemplate = provider.GetDefaultIoTemplate().Count > 0;
         return Task.FromResult(new ModuleTemplateInfoResult(
-            true,
-            provider.ModuleId,
-            provider.GetProtocolSummary()));
+            hasTemplate,
+            provider.ModuleId));
     }
 
     public async Task<CrudOperationResult> ApplyModuleTemplateAsync(

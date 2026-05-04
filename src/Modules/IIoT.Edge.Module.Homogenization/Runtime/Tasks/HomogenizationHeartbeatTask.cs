@@ -1,5 +1,6 @@
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
 using IIoT.Edge.Module.Homogenization.Runtime;
@@ -14,6 +15,7 @@ namespace IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 internal sealed class HomogenizationHeartbeatTask : HeartbeatMirrorPlcTaskBase
 {
     private readonly HomogenizationContext _context;
+    private readonly IProductionTimeProvider _productionTime;
     private readonly int _taskLoopInterval;
     private HomogenizationSignalCodec? _codec;
 
@@ -21,11 +23,13 @@ internal sealed class HomogenizationHeartbeatTask : HeartbeatMirrorPlcTaskBase
         IPlcBuffer buffer,
         HomogenizationContext context,
         ILogService logger,
+        IProductionTimeProvider productionTime,
         IOptions<HomogenizationModuleOptions> moduleOptions,
         IOptions<HomogenizationCodeOptions> codeOptions)
         : base(buffer, context, logger)
     {
         _context = context;
+        _productionTime = productionTime;
         var runtime = moduleOptions.Value.Runtime;
         _taskLoopInterval = Math.Max(runtime.MinEventLoopIntervalMs, runtime.EventLoopIntervalMs);
     }
@@ -61,9 +65,9 @@ internal sealed class HomogenizationHeartbeatTask : HeartbeatMirrorPlcTaskBase
         ushort output,
         CancellationToken cancellationToken)
     {
-        _context.LastHeartbeatAt = DateTime.UtcNow;
+        _context.LastHeartbeatAt = _productionTime.BusinessNow;
         return Task.CompletedTask;
     }
 
-    private HomogenizationSignalCodec Codec => _codec ??= new HomogenizationSignalCodec(Buffer, _context);
+    private HomogenizationSignalCodec Codec => _codec ??= new HomogenizationSignalCodec(Buffer, _context, _productionTime);
 }

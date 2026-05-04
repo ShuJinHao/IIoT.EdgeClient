@@ -10,19 +10,15 @@ using System.Windows.Input;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Config.ParamView;
 
+/// <summary>
+/// 参数配置页视图模型，只负责 MES、云端、业务三类插件参数。
+/// </summary>
 public class ParamViewModel : LocalizedCrudPageViewModelBase
 {
     private readonly IParamViewCrudService _crudService;
     private readonly IClientPermissionService _permissionService;
-    private readonly IEditorValidator<GeneralParamVm> _generalParamValidator;
-    private readonly IEditorValidator<DeviceParamVm> _deviceParamValidator;
     private readonly AsyncCommand _saveCommand;
-    private readonly BaseCommand _addGeneralParamCommand;
-    private readonly BaseCommand _deleteGeneralParamCommand;
-    private readonly BaseCommand _addDeviceParamCommand;
-    private readonly BaseCommand _deleteDeviceParamCommand;
     private int _selectedTabIndex;
-    private DeviceParamGroupVm? _selectedGroup;
 
     public bool CanEdit => _permissionService.CanEditParams;
 
@@ -36,28 +32,11 @@ public class ParamViewModel : LocalizedCrudPageViewModelBase
         }
     }
 
-    public ObservableCollection<GeneralParamVm> GeneralParams { get; } = new();
-    public ObservableCollection<DeviceParamGroupVm> DeviceParamGroups { get; } = new();
-
-    public DeviceParamGroupVm? SelectedGroup
-    {
-        get => _selectedGroup;
-        set
-        {
-            _selectedGroup = value;
-            OnPropertyChanged();
-            if (value is not null)
-            {
-                _ = LoadDeviceParamsAsync(value);
-            }
-        }
-    }
+    public ObservableCollection<ModuleParamGroupVm> MesParamGroups { get; } = new();
+    public ObservableCollection<ModuleParamGroupVm> CloudParamGroups { get; } = new();
+    public ObservableCollection<ModuleParamGroupVm> BusinessParamGroups { get; } = new();
 
     public ICommand SaveCommand { get; }
-    public ICommand AddGeneralParamCommand { get; }
-    public ICommand DeleteGeneralParamCommand { get; }
-    public ICommand AddDeviceParamCommand { get; }
-    public ICommand DeleteDeviceParamCommand { get; }
 
     public ParamViewModel(
         IParamViewCrudService crudService,
@@ -84,23 +63,9 @@ public class ParamViewModel : LocalizedCrudPageViewModelBase
     {
         _crudService = crudService;
         _permissionService = permissionService;
-        _generalParamValidator = new GeneralParamValidator(GetText);
-        _deviceParamValidator = new DeviceParamValidator(GetText);
 
         _saveCommand = (AsyncCommand)CreateBusyCommand(SaveAsync, () => CanEdit);
-        _addGeneralParamCommand = (BaseCommand)CreateAddCommand(GeneralParams, () => new GeneralParamVm(), () => CanEdit);
-        _deleteGeneralParamCommand = (BaseCommand)CreateDeleteCommand(GeneralParams, () => CanEdit);
-        _addDeviceParamCommand = (BaseCommand)CreateScopedAddCommand(
-            () => SelectedGroup?.Params,
-            () => new DeviceParamVm(),
-            () => CanEdit);
-        _deleteDeviceParamCommand = (BaseCommand)CreateScopedDeleteCommand(() => SelectedGroup?.Params, () => CanEdit);
-
         SaveCommand = _saveCommand;
-        AddGeneralParamCommand = _addGeneralParamCommand;
-        DeleteGeneralParamCommand = _deleteGeneralParamCommand;
-        AddDeviceParamCommand = _addDeviceParamCommand;
-        DeleteDeviceParamCommand = _deleteDeviceParamCommand;
 
         _permissionService.PermissionStateChanged += HandlePermissionStateChanged;
     }
@@ -114,65 +79,36 @@ public class ParamViewModel : LocalizedCrudPageViewModelBase
     {
         var result = await _crudService.LoadAsync();
 
-        ReplaceItems(GeneralParams, result.GeneralParams);
-
-        DeviceParamGroups.Clear();
-        foreach (var header in result.DeviceGroups)
-        {
-            DeviceParamGroups.Add(new DeviceParamGroupVm
-            {
-                DeviceId = header.DeviceId,
-                DeviceName = header.DeviceName
-            });
-        }
-
-        if (DeviceParamGroups.Count > 0)
-        {
-            SelectedGroup = DeviceParamGroups[0];
-        }
-    }
-
-    private async Task LoadDeviceParamsAsync(DeviceParamGroupVm group)
-    {
-        var parameters = await _crudService.LoadDeviceParamsAsync(group.DeviceId);
-        ReplaceItems(group.Params, parameters);
+        ReplaceItems(MesParamGroups, result.MesParamGroups);
+        ReplaceItems(CloudParamGroups, result.CloudParamGroups);
+        ReplaceItems(BusinessParamGroups, result.BusinessParamGroups);
     }
 
     private async Task<CrudOperationResult> SaveAsync()
     {
-        if (SelectedGroup is null)
-        {
-            return CrudOperationResult.Failure(GetText(
-                "Navigation_Param_SelectDeviceGroupFirst",
-                "请先选择设备参数组。"));
-        }
+        var moduleParams = MesParamGroups
+            .Concat(CloudParamGroups)
+            .Concat(BusinessParamGroups)
+            .SelectMany(group => group.Params)
+            .ToList();
 
-        var issues = new List<ValidationIssue>();
-        issues.AddRange(await ValidateAsync(GeneralParams, _generalParamValidator));
-        issues.AddRange(await ValidateAsync(SelectedGroup.Params, _deviceParamValidator));
-
-        var validationResult = CreateValidationResult(issues);
-        if (!validationResult.IsSuccess)
-        {
-            return validationResult;
-        }
-
-        var saveResult = await _crudService.SaveAsync(GeneralParams, SelectedGroup.DeviceId, SelectedGroup.Params);
+        var saveResult = await _crudService.SaveAsync(moduleParams);
         if (!saveResult.IsSuccess)
         {
             return saveResult;
         }
 
-        await RefreshAfterSaveAsync(SelectedGroup);
+        await RefreshAfterSaveAsync();
 
         return saveResult;
     }
 
-    private async Task RefreshAfterSaveAsync(DeviceParamGroupVm selectedGroup)
+    private async Task RefreshAfterSaveAsync()
     {
         var result = await _crudService.LoadAsync();
-        ReplaceItems(GeneralParams, result.GeneralParams);
-        await LoadDeviceParamsAsync(selectedGroup);
+        ReplaceItems(MesParamGroups, result.MesParamGroups);
+        ReplaceItems(CloudParamGroups, result.CloudParamGroups);
+        ReplaceItems(BusinessParamGroups, result.BusinessParamGroups);
     }
 
     private void HandlePermissionStateChanged()
@@ -191,9 +127,5 @@ public class ParamViewModel : LocalizedCrudPageViewModelBase
     {
         OnPropertyChanged(nameof(CanEdit));
         _saveCommand.RaiseCanExecuteChanged();
-        _addGeneralParamCommand.RaiseCanExecuteChanged();
-        _deleteGeneralParamCommand.RaiseCanExecuteChanged();
-        _addDeviceParamCommand.RaiseCanExecuteChanged();
-        _deleteDeviceParamCommand.RaiseCanExecuteChanged();
     }
 }

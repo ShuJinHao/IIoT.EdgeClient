@@ -6,7 +6,6 @@ using IIoT.Edge.Application.Modules.Mes;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Integration;
 using IIoT.Edge.Module.Homogenization.Payload;
-using IIoT.Edge.SharedKernel.Enums;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
 using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesScenarioChannel<
@@ -44,6 +43,7 @@ public sealed class HomogenizationMesIntegrationTests
         var root = document.RootElement;
         Assert.Equal("CLIENT-H", root.GetProperty("upperComputerNo").GetString());
         Assert.Equal("ST-H-01", root.GetProperty("stationNo").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("timestamp").GetString()));
         Assert.Equal("TRAY-001", root.GetProperty("data").GetProperty("productNo").GetString());
         Assert.Equal(32, root.GetProperty("sign").GetString()!.Length);
     }
@@ -63,6 +63,11 @@ public sealed class HomogenizationMesIntegrationTests
 
         Assert.Equal(MesCallOutcome.BusinessRejected, result.Outcome);
         Assert.Equal("/dev/dev/electrode/exit/push", httpClient.LastUrl);
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(httpClient.LastPayload));
+        var root = document.RootElement;
+        Assert.Equal("ST-H-02", root.GetProperty("stationNo").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("timestamp").GetString()));
+        Assert.Equal(32, root.GetProperty("sign").GetString()!.Length);
     }
 
     [Fact]
@@ -88,6 +93,9 @@ public sealed class HomogenizationMesIntegrationTests
         Assert.Equal("/dev/dev/run/info", httpClient.LastUrl);
         using var document = JsonDocument.Parse(JsonSerializer.Serialize(httpClient.LastPayload));
         var root = document.RootElement;
+        Assert.Equal("ST-H-03", root.GetProperty("stationNo").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("timestamp").GetString()));
+        Assert.Equal(32, root.GetProperty("sign").GetString()!.Length);
         var device = root.GetProperty("data").GetProperty("devices")[0];
         Assert.Equal("ST-H-03", device.GetProperty("stationNo").GetString());
         Assert.Equal("2026-04-29 08:01:02", device.GetProperty("collectTime").GetString());
@@ -120,7 +128,11 @@ public sealed class HomogenizationMesIntegrationTests
         Assert.True(result.IsSuccess);
         Assert.Equal("/dev/dev/process/param", httpClient.LastUrl);
         using var document = JsonDocument.Parse(JsonSerializer.Serialize(httpClient.LastPayload));
-        var items = document.RootElement.GetProperty("data").GetProperty("devices");
+        var root = document.RootElement;
+        Assert.Equal("ST-H-04", root.GetProperty("stationNo").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("timestamp").GetString()));
+        Assert.Equal(32, root.GetProperty("sign").GetString()!.Length);
+        var items = root.GetProperty("data").GetProperty("devices");
         Assert.Equal("recipe_stir_speed_01", items[0].GetProperty("code").GetString());
         Assert.Equal("10", items[0].GetProperty("val").GetString());
     }
@@ -142,7 +154,11 @@ public sealed class HomogenizationMesIntegrationTests
         Assert.True(result.IsSuccess);
         Assert.Equal("/dev/dev/realTime/status", httpClient.LastUrl);
         using var document = JsonDocument.Parse(JsonSerializer.Serialize(httpClient.LastPayload));
-        var device = document.RootElement.GetProperty("data").GetProperty("devices")[0];
+        var root = document.RootElement;
+        Assert.Equal("ST-H-05", root.GetProperty("stationNo").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("timestamp").GetString()));
+        Assert.Equal(32, root.GetProperty("sign").GetString()!.Length);
+        var device = root.GetProperty("data").GetProperty("devices")[0];
         Assert.Equal("ST-H-05", device.GetProperty("stationNo").GetString());
         Assert.Equal(1, device.GetProperty("status").GetInt32());
     }
@@ -175,24 +191,17 @@ public sealed class HomogenizationMesIntegrationTests
         CapturingMesHttpClient httpClient,
         string stationNo)
     {
-        var runtimeConfig = new FakeLocalSystemRuntimeConfigService
-        {
-            Current = SystemRuntimeConfigSnapshot.Default with
-            {
-                MesBaseUrl = "https://mes.local",
-                MesUploadEnabled = true
-            }
-        };
         var logger = new FakeLogService();
+        var roleProvider = new FakeModuleParamRoleProvider(stationNo);
         var executor = new MesRequestExecutor(
             httpClient,
             new FakeMesEndpointProvider(),
-            runtimeConfig,
+            roleProvider,
             logger);
 
         return new HomogenizationMesChannel(
             executor,
-            new MutableLocalParameterConfigService(stationNo),
+            roleProvider,
             logger,
             new FakeProductionTimeProvider(),
             Options.Create(CreateMesOptions()),
@@ -313,6 +322,7 @@ public sealed class HomogenizationMesIntegrationTests
         public string Response { get; set; } = """{"code":200,"msg":"OK"}""";
 
         public Task<bool> PostAsync(
+            string processType,
             string url,
             object payload,
             IReadOnlyDictionary<string, string>? headers = null,
@@ -320,6 +330,7 @@ public sealed class HomogenizationMesIntegrationTests
             => Task.FromResult(true);
 
         public Task<string?> PostWithResponseAsync(
+            string processType,
             string url,
             object payload,
             IReadOnlyDictionary<string, string>? headers = null,
@@ -330,6 +341,7 @@ public sealed class HomogenizationMesIntegrationTests
         }
 
         public Task<string?> GetAsync(
+            string processType,
             string url,
             IReadOnlyDictionary<string, string>? headers = null,
             CancellationToken cancellationToken = default)
@@ -338,40 +350,119 @@ public sealed class HomogenizationMesIntegrationTests
 
     private sealed class FakeMesEndpointProvider : IMesEndpointProvider
     {
-        public bool IsConfigured => true;
-        public string BuildUrl(string relativeOrAbsoluteUrl) => $"https://mes.local{relativeOrAbsoluteUrl}";
+        public Task<bool> IsConfiguredAsync(string processType, CancellationToken cancellationToken = default)
+            => Task.FromResult(true);
+
+        public Task<string> BuildUrlAsync(
+            string processType,
+            string relativeOrAbsoluteUrl,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult($"https://mes.local{relativeOrAbsoluteUrl}");
+
+        public Task<string?> TryBuildFirstConfiguredUrlAsync(
+            IReadOnlyCollection<string> processTypes,
+            string relativeOrAbsoluteUrl,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult<string?>($"https://mes.local{relativeOrAbsoluteUrl}");
+
         public IReadOnlyDictionary<string, string> GetDefaultHeaders() => new Dictionary<string, string>();
     }
 
-    private sealed class MutableLocalParameterConfigService(string stationNo) : ILocalParameterConfigService
+    private sealed class FakeModuleParamRoleProvider(string stationNo) : IModuleParamRoleProvider
     {
-        public event EventHandler<ParameterConfigChangedEventArgs>? ParameterConfigChanged
+        public Task<ModuleParamRoleValue?> GetAsync(
+            string moduleId,
+            ModuleParamCategory category,
+            ModuleParamRole role,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(CreateValue(moduleId, category, role));
+
+        public Task<IReadOnlyList<ModuleParamRoleValue>> GetAllAsync(
+            ModuleParamCategory category,
+            ModuleParamRole role,
+            IReadOnlyCollection<string>? moduleIds = null,
+            CancellationToken cancellationToken = default)
         {
-            add { }
-            remove { }
+            var values = (moduleIds ?? ["Homogenization"])
+                .Select(moduleId => CreateValue(moduleId, category, role))
+                .Where(static value => value is not null)
+                .Cast<ModuleParamRoleValue>()
+                .ToList();
+            return Task.FromResult<IReadOnlyList<ModuleParamRoleValue>>(values);
+        }
+
+        public Task<string?> GetStringAsync(
+            string moduleId,
+            ModuleParamCategory category,
+            ModuleParamRole role,
+            string? defaultValue = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(CreateValue(moduleId, category, role)?.Value ?? defaultValue);
+
+        public Task<string?> FirstStringAsync(
+            ModuleParamCategory category,
+            ModuleParamRole role,
+            IReadOnlyCollection<string>? moduleIds = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(CreateValue((moduleIds ?? ["Homogenization"]).First(), category, role)?.Value);
+
+        public Task<bool> GetBoolAsync(
+            string moduleId,
+            ModuleParamCategory category,
+            ModuleParamRole role,
+            bool defaultValue = false,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(role == ModuleParamRole.MesEnabled || defaultValue);
+
+        public Task<bool> AnyBoolAsync(
+            ModuleParamCategory category,
+            ModuleParamRole role,
+            IReadOnlyCollection<string>? moduleIds = null,
+            bool defaultValue = false,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(role == ModuleParamRole.MesEnabled || defaultValue);
+
+        private ModuleParamRoleValue? CreateValue(
+            string moduleId,
+            ModuleParamCategory category,
+            ModuleParamRole role)
+        {
+            if (category != ModuleParamCategory.Mes)
+            {
+                return null;
+            }
+
+            return role switch
+            {
+                ModuleParamRole.MesEnabled => Build("启用", "true", ParamValueKind.Bool),
+                ModuleParamRole.MesBaseUrl => Build("服务地址", "https://mes.local", ParamValueKind.String),
+                ModuleParamRole.StationNo => Build("工站编号", stationNo, ParamValueKind.String),
+                _ => null
+            };
+
+            ModuleParamRoleValue Build(string name, string value, ParamValueKind kind)
+                => new(
+                    moduleId,
+                    category,
+                    role,
+                    kind,
+                    name,
+                    $"Module:{moduleId}:Mes:{name}",
+                    value,
+                    value);
         }
 
         public Task<IReadOnlyList<LocalSystemConfigSnapshot>> GetSystemConfigsAsync(
             CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<LocalSystemConfigSnapshot>>(
             [
-                new LocalSystemConfigSnapshot(1, SystemConfigKey.工站编号.ToString(), stationNo, null, 1)
+                new LocalSystemConfigSnapshot(1, "Module:Homogenization:Mes:工站编号", stationNo, null, 1)
             ]);
 
-        public Task<string?> GetSystemConfigValueAsync(
-            SystemConfigKey key,
+        public Task<string?> LegacyGetSystemConfigValueAsync(
+            string key,
             CancellationToken cancellationToken = default)
-            => Task.FromResult<string?>(key == SystemConfigKey.工站编号 ? stationNo : null);
+            => Task.FromResult<string?>(key == "工站编号" ? stationNo : null);
 
-        public Task<IReadOnlyList<LocalDeviceParameterSnapshot>> GetDeviceParamsAsync(
-            int deviceId,
-            CancellationToken cancellationToken = default)
-            => Task.FromResult<IReadOnlyList<LocalDeviceParameterSnapshot>>([]);
-
-        public Task<string?> GetDeviceParamValueAsync(
-            int deviceId,
-            DeviceParamKey key,
-            CancellationToken cancellationToken = default)
-            => Task.FromResult<string?>(null);
     }
 }

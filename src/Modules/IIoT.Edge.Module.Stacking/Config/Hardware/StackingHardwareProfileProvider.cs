@@ -6,7 +6,7 @@ using IIoT.Edge.SharedKernel.Enums;
 namespace IIoT.Edge.Module.Stacking.Config.Hardware;
 
 /// <summary>
-/// 叠片硬件模板提供者，把插件内信号清单转换为默认 IO 模板和协议摘要。
+/// 叠片硬件模板提供者，把插件内信号清单转换为默认 IO 模板。
 /// </summary>
 public sealed class StackingHardwareProfileProvider
     : ModuleHardwareProfileProviderBase<StackingSignalDefinition>
@@ -35,7 +35,4 @@ public sealed class StackingHardwareProfileProvider
 
     protected override string CreateTemplateRemark(StackingSignalDefinition signal)
         => $"叠片模块 - {signal.DisplayName}";
-
-    protected override string FormatProtocolSummaryLine(StackingSignalDefinition signal)
-        => $"{signal.Label}：默认地址={signal.DefaultAddress}，方向 {signal.Direction}，类型 {signal.DataType}，长度 {signal.AddressCount}，排序 {signal.SortOrder}";
 }

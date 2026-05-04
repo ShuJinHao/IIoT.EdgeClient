@@ -118,7 +118,7 @@ public sealed class CloudRetryTask : ScheduledTaskBase
                 return;
             }
 
-            Logger.Warn("[Retry-Cloud] Device log buffer retry paused or failed.");
+            Logger.Warn("[Retry-Cloud] 设备日志缓冲补传已暂停或失败。");
         }
 
         var capacitySnapshotBefore = _diagnosticsStore.Snapshot;
@@ -131,7 +131,7 @@ public sealed class CloudRetryTask : ScheduledTaskBase
                 return;
             }
 
-            Logger.Warn("[Retry-Cloud] Capacity buffer retry paused or failed.");
+            Logger.Warn("[Retry-Cloud] 产能缓冲补传已暂停或失败。");
         }
 
         await _capacityGuard.RefreshCloudRetryCapacityStatusAsync().ConfigureAwait(false);
@@ -145,11 +145,11 @@ public sealed class CloudRetryTask : ScheduledTaskBase
         try
         {
             await _retryStore.ResetAllAbandonedAsync().ConfigureAwait(false);
-            Logger.Info("[Retry-Cloud] Upload gate recovered. Abandoned records were reset for retry.");
+            Logger.Info("[Retry-Cloud] 云端上传门控已恢复，弃置记录已重置为可补传。");
         }
         catch (Exception ex)
         {
-            Logger.Warn($"[Retry-Cloud] Failed to reset abandoned records: {ex.Message}");
+            Logger.Warn($"[Retry-Cloud] 重置弃置记录失败：{ex.Message}");
         }
     }
 
@@ -175,7 +175,7 @@ public sealed class CloudRetryTask : ScheduledTaskBase
                     sourceTable: "cloud_fallback_records",
                     sourceRecordId: fallback.Id,
                     DeadLetterStage.FallbackRecoverDeserialize,
-                    $"Cloud fallback deserialize failed for process type {fallback.ProcessType}.").ConfigureAwait(false);
+                    $"Cloud fallback 记录反序列化失败，工序：{fallback.ProcessType}。").ConfigureAwait(false);
 
                 if (persisted)
                 {
@@ -194,7 +194,7 @@ public sealed class CloudRetryTask : ScheduledTaskBase
                 if (!string.IsNullOrWhiteSpace(retryBlockedReason))
                 {
                     Logger.Warn(
-                        $"[Retry-Cloud] Cloud fallback record {fallback.Id} remains buffered because retry capacity is blocked by {retryBlockedReason}.");
+                        $"[Retry-Cloud] Cloud fallback 记录 {fallback.Id} 因 retry 容量阻塞继续保留，原因：{retryBlockedReason}。");
                     continue;
                 }
 
@@ -202,7 +202,7 @@ public sealed class CloudRetryTask : ScheduledTaskBase
             }
             catch (Exception ex)
             {
-                Logger.Error($"[Retry-Cloud] Failed to rehydrate Cloud fallback record {fallback.Id}: {ex.Message}");
+                Logger.Error($"[Retry-Cloud] 恢复 Cloud fallback 记录 {fallback.Id} 失败：{ex.Message}");
             }
         }
 
@@ -214,7 +214,7 @@ public sealed class CloudRetryTask : ScheduledTaskBase
         if (recoveredIds.Count > 0)
         {
             await _fallbackStore.MovePendingToRetryAsync(recoveredIds).ConfigureAwait(false);
-            Logger.Info($"[Retry-Cloud] Recovered {recoveredIds.Count} Cloud fallback record(s) into the main retry store.");
+            Logger.Info($"[Retry-Cloud] 已将 {recoveredIds.Count} 条 Cloud fallback 记录恢复到 retry 主表。");
         }
 
         await _capacityGuard.RefreshCloudFallbackCapacityStatusAsync().ConfigureAwait(false);
@@ -258,7 +258,7 @@ public sealed class CloudRetryTask : ScheduledTaskBase
                                 sourceTable: "failed_cloud_records",
                                 sourceRecordId: source.Id,
                                 DeadLetterStage.RetryDeserialize,
-                                $"Cloud retry deserialize failed for process type {source.ProcessType}.").ConfigureAwait(false);
+                                $"Cloud retry 记录反序列化失败，工序：{source.ProcessType}。").ConfigureAwait(false);
 
                             if (persisted)
                             {
@@ -268,7 +268,7 @@ public sealed class CloudRetryTask : ScheduledTaskBase
                             {
                                 await HandleRetryFailureAsync(
                                     source,
-                                    "Cloud retry deserialize failed and dead-letter persistence also failed.").ConfigureAwait(false);
+                                    "Cloud retry 记录反序列化失败，且死信持久化也失败。").ConfigureAwait(false);
                             }
 
                             continue;
@@ -300,7 +300,7 @@ public sealed class CloudRetryTask : ScheduledTaskBase
                             await HandleRetryFailureAsync(source, "timeout_exceeded").ConfigureAwait(false);
                         }
 
-                        Logger.Warn($"[Retry-Cloud] {processGroup.Key} batch retry timed out. Count:{validSourceRecords.Count}");
+                        Logger.Warn($"[Retry-Cloud] {processGroup.Key} 批量补传超时，数量：{validSourceRecords.Count}。");
                         continue;
                     }
 
@@ -311,7 +311,7 @@ public sealed class CloudRetryTask : ScheduledTaskBase
                             await _retryStore.DeleteAsync(source.Id).ConfigureAwait(false);
                         }
 
-                        Logger.Info($"[Retry-Cloud] {processGroup.Key} batch retry succeeded. Count:{validSourceRecords.Count}");
+                        Logger.Info($"[Retry-Cloud] {processGroup.Key} 批量补传成功，数量：{validSourceRecords.Count}。");
                         continue;
                     }
 
@@ -319,16 +319,16 @@ public sealed class CloudRetryTask : ScheduledTaskBase
                     {
                         await _retryStore.ReleaseClaimAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
                         _diagnosticsStore.SetRuntimeState(CloudRetryRuntimeState.WaitingForRecovery);
-                        Logger.Warn($"[Retry-Cloud] {processGroup.Key} batch retry paused. Outcome:{result.Outcome}, Reason:{result.ReasonCode}");
+                        Logger.Warn($"[Retry-Cloud] {processGroup.Key} 批量补传已暂停，结果：{result.Outcome}，原因：{result.ReasonCode}。");
                         return false;
                     }
 
                     foreach (var source in validSourceRecords)
                     {
-                        await HandleRetryFailureAsync(source, $"Cloud batch retry failed ({result.ReasonCode}).").ConfigureAwait(false);
+                        await HandleRetryFailureAsync(source, $"Cloud 批量补传失败（{result.ReasonCode}）。").ConfigureAwait(false);
                     }
 
-                    Logger.Warn($"[Retry-Cloud] {processGroup.Key} batch retry failed. Count:{validSourceRecords.Count}");
+                    Logger.Warn($"[Retry-Cloud] {processGroup.Key} 批量补传失败，数量：{validSourceRecords.Count}。");
                 }
             }
 
@@ -353,10 +353,10 @@ public sealed class CloudRetryTask : ScheduledTaskBase
             }
             catch (Exception releaseEx)
             {
-                Logger.Error($"[Retry-Cloud] Failed to release retry claim {claimedBatch.ClaimToken}: {releaseEx.Message}");
+                Logger.Error($"[Retry-Cloud] 释放 retry 领取标记 {claimedBatch.ClaimToken} 失败：{releaseEx.Message}");
             }
 
-            Logger.Error($"[Retry-Cloud] Retry batch failed with exception: {ex.Message}");
+            Logger.Error($"[Retry-Cloud] retry 批次执行异常：{ex.Message}");
             return false;
         }
     }
@@ -386,7 +386,7 @@ public sealed class CloudRetryTask : ScheduledTaskBase
                 sourceTable: "failed_cloud_records",
                 sourceRecordId: record.Id,
                 DeadLetterStage.RetryDeserialize,
-                $"Cloud retry deserialize failed for process type {record.ProcessType}.").ConfigureAwait(false);
+                $"Cloud retry 记录反序列化失败，工序：{record.ProcessType}。").ConfigureAwait(false);
 
             if (persisted)
             {
@@ -396,7 +396,7 @@ public sealed class CloudRetryTask : ScheduledTaskBase
             {
                 await HandleRetryFailureAsync(
                     record,
-                    "Cloud retry deserialize failed and dead-letter persistence also failed.").ConfigureAwait(false);
+                    "Cloud retry 记录反序列化失败，且死信持久化也失败。").ConfigureAwait(false);
             }
 
             return RetryProcessResult.Continue;
@@ -421,13 +421,13 @@ public sealed class CloudRetryTask : ScheduledTaskBase
         if (result.IsSuccess)
         {
             await _retryStore.DeleteAsync(record.Id).ConfigureAwait(false);
-            Logger.Info($"[Retry-Cloud] {cellData.DisplayLabel} retry succeeded and the record was removed.");
+            Logger.Info($"[Retry-Cloud] {cellData.DisplayLabel} 补传成功，记录已删除。");
             return RetryProcessResult.Continue;
         }
 
         if (ShouldPauseForRecovery(result))
         {
-            Logger.Warn($"[Retry-Cloud] {cellData.DisplayLabel} retry paused. Outcome:{result.Outcome}, Reason:{result.ReasonCode}");
+            Logger.Warn($"[Retry-Cloud] {cellData.DisplayLabel} 补传已暂停，结果：{result.Outcome}，原因：{result.ReasonCode}。");
             return RetryProcessResult.Pause;
         }
 
@@ -442,12 +442,12 @@ public sealed class CloudRetryTask : ScheduledTaskBase
 
         if (newRetryCount > MaxRetryCount)
         {
-            Logger.Warn($"[Retry-Cloud] {record.ProcessType} reached max retry count {MaxRetryCount}. Auto retry stopped.");
+            Logger.Warn($"[Retry-Cloud] {record.ProcessType} 已达到最大补传次数 {MaxRetryCount}，自动补传停止。");
             await _retryStore.UpdateRetryAsync(record.Id, newRetryCount, errorMessage, AbandonedRetryTimeUtc).ConfigureAwait(false);
             return;
         }
 
-        var nextRetryTime = DateTime.UtcNow.Add(CalculateBackoff(newRetryCount));
+        var nextRetryTime = DateTime.UtcNow.Add(RetryBackoffCalculator.Calculate(newRetryCount));
         await _retryStore.UpdateRetryAsync(record.Id, newRetryCount, errorMessage, nextRetryTime).ConfigureAwait(false);
     }
 
@@ -469,12 +469,12 @@ public sealed class CloudRetryTask : ScheduledTaskBase
 
             if (deleted > 0)
             {
-                Logger.Info($"[Retry-Cloud] Deleted {deleted} expired abandoned retry record(s).");
+                Logger.Info($"[Retry-Cloud] 已清理 {deleted} 条过期弃置 retry 记录。");
             }
         }
         catch (Exception ex)
         {
-            Logger.Warn($"[Retry-Cloud] Failed to cleanup expired abandoned records: {ex.Message}");
+            Logger.Warn($"[Retry-Cloud] 清理过期弃置记录失败：{ex.Message}");
         }
     }
 
@@ -509,21 +509,6 @@ public sealed class CloudRetryTask : ScheduledTaskBase
                 : CloudRetryRuntimeState.Idle);
     }
 
-    private static TimeSpan CalculateBackoff(int retryCount)
-    {
-        if (retryCount <= 5)
-        {
-            return TimeSpan.FromSeconds(30);
-        }
-
-        if (retryCount <= 10)
-        {
-            return TimeSpan.FromMinutes(5);
-        }
-
-        return TimeSpan.FromMinutes(30);
-    }
-
     private CellDataBase? DeserializeCellData(string processType, string json)
     {
         try
@@ -532,7 +517,7 @@ public sealed class CloudRetryTask : ScheduledTaskBase
         }
         catch (Exception ex)
         {
-            Logger.Error($"[Retry-Cloud] CellData deserialize failed: {ex.Message}");
+            Logger.Error($"[Retry-Cloud] CellData 反序列化失败：{ex.Message}");
             return null;
         }
     }

@@ -1,12 +1,15 @@
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Module.Homogenization;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
+using IIoT.Edge.Module.Homogenization.Config.Parameters;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using IIoT.Edge.Runtime.Signals;
@@ -85,6 +88,48 @@ public sealed class HomogenizationBusinessChainBehaviorTests
     }
 
     [Fact]
+    public async Task Inbound_WhenDuplicateCheckDisabled_ShouldAllowRepeatedTrayCode()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create(duplicateCheckEnabled: false);
+        await harness.StartAsync();
+
+        harness.SetAscii(HomogenizationPlcSignalProfile.TrayCode.Label, "TRAY-DUP-OFF", 30);
+        harness.SetWord(HomogenizationPlcSignalProfile.InboundTrigger.Label, TestCodeOptions.Plc.SignalTrigger);
+        await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.Inbound") == 30);
+
+        harness.SetWord(HomogenizationPlcSignalProfile.InboundTrigger.Label, TestCodeOptions.Plc.SignalReset);
+        await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.Inbound") == 0);
+
+        harness.SetWord(HomogenizationPlcSignalProfile.InboundTrigger.Label, TestCodeOptions.Plc.SignalTrigger);
+        await WaitUntilAsync(() => harness.Mes.InboundTrayCodes.Count == 2);
+
+        Assert.Equal(["TRAY-DUP-OFF", "TRAY-DUP-OFF"], harness.Mes.InboundTrayCodes);
+        Assert.Equal(TestCodeOptions.Plc.AckOk, harness.ReadWriteWord(HomogenizationPlcSignalProfile.InboundAck.Label));
+    }
+
+    [Fact]
+    public async Task Inbound_WhenDuplicateCheckEnabled_ShouldAckMesNgAndNotCallMesAgain()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create(duplicateCheckEnabled: true);
+        await harness.StartAsync();
+
+        harness.SetAscii(HomogenizationPlcSignalProfile.TrayCode.Label, "TRAY-DUP-IN", 30);
+        harness.SetWord(HomogenizationPlcSignalProfile.InboundTrigger.Label, TestCodeOptions.Plc.SignalTrigger);
+        await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.Inbound") == 30);
+
+        harness.SetWord(HomogenizationPlcSignalProfile.InboundTrigger.Label, TestCodeOptions.Plc.SignalReset);
+        await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.Inbound") == 0);
+
+        harness.SetWord(HomogenizationPlcSignalProfile.InboundTrigger.Label, TestCodeOptions.Plc.SignalTrigger);
+        await WaitUntilAsync(() => harness.Context.LastInboundResult?.Contains("托盘码重复", StringComparison.Ordinal) == true);
+
+        Assert.Single(harness.Mes.InboundTrayCodes);
+        Assert.Equal(TestCodeOptions.Plc.AckMesNg, harness.ReadWriteWord(HomogenizationPlcSignalProfile.InboundAck.Label));
+        Assert.Contains("TRAY-DUP-IN", harness.Context.LastInboundResult, StringComparison.Ordinal);
+        Assert.Equal(harness.Context.LastInboundResult, harness.Diagnostics.Get(TestCodeOptions.Mes.Channels.Inbound)!.LastFailureReason);
+    }
+
+    [Fact]
     public async Task Outbound_WhenNoLocalInboundSuccess_ShouldStillEnterDataPipelineForMesGate()
     {
         await using var harness = HomogenizationRuntimeHarness.Create();
@@ -132,6 +177,52 @@ public sealed class HomogenizationBusinessChainBehaviorTests
     }
 
     [Fact]
+    public async Task Outbound_WhenDuplicateCheckEnabled_ShouldAckMesNgAndNotEnqueueAgain()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create(duplicateCheckEnabled: true);
+        await harness.StartAsync();
+
+        harness.SetAscii(HomogenizationPlcSignalProfile.TrayCode.Label, "TRAY-DUP-OUT", 30);
+        harness.SetWord(HomogenizationPlcSignalProfile.OutboundTrigger.Label, TestCodeOptions.Plc.SignalTrigger);
+        await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.Outbound") == 30);
+
+        harness.SetWord(HomogenizationPlcSignalProfile.OutboundTrigger.Label, TestCodeOptions.Plc.SignalReset);
+        await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.Outbound") == 0);
+
+        harness.SetWord(HomogenizationPlcSignalProfile.OutboundTrigger.Label, TestCodeOptions.Plc.SignalTrigger);
+        await WaitUntilAsync(() => harness.Context.LastOutboundResult?.Contains("托盘码重复", StringComparison.Ordinal) == true);
+
+        Assert.Single(harness.Pipeline.Records);
+        Assert.Equal(TestCodeOptions.Plc.AckMesNg, harness.ReadWriteWord(HomogenizationPlcSignalProfile.OutboundAck.Label));
+        Assert.Contains("TRAY-DUP-OUT", harness.Context.LastOutboundResult, StringComparison.Ordinal);
+        Assert.Equal(harness.Context.LastOutboundResult, harness.Diagnostics.Get(TestCodeOptions.Mes.Channels.Outbound)!.LastFailureReason);
+    }
+
+    [Fact]
+    public async Task Outbound_WhenAccepted_ShouldUseProductionBusinessTime()
+    {
+        var productionTime = new FakeProductionTimeProvider
+        {
+            FixedUtcNow = new DateTime(2026, 5, 3, 1, 2, 3, DateTimeKind.Utc)
+        };
+        await using var harness = HomogenizationRuntimeHarness.Create(productionTime: productionTime);
+        await harness.StartAsync();
+
+        harness.SetAscii(HomogenizationPlcSignalProfile.TrayCode.Label, "TRAY-BIZ-TIME", 30);
+        harness.SetWord(HomogenizationPlcSignalProfile.OutboundTrigger.Label, TestCodeOptions.Plc.SignalTrigger);
+
+        await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.Outbound") == 30);
+
+        var expected = productionTime.BusinessNow;
+        var record = Assert.Single(harness.Pipeline.Records);
+        var cellData = Assert.IsType<HomogenizationCellData>(record.CellData);
+        Assert.Equal(expected, cellData.CompletedTime);
+        Assert.Equal(expected, cellData.RealtimeSnapshot!.CapturedAt);
+        Assert.Equal(expected, cellData.EquipmentStatusSnapshot!.CapturedAt);
+        Assert.Equal(expected, harness.Context.LastOutboundAt);
+    }
+
+    [Fact]
     public async Task Outbound_WhenTrayCodeIsEmpty_ShouldAckExceptionAndNotEnqueue()
     {
         await using var harness = HomogenizationRuntimeHarness.Create();
@@ -145,6 +236,8 @@ public sealed class HomogenizationBusinessChainBehaviorTests
         Assert.Empty(harness.Pipeline.Records);
         Assert.Equal(TestCodeOptions.Plc.AckException, harness.ReadWriteWord(HomogenizationPlcSignalProfile.OutboundAck.Label));
         Assert.Contains("托盘码不能为空", harness.Context.LastOutboundResult, StringComparison.Ordinal);
+        Assert.Equal("Failed", harness.Diagnostics.Get(TestCodeOptions.Mes.Channels.Outbound)!.LastResult);
+        Assert.Contains("托盘码不能为空", harness.Diagnostics.Get(TestCodeOptions.Mes.Channels.Outbound)!.LastFailureReason, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -165,6 +258,74 @@ public sealed class HomogenizationBusinessChainBehaviorTests
         Assert.Single(harness.Pipeline.Records);
         Assert.Equal(TestCodeOptions.Plc.AckOk, harness.ReadWriteWord(HomogenizationPlcSignalProfile.OutboundAck.Label));
         Assert.Equal("出料已接收，数据已进入溢出持久化。", harness.Context.LastOutboundResult);
+    }
+
+    [Fact]
+    public async Task Outbound_WhenDataPipelineRejects_ShouldAckExceptionAndRecordFailure()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create(
+            pipeline: new CapturingDataPipelineService
+            {
+                Result = DataPipelineEnqueueResult.Rejected("capacity_blocked")
+            });
+        await harness.StartAsync();
+
+        harness.SetAscii(HomogenizationPlcSignalProfile.TrayCode.Label, "TRAY-REJECTED", 30);
+        harness.SetWord(HomogenizationPlcSignalProfile.OutboundTrigger.Label, TestCodeOptions.Plc.SignalTrigger);
+
+        await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.Outbound") == 30);
+
+        Assert.Single(harness.Pipeline.Records);
+        Assert.Equal(TestCodeOptions.Plc.AckException, harness.ReadWriteWord(HomogenizationPlcSignalProfile.OutboundAck.Label));
+        Assert.Contains("数据管道拒绝入队", harness.Context.LastOutboundResult, StringComparison.Ordinal);
+        Assert.Contains("capacity_blocked", harness.Context.LastOutboundResult, StringComparison.Ordinal);
+        Assert.Equal("Failed", harness.Diagnostics.Get(TestCodeOptions.Mes.Channels.Outbound)!.LastResult);
+        Assert.Equal(harness.Context.LastOutboundResult, harness.Diagnostics.Get(TestCodeOptions.Mes.Channels.Outbound)!.LastFailureReason);
+    }
+
+    [Fact]
+    public async Task Outbound_WhenOverflowDoesNotPersistDurableTarget_ShouldAckExceptionAndRecordFailure()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create(
+            pipeline: new CapturingDataPipelineService
+            {
+                Result = DataPipelineEnqueueResult.OverflowPersisted(0, 1)
+            });
+        await harness.StartAsync();
+
+        harness.SetAscii(HomogenizationPlcSignalProfile.TrayCode.Label, "TRAY-OVERFLOW-FAILED", 30);
+        harness.SetWord(HomogenizationPlcSignalProfile.OutboundTrigger.Label, TestCodeOptions.Plc.SignalTrigger);
+
+        await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.Outbound") == 30);
+
+        Assert.Single(harness.Pipeline.Records);
+        Assert.Equal(TestCodeOptions.Plc.AckException, harness.ReadWriteWord(HomogenizationPlcSignalProfile.OutboundAck.Label));
+        Assert.Contains("溢出持久化未写入任何补偿目标", harness.Context.LastOutboundResult, StringComparison.Ordinal);
+        Assert.Contains("overflow_skipped_best_effort", harness.Context.LastOutboundResult, StringComparison.Ordinal);
+        Assert.Equal("Failed", harness.Diagnostics.Get(TestCodeOptions.Mes.Channels.Outbound)!.LastResult);
+        Assert.Equal(harness.Context.LastOutboundResult, harness.Diagnostics.Get(TestCodeOptions.Mes.Channels.Outbound)!.LastFailureReason);
+    }
+
+    [Fact]
+    public async Task Outbound_WhenDataPipelineThrows_ShouldAckExceptionAndRecordFailure()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create(
+            pipeline: new CapturingDataPipelineService
+            {
+                ExceptionToThrow = new InvalidOperationException("本地队列异常")
+            });
+        await harness.StartAsync();
+
+        harness.SetAscii(HomogenizationPlcSignalProfile.TrayCode.Label, "TRAY-PIPELINE-EX", 30);
+        harness.SetWord(HomogenizationPlcSignalProfile.OutboundTrigger.Label, TestCodeOptions.Plc.SignalTrigger);
+
+        await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.Outbound") == 30);
+
+        Assert.Empty(harness.Pipeline.Records);
+        Assert.Equal(TestCodeOptions.Plc.AckException, harness.ReadWriteWord(HomogenizationPlcSignalProfile.OutboundAck.Label));
+        Assert.Contains("本地队列异常", harness.Context.LastOutboundResult, StringComparison.Ordinal);
+        Assert.Equal("Failed", harness.Diagnostics.Get(TestCodeOptions.Mes.Channels.Outbound)!.LastResult);
+        Assert.Contains("本地队列异常", harness.Diagnostics.Get(TestCodeOptions.Mes.Channels.Outbound)!.LastFailureReason, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -271,7 +432,9 @@ public sealed class HomogenizationBusinessChainBehaviorTests
             HomogenizationContext context,
             CapturingHomogenizationMesChannel mes,
             CapturingDataPipelineService pipeline,
-            FakeMesUploadDiagnosticsStore diagnostics)
+            FakeMesUploadDiagnosticsStore diagnostics,
+            FakeHomogenizationModuleParamProvider parameters,
+            FakeProductionTimeProvider productionTime)
         {
             _provider = provider;
             Buffer = buffer;
@@ -282,6 +445,8 @@ public sealed class HomogenizationBusinessChainBehaviorTests
             Mes = mes;
             Pipeline = pipeline;
             Diagnostics = diagnostics;
+            Parameters = parameters;
+            ProductionTime = productionTime;
         }
 
         public PlcBuffer Buffer { get; }
@@ -300,12 +465,19 @@ public sealed class HomogenizationBusinessChainBehaviorTests
 
         public FakeMesUploadDiagnosticsStore Diagnostics { get; }
 
+        public FakeHomogenizationModuleParamProvider Parameters { get; }
+
+        public FakeProductionTimeProvider ProductionTime { get; }
+
         public static HomogenizationRuntimeHarness Create(
             CapturingHomogenizationMesChannel? mes = null,
-            CapturingDataPipelineService? pipeline = null)
+            CapturingDataPipelineService? pipeline = null,
+            bool duplicateCheckEnabled = false,
+            FakeProductionTimeProvider? productionTime = null)
         {
             mes ??= new CapturingHomogenizationMesChannel();
             pipeline ??= new CapturingDataPipelineService();
+            productionTime ??= new FakeProductionTimeProvider();
 
             var bindings = BuildBindings();
             var readOffsets = BuildOffsets(bindings, "Read");
@@ -318,6 +490,10 @@ public sealed class HomogenizationBusinessChainBehaviorTests
                 DeviceId = 7
             };
             var diagnostics = new FakeMesUploadDiagnosticsStore();
+            var parameters = new FakeHomogenizationModuleParamProvider
+            {
+                DuplicateCheckEnabled = duplicateCheckEnabled
+            };
             var deviceService = new FakeDeviceService();
             deviceService.SetOnline(new DeviceSession
             {
@@ -341,6 +517,9 @@ public sealed class HomogenizationBusinessChainBehaviorTests
             services.AddSingleton<IMesUploadDiagnosticsStore>(diagnostics);
             services.AddSingleton<HomogenizationMesScenarioChannel>(mes);
             services.AddSingleton<IDataPipelineService>(pipeline);
+            services.AddSingleton<IProductionTimeProvider>(productionTime);
+            services.AddSingleton<IModuleParamProvider<MesParam, CloudParam, BusinessParam>>(parameters);
+            services.AddSingleton(new HomogenizationTrayCodeGuard());
             services.AddSingleton(new HomogenizationCellDataValidator());
             services.AddSingleton(Options.Create(new HomogenizationModuleOptions
             {
@@ -363,7 +542,9 @@ public sealed class HomogenizationBusinessChainBehaviorTests
                 context,
                 mes,
                 pipeline,
-                diagnostics);
+                diagnostics,
+                parameters,
+                productionTime);
         }
 
         public Task StartAsync()
@@ -447,6 +628,50 @@ public sealed class HomogenizationBusinessChainBehaviorTests
         }
     }
 
+    private sealed class FakeHomogenizationModuleParamProvider
+        : IModuleParamProvider<MesParam, CloudParam, BusinessParam>
+    {
+        public bool DuplicateCheckEnabled { get; set; }
+
+        public int GetCallCount { get; private set; }
+
+        public Task<ModuleParamSnapshot<MesParam, CloudParam, BusinessParam>> GetAsync(
+            CancellationToken cancellationToken = default)
+        {
+            GetCallCount++;
+            return Task.FromResult(new ModuleParamSnapshot<MesParam, CloudParam, BusinessParam>(
+                DependencyInjection.ModuleKey,
+                EmptyGroup<MesParam>(ModuleParamCategory.Mes),
+                EmptyGroup<CloudParam>(ModuleParamCategory.Cloud),
+                new ModuleParamGroup<BusinessParam>(
+                    DependencyInjection.ModuleKey,
+                    ModuleParamCategory.Business,
+                    new Dictionary<BusinessParam, string>
+                    {
+                        [BusinessParam.启用托盘码重码验证] = DuplicateCheckEnabled.ToString()
+                    },
+                    new Dictionary<BusinessParam, string?>
+                    {
+                        [BusinessParam.启用托盘码重码验证] = "false"
+                    },
+                    new Dictionary<BusinessParam, ParamValueKind>
+                    {
+                        [BusinessParam.启用托盘码重码验证] = ParamValueKind.Bool
+                    },
+                    warn: null)));
+        }
+
+        private static ModuleParamGroup<TEnum> EmptyGroup<TEnum>(ModuleParamCategory category)
+            where TEnum : struct, Enum
+            => new(
+                DependencyInjection.ModuleKey,
+                category,
+                new Dictionary<TEnum, string>(),
+                new Dictionary<TEnum, string?>(),
+                new Dictionary<TEnum, ParamValueKind>(),
+                warn: null);
+    }
+
     private sealed class CapturingHomogenizationMesChannel : HomogenizationMesScenarioChannel
     {
         public List<string> InboundTrayCodes { get; } = [];
@@ -516,6 +741,8 @@ public sealed class HomogenizationBusinessChainBehaviorTests
 
         public DataPipelineEnqueueResult Result { get; set; } = DataPipelineEnqueueResult.Accepted();
 
+        public Exception? ExceptionToThrow { get; set; }
+
         public int PendingCount => Records.Count;
 
         public int OverflowCount => Result.WasOverflow ? 1 : 0;
@@ -526,6 +753,11 @@ public sealed class HomogenizationBusinessChainBehaviorTests
             CellCompletedRecord record,
             CancellationToken cancellationToken = default)
         {
+            if (ExceptionToThrow is not null)
+            {
+                throw ExceptionToThrow;
+            }
+
             Records.Add(record);
             return ValueTask.FromResult(Result);
         }

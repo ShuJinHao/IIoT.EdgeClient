@@ -1008,7 +1008,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
 
         Assert.Equal(1, deviceLogSync.RetryBufferCallCount);
         Assert.Equal(1, capacitySync.RetryBufferCallCount);
-        Assert.Contains(logger.Entries, x => x.Message.Contains("Device log buffer retry paused or failed.", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, x => x.Message.Contains("设备日志缓冲补传已暂停或失败", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -1062,7 +1062,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         Assert.Single(deadLetterStore.Records);
         Assert.Equal(0, cloudConsumer.ProcessCallCount);
         Assert.Equal(1, cloudBatchConsumer.ProcessBatchCallCount);
-        Assert.Contains(logger.Entries, entry => entry.Message.Contains("moved into Cloud dead-letter store", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, entry => entry.Message.Contains("已进入 Cloud 死信表", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -1266,7 +1266,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         Assert.DoesNotContain(302L, failedStore.DeletedIds);
         Assert.True(failedStore.Updates.TryGetValue(302, out var update));
         Assert.Equal(3, update!.RetryCount);
-        Assert.Contains("dead-letter persistence also failed", update.ErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("死信持久化也失败", update.ErrorMessage, StringComparison.Ordinal);
         Assert.InRange((update.NextRetryTime - before).TotalSeconds, 20, 40);
         Assert.Single(criticalWriter.Writes);
 
@@ -1317,7 +1317,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         Assert.DoesNotContain(303L, failedStore.DeletedIds);
         Assert.True(failedStore.Updates.TryGetValue(303, out var update));
         Assert.Equal(1, update!.RetryCount);
-        Assert.Contains("dead-letter persistence also failed", update.ErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("死信持久化也失败", update.ErrorMessage, StringComparison.Ordinal);
         Assert.Single(criticalWriter.Writes);
 
         var reclaimedBatch = await failedStore.ClaimPendingBatchAsync("Cloud", 10);
@@ -1361,7 +1361,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         Assert.DoesNotContain(304L, failedStore.DeletedIds);
         Assert.True(failedStore.Updates.TryGetValue(304, out var update));
         Assert.Equal(2, update!.RetryCount);
-        Assert.Contains("dead-letter persistence also failed", update.ErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("死信持久化也失败", update.ErrorMessage, StringComparison.Ordinal);
         Assert.InRange((update.NextRetryTime - before).TotalSeconds, 20, 40);
         Assert.Single(criticalWriter.Writes);
 

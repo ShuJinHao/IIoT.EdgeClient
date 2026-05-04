@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using IIoT.Edge.Application.Modules.Descriptors;
+using IIoT.Edge.Application.Abstractions.Config;
 
 namespace IIoT.Edge.Application.Abstractions.Modules;
 
@@ -58,4 +59,9 @@ public interface IEdgeProcessModuleBuilder
     void RegisterCloudUploader(ProcessUploadMode uploadMode);
 
     void RegisterMesUploader(MesUploadMode uploadMode);
+
+    void RegisterParameters<TMes, TCloud, TBusiness>()
+        where TMes : struct, Enum
+        where TCloud : struct, Enum
+        where TBusiness : struct, Enum;
 }

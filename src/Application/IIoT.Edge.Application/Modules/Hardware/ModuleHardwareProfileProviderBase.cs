@@ -43,9 +43,6 @@ public abstract class ModuleHardwareProfileProviderBase<TSignal> : IModuleHardwa
             .Select(CreateTemplateEntry)
             .ToArray();
 
-    public string GetProtocolSummary()
-        => string.Join(Environment.NewLine, Signals.Select(FormatProtocolSummaryLine));
-
     public ModuleHardwareValidationResult ValidatePlcConfiguration(
         string deviceName,
         string? deviceModel,
@@ -64,8 +61,6 @@ public abstract class ModuleHardwareProfileProviderBase<TSignal> : IModuleHardwa
             ValidateSequentialOrder);
 
     protected abstract string CreateTemplateRemark(TSignal signal);
-
-    protected abstract string FormatProtocolSummaryLine(TSignal signal);
 
     private ModuleIoTemplateEntry CreateTemplateEntry(TSignal signal)
         => new(

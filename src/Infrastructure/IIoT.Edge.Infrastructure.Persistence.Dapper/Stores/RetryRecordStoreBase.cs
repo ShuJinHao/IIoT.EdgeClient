@@ -30,6 +30,15 @@ public abstract class RetryRecordStoreBase : DapperRepositoryBase<FailedCellReco
     {
         var cellData = record.CellData;
         var cellDataJson = CellDataJsonSerializer.Serialize(cellData);
+        await SaveRawAsync(cellData.ProcessType, cellDataJson, failedTarget, errorMessage).ConfigureAwait(false);
+    }
+
+    public async Task SaveRawAsync(
+        string processType,
+        string cellDataJson,
+        string failedTarget,
+        string errorMessage)
+    {
         var nowUtc = DateTime.UtcNow;
 
         var sql = $@"
@@ -42,7 +51,7 @@ public abstract class RetryRecordStoreBase : DapperRepositoryBase<FailedCellReco
 
         var affectedRows = await SafeExecuteAsync(sql, new
         {
-            ProcessType = cellData.ProcessType,
+            ProcessType = processType,
             CellDataJson = cellDataJson,
             FailedTarget = failedTarget,
             ErrorMessage = errorMessage,

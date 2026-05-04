@@ -24,13 +24,11 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
     private readonly BaseCommand _deleteNetworkDeviceCommand;
     private readonly BaseCommand _addSerialDeviceCommand;
     private readonly BaseCommand _deleteSerialDeviceCommand;
-    private readonly BaseCommand _addIoMappingCommand;
+    private readonly BaseCommand _addReadIoMappingCommand;
+    private readonly BaseCommand _addWriteIoMappingCommand;
     private readonly BaseCommand _deleteIoMappingCommand;
     private readonly AsyncCommand _saveCommand;
-    private readonly BaseCommand _ioPrevPageCommand;
-    private List<IoMappingVm> _loadedIoMappingSnapshot = [];
-
-    private const int IoPageSize = 20;
+    private bool _hasModuleTemplate;
 
     public IEnumerable<DeviceType> DeviceTypes => Enum.GetValues<DeviceType>();
     public IEnumerable<PlcType> PlcTypes => Enum.GetValues<PlcType>();
@@ -71,63 +69,26 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
             }
 
             OnPropertyChanged();
-            ModuleTemplateSummary = string.Empty;
-            IoPageIndex = 0;
+            SetModuleTemplateAvailable(false);
             _ = RefreshSelectedNetworkDeviceAsync();
         }
     }
-
-    private int _ioPageIndex;
-    public int IoPageIndex
-    {
-        get => _ioPageIndex;
-        set
-        {
-            _ioPageIndex = value;
-            OnPropertyChanged();
-            _ioPrevPageCommand.RaiseCanExecuteChanged();
-        }
-    }
-
-    private int _ioTotalCount;
-    public int IoTotalCount
-    {
-        get => _ioTotalCount;
-        set { _ioTotalCount = value; OnPropertyChanged(); }
-    }
-
-    private string _moduleTemplateSummary = string.Empty;
-    public string ModuleTemplateSummary
-    {
-        get => _moduleTemplateSummary;
-        private set
-        {
-            _moduleTemplateSummary = value;
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(HasModuleTemplateSummary));
-            OnPropertyChanged(nameof(CanApplyModuleTemplate));
-            _applyModuleTemplateCommand.RaiseCanExecuteChanged();
-        }
-    }
-
-    public bool HasModuleTemplateSummary => !string.IsNullOrWhiteSpace(ModuleTemplateSummary);
 
     public bool CanApplyModuleTemplate =>
         CanEdit
         && SelectedNetworkDevice is not null
         && SelectedNetworkDevice.DeviceType == DeviceType.PLC
         && SelectedNetworkDevice.Id > 0
-        && HasModuleTemplateSummary;
+        && _hasModuleTemplate;
 
     public ICommand AddNetworkDeviceCommand { get; }
     public ICommand DeleteNetworkDeviceCommand { get; }
     public ICommand AddSerialDeviceCommand { get; }
     public ICommand DeleteSerialDeviceCommand { get; }
-    public ICommand AddIoMappingCommand { get; }
+    public ICommand AddReadIoMappingCommand { get; }
+    public ICommand AddWriteIoMappingCommand { get; }
     public ICommand DeleteIoMappingCommand { get; }
     public ICommand ApplyModuleTemplateCommand => _applyModuleTemplateCommand;
-    public ICommand IoNextPageCommand { get; }
-    public ICommand IoPrevPageCommand => _ioPrevPageCommand;
     public ICommand SaveCommand { get; }
 
     public HardwareConfigViewModel(
@@ -169,30 +130,26 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
             () => new SerialDeviceVm(),
             () => CanEdit);
         _deleteSerialDeviceCommand = (BaseCommand)CreateDeleteCommand(SerialDevices, () => CanEdit);
-        _addIoMappingCommand = (BaseCommand)CreateScopedAddCommand(
+        _addReadIoMappingCommand = (BaseCommand)CreateScopedAddCommand(
             () => SelectedNetworkDevice is null ? null : IoMappings,
-            () => new IoMappingVm
-            {
-                NetworkDeviceId = SelectedNetworkDevice!.Id,
-                Direction = "Read",
-                DataType = "Int16",
-                AddressCount = 1,
-                Category = GetText("Navigation_Io_Category_SingleRead", "单点读数据")
-            },
+            () => CreateIoMapping("Read"),
+            () => CanEdit && SelectedNetworkDevice is not null);
+        _addWriteIoMappingCommand = (BaseCommand)CreateScopedAddCommand(
+            () => SelectedNetworkDevice is null ? null : IoMappings,
+            () => CreateIoMapping("Write"),
             () => CanEdit && SelectedNetworkDevice is not null);
         _deleteIoMappingCommand = (BaseCommand)CreateDeleteCommand(IoMappings, () => CanEdit);
         _applyModuleTemplateCommand = (AsyncCommand)CreateBusyCommand(
             ApplyModuleTemplateAsync,
             () => CanApplyModuleTemplate);
-        IoNextPageCommand = new AsyncCommand(IoNextPageAsync);
-        _ioPrevPageCommand = new BaseCommand(_ => IoPrevPage(), _ => IoPageIndex > 0);
         _saveCommand = (AsyncCommand)CreateBusyCommand(SaveAsync, () => CanEdit);
 
         AddNetworkDeviceCommand = _addNetworkDeviceCommand;
         DeleteNetworkDeviceCommand = _deleteNetworkDeviceCommand;
         AddSerialDeviceCommand = _addSerialDeviceCommand;
         DeleteSerialDeviceCommand = _deleteSerialDeviceCommand;
-        AddIoMappingCommand = _addIoMappingCommand;
+        AddReadIoMappingCommand = _addReadIoMappingCommand;
+        AddWriteIoMappingCommand = _addWriteIoMappingCommand;
         DeleteIoMappingCommand = _deleteIoMappingCommand;
         SaveCommand = _saveCommand;
 
@@ -217,8 +174,7 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         }
         else
         {
-            ModuleTemplateSummary = string.Empty;
-            IoTotalCount = 0;
+            SetModuleTemplateAvailable(false);
             ReplaceItems(IoMappings, []);
         }
     }
@@ -233,48 +189,18 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
     {
         if (SelectedNetworkDevice is null || SelectedNetworkDevice.Id <= 0)
         {
-            IoTotalCount = 0;
-            _loadedIoMappingSnapshot = [];
             ReplaceItems(IoMappings, []);
             return;
         }
 
-        var result = await _crudService.LoadIoMappingsAsync(
-            SelectedNetworkDevice.Id,
-            IoPageIndex,
-            IoPageSize);
-
-        IoTotalCount = result.TotalCount;
-        _loadedIoMappingSnapshot = result.Items.Select(CloneIoMapping).ToList();
+        var result = await _crudService.LoadIoMappingsAsync(SelectedNetworkDevice.Id);
         ReplaceItems(IoMappings, result.Items);
     }
 
     private async Task RefreshModuleTemplateInfoAsync()
     {
         var result = await _crudService.GetModuleTemplateInfoAsync(SelectedNetworkDevice);
-        ModuleTemplateSummary = result.IsAvailable ? result.Summary : string.Empty;
-    }
-
-    private async Task IoNextPageAsync()
-    {
-        if ((IoPageIndex + 1) * IoPageSize >= IoTotalCount)
-        {
-            return;
-        }
-
-        IoPageIndex++;
-        await LoadIoMappingsAsync();
-    }
-
-    private void IoPrevPage()
-    {
-        if (IoPageIndex <= 0)
-        {
-            return;
-        }
-
-        IoPageIndex--;
-        _ = LoadIoMappingsAsync();
+        SetModuleTemplateAvailable(result.IsAvailable);
     }
 
     private async Task<CrudOperationResult> ApplyModuleTemplateAsync()
@@ -302,7 +228,7 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
             return validationResult;
         }
 
-        var mappingsToSave = await BuildMappingsToSaveAsync();
+        var mappingsToSave = BuildMappingsToSave();
 
         var saveResult = await _crudService.SaveAsync(
             NetworkDevices,
@@ -311,7 +237,7 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
             mappingsToSave);
 
         if (saveResult.IsSuccess
-            || saveResult.Message.StartsWith("配置已保存，但", StringComparison.Ordinal))
+            || saveResult.Message.StartsWith("配置已保存", StringComparison.Ordinal))
         {
             await LoadAllAsync();
         }
@@ -319,36 +245,8 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         return saveResult;
     }
 
-    private async Task<IReadOnlyCollection<IoMappingVm>> BuildMappingsToSaveAsync()
-    {
-        if (SelectedNetworkDevice is null || SelectedNetworkDevice.Id <= 0)
-        {
-            return IoMappings.ToList();
-        }
-
-        var allPersisted = await _crudService.LoadIoMappingsAsync(
-            SelectedNetworkDevice.Id,
-            0,
-            int.MaxValue);
-
-        if (allPersisted.TotalCount == 0)
-        {
-            return IoMappings.ToList();
-        }
-
-        var loadedIds = _loadedIoMappingSnapshot
-            .Where(x => x.Id > 0)
-            .Select(x => x.Id)
-            .ToHashSet();
-
-        var merged = allPersisted.Items
-            .Where(x => !loadedIds.Contains(x.Id))
-            .Select(CloneIoMapping)
-            .ToList();
-
-        merged.AddRange(IoMappings.Select(CloneIoMapping));
-        return merged;
-    }
+    private IReadOnlyCollection<IoMappingVm> BuildMappingsToSave()
+        => IoMappings.Select(CloneIoMapping).ToList();
 
     private void OnSelectedNetworkDevicePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -356,8 +254,6 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
             or nameof(NetworkDeviceVm.DeviceType)
             or nameof(NetworkDeviceVm.Id))
         {
-            OnPropertyChanged(nameof(CanApplyModuleTemplate));
-            _applyModuleTemplateCommand.RaiseCanExecuteChanged();
             _ = RefreshModuleTemplateInfoAsync();
         }
     }
@@ -382,10 +278,33 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         _deleteNetworkDeviceCommand.RaiseCanExecuteChanged();
         _addSerialDeviceCommand.RaiseCanExecuteChanged();
         _deleteSerialDeviceCommand.RaiseCanExecuteChanged();
-        _addIoMappingCommand.RaiseCanExecuteChanged();
+        _addReadIoMappingCommand.RaiseCanExecuteChanged();
+        _addWriteIoMappingCommand.RaiseCanExecuteChanged();
         _deleteIoMappingCommand.RaiseCanExecuteChanged();
         _applyModuleTemplateCommand.RaiseCanExecuteChanged();
         _saveCommand.RaiseCanExecuteChanged();
+    }
+
+    private void SetModuleTemplateAvailable(bool value)
+    {
+        _hasModuleTemplate = value;
+        OnPropertyChanged(nameof(CanApplyModuleTemplate));
+        _applyModuleTemplateCommand.RaiseCanExecuteChanged();
+    }
+
+    private IoMappingVm CreateIoMapping(string direction)
+    {
+        var isWrite = string.Equals(direction, "Write", StringComparison.OrdinalIgnoreCase);
+        return new IoMappingVm
+        {
+            NetworkDeviceId = SelectedNetworkDevice!.Id,
+            Direction = isWrite ? "Write" : "Read",
+            DataType = "Int16",
+            AddressCount = 1,
+            Category = GetText(
+                isWrite ? "Navigation_Io_Category_SingleWrite" : "Navigation_Io_Category_SingleRead",
+                isWrite ? "单点写数据" : "单点读数据")
+        };
     }
 
     private static IoMappingVm CloneIoMapping(IoMappingVm source)

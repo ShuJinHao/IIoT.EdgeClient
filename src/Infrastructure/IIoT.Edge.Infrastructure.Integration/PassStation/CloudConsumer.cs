@@ -60,7 +60,7 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
                 CloudCallOutcome.SkippedUploadNotReady,
                 gate.ReasonCode);
             _logger.Warn(
-                $"[Cloud] Upload gate is blocked ({gate.ReasonCode}). Move {records.Count} record(s) to retry queue.");
+                $"[Cloud] 上传门控已阻塞（{gate.ReasonCode}），{records.Count} 条记录转入 retry 队列。");
             _diagnosticsStore.RecordResult(records[0].CellData.ProcessType, blockedResult);
             return blockedResult;
         }
@@ -71,7 +71,7 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
             var unidentifiedResult = CloudCallResult.Failure(
                 CloudCallOutcome.SkippedUploadNotReady,
                 EdgeUploadBlockReason.DeviceUnidentified.ToReasonCode());
-            _logger.Warn("[Cloud] Device is not identified yet. Move record(s) to retry queue.");
+            _logger.Warn("[Cloud] 设备尚未识别，记录转入 retry 队列。");
             _diagnosticsStore.RecordResult(records[0].CellData.ProcessType, unidentifiedResult);
             return unidentifiedResult;
         }
@@ -82,7 +82,7 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
             if (!_uploaders.TryGetValue(group.Key, out var uploader))
             {
                 var uploaderMissing = CloudCallResult.Failure(CloudCallOutcome.Exception, "uploader_not_found");
-                _logger.Error($"[Cloud] No uploader registered for process type: {group.Key}");
+                _logger.Error($"[Cloud] 工序 {group.Key} 未注册云端上传器。");
                 _diagnosticsStore.RecordResult(group.Key, uploaderMissing);
                 return uploaderMissing;
             }
@@ -92,7 +92,7 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
             if (!result.IsSuccess)
             {
                 _logger.Error(
-                    $"[Cloud] Upload failed for process type {group.Key}. Count:{group.Count()}, Outcome:{result.Outcome}, Reason:{result.ReasonCode}");
+                    $"[Cloud] 工序 {group.Key} 上传失败，数量：{group.Count()}，结果：{result.Outcome}，原因：{result.ReasonCode}。");
                 return result;
             }
         }

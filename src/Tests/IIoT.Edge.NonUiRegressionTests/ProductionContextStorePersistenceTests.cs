@@ -121,7 +121,7 @@ public sealed class ProductionContextStorePersistenceTests
             store.LoadFromFile();
 
             Assert.Empty(store.GetAll());
-            Assert.Contains(logger.Entries, x => x.Message.Contains("No persisted file", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(logger.Entries, x => x.Message.Contains("未找到持久化文件", StringComparison.Ordinal));
         }
         finally
         {
@@ -279,8 +279,8 @@ public sealed class ProductionContextStorePersistenceTests
             Assert.False(File.Exists(tempPath));
             Assert.Contains(
                 logger.Entries,
-                x => x.Message.Contains("writing temp file", StringComparison.OrdinalIgnoreCase)
-                    && x.Message.Contains("Temp cleanup: deleted residual .tmp file.", StringComparison.Ordinal));
+                x => x.Message.Contains("写入临时文件", StringComparison.Ordinal)
+                    && x.Message.Contains("临时文件清理：已删除残留 .tmp 文件。", StringComparison.Ordinal));
         }
         finally
         {
@@ -317,8 +317,8 @@ public sealed class ProductionContextStorePersistenceTests
             Assert.Equal("seed", File.ReadAllText(persistPath));
             Assert.Contains(
                 logger.Entries,
-                x => x.Message.Contains("replacing persisted file", StringComparison.OrdinalIgnoreCase)
-                    && x.Message.Contains("Temp cleanup: deleted residual .tmp file.", StringComparison.Ordinal));
+                x => x.Message.Contains("替换持久化文件", StringComparison.Ordinal)
+                    && x.Message.Contains("临时文件清理：已删除残留 .tmp 文件。", StringComparison.Ordinal));
         }
         finally
         {

@@ -50,7 +50,7 @@ public abstract class PlcTaskBase : IPlcTask
     private async Task TaskCoreAsync(CancellationToken ct)
     {
         SetTaskCancellationToken(ct);
-        Logger.Info($"[{Context.DeviceName}] {TaskName} started. Current step: {Step}");
+        Logger.Info($"[{Context.DeviceName}] {TaskName} 已启动，当前步骤：{Step}");
 
         while (!ct.IsCancellationRequested)
         {
@@ -65,7 +65,7 @@ public abstract class PlcTaskBase : IPlcTask
             }
             catch (Exception ex)
             {
-                Logger.Error($"[{Context.DeviceName}] {TaskName} failed: {ex.Message}");
+                Logger.Error($"[{Context.DeviceName}] {TaskName} 执行失败：{ex.Message}");
                 try
                 {
                     await Task.Delay(ErrorRetryInterval, ct);
@@ -77,6 +77,6 @@ public abstract class PlcTaskBase : IPlcTask
             }
         }
 
-        Logger.Info($"[{Context.DeviceName}] {TaskName} stopped.");
+        Logger.Info($"[{Context.DeviceName}] {TaskName} 已停止。");
     }
 }

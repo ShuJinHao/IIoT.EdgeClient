@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Modules.Descriptors;
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.UI.Shared.Modularity;
 using IIoT.Edge.UI.Shared.PluginSystem;
@@ -13,6 +14,7 @@ internal sealed class EdgeProcessModuleBuilder : IEdgeProcessModuleBuilder
     private readonly ICellDataRegistry _cellDataRegistry;
     private readonly IStationRuntimeRegistry _runtimeRegistry;
     private readonly IProcessIntegrationRegistry _integrationRegistry;
+    private readonly IModuleParamRegistry _moduleParamRegistry;
 
     public EdgeProcessModuleBuilder(
         string moduleId,
@@ -22,7 +24,8 @@ internal sealed class EdgeProcessModuleBuilder : IEdgeProcessModuleBuilder
         IViewRegistry viewRegistry,
         ICellDataRegistry cellDataRegistry,
         IStationRuntimeRegistry runtimeRegistry,
-        IProcessIntegrationRegistry integrationRegistry)
+        IProcessIntegrationRegistry integrationRegistry,
+        IModuleParamRegistry moduleParamRegistry)
     {
         ModuleId = string.IsNullOrWhiteSpace(moduleId)
             ? throw new ArgumentException("ModuleId cannot be empty.", nameof(moduleId))
@@ -36,6 +39,7 @@ internal sealed class EdgeProcessModuleBuilder : IEdgeProcessModuleBuilder
         _cellDataRegistry = cellDataRegistry ?? throw new ArgumentNullException(nameof(cellDataRegistry));
         _runtimeRegistry = runtimeRegistry ?? throw new ArgumentNullException(nameof(runtimeRegistry));
         _integrationRegistry = integrationRegistry ?? throw new ArgumentNullException(nameof(integrationRegistry));
+        _moduleParamRegistry = moduleParamRegistry ?? throw new ArgumentNullException(nameof(moduleParamRegistry));
     }
 
     public string ModuleId { get; }
@@ -181,6 +185,12 @@ internal sealed class EdgeProcessModuleBuilder : IEdgeProcessModuleBuilder
 
     public void RegisterMesUploader(MesUploadMode uploadMode)
         => _integrationRegistry.RegisterMesUploader(ProcessType, uploadMode);
+
+    public void RegisterParameters<TMes, TCloud, TBusiness>()
+        where TMes : struct, Enum
+        where TCloud : struct, Enum
+        where TBusiness : struct, Enum
+        => _moduleParamRegistry.Register(ModuleId, typeof(TMes), typeof(TCloud), typeof(TBusiness));
 
     private static ViewModelBase ResolveViewModel(
         string viewId,

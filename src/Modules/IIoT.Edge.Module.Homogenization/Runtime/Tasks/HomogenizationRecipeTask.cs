@@ -2,6 +2,7 @@ using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
 using IIoT.Edge.Module.Homogenization.Runtime;
@@ -31,9 +32,10 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
         HomogenizationMesScenarioChannel mesChannel,
         IMesUploadDiagnosticsStore diagnosticsStore,
         ILogService logger,
+        IProductionTimeProvider productionTime,
         IOptions<HomogenizationModuleOptions> moduleOptions,
         IOptions<HomogenizationCodeOptions> codeOptions)
-        : base(buffer, context, logger, codeOptions, moduleOptions)
+        : base(buffer, context, logger, productionTime, codeOptions, moduleOptions)
     {
         _deviceService = deviceService;
         _mesChannel = mesChannel;
@@ -76,7 +78,7 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
                 {
                     var message = $"配方上传处理异常：{ex.Message}";
                     _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Recipe, message);
-                    ModuleContext.LastRecipeAt = DateTime.UtcNow;
+                    ModuleContext.LastRecipeAt = ProductionTime.BusinessNow;
                     ModuleContext.LastRecipeResult = message;
                     Codec.WriteWord(AckLabel, CodeOptions.Plc.AckException);
                     Logger.Error($"[{ModuleContext.DeviceName}] {TaskName} {message}");

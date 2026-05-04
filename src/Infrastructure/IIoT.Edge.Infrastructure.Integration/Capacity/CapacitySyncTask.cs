@@ -64,7 +64,7 @@ public class CapacitySyncTask : ICapacitySyncTask
             _loopTask = Task.Run(() => SyncLoopAsync(_cts.Token), CancellationToken.None);
         }
 
-        _logger.Info($"[CapacitySync] Started. Interval: {(int)_runtimeConfig.Current.CloudSyncInterval.TotalSeconds}s");
+        _logger.Info($"[CapacitySync] 已启动，间隔：{(int)_runtimeConfig.Current.CloudSyncInterval.TotalSeconds}s");
         return Task.CompletedTask;
     }
 
@@ -121,7 +121,7 @@ public class CapacitySyncTask : ICapacitySyncTask
             await ExecuteOnceAsync();
         }
 
-        _logger.Info("[CapacitySync] Stopped.");
+        _logger.Info("[CapacitySync] 已停止。");
     }
 
     private async Task ExecuteOnceAsync()
@@ -146,7 +146,7 @@ public class CapacitySyncTask : ICapacitySyncTask
             }
             catch (Exception ex)
             {
-                _logger.Error($"[CapacitySync] Sync failed: {ex.Message}");
+                _logger.Error($"[CapacitySync] 同步失败：{ex.Message}");
             }
         }
         finally
@@ -200,16 +200,16 @@ public class CapacitySyncTask : ICapacitySyncTask
         if (result.IsSuccess)
         {
             _logger.Info(
-                $"[CapacitySync] [{plcName}] {date} {hour:D2}:{minute:D2}/{shiftCode} synced. Total:{totalCount}, OK:{okCount}, NG:{ngCount}");
+                $"[CapacitySync] [{plcName}] {date} {hour:D2}:{minute:D2}/{shiftCode} 已同步。总数：{totalCount}，OK：{okCount}，NG：{ngCount}");
         }
         else if (result.Outcome is CloudCallOutcome.SkippedUploadNotReady or CloudCallOutcome.UnauthorizedAfterRetry)
         {
             _logger.Warn(
-                $"[CapacitySync] [{plcName}] {date} {hour:D2}:{minute:D2}/{shiftCode} waiting for cloud recovery. Reason:{result.ReasonCode}");
+                $"[CapacitySync] [{plcName}] {date} {hour:D2}:{minute:D2}/{shiftCode} 等待云端恢复，原因：{result.ReasonCode}");
         }
         else
         {
-            _logger.Warn($"[CapacitySync] [{plcName}] {date} {hour:D2}:{minute:D2}/{shiftCode} sync failed.");
+            _logger.Warn($"[CapacitySync] [{plcName}] {date} {hour:D2}:{minute:D2}/{shiftCode} 同步失败。");
         }
 
         return result.IsSuccess;
@@ -266,12 +266,12 @@ public class CapacitySyncTask : ICapacitySyncTask
                             if (result.Outcome is CloudCallOutcome.SkippedUploadNotReady or CloudCallOutcome.UnauthorizedAfterRetry)
                             {
                                 _logger.Warn(
-                                    $"[Retry-Cloud] Capacity retry paused waiting for cloud recovery: {summary.Date} {summary.Hour:D2}:{summary.MinuteBucket:D2}/{summary.ShiftCode} ({result.ReasonCode})");
+                                    $"[Retry-Cloud] 产能补传已暂停，等待云端恢复：{summary.Date} {summary.Hour:D2}:{summary.MinuteBucket:D2}/{summary.ShiftCode}（{result.ReasonCode}）");
                             }
                             else
                             {
                                 _logger.Warn(
-                                    $"[Retry-Cloud] Capacity retry failed: {summary.Date} {summary.Hour:D2}:{summary.MinuteBucket:D2}/{summary.ShiftCode}");
+                                    $"[Retry-Cloud] 产能补传失败：{summary.Date} {summary.Hour:D2}:{summary.MinuteBucket:D2}/{summary.ShiftCode}");
                             }
                             return false;
                         }
@@ -286,7 +286,7 @@ public class CapacitySyncTask : ICapacitySyncTask
                     }
 
                     _logger.Info(
-                        $"[Retry-Cloud] Capacity retry completed for claim {claimedBatch.ClaimToken}. Rows:{claimedBatch.Summaries.Count}");
+                        $"[Retry-Cloud] 产能补传批次 {claimedBatch.ClaimToken} 已完成，行数：{claimedBatch.Summaries.Count}");
                 }
                 catch (Exception ex)
                 {
@@ -299,11 +299,11 @@ public class CapacitySyncTask : ICapacitySyncTask
                         catch (Exception releaseEx)
                         {
                             _logger.Error(
-                                $"[Retry-Cloud] Failed to release capacity claim {claimedBatch.ClaimToken}: {releaseEx.Message}");
+                                $"[Retry-Cloud] 释放产能补传领取标记 {claimedBatch.ClaimToken} 失败：{releaseEx.Message}");
                         }
                     }
 
-                    _logger.Error($"[Retry-Cloud] Capacity retry failed with exception: {ex.Message}");
+                    _logger.Error($"[Retry-Cloud] 产能补传异常：{ex.Message}");
                     return false;
                 }
             }

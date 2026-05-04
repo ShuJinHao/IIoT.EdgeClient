@@ -1,10 +1,13 @@
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
+using IIoT.Edge.Module.Homogenization.Config.Parameters;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 using IIoT.Edge.SharedKernel.Context;
@@ -51,6 +54,9 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
         var mesChannel = serviceProvider.GetRequiredService<HomogenizationMesScenarioChannel>();
         var diagnosticsStore = serviceProvider.GetRequiredService<IMesUploadDiagnosticsStore>();
         var dataPipelineService = serviceProvider.GetRequiredService<IDataPipelineService>();
+        var parameters = serviceProvider.GetRequiredService<IModuleParamProvider<MesParam, CloudParam, BusinessParam>>();
+        var trayCodeGuard = serviceProvider.GetRequiredService<HomogenizationTrayCodeGuard>();
+        var productionTime = serviceProvider.GetRequiredService<IProductionTimeProvider>();
         var validator = serviceProvider.GetService<HomogenizationCellDataValidator>() ?? new HomogenizationCellDataValidator();
         var moduleOptions = serviceProvider.GetRequiredService<IOptions<HomogenizationModuleOptions>>();
         var codeOptions = serviceProvider.GetRequiredService<IOptions<HomogenizationCodeOptions>>();
@@ -63,7 +69,10 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 deviceService,
                 mesChannel,
                 diagnosticsStore,
+                parameters,
+                trayCodeGuard,
                 logger,
+                productionTime,
                 moduleOptions,
                 codeOptions),
             new HomogenizationOutboundTask(
@@ -72,7 +81,11 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 deviceService,
                 dataPipelineService,
                 validator,
+                diagnosticsStore,
+                parameters,
+                trayCodeGuard,
                 logger,
+                productionTime,
                 moduleOptions,
                 codeOptions),
             new HomogenizationRecipeTask(
@@ -82,6 +95,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 mesChannel,
                 diagnosticsStore,
                 logger,
+                productionTime,
                 moduleOptions,
                 codeOptions),
             new HomogenizationEquipmentStatusTask(
@@ -91,12 +105,14 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 mesChannel,
                 diagnosticsStore,
                 logger,
+                productionTime,
                 moduleOptions,
                 codeOptions),
             new HomogenizationHeartbeatTask(
                 buffer,
                 homogenizationContext,
                 logger,
+                productionTime,
                 moduleOptions,
                 codeOptions),
             new HomogenizationRealtimeTask(
@@ -106,6 +122,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 mesChannel,
                 diagnosticsStore,
                 logger,
+                productionTime,
                 moduleOptions,
                 codeOptions)
         ];

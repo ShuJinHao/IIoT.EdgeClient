@@ -12,6 +12,11 @@ public sealed record DataPipelineEnqueueResult
 
     public string ReasonCode { get; init; } = string.Empty;
 
+    /// <summary>
+    /// 数据已经进入内存队列，或在内存队列溢出时至少写入一个 durable 本地补偿目标。
+    /// </summary>
+    public bool IsDurablyAccepted => AcceptedToMemory || (WasOverflow && PersistedTargetCount > 0);
+
     public static DataPipelineEnqueueResult Accepted()
         => new()
         {

@@ -8,7 +8,7 @@ public sealed class HomogenizationRealtimeSnapshot
     /// <summary>
     /// 快照采集时间，作为 MES collectTime 的来源。
     /// </summary>
-    public DateTime CapturedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CapturedAt { get; set; }
 
     /// <summary>
     /// 搅拌转速，来源于 PLC 实时搅拌转速信号。

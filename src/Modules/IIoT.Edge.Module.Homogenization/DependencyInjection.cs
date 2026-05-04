@@ -3,11 +3,13 @@ using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Modules.Mes;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
+using IIoT.Edge.Module.Homogenization.Config.Parameters;
 using IIoT.Edge.Module.Homogenization.Integration;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Presentation;
 using IIoT.Edge.Module.Homogenization.Resources;
 using IIoT.Edge.Module.Homogenization.Runtime;
+using IIoT.Edge.Module.Homogenization.Samples;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -49,6 +51,8 @@ public sealed class DependencyInjection : EdgeProcessModuleBase<HomogenizationCe
     /// </summary>
     protected override void ConfigureModuleServices(IEdgeProcessModuleBuilder builder)
     {
+        builder.RegisterParameters<MesParam, CloudParam, BusinessParam>();
+
         var section = builder.Configuration.GetSection($"Modules:{ModuleKey}");
         builder.Services.AddOptions<HomogenizationModuleOptions>()
             .Bind(section.GetSection("Module"));
@@ -73,6 +77,7 @@ public sealed class DependencyInjection : EdgeProcessModuleBase<HomogenizationCe
         builder.Services.AddSingleton<IProductionContextFactory, HomogenizationContextFactory>();
         builder.Services.AddSingleton<IModuleHardwareProfileProvider, HomogenizationHardwareProfileProvider>();
         builder.Services.AddSingleton<HomogenizationCellDataValidator>();
+        builder.Services.AddSingleton<HomogenizationTrayCodeGuard>();
         builder.Services.AddSingleton<IDevelopmentSampleContributor, HomogenizationDevelopmentSampleContributor>();
         builder.Services.AddSingleton<HomogenizationDataViewModel>();
     }

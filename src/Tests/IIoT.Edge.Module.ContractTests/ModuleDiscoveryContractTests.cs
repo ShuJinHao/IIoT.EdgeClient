@@ -1,11 +1,14 @@
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Features.Config.ModuleParameters;
 using IIoT.Edge.Application.Modules.Descriptors;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using Microsoft.Extensions.Configuration;
 using System.IO;
+using System.Text.Json;
 
 namespace IIoT.Edge.Module.ContractTests;
 
@@ -87,6 +90,7 @@ public sealed class ModuleDiscoveryContractTests
             var cellDataRegistry = new CellDataRegistry();
             var runtimeRegistry = new StationRuntimeRegistry();
             var integrationRegistry = new ProcessIntegrationRegistry();
+            var moduleParamRegistry = new ModuleParamRegistry();
 
             foreach (var module in modules)
             {
@@ -98,12 +102,14 @@ public sealed class ModuleDiscoveryContractTests
                     new ModuleViewRegistry(viewRegistry, module.ModuleId),
                     cellDataRegistry,
                     runtimeRegistry,
-                    integrationRegistry));
+                    integrationRegistry,
+                    moduleParamRegistry));
             }
 
             Assert.Equal(3, cellDataRegistry.GetRegistrations().Count);
             Assert.Equal(3, runtimeRegistry.GetRegistrations().Count);
             Assert.Equal(3, integrationRegistry.GetCloudUploaders().Count);
+            Assert.Equal(3, moduleParamRegistry.GetRegistrations().Count);
             Assert.NotNull(viewRegistry.GetViewRegistration("Injection.DataView"));
             Assert.NotNull(viewRegistry.GetViewRegistration("Stacking.DataView"));
             Assert.NotNull(viewRegistry.GetViewRegistration("Homogenization.DataView"));
@@ -123,10 +129,64 @@ public sealed class ModuleDiscoveryContractTests
         Assert.True(result.RuntimeRegistry.HasFactory(MockEdgeProcessModule.Module));
         Assert.True(result.IntegrationRegistry.HasCloudUploader(MockEdgeProcessModule.Process));
         Assert.False(result.IntegrationRegistry.HasMesUploader(MockEdgeProcessModule.Process));
+        Assert.True(result.ModuleParamRegistry.TryGetRegistration(
+            typeof(MockMesParam),
+            typeof(MockCloudParam),
+            typeof(MockBusinessParam),
+            out _));
         Assert.NotNull(result.ViewRegistry.GetViewRegistration("MockProcess.DataView"));
         Assert.Contains(
             result.ViewRegistry.GetAllMenus(),
             x => x.ViewId == "MockProcess.DataView" && x.Title == "模拟工序");
+    }
+
+    [Fact]
+    public void ProductModules_ShouldUseStandardRuntimeAndSampleDirectories()
+    {
+        var repoRoot = ContractTestPathHelper.FindRepoRoot();
+
+        Assert.True(File.Exists(Path.Combine(
+            repoRoot,
+            "src",
+            "Modules",
+            "IIoT.Edge.Module.Stacking",
+            "Runtime",
+            "Tasks",
+            "StackingSignalCaptureTask.cs")));
+        Assert.False(File.Exists(Path.Combine(
+            repoRoot,
+            "src",
+            "Modules",
+            "IIoT.Edge.Module.Stacking",
+            "Runtime",
+            "StackingSignalCaptureTask.cs")));
+        Assert.True(File.Exists(Path.Combine(
+            repoRoot,
+            "src",
+            "Modules",
+            "IIoT.Edge.Module.Homogenization",
+            "Samples",
+            "HomogenizationDevelopmentSampleContributor.cs")));
+        Assert.False(File.Exists(Path.Combine(
+            repoRoot,
+            "src",
+            "Modules",
+            "IIoT.Edge.Module.Homogenization",
+            "Config",
+            "HomogenizationDevelopmentSampleContributor.cs")));
+    }
+
+    [Fact]
+    public void PluginBundles_ShouldContainHomogenizationSingleLineBundle()
+    {
+        var repoRoot = ContractTestPathHelper.FindRepoRoot();
+        var bundlePath = Path.Combine(repoRoot, "scripts", "PluginBundles", "homogenization-line.json");
+
+        Assert.True(File.Exists(bundlePath));
+        using var document = JsonDocument.Parse(File.ReadAllText(bundlePath));
+        Assert.Equal("homogenization-line", document.RootElement.GetProperty("bundleId").GetString());
+        Assert.Equal("Homogenization", document.RootElement.GetProperty("includeModules")[0].GetString());
+        Assert.Equal("HomogenizationLine", document.RootElement.GetProperty("machineProfiles")[0].GetString());
     }
 
     private static ModuleCatalogDiscoveryResult DiscoverPlugins(string pluginRoot)
@@ -154,6 +214,9 @@ public sealed class ModuleDiscoveryContractTests
         protected override IStationRuntimeFactory CreateRuntimeFactory()
             => new MockRuntimeFactory();
 
+        protected override void ConfigureModuleServices(IEdgeProcessModuleBuilder builder)
+            => builder.RegisterParameters<MockMesParam, MockCloudParam, MockBusinessParam>();
+
         protected override void RegisterModuleViews(IEdgeProcessModuleBuilder builder)
         {
             builder.RegisterRoute("MockProcess.DataView", typeof(object), typeof(object));
@@ -165,6 +228,24 @@ public sealed class ModuleDiscoveryContractTests
                 Order = 99
             });
         }
+    }
+
+    private enum MockMesParam
+    {
+        [ModuleParam(ParamValueKind.Bool, DefaultValue = "false")]
+        启用
+    }
+
+    private enum MockCloudParam
+    {
+        [ModuleParam(ParamValueKind.Bool, DefaultValue = "false")]
+        启用
+    }
+
+    private enum MockBusinessParam
+    {
+        [ModuleParam(ParamValueKind.Bool, DefaultValue = "false")]
+        启用重码验证
     }
 
     private sealed class MockCellData : CellDataBase

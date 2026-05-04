@@ -35,6 +35,7 @@ public static class DependencyInjection
     private static void AddDataPipelineRuntimeCore(IServiceCollection services)
     {
         services.AddSingleton<DataPipelineCapacityGuard>();
+        services.AddSingleton<DataPipelineCascadingPersistenceWriter>();
         services.AddSingleton<IIngressOverflowPersistence, IngressOverflowPersistence>();
         services.AddSingleton<DataPipelineService>();
         services.AddSingleton<IDataPipelineService>(sp => sp.GetRequiredService<DataPipelineService>());

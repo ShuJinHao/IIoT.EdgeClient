@@ -36,14 +36,14 @@ internal static class DataPipelineDeadLetterWriter
                 CreatedAt = DateTime.UtcNow
             }).ConfigureAwait(false);
 
-            logger.Fatal($"[{channel.LogPrefix}] {processType} record {sourceRecordId} moved into {channel.DeadLetterName} dead-letter store.");
+            logger.Fatal($"[{channel.LogPrefix}] {processType} 记录 {sourceRecordId} 已进入 {channel.DeadLetterName} 死信表。");
             return true;
         }
         catch (Exception ex)
         {
             criticalFallbackWriter.Write(
                 channel.CriticalSource,
-                $"{failureReason} Dead-letter save failed: {ex.Message}",
+                $"{failureReason} 死信写入失败：{ex.Message}",
                 ex);
             return false;
         }

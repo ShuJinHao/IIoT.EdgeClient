@@ -550,8 +550,8 @@ public static class EdgeSyncDiagnosticsFormatter
 
     private static DateTime NormalizeTimestamp(DateTime value) => value.Kind switch
     {
-        DateTimeKind.Utc => value.ToLocalTime(),
-        DateTimeKind.Unspecified => DateTime.SpecifyKind(value, DateTimeKind.Utc).ToLocalTime(),
+        DateTimeKind.Utc => DateTime.SpecifyKind(value, DateTimeKind.Unspecified),
+        DateTimeKind.Local => DateTime.SpecifyKind(value, DateTimeKind.Unspecified),
         _ => value
     };
 

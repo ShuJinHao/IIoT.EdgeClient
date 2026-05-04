@@ -72,7 +72,7 @@ public class CloudHttpClient : ICloudHttpClient
                 return CloudCallResult.Success();
             }
 
-            _logger.Warn($"[CloudHttp] POST failed: {requestUrl}, Status={(int)response.StatusCode} {response.ReasonPhrase}");
+            _logger.Warn($"[CloudHttp] POST 请求失败：{requestUrl}，状态码={(int)response.StatusCode} {response.ReasonPhrase}");
             return CloudCallResult.Failure(
                 CloudCallOutcome.HttpFailure,
                 BuildHttpReasonCode(response.StatusCode),
@@ -80,22 +80,22 @@ public class CloudHttpClient : ICloudHttpClient
         }
         catch (TaskCanceledException ex)
         {
-            _logger.Warn($"[CloudHttp] POST timeout: {requestUrl}, {ex.Message}");
+            _logger.Warn($"[CloudHttp] POST 请求超时：{requestUrl}，{ex.Message}");
             return CloudCallResult.Failure(CloudCallOutcome.NetworkFailure, "timeout");
         }
         catch (TimeoutRejectedException ex)
         {
-            _logger.Warn($"[CloudHttp] POST timeout: {requestUrl}, {ex.Message}");
+            _logger.Warn($"[CloudHttp] POST 请求超时：{requestUrl}，{ex.Message}");
             return CloudCallResult.Failure(CloudCallOutcome.NetworkFailure, "timeout");
         }
         catch (HttpRequestException ex)
         {
-            _logger.Error($"[CloudHttp] POST network exception: {requestUrl}, {ex.Message}");
+            _logger.Error($"[CloudHttp] POST 网络异常：{requestUrl}，{ex.Message}");
             return CloudCallResult.Failure(CloudCallOutcome.NetworkFailure, "network_exception");
         }
         catch (Exception ex)
         {
-            _logger.Error($"[CloudHttp] POST exception: {requestUrl}, {ex.Message}");
+            _logger.Error($"[CloudHttp] POST 异常：{requestUrl}，{ex.Message}");
             return CloudCallResult.Failure(CloudCallOutcome.Exception, "exception");
         }
     }
@@ -125,7 +125,7 @@ public class CloudHttpClient : ICloudHttpClient
                     await response.Content.ReadAsStringAsync().ConfigureAwait(false));
             }
 
-            _logger.Warn($"[CloudHttp] POST-with-response failed: {requestUrl}, Status={(int)response.StatusCode} {response.ReasonPhrase}");
+            _logger.Warn($"[CloudHttp] POST 响应请求失败：{requestUrl}，状态码={(int)response.StatusCode} {response.ReasonPhrase}");
             return CloudCallResult<string>.Failure(
                 CloudCallOutcome.HttpFailure,
                 BuildHttpReasonCode(response.StatusCode),
@@ -133,22 +133,22 @@ public class CloudHttpClient : ICloudHttpClient
         }
         catch (TaskCanceledException ex)
         {
-            _logger.Warn($"[CloudHttp] POST-with-response timeout: {requestUrl}, {ex.Message}");
+            _logger.Warn($"[CloudHttp] POST 响应请求超时：{requestUrl}，{ex.Message}");
             return CloudCallResult<string>.Failure(CloudCallOutcome.NetworkFailure, "timeout");
         }
         catch (TimeoutRejectedException ex)
         {
-            _logger.Warn($"[CloudHttp] POST-with-response timeout: {requestUrl}, {ex.Message}");
+            _logger.Warn($"[CloudHttp] POST 响应请求超时：{requestUrl}，{ex.Message}");
             return CloudCallResult<string>.Failure(CloudCallOutcome.NetworkFailure, "timeout");
         }
         catch (HttpRequestException ex)
         {
-            _logger.Error($"[CloudHttp] POST-with-response network exception: {requestUrl}, {ex.Message}");
+            _logger.Error($"[CloudHttp] POST 响应请求网络异常：{requestUrl}，{ex.Message}");
             return CloudCallResult<string>.Failure(CloudCallOutcome.NetworkFailure, "network_exception");
         }
         catch (Exception ex)
         {
-            _logger.Error($"[CloudHttp] POST-with-response exception: {requestUrl}, {ex.Message}");
+            _logger.Error($"[CloudHttp] POST 响应请求异常：{requestUrl}，{ex.Message}");
             return CloudCallResult<string>.Failure(CloudCallOutcome.Exception, "exception");
         }
     }
@@ -177,7 +177,7 @@ public class CloudHttpClient : ICloudHttpClient
                     await response.Content.ReadAsStringAsync().ConfigureAwait(false));
             }
 
-            _logger.Warn($"[CloudHttp] GET failed: {requestUrl}, Status={(int)response.StatusCode} {response.ReasonPhrase}");
+            _logger.Warn($"[CloudHttp] GET 请求失败：{requestUrl}，状态码={(int)response.StatusCode} {response.ReasonPhrase}");
             return CloudCallResult<string>.Failure(
                 CloudCallOutcome.HttpFailure,
                 BuildHttpReasonCode(response.StatusCode),
@@ -185,22 +185,22 @@ public class CloudHttpClient : ICloudHttpClient
         }
         catch (TaskCanceledException ex)
         {
-            _logger.Warn($"[CloudHttp] GET timeout: {requestUrl}, {ex.Message}");
+            _logger.Warn($"[CloudHttp] GET 请求超时：{requestUrl}，{ex.Message}");
             return CloudCallResult<string>.Failure(CloudCallOutcome.NetworkFailure, "timeout");
         }
         catch (TimeoutRejectedException ex)
         {
-            _logger.Warn($"[CloudHttp] GET timeout: {requestUrl}, {ex.Message}");
+            _logger.Warn($"[CloudHttp] GET 请求超时：{requestUrl}，{ex.Message}");
             return CloudCallResult<string>.Failure(CloudCallOutcome.NetworkFailure, "timeout");
         }
         catch (HttpRequestException ex)
         {
-            _logger.Error($"[CloudHttp] GET network exception: {requestUrl}, {ex.Message}");
+            _logger.Error($"[CloudHttp] GET 网络异常：{requestUrl}，{ex.Message}");
             return CloudCallResult<string>.Failure(CloudCallOutcome.NetworkFailure, "network_exception");
         }
         catch (Exception ex)
         {
-            _logger.Error($"[CloudHttp] GET exception: {requestUrl}, {ex.Message}");
+            _logger.Error($"[CloudHttp] GET 异常：{requestUrl}，{ex.Message}");
             return CloudCallResult<string>.Failure(CloudCallOutcome.Exception, "exception");
         }
     }

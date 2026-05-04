@@ -1,9 +1,13 @@
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
+using IIoT.Edge.Module.Homogenization.Config.Parameters;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Resources;
 using IIoT.Edge.Module.Homogenization.Runtime;
@@ -20,6 +24,9 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
     private readonly IDeviceService _deviceService;
     private readonly IDataPipelineService _dataPipelineService;
     private readonly HomogenizationCellDataValidator _validator;
+    private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
+    private readonly IModuleParamProvider<MesParam, CloudParam, BusinessParam> _parameters;
+    private readonly HomogenizationTrayCodeGuard _trayCodeGuard;
 
     public HomogenizationOutboundTask(
         IPlcBuffer buffer,
@@ -27,14 +34,21 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
         IDeviceService deviceService,
         IDataPipelineService dataPipelineService,
         HomogenizationCellDataValidator validator,
+        IMesUploadDiagnosticsStore diagnosticsStore,
+        IModuleParamProvider<MesParam, CloudParam, BusinessParam> parameters,
+        HomogenizationTrayCodeGuard trayCodeGuard,
         ILogService logger,
+        IProductionTimeProvider productionTime,
         IOptions<HomogenizationModuleOptions> moduleOptions,
         IOptions<HomogenizationCodeOptions> codeOptions)
-        : base(buffer, context, logger, codeOptions, moduleOptions)
+        : base(buffer, context, logger, productionTime, codeOptions, moduleOptions)
     {
         _deviceService = deviceService;
         _dataPipelineService = dataPipelineService;
         _validator = validator;
+        _diagnosticsStore = diagnosticsStore;
+        _parameters = parameters;
+        _trayCodeGuard = trayCodeGuard;
     }
 
     /// <summary>
@@ -72,8 +86,9 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
                 catch (Exception ex)
                 {
                     var message = $"出料处理异常：{ex.Message}";
-                    ModuleContext.LastOutboundAt = DateTime.UtcNow;
+                    ModuleContext.LastOutboundAt = ProductionTime.BusinessNow;
                     ModuleContext.LastOutboundResult = message;
+                    _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Outbound, message);
                     Codec.WriteWord(AckLabel, CodeOptions.Plc.AckException);
                     Logger.Error($"[{ModuleContext.DeviceName}] {TaskName} {message}");
                     Step = 30;
@@ -100,7 +115,19 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
         {
             var message = error ?? "出料校验失败。";
             RecordOutbound(cellData, message);
+            _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Outbound, message);
             Codec.WriteWord(AckLabel, CodeOptions.Plc.AckException);
+            return;
+        }
+
+        var parameters = await _parameters.GetAsync(cancellationToken).ConfigureAwait(false);
+        if (_trayCodeGuard.IsDuplicateEnabled(parameters)
+            && _trayCodeGuard.IsDuplicate(ModuleContext, HomogenizationTrayCodeStage.Outbound, cellData.TrayCode))
+        {
+            var message = _trayCodeGuard.FormatDuplicateMessage(HomogenizationTrayCodeStage.Outbound, cellData.TrayCode);
+            Codec.WriteWord(AckLabel, CodeOptions.Plc.AckMesNg);
+            RecordOutbound(cellData, message);
+            _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Outbound, message);
             return;
         }
 
@@ -108,12 +135,27 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
             .EnqueueAsync(new CellCompletedRecord { CellData = cellData }, cancellationToken)
             .ConfigureAwait(false);
 
+        if (!enqueueResult.IsDurablyAccepted)
+        {
+            var failure = FormatRejectedResult(enqueueResult);
+            RecordOutbound(cellData, failure);
+            _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Outbound, failure);
+            Codec.WriteWord(AckLabel, CodeOptions.Plc.AckException);
+            return;
+        }
+
         var result = enqueueResult.WasOverflow
             ? HomogenizationText.Get(
                 "Homogenization_Outbound_OverflowReceived",
                 "出料已接收，数据已进入溢出持久化。")
             : HomogenizationText.Get("Homogenization_Outbound_Received", "出料已接收。");
 
+        _trayCodeGuard.MarkProcessed(
+            ModuleContext,
+            HomogenizationTrayCodeStage.Outbound,
+            cellData.TrayCode,
+            "出站已接收",
+            cellData.CompletedTime ?? ProductionTime.BusinessNow);
         RecordOutbound(cellData, result);
         Codec.WriteWord(AckLabel, CodeOptions.Plc.AckOk);
     }
@@ -127,7 +169,7 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
             DeviceName = ModuleContext.DeviceName,
             DeviceCode = _deviceService.CurrentDevice?.ClientCode ?? ModuleContext.DeviceName,
             InboundTime = ModuleContext.LastInboundAt,
-            CompletedTime = DateTime.UtcNow,
+            CompletedTime = ProductionTime.BusinessNow,
             RuntimeStatus = HomogenizationText.Get("Homogenization_Outbound_PendingUpload", "出料待上传"),
             RealtimeSnapshot = Codec.CaptureRealtimeSnapshot(),
             RecipeSnapshot = ModuleContext.LastRecipeSnapshot,
@@ -150,8 +192,19 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
     private void RecordOutbound(HomogenizationCellData cellData, string result)
     {
         ModuleContext.LastOutboundTrayCode = cellData.TrayCode;
-        ModuleContext.LastOutboundAt = DateTime.UtcNow;
+        ModuleContext.LastOutboundAt = cellData.CompletedTime ?? ProductionTime.BusinessNow;
         ModuleContext.LastOutboundResult = result;
         ModuleContext.RecordOutbound(cellData);
+    }
+
+    private static string FormatRejectedResult(DataPipelineEnqueueResult enqueueResult)
+    {
+        var reason = string.IsNullOrWhiteSpace(enqueueResult.ReasonCode)
+            ? "unknown"
+            : enqueueResult.ReasonCode;
+
+        return enqueueResult.WasOverflow
+            ? $"出料未接收，溢出持久化未写入任何补偿目标（{reason}）。"
+            : $"出料未接收，数据管道拒绝入队（{reason}）。";
     }
 }

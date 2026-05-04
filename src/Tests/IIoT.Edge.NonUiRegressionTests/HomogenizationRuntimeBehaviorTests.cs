@@ -1,16 +1,20 @@
 using IIoT.Edge.Application.Modules.Hardware;
 using System.Linq.Expressions;
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Module.Homogenization;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
+using IIoT.Edge.Module.Homogenization.Config.Parameters;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Runtime;
+using IIoT.Edge.Module.Homogenization.Samples;
 using IIoT.Edge.Runtime.Signals;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.DataPipeline;
@@ -209,6 +213,9 @@ public sealed class HomogenizationRuntimeBehaviorTests
         services.AddSingleton<IMesUploadDiagnosticsStore>(diagnostics);
         services.AddSingleton<HomogenizationMesScenarioChannel>(mesApi);
         services.AddSingleton<IDataPipelineService>(pipeline);
+        services.AddSingleton<IProductionTimeProvider>(new FakeProductionTimeProvider());
+        services.AddSingleton<IModuleParamProvider<MesParam, CloudParam, BusinessParam>>(new RuntimeFakeModuleParamProvider());
+        services.AddSingleton(new HomogenizationTrayCodeGuard());
         services.AddSingleton(new HomogenizationCellDataValidator());
         services.AddSingleton(Options.Create(new HomogenizationModuleOptions()));
         services.AddSingleton(Options.Create(TestCodeOptions));
@@ -356,6 +363,9 @@ public sealed class HomogenizationRuntimeBehaviorTests
         services.AddSingleton<IMesUploadDiagnosticsStore>(diagnostics);
         services.AddSingleton<HomogenizationMesScenarioChannel>(mesApi);
         services.AddSingleton<IDataPipelineService>(pipeline);
+        services.AddSingleton<IProductionTimeProvider>(new FakeProductionTimeProvider());
+        services.AddSingleton<IModuleParamProvider<MesParam, CloudParam, BusinessParam>>(new RuntimeFakeModuleParamProvider());
+        services.AddSingleton(new HomogenizationTrayCodeGuard());
         services.AddSingleton(new HomogenizationCellDataValidator());
         services.AddSingleton(Options.Create(new HomogenizationModuleOptions()));
         services.AddSingleton(Options.Create(TestCodeOptions));
@@ -602,6 +612,40 @@ public sealed class HomogenizationRuntimeBehaviorTests
         }
 
         Assert.True(condition());
+    }
+
+    private sealed class RuntimeFakeModuleParamProvider
+        : IModuleParamProvider<MesParam, CloudParam, BusinessParam>
+    {
+        public Task<ModuleParamSnapshot<MesParam, CloudParam, BusinessParam>> GetAsync(
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new ModuleParamSnapshot<MesParam, CloudParam, BusinessParam>(
+                DependencyInjection.ModuleKey,
+                EmptyGroup<MesParam>(ModuleParamCategory.Mes),
+                EmptyGroup<CloudParam>(ModuleParamCategory.Cloud),
+                new ModuleParamGroup<BusinessParam>(
+                    DependencyInjection.ModuleKey,
+                    ModuleParamCategory.Business,
+                    new Dictionary<BusinessParam, string>(),
+                    new Dictionary<BusinessParam, string?>
+                    {
+                        [BusinessParam.启用托盘码重码验证] = "false"
+                    },
+                    new Dictionary<BusinessParam, ParamValueKind>
+                    {
+                        [BusinessParam.启用托盘码重码验证] = ParamValueKind.Bool
+                    },
+                    warn: null)));
+
+        private static ModuleParamGroup<TEnum> EmptyGroup<TEnum>(ModuleParamCategory category)
+            where TEnum : struct, Enum
+            => new(
+                DependencyInjection.ModuleKey,
+                category,
+                new Dictionary<TEnum, string>(),
+                new Dictionary<TEnum, string?>(),
+                new Dictionary<TEnum, ParamValueKind>(),
+                warn: null);
     }
 
     private sealed class CapturingHomogenizationMesChannel : HomogenizationMesScenarioChannel

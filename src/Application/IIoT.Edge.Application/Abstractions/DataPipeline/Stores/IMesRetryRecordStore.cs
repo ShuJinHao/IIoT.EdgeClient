@@ -6,6 +6,8 @@ public interface IMesRetryRecordStore
 {
     Task SaveAsync(CellCompletedRecord record, string failedTarget, string errorMessage);
 
+    Task SaveRawAsync(string processType, string cellDataJson, string failedTarget, string errorMessage);
+
     Task<List<FailedCellRecord>> GetPendingAsync(int batchSize = 10);
 
     Task<ClaimedFailedCellBatch?> ClaimPendingBatchAsync(int batchSize = 10);

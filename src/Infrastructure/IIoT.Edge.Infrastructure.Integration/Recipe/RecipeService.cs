@@ -57,7 +57,7 @@ public class RecipeService : IRecipeService
         }
 
         _activeSource = source;
-        _logger.Info($"[Recipe] Source switched to: {source}");
+        _logger.Info($"[Recipe] 配方来源已切换为：{source}");
         RecipeChanged?.Invoke();
     }
 
@@ -87,14 +87,14 @@ public class RecipeService : IRecipeService
         var device = _deviceService.CurrentDevice;
         if (device is null)
         {
-            _logger.Warn("[Recipe] Device is not identified yet. Cloud pull skipped.");
+            _logger.Warn("[Recipe] 设备尚未识别，已跳过云端配方拉取。");
             return false;
         }
 
         if (!_deviceService.CanUploadToCloud)
         {
             _logger.Warn(
-                $"[Recipe] Cloud pull skipped because upload gate is blocked ({_deviceService.CurrentUploadGate.Reason.ToReasonCode()}).");
+                $"[Recipe] 上传门控已阻塞，已跳过云端配方拉取（{_deviceService.CurrentUploadGate.Reason.ToReasonCode()}）。");
             return false;
         }
 
@@ -102,7 +102,7 @@ public class RecipeService : IRecipeService
         var result = await _cloudHttp.GetAsync(url);
         if (!result.IsSuccess || string.IsNullOrWhiteSpace(result.Payload))
         {
-            _logger.Error($"[Recipe] Cloud pull failed. Outcome:{result.Outcome}, Reason:{result.ReasonCode}");
+            _logger.Error($"[Recipe] 云端配方拉取失败。结果：{result.Outcome}，原因：{result.ReasonCode}");
             return false;
         }
 
@@ -111,19 +111,19 @@ public class RecipeService : IRecipeService
             var recipe = ParseCloudResponse(result.Payload);
             if (recipe is null)
             {
-                _logger.Warn("[Recipe] Cloud response was empty or invalid.");
+                _logger.Warn("[Recipe] 云端配方响应为空或格式无效。");
                 return false;
             }
 
             _cloudRecipe = recipe;
             SaveSingleFile(_cloudRecipe, GetCloudFilePath());
-            _logger.Info($"[Recipe] Cloud recipe loaded: {recipe.RecipeName} {recipe.Version}, Params:{recipe.Parameters.Count}");
+            _logger.Info($"[Recipe] 云端配方已加载：{recipe.RecipeName} {recipe.Version}，参数数：{recipe.Parameters.Count}");
             RecipeChanged?.Invoke();
             return true;
         }
         catch (Exception ex)
         {
-            _logger.Error($"[Recipe] Parse failed: {ex.Message}");
+            _logger.Error($"[Recipe] 配方解析失败：{ex.Message}");
             return false;
         }
     }
@@ -148,7 +148,7 @@ public class RecipeService : IRecipeService
 
         _localRecipe.UpdatedAt = CurrentUtcTimestamp();
         SaveSingleFile(_localRecipe, GetLocalFilePath());
-        _logger.Info($"[Recipe] Local parameter updated: {name} [{min} ~ {max}] {unit}");
+        _logger.Info($"[Recipe] 本地参数已更新：{name} [{min} ~ {max}] {unit}");
 
         if (_activeSource == RecipeSource.Local)
         {
@@ -167,7 +167,7 @@ public class RecipeService : IRecipeService
         {
             _localRecipe.UpdatedAt = CurrentUtcTimestamp();
             SaveSingleFile(_localRecipe, GetLocalFilePath());
-            _logger.Info($"[Recipe] Local parameter removed: {name}");
+            _logger.Info($"[Recipe] 本地参数已删除：{name}");
 
             if (_activeSource == RecipeSource.Local)
             {
@@ -183,7 +183,7 @@ public class RecipeService : IRecipeService
 
         var cloudCount = _cloudRecipe?.Parameters.Count ?? 0;
         var localCount = _localRecipe?.Parameters.Count ?? 0;
-        _logger.Info($"[Recipe] Loaded. Cloud params:{cloudCount}, Local params:{localCount}");
+        _logger.Info($"[Recipe] 配方已加载。云端参数数：{cloudCount}，本地参数数：{localCount}");
     }
 
     public void SaveToFile()
@@ -218,7 +218,7 @@ public class RecipeService : IRecipeService
         }
         catch (Exception ex)
         {
-            _logger.Error($"[Recipe] Load file failed {path}: {ex.Message}");
+            _logger.Error($"[Recipe] 读取配方文件失败 {path}：{ex.Message}");
             return null;
         }
     }
@@ -232,7 +232,7 @@ public class RecipeService : IRecipeService
         }
         catch (Exception ex)
         {
-            _logger.Error($"[Recipe] Save file failed {path}: {ex.Message}");
+            _logger.Error($"[Recipe] 保存配方文件失败 {path}：{ex.Message}");
         }
     }
 
@@ -322,7 +322,7 @@ public class RecipeService : IRecipeService
         }
         catch (Exception ex)
         {
-            _logger.Error($"[Recipe] Parse parametersJsonb failed: {ex.Message}");
+            _logger.Error($"[Recipe] 解析 parametersJsonb 失败：{ex.Message}");
         }
 
         return result;

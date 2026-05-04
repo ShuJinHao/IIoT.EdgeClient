@@ -10,22 +10,23 @@ public sealed class MesRequestExecutor
 {
     private readonly IMesHttpClient _mesHttpClient;
     private readonly IMesEndpointProvider _endpointProvider;
-    private readonly ILocalSystemRuntimeConfigService _runtimeConfig;
+    private readonly IModuleParamRoleProvider _moduleParamRoleProvider;
     private readonly ILogService _logger;
 
     public MesRequestExecutor(
         IMesHttpClient mesHttpClient,
         IMesEndpointProvider endpointProvider,
-        ILocalSystemRuntimeConfigService runtimeConfig,
+        IModuleParamRoleProvider moduleParamRoleProvider,
         ILogService logger)
     {
         _mesHttpClient = mesHttpClient;
         _endpointProvider = endpointProvider;
-        _runtimeConfig = runtimeConfig;
+        _moduleParamRoleProvider = moduleParamRoleProvider;
         _logger = logger;
     }
 
     public async Task<MesCallResult> ExecuteAsync(
+        string processType,
         DeviceSession? device,
         string relativePath,
         Func<DeviceSession, CancellationToken, Task<object>> payloadFactory,
@@ -34,7 +35,15 @@ public sealed class MesRequestExecutor
         ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
         ArgumentNullException.ThrowIfNull(payloadFactory);
 
-        if (!_runtimeConfig.Current.MesUploadEnabled)
+        var mesEnabled = await _moduleParamRoleProvider
+            .GetBoolAsync(
+                processType,
+                ModuleParamCategory.Mes,
+                ModuleParamRole.MesEnabled,
+                defaultValue: false,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (!mesEnabled)
         {
             return MesCallResult.Disabled("MES 上传已被配置关闭。");
         }
@@ -44,7 +53,7 @@ public sealed class MesRequestExecutor
             return MesCallResult.InvalidContext("设备尚未完成云端身份初始化。");
         }
 
-        if (!_endpointProvider.IsConfigured)
+        if (!await _endpointProvider.IsConfiguredAsync(processType, cancellationToken).ConfigureAwait(false))
         {
             return MesCallResult.InvalidContext("MES 基础地址未配置。");
         }
@@ -53,7 +62,7 @@ public sealed class MesRequestExecutor
         {
             var payload = await payloadFactory(device, cancellationToken).ConfigureAwait(false);
             var response = await _mesHttpClient
-                .PostWithResponseAsync(relativePath, payload, cancellationToken: cancellationToken)
+                .PostWithResponseAsync(processType, relativePath, payload, cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
 
             if (string.IsNullOrWhiteSpace(response))

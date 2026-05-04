@@ -1,5 +1,7 @@
 using IIoT.Edge.Application.Modules.Descriptors;
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Features.Config.ModuleParameters;
 using Microsoft.Extensions.Configuration;
 
 namespace IIoT.Edge.Module.ContractTests;
@@ -16,6 +18,7 @@ public sealed class ModuleContractFixture
         var cellDataRegistry = new CellDataRegistry();
         var runtimeRegistry = new StationRuntimeRegistry();
         var integrationRegistry = new ProcessIntegrationRegistry();
+        var moduleParamRegistry = new ModuleParamRegistry();
         configuration ??= new ConfigurationBuilder().Build();
         var builder = new TestEdgeProcessModuleBuilder(
             module.ModuleId,
@@ -25,7 +28,8 @@ public sealed class ModuleContractFixture
             moduleViewRegistry,
             cellDataRegistry,
             runtimeRegistry,
-            integrationRegistry);
+            integrationRegistry,
+            moduleParamRegistry);
 
         module.Configure(builder);
 
@@ -34,7 +38,8 @@ public sealed class ModuleContractFixture
             viewRegistry,
             cellDataRegistry,
             runtimeRegistry,
-            integrationRegistry);
+            integrationRegistry,
+            moduleParamRegistry);
     }
 }
 
@@ -43,7 +48,8 @@ public sealed record ModuleContractResult(
     ViewRegistry ViewRegistry,
     CellDataRegistry CellDataRegistry,
     StationRuntimeRegistry RuntimeRegistry,
-    ProcessIntegrationRegistry IntegrationRegistry);
+    ProcessIntegrationRegistry IntegrationRegistry,
+    ModuleParamRegistry ModuleParamRegistry);
 
 internal sealed class TestEdgeProcessModuleBuilder(
     string moduleId,
@@ -53,7 +59,8 @@ internal sealed class TestEdgeProcessModuleBuilder(
     IViewRegistry viewRegistry,
     ICellDataRegistry cellDataRegistry,
     IStationRuntimeRegistry runtimeRegistry,
-    IProcessIntegrationRegistry integrationRegistry) : IEdgeProcessModuleBuilder
+    IProcessIntegrationRegistry integrationRegistry,
+    IModuleParamRegistry moduleParamRegistry) : IEdgeProcessModuleBuilder
 {
     public string ModuleId { get; } = moduleId;
 
@@ -171,6 +178,12 @@ internal sealed class TestEdgeProcessModuleBuilder(
 
     public void RegisterMesUploader(MesUploadMode uploadMode)
         => integrationRegistry.RegisterMesUploader(ProcessType, uploadMode);
+
+    public void RegisterParameters<TMes, TCloud, TBusiness>()
+        where TMes : struct, Enum
+        where TCloud : struct, Enum
+        where TBusiness : struct, Enum
+        => moduleParamRegistry.Register(ModuleId, typeof(TMes), typeof(TCloud), typeof(TBusiness));
 
     private static ViewModelBase ResolveViewModel(
         string viewId,

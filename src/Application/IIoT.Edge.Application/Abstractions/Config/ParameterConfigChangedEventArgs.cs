@@ -5,15 +5,10 @@ namespace IIoT.Edge.Application.Abstractions.Config;
 /// </summary>
 public sealed class ParameterConfigChangedEventArgs : EventArgs
 {
-    public ParameterConfigChangedEventArgs(
-        ParameterConfigChangeScope scope,
-        int? deviceId = null)
+    public ParameterConfigChangedEventArgs(ParameterConfigChangeScope scope)
     {
         Scope = scope;
-        DeviceId = deviceId;
     }
 
     public ParameterConfigChangeScope Scope { get; }
-
-    public int? DeviceId { get; }
 }

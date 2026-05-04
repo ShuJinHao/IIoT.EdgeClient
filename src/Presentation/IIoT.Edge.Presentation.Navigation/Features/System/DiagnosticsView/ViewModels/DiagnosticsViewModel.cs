@@ -1,12 +1,17 @@
 using IIoT.Edge.Application.Modules.Diagnostics;
 using System.Collections.ObjectModel;
 using System.Threading;
+using System.Windows.Input;
 using System.Windows.Threading;
+using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Application.Common.Diagnostics;
 using IIoT.Edge.Presentation.Navigation.Localization;
+using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.UI.Shared.Localization;
+using IIoT.Edge.UI.Shared.Mvvm;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
 
@@ -14,6 +19,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
 {
     private readonly IStartupDiagnosticsStore _diagnosticsStore;
     private readonly IEdgeSyncDiagnosticsQuery _syncDiagnosticsQuery;
+    private readonly IDeadLetterMaintenanceService? _deadLetterMaintenanceService;
     private readonly LocalizedSyncDiagnosticsText _diagnosticsText;
     private readonly DispatcherTimer _refreshTimer;
     private int _refreshInProgress;
@@ -23,6 +29,11 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
     public ObservableCollection<DeviceModuleBindingRow> DeviceBindings { get; } = [];
     public ObservableCollection<StartupDiagnosticIssueRow> Issues { get; } = [];
     public ObservableCollection<MesChannelDiagnosticsRow> MesUploadDiagnostics { get; } = [];
+    public ObservableCollection<DeadLetterRow> CloudDeadLetters { get; } = [];
+    public ObservableCollection<DeadLetterRow> MesDeadLetters { get; } = [];
+
+    public ICommand RequeueDeadLetterCommand { get; }
+    public ICommand DeleteDeadLetterCommand { get; }
 
     private string _discoveredModulesSummary = string.Empty;
     public string DiscoveredModulesSummary
@@ -280,12 +291,17 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
     public DiagnosticsViewModel(
         IStartupDiagnosticsStore diagnosticsStore,
         IEdgeSyncDiagnosticsQuery syncDiagnosticsQuery,
-        IAppLanguageService languageService)
+        IAppLanguageService languageService,
+        IDeadLetterMaintenanceService? deadLetterMaintenanceService = null,
+        IProductionTimeProvider? productionTime = null)
         : base(languageService, CoreViewIds.Diagnostics, "Navigation_Menu_CoreDiagnostics", "系统诊断")
     {
         _diagnosticsStore = diagnosticsStore;
         _syncDiagnosticsQuery = syncDiagnosticsQuery;
-        _diagnosticsText = new LocalizedSyncDiagnosticsText(languageService);
+        _deadLetterMaintenanceService = deadLetterMaintenanceService;
+        _diagnosticsText = new LocalizedSyncDiagnosticsText(languageService, productionTime);
+        RequeueDeadLetterCommand = new AsyncCommand<DeadLetterRow>(RequeueDeadLetterAsync, CanOperateDeadLetter);
+        DeleteDeadLetterCommand = new AsyncCommand<DeadLetterRow>(DeleteDeadLetterAsync, CanOperateDeadLetter);
         _refreshTimer = new DispatcherTimer
         {
             Interval = TimeSpan.FromSeconds(1)
@@ -413,9 +429,9 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
             syncDiagnostics.Cloud.IsPersistenceFaulted,
             syncDiagnostics.Cloud.LastPersistenceFaultAt,
             syncDiagnostics.Cloud.PersistenceFaultMessage);
-        CloudLastAttemptSummary = FormatText("Navigation_Sync_LastAttemptFormat", "最近尝试：{0}", LocalizedSyncDiagnosticsText.FormatTimestamp(syncDiagnostics.Cloud.LastAttemptAt));
-        CloudLastSuccessSummary = FormatText("Navigation_Sync_LastSuccessFormat", "最近成功：{0}", LocalizedSyncDiagnosticsText.FormatTimestamp(syncDiagnostics.Cloud.LastSuccessAt));
-        CloudLastFailureSummary = FormatText("Navigation_Sync_LastFailureFormat", "最近失败：{0}", LocalizedSyncDiagnosticsText.FormatTimestamp(syncDiagnostics.Cloud.LastFailureAt));
+        CloudLastAttemptSummary = FormatText("Navigation_Sync_LastAttemptFormat", "最近尝试：{0}", _diagnosticsText.FormatTimestamp(syncDiagnostics.Cloud.LastAttemptAt));
+        CloudLastSuccessSummary = FormatText("Navigation_Sync_LastSuccessFormat", "最近成功：{0}", _diagnosticsText.FormatTimestamp(syncDiagnostics.Cloud.LastSuccessAt));
+        CloudLastFailureSummary = FormatText("Navigation_Sync_LastFailureFormat", "最近失败：{0}", _diagnosticsText.FormatTimestamp(syncDiagnostics.Cloud.LastFailureAt));
 
         MesRuntimeSummary = FormatText(
             "Navigation_Diagnostics_MesRuntimeFormat",
@@ -435,12 +451,12 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
             syncDiagnostics.Mes.IsPersistenceFaulted,
             syncDiagnostics.Mes.LastPersistenceFaultAt,
             syncDiagnostics.Mes.PersistenceFaultMessage);
-        MesLastAttemptSummary = FormatText("Navigation_Sync_LastAttemptFormat", "最近尝试：{0}", LocalizedSyncDiagnosticsText.FormatTimestamp(syncDiagnostics.Mes.LastAttemptAt));
-        MesLastSuccessSummary = FormatText("Navigation_Sync_LastSuccessFormat", "最近成功：{0}", LocalizedSyncDiagnosticsText.FormatTimestamp(syncDiagnostics.Mes.LastSuccessAt));
+        MesLastAttemptSummary = FormatText("Navigation_Sync_LastAttemptFormat", "最近尝试：{0}", _diagnosticsText.FormatTimestamp(syncDiagnostics.Mes.LastAttemptAt));
+        MesLastSuccessSummary = FormatText("Navigation_Sync_LastSuccessFormat", "最近成功：{0}", _diagnosticsText.FormatTimestamp(syncDiagnostics.Mes.LastSuccessAt));
         MesLastFailureSummary = FormatText(
             "Navigation_Sync_LastFailureWithReasonFormat",
             "最近失败：{0}（{1}）",
-            LocalizedSyncDiagnosticsText.FormatTimestamp(syncDiagnostics.Mes.LastFailureAt),
+            _diagnosticsText.FormatTimestamp(syncDiagnostics.Mes.LastFailureAt),
             NormalizeText(syncDiagnostics.Mes.LastFailureReason));
 
         ContextPersistenceSummary = _diagnosticsText.FormatContextPersistenceSummary(syncDiagnostics.ContextPersistence);
@@ -490,9 +506,27 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
             syncDiagnostics.Mes.Channels.Select(x => new MesChannelDiagnosticsRow(
                 ResolveProcessDisplayName(x.ProcessType, x.ProcessDisplayName),
                 _diagnosticsText.FormatMesChannelResult(x.LastResult),
-                LocalizedSyncDiagnosticsText.FormatTimestamp(x.LastAttemptAt),
-                LocalizedSyncDiagnosticsText.FormatTimestamp(x.LastSuccessAt),
+                _diagnosticsText.FormatTimestamp(x.LastAttemptAt),
+                _diagnosticsText.FormatTimestamp(x.LastSuccessAt),
                 NormalizeText(x.LastFailureReason))));
+
+        ReplaceItems(
+            CloudDeadLetters,
+            (syncDiagnostics.Cloud.DeadLetters?.LatestRecords ?? [])
+                .Select(x => DeadLetterRow.From(
+                    DataPipelineRetryChannel.Cloud,
+                    x,
+                    ResolveProcessDisplayName(x.ProcessType, null),
+                    _diagnosticsText.FormatTimestamp(x.CreatedAt))));
+
+        ReplaceItems(
+            MesDeadLetters,
+            (syncDiagnostics.Mes.DeadLetters?.LatestRecords ?? [])
+                .Select(x => DeadLetterRow.From(
+                    DataPipelineRetryChannel.Mes,
+                    x,
+                    ResolveProcessDisplayName(x.ProcessType, null),
+                    _diagnosticsText.FormatTimestamp(x.CreatedAt))));
 
         SetStatus(report.Issues.Count == 0
             ? GetText("Navigation_Diagnostics_StartupOk", "启动诊断正常。")
@@ -618,6 +652,47 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
             ? "--"
             : value;
 
+    private bool CanOperateDeadLetter(DeadLetterRow? row)
+        => _deadLetterMaintenanceService is not null && row is not null;
+
+    private async Task RequeueDeadLetterAsync(DeadLetterRow row)
+    {
+        if (_deadLetterMaintenanceService is null)
+        {
+            SetError("死信运维服务未注册。");
+            return;
+        }
+
+        var result = await _deadLetterMaintenanceService.RequeueAsync(row.Channel, row.Id);
+        if (result.IsSuccess)
+        {
+            SetStatus(result.Message);
+            await RefreshAsync();
+            return;
+        }
+
+        SetError(result.Message);
+    }
+
+    private async Task DeleteDeadLetterAsync(DeadLetterRow row)
+    {
+        if (_deadLetterMaintenanceService is null)
+        {
+            SetError("死信运维服务未注册。");
+            return;
+        }
+
+        var result = await _deadLetterMaintenanceService.DeleteAsync(row.Channel, row.Id);
+        if (result.IsSuccess)
+        {
+            SetStatus(result.Message);
+            await RefreshAsync();
+            return;
+        }
+
+        SetError(result.Message);
+    }
+
     public sealed record PluginLifecycleRow(
         string ModuleId,
         string DisplayName,
@@ -656,4 +731,32 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         string LastAttemptAt,
         string LastSuccessAt,
         string LastFailureReason);
+
+    public sealed record DeadLetterRow(
+        DataPipelineRetryChannel Channel,
+        long Id,
+        string ProcessType,
+        string FailedTarget,
+        string FailureStage,
+        string Source,
+        string CreatedAt,
+        string FailureReason,
+        string CellDataJson)
+    {
+        public static DeadLetterRow From(
+            DataPipelineRetryChannel channel,
+            DeadLetterRecord record,
+            string processDisplayName,
+            string createdAt)
+            => new(
+                channel,
+                record.Id,
+                processDisplayName,
+                record.FailedTarget,
+                record.FailureStage,
+                $"{record.SourceTable}/{record.SourceRecordId?.ToString() ?? "--"}",
+                createdAt,
+                NormalizeText(record.FailureReason),
+                NormalizeText(record.CellDataJson));
+    }
 }
