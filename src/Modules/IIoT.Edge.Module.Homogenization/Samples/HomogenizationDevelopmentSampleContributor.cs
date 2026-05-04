@@ -1,11 +1,8 @@
-using IIoT.Edge.Application.Modules.Hardware;
-using System.IO;
-using System.Text.Json;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.Domain.Hardware.Aggregates;
+using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Application.Modules.Samples;
-using IIoT.Edge.Module.Homogenization.Config;
+using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.SharedKernel.Repository;
 using Microsoft.Extensions.Configuration;
@@ -13,17 +10,29 @@ using Microsoft.Extensions.Configuration;
 namespace IIoT.Edge.Module.Homogenization.Samples;
 
 /// <summary>
-/// 匀浆开发样本导入器，只在开发样本开关打开时写入匀浆设备和 IO 映射，生产配置仍以用户维护为准。
+/// 匀浆开发样本导入器，只播种样本 PLC 设备；IO 点位统一由硬件模板生成并写入当前 PLC 的硬件配置。
 /// </summary>
 public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSampleContributorBase
 {
-    private const string SeedRemark = "匀浆 IO 种子";
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private const string SeedRemark = "匀浆开发样本";
+    private static readonly IReadOnlyList<HomogenizationDeviceSeed> DefaultDevices =
+    [
+        new()
+        {
+            DeviceName = "PLC-Homogenization-01",
+            DeviceModel = "Mc",
+            IpAddress = "127.0.0.1",
+            Port1 = 6000,
+            ConnectTimeout = 3000,
+            IsEnabled = true,
+            Remark = "匀浆开发样本 PLC"
+        }
+    ];
 
     private readonly ILogService _logger;
     private readonly IRepository<NetworkDeviceEntity> _networkDevices;
     private readonly IRepository<IoMappingEntity> _ioMappings;
-    private readonly HomogenizationIoSeedOptions _options;
+    private readonly HomogenizationDeviceSeedOptions _options;
 
     public HomogenizationDevelopmentSampleContributor(
         IConfiguration configuration,
@@ -36,7 +45,7 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
         _networkDevices = networkDevices;
         _ioMappings = ioMappings;
         _logger = logger;
-        _options = BindOptions<HomogenizationIoSeedOptions>(HomogenizationIoSeedOptions.SectionName);
+        _options = BindOptions<HomogenizationDeviceSeedOptions>(HomogenizationDeviceSeedOptions.SectionName);
     }
 
     /// <summary>
@@ -48,16 +57,15 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
         => _options.Enabled;
 
     protected override void OnConfigurationSamplesSkipped()
-        => _logger.Info("[匀浆][IO种子] 自动播种已关闭。");
+        => _logger.Info("[匀浆][设备样本] 自动播种已关闭。");
 
     protected override async Task EnsureConfigurationSamplesCoreAsync(CancellationToken cancellationToken)
     {
-        _logger.Info("[匀浆][IO种子] 开始检查匀浆设备和 IO 映射。");
+        _logger.Info("[匀浆][设备样本] 开始检查样本 PLC 设备和硬件 IO 映射。");
 
-        var seedFile = await LoadSeedFileAsync(cancellationToken).ConfigureAwait(false);
-        if (seedFile.Devices.Count == 0)
+        if (DefaultDevices.Count == 0)
         {
-            _logger.Warn("[匀浆][IO种子] 种子文件没有设备配置。");
+            _logger.Warn("[匀浆][设备样本] 没有可用的默认 PLC 样本。");
             return;
         }
 
@@ -70,9 +78,8 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
         var importedDeviceCount = 0;
         var importedMappingCount = 0;
 
-        foreach (var seedDevice in seedFile.Devices)
+        foreach (var seedDevice in DefaultDevices)
         {
-            ValidateSeedDevice(seedDevice, hardwareProfile);
             var device = await EnsureDeviceAsync(seedDevice, hardwareProfile, cancellationToken).ConfigureAwait(false);
             if (device is null)
             {
@@ -80,35 +87,10 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
             }
 
             importedDeviceCount++;
-            importedMappingCount += await EnsureMappingsAsync(device, seedDevice, cancellationToken).ConfigureAwait(false);
+            importedMappingCount += await EnsureMappingsAsync(device, hardwareProfile, cancellationToken).ConfigureAwait(false);
         }
 
-        _logger.Info($"[匀浆][IO种子] 播种检查完成。设备导入 {importedDeviceCount} 台，IO 映射导入 {importedMappingCount} 条。");
-    }
-
-    private async Task<HomogenizationIoSeedFile> LoadSeedFileAsync(CancellationToken cancellationToken)
-    {
-        var seedPath = ResolveConfigPath("homogenization.io.seed.json");
-        await using var stream = File.OpenRead(seedPath);
-        var seedFile = await JsonSerializer.DeserializeAsync<HomogenizationIoSeedFile>(stream, JsonOptions, cancellationToken)
-            .ConfigureAwait(false);
-
-        return seedFile ?? new HomogenizationIoSeedFile();
-    }
-
-    private static string ResolveConfigPath(string fileName)
-    {
-        var assemblyDirectory = Path.GetDirectoryName(typeof(DependencyInjection).Assembly.Location);
-        if (!string.IsNullOrWhiteSpace(assemblyDirectory))
-        {
-            var outputPath = Path.Combine(assemblyDirectory, "Config", fileName);
-            if (File.Exists(outputPath))
-            {
-                return outputPath;
-            }
-        }
-
-        throw new FileNotFoundException($"未找到匀浆模块配置文件：{fileName}。");
+        _logger.Info($"[匀浆][设备样本] 播种检查完成。设备导入 {importedDeviceCount} 台，IO 映射补齐 {importedMappingCount} 条。");
     }
 
     private async Task ResetHomogenizationConfigurationAsync(CancellationToken cancellationToken)
@@ -143,11 +125,11 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
         }
 
         await _networkDevices.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-        _logger.Info($"[匀浆][IO种子] 已重置 {existingDevices.Count} 台设备和 {mappings.Count} 条映射。");
+        _logger.Info($"[匀浆][设备样本] 已重置 {existingDevices.Count} 台设备和 {mappings.Count} 条映射。");
     }
 
     private async Task<NetworkDeviceEntity?> EnsureDeviceAsync(
-        HomogenizationIoSeedDevice seedDevice,
+        HomogenizationDeviceSeed seedDevice,
         IModuleHardwareProfileProvider hardwareProfile,
         CancellationToken cancellationToken)
     {
@@ -158,7 +140,7 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
 
         if (existingDevice is not null)
         {
-            _logger.Info($"[匀浆][IO种子] 设备“{seedDevice.DeviceName}”已存在，跳过设备写入。");
+            _logger.Info($"[匀浆][设备样本] 设备“{seedDevice.DeviceName}”已存在，跳过设备写入。");
             return existingDevice;
         }
 
@@ -168,7 +150,7 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
 
         if (conflictingDevice is not null)
         {
-            _logger.Warn($"[匀浆][IO种子] 跳过设备“{seedDevice.DeviceName}”，该名称已被模块“{conflictingDevice.ModuleId}”占用。");
+            _logger.Warn($"[匀浆][设备样本] 跳过设备“{seedDevice.DeviceName}”，该名称已被模块“{conflictingDevice.ModuleId}”占用。");
             return null;
         }
 
@@ -194,13 +176,13 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
         _networkDevices.Add(device);
         await _networkDevices.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        _logger.Info($"[匀浆][IO种子] 已写入设备“{device.DeviceName}”。");
+        _logger.Info($"[匀浆][设备样本] 已写入设备“{device.DeviceName}”。");
         return device;
     }
 
     private async Task<int> EnsureMappingsAsync(
         NetworkDeviceEntity device,
-        HomogenizationIoSeedDevice seedDevice,
+        IModuleHardwareProfileProvider hardwareProfile,
         CancellationToken cancellationToken)
     {
         var existingMappings = await _ioMappings.GetListAsync(
@@ -213,11 +195,11 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
 
         var addedCount = 0;
         var repairedCount = 0;
-        foreach (var mapping in seedDevice.Mappings.OrderBy(static x => x.SortOrder))
+        foreach (var template in hardwareProfile.GetDefaultIoTemplate().OrderBy(static x => x.SortOrder))
         {
-            if (existingByLabel.TryGetValue(mapping.Label, out var existingMapping))
+            if (existingByLabel.TryGetValue(template.Label, out var existingMapping))
             {
-                if (ApplySeedMetadata(existingMapping, mapping))
+                if (ApplyTemplateMetadata(existingMapping, template))
                 {
                     _ioMappings.Update(existingMapping);
                     repairedCount++;
@@ -228,107 +210,73 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
 
             var entity = IoMappingEntity.Create(
                 device.Id,
-                mapping.Label,
-                mapping.PlcAddress,
-                mapping.AddressCount,
-                mapping.DataType,
-                mapping.Direction,
-                mapping.Category,
-                mapping.GroupName,
-                mapping.DisplayRole);
-            entity.UpdateSortOrder(mapping.SortOrder);
+                template.Label,
+                template.PlcAddress,
+                template.AddressCount,
+                template.DataType,
+                template.Direction,
+                template.Category,
+                template.GroupName,
+                template.DisplayRole);
+            entity.UpdateSortOrder(template.SortOrder);
             entity.UpdateMetadata(
-                mapping.Label,
-                mapping.DataType,
-                mapping.Direction,
-                mapping.Category,
-                mapping.GroupName,
-                mapping.DisplayRole,
-                string.IsNullOrWhiteSpace(mapping.Remark) ? SeedRemark : mapping.Remark);
+                template.Label,
+                template.DataType,
+                template.Direction,
+                template.Category,
+                template.GroupName,
+                template.DisplayRole,
+                string.IsNullOrWhiteSpace(template.Remark) ? SeedRemark : template.Remark);
             _ioMappings.Add(entity);
             addedCount++;
         }
 
         if (addedCount == 0 && repairedCount == 0)
         {
-            _logger.Info($"[匀浆][IO种子] 设备“{device.DeviceName}”无需补写映射。");
+            _logger.Info($"[匀浆][设备样本] 设备“{device.DeviceName}”无需补写映射。");
             return 0;
         }
 
         await _ioMappings.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-        _logger.Info($"[匀浆][IO种子] 已为“{device.DeviceName}”写入 {addedCount} 条映射，修复 {repairedCount} 条分类字段。");
+        _logger.Info($"[匀浆][设备样本] 已为“{device.DeviceName}”新增 {addedCount} 条映射，修复 {repairedCount} 条模板元数据。");
         return addedCount + repairedCount;
     }
 
-    private static bool ApplySeedMetadata(
-        IoMappingEntity existing,
-        HomogenizationIoSeedMapping seed)
+    private static bool ApplyTemplateMetadata(IoMappingEntity existing, ModuleIoTemplateEntry template)
     {
-        var changed = false;
+        var templateRemark = string.IsNullOrWhiteSpace(template.Remark) ? SeedRemark : template.Remark.Trim();
+        var changed = existing.AddressCount != template.AddressCount
+            || !string.Equals(existing.DataType, template.DataType, StringComparison.Ordinal)
+            || !string.Equals(existing.Direction, template.Direction, StringComparison.Ordinal)
+            || existing.SortOrder != template.SortOrder
+            || !string.Equals(existing.Category, template.Category, StringComparison.Ordinal)
+            || !string.Equals(existing.GroupName, template.GroupName, StringComparison.Ordinal)
+            || !string.Equals(existing.DisplayRole, template.DisplayRole, StringComparison.Ordinal)
+            || !string.Equals(existing.Remark, templateRemark, StringComparison.Ordinal);
 
-        var category = string.IsNullOrWhiteSpace(seed.Category) ? "单点读数据" : seed.Category.Trim();
-        var groupName = seed.GroupName?.Trim() ?? string.Empty;
-        var displayRole = seed.DisplayRole?.Trim() ?? string.Empty;
-        var seedRemark = string.IsNullOrWhiteSpace(seed.Remark) ? SeedRemark : seed.Remark.Trim();
-        changed = existing.SortOrder != seed.SortOrder
-            || !string.Equals(existing.Category, category, StringComparison.Ordinal)
-            || !string.Equals(existing.GroupName, groupName, StringComparison.Ordinal)
-            || !string.Equals(existing.DisplayRole, displayRole, StringComparison.Ordinal)
-            || !string.Equals(existing.Remark, seedRemark, StringComparison.Ordinal);
-
-        existing.UpdateSortOrder(seed.SortOrder);
+        existing.UpdateAddress(existing.PlcAddress, template.AddressCount);
+        existing.UpdateSortOrder(template.SortOrder);
         existing.UpdateMetadata(
             existing.Label,
-            existing.DataType,
-            existing.Direction,
-            category,
-            groupName,
-            displayRole,
-            seedRemark);
+            template.DataType,
+            template.Direction,
+            template.Category,
+            template.GroupName,
+            template.DisplayRole,
+            templateRemark);
 
         return changed;
     }
 
-    private void ValidateSeedDevice(
-        HomogenizationIoSeedDevice seedDevice,
-        IModuleHardwareProfileProvider hardwareProfile)
-    {
-        var mappings = seedDevice.Mappings
-            .Select(static mapping => new ModuleIoSnapshot(
-                mapping.Label,
-                mapping.PlcAddress,
-                mapping.AddressCount,
-                mapping.DataType,
-                mapping.Direction,
-                mapping.SortOrder,
-                mapping.Category,
-                mapping.GroupName,
-                mapping.DisplayRole))
-            .ToArray();
-
-        var validation = hardwareProfile.ValidatePlcConfiguration(
-            seedDevice.DeviceName,
-            seedDevice.DeviceModel,
-            mappings);
-
-        if (validation.IsValid)
-        {
-            return;
-        }
-
-        var details = string.Join("；", validation.Issues.Select(static issue => issue.Message));
-        throw new InvalidOperationException($"匀浆 IO 种子配置无效：{details}");
-    }
-
     private IModuleHardwareProfileProvider GetHardwareProfile()
-        => GetHardwareProfile($"匀浆 IO 种子导入需要模块“{DependencyInjection.ModuleKey}”的硬件模板提供器。");
+        => GetHardwareProfile($"匀浆设备样本导入需要模块“{DependencyInjection.ModuleKey}”的硬件模板提供器。");
 
     /// <summary>
-    /// 匀浆 IO 种子导入开关。JSON 文件不能写注释，字段含义在这里说明。
+    /// 匀浆开发设备样本导入开关。IO 点位不在 JSON 内维护，只由硬件模板补齐。
     /// </summary>
-    private sealed class HomogenizationIoSeedOptions
+    private sealed class HomogenizationDeviceSeedOptions
     {
-        public const string SectionName = "Modules:Homogenization:IoSeed";
+        public const string SectionName = "Modules:Homogenization:DeviceSeed";
 
         /// <summary>
         /// 是否启用匀浆开发样本自动导入。
@@ -342,20 +290,9 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
     }
 
     /// <summary>
-    /// 匀浆 IO 种子文件结构，承载一个或多个开发样本设备。
+    /// 匀浆样本设备配置，不包含 IO 点位，点位由插件硬件模板补齐。
     /// </summary>
-    private sealed class HomogenizationIoSeedFile
-    {
-        /// <summary>
-        /// 需要导入的匀浆样本设备列表。
-        /// </summary>
-        public List<HomogenizationIoSeedDevice> Devices { get; set; } = [];
-    }
-
-    /// <summary>
-    /// 匀浆样本设备配置，对应一台 PLC 设备及其 IO 映射。
-    /// </summary>
-    private sealed class HomogenizationIoSeedDevice
+    private sealed class HomogenizationDeviceSeed
     {
         /// <summary>
         /// 样本设备名称，作为设备表唯一识别和 UI 展示名称。
@@ -389,67 +326,6 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
 
         /// <summary>
         /// 样本设备备注，写入设备资料用于标识开发种子来源。
-        /// </summary>
-        public string? Remark { get; set; }
-
-        /// <summary>
-        /// 该设备下需要导入的匀浆 IO 映射列表。
-        /// </summary>
-        public List<HomogenizationIoSeedMapping> Mappings { get; set; } = [];
-    }
-
-    /// <summary>
-    /// 匀浆单条 IO 映射种子，描述 PLC 地址和信号业务元数据的绑定关系。
-    /// </summary>
-    private sealed class HomogenizationIoSeedMapping
-    {
-        /// <summary>
-        /// 信号标签，必须匹配匀浆硬件模板中的 Label。
-        /// </summary>
-        public string Label { get; set; } = string.Empty;
-
-        /// <summary>
-        /// PLC 实际地址，由开发样本提供给本地 SQLite 配置。
-        /// </summary>
-        public string PlcAddress { get; set; } = string.Empty;
-
-        /// <summary>
-        /// 地址长度，和硬件模板的 AddressCount 保持一致。
-        /// </summary>
-        public int AddressCount { get; set; } = 1;
-
-        /// <summary>
-        /// 数据类型，例如 Int16、UInt16、Float、Bool、Ascii。
-        /// </summary>
-        public string DataType { get; set; } = "Int16";
-
-        /// <summary>
-        /// 信号方向，Read 表示 PLC 到上位机，Write 表示上位机应答 PLC。
-        /// </summary>
-        public string Direction { get; set; } = "Read";
-
-        /// <summary>
-        /// UI 分类，例如信号交互、连续读数据、单点读数据。
-        /// </summary>
-        public string Category { get; set; } = "单点读数据";
-
-        /// <summary>
-        /// UI 分组名称，用于将同一业务场景下的信号放在一起。
-        /// </summary>
-        public string GroupName { get; set; } = string.Empty;
-
-        /// <summary>
-        /// UI 展示角色，说明该信号在业务中的含义。
-        /// </summary>
-        public string DisplayRole { get; set; } = string.Empty;
-
-        /// <summary>
-        /// 模板排序号，决定导入和展示顺序。
-        /// </summary>
-        public int SortOrder { get; set; }
-
-        /// <summary>
-        /// IO 映射备注，写入本地配置用于说明样本来源。
         /// </summary>
         public string? Remark { get; set; }
     }

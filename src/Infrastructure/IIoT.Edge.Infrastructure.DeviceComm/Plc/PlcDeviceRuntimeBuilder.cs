@@ -61,16 +61,16 @@ public sealed class PlcDeviceRuntimeBuilder
         var plcService = _plcServiceFactory.Create(plcType, device.DeviceName);
         var deviceCts = new CancellationTokenSource();
 
-        var signalInteraction = new SignalInteraction(
+        var ioScanTask = new PlcIoScanTask(
             plcService,
             _dataStore,
             device,
             mappingArray,
             _logger,
             _statusStore);
-        await signalInteraction.ConnectAsync().ConfigureAwait(false);
+        await ioScanTask.ConnectAsync().ConfigureAwait(false);
 
-        var tasks = new List<IPlcTask> { signalInteraction };
+        var tasks = new List<IPlcTask> { ioScanTask };
         if (buffer is not null && taskFactory is not null)
         {
             tasks.AddRange(taskFactory(buffer, context));

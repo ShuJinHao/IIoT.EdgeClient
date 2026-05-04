@@ -1,9 +1,11 @@
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Abstractions.Plc.Signals;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
+using IIoT.Edge.Module.Homogenization.Config.Hardware;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using IIoT.Edge.Runtime.Base;
@@ -27,12 +29,12 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
     private readonly HomogenizationMesScenarioChannel _mesChannel;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
     private readonly HomogenizationCodeOptions _codeOptions;
-    private readonly IProductionTimeProvider _productionTime;
     private readonly int _taskLoopInterval;
-    private HomogenizationSignalCodec? _codec;
+    private readonly HomogenizationSignalCodec _codec;
 
     public HomogenizationRealtimeTask(
         IPlcBuffer buffer,
+        ILogicalSignalAccessor<HomogenizationSignal> signals,
         HomogenizationContext context,
         IDeviceService deviceService,
         HomogenizationMesScenarioChannel mesChannel,
@@ -48,7 +50,7 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
         _mesChannel = mesChannel;
         _diagnosticsStore = diagnosticsStore;
         _codeOptions = codeOptions.Value;
-        _productionTime = productionTime;
+        _codec = new HomogenizationSignalCodec(signals, productionTime);
         var runtime = moduleOptions.Value.Runtime;
         _taskLoopInterval = Math.Max(runtime.MinRealtimeLoopIntervalMs, runtime.RealtimeLoopIntervalMs);
     }
@@ -91,5 +93,5 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
         return Task.CompletedTask;
     }
 
-    private HomogenizationSignalCodec Codec => _codec ??= new HomogenizationSignalCodec(Buffer, _context, _productionTime);
+    private HomogenizationSignalCodec Codec => _codec;
 }

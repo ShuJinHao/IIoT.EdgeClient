@@ -16,7 +16,7 @@ public sealed class StackingHardwareProfileBehaviorTests
     [Fact]
     public void StackingHardwareProfileProvider_ShouldExposeStableDefaultTemplate()
     {
-        var provider = new StackingHardwareProfileProvider();
+        var provider = new StackingHardwareProfileProvider(new StackingPlcSignalProfile());
 
         var defaults = provider.GetDefaultPlcSettings();
         var template = provider.GetDefaultIoTemplate();
@@ -35,7 +35,7 @@ public sealed class StackingHardwareProfileBehaviorTests
     [Fact]
     public void StackingHardwareProfileProvider_ShouldRejectOutOfSequenceMappings()
     {
-        var provider = new StackingHardwareProfileProvider();
+        var provider = new StackingHardwareProfileProvider(new StackingPlcSignalProfile());
         var mappings = CreateValidSnapshots(provider)
             .Select(static mapping => mapping.Label switch
             {
@@ -53,7 +53,7 @@ public sealed class StackingHardwareProfileBehaviorTests
     [Fact]
     public async Task HardwareConfigCrudService_WhenApplyingTemplateTwice_ShouldOnlyFillMissingMappings()
     {
-        var provider = new StackingHardwareProfileProvider();
+        var provider = new StackingHardwareProfileProvider(new StackingPlcSignalProfile());
         var sender = new FakeSender(
         [
             new FakeIoMappingEntity(9, "Stacking.Sequence", "DB1.DBW0", 1, "Int16", "Read", 1)
@@ -79,6 +79,37 @@ public sealed class StackingHardwareProfileBehaviorTests
         Assert.Equal(4, sender.CurrentMappings.Count);
         Assert.Contains(sender.CurrentMappings, x => x.Label == "Stacking.Ack" && x.Direction == "Write");
         Assert.Equal("模块模板已存在，无需补充映射。", secondApply.Message);
+    }
+
+    [Fact]
+    public async Task HardwareConfigCrudService_WhenApplyingTemplate_ShouldOnlyAffectSelectedPlc()
+    {
+        var provider = new StackingHardwareProfileProvider(new StackingPlcSignalProfile());
+        var sender = new FakeSender(
+        [
+            new FakeIoMappingEntity(10, "Stacking.Sequence", "DB10.DBW0", 1, "Int16", "Read", 1),
+            new FakeIoMappingEntity(11, "Stacking.Sequence", "DB11.DBW0", 1, "Int16", "Read", 1)
+        ]);
+        var service = new HardwareConfigCrudService(
+            sender,
+            [provider],
+            new StubPermissionService { CanEditHardware = true });
+        var selectedPlc = new NetworkDeviceVm
+        {
+            Id = 10,
+            DeviceName = "PLC-STACKING-A",
+            DeviceType = DeviceType.PLC,
+            ModuleId = "Stacking"
+        };
+
+        var result = await service.ApplyModuleTemplateAsync(selectedPlc);
+
+        Assert.True(result.IsSuccess, result.Message);
+        Assert.Single(sender.SaveCommands);
+        Assert.Equal(10, sender.SaveCommands.Single().NetworkDeviceId);
+        Assert.Contains(sender.CurrentMappings, x => x.NetworkDeviceId == 10 && x.Label == "Stacking.Ack" && x.Direction == "Write");
+        Assert.Contains(sender.CurrentMappings, x => x.NetworkDeviceId == 11 && x.Label == "Stacking.Sequence" && x.PlcAddress == "DB11.DBW0");
+        Assert.DoesNotContain(sender.CurrentMappings, x => x.NetworkDeviceId == 11 && x.Label == "Stacking.Ack");
     }
 
     private static ModuleIoSnapshot[] CreateValidSnapshots(StackingHardwareProfileProvider provider)
@@ -137,7 +168,7 @@ public sealed class StackingHardwareProfileBehaviorTests
         private Task HandleSave(SaveIoMappingsCommand command)
         {
             SaveCommands.Add(command);
-            CurrentMappings.Clear();
+            CurrentMappings.RemoveAll(x => x.NetworkDeviceId == command.NetworkDeviceId);
             CurrentMappings.AddRange(command.Mappings.Select(x => new FakeIoMappingEntity(
                 x.NetworkDeviceId,
                 x.Label,

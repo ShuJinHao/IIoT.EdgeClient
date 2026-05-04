@@ -186,11 +186,57 @@ internal sealed class EdgeProcessModuleBuilder : IEdgeProcessModuleBuilder
     public void RegisterMesUploader(MesUploadMode uploadMode)
         => _integrationRegistry.RegisterMesUploader(ProcessType, uploadMode);
 
+    public void RegisterPlcSignalProfile<TSignalKey, TProfile>()
+        where TSignalKey : struct, Enum
+        where TProfile : class, IModulePlcSignalProfile<TSignalKey>
+    {
+        Services.AddSingleton<TProfile>();
+        Services.AddSingleton<IModulePlcSignalProfile<TSignalKey>>(serviceProvider =>
+        {
+            var profile = serviceProvider.GetRequiredService<TProfile>();
+            EnsureModuleId(profile.ModuleId, typeof(TProfile).Name);
+            return profile;
+        });
+    }
+
+    public void RegisterHardwareProfile<TProvider>()
+        where TProvider : class, IModuleHardwareProfileProvider
+    {
+        Services.AddSingleton<TProvider>();
+        Services.AddSingleton<IModuleHardwareProfileProvider>(serviceProvider =>
+        {
+            var provider = serviceProvider.GetRequiredService<TProvider>();
+            EnsureModuleId(provider.ModuleId, typeof(TProvider).Name);
+            return provider;
+        });
+    }
+
+    public void RegisterDevelopmentSample<TContributor>()
+        where TContributor : class, IDevelopmentSampleContributor
+    {
+        Services.AddSingleton<TContributor>();
+        Services.AddSingleton<IDevelopmentSampleContributor>(serviceProvider =>
+        {
+            var contributor = serviceProvider.GetRequiredService<TContributor>();
+            EnsureModuleId(contributor.ModuleId, typeof(TContributor).Name);
+            return contributor;
+        });
+    }
+
     public void RegisterParameters<TMes, TCloud, TBusiness>()
         where TMes : struct, Enum
         where TCloud : struct, Enum
         where TBusiness : struct, Enum
         => _moduleParamRegistry.Register(ModuleId, typeof(TMes), typeof(TCloud), typeof(TBusiness));
+
+    private void EnsureModuleId(string registeredModuleId, string registrationName)
+    {
+        if (!string.Equals(registeredModuleId, ModuleId, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"模块注册【{registrationName}】的 ModuleId【{registeredModuleId}】与当前模块【{ModuleId}】不一致。");
+        }
+    }
 
     private static ViewModelBase ResolveViewModel(
         string viewId,

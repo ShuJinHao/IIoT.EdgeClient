@@ -4,6 +4,7 @@ using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Features.Hardware.Queries;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
+using IIoT.Edge.Module.Homogenization.Config.Hardware;
 using IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.Enums;
@@ -71,7 +72,7 @@ public sealed class IoViewViewModelBehaviorTests
             Assert.Equal(0, row.HostSignal?.StartIndex);
 
             var section = Assert.Single(viewModel.DataSections);
-            Assert.Equal("实时数据 - 设备实时", section.Title);
+            Assert.Equal("实时数据", section.Title);
         });
 
     [Fact]
@@ -133,6 +134,56 @@ public sealed class IoViewViewModelBehaviorTests
         });
 
     [Fact]
+    public Task LoadMappingsAsync_WhenSameSignalConfiguredOnMultiplePlcs_ShouldUseSelectedPlcSavedAddress()
+        => RunOnStaThreadAsync(async () =>
+        {
+            var deviceA = CreateDevice(25, "PLC-Homogenization-A", "Homogenization");
+            var deviceB = CreateDevice(26, "PLC-Homogenization-B", "Homogenization");
+            var signal = HomogenizationSignalTestProfile.Get(HomogenizationSignal.进站触发);
+            var mappings = new Dictionary<int, List<IoMappingEntity>>
+            {
+                [deviceA.Id] =
+                [
+                    CreateMapping(
+                        deviceA.Id,
+                        signal.Label,
+                        "D901",
+                        signal.AddressCount,
+                        signal.DataType,
+                        signal.DirectionText,
+                        signal.Category,
+                        signal.GroupName,
+                        signal.DisplayRole,
+                        signal.SortOrder)
+                ],
+                [deviceB.Id] =
+                [
+                    CreateMapping(
+                        deviceB.Id,
+                        signal.Label,
+                        "D902",
+                        signal.AddressCount,
+                        signal.DataType,
+                        signal.DirectionText,
+                        signal.Category,
+                        signal.GroupName,
+                        signal.DisplayRole,
+                        signal.SortOrder)
+                ]
+            };
+            var viewModel = CreateViewModel([deviceA, deviceB], mappings);
+
+            viewModel.SelectedDevice = deviceA;
+            await viewModel.LoadMappingsAsync();
+            Assert.Equal("D901", Assert.Single(viewModel.InteractionRows).PlcAddressSummary);
+
+            viewModel.SelectedDevice = deviceB;
+            await viewModel.LoadMappingsAsync();
+            Assert.Equal("D902", Assert.Single(viewModel.InteractionRows).PlcAddressSummary);
+            Assert.NotEqual(signal.DefaultAddress, Assert.Single(viewModel.InteractionRows).PlcAddressSummary);
+        });
+
+    [Fact]
     public Task RefreshCurrentValues_ShouldDecodeCommonSignalTypes()
         => RunOnStaThreadAsync(async () =>
         {
@@ -171,7 +222,7 @@ public sealed class IoViewViewModelBehaviorTests
             Assert.Equal("ABCD", decodedSignals[2].DisplayValue);
 
             var matrix = Assert.Single(viewModel.ArraySections);
-            Assert.Equal("配方数组 - 配方", matrix.Title);
+            Assert.Equal("配方数组", matrix.Title);
             Assert.Equal("12.5", matrix.Rows.Single().Values.Single().Value);
         });
 
@@ -198,7 +249,7 @@ public sealed class IoViewViewModelBehaviorTests
 
             Assert.Empty(viewModel.DataSections);
             var matrix = Assert.Single(viewModel.ArraySections);
-            Assert.Equal("配方数组", matrix.Title);
+            Assert.Equal("连续读数据", matrix.Title);
             Assert.Equal(2, matrix.Columns.Count);
             Assert.Equal(3, matrix.Rows.Count);
             Assert.Equal("10", matrix.Rows[0].Values[0].Value);

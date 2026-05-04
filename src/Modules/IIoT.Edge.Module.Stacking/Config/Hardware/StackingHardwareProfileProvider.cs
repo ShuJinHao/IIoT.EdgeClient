@@ -1,3 +1,5 @@
+using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Abstractions.Plc.Signals;
 using IIoT.Edge.Application.Modules;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Module.Stacking.Constants;
@@ -9,18 +11,12 @@ namespace IIoT.Edge.Module.Stacking.Config.Hardware;
 /// 叠片硬件模板提供者，把插件内信号清单转换为默认 IO 模板。
 /// </summary>
 public sealed class StackingHardwareProfileProvider
-    : ModuleHardwareProfileProviderBase<StackingSignalDefinition>
+    : ModuleHardwareProfileProviderBase<StackingSignal>
 {
-    /// <summary>
-    /// 硬件模板所属模块。
-    /// </summary>
-    public override string ModuleId => StackingModuleConstants.ModuleId;
-
-    /// <summary>
-    /// 叠片插件自己的 PLC 信号清单。
-    /// </summary>
-    protected override IReadOnlyList<StackingSignalDefinition> Signals
-        => StackingPlcSignalProfile.Signals;
+    public StackingHardwareProfileProvider(IModulePlcSignalProfile<StackingSignal> signalProfile)
+        : base(signalProfile)
+    {
+    }
 
     /// <summary>
     /// 叠片样本要求信号排序连续，防止硬件模板顺序与运行时读取约定脱节。
@@ -33,6 +29,6 @@ public sealed class StackingHardwareProfileProvider
     public override ModulePlcDefaults GetDefaultPlcSettings()
         => new(PlcType.S7.ToString(), 3000, 102);
 
-    protected override string CreateTemplateRemark(StackingSignalDefinition signal)
+    protected override string CreateTemplateRemark(ModuleSignalDefinition<StackingSignal> signal)
         => $"叠片模块 - {signal.DisplayName}";
 }

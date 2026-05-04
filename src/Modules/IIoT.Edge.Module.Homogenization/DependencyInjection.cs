@@ -75,10 +75,10 @@ public sealed class DependencyInjection : EdgeProcessModuleBase<HomogenizationCe
         builder.Services.AddSingleton<IProcessMesUploader>(sp =>
             sp.GetRequiredService<HomogenizationMesChannel>());
         builder.Services.AddSingleton<IProductionContextFactory, HomogenizationContextFactory>();
-        builder.Services.AddSingleton<IModuleHardwareProfileProvider, HomogenizationHardwareProfileProvider>();
+        builder.RegisterPlcSignalProfile<HomogenizationSignal, HomogenizationPlcSignalProfile>();
+        builder.RegisterHardwareProfile<HomogenizationHardwareProfileProvider>();
         builder.Services.AddSingleton<HomogenizationCellDataValidator>();
-        builder.Services.AddSingleton<HomogenizationTrayCodeGuard>();
-        builder.Services.AddSingleton<IDevelopmentSampleContributor, HomogenizationDevelopmentSampleContributor>();
+        builder.RegisterDevelopmentSample<HomogenizationDevelopmentSampleContributor>();
         builder.Services.AddSingleton<HomogenizationDataViewModel>();
     }
 

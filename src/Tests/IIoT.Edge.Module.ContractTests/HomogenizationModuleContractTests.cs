@@ -41,7 +41,6 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
         services.AddSingleton<IMesUploadDiagnosticsStore, ContractMesUploadDiagnosticsStore>();
         services.AddSingleton<HomogenizationMesScenarioChannel, ContractHomogenizationMesChannel>();
         services.AddSingleton<HomogenizationCellDataValidator>();
-        services.AddSingleton<HomogenizationTrayCodeGuard>();
         services.AddSingleton<IModuleParamProvider<MesParam, CloudParam, BusinessParam>, ContractHomogenizationModuleParamProvider>();
         services.AddSingleton(Options.Create(new HomogenizationModuleOptions()));
         services.AddSingleton(Options.Create(new HomogenizationCodeOptions()));

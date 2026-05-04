@@ -9,6 +9,7 @@ using IIoT.Edge.UI.Shared.Mvvm;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows.Input;
+using System.Windows.Data;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView;
 
@@ -45,6 +46,7 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
     public ObservableCollection<NetworkDeviceVm> NetworkDevices { get; } = new();
     public ObservableCollection<SerialDeviceVm> SerialDevices { get; } = new();
     public ObservableCollection<IoMappingVm> IoMappings { get; } = new();
+    public ICollectionView IoMappingsView { get; }
 
     private NetworkDeviceVm? _selectedNetworkDevice;
     public NetworkDeviceVm? SelectedNetworkDevice
@@ -119,6 +121,9 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         _networkDeviceValidator = new NetworkDeviceValidator(GetText, FormatText);
         _serialDeviceValidator = new SerialDeviceValidator(GetText, FormatText);
         _ioMappingValidator = new IoMappingValidator(GetText, FormatText);
+        IoMappingsView = CollectionViewSource.GetDefaultView(IoMappings);
+        IoMappingsView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(IoMappingVm.GroupTitle)));
+        IoMappingsView.SortDescriptions.Add(new SortDescription(nameof(IoMappingVm.SortOrder), ListSortDirection.Ascending));
 
         _addNetworkDeviceCommand = (BaseCommand)CreateAddCommand(
             NetworkDevices,
@@ -190,11 +195,13 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         if (SelectedNetworkDevice is null || SelectedNetworkDevice.Id <= 0)
         {
             ReplaceItems(IoMappings, []);
+            IoMappingsView.Refresh();
             return;
         }
 
         var result = await _crudService.LoadIoMappingsAsync(SelectedNetworkDevice.Id);
         ReplaceItems(IoMappings, result.Items);
+        IoMappingsView.Refresh();
     }
 
     private async Task RefreshModuleTemplateInfoAsync()

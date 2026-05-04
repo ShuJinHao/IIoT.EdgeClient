@@ -17,7 +17,7 @@ namespace IIoT.Edge.Module.Stacking.Runtime.Tasks;
 public sealed class StackingSignalCaptureTask : PlcTaskBase
 {
     private readonly IDataPipelineService _pipelineService;
-    private readonly ILogicalSignalAccessor _signals;
+    private readonly ILogicalSignalAccessor<StackingSignal> _signals;
 
     /// <summary>
     /// 叠片信号采集任务名称，用于运行日志和任务诊断。
@@ -31,7 +31,7 @@ public sealed class StackingSignalCaptureTask : PlcTaskBase
 
     public StackingSignalCaptureTask(
         IPlcBuffer buffer,
-        ILogicalSignalAccessor signals,
+        ILogicalSignalAccessor<StackingSignal> signals,
         ProductionContext context,
         IDataPipelineService pipelineService,
         ILogService logger)
@@ -45,10 +45,9 @@ public sealed class StackingSignalCaptureTask : PlcTaskBase
     {
         Context.Set(StackingModuleConstants.RuntimeRegisteredKey, true);
 
-        var sequence = _signals.Read(StackingPlcSignalProfile.Sequence.Label);
-        var layerCount = _signals.Read(StackingPlcSignalProfile.LayerCount.Label);
-        var resultCode = StackingPlcSignalProfile.ParseResultCode(
-            _signals.Read(StackingPlcSignalProfile.ResultCode.Label));
+        var sequence = _signals.ReadUInt16(StackingSignal.工序序号);
+        var layerCount = _signals.ReadUInt16(StackingSignal.叠片层数);
+        var resultCode = ParseResultCode(_signals.ReadUInt16(StackingSignal.结果码));
         var observedAt = DateTime.UtcNow;
 
         Context.Set(StackingModuleConstants.LastObservedSequenceKey, (int)sequence);
@@ -75,18 +74,18 @@ public sealed class StackingSignalCaptureTask : PlcTaskBase
             TrayCode = $"{Context.DeviceName}-TRAY",
             LayerCount = layerCount,
             SequenceNo = sequence,
-            RuntimeStatus = "Captured",
+            RuntimeStatus = "已采集",
             DeviceName = Context.DeviceName,
             DeviceCode = Context.DeviceName,
             PlcDeviceId = Context.DeviceId,
-            CellResult = StackingPlcSignalProfile.ToCellResult(resultCode),
+            CellResult = ToCellResult(resultCode),
             CompletedTime = observedAt
         };
 
         Context.AddCell(barcode, cellData);
         Context.Set(StackingModuleConstants.LastPublishedSequenceKey, (int)sequence);
         Context.Set(StackingModuleConstants.LastPublishedBarcodeKey, barcode);
-        _signals.Write(StackingPlcSignalProfile.Ack.Label, sequence);
+        _signals.WriteUInt16(StackingSignal.采集应答, sequence);
 
         var enqueueResult = await _pipelineService
             .EnqueueAsync(new CellCompletedRecord { CellData = cellData }, TaskCancellationToken)
@@ -95,10 +94,23 @@ public sealed class StackingSignalCaptureTask : PlcTaskBase
         if (enqueueResult.WasOverflow)
         {
             Logger.Warn(
-                $"[{Context.DeviceName}] {TaskName} overflow persisted sample #{sequence} ({barcode}). Targets:{enqueueResult.PersistedTargetCount}, SkippedBestEffort:{enqueueResult.SkippedBestEffortCount}");
+                $"[{Context.DeviceName}] {TaskName} 叠片样本 #{sequence}（{barcode}）进入溢出持久化，目标数：{enqueueResult.PersistedTargetCount}，跳过尽力目标：{enqueueResult.SkippedBestEffortCount}。");
         }
 
         Logger.Info(
-            $"[{Context.DeviceName}] {TaskName} captured sample #{sequence} ({barcode}), Layers:{layerCount}, ResultCode:{resultCode}.");
+            $"[{Context.DeviceName}] {TaskName} 已采集叠片样本 #{sequence}（{barcode}），层数：{layerCount}，结果码：{resultCode}。");
     }
+
+    private static StackingResultCode ParseResultCode(ushort rawValue)
+        => Enum.IsDefined(typeof(StackingResultCode), (int)rawValue)
+            ? (StackingResultCode)rawValue
+            : StackingResultCode.Unknown;
+
+    private static bool? ToCellResult(StackingResultCode resultCode)
+        => resultCode switch
+        {
+            StackingResultCode.Ok => true,
+            StackingResultCode.Ng => false,
+            _ => null
+        };
 }

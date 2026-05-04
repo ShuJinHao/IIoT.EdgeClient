@@ -1,5 +1,7 @@
 namespace IIoT.Edge.Module.ContractTests;
 
+using System.Text.RegularExpressions;
+
 public sealed class ArchitectureBoundaryContractTests
 {
     private static readonly string[] ForbiddenModuleNamespaces =
@@ -118,5 +120,82 @@ public sealed class ArchitectureBoundaryContractTests
 
         Assert.False(File.Exists(logoPath), $"公司标志资源应删除：{logoPath}");
         Assert.Empty(filesWithReferences);
+    }
+
+    [Fact]
+    public void PluginHardwareAndSampleRegistration_ShouldUseModuleBuilder()
+    {
+        var repoRoot = ContractTestPathHelper.FindRepoRoot();
+        var moduleFiles = Directory
+            .EnumerateFiles(Path.Combine(repoRoot, "src", "Modules"), "DependencyInjection.cs", SearchOption.AllDirectories)
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            .Select(path => new
+            {
+                Path = Path.GetRelativePath(repoRoot, path),
+                Text = File.ReadAllText(path)
+            })
+            .ToArray();
+
+        var forbiddenPatterns = new[]
+        {
+            "AddSingleton<IModulePlcSignalProfile",
+            "AddSingleton<IModuleHardwareProfileProvider",
+            "AddSingleton<IDevelopmentSampleContributor"
+        };
+        var offenders = moduleFiles
+            .Where(file => forbiddenPatterns.Any(pattern => file.Text.Contains(pattern, StringComparison.Ordinal)))
+            .Select(file => file.Path)
+            .ToArray();
+
+        Assert.Empty(offenders);
+    }
+
+    [Fact]
+    public void Runtime_ShouldNotKeepOldIoScanContractName()
+    {
+        var repoRoot = ContractTestPathHelper.FindRepoRoot();
+        var oldInterfaceName = "I" + "Signal" + "Interaction";
+        var oldClassName = "Signal" + "Interaction";
+        var offenders = Directory
+            .EnumerateFiles(Path.Combine(repoRoot, "src"), "*.cs", SearchOption.AllDirectories)
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            .Select(path => new
+            {
+                Path = Path.GetRelativePath(repoRoot, path),
+                Text = File.ReadAllText(path)
+            })
+            .Where(file => file.Text.Contains(oldInterfaceName, StringComparison.Ordinal)
+                           || file.Text.Contains(oldClassName, StringComparison.Ordinal))
+            .Select(file => file.Path)
+            .ToArray();
+
+        Assert.Empty(offenders);
+    }
+
+    [Fact]
+    public void PluginRuntime_ShouldNotUseStaticPlcProfileOrStringSignalAccessor()
+    {
+        var repoRoot = ContractTestPathHelper.FindRepoRoot();
+        var runtimeFiles = Directory
+            .EnumerateFiles(Path.Combine(repoRoot, "src", "Modules"), "*.cs", SearchOption.AllDirectories)
+            .Where(path => path.Contains($"{Path.DirectorySeparatorChar}Runtime{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            .Select(path => new
+            {
+                Path = Path.GetRelativePath(repoRoot, path),
+                Text = File.ReadAllText(path)
+            })
+            .ToArray();
+
+        var offenders = runtimeFiles
+            .Where(file => file.Text.Contains("PlcSignalProfile.", StringComparison.Ordinal)
+                           || Regex.IsMatch(file.Text, @"ILogicalSignalAccessor\s+\w"))
+            .Select(file => file.Path)
+            .ToArray();
+
+        Assert.Empty(offenders);
     }
 }

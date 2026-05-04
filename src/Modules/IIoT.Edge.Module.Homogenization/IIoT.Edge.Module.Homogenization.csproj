@@ -37,11 +37,6 @@
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <TargetPath>Config\homogenization.module.json</TargetPath>
     </None>
-    <None Update="Config\homogenization.io.seed.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      <TargetPath>Config\homogenization.io.seed.json</TargetPath>
-    </None>
   </ItemGroup>
 
 </Project>

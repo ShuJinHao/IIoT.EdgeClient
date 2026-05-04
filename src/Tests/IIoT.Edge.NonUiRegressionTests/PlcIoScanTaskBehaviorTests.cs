@@ -11,7 +11,7 @@ using System.Diagnostics;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 
-public sealed class SignalInteractionBehaviorTests
+public sealed class PlcIoScanTaskBehaviorTests
 {
     [Fact]
     public void ProductionContextSignalBindings_ShouldPreserveIoDisplayMetadata()
@@ -50,14 +50,14 @@ public sealed class SignalInteractionBehaviorTests
     }
 
     [Fact]
-    public async Task SignalInteraction_ConnectAsync_WhenConnectTimesOut_ShouldLogAndStayDisconnected()
+    public async Task PlcIoScanTask_ConnectAsync_WhenConnectTimesOut_ShouldLogAndStayDisconnected()
     {
         var plcService = new ScriptedPlcService();
         plcService.ConnectOutcomes.Enqueue(new TimeoutException("connect timeout"));
 
         var logger = new FakeLogService();
         var statusStore = new PlcConnectionStatusStore();
-        var interaction = new SignalInteraction(
+        var interaction = new PlcIoScanTask(
             plcService,
             new PlcDataStore(),
             CreateDevice(1, "PLC-A"),
@@ -69,13 +69,13 @@ public sealed class SignalInteractionBehaviorTests
 
         Assert.False(plcService.IsConnected);
         Assert.Equal(1, plcService.ConnectAsyncCallCount);
-        Assert.Contains(logger.Entries, x => x.Message.Contains("Connect exception", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, x => x.Message.Contains("PLC 连接异常", StringComparison.Ordinal));
         Assert.False(statusStore.GetSnapshot(1)?.IsConnected);
         Assert.Equal("connect timeout", statusStore.GetSnapshot(1)?.LastError);
     }
 
     [Fact]
-    public async Task SignalInteraction_WhenReadTimesOut_ShouldDisconnectAndReconnectBeforeRecovering()
+    public async Task PlcIoScanTask_WhenReadTimesOut_ShouldDisconnectAndReconnectBeforeRecovering()
     {
         var plcService = new ScriptedPlcService();
         plcService.ConnectOutcomes.Enqueue(true);
@@ -87,7 +87,7 @@ public sealed class SignalInteractionBehaviorTests
         dataStore.Register(1, readSize: 1, writeSize: 0);
         var statusStore = new PlcConnectionStatusStore();
 
-        var interaction = new SignalInteraction(
+        var interaction = new PlcIoScanTask(
             plcService,
             dataStore,
             CreateDevice(1, "PLC-A"),
@@ -97,7 +97,7 @@ public sealed class SignalInteractionBehaviorTests
 
         var buffer = Assert.IsType<PlcBuffer>(dataStore.GetBuffer(1));
         await interaction.ConnectAsync();
-        await Assert.ThrowsAsync<Exception>(() => interaction.ExecuteOneCycleAsync());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => interaction.ExecuteOneCycleAsync());
         Assert.Equal(1, plcService.DisconnectCallCount);
         Assert.False(plcService.IsConnected);
         Assert.False(statusStore.GetSnapshot(1)?.IsConnected);
@@ -112,7 +112,7 @@ public sealed class SignalInteractionBehaviorTests
     }
 
     [Fact]
-    public async Task SignalInteraction_WhenWriteTimesOut_ShouldDisconnectAndReconnectBeforeRecovering()
+    public async Task PlcIoScanTask_WhenWriteTimesOut_ShouldDisconnectAndReconnectBeforeRecovering()
     {
         var plcService = new ScriptedPlcService();
         plcService.ConnectOutcomes.Enqueue(true);
@@ -127,7 +127,7 @@ public sealed class SignalInteractionBehaviorTests
         var buffer = Assert.IsType<PlcBuffer>(dataStore.GetBuffer(2));
         buffer.SetWriteValue(0, 9);
 
-        var interaction = new SignalInteraction(
+        var interaction = new PlcIoScanTask(
             plcService,
             dataStore,
             CreateDevice(2, "PLC-B"),
@@ -136,7 +136,7 @@ public sealed class SignalInteractionBehaviorTests
             statusStore);
 
         await interaction.ConnectAsync();
-        await Assert.ThrowsAsync<Exception>(() => interaction.ExecuteOneCycleAsync());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => interaction.ExecuteOneCycleAsync());
         Assert.Equal(1, plcService.DisconnectCallCount);
         Assert.False(plcService.IsConnected);
         Assert.False(statusStore.GetSnapshot(2)?.IsConnected);
@@ -150,7 +150,7 @@ public sealed class SignalInteractionBehaviorTests
     }
 
     [Fact]
-    public async Task SignalInteraction_StartAsync_WhenCanceled_ShouldStopPolling()
+    public async Task PlcIoScanTask_StartAsync_WhenCanceled_ShouldStopPolling()
     {
         var plcService = new ScriptedPlcService();
         plcService.ConnectOutcomes.Enqueue(true);
@@ -158,7 +158,7 @@ public sealed class SignalInteractionBehaviorTests
         var dataStore = new PlcDataStore();
         dataStore.Register(3, readSize: 1, writeSize: 0);
 
-        var interaction = new SignalInteraction(
+        var interaction = new PlcIoScanTask(
             plcService,
             dataStore,
             CreateDevice(3, "PLC-C"),
@@ -178,12 +178,12 @@ public sealed class SignalInteractionBehaviorTests
     }
 
     [Fact]
-    public async Task SignalInteraction_ExecuteOneCycleAsync_WhenCanceledDuringBackoff_ShouldPropagateCancellation()
+    public async Task PlcIoScanTask_ExecuteOneCycleAsync_WhenCanceledDuringBackoff_ShouldPropagateCancellation()
     {
         var plcService = new ScriptedPlcService();
         plcService.ConnectOutcomes.Enqueue(false);
 
-        var interaction = new SignalInteraction(
+        var interaction = new PlcIoScanTask(
             plcService,
             new PlcDataStore(),
             CreateDevice(4, "PLC-D"),

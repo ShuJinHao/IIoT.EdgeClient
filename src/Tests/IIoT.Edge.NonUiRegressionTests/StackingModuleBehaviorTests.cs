@@ -210,7 +210,8 @@ public sealed class StackingModuleBehaviorTests
             DeviceId = 7
         };
 
-        var signals = BufferLogicalSignalAccessor.Create(buffer, context, StackingPlcSignalProfile.LogicalSignals);
+        var profile = new StackingPlcSignalProfile();
+        var signals = BufferLogicalSignalAccessor<StackingSignal>.Create(buffer, context, profile);
         var task = new StackingSignalCaptureTask(buffer, signals, context, pipeline, logger);
         buffer.UpdateReadBuffer(new ushort[] { 3, 16, 1 });
 
@@ -224,7 +225,7 @@ public sealed class StackingModuleBehaviorTests
         Assert.Equal("PLC-STACKING-DEV-ST-0003", cell.Barcode);
         Assert.Equal(16, cell.LayerCount);
         Assert.Equal(3, cell.SequenceNo);
-        Assert.Equal("Captured", cell.RuntimeStatus);
+        Assert.Equal("已采集", cell.RuntimeStatus);
         Assert.True(context.Get<bool>(StackingModuleConstants.RuntimeRegisteredKey));
         Assert.Equal(3, context.Get<int>(StackingModuleConstants.LastPublishedSequenceKey));
         Assert.Equal(cell.Barcode, context.Get<string>(StackingModuleConstants.LastPublishedBarcodeKey));
@@ -246,7 +247,8 @@ public sealed class StackingModuleBehaviorTests
             DeviceId = 8
         };
 
-        var signals = BufferLogicalSignalAccessor.Create(buffer, context, StackingPlcSignalProfile.LogicalSignals);
+        var profile = new StackingPlcSignalProfile();
+        var signals = BufferLogicalSignalAccessor<StackingSignal>.Create(buffer, context, profile);
         var task = new StackingSignalCaptureTask(buffer, signals, context, pipeline, logger);
         buffer.UpdateReadBuffer(new ushort[] { 4, 18, 0 });
 
@@ -272,15 +274,16 @@ public sealed class StackingModuleBehaviorTests
             DeviceId = 18
         };
 
+        var profile = new StackingPlcSignalProfile();
         ProductionContextSignalBindings.Set(context,
         [
-            new ModuleIoSnapshot(StackingPlcSignalProfile.LayerCount.Label, "DB1.DBW2", 1, "Int16", "Read", 1),
-            new ModuleIoSnapshot(StackingPlcSignalProfile.ResultCode.Label, "DB1.DBW4", 1, "Int16", "Read", 2),
-            new ModuleIoSnapshot(StackingPlcSignalProfile.Sequence.Label, "DB1.DBW0", 1, "Int16", "Read", 3),
-            new ModuleIoSnapshot(StackingPlcSignalProfile.Ack.Label, "DB1.DBW6", 1, "Int16", "Write", 1)
+            new ModuleIoSnapshot(profile.Get(StackingSignal.叠片层数).Label, "DB1.DBW2", 1, "Int16", "Read", 1),
+            new ModuleIoSnapshot(profile.Get(StackingSignal.结果码).Label, "DB1.DBW4", 1, "Int16", "Read", 2),
+            new ModuleIoSnapshot(profile.Get(StackingSignal.工序序号).Label, "DB1.DBW0", 1, "Int16", "Read", 3),
+            new ModuleIoSnapshot(profile.Get(StackingSignal.采集应答).Label, "DB1.DBW6", 1, "Int16", "Write", 1)
         ]);
 
-        var signals = BufferLogicalSignalAccessor.Create(buffer, context, StackingPlcSignalProfile.LogicalSignals);
+        var signals = BufferLogicalSignalAccessor<StackingSignal>.Create(buffer, context, profile);
         var task = new StackingSignalCaptureTask(buffer, signals, context, pipeline, logger);
         buffer.UpdateReadBuffer([16, 1, 3]);
 

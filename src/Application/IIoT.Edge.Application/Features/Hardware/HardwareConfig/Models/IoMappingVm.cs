@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Common.Models;
+using IIoT.Edge.Application.Features.Hardware.IoMappings;
 
 namespace IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Models;
 
@@ -39,7 +40,12 @@ public class IoMappingVm : ObservableModelBase
     public int AddressCount
     {
         get => _addressCount;
-        set { _addressCount = value; OnPropertyChanged(); }
+        set
+        {
+            _addressCount = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(GroupTitle));
+        }
     }
 
     private string _dataType = "Int16";
@@ -60,14 +66,24 @@ public class IoMappingVm : ObservableModelBase
     public string Category
     {
         get => _category;
-        set { _category = value; OnPropertyChanged(); }
+        set
+        {
+            _category = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(GroupTitle));
+        }
     }
 
     private string _groupName = string.Empty;
     public string GroupName
     {
         get => _groupName;
-        set { _groupName = value; OnPropertyChanged(); }
+        set
+        {
+            _groupName = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(GroupTitle));
+        }
     }
 
     private string _displayRole = string.Empty;
@@ -89,5 +105,19 @@ public class IoMappingVm : ObservableModelBase
     {
         get => _remark;
         set { _remark = value; OnPropertyChanged(); }
+    }
+
+    /// <summary>
+    /// IO 映射统一分组标题，硬件配置页与 IO 交互页共用同一分类规则。
+    /// </summary>
+    public string GroupTitle
+    {
+        get
+        {
+            var category = IoMappingDisplay.ResolveCategory(Category, AddressCount);
+            return IoMappingDisplay.BuildSectionTitle(
+                category,
+                IoMappingDisplay.ResolveGroupName(GroupName, category));
+        }
     }
 }

@@ -116,6 +116,11 @@ public abstract class ModuleContractTestBase<TModule>
         Assert.True(result.RuntimeRegistry.TryGetFactory(module.ModuleId, out var factory));
 
         var services = new ServiceCollection();
+        foreach (var descriptor in result.Services)
+        {
+            ((ICollection<ServiceDescriptor>)services).Add(descriptor);
+        }
+
         ConfigureRuntimeServices(services);
 
         var tasks = factory.CreateTasks(

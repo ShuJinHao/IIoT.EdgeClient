@@ -119,6 +119,51 @@ public sealed class HomogenizationContext : ProductionContext
         LastOutboundRecord = record;
         OutboundRecords.Enqueue(record);
     }
+
+    /// <summary>
+    /// 判断指定阶段是否已经处理过该托盘码。进站和出站独立记录，避免正常出站被进站记录误判。
+    /// </summary>
+    public bool HasProcessedTray(HomogenizationTrayCodeStage stage, string trayCode)
+        => HasCell(BuildTrayKey(stage, trayCode));
+
+    /// <summary>
+    /// 标记指定阶段的托盘码已处理，用于插件业务重码校验。
+    /// </summary>
+    public void MarkProcessedTray(
+        HomogenizationTrayCodeStage stage,
+        string trayCode,
+        string status,
+        DateTime occurredAt)
+    {
+        var normalizedTrayCode = NormalizeTrayCode(trayCode);
+        AddCell(
+            BuildTrayKey(stage, normalizedTrayCode),
+            new HomogenizationCellData
+            {
+                TrayCode = normalizedTrayCode,
+                DeviceName = DeviceName,
+                RuntimeStatus = status,
+                CompletedTime = occurredAt
+            });
+    }
+
+    private static string BuildTrayKey(HomogenizationTrayCodeStage stage, string trayCode)
+        => $"Homogenization.{stage}:{NormalizeTrayCode(trayCode)}";
+
+    private static string NormalizeTrayCode(string trayCode)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(trayCode);
+        return trayCode.Trim();
+    }
+}
+
+/// <summary>
+/// 匀浆托盘码重码校验范围。进站和出站独立记录，保证同一托盘正常完成入站后仍可出站。
+/// </summary>
+public enum HomogenizationTrayCodeStage
+{
+    Inbound,
+    Outbound
 }
 
 /// <summary>

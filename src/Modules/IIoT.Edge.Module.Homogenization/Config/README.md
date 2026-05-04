@@ -1,6 +1,6 @@
 # 匀浆插件配置说明
 
-本目录只存放匀浆插件自己的业务配置和开发样本配置。共享层不能在这里替插件决定 MES 字段、PLC 点位、设备状态文本或样本数据。
+本目录只存放匀浆插件自己的业务配置。共享层不能在这里替插件决定 MES 字段、PLC 点位、设备状态文本或样本数据。
 
 ## homogenization.module.json
 
@@ -17,13 +17,8 @@
 
 JSON 文件保持标准 JSON 格式，不能直接写注释；字段含义以本文件和 `HomogenizationModuleConfiguration.cs` 的中文 XML 注释为准。
 
-## homogenization.io.seed.json
+## 开发样本
 
-该文件是匀浆开发样本点位，不是运行时唯一配置源。`HomogenizationDevelopmentSampleContributor` 在样本开关启用时读取它，向本地设备和 IO 映射表写入开发用 PLC 设备、读写地址、分类、分组和显示角色。
+匀浆开发样本 PLC 由 `Samples/HomogenizationDevelopmentSampleContributor.cs` 内置默认设备生成，不再额外维护设备 JSON。IO 点位唯一真实来源是硬件配置里按 `NetworkDeviceId` 保存的 `IoMappingEntity`，开发播种只会用 `HomogenizationPlcSignalProfile.Signals` 作为默认模板补齐当前 PLC 缺失的映射。
 
-- `devices[].deviceName/deviceModel/ipAddress/port1`：开发样本 PLC 连接信息。
-- `devices[].mappings[].label`：运行时代码通过 label 读取 PLC 缓冲区，不能随意改名。
-- `plcAddress/addressCount/dataType/direction`：PLC 地址、长度、数据类型和读写方向。
-- `category/groupName/displayRole/remark`：硬件配置页和诊断页展示用的中文分类信息，属于插件业务文案。
-
-如果后续接真实设备，应优先通过 UI 或正式配置导入覆盖开发样本，而不是把现场差异写进共享层。
+点位 label、默认地址、长度、方向、分类、分组和显示角色全部维护在 `Config/Hardware/HomogenizationPlcSignalProfile.cs`。如果后续接真实设备，应在硬件配置页维护每台 PLC 的实际地址。插件模板只负责初始化，不允许再新增 JSON 点位源，也不允许 IO 交互绕过数据库直接读取模板。

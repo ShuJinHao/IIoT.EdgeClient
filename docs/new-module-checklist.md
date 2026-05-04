@@ -22,12 +22,14 @@ Before implementation, read `docs/插件开发约定.md` and follow the single `
 ## Required implementation pieces
 
 - Module entry implementing `IEdgeProcessModule`.
-- Register services, views, runtime factories, CellData, hardware profiles, and uploaders through `IEdgeProcessModuleBuilder`.
-- Keep module data under the module: `Payload`, snapshots, PLC signal profile, module options, and module `Context`.
+- Register services, views, runtime factories, CellData, PLC signal profiles, hardware profiles, development samples, and uploaders through `IEdgeProcessModuleBuilder`.
+- Keep module data under the module: `Payload`, snapshots, PLC signal enum/profile implementation, module options, and module `Context`.
 - Put shared runtime state and factories under `Runtime/`; put tasks under `Runtime/Tasks/`.
+- Put PLC signal enums and profile implementations under `Config/Hardware/`; interfaces, base classes, accessors, and offset calculation belong to `Application` / `Runtime`, not plugin projects.
 - Put module parameter enums under `Config/Parameters/` with exactly three files: `MesParam.cs`, `CloudParam.cs`, and `BusinessParam.cs`.
 - Register parameter enums through `builder.RegisterParameters<MesParam, CloudParam, BusinessParam>()`; do not place process parameter names in host code.
 - Use explicit `switch (Step)` task machines for trigger/ack PLC workflows; reserve `HeartbeatMirrorPlcTaskBase` and `PeriodicSnapshotUploadTaskBase<TSnapshot>` for heartbeat and periodic snapshot tasks.
+- Runtime PLC read/write must use `ILogicalSignalAccessor<TSignalKey>` and plugin signal enums. Do not add static profile fields, string label runtime calls, JSON point seeds, or task-local offset calculation.
 - Prefer `CloudUploadChannelBase<TCellData, TPayload>` and `MesScenarioChannelBase<TCellData, ...>` for uploaders.
 - Use standard navigation registration extensions before adding custom ViewModel wrappers.
 - Add module-focused tests for runtime behavior, upload behavior, registration, and route restrictions.
@@ -62,6 +64,12 @@ Use this order when adding a new process module:
 - The hardware page owns only network devices, serial devices, and IO mappings.
 - Do not add module protocol summary text blocks to the hardware page. Template availability is determined by whether the selected PLC has a registered module hardware template.
 - Applying a module template must write both `Read` and `Write` IO points from the plugin template.
+- IO mapping truth is `IoMappingEntity` saved per PLC `NetworkDeviceId`; IO interaction pages must read that selected PLC mapping and must not read plugin templates or JSON point seeds as runtime addresses.
+- IO mapping pages group only by `Category`. `GroupName` may describe business meaning inside the row, but must not create extra top-level headings such as `信号交互 - 心跳交互`.
+- Plugin `*PlcSignalProfile` is only the default template for applying templates and development seeding. Do not create JSON point seeds. Fixed development sample PLC devices should be defined in the sample contributor code; add a JSON seed only after the user confirms there are multiple sample sets worth configuring.
+- Plugin `*PlcSignalProfile` must split default points by business groups and expose one `Signals` aggregate for templates/seeding. Do not maintain a flat point dump or a second JSON point list.
+- Plugin registration must use `builder.RegisterPlcSignalProfile<TSignalKey, TProfile>()`, `builder.RegisterHardwareProfile<TProvider>()`, and `builder.RegisterDevelopmentSample<TContributor>()`. Do not directly register these host abstractions from plugin code.
+- PLC IO scanning, read/write merge, reconnect backoff, and buffer transport belong to `IIoT.Edge.Runtime`; infrastructure projects should only provide concrete PLC communication and status reporting.
 - IO mappings are loaded for the selected device as one full list and shown with table scrolling, not host-side paging.
 - New IO buttons must be explicit: `新增读点` defaults `Direction=Read`, and `新增写点` defaults `Direction=Write`; the direction column remains editable.
 

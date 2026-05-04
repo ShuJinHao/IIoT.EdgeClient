@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Application.Features.Hardware.IoMappings;
 using IIoT.Edge.Application.Features.Hardware.Queries;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Presentation.Navigation.Localization;
@@ -17,10 +18,6 @@ namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
 
 public class IoViewViewModel : NavigationViewModelBase
 {
-    private const string InteractionCategory = "信号交互";
-    private const string SingleReadCategory = "单点读数据";
-    private const string ContinuousReadCategory = "连续读数据";
-
     private readonly IPlcDataStore _dataStore;
     private readonly IPlcConnectionManager _plcConnectionManager;
     private readonly ISender _sender;
@@ -194,7 +191,7 @@ public class IoViewViewModel : NavigationViewModelBase
             }
 
             var category = ResolveCategory(mapping);
-            if (string.Equals(category, InteractionCategory, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(category, IoMappingDisplay.InteractionCategory, StringComparison.OrdinalIgnoreCase))
             {
                 var row = GetOrCreateInteractionRow(interactionRows, mapping);
                 row.SortOrder = Math.Min(row.SortOrder, mapping.SortOrder);
@@ -212,7 +209,7 @@ public class IoViewViewModel : NavigationViewModelBase
                 continue;
             }
 
-            if (IsArrayMatrixSignal(signal))
+            if (IoMappingDisplay.IsContinuousMatrix(signal.DataType, signal.AddressCount))
             {
                 var arraySection = GetOrCreateArraySection(arraySections, mapping, category);
                 arraySection.SortOrder = Math.Min(arraySection.SortOrder, mapping.SortOrder);
@@ -317,7 +314,7 @@ public class IoViewViewModel : NavigationViewModelBase
         IDictionary<string, IoInteractionRowModel> rows,
         IoMappingEntity mapping)
     {
-        var groupName = ResolveGroupName(mapping, InteractionCategory);
+        var groupName = ResolveGroupName(mapping, IoMappingDisplay.InteractionCategory);
         if (rows.TryGetValue(groupName, out var row))
         {
             return row;
@@ -338,7 +335,7 @@ public class IoViewViewModel : NavigationViewModelBase
         string category)
     {
         var groupName = ResolveGroupName(mapping, category);
-        var key = $"{category}|{groupName}";
+        var key = category;
         if (sections.TryGetValue(key, out var section))
         {
             return section;
@@ -360,7 +357,7 @@ public class IoViewViewModel : NavigationViewModelBase
         string category)
     {
         var groupName = ResolveGroupName(mapping, category);
-        var key = $"{category}|{groupName}";
+        var key = category;
         if (sections.TryGetValue(key, out var section))
         {
             return section;
@@ -397,23 +394,10 @@ public class IoViewViewModel : NavigationViewModelBase
     }
 
     private static string ResolveCategory(IoMappingEntity mapping)
-    {
-        if (!string.IsNullOrWhiteSpace(mapping.Category))
-        {
-            return mapping.Category.Trim();
-        }
-
-        return mapping.AddressCount > 1 ? ContinuousReadCategory : SingleReadCategory;
-    }
+        => IoMappingDisplay.ResolveCategory(mapping.Category, mapping.AddressCount);
 
     private static string ResolveGroupName(IoMappingEntity mapping, string category)
-        => string.IsNullOrWhiteSpace(mapping.GroupName)
-            ? category
-            : mapping.GroupName.Trim();
-
-    private static bool IsArrayMatrixSignal(IoSignalModel signal)
-        => signal.AddressCount > 1
-            && !string.Equals(signal.DataType, "Ascii", StringComparison.OrdinalIgnoreCase);
+        => IoMappingDisplay.ResolveGroupName(mapping.GroupName, category);
 
     private static void UpdateReadSignal(IoSignalModel signal, IPlcBuffer buffer)
     {

@@ -1,6 +1,7 @@
 using IIoT.Edge.Application.Modules.Descriptors;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Abstractions.Plc.Signals;
 using IIoT.Edge.Application.Features.Config.ModuleParameters;
 using Microsoft.Extensions.Configuration;
 
@@ -184,6 +185,23 @@ internal sealed class TestEdgeProcessModuleBuilder(
         where TCloud : struct, Enum
         where TBusiness : struct, Enum
         => moduleParamRegistry.Register(ModuleId, typeof(TMes), typeof(TCloud), typeof(TBusiness));
+
+    public void RegisterPlcSignalProfile<TSignalKey, TProfile>()
+        where TSignalKey : struct, Enum
+        where TProfile : class, IModulePlcSignalProfile<TSignalKey>
+    {
+        Services.AddSingleton<TProfile>();
+        Services.AddSingleton<IModulePlcSignalProfile<TSignalKey>>(serviceProvider =>
+            serviceProvider.GetRequiredService<TProfile>());
+    }
+
+    public void RegisterHardwareProfile<TProvider>()
+        where TProvider : class, IModuleHardwareProfileProvider
+        => Services.AddSingleton<IModuleHardwareProfileProvider, TProvider>();
+
+    public void RegisterDevelopmentSample<TContributor>()
+        where TContributor : class, IDevelopmentSampleContributor
+        => Services.AddSingleton<IDevelopmentSampleContributor, TContributor>();
 
     private static ViewModelBase ResolveViewModel(
         string viewId,

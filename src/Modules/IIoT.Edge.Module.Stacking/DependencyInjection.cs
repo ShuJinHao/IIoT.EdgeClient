@@ -44,8 +44,9 @@ public sealed class DependencyInjection : EdgeProcessModuleBase<StackingCellData
             sp.GetRequiredService<StackingCloudUploader>());
         builder.Services.AddSingleton<IProcessCloudUploader>(sp =>
             sp.GetRequiredService<StackingCloudUploader>());
-        builder.Services.AddSingleton<IModuleHardwareProfileProvider, StackingHardwareProfileProvider>();
-        builder.Services.AddSingleton<IDevelopmentSampleContributor, StackingDevelopmentSampleContributor>();
+        builder.RegisterPlcSignalProfile<StackingSignal, StackingPlcSignalProfile>();
+        builder.RegisterHardwareProfile<StackingHardwareProfileProvider>();
+        builder.RegisterDevelopmentSample<StackingDevelopmentSampleContributor>();
     }
 
     protected override void RegisterModuleViews(IEdgeProcessModuleBuilder builder)

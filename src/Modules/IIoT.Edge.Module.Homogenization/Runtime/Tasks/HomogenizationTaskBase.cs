@@ -1,8 +1,10 @@
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Abstractions.Plc.Signals;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
+using IIoT.Edge.Module.Homogenization.Config.Hardware;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using IIoT.Edge.Runtime.Base;
 using Microsoft.Extensions.Options;
@@ -14,10 +16,9 @@ namespace IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 /// </summary>
 internal abstract class HomogenizationTaskBase : PlcTaskBase
 {
-    private HomogenizationSignalCodec? _codec;
-
     protected HomogenizationTaskBase(
         IPlcBuffer buffer,
+        ILogicalSignalAccessor<HomogenizationSignal> signals,
         HomogenizationContext context,
         ILogService logger,
         IProductionTimeProvider productionTime,
@@ -30,6 +31,8 @@ internal abstract class HomogenizationTaskBase : PlcTaskBase
         CodeOptions = codeOptions.Value;
         var runtime = moduleOptions.Value.Runtime;
         EventLoopInterval = Math.Max(runtime.MinEventLoopIntervalMs, runtime.EventLoopIntervalMs);
+        Signals = signals;
+        Codec = new HomogenizationSignalCodec(signals, productionTime);
     }
 
     /// <summary>
@@ -53,9 +56,14 @@ internal abstract class HomogenizationTaskBase : PlcTaskBase
     protected int EventLoopInterval { get; }
 
     /// <summary>
-    /// 匀浆 PLC 信号编解码器，按本插件信号模板读写地址。
+    /// Runtime 提供的强类型 PLC 信号访问器，任务只能通过枚举键读写点位。
     /// </summary>
-    protected HomogenizationSignalCodec Codec => _codec ??= new HomogenizationSignalCodec(Buffer, ModuleContext, ProductionTime);
+    protected ILogicalSignalAccessor<HomogenizationSignal> Signals { get; }
+
+    /// <summary>
+    /// 匀浆业务快照解码器，只负责把 PLC 连续区转换为插件 payload。
+    /// </summary>
+    protected HomogenizationSignalCodec Codec { get; }
 
     /// <summary>
     /// PLC 任务循环间隔，来源于匀浆运行配置。

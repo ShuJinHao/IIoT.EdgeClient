@@ -1,23 +1,32 @@
 using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Application.Abstractions.Plc.Signals;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.SharedKernel.Context;
 
 namespace IIoT.Edge.Runtime.Base;
 
-public abstract class HeartbeatMirrorPlcTaskBase : PlcTaskBase
+/// <summary>
+/// 强类型心跳镜像任务基类，插件只提供输入/输出信号枚举，不直接写 PLC 字符串 Label。
+/// </summary>
+/// <typeparam name="TSignalKey">插件声明的 PLC 信号枚举。</typeparam>
+public abstract class HeartbeatMirrorPlcTaskBase<TSignalKey> : PlcTaskBase
+    where TSignalKey : struct, Enum
 {
-    protected HeartbeatMirrorPlcTaskBase(IPlcBuffer buffer, ProductionContext context, ILogService logger)
+    private readonly ILogicalSignalAccessor<TSignalKey> _signals;
+
+    protected HeartbeatMirrorPlcTaskBase(
+        IPlcBuffer buffer,
+        ILogicalSignalAccessor<TSignalKey> signals,
+        ProductionContext context,
+        ILogService logger)
         : base(buffer, context, logger)
     {
+        _signals = signals ?? throw new ArgumentNullException(nameof(signals));
     }
 
-    protected abstract string InputLabel { get; }
+    protected abstract TSignalKey InputSignal { get; }
 
-    protected abstract string OutputLabel { get; }
-
-    protected abstract ushort ReadWord(string label);
-
-    protected abstract void WriteWord(string label, ushort value);
+    protected abstract TSignalKey OutputSignal { get; }
 
     protected virtual ushort NormalizeHeartbeat(ushort value)
         => value == 0 ? (ushort)1 : value;
@@ -27,10 +36,10 @@ public abstract class HeartbeatMirrorPlcTaskBase : PlcTaskBase
 
     protected override async Task DoCoreAsync()
     {
-        var input = ReadWord(InputLabel);
+        var input = _signals.ReadUInt16(InputSignal);
         var output = NormalizeHeartbeat(input);
 
-        WriteWord(OutputLabel, output);
+        _signals.WriteUInt16(OutputSignal, output);
         Context.Set($"Runtime.Tasks.{TaskName}.LastHeartbeatAtUtc", DateTime.UtcNow);
         Context.Set($"Runtime.Tasks.{TaskName}.LastHeartbeatIn", input);
         Context.Set($"Runtime.Tasks.{TaskName}.LastHeartbeatOut", output);
