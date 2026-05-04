@@ -1,13 +1,9 @@
-using IIoT.Edge.Application.Modules.Hardware;
-using System.Text;
-using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Application.Abstractions.Plc.Signals;
+using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Resources;
-using IIoT.Edge.Runtime.Signals;
-using IIoT.Edge.SharedKernel.Context;
 
 namespace IIoT.Edge.Module.Homogenization.Runtime;
 
@@ -16,106 +12,15 @@ namespace IIoT.Edge.Module.Homogenization.Runtime;
 /// </summary>
 internal sealed class HomogenizationSignalCodec
 {
-    private readonly IPlcBuffer _buffer;
-    private readonly IReadOnlyDictionary<string, SignalBinding> _readBindings;
-    private readonly IReadOnlyDictionary<string, SignalBinding> _writeBindings;
+    private readonly ILogicalSignalAccessor<HomogenizationSignal> _signals;
+    private readonly IProductionTimeProvider _productionTime;
 
-    public HomogenizationSignalCodec(IPlcBuffer buffer, ProductionContext context)
+    public HomogenizationSignalCodec(
+        ILogicalSignalAccessor<HomogenizationSignal> signals,
+        IProductionTimeProvider productionTime)
     {
-        ArgumentNullException.ThrowIfNull(context);
-        _buffer = buffer ?? throw new ArgumentNullException(nameof(buffer));
-
-        var bindings = ProductionContextSignalBindings.Get(context);
-        if (bindings.Count == 0)
-        {
-            throw new InvalidOperationException("匀浆运行时需要先由宿主注入 IO 绑定。");
-        }
-
-        // 运行时只按数据库绑定计算缓冲区偏移，不按 PLC 地址或模板顺序硬编码取数。
-        _readBindings = BuildBindings(bindings, "Read");
-        _writeBindings = BuildBindings(bindings, "Write");
-    }
-
-    public ushort ReadWord(string label)
-        => _buffer.GetReadValue(GetReadBinding(label).Offset);
-
-    public short ReadInt16(string label)
-        => unchecked((short)ReadWord(label));
-
-    public void WriteWord(string label, ushort value)
-        => _buffer.SetWriteValue(GetWriteBinding(label).Offset, value);
-
-    /// <summary>
-    /// 读取按低字节在前、高字节在后的 ASCII 托盘码。
-    /// </summary>
-    public string ReadAsciiString(string label)
-    {
-        var binding = GetReadBinding(label);
-        var builder = new StringBuilder(binding.AddressCount * 2);
-
-        for (var offset = 0; offset < binding.AddressCount; offset++)
-        {
-            var word = _buffer.GetReadValue(binding.Offset + offset);
-            var low = (byte)(word & 0xFF);
-            var high = (byte)(word >> 8);
-
-            if (low != 0)
-            {
-                builder.Append((char)low);
-            }
-
-            if (high != 0)
-            {
-                builder.Append((char)high);
-            }
-        }
-
-        return builder.ToString().Trim();
-    }
-
-    public IReadOnlyList<int> ReadIntList(string label, int count)
-    {
-        var binding = GetReadBinding(label);
-        var size = Math.Min(count, binding.AddressCount);
-        var values = new int[size];
-
-        for (var index = 0; index < size; index++)
-        {
-            values[index] = _buffer.GetReadValue(binding.Offset + index);
-        }
-
-        return values;
-    }
-
-    public IReadOnlyList<bool> ReadBoolList(string label, int count)
-    {
-        var binding = GetReadBinding(label);
-        var size = Math.Min(count, binding.AddressCount);
-        var values = new bool[size];
-
-        for (var index = 0; index < size; index++)
-        {
-            values[index] = _buffer.GetReadValue(binding.Offset + index) != 0;
-        }
-
-        return values;
-    }
-
-    public IReadOnlyList<double> ReadFloatList(string label, int count)
-    {
-        var binding = GetReadBinding(label);
-        var size = Math.Min(count, binding.AddressCount / 2);
-        var values = new double[size];
-
-        for (var index = 0; index < size; index++)
-        {
-            var baseOffset = binding.Offset + (index * 2);
-            values[index] = CombineToFloat(
-                _buffer.GetReadValue(baseOffset + 1),
-                _buffer.GetReadValue(baseOffset));
-        }
-
-        return values;
+        _signals = signals ?? throw new ArgumentNullException(nameof(signals));
+        _productionTime = productionTime;
     }
 
     /// <summary>
@@ -124,13 +29,13 @@ internal sealed class HomogenizationSignalCodec
     public HomogenizationRealtimeSnapshot CaptureRealtimeSnapshot()
         => new()
         {
-            CapturedAt = DateTime.UtcNow,
-            StirringSpeed = ReadInt16(HomogenizationPlcSignalProfile.RealtimeStirringSpeed.Label),
-            StirringCurrent = ReadInt16(HomogenizationPlcSignalProfile.RealtimeStirringCurrent.Label),
-            DispersionSpeed = ReadInt16(HomogenizationPlcSignalProfile.RealtimeDispersionSpeed.Label),
-            DispersionCurrent = ReadInt16(HomogenizationPlcSignalProfile.RealtimeDispersionCurrent.Label),
-            Temperature = ReadInt16(HomogenizationPlcSignalProfile.RealtimeTemperature.Label),
-            Vacuum = ReadInt16(HomogenizationPlcSignalProfile.RealtimeVacuum.Label)
+            CapturedAt = _productionTime.BusinessNow,
+            StirringSpeed = _signals.ReadInt16(HomogenizationSignal.实时搅拌转速),
+            StirringCurrent = _signals.ReadInt16(HomogenizationSignal.实时搅拌电流),
+            DispersionSpeed = _signals.ReadInt16(HomogenizationSignal.实时分散转速),
+            DispersionCurrent = _signals.ReadInt16(HomogenizationSignal.实时分散电流),
+            Temperature = _signals.ReadInt16(HomogenizationSignal.实时温度),
+            Vacuum = _signals.ReadInt16(HomogenizationSignal.实时真空度)
         };
 
     /// <summary>
@@ -139,20 +44,20 @@ internal sealed class HomogenizationSignalCodec
     public HomogenizationRecipeSnapshot CaptureRecipeSnapshot()
         => new()
         {
-            CapturedAt = DateTime.UtcNow,
-            StirringSpeed = ReadIntList(HomogenizationPlcSignalProfile.RecipeStirringSpeed.Label, 30),
-            DispersionSpeed = ReadIntList(HomogenizationPlcSignalProfile.RecipeDispersionSpeed.Label, 30),
-            Ncm = ReadFloatList(HomogenizationPlcSignalProfile.RecipeNcm.Label, 30),
-            Sp1 = ReadFloatList(HomogenizationPlcSignalProfile.RecipeSp1.Label, 30),
-            Nmp = ReadFloatList(HomogenizationPlcSignalProfile.RecipeNmp.Label, 30),
-            GlueSolution = ReadFloatList(HomogenizationPlcSignalProfile.RecipeGlueSolution.Label, 30),
-            Cnt = ReadFloatList(HomogenizationPlcSignalProfile.RecipeCnt.Label, 30),
-            Vacuum = ReadBoolList(HomogenizationPlcSignalProfile.RecipeVacuum.Label, 30),
-            Time = ReadIntList(HomogenizationPlcSignalProfile.RecipeTime.Label, 30),
-            Temperature = ReadIntList(HomogenizationPlcSignalProfile.RecipeTemperature.Label, 30)
+            CapturedAt = _productionTime.BusinessNow,
+            StirringSpeed = _signals.ReadIntArray(HomogenizationSignal.配方搅拌转速, 30),
+            DispersionSpeed = _signals.ReadIntArray(HomogenizationSignal.配方分散转速, 30),
+            Ncm = _signals.ReadFloatArray(HomogenizationSignal.配方NCM, 30),
+            Sp1 = _signals.ReadFloatArray(HomogenizationSignal.配方SP1, 30),
+            Nmp = _signals.ReadFloatArray(HomogenizationSignal.配方NMP, 30),
+            GlueSolution = _signals.ReadFloatArray(HomogenizationSignal.配方胶液, 30),
+            Cnt = _signals.ReadFloatArray(HomogenizationSignal.配方CNT, 30),
+            Vacuum = _signals.ReadBoolArray(HomogenizationSignal.配方真空, 30),
+            Time = _signals.ReadIntArray(HomogenizationSignal.配方时间, 30),
+            Temperature = _signals.ReadIntArray(HomogenizationSignal.配方温度, 30)
                 .Select(static value => (double)value)
                 .ToArray(),
-            StopStep = ReadBoolList(HomogenizationPlcSignalProfile.RecipeStopStep.Label, 30)
+            StopStep = _signals.ReadBoolArray(HomogenizationSignal.配方停机步, 30)
         };
 
     /// <summary>
@@ -160,7 +65,7 @@ internal sealed class HomogenizationSignalCodec
     /// </summary>
     public HomogenizationEquipmentStatusSnapshot CaptureEquipmentStatusSnapshot(HomogenizationMesCodeOptions mesCodes)
     {
-        var statusCode = ReadInt16(HomogenizationPlcSignalProfile.EquipmentStatusValue.Label);
+        var statusCode = _signals.ReadInt16(HomogenizationSignal.设备状态值);
         var statusText = mesCodes.ResolveEquipmentStatusText(statusCode);
 
         var messages = new List<string>();
@@ -177,74 +82,10 @@ internal sealed class HomogenizationSignalCodec
 
         return new HomogenizationEquipmentStatusSnapshot
         {
-            CapturedAt = DateTime.UtcNow,
+            CapturedAt = _productionTime.BusinessNow,
             StatusCode = statusCode,
             StatusText = statusText,
             Messages = messages
         };
     }
-
-    private SignalBinding GetReadBinding(string label)
-        => GetBinding(_readBindings, label, "Read");
-
-    private SignalBinding GetWriteBinding(string label)
-        => GetBinding(_writeBindings, label, "Write");
-
-    private static SignalBinding GetBinding(
-        IReadOnlyDictionary<string, SignalBinding> bindings,
-        string label,
-        string direction)
-    {
-        var normalized = NormalizeLabel(label);
-        if (!bindings.TryGetValue(normalized, out var binding))
-        {
-            throw new InvalidOperationException($"匀浆运行时未绑定 {direction} 信号“{label}”。");
-        }
-
-        return binding;
-    }
-
-    private static IReadOnlyDictionary<string, SignalBinding> BuildBindings(
-        IReadOnlyCollection<ModuleIoSnapshot> bindings,
-        string direction)
-    {
-        var indexes = new Dictionary<string, SignalBinding>(StringComparer.OrdinalIgnoreCase);
-        var currentOffset = 0;
-
-        foreach (var binding in bindings
-                     .Where(binding => string.Equals(binding.Direction, direction, StringComparison.OrdinalIgnoreCase))
-                     .OrderBy(binding => binding.SortOrder))
-        {
-            indexes[NormalizeLabel(binding.Label)] = new SignalBinding(currentOffset, Math.Max(1, binding.AddressCount));
-            currentOffset += Math.Max(1, binding.AddressCount);
-        }
-
-        return indexes;
-    }
-
-    private static string NormalizeLabel(string label)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(label);
-        return label.Trim();
-    }
-
-    private static float CombineToFloat(ushort high, ushort low)
-    {
-        byte[] bytes =
-        [
-            (byte)(high >> 8),
-            (byte)high,
-            (byte)(low >> 8),
-            (byte)low
-        ];
-
-        if (BitConverter.IsLittleEndian)
-        {
-            Array.Reverse(bytes);
-        }
-
-        return BitConverter.ToSingle(bytes, 0);
-    }
-
-    private sealed record SignalBinding(int Offset, int AddressCount);
 }

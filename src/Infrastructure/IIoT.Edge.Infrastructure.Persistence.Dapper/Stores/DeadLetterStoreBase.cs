@@ -45,6 +45,9 @@ public abstract class DeadLetterStoreBase : DapperRepositoryBase<DeadLetterRecor
     public Task<int> GetCountAsync()
         => SafeCountAsync($"SELECT COUNT(*) FROM {TableName}");
 
+    public new Task<DeadLetterRecord?> GetByIdAsync(long id)
+        => base.GetByIdAsync(id);
+
     public async Task<IReadOnlyList<DeadLetterGroupSummary>> GetGroupSummaryAsync()
     {
         var sql = $@"
@@ -71,5 +74,14 @@ public abstract class DeadLetterStoreBase : DapperRepositoryBase<DeadLetterRecor
         return await SafeQueryListAsync<DeadLetterRecord>(
             sql,
             new { Count = Math.Clamp(count, 1, 100) }).ConfigureAwait(false);
+    }
+
+    public async Task DeleteAsync(long id)
+    {
+        var affectedRows = await DeleteByIdAsync(id).ConfigureAwait(false);
+        if (affectedRows <= 0)
+        {
+            throw new InvalidOperationException($"未找到要删除的死信记录：{TableName}/{id}。");
+        }
     }
 }

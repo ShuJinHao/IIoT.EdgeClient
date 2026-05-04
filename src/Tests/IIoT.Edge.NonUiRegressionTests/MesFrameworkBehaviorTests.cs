@@ -165,6 +165,7 @@ public sealed class MesFrameworkBehaviorTests
             new FakeLogService());
 
         var success = await client.PostAsync(
+            "Homogenization",
             "/api/mes/outbound",
             new { barcode = "MES-01" },
             new Dictionary<string, string>
@@ -180,43 +181,26 @@ public sealed class MesFrameworkBehaviorTests
     }
 
     [Fact]
-    public void MesEndpointProvider_WhenLocalMesUrlExists_ShouldPreferRuntimeConfig()
+    public async Task MesEndpointProvider_WhenModuleMesUrlExists_ShouldBuildProcessUrl()
     {
         var provider = new MesEndpointProvider(
-            new TestOptionsMonitor<MesApiConfig>(
-                new MesApiConfig
-                {
-                    BaseUrl = "https://options-mes.test"
-                }),
-            new FakeLocalSystemRuntimeConfigService
-            {
-                Current = SystemRuntimeConfigSnapshot.Default with
-                {
-                    MesBaseUrl = "https://local-mes.test"
-                }
-            });
+            new FakeModuleParamRoleProvider("https://local-mes.test"),
+            new TestOptionsMonitor<MesApiConfig>(new MesApiConfig()));
 
-        var url = provider.BuildUrl("/api/mes/outbound");
+        var url = await provider.BuildUrlAsync("Homogenization", "/api/mes/outbound");
 
-        Assert.True(provider.IsConfigured);
+        Assert.True(await provider.IsConfiguredAsync("Homogenization"));
         Assert.Equal("https://local-mes.test/api/mes/outbound", url);
     }
 
     [Fact]
-    public void MesEndpointProvider_WhenLocalMesUrlMissing_ShouldFallbackToOptionsConfig()
+    public async Task MesEndpointProvider_WhenModuleMesUrlMissing_ShouldReportNotConfigured()
     {
         var provider = new MesEndpointProvider(
-            new TestOptionsMonitor<MesApiConfig>(
-                new MesApiConfig
-                {
-                    BaseUrl = "https://options-mes.test"
-                }),
-            new FakeLocalSystemRuntimeConfigService());
+            new FakeModuleParamRoleProvider(null),
+            new TestOptionsMonitor<MesApiConfig>(new MesApiConfig()));
 
-        var url = provider.BuildUrl("/api/mes/outbound");
-
-        Assert.True(provider.IsConfigured);
-        Assert.Equal("https://options-mes.test/api/mes/outbound", url);
+        Assert.False(await provider.IsConfiguredAsync("Homogenization"));
     }
 
     [Fact]
@@ -226,6 +210,7 @@ public sealed class MesFrameworkBehaviorTests
         var probe = new MesHeartbeatProbe(
             new FakeHttpClientFactory(new HttpClient(handler)),
             new FakeMesEndpointProvider(),
+            new FakeProcessIntegrationRegistry(["Homogenization"]),
             new TestOptionsMonitor<MesApiConfig>(new MesApiConfig { HeartbeatPath = "/api/mes/heartbeat" }),
             new FakeLogService());
 
@@ -244,6 +229,7 @@ public sealed class MesFrameworkBehaviorTests
         var probe = new MesHeartbeatProbe(
             new FakeHttpClientFactory(new HttpClient(handler)),
             new FakeMesEndpointProvider(),
+            new FakeProcessIntegrationRegistry(["Homogenization"]),
             new TestOptionsMonitor<MesApiConfig>(new MesApiConfig { HeartbeatPath = "" }),
             new FakeLogService());
 
@@ -262,6 +248,7 @@ public sealed class MesFrameworkBehaviorTests
         var probe = new MesHeartbeatProbe(
             new FakeHttpClientFactory(httpClient),
             new FakeMesEndpointProvider(),
+            new FakeProcessIntegrationRegistry(["Homogenization"]),
             new TestOptionsMonitor<MesApiConfig>(new MesApiConfig { HeartbeatPath = "/api/mes/heartbeat" }),
             new FakeLogService());
 
@@ -314,16 +301,108 @@ public sealed class MesFrameworkBehaviorTests
 
     private sealed class FakeMesEndpointProvider : IMesEndpointProvider
     {
-        public bool IsConfigured => true;
+        public Task<bool> IsConfiguredAsync(string processType, CancellationToken cancellationToken = default)
+            => Task.FromResult(true);
 
-        public string BuildUrl(string relativeOrAbsoluteUrl)
-            => $"https://mes.test{relativeOrAbsoluteUrl}";
+        public Task<string> BuildUrlAsync(
+            string processType,
+            string relativeOrAbsoluteUrl,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult($"https://mes.test{relativeOrAbsoluteUrl}");
+
+        public Task<string?> TryBuildFirstConfiguredUrlAsync(
+            IReadOnlyCollection<string> processTypes,
+            string relativeOrAbsoluteUrl,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult<string?>($"https://mes.test{relativeOrAbsoluteUrl}");
 
         public IReadOnlyDictionary<string, string> GetDefaultHeaders()
             => new Dictionary<string, string>
             {
                 ["X-Default"] = "default"
             };
+    }
+
+    private sealed class FakeModuleParamRoleProvider(string? mesBaseUrl) : IModuleParamRoleProvider
+    {
+        public Task<ModuleParamRoleValue?> GetAsync(
+            string moduleId,
+            ModuleParamCategory category,
+            ModuleParamRole role,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult<ModuleParamRoleValue?>(null);
+
+        public Task<IReadOnlyList<ModuleParamRoleValue>> GetAllAsync(
+            ModuleParamCategory category,
+            ModuleParamRole role,
+            IReadOnlyCollection<string>? moduleIds = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<ModuleParamRoleValue>>([]);
+
+        public Task<string?> GetStringAsync(
+            string moduleId,
+            ModuleParamCategory category,
+            ModuleParamRole role,
+            string? defaultValue = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(role == ModuleParamRole.MesBaseUrl ? mesBaseUrl : defaultValue);
+
+        public Task<string?> FirstStringAsync(
+            ModuleParamCategory category,
+            ModuleParamRole role,
+            IReadOnlyCollection<string>? moduleIds = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(role == ModuleParamRole.MesBaseUrl ? mesBaseUrl : null);
+
+        public Task<bool> GetBoolAsync(
+            string moduleId,
+            ModuleParamCategory category,
+            ModuleParamRole role,
+            bool defaultValue = false,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(defaultValue);
+
+        public Task<bool> AnyBoolAsync(
+            ModuleParamCategory category,
+            ModuleParamRole role,
+            IReadOnlyCollection<string>? moduleIds = null,
+            bool defaultValue = false,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(defaultValue);
+    }
+
+    private sealed class FakeProcessIntegrationRegistry(IEnumerable<string> mesProcessTypes) : IProcessIntegrationRegistry
+    {
+        private readonly Dictionary<string, MesUploaderRegistration> _mesUploaders = mesProcessTypes
+            .ToDictionary(
+                static processType => processType,
+                static processType => new MesUploaderRegistration(processType, MesUploadMode.Single),
+                StringComparer.OrdinalIgnoreCase);
+
+        public void RegisterCloudUploader(string processType, ProcessUploadMode uploadMode)
+            => throw new NotSupportedException();
+
+        public void RegisterMesUploader(string processType, MesUploadMode uploadMode)
+            => throw new NotSupportedException();
+
+        public bool HasCloudUploader(string processType) => false;
+
+        public bool HasMesUploader(string processType) => _mesUploaders.ContainsKey(processType);
+
+        public bool TryGetCloudUploader(string processType, out CloudUploaderRegistration registration)
+        {
+            registration = default!;
+            return false;
+        }
+
+        public bool TryGetMesUploader(string processType, out MesUploaderRegistration registration)
+            => _mesUploaders.TryGetValue(processType, out registration!);
+
+        public IReadOnlyDictionary<string, CloudUploaderRegistration> GetCloudUploaders()
+            => new Dictionary<string, CloudUploaderRegistration>();
+
+        public IReadOnlyDictionary<string, MesUploaderRegistration> GetMesUploaders()
+            => _mesUploaders;
     }
 
     private sealed class FakeHttpClientFactory(HttpClient httpClient) : IHttpClientFactory

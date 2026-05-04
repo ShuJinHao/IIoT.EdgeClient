@@ -2,8 +2,11 @@ using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc;
+using IIoT.Edge.Application.Abstractions.Plc.Signals;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Module.Stacking.Config.Hardware;
 using IIoT.Edge.Module.Stacking.Constants;
+using IIoT.Edge.Module.Stacking.Runtime.Tasks;
 using IIoT.Edge.Runtime.Signals;
 using IIoT.Edge.SharedKernel.Context;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,10 +35,11 @@ public sealed class StackingStationRuntimeFactory : IStationRuntimeFactory
         ArgumentNullException.ThrowIfNull(buffer);
         ArgumentNullException.ThrowIfNull(context);
 
-        var signalAccessor = BufferLogicalSignalAccessor.Create(
+        var signalProfile = serviceProvider.GetRequiredService<IModulePlcSignalProfile<StackingSignal>>();
+        var signalAccessor = BufferLogicalSignalAccessor<StackingSignal>.Create(
             buffer,
             context,
-            StackingPlcSignalProfile.LogicalSignals);
+            signalProfile);
 
         return
         [

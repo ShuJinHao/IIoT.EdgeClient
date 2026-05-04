@@ -1,11 +1,14 @@
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Modules.Mes;
 using IIoT.Edge.Module.Homogenization;
 using IIoT.Edge.Module.Homogenization.Config;
+using IIoT.Edge.Module.Homogenization.Config.Parameters;
 using IIoT.Edge.Module.Homogenization.Integration;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Runtime;
+using IIoT.Edge.Module.Homogenization.Samples;
 using IIoT.Edge.SharedKernel.Context;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
@@ -38,6 +41,7 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
         services.AddSingleton<IMesUploadDiagnosticsStore, ContractMesUploadDiagnosticsStore>();
         services.AddSingleton<HomogenizationMesScenarioChannel, ContractHomogenizationMesChannel>();
         services.AddSingleton<HomogenizationCellDataValidator>();
+        services.AddSingleton<IModuleParamProvider<MesParam, CloudParam, BusinessParam>, ContractHomogenizationModuleParamProvider>();
         services.AddSingleton(Options.Create(new HomogenizationModuleOptions()));
         services.AddSingleton(Options.Create(new HomogenizationCodeOptions()));
     }
@@ -181,6 +185,42 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
         public MesChannelDiagnostics? Get(string processType) => null;
         public void RecordSuccess(string processType) { }
         public void RecordFailure(string processType, string failureReason) { }
+    }
+
+    private sealed class ContractHomogenizationModuleParamProvider
+        : IModuleParamProvider<MesParam, CloudParam, BusinessParam>
+    {
+        public Task<ModuleParamSnapshot<MesParam, CloudParam, BusinessParam>> GetAsync(
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new ModuleParamSnapshot<MesParam, CloudParam, BusinessParam>(
+                DependencyInjection.ModuleKey,
+                new ModuleParamGroup<MesParam>(
+                    DependencyInjection.ModuleKey,
+                    ModuleParamCategory.Mes,
+                    new Dictionary<MesParam, string>(),
+                    new Dictionary<MesParam, string?>(),
+                    new Dictionary<MesParam, ParamValueKind>(),
+                    warn: null),
+                new ModuleParamGroup<CloudParam>(
+                    DependencyInjection.ModuleKey,
+                    ModuleParamCategory.Cloud,
+                    new Dictionary<CloudParam, string>(),
+                    new Dictionary<CloudParam, string?>(),
+                    new Dictionary<CloudParam, ParamValueKind>(),
+                    warn: null),
+                new ModuleParamGroup<BusinessParam>(
+                    DependencyInjection.ModuleKey,
+                    ModuleParamCategory.Business,
+                    new Dictionary<BusinessParam, string>(),
+                    new Dictionary<BusinessParam, string?>
+                    {
+                        [BusinessParam.启用托盘码重码验证] = "false"
+                    },
+                    new Dictionary<BusinessParam, ParamValueKind>
+                    {
+                        [BusinessParam.启用托盘码重码验证] = ParamValueKind.Bool
+                    },
+                    warn: null)));
     }
 
     private sealed class ContractHomogenizationMesChannel : HomogenizationMesScenarioChannel

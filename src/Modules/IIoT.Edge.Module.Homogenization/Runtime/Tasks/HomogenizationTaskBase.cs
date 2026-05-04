@@ -1,7 +1,10 @@
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Abstractions.Plc.Signals;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
+using IIoT.Edge.Module.Homogenization.Config.Hardware;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using IIoT.Edge.Runtime.Base;
 using Microsoft.Extensions.Options;
@@ -13,26 +16,34 @@ namespace IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 /// </summary>
 internal abstract class HomogenizationTaskBase : PlcTaskBase
 {
-    private HomogenizationSignalCodec? _codec;
-
     protected HomogenizationTaskBase(
         IPlcBuffer buffer,
+        ILogicalSignalAccessor<HomogenizationSignal> signals,
         HomogenizationContext context,
         ILogService logger,
+        IProductionTimeProvider productionTime,
         IOptions<HomogenizationCodeOptions> codeOptions,
         IOptions<HomogenizationModuleOptions> moduleOptions)
         : base(buffer, context, logger)
     {
         ModuleContext = context;
+        ProductionTime = productionTime;
         CodeOptions = codeOptions.Value;
         var runtime = moduleOptions.Value.Runtime;
         EventLoopInterval = Math.Max(runtime.MinEventLoopIntervalMs, runtime.EventLoopIntervalMs);
+        Signals = signals;
+        Codec = new HomogenizationSignalCodec(signals, productionTime);
     }
 
     /// <summary>
     /// 匀浆运行态上下文，用于记录最近一次业务结果并供 UI 展示。
     /// </summary>
     protected HomogenizationContext ModuleContext { get; }
+
+    /// <summary>
+    /// 匀浆任务使用的统一生产业务时间服务，避免对外状态和 payload 混用 UTC/本地时间。
+    /// </summary>
+    protected IProductionTimeProvider ProductionTime { get; }
 
     /// <summary>
     /// 匀浆 PLC/MES code 配置，包含触发码、复位码、应答码和 MES 通道名称。
@@ -45,9 +56,14 @@ internal abstract class HomogenizationTaskBase : PlcTaskBase
     protected int EventLoopInterval { get; }
 
     /// <summary>
-    /// 匀浆 PLC 信号编解码器，按本插件信号模板读写地址。
+    /// Runtime 提供的强类型 PLC 信号访问器，任务只能通过枚举键读写点位。
     /// </summary>
-    protected HomogenizationSignalCodec Codec => _codec ??= new HomogenizationSignalCodec(Buffer, ModuleContext);
+    protected ILogicalSignalAccessor<HomogenizationSignal> Signals { get; }
+
+    /// <summary>
+    /// 匀浆业务快照解码器，只负责把 PLC 连续区转换为插件 payload。
+    /// </summary>
+    protected HomogenizationSignalCodec Codec { get; }
 
     /// <summary>
     /// PLC 任务循环间隔，来源于匀浆运行配置。

@@ -33,11 +33,22 @@
                 Height="30"
                 Margin="0,0,8,0"
                 Padding="12,0"
-                Command="{Binding AddIoMappingCommand}"
+                Command="{Binding AddReadIoMappingCommand}"
                 Style="{StaticResource MaterialDesignOutlinedButton}">
                 <StackPanel Orientation="Horizontal">
                     <materialDesign:PackIcon Width="14" Height="14" VerticalAlignment="Center" Kind="Plus" />
-                    <TextBlock Margin="4,0,0,0" VerticalAlignment="Center" FontSize="12" Text="{DynamicResource Navigation_Button_Add}" />
+                    <TextBlock Margin="4,0,0,0" VerticalAlignment="Center" FontSize="12" Text="{DynamicResource Navigation_Button_AddReadPoint}" />
+                </StackPanel>
+            </Button>
+            <Button
+                Height="30"
+                Margin="0,0,8,0"
+                Padding="12,0"
+                Command="{Binding AddWriteIoMappingCommand}"
+                Style="{StaticResource MaterialDesignOutlinedButton}">
+                <StackPanel Orientation="Horizontal">
+                    <materialDesign:PackIcon Width="14" Height="14" VerticalAlignment="Center" Kind="Plus" />
+                    <TextBlock Margin="4,0,0,0" VerticalAlignment="Center" FontSize="12" Text="{DynamicResource Navigation_Button_AddWritePoint}" />
                 </StackPanel>
             </Button>
             <Button
@@ -97,39 +108,12 @@
 
         <Grid Grid.Column="1">
             <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
-                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
-
-            <Border
-                Grid.Row="0"
-                Margin="0,0,0,12"
-                Padding="12"
-                Background="#101114"
-                BorderBrush="#27272A"
-                BorderThickness="1"
-                CornerRadius="8"
-                Visibility="{Binding HasModuleTemplateSummary, Converter={StaticResource BooleanToVisibilityConverter}}">
-                <StackPanel>
-                    <TextBlock
-                        FontSize="12"
-                        FontWeight="SemiBold"
-                        Foreground="#E4E4E7"
-                        Text="{DynamicResource Navigation_Label_ModuleProtocolSummary}" />
-                    <TextBlock
-                        Margin="0,8,0,0"
-                        FontSize="12"
-                        Foreground="#A1A1AA"
-                        Text="{Binding ModuleTemplateSummary}"
-                        TextWrapping="Wrap" />
-                </StackPanel>
-            </Border>
 
             <DataGrid
                 x:Name="IoGrid"
-                Grid.Row="1"
+                Grid.Row="0"
                 AlternatingRowBackground="#0F0F0F"
                 AutoGenerateColumns="False"
                 Background="Transparent"
@@ -141,8 +125,24 @@
                 GridLinesVisibility="Horizontal"
                 HeadersVisibility="Column"
                 IsReadOnly="{Binding CanEdit, Converter={StaticResource InverseBooleanConverter}}"
-                ItemsSource="{Binding IoMappings}"
+                ItemsSource="{Binding IoMappingsView}"
                 RowBackground="Transparent">
+                <DataGrid.GroupStyle>
+                    <GroupStyle>
+                        <GroupStyle.HeaderTemplate>
+                            <DataTemplate>
+                                <Border
+                                    Margin="0,8,0,2"
+                                    Padding="8,4"
+                                    Background="#18181B"
+                                    BorderBrush="#27272A"
+                                    BorderThickness="0,0,0,1">
+                                    <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="#E4E4E7" Text="{Binding Name}" />
+                                </Border>
+                            </DataTemplate>
+                        </GroupStyle.HeaderTemplate>
+                    </GroupStyle>
+                </DataGrid.GroupStyle>
                 <DataGrid.Columns>
                     <DataGridTextColumn Width="120" Binding="{Binding Label}" Header="{DynamicResource Navigation_Column_Label}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_Label" />
                     <DataGridTextColumn Width="100" Binding="{Binding PlcAddress}" Header="{DynamicResource Navigation_Column_PlcAddress}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_PlcAddress" />
@@ -191,33 +191,6 @@
                 </DataGrid.Columns>
             </DataGrid>
 
-            <StackPanel
-                Grid.Row="2"
-                Margin="0,8,0,0"
-                HorizontalAlignment="Right"
-                Orientation="Horizontal">
-                <TextBlock
-                    Margin="0,0,12,0"
-                    VerticalAlignment="Center"
-                    FontSize="12"
-                    Foreground="#71717A">
-                    <Run Text="{DynamicResource Navigation_Label_TotalRecordsPrefix}" /><Run Text="{Binding IoTotalCount}" /><Run Text="{DynamicResource Navigation_Label_TotalRecordsSuffix}" />
-                </TextBlock>
-                <Button Width="28" Height="28" Padding="0" Command="{Binding IoPrevPageCommand}" Style="{StaticResource MaterialDesignOutlinedButton}">
-                    <materialDesign:PackIcon Width="16" Height="16" Kind="ChevronLeft" />
-                </Button>
-                <TextBlock Margin="8,0" VerticalAlignment="Center" FontSize="12" Foreground="#E4E4E7">
-                    <TextBlock.Text>
-                        <MultiBinding StringFormat="{}{0} / {1}">
-                            <Binding Path="IoPageIndex" />
-                            <Binding Path="IoTotalCount" />
-                        </MultiBinding>
-                    </TextBlock.Text>
-                </TextBlock>
-                <Button Width="28" Height="28" Padding="0" Command="{Binding IoNextPageCommand}" Style="{StaticResource MaterialDesignOutlinedButton}">
-                    <materialDesign:PackIcon Width="16" Height="16" Kind="ChevronRight" />
-                </Button>
-            </StackPanel>
         </Grid>
     </Grid>
     </sharedViews:PageActionShell>

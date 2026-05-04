@@ -28,12 +28,12 @@ public sealed class HomogenizationMesChannel
 
     public HomogenizationMesChannel(
         MesRequestExecutor requestExecutor,
-        ILocalParameterConfigService parameterConfigService,
+        IModuleParamRoleProvider moduleParamRoleProvider,
         ILogService logger,
         IProductionTimeProvider productionTime,
         IOptions<HomogenizationMesOptions> mesOptions,
         IOptions<HomogenizationCodeOptions> codeOptions)
-        : base(DependencyInjection.ModuleKey, logger, requestExecutor, parameterConfigService, productionTime)
+        : base(DependencyInjection.ModuleKey, logger, requestExecutor, moduleParamRoleProvider, productionTime)
     {
         _mesOptions = mesOptions.Value;
         _mesCodes = codeOptions.Value.Mes;
@@ -104,7 +104,7 @@ public sealed class HomogenizationMesChannel
                 timestamp = envelope.Timestamp,
                 sign = envelope.Sign,
                 stationNo = envelope.StationNo,
-                outboundTime = FormatTimestamp(cellData.CompletedTime ?? DateTime.UtcNow),
+                outboundTime = FormatTimestamp(cellData.CompletedTime ?? ProductionTime.UtcNow),
                 serialNumber = cellData.TrayCode,
                 data = new
                 {
@@ -196,6 +196,7 @@ public sealed class HomogenizationMesChannel
                 upperComputerNo = envelope.UpperComputerNo,
                 timestamp = envelope.Timestamp,
                 sign = envelope.Sign,
+                stationNo = envelope.StationNo,
                 data = new
                 {
                     devices = new[]

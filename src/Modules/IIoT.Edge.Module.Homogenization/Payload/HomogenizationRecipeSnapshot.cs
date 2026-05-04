@@ -8,7 +8,7 @@ public sealed class HomogenizationRecipeSnapshot
     /// <summary>
     /// 配方参数采集时间，用于 UI 最近上传状态和问题追踪。
     /// </summary>
-    public DateTime CapturedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CapturedAt { get; set; }
 
     /// <summary>
     /// 各步骤搅拌转速数组，按 PLC 配方顺序上传为带序号的 MES item。

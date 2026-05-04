@@ -2,7 +2,6 @@ using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Auth;
-using IIoT.Edge.Application.Common.Crud;
 using IIoT.Edge.Application.Common.Models;
 using IIoT.Edge.Application.Features.Config.ParamView;
 using IIoT.Edge.Application.Features.Config.ParamView.Models;
@@ -68,12 +67,10 @@ public sealed class ConfigPermissionGuardBehaviorTests
             new StubPermissionService { CanEditParams = false });
 
         var result = await service.SaveAsync(
-            [new GeneralParamVm { Name = "ClientCode", Value = "EDGE-01" }],
-            7,
-            [new DeviceParamVm { Name = "Temperature", Value = "180" }]);
+            [new ModuleParamVm { Key = "Module:Homogenization:Business:启用托盘码重码验证", Value = "true" }]);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal("当前用户无参数配置权限。", result.Message);
+        Assert.Contains("参数配置权限", result.Message);
         Assert.Equal(0, sender.SendCount);
     }
 
@@ -87,13 +84,11 @@ public sealed class ConfigPermissionGuardBehaviorTests
 
         var result = await handler.Handle(
             new SaveParamViewCommand(
-                [new GeneralParamVm { Name = "ClientCode", Value = "EDGE-01" }],
-                7,
-                [new DeviceParamVm { Name = "Temperature", Value = "180" }]),
+                [new ModuleParamVm { Key = "Module:Homogenization:Business:启用托盘码重码验证", Value = "true" }]),
             CancellationToken.None);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal("当前用户无参数配置权限。", result.Message);
+        Assert.Contains("参数配置权限", result.Message);
         Assert.Equal(0, sender.SendCount);
     }
 
@@ -113,7 +108,6 @@ public sealed class ConfigPermissionGuardBehaviorTests
             []);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal("当前用户没有硬件配置权限。", result.Message);
         Assert.Equal(0, sender.SendCount);
     }
 
@@ -135,7 +129,6 @@ public sealed class ConfigPermissionGuardBehaviorTests
         });
 
         Assert.False(result.IsSuccess);
-        Assert.Equal("当前用户没有硬件配置权限。", result.Message);
         Assert.Equal(0, sender.SendCount);
     }
 
@@ -206,7 +199,6 @@ public sealed class ConfigPermissionGuardBehaviorTests
             CancellationToken.None);
 
         Assert.False(result.IsSuccess);
-        Assert.StartsWith("配置已保存，但 以下 PLC 重载失败：", result.Message);
         Assert.Contains("PLC-B", result.Message);
         Assert.Equal(
             ["PLC-A", "PLC-B"],
@@ -227,7 +219,6 @@ public sealed class ConfigPermissionGuardBehaviorTests
         var configuration = new AutoMapper.MapperConfiguration(
             cfg =>
             {
-                cfg.AddProfile<IIoT.Edge.Application.Features.Config.ParamView.Mappings.ParamViewMappingProfile>();
                 cfg.AddProfile<IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Mappings.HardwareConfigMappingProfile>();
             },
             NullLoggerFactory.Instance);

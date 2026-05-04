@@ -1,4 +1,5 @@
-﻿using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Module.Injection.Config.Parameters;
 using IIoT.Edge.Module.Injection.Integration;
 using IIoT.Edge.Module.Injection.Payload;
 using IIoT.Edge.Module.Injection.Presentation;
@@ -33,6 +34,8 @@ public sealed class DependencyInjection : EdgeProcessModuleBase<InjectionCellDat
 
     protected override void ConfigureModuleServices(IEdgeProcessModuleBuilder builder)
     {
+        builder.RegisterParameters<MesParam, CloudParam, BusinessParam>();
+
         builder.Services.AddSingleton<InjectionCloudUploader>();
         builder.Services.AddSingleton<InjectionCloudUploadChannel>(sp =>
             sp.GetRequiredService<InjectionCloudUploader>());
@@ -43,4 +46,3 @@ public sealed class DependencyInjection : EdgeProcessModuleBase<InjectionCellDat
     protected override void RegisterModuleViews(IEdgeProcessModuleBuilder builder)
         => builder.RegisterInjectionViews();
 }
-

@@ -124,7 +124,7 @@ public sealed class CapacitySyncTaskBehaviorTests
         Assert.Single(bufferStore.ReleasedClaimTokens);
         Assert.Single(bufferStore.HourlySummaries);
         Assert.Equal(30, bufferStore.HourlySummaries[0].MinuteBucket);
-        Assert.Contains(logger.Entries, x => x.Message.Contains("[Retry-Cloud] Capacity retry failed", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, x => x.Message.Contains("[Retry-Cloud] 产能补传失败", StringComparison.Ordinal));
     }
 
     [Fact]

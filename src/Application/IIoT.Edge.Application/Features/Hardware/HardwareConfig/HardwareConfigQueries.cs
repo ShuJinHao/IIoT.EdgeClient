@@ -24,12 +24,11 @@ public record IoMappingPageResult(
 
 public record ModuleTemplateInfoResult(
     bool IsAvailable,
-    string? ModuleId,
-    string Summary);
+    string? ModuleId);
 
 public record LoadHardwareConfigQuery : IRequest<HardwareConfigInitResult>;
 
-public record LoadIoMappingsQuery(int NetworkDeviceId, int PageIndex, int PageSize)
+public record LoadIoMappingsQuery(int NetworkDeviceId)
     : IRequest<IoMappingPageResult>;
 
 public record SaveHardwareConfigCommand(
@@ -73,7 +72,7 @@ public class LoadIoMappingsHandler(ISender sender, IMapper mapper)
     public async Task<IoMappingPageResult> Handle(LoadIoMappingsQuery request, CancellationToken ct)
     {
         var result = await sender.Send(
-            new GetIoMappingsByDeviceQuery(request.NetworkDeviceId, request.PageIndex, request.PageSize),
+            new GetIoMappingsByDeviceQuery(request.NetworkDeviceId, 0, int.MaxValue),
             ct);
 
         if (!result.IsSuccess || result.Value is null)
@@ -85,7 +84,7 @@ public class LoadIoMappingsHandler(ISender sender, IMapper mapper)
             .Select(item => mapper.Map<IoMappingVm>(item))
             .ToList();
 
-        return new IoMappingPageResult(items, result.Value.TotalCount);
+        return new IoMappingPageResult(items, items.Count);
     }
 }
 

@@ -22,6 +22,7 @@ public sealed class MesHttpClient : IMesHttpClient
     }
 
     public async Task<bool> PostAsync(
+        string processType,
         string url,
         object payload,
         IReadOnlyDictionary<string, string>? headers = null,
@@ -29,6 +30,7 @@ public sealed class MesHttpClient : IMesHttpClient
     {
         var response = await SendAsync(
                 HttpMethod.Post,
+                processType,
                 url,
                 JsonContent.Create(payload),
                 headers,
@@ -39,6 +41,7 @@ public sealed class MesHttpClient : IMesHttpClient
     }
 
     public async Task<string?> PostWithResponseAsync(
+        string processType,
         string url,
         object payload,
         IReadOnlyDictionary<string, string>? headers = null,
@@ -46,6 +49,7 @@ public sealed class MesHttpClient : IMesHttpClient
     {
         var response = await SendAsync(
                 HttpMethod.Post,
+                processType,
                 url,
                 JsonContent.Create(payload),
                 headers,
@@ -56,12 +60,14 @@ public sealed class MesHttpClient : IMesHttpClient
     }
 
     public async Task<string?> GetAsync(
+        string processType,
         string url,
         IReadOnlyDictionary<string, string>? headers = null,
         CancellationToken cancellationToken = default)
     {
         var response = await SendAsync(
                 HttpMethod.Get,
+                processType,
                 url,
                 content: null,
                 headers,
@@ -73,6 +79,7 @@ public sealed class MesHttpClient : IMesHttpClient
 
     private async Task<(bool isSuccess, string? content)> SendAsync(
         HttpMethod method,
+        string processType,
         string url,
         HttpContent? content,
         IReadOnlyDictionary<string, string>? headers,
@@ -83,7 +90,8 @@ public sealed class MesHttpClient : IMesHttpClient
         try
         {
             var client = _httpClientFactory.CreateClient("MesApi");
-            requestUrl = _endpointProvider.BuildUrl(url);
+            requestUrl = await _endpointProvider.BuildUrlAsync(processType, url, cancellationToken)
+                .ConfigureAwait(false);
             using var request = new HttpRequestMessage(method, requestUrl)
             {
                 Content = content
@@ -98,12 +106,12 @@ public sealed class MesHttpClient : IMesHttpClient
                 return (true, await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
             }
 
-            _logger.Warn($"[MesHttp] {method} failed: {requestUrl}, Status={(int)response.StatusCode} {response.ReasonPhrase}");
+            _logger.Warn($"[MesHttp] {method} 请求失败：{requestUrl}，状态码={(int)response.StatusCode} {response.ReasonPhrase}");
             return (false, await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
         }
         catch (Exception ex)
         {
-            _logger.Error($"[MesHttp] {method} exception: {requestUrl}, {ex.Message}");
+            _logger.Error($"[MesHttp] {method} 请求异常：{requestUrl}，{ex.Message}");
             return (false, null);
         }
     }

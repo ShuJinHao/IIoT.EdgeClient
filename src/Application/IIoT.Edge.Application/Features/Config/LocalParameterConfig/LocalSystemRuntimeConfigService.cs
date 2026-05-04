@@ -1,17 +1,21 @@
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Logging;
-using IIoT.Edge.SharedKernel.Enums;
+using IIoT.Edge.Application.Abstractions.Modules;
 
 namespace IIoT.Edge.Application.Features.Config.LocalParameterConfig;
 
 public sealed class LocalSystemRuntimeConfigService(
     ILocalParameterConfigService parameterConfigService,
+    IModuleParamRoleProvider moduleParamRoleProvider,
+    IProcessIntegrationRegistry processIntegrationRegistry,
     ILogService logger)
     : ILocalSystemRuntimeConfigService, IDisposable
 {
-    private const int DefaultIntervalSeconds = 60;
+    private static readonly TimeSpan DefaultInterval = TimeSpan.FromSeconds(60);
 
     private readonly ILocalParameterConfigService _parameterConfigService = parameterConfigService;
+    private readonly IModuleParamRoleProvider _moduleParamRoleProvider = moduleParamRoleProvider;
+    private readonly IProcessIntegrationRegistry _processIntegrationRegistry = processIntegrationRegistry;
     private readonly ILogService _logger = logger;
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
 
@@ -32,7 +36,7 @@ public sealed class LocalSystemRuntimeConfigService(
 
     private void OnParameterConfigChanged(object? sender, ParameterConfigChangedEventArgs args)
     {
-        if (args.Scope != ParameterConfigChangeScope.System)
+        if (args.Scope != ParameterConfigChangeScope.Module)
         {
             return;
         }
@@ -48,7 +52,7 @@ public sealed class LocalSystemRuntimeConfigService(
         }
         catch (Exception ex)
         {
-            _logger.Warn($"[LocalSystemRuntimeConfig] Failed to refresh system runtime config: {ex.Message}");
+            _logger.Warn($"[本地参数] 刷新运行参数失败：{ex.Message}");
         }
     }
 
@@ -57,69 +61,27 @@ public sealed class LocalSystemRuntimeConfigService(
         await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var systemConfigs = await _parameterConfigService
-                .GetSystemConfigsAsync(cancellationToken)
+            var mesProcessTypes = _processIntegrationRegistry
+                .GetMesUploaders()
+                .Keys
+                .ToArray();
+            var mesEnabled = await _moduleParamRoleProvider
+                .AnyBoolAsync(
+                    ModuleParamCategory.Mes,
+                    ModuleParamRole.MesEnabled,
+                    mesProcessTypes,
+                    defaultValue: false,
+                    cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
-            var values = systemConfigs.ToDictionary(
-                static x => x.Key,
-                static x => x.Value,
-                StringComparer.OrdinalIgnoreCase);
 
             Current = new SystemRuntimeConfigSnapshot(
-                ParseMesBaseUrl(values),
-                ParseBoolean(values, SystemConfigKey.启用MES上报, defaultValue: true),
-                ParsePositiveSeconds(values, SystemConfigKey.心跳间隔, DefaultIntervalSeconds),
-                ParsePositiveSeconds(values, SystemConfigKey.云端同步周期, DefaultIntervalSeconds));
+                mesEnabled,
+                DefaultInterval,
+                DefaultInterval);
         }
         finally
         {
             _refreshGate.Release();
         }
-    }
-
-    private static string? ParseMesBaseUrl(IReadOnlyDictionary<string, string> values)
-    {
-        if (!values.TryGetValue(SystemConfigKey.MES服务地址.ToString(), out var configured)
-            || string.IsNullOrWhiteSpace(configured))
-        {
-            return null;
-        }
-
-        var trimmed = configured.Trim();
-        return Uri.TryCreate(trimmed, UriKind.Absolute, out _)
-            ? trimmed
-            : null;
-    }
-
-    private static bool ParseBoolean(
-        IReadOnlyDictionary<string, string> values,
-        SystemConfigKey key,
-        bool defaultValue)
-    {
-        if (!values.TryGetValue(key.ToString(), out var configured)
-            || string.IsNullOrWhiteSpace(configured))
-        {
-            return defaultValue;
-        }
-
-        return bool.TryParse(configured.Trim(), out var parsed)
-            ? parsed
-            : defaultValue;
-    }
-
-    private static TimeSpan ParsePositiveSeconds(
-        IReadOnlyDictionary<string, string> values,
-        SystemConfigKey key,
-        int defaultSeconds)
-    {
-        if (!values.TryGetValue(key.ToString(), out var configured)
-            || string.IsNullOrWhiteSpace(configured))
-        {
-            return TimeSpan.FromSeconds(defaultSeconds);
-        }
-
-        return int.TryParse(configured.Trim(), out var parsed) && parsed > 0
-            ? TimeSpan.FromSeconds(parsed)
-            : TimeSpan.FromSeconds(defaultSeconds);
     }
 }

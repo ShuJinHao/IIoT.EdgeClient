@@ -1,19 +1,19 @@
 using IIoT.Edge.Application.Modules.Hardware;
-using AutoMapper;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Module.Stacking.Constants;
+using IIoT.Edge.Module.Stacking.Config.Hardware;
 using IIoT.Edge.Module.Stacking.Integration;
 using IIoT.Edge.Module.Stacking.Payload;
 using IIoT.Edge.Module.Stacking.Runtime;
+using IIoT.Edge.Module.Stacking.Runtime.Tasks;
 using IIoT.Edge.Runtime.Signals;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging.Abstractions;
 using System.Text.Json;
 
 namespace IIoT.Edge.NonUiRegressionTests;
@@ -109,7 +109,7 @@ public sealed class StackingModuleBehaviorTests
         Assert.Equal("OK", payload.RootElement.GetProperty("item").GetProperty("cellResult").GetString());
 
         var productionContext = contextStore.GetOrCreate(deviceSession.DeviceName);
-        Assert.True(productionContext.Get<bool>(StackingModuleConstants.CloudUploadEnabledKey));
+        Assert.True(productionContext.Get<bool>(StackingModuleConstants.CloudUploadConfiguredKey));
         Assert.Equal(
             StackingModuleConstants.CloudUploadSuccessStatus,
             productionContext.Get<string>(StackingModuleConstants.LastCloudUploadStatusKey));
@@ -157,7 +157,7 @@ public sealed class StackingModuleBehaviorTests
         Assert.Contains(logger.Entries, x => x.Message.Contains("叠片云端上传已被配置关闭", StringComparison.Ordinal));
 
         var productionContext = contextStore.GetOrCreate(deviceSession.DeviceName);
-        Assert.False(productionContext.Get<bool>(StackingModuleConstants.CloudUploadEnabledKey));
+        Assert.False(productionContext.Get<bool>(StackingModuleConstants.CloudUploadConfiguredKey));
         Assert.Equal(
             StackingModuleConstants.CloudUploadDisabledStatus,
             productionContext.Get<string>(StackingModuleConstants.LastCloudUploadStatusKey));
@@ -210,7 +210,8 @@ public sealed class StackingModuleBehaviorTests
             DeviceId = 7
         };
 
-        var signals = BufferLogicalSignalAccessor.Create(buffer, context, StackingPlcSignalProfile.LogicalSignals);
+        var profile = new StackingPlcSignalProfile();
+        var signals = BufferLogicalSignalAccessor<StackingSignal>.Create(buffer, context, profile);
         var task = new StackingSignalCaptureTask(buffer, signals, context, pipeline, logger);
         buffer.UpdateReadBuffer(new ushort[] { 3, 16, 1 });
 
@@ -224,7 +225,7 @@ public sealed class StackingModuleBehaviorTests
         Assert.Equal("PLC-STACKING-DEV-ST-0003", cell.Barcode);
         Assert.Equal(16, cell.LayerCount);
         Assert.Equal(3, cell.SequenceNo);
-        Assert.Equal("Captured", cell.RuntimeStatus);
+        Assert.Equal("已采集", cell.RuntimeStatus);
         Assert.True(context.Get<bool>(StackingModuleConstants.RuntimeRegisteredKey));
         Assert.Equal(3, context.Get<int>(StackingModuleConstants.LastPublishedSequenceKey));
         Assert.Equal(cell.Barcode, context.Get<string>(StackingModuleConstants.LastPublishedBarcodeKey));
@@ -246,7 +247,8 @@ public sealed class StackingModuleBehaviorTests
             DeviceId = 8
         };
 
-        var signals = BufferLogicalSignalAccessor.Create(buffer, context, StackingPlcSignalProfile.LogicalSignals);
+        var profile = new StackingPlcSignalProfile();
+        var signals = BufferLogicalSignalAccessor<StackingSignal>.Create(buffer, context, profile);
         var task = new StackingSignalCaptureTask(buffer, signals, context, pipeline, logger);
         buffer.UpdateReadBuffer(new ushort[] { 4, 18, 0 });
 
@@ -272,15 +274,16 @@ public sealed class StackingModuleBehaviorTests
             DeviceId = 18
         };
 
+        var profile = new StackingPlcSignalProfile();
         ProductionContextSignalBindings.Set(context,
         [
-            new ModuleIoSnapshot(StackingPlcSignalProfile.LayerCount.Label, "DB1.DBW2", 1, "Int16", "Read", 1),
-            new ModuleIoSnapshot(StackingPlcSignalProfile.ResultCode.Label, "DB1.DBW4", 1, "Int16", "Read", 2),
-            new ModuleIoSnapshot(StackingPlcSignalProfile.Sequence.Label, "DB1.DBW0", 1, "Int16", "Read", 3),
-            new ModuleIoSnapshot(StackingPlcSignalProfile.Ack.Label, "DB1.DBW6", 1, "Int16", "Write", 1)
+            new ModuleIoSnapshot(profile.Get(StackingSignal.叠片层数).Label, "DB1.DBW2", 1, "Int16", "Read", 1),
+            new ModuleIoSnapshot(profile.Get(StackingSignal.结果码).Label, "DB1.DBW4", 1, "Int16", "Read", 2),
+            new ModuleIoSnapshot(profile.Get(StackingSignal.工序序号).Label, "DB1.DBW0", 1, "Int16", "Read", 3),
+            new ModuleIoSnapshot(profile.Get(StackingSignal.采集应答).Label, "DB1.DBW6", 1, "Int16", "Write", 1)
         ]);
 
-        var signals = BufferLogicalSignalAccessor.Create(buffer, context, StackingPlcSignalProfile.LogicalSignals);
+        var signals = BufferLogicalSignalAccessor<StackingSignal>.Create(buffer, context, profile);
         var task = new StackingSignalCaptureTask(buffer, signals, context, pipeline, logger);
         buffer.UpdateReadBuffer([16, 1, 3]);
 
@@ -346,10 +349,4 @@ public sealed class StackingModuleBehaviorTests
                 ["Modules:Stacking:CloudUploadEnabled"] = cloudUploadEnabled.ToString()
             })
             .Build();
-
-    private static IMapper CreateMapper()
-        => new MapperConfiguration(
-                cfg => cfg.AddProfile<StackingCloudProfile>(),
-                NullLoggerFactory.Instance)
-            .CreateMapper();
 }

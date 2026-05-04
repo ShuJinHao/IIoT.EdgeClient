@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows.Input;
+using IIoT.Edge.Application.Features.Hardware.IoMappings;
 using IIoT.Edge.UI.Shared.Mvvm;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
@@ -9,15 +10,6 @@ namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
 /// </summary>
 public sealed class IoContinuousReadMatrixSectionModel : BaseNotifyPropertyChanged
 {
-    private const string SinglePointDataCategory = "单点读数据";
-    private const string ContinuousDataCategory = "连续读数据";
-
-    private static readonly HashSet<string> GenericCategories =
-    [
-        SinglePointDataCategory,
-        ContinuousDataCategory
-    ];
-
     private bool _isExpanded;
 
     public IoContinuousReadMatrixSectionModel()
@@ -25,7 +17,7 @@ public sealed class IoContinuousReadMatrixSectionModel : BaseNotifyPropertyChang
         ToggleExpandedCommand = new BaseCommand(_ => IsExpanded = !IsExpanded);
     }
 
-    public string Category { get; init; } = ContinuousDataCategory;
+    public string Category { get; init; } = IoMappingDisplay.ContinuousReadCategory;
 
     public string GroupName { get; init; } = string.Empty;
 
@@ -37,21 +29,7 @@ public sealed class IoContinuousReadMatrixSectionModel : BaseNotifyPropertyChang
 
     public ICommand ToggleExpandedCommand { get; }
 
-    public string Title
-    {
-        get
-        {
-            if (string.IsNullOrWhiteSpace(GroupName)
-                || string.Equals(Category, GroupName, StringComparison.OrdinalIgnoreCase))
-            {
-                return LocalizeCategory(Category);
-            }
-
-            return GenericCategories.Contains(Category)
-                ? GroupName
-                : $"{LocalizeCategory(Category)} - {GroupName}";
-        }
-    }
+    public string Title => IoMappingDisplay.BuildSectionTitle(Category, GroupName);
 
     public string Summary
     {
@@ -136,14 +114,6 @@ public sealed class IoContinuousReadMatrixSectionModel : BaseNotifyPropertyChang
 
         OnPropertyChanged(nameof(Summary));
     }
-
-    private static string LocalizeCategory(string category)
-        => category switch
-        {
-            SinglePointDataCategory => GetText("Navigation_Io_Category_SingleRead", category),
-            ContinuousDataCategory => GetText("Navigation_Io_Category_ContinuousRead", category),
-            _ => category
-        };
 
     private static string GetText(string key, string fallback)
         => System.Windows.Application.Current?.TryFindResource(key) as string ?? fallback;

@@ -71,7 +71,7 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
             _loopTask = Task.Run(() => SyncLoopAsync(linkedCts.Token), CancellationToken.None);
         }
 
-        _logger.Info($"[DeviceLogSync] Started. Interval: {(int)_runtimeConfig.Current.CloudSyncInterval.TotalSeconds}s");
+        _logger.Info($"[DeviceLogSync] 已启动，间隔：{(int)_runtimeConfig.Current.CloudSyncInterval.TotalSeconds}s");
         return Task.CompletedTask;
     }
 
@@ -123,10 +123,10 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
         }
         catch (Exception ex)
         {
-            _logger.Error($"[DeviceLogSync] Flush on stop failed: {ex.Message}");
+            _logger.Error($"[DeviceLogSync] 停止前刷新失败：{ex.Message}");
         }
 
-        _logger.Info("[DeviceLogSync] Stopped.");
+        _logger.Info("[DeviceLogSync] 已停止。");
     }
 
     private void OnLogEntryAdded(LogEntry entry)
@@ -181,7 +181,7 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
         }
         catch (Exception ex)
         {
-            _logger.Error($"[DeviceLogSync] Execute failed: {ex.Message}");
+            _logger.Error($"[DeviceLogSync] 执行失败：{ex.Message}");
         }
         finally
         {
@@ -208,7 +208,7 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
                     await _bufferStore.ReleaseClaimAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
                     if (result.Outcome is CloudCallOutcome.SkippedUploadNotReady or CloudCallOutcome.UnauthorizedAfterRetry)
                     {
-                        _logger.Warn($"[DeviceLogSync] Retry paused waiting for cloud recovery. Outcome:{result.Outcome}, Reason:{result.ReasonCode}");
+                        _logger.Warn($"[DeviceLogSync] 补传已暂停，等待云端恢复。结果：{result.Outcome}，原因：{result.ReasonCode}");
                     }
 
                     return false;
@@ -236,7 +236,7 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
                     }
                 }
 
-                _logger.Error($"[DeviceLogSync] Retry buffered logs failed: {ex.Message}");
+                _logger.Error($"[DeviceLogSync] 缓冲日志补传失败：{ex.Message}");
                 return false;
             }
         }

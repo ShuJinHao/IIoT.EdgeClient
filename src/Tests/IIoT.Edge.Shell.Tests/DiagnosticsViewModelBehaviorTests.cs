@@ -94,7 +94,7 @@ public sealed class DiagnosticsViewModelBehaviorTests
 
             await viewModel.RefreshAsync();
 
-            Assert.Equal("上传门禁：等待恢复", viewModel.CloudGateSummary);
+            Assert.Equal("上传门禁：存储故障", viewModel.CloudGateSummary);
             Assert.Equal("云端运行：等待恢复", viewModel.CloudRuntimeSummary);
             Assert.Equal("MES运行：退避中", viewModel.MesRuntimeSummary);
             Assert.Contains("产能阻塞：是", viewModel.CloudCapacitySummary, StringComparison.Ordinal);

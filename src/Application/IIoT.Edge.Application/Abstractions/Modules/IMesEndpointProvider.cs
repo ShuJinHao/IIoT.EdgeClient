@@ -2,9 +2,17 @@ namespace IIoT.Edge.Application.Abstractions.Modules;
 
 public interface IMesEndpointProvider
 {
-    bool IsConfigured { get; }
+    Task<bool> IsConfiguredAsync(string processType, CancellationToken cancellationToken = default);
 
-    string BuildUrl(string relativeOrAbsoluteUrl);
+    Task<string> BuildUrlAsync(
+        string processType,
+        string relativeOrAbsoluteUrl,
+        CancellationToken cancellationToken = default);
+
+    Task<string?> TryBuildFirstConfiguredUrlAsync(
+        IReadOnlyCollection<string> processTypes,
+        string relativeOrAbsoluteUrl,
+        CancellationToken cancellationToken = default);
 
     IReadOnlyDictionary<string, string> GetDefaultHeaders();
 }

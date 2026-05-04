@@ -1,75 +1,86 @@
 using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Common.Crud;
+using IIoT.Edge.Application.Features.Config.ModuleParameters;
 using IIoT.Edge.Application.Features.Config.ParamView.Models;
-using IIoT.Edge.Application.Features.Config.UseCases.DeviceParam.Commands;
-using IIoT.Edge.Application.Features.Config.UseCases.SystemConfig.Commands;
-using IIoT.Edge.Application.Features.Hardware.Queries;
+using IIoT.Edge.Application.Features.Config.UseCases.ModuleParam;
 using MediatR;
 
 namespace IIoT.Edge.Application.Features.Config.ParamView;
 
-public record DeviceGroupHeader(int DeviceId, string DeviceName);
-
 public record ParamViewInitResult(
-    List<GeneralParamVm> GeneralParams,
-    List<DeviceGroupHeader> DeviceGroups);
+    List<ModuleParamGroupVm> MesParamGroups,
+    List<ModuleParamGroupVm> CloudParamGroups,
+    List<ModuleParamGroupVm> BusinessParamGroups);
 
 public record LoadParamViewQuery : IRequest<ParamViewInitResult>;
 
-public record LoadDeviceParamsQuery(int DeviceId) : IRequest<List<DeviceParamVm>>;
-
-public record SaveParamViewCommand(
-    List<GeneralParamVm> GeneralParams,
-    int DeviceId,
-    List<DeviceParamVm> DeviceParams) : IRequest<CrudOperationResult>;
+public record SaveParamViewCommand(List<ModuleParamVm> ModuleParams) : IRequest<CrudOperationResult>;
 
 public class LoadParamViewHandler(
-    ISender sender,
-    ILocalParameterConfigService localParameterConfigService)
+    ILocalParameterConfigService localParameterConfigService,
+    IModuleParamRegistry moduleParamRegistry,
+    IEnumerable<IEdgeProcessModule> modules)
     : IRequestHandler<LoadParamViewQuery, ParamViewInitResult>
 {
     public async Task<ParamViewInitResult> Handle(LoadParamViewQuery request, CancellationToken ct)
     {
-        var general = (await localParameterConfigService.GetSystemConfigsAsync(ct))
-            .Select(snapshot => new GeneralParamVm
-            {
-                Id = snapshot.Id,
-                Key = snapshot.Key,
-                Name = snapshot.Key,
-                Value = snapshot.Value,
-                Description = snapshot.Description ?? string.Empty
-            })
-            .ToList();
+        var systemSnapshots = await localParameterConfigService.GetSystemConfigsAsync(ct);
+        var moduleValues = systemSnapshots
+            .Where(snapshot => ModuleParamKeys.IsModuleStorageKey(snapshot.Key))
+            .ToDictionary(
+                static x => x.Key,
+                static x => x.Value,
+                StringComparer.OrdinalIgnoreCase);
+        var moduleNames = modules.ToDictionary(
+            static x => x.ModuleId,
+            static x => x.DisplayName,
+            StringComparer.OrdinalIgnoreCase);
 
-        var devResult = await sender.Send(new GetAllNetworkDevicesQuery(), ct);
-        var groups = new List<DeviceGroupHeader>();
-        if (devResult.IsSuccess && devResult.Value != null)
-        {
-            foreach (var device in devResult.Value.Where(x => x.IsEnabled))
-            {
-                groups.Add(new DeviceGroupHeader(device.Id, $"{device.DeviceName} ({device.IpAddress})"));
-            }
-        }
-
-        return new ParamViewInitResult(general, groups);
+        return new ParamViewInitResult(
+            BuildModuleGroups(ModuleParamCategory.Mes, moduleParamRegistry, moduleNames, moduleValues),
+            BuildModuleGroups(ModuleParamCategory.Cloud, moduleParamRegistry, moduleNames, moduleValues),
+            BuildModuleGroups(ModuleParamCategory.Business, moduleParamRegistry, moduleNames, moduleValues));
     }
-}
 
-public class LoadDeviceParamsHandler(
-    ILocalParameterConfigService localParameterConfigService)
-    : IRequestHandler<LoadDeviceParamsQuery, List<DeviceParamVm>>
-{
-    public async Task<List<DeviceParamVm>> Handle(LoadDeviceParamsQuery request, CancellationToken ct)
-        => (await localParameterConfigService.GetDeviceParamsAsync(request.DeviceId, ct))
-            .Select(snapshot => new DeviceParamVm
+    private static List<ModuleParamGroupVm> BuildModuleGroups(
+        ModuleParamCategory category,
+        IModuleParamRegistry moduleParamRegistry,
+        IReadOnlyDictionary<string, string> moduleNames,
+        IReadOnlyDictionary<string, string> moduleValues)
+        => moduleParamRegistry.GetDescriptors(category)
+            .GroupBy(x => x.ModuleId, StringComparer.OrdinalIgnoreCase)
+            .Select(group =>
             {
-                Id = snapshot.Id,
-                Name = snapshot.Name,
-                Value = snapshot.Value,
-                Unit = snapshot.Unit ?? string.Empty,
-                Min = snapshot.MinValue ?? string.Empty,
-                Max = snapshot.MaxValue ?? string.Empty
+                var vm = new ModuleParamGroupVm
+                {
+                    ModuleId = group.Key,
+                    ModuleDisplayName = moduleNames.TryGetValue(group.Key, out var displayName)
+                        ? displayName
+                        : group.Key
+                };
+
+                foreach (var descriptor in group.OrderBy(x => x.SortOrder))
+                {
+                    vm.Params.Add(new ModuleParamVm
+                    {
+                        ModuleId = descriptor.ModuleId,
+                        Category = descriptor.Category,
+                        Key = descriptor.StorageKey,
+                        Name = descriptor.Name,
+                        ValueKind = descriptor.ValueKind,
+                        Value = moduleValues.TryGetValue(descriptor.StorageKey, out var configured)
+                            ? configured
+                            : descriptor.DefaultValue ?? string.Empty,
+                        DefaultValue = descriptor.DefaultValue ?? string.Empty,
+                        Unit = descriptor.Unit ?? string.Empty,
+                        Min = descriptor.MinValue ?? string.Empty,
+                        Max = descriptor.MaxValue ?? string.Empty
+                    });
+                }
+
+                return vm;
             })
             .ToList();
 }
@@ -83,35 +94,18 @@ public class SaveParamViewHandler(
     {
         if (!permissionService.CanEditParams)
         {
-            return CrudOperationResult.Failure("当前用户无参数配置权限。");
+            return CrudOperationResult.Failure("当前用户没有参数配置权限。");
         }
 
-        var systemConfigs = request.GeneralParams
-            .Select(item => new SystemConfigDto(
-                item.Name,
-                item.Value,
-                string.IsNullOrWhiteSpace(item.Description) ? null : item.Description))
+        var moduleParams = request.ModuleParams
+            .Select(item => new ModuleParamDto(item.Key, item.Value))
             .ToList();
-        var systemResult = await sender.Send(new SaveSystemConfigsCommand(systemConfigs), ct);
-        if (!systemResult.IsSuccess)
+        var moduleResult = await sender.Send(new SaveModuleParamsCommand(moduleParams), ct);
+        if (!moduleResult.IsSuccess)
         {
-            return CrudOperationResult.Failure(systemResult.ErrorMessage ?? "系统参数保存失败。");
+            return CrudOperationResult.Failure(moduleResult.ErrorMessage ?? "插件参数保存失败。");
         }
 
-        var deviceParams = request.DeviceParams
-            .Select(item => new DeviceParamDto(
-                item.Name,
-                item.Value,
-                string.IsNullOrWhiteSpace(item.Unit) ? null : item.Unit,
-                string.IsNullOrWhiteSpace(item.Min) ? null : item.Min,
-                string.IsNullOrWhiteSpace(item.Max) ? null : item.Max))
-            .ToList();
-        var deviceResult = await sender.Send(new SaveDeviceParamsCommand(request.DeviceId, deviceParams), ct);
-        if (!deviceResult.IsSuccess)
-        {
-            return CrudOperationResult.Failure(deviceResult.ErrorMessage ?? "设备参数保存失败。");
-        }
-
-        return CrudOperationResult.Success("已保存到本地参数配置。");
+        return CrudOperationResult.Success("参数配置已保存。");
     }
 }

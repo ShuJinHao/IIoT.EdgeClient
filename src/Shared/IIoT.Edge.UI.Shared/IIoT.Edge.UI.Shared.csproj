@@ -25,7 +25,7 @@
     <PackageReference Include="Dirkster.AvalonDock" />
     <PackageReference Include="Dirkster.AvalonDock.Themes.Aero" />
     <PackageReference Include="Dirkster.AvalonDock.Themes.Metro" />
-    <PackageReference Include="MaterialDesignThemes" />
+    <PackageReference Include="MaterialDesignThemes" ExcludeAssets="contentFiles" />
   </ItemGroup>
 
   <ItemGroup>

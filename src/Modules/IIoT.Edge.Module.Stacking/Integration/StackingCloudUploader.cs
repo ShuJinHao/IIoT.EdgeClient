@@ -108,7 +108,7 @@ public sealed class StackingCloudUploader : CloudUploadChannelBase<StackingCellD
         string? errorMessage)
     {
         var productionContext = _contextStore.GetOrCreate(deviceName);
-        productionContext.Set(StackingModuleConstants.CloudUploadEnabledKey, enabled);
+        productionContext.Set(StackingModuleConstants.CloudUploadConfiguredKey, enabled);
         productionContext.Set(StackingModuleConstants.LastCloudUploadStatusKey, status);
         productionContext.Set(StackingModuleConstants.LastCloudUploadAtKey, _productionTime.BusinessNow);
 

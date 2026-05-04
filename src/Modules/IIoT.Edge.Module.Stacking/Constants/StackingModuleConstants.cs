@@ -56,9 +56,9 @@ public static class StackingModuleConstants
     public const string LastPublishedBarcodeKey = "Stacking.LastPublishedBarcode";
 
     /// <summary>
-    /// 叠片云端上传启用开关配置键。
+    /// 叠片云端上传配置状态键。
     /// </summary>
-    public const string CloudUploadEnabledKey = "Stacking.CloudUploadEnabled";
+    public const string CloudUploadConfiguredKey = "Stacking.CloudUploadConfigured";
 
     /// <summary>
     /// 最近一次 Cloud 上传状态键。

@@ -29,11 +29,20 @@ public sealed class InjectionCloudUploader : CloudUploadChannelBase<InjectionCel
         _productionTime = productionTime;
     }
 
+    protected override Task<CloudCallResult?> CheckBeforeUploadAsync(
+        ProcessCloudUploadContext context,
+        IReadOnlyList<CellCompletedRecord> records,
+        CancellationToken cancellationToken)
+    {
+        Logger.Warn("[Cloud] 注液云端上传契约未就绪，客户端已跳过上传。");
+        return Task.FromResult<CloudCallResult?>(CloudCallResult.Success());
+    }
+
     protected override object BuildPayload(
         ProcessCloudUploadContext context,
         IReadOnlyList<InjectionCellData> cellData,
         IReadOnlyList<CellCompletedRecord> records)
-        // 注液当前按批量上传，deviceId 来自 bootstrap 设备身份，items 来自插件内 AutoMapper 映射。
+        // 注液当前按批量上传，deviceId 来自 bootstrap 设备身份，items 来自插件内字段映射。
         => new
         {
             deviceId = context.Device.DeviceId,

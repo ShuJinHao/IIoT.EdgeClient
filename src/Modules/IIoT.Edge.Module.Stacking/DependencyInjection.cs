@@ -1,4 +1,6 @@
-﻿using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Module.Stacking.Config.Hardware;
+using IIoT.Edge.Module.Stacking.Config.Parameters;
 using IIoT.Edge.Module.Stacking.Constants;
 using IIoT.Edge.Module.Stacking.Integration;
 using IIoT.Edge.Module.Stacking.Payload;
@@ -35,16 +37,18 @@ public sealed class DependencyInjection : EdgeProcessModuleBase<StackingCellData
 
     protected override void ConfigureModuleServices(IEdgeProcessModuleBuilder builder)
     {
+        builder.RegisterParameters<MesParam, CloudParam, BusinessParam>();
+
         builder.Services.AddSingleton<StackingCloudUploader>();
         builder.Services.AddSingleton<StackingCloudUploadChannel>(sp =>
             sp.GetRequiredService<StackingCloudUploader>());
         builder.Services.AddSingleton<IProcessCloudUploader>(sp =>
             sp.GetRequiredService<StackingCloudUploader>());
-        builder.Services.AddSingleton<IModuleHardwareProfileProvider, StackingHardwareProfileProvider>();
-        builder.Services.AddSingleton<IDevelopmentSampleContributor, StackingDevelopmentSampleContributor>();
+        builder.RegisterPlcSignalProfile<StackingSignal, StackingPlcSignalProfile>();
+        builder.RegisterHardwareProfile<StackingHardwareProfileProvider>();
+        builder.RegisterDevelopmentSample<StackingDevelopmentSampleContributor>();
     }
 
     protected override void RegisterModuleViews(IEdgeProcessModuleBuilder builder)
         => builder.RegisterStackingViews();
 }
-

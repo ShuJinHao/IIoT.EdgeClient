@@ -186,71 +186,50 @@ public class FooterViewModel : ViewModelBase
         DeviceName = snapshot.DeviceName;
 
         CloudStatus = FormatCloudFooterStatus(snapshot.Cloud);
-        CloudStatusColor = snapshot.Cloud switch
-        {
-            _ when snapshot.Cloud.IsPersistenceFaulted => OfflineBrush,
-            _ when snapshot.Cloud.IsCapacityBlocked => OfflineBrush,
-            _ when IsHeartbeatWaiting(snapshot.Cloud.Heartbeat) => RefreshingBrush,
-            _ when snapshot.Cloud.GateState == EdgeUploadGateState.Ready => OnlineBrush,
-            _ when snapshot.Cloud.IsPausedWaitingForRecovery => RefreshingBrush,
-            _ => OfflineBrush
-        };
+        CloudStatusColor = GetCloudStatusBrush(EdgeSyncDiagnosticStatusClassifier.ClassifyCloud(snapshot.Cloud));
 
         MesStatus = FormatMesFooterStatus(snapshot.Mes);
-        MesStatusColor = snapshot.Mes.RuntimeState switch
-        {
-            _ when snapshot.Mes.IsPersistenceFaulted => OfflineBrush,
-            _ when snapshot.Mes.IsCapacityBlocked => OfflineBrush,
-            _ when IsHeartbeatWaiting(snapshot.Mes.Heartbeat) => RefreshingBrush,
-            MesRetryRuntimeState.Retrying => OnlineBrush,
-            MesRetryRuntimeState.Idle => OnlineBrush,
-            MesRetryRuntimeState.Backoff => RefreshingBrush,
-            _ => OfflineBrush
-        };
+        MesStatusColor = GetMesStatusBrush(EdgeSyncDiagnosticStatusClassifier.ClassifyMes(snapshot.Mes));
     }
 
     private string FormatCloudFooterStatus(CloudSyncDiagnosticsSnapshot snapshot)
+        => EdgeSyncDiagnosticStatusClassifier.ClassifyCloud(snapshot) switch
+        {
+            CloudSyncDiagnosticStatus.PersistenceFaulted => _languageService.GetString("Shell_Footer_CloudPersistenceFault", "云端：存储故障"),
+            CloudSyncDiagnosticStatus.CapacityBlocked => _languageService.GetString("Shell_Footer_CloudCapacityBlocked", "云端：产能阻塞"),
+            CloudSyncDiagnosticStatus.WaitingHeartbeat => _languageService.GetString("Shell_Footer_CloudHeartbeatWaiting", "云端：等待心跳恢复"),
+            CloudSyncDiagnosticStatus.Ready => _languageService.GetString("Shell_Footer_CloudReady", "云端：已就绪"),
+            CloudSyncDiagnosticStatus.WaitingRecovery => _languageService.GetString("Shell_Footer_CloudWaitingRecovery", "云端：等待恢复"),
+            _ => _languageService.Format(
+                "Shell_Footer_CloudBlockedFormat",
+                "云端：已阻塞（{0}）",
+                FormatBlockReason(snapshot.BlockReason))
+        };
+
+    private string FormatMesFooterStatus(MesSyncDiagnosticsSnapshot snapshot)
+        => EdgeSyncDiagnosticStatusClassifier.ClassifyMes(snapshot) switch
+        {
+            MesSyncDiagnosticStatus.PersistenceFaulted => _languageService.GetString("Shell_Footer_MesPersistenceFault", "MES：存储故障"),
+            MesSyncDiagnosticStatus.CapacityBlocked => _languageService.GetString("Shell_Footer_MesCapacityBlocked", "MES：产能阻塞"),
+            MesSyncDiagnosticStatus.WaitingHeartbeat => _languageService.GetString("Shell_Footer_MesHeartbeatWaiting", "MES：等待心跳恢复"),
+            MesSyncDiagnosticStatus.Retrying => _languageService.GetString("Shell_Footer_MesRetrying", "MES：重试中"),
+            MesSyncDiagnosticStatus.Backoff => _languageService.GetString("Shell_Footer_MesBackoff", "MES：退避中"),
+            MesSyncDiagnosticStatus.LastFailed => _languageService.GetString("Shell_Footer_MesLastFailed", "MES：最近失败"),
+            _ => _languageService.GetString("Shell_Footer_MesIdle", "MES：空闲")
+        };
+
+    private static Brush GetCloudStatusBrush(CloudSyncDiagnosticStatus status) => status switch
     {
-        if (snapshot.IsPersistenceFaulted)
-        {
-            return _languageService.GetString("Shell_Footer_CloudPersistenceFault", "云端：存储故障");
-        }
+        CloudSyncDiagnosticStatus.Ready => OnlineBrush,
+        CloudSyncDiagnosticStatus.WaitingHeartbeat or CloudSyncDiagnosticStatus.WaitingRecovery => RefreshingBrush,
+        _ => OfflineBrush
+    };
 
-        if (snapshot.IsCapacityBlocked)
-        {
-            return _languageService.GetString("Shell_Footer_CloudCapacityBlocked", "云端：产能阻塞");
-        }
-
-        if (IsHeartbeatWaiting(snapshot.Heartbeat))
-        {
-            return _languageService.GetString("Shell_Footer_CloudHeartbeatWaiting", "云端：等待心跳恢复");
-        }
-
-        if (snapshot.GateState == EdgeUploadGateState.Ready)
-        {
-            return _languageService.GetString("Shell_Footer_CloudReady", "云端：已就绪");
-        }
-
-        if (snapshot.IsPausedWaitingForRecovery)
-        {
-            return _languageService.GetString("Shell_Footer_CloudWaitingRecovery", "云端：等待恢复");
-        }
-
-        return _languageService.Format(
-            "Shell_Footer_CloudBlockedFormat",
-            "云端：已阻塞（{0}）",
-            FormatBlockReason(snapshot.BlockReason));
-    }
-
-    private string FormatMesFooterStatus(MesSyncDiagnosticsSnapshot snapshot) => snapshot.RuntimeState switch
+    private static Brush GetMesStatusBrush(MesSyncDiagnosticStatus status) => status switch
     {
-        _ when snapshot.IsPersistenceFaulted => _languageService.GetString("Shell_Footer_MesPersistenceFault", "MES：存储故障"),
-        _ when snapshot.IsCapacityBlocked => _languageService.GetString("Shell_Footer_MesCapacityBlocked", "MES：产能阻塞"),
-        _ when IsHeartbeatWaiting(snapshot.Heartbeat) => _languageService.GetString("Shell_Footer_MesHeartbeatWaiting", "MES：等待心跳恢复"),
-        MesRetryRuntimeState.Retrying => _languageService.GetString("Shell_Footer_MesRetrying", "MES：重试中"),
-        MesRetryRuntimeState.Backoff => _languageService.GetString("Shell_Footer_MesBackoff", "MES：退避中"),
-        MesRetryRuntimeState.LastFailed => _languageService.GetString("Shell_Footer_MesLastFailed", "MES：最近失败"),
-        _ => _languageService.GetString("Shell_Footer_MesIdle", "MES：空闲")
+        MesSyncDiagnosticStatus.Idle or MesSyncDiagnosticStatus.Retrying => OnlineBrush,
+        MesSyncDiagnosticStatus.WaitingHeartbeat or MesSyncDiagnosticStatus.Backoff => RefreshingBrush,
+        _ => OfflineBrush
     };
 
     private string FormatBlockReason(EdgeUploadBlockReason reason) => reason switch
@@ -267,6 +246,4 @@ public class FooterViewModel : ViewModelBase
         _ => _languageService.GetString("Shell_Footer_Unknown", "未知")
     };
 
-    private static bool IsHeartbeatWaiting(ExternalHeartbeatSnapshot? heartbeat)
-        => heartbeat is not null && !heartbeat.IsReady;
 }

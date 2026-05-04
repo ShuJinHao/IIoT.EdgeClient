@@ -1,5 +1,6 @@
 ﻿using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Application.Common.Models;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Modules;
@@ -115,6 +116,11 @@ public abstract class ModuleContractTestBase<TModule>
         Assert.True(result.RuntimeRegistry.TryGetFactory(module.ModuleId, out var factory));
 
         var services = new ServiceCollection();
+        foreach (var descriptor in result.Services)
+        {
+            ((ICollection<ServiceDescriptor>)services).Add(descriptor);
+        }
+
         ConfigureRuntimeServices(services);
 
         var tasks = factory.CreateTasks(
@@ -129,6 +135,20 @@ public abstract class ModuleContractTestBase<TModule>
     {
         services.AddSingleton<ILogService, ContractLogService>();
         services.AddSingleton<IDataPipelineService, ContractDataPipelineService>();
+        services.AddSingleton<IProductionTimeProvider, ContractProductionTimeProvider>();
+    }
+
+    private sealed class ContractProductionTimeProvider : IProductionTimeProvider
+    {
+        public TimeZoneInfo BusinessTimeZone { get; } = TimeZoneInfo.Local;
+        public DateTime UtcNow => DateTime.UtcNow;
+        public DateTime BusinessNow => ToBusinessTime(UtcNow);
+        public DateTime ToUtc(DateTime value) => value.Kind == DateTimeKind.Utc ? value : value.ToUniversalTime();
+        public DateTime ToBusinessTime(DateTime value)
+            => value.Kind == DateTimeKind.Utc
+                ? TimeZoneInfo.ConvertTimeFromUtc(value, BusinessTimeZone)
+                : value;
+        public string FormatBusinessTimestamp(DateTime value) => ToBusinessTime(value).ToString("yyyy-MM-dd HH:mm:ss");
     }
 
     private sealed class ContractLogService : ILogService

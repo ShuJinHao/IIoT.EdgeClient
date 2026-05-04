@@ -1,14 +1,29 @@
 namespace IIoT.Edge.Application.Abstractions.Plc.Signals;
 
-public interface ILogicalSignalAccessor
+/// <summary>
+/// 按插件强类型信号键读写 PLC 缓冲区，运行任务不得直接使用字符串 Label 访问点位。
+/// </summary>
+/// <typeparam name="TSignalKey">插件声明的 PLC 信号枚举。</typeparam>
+public interface ILogicalSignalAccessor<TSignalKey>
+    where TSignalKey : struct, Enum
 {
-    bool CanRead(string label);
+    bool CanRead(TSignalKey key);
 
-    bool CanWrite(string label);
+    bool CanWrite(TSignalKey key);
 
-    bool TryRead(string label, out ushort value);
+    bool TryReadUInt16(TSignalKey key, out ushort value);
 
-    ushort Read(string label);
+    ushort ReadUInt16(TSignalKey key);
 
-    void Write(string label, ushort value);
+    short ReadInt16(TSignalKey key);
+
+    string ReadAscii(TSignalKey key);
+
+    IReadOnlyList<int> ReadIntArray(TSignalKey key, int count);
+
+    IReadOnlyList<bool> ReadBoolArray(TSignalKey key, int count);
+
+    IReadOnlyList<double> ReadFloatArray(TSignalKey key, int count);
+
+    void WriteUInt16(TSignalKey key, ushort value);
 }

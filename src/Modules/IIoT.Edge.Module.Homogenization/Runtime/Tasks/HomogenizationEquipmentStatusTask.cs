@@ -1,7 +1,9 @@
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Abstractions.Plc.Signals;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
 using IIoT.Edge.Module.Homogenization.Runtime;
@@ -26,14 +28,16 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
 
     public HomogenizationEquipmentStatusTask(
         IPlcBuffer buffer,
+        ILogicalSignalAccessor<HomogenizationSignal> signals,
         HomogenizationContext context,
         IDeviceService deviceService,
         HomogenizationMesScenarioChannel mesChannel,
         IMesUploadDiagnosticsStore diagnosticsStore,
         ILogService logger,
+        IProductionTimeProvider productionTime,
         IOptions<HomogenizationModuleOptions> moduleOptions,
         IOptions<HomogenizationCodeOptions> codeOptions)
-        : base(buffer, context, logger, codeOptions, moduleOptions)
+        : base(buffer, signals, context, logger, productionTime, codeOptions, moduleOptions)
     {
         _deviceService = deviceService;
         _mesChannel = mesChannel;
@@ -45,16 +49,12 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
     /// </summary>
     public override string TaskName => "Homogenization.EquipmentStatus";
 
-    private static string TriggerLabel => HomogenizationPlcSignalProfile.EquipmentStatusTrigger.Label;
-
-    private static string AckLabel => HomogenizationPlcSignalProfile.EquipmentStatusAck.Label;
-
     protected override async Task DoCoreAsync()
     {
         switch (Step)
         {
             case 0:
-                if (Codec.ReadWord(TriggerLabel) == CodeOptions.Plc.SignalTrigger)
+                if (Signals.ReadUInt16(HomogenizationSignal.设备状态上传触发) == CodeOptions.Plc.SignalTrigger)
                 {
                     Logger.Info($"[{ModuleContext.DeviceName}] {TaskName} 设备状态上传触发。");
                     Step = 10;
@@ -76,9 +76,9 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
                 {
                     var message = $"设备状态上传处理异常：{ex.Message}";
                     _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.EquipmentStatus, message);
-                    ModuleContext.LastEquipmentStatusAt = DateTime.UtcNow;
+                    ModuleContext.LastEquipmentStatusAt = ProductionTime.BusinessNow;
                     ModuleContext.LastEquipmentStatusResult = message;
-                    Codec.WriteWord(AckLabel, CodeOptions.Plc.AckException);
+                    Signals.WriteUInt16(HomogenizationSignal.设备状态应答, CodeOptions.Plc.AckException);
                     Logger.Error($"[{ModuleContext.DeviceName}] {TaskName} {message}");
                     Step = 30;
                 }
@@ -86,9 +86,9 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
                 break;
 
             case 30:
-                if (Codec.ReadWord(TriggerLabel) == CodeOptions.Plc.SignalReset)
+                if (Signals.ReadUInt16(HomogenizationSignal.设备状态上传触发) == CodeOptions.Plc.SignalReset)
                 {
-                    Codec.WriteWord(AckLabel, CodeOptions.Plc.SignalReset);
+                    Signals.WriteUInt16(HomogenizationSignal.设备状态应答, CodeOptions.Plc.SignalReset);
                     Logger.Info($"[{ModuleContext.DeviceName}] {TaskName} 设备状态上传复位。");
                     Step = 0;
                 }
@@ -117,6 +117,6 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
         ModuleContext.LastEquipmentStatusResult = result.Message;
         ModuleContext.LastEquipmentStatusSnapshot = snapshot;
 
-        Codec.WriteWord(AckLabel, ResolveAck(result));
+        Signals.WriteUInt16(HomogenizationSignal.设备状态应答, ResolveAck(result));
     }
 }

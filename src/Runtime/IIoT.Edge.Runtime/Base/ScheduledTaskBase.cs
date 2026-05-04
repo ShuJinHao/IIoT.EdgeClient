@@ -44,7 +44,7 @@ public abstract class ScheduledTaskBase : IBackgroundTask
     {
         CurrentCancellationToken = ct;
         var deviceInfo = Context is not null ? $"[{Context.DeviceName}] " : string.Empty;
-        Logger.Info($"{deviceInfo}{TaskName} started. Interval: {ExecuteInterval}ms");
+        Logger.Info($"{deviceInfo}{TaskName} 已启动，执行间隔：{ExecuteInterval}ms");
 
         while (!ct.IsCancellationRequested)
         {
@@ -59,7 +59,7 @@ public abstract class ScheduledTaskBase : IBackgroundTask
             }
             catch (Exception ex)
             {
-                Logger.Error($"{deviceInfo}{TaskName} failed: {ex.Message}");
+                Logger.Error($"{deviceInfo}{TaskName} 执行失败：{ex.Message}");
                 try
                 {
                     await Task.Delay(ErrorRetryInterval, ct);
@@ -71,6 +71,6 @@ public abstract class ScheduledTaskBase : IBackgroundTask
             }
         }
 
-        Logger.Info($"{deviceInfo}{TaskName} stopped.");
+        Logger.Info($"{deviceInfo}{TaskName} 已停止。");
     }
 }

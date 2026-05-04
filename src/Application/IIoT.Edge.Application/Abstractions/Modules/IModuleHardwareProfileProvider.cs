@@ -10,8 +10,6 @@ public interface IModuleHardwareProfileProvider
 
     IReadOnlyList<ModuleIoTemplateEntry> GetDefaultIoTemplate();
 
-    string GetProtocolSummary();
-
     ModuleHardwareValidationResult ValidatePlcConfiguration(
         string deviceName,
         string? deviceModel,

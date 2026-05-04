@@ -7,6 +7,7 @@ using IIoT.Edge.Application.Abstractions.DataPipeline.SyncTask;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Features.Config.ModuleParameters;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Tasks;
 using IIoT.Edge.Application.Abstractions.Time;
@@ -235,10 +236,12 @@ public static class DependencyInjection
         var cellDataRegistry = new CellDataRegistry();
         var runtimeRegistry = new StationRuntimeRegistry();
         var integrationRegistry = new ProcessIntegrationRegistry();
+        var moduleParamRegistry = new ModuleParamRegistry();
 
         services.AddSingleton<ICellDataRegistry>(cellDataRegistry);
         services.AddSingleton<IStationRuntimeRegistry>(runtimeRegistry);
         services.AddSingleton<IProcessIntegrationRegistry>(integrationRegistry);
+        services.AddSingleton<IModuleParamRegistry>(moduleParamRegistry);
 
         ValidateModuleIdentity(modules);
 
@@ -253,7 +256,8 @@ public static class DependencyInjection
                 new ModuleViewRegistry(viewRegistry, module.ModuleId),
                 cellDataRegistry,
                 runtimeRegistry,
-                integrationRegistry);
+                integrationRegistry,
+                moduleParamRegistry);
 
             module.Configure(builder);
         }

@@ -29,7 +29,9 @@ internal sealed class FakeProductionTimeProvider : IProductionTimeProvider
 {
     public TimeZoneInfo BusinessTimeZone { get; } = ResolveChinaTimeZone();
 
-    public DateTime UtcNow => DateTime.UtcNow;
+    public DateTime? FixedUtcNow { get; set; }
+
+    public DateTime UtcNow => FixedUtcNow ?? DateTime.UtcNow;
 
     public DateTime BusinessNow => ToBusinessTime(UtcNow);
 
@@ -352,6 +354,12 @@ internal sealed class FakeFailedRecordStore : ICloudRetryRecordStore, IMesRetryR
     Task IMesRetryRecordStore.SaveAsync(CellCompletedRecord record, string failedTarget, string errorMessage)
         => SaveAsync(record, failedTarget, errorMessage, "MES");
 
+    Task ICloudRetryRecordStore.SaveRawAsync(string processType, string cellDataJson, string failedTarget, string errorMessage)
+        => SaveRawAsync(processType, cellDataJson, failedTarget, errorMessage, "Cloud");
+
+    Task IMesRetryRecordStore.SaveRawAsync(string processType, string cellDataJson, string failedTarget, string errorMessage)
+        => SaveRawAsync(processType, cellDataJson, failedTarget, errorMessage, "MES");
+
     Task<List<FailedCellRecord>> ICloudRetryRecordStore.GetPendingAsync(int batchSize)
         => GetPendingAsync("Cloud", batchSize);
 
@@ -389,6 +397,9 @@ internal sealed class FakeFailedRecordStore : ICloudRetryRecordStore, IMesRetryR
         => GetCountAsync("MES", processType);
 
     public Task SaveAsync(CellCompletedRecord record, string failedTarget, string errorMessage, string channel)
+        => SaveRawAsync(record.CellData.ProcessType, "{}", failedTarget, errorMessage, channel);
+
+    public Task SaveRawAsync(string processType, string cellDataJson, string failedTarget, string errorMessage, string channel)
     {
         SaveCallCount++;
 
@@ -408,8 +419,8 @@ internal sealed class FakeFailedRecordStore : ICloudRetryRecordStore, IMesRetryR
             Channel = channel,
             FailedTarget = failedTarget,
             ErrorMessage = errorMessage,
-            ProcessType = record.CellData.ProcessType,
-            CellDataJson = "{}",
+            ProcessType = processType,
+            CellDataJson = cellDataJson,
             NextRetryTime = DateTime.UtcNow
         });
         return Task.CompletedTask;
@@ -789,11 +800,20 @@ internal sealed class FakeCloudDeadLetterStore : ICloudDeadLetterStore
 
     public Task<int> GetCountAsync() => Task.FromResult(Records.Count);
 
+    public Task<DeadLetterRecord?> GetByIdAsync(long id)
+        => Task.FromResult(Records.FirstOrDefault(x => x.Id == id));
+
     public Task<IReadOnlyList<DeadLetterGroupSummary>> GetGroupSummaryAsync()
         => Task.FromResult<IReadOnlyList<DeadLetterGroupSummary>>(DeadLetterTestHelpers.BuildGroupSummary(Records));
 
     public Task<IReadOnlyList<DeadLetterRecord>> GetLatestAsync(int count = 20)
         => Task.FromResult<IReadOnlyList<DeadLetterRecord>>(DeadLetterTestHelpers.GetLatest(Records, count));
+
+    public Task DeleteAsync(long id)
+    {
+        Records.RemoveAll(x => x.Id == id);
+        return Task.CompletedTask;
+    }
 }
 
 internal sealed class FakeMesDeadLetterStore : IMesDeadLetterStore
@@ -814,11 +834,20 @@ internal sealed class FakeMesDeadLetterStore : IMesDeadLetterStore
 
     public Task<int> GetCountAsync() => Task.FromResult(Records.Count);
 
+    public Task<DeadLetterRecord?> GetByIdAsync(long id)
+        => Task.FromResult(Records.FirstOrDefault(x => x.Id == id));
+
     public Task<IReadOnlyList<DeadLetterGroupSummary>> GetGroupSummaryAsync()
         => Task.FromResult<IReadOnlyList<DeadLetterGroupSummary>>(DeadLetterTestHelpers.BuildGroupSummary(Records));
 
     public Task<IReadOnlyList<DeadLetterRecord>> GetLatestAsync(int count = 20)
         => Task.FromResult<IReadOnlyList<DeadLetterRecord>>(DeadLetterTestHelpers.GetLatest(Records, count));
+
+    public Task DeleteAsync(long id)
+    {
+        Records.RemoveAll(x => x.Id == id);
+        return Task.CompletedTask;
+    }
 }
 
 internal static class DeadLetterTestHelpers

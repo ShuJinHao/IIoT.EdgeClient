@@ -136,7 +136,7 @@ public class ProductionContextStore : IProductionContextStore
     {
         if (!File.Exists(_persistPath))
         {
-            _logger.Info("[ContextStore] No persisted file found. Using empty state.");
+            _logger.Info("[ContextStore] 未找到持久化文件，使用空运行状态。");
             RefreshPersistenceDiagnostics();
             return;
         }
@@ -158,7 +158,7 @@ public class ProductionContextStore : IProductionContextStore
                 }
             }
 
-            _logger.Info($"[ContextStore] Restored {list.Count} device contexts.");
+            _logger.Info($"[ContextStore] 已恢复 {list.Count} 个设备运行上下文。");
 
             lock (_lock)
             {
@@ -168,7 +168,7 @@ public class ProductionContextStore : IProductionContextStore
                     var stepInfo = string.Join(", ", ctx.StepStates.Select(kv => $"{kv.Key}={kv.Value}"));
                     var capacity = ctx.TodayCapacity;
                     _logger.Info(
-                        $"  [{ctx.DeviceName}] Cells:{cellCount}, Steps:{(string.IsNullOrEmpty(stepInfo) ? "None" : stepInfo)}, DayShift:{capacity.DayShift.Total}, NightShift:{capacity.NightShift.Total}");
+                        $"  [{ctx.DeviceName}] 电芯数：{cellCount}，步骤：{(string.IsNullOrEmpty(stepInfo) ? "无" : stepInfo)}，白班：{capacity.DayShift.Total}，夜班：{capacity.NightShift.Total}");
                 }
             }
         }
@@ -186,7 +186,7 @@ public class ProductionContextStore : IProductionContextStore
         }
         catch (Exception ex)
         {
-            _logger.Error($"[ContextStore] Load failed: {ex.Message}");
+            _logger.Error($"[ContextStore] 加载运行状态失败：{ex.Message}");
         }
         finally
         {
@@ -215,7 +215,7 @@ public class ProductionContextStore : IProductionContextStore
             catch (Exception ex)
             {
                 _logger.Error(
-                    $"[ContextStore] Save failed while writing temp file {Path.GetFileName(tempPath)}: {ex.Message}. {CleanupTempFile(tempPath)}");
+                    $"[ContextStore] 写入临时文件 {Path.GetFileName(tempPath)} 失败：{ex.Message}。{CleanupTempFile(tempPath)}");
                 return;
             }
 
@@ -226,15 +226,15 @@ public class ProductionContextStore : IProductionContextStore
             catch (Exception ex)
             {
                 _logger.Error(
-                    $"[ContextStore] Save failed while replacing persisted file {Path.GetFileName(_persistPath)}: {ex.Message}. {CleanupTempFile(tempPath)}");
+                    $"[ContextStore] 替换持久化文件 {Path.GetFileName(_persistPath)} 失败：{ex.Message}。{CleanupTempFile(tempPath)}");
                 return;
             }
 
-            _logger.Info($"[ContextStore] Saved {contexts.Count} device contexts.");
+            _logger.Info($"[ContextStore] 已保存 {contexts.Count} 个设备运行上下文。");
         }
         catch (Exception ex)
         {
-            _logger.Error($"[ContextStore] Save failed: {ex.Message}");
+            _logger.Error($"[ContextStore] 保存运行状态失败：{ex.Message}");
         }
     }
 
@@ -264,14 +264,14 @@ public class ProductionContextStore : IProductionContextStore
         if (quarantinedPath is not null)
         {
             _logger.Error(
-                $"[ContextStore] Persisted state is corrupt. Quarantined to {Path.GetFileName(quarantinedPath)}. {ex.Message}");
+                $"[ContextStore] 持久化运行状态已损坏，已隔离到 {Path.GetFileName(quarantinedPath)}。{ex.Message}");
         }
         else
         {
-            _logger.Error($"[ContextStore] Persisted state is corrupt and could not be quarantined cleanly: {ex.Message}");
+            _logger.Error($"[ContextStore] 持久化运行状态已损坏，且无法完成隔离：{ex.Message}");
         }
 
-        _logger.Warn("[ContextStore] Starting with empty runtime state because the persisted file could not be restored.");
+        _logger.Warn("[ContextStore] 持久化文件无法恢复，已使用空运行状态启动。");
         RefreshPersistenceDiagnostics();
     }
 
@@ -297,7 +297,7 @@ public class ProductionContextStore : IProductionContextStore
         }
         catch (Exception moveEx)
         {
-            _logger.Error($"[ContextStore] Failed to quarantine corrupt persisted state: {moveEx.Message}");
+            _logger.Error($"[ContextStore] 隔离损坏运行状态失败：{moveEx.Message}");
             return null;
         }
     }
@@ -325,7 +325,7 @@ public class ProductionContextStore : IProductionContextStore
         }
         catch (Exception ex)
         {
-            _logger.Warn($"[ContextStore] Failed to refresh persistence diagnostics: {ex.Message}");
+            _logger.Warn($"[ContextStore] 刷新持久化诊断失败：{ex.Message}");
         }
     }
 
@@ -388,15 +388,15 @@ public class ProductionContextStore : IProductionContextStore
         {
             if (!_fileSystem.FileExists(tempPath))
             {
-                return "Temp cleanup: no residual .tmp file found.";
+                return "临时文件清理：未发现残留 .tmp 文件。";
             }
 
             _fileSystem.DeleteFile(tempPath);
-            return "Temp cleanup: deleted residual .tmp file.";
+            return "临时文件清理：已删除残留 .tmp 文件。";
         }
         catch (Exception cleanupEx)
         {
-            return $"Temp cleanup: failed to delete residual .tmp file: {cleanupEx.Message}";
+            return $"临时文件清理：删除残留 .tmp 文件失败：{cleanupEx.Message}";
         }
     }
 
@@ -438,7 +438,7 @@ internal class CellDataBaseConverter : JsonConverter<CellDataBase>
             : null;
 
         if (processType is null)
-            throw new JsonException("CellData missing processType property.");
+                throw new JsonException("CellData 缺少 processType 属性。");
 
         var json = root.GetRawText();
         var result = CellDataTypeRegistry.Deserialize(processType, json, options);

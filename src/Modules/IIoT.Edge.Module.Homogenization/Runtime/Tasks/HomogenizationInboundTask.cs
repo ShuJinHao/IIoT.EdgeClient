@@ -1,9 +1,13 @@
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Abstractions.Plc.Signals;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
+using IIoT.Edge.Module.Homogenization.Config.Parameters;
 using IIoT.Edge.Module.Homogenization.Resources;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using Microsoft.Extensions.Options;
@@ -24,21 +28,26 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
     private readonly IDeviceService _deviceService;
     private readonly HomogenizationMesScenarioChannel _mesChannel;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
+    private readonly IModuleParamProvider<MesParam, CloudParam, BusinessParam> _parameters;
 
     public HomogenizationInboundTask(
         IPlcBuffer buffer,
+        ILogicalSignalAccessor<HomogenizationSignal> signals,
         HomogenizationContext context,
         IDeviceService deviceService,
         HomogenizationMesScenarioChannel mesChannel,
         IMesUploadDiagnosticsStore diagnosticsStore,
+        IModuleParamProvider<MesParam, CloudParam, BusinessParam> parameters,
         ILogService logger,
+        IProductionTimeProvider productionTime,
         IOptions<HomogenizationModuleOptions> moduleOptions,
         IOptions<HomogenizationCodeOptions> codeOptions)
-        : base(buffer, context, logger, codeOptions, moduleOptions)
+        : base(buffer, signals, context, logger, productionTime, codeOptions, moduleOptions)
     {
         _deviceService = deviceService;
         _mesChannel = mesChannel;
         _diagnosticsStore = diagnosticsStore;
+        _parameters = parameters;
     }
 
     /// <summary>
@@ -46,16 +55,12 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
     /// </summary>
     public override string TaskName => "Homogenization.Inbound";
 
-    private static string TriggerLabel => HomogenizationPlcSignalProfile.InboundTrigger.Label;
-
-    private static string AckLabel => HomogenizationPlcSignalProfile.InboundAck.Label;
-
     protected override async Task DoCoreAsync()
     {
         switch (Step)
         {
             case 0:
-                if (Codec.ReadWord(TriggerLabel) == CodeOptions.Plc.SignalTrigger)
+                if (Signals.ReadUInt16(HomogenizationSignal.进站触发) == CodeOptions.Plc.SignalTrigger)
                 {
                     Logger.Info($"[{ModuleContext.DeviceName}] {TaskName} 进站触发。");
                     Step = 10;
@@ -78,7 +83,7 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
                     var message = $"进站处理异常：{ex.Message}";
                     _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Inbound, message);
                     RecordInboundResult(string.Empty, message);
-                    Codec.WriteWord(AckLabel, CodeOptions.Plc.AckException);
+                    Signals.WriteUInt16(HomogenizationSignal.进站应答, CodeOptions.Plc.AckException);
                     Logger.Error($"[{ModuleContext.DeviceName}] {TaskName} {message}");
                     Step = 30;
                 }
@@ -86,9 +91,9 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
                 break;
 
             case 30:
-                if (Codec.ReadWord(TriggerLabel) == CodeOptions.Plc.SignalReset)
+                if (Signals.ReadUInt16(HomogenizationSignal.进站触发) == CodeOptions.Plc.SignalReset)
                 {
-                    Codec.WriteWord(AckLabel, CodeOptions.Plc.SignalReset);
+                    Signals.WriteUInt16(HomogenizationSignal.进站应答, CodeOptions.Plc.SignalReset);
                     Logger.Info($"[{ModuleContext.DeviceName}] {TaskName} 进站复位。");
                     Step = 0;
                 }
@@ -99,13 +104,24 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
 
     private async Task ProcessTriggerAsync(CancellationToken cancellationToken)
     {
-        var trayCode = Codec.ReadAsciiString(HomogenizationPlcSignalProfile.TrayCode.Label);
+        var trayCode = Signals.ReadAscii(HomogenizationSignal.托盘码);
         if (string.IsNullOrWhiteSpace(trayCode))
         {
             var message = HomogenizationText.Get("Homogenization_Error_PalletCodeRequired", "托盘码不能为空。");
             _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Inbound, message);
             RecordInboundResult(string.Empty, message);
-            Codec.WriteWord(AckLabel, CodeOptions.Plc.AckException);
+            Signals.WriteUInt16(HomogenizationSignal.进站应答, CodeOptions.Plc.AckException);
+            return;
+        }
+
+        var parameters = await _parameters.GetAsync(cancellationToken).ConfigureAwait(false);
+        if (parameters.Business<bool>(BusinessParam.启用托盘码重码验证)
+            && ModuleContext.HasProcessedTray(HomogenizationTrayCodeStage.Inbound, trayCode))
+        {
+            var message = FormatDuplicateMessage(HomogenizationTrayCodeStage.Inbound, trayCode);
+            Signals.WriteUInt16(HomogenizationSignal.进站应答, CodeOptions.Plc.AckMesNg);
+            _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Inbound, message);
+            RecordInboundResult(trayCode, message);
             return;
         }
 
@@ -116,6 +132,11 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
         if (result.IsSuccess)
         {
             _diagnosticsStore.RecordSuccess(CodeOptions.Mes.Channels.Inbound);
+            ModuleContext.MarkProcessedTray(
+                HomogenizationTrayCodeStage.Inbound,
+                trayCode,
+                "进站已通过",
+                ProductionTime.BusinessNow);
         }
         else
         {
@@ -123,13 +144,19 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
         }
 
         RecordInboundResult(trayCode, result.Message);
-        Codec.WriteWord(AckLabel, ResolveAck(result));
+        Signals.WriteUInt16(HomogenizationSignal.进站应答, ResolveAck(result));
+    }
+
+    private static string FormatDuplicateMessage(HomogenizationTrayCodeStage stage, string trayCode)
+    {
+        var stageName = stage == HomogenizationTrayCodeStage.Inbound ? "进站" : "出站";
+        return $"托盘码重复，已按业务 NG 拒绝{stageName}：{trayCode.Trim()}。";
     }
 
     private void RecordInboundResult(string trayCode, string result)
     {
         ModuleContext.LastInboundTrayCode = trayCode;
-        ModuleContext.LastInboundAt = DateTime.UtcNow;
+        ModuleContext.LastInboundAt = ProductionTime.BusinessNow;
         ModuleContext.LastInboundResult = result;
     }
 }

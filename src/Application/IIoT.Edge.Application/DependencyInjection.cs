@@ -1,11 +1,14 @@
 using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Tasks;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Auth;
 using IIoT.Edge.Application.Common.Diagnostics;
 using IIoT.Edge.Application.Common.Tasks;
+using IIoT.Edge.Application.Features.DataPipeline.DeadLetters;
 using IIoT.Edge.Application.Features.Config.LocalParameterConfig;
+using IIoT.Edge.Application.Features.Config.ModuleParameters;
 using IIoT.Edge.Application.Features.Config.ParamView;
 using IIoT.Edge.Application.Features.Formula.RecipeView;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView;
@@ -29,6 +32,9 @@ public static class DependencyInjection
         services.AddSingleton<ILocalParameterConfigChangePublisher>(sp => sp.GetRequiredService<LocalParameterConfigService>());
         services.AddSingleton<LocalSystemRuntimeConfigService>();
         services.AddSingleton<ILocalSystemRuntimeConfigService>(sp => sp.GetRequiredService<LocalSystemRuntimeConfigService>());
+        services.AddSingleton(typeof(IModuleParamProvider<,,>), typeof(ModuleParamProvider<,,>));
+        services.AddSingleton<IModuleParamRoleProvider, ModuleParamRoleProvider>();
+        services.AddSingleton<IDeadLetterMaintenanceService, DeadLetterMaintenanceService>();
         services.AddTransient<IParamViewCrudService, ParamViewCrudService>();
         services.AddTransient<IHardwareConfigCrudService, HardwareConfigCrudService>();
         services.AddTransient<IRecipeViewCrudService, RecipeViewCrudService>();

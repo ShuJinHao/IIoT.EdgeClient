@@ -5,7 +5,6 @@ using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Runtime.Base;
 using IIoT.Edge.Runtime.DataPipeline.Services;
 using IIoT.Edge.SharedKernel.DataPipeline;
-using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 
 namespace IIoT.Edge.Runtime.DataPipeline.Tasks;
 
@@ -15,14 +14,8 @@ public class ProcessQueueTask : ScheduledTaskBase
 
     private readonly IDataPipelineService _pipelineService;
     private readonly List<ICellDataConsumer> _consumers;
-    private readonly ICloudRetryRecordStore _cloudRetryStore;
-    private readonly IMesRetryRecordStore _mesRetryStore;
-    private readonly ICloudFallbackBufferStore _cloudFallbackStore;
-    private readonly IMesFallbackBufferStore _mesFallbackStore;
-    private readonly ICloudDeadLetterStore _cloudDeadLetterStore;
-    private readonly IMesDeadLetterStore _mesDeadLetterStore;
     private readonly ICriticalPersistenceFallbackWriter _criticalFallbackWriter;
-    private readonly DataPipelineCapacityGuard _capacityGuard;
+    private readonly DataPipelineCascadingPersistenceWriter _persistenceWriter;
     private readonly TimeSpan _consumerCallTimeout;
 
     public override string TaskName => "ProcessQueueTask";
@@ -32,29 +25,17 @@ public class ProcessQueueTask : ScheduledTaskBase
         ILogService logger,
         IDataPipelineService pipelineService,
         IEnumerable<ICellDataConsumer> consumers,
-        ICloudRetryRecordStore cloudRetryStore,
-        IMesRetryRecordStore mesRetryStore,
-        ICloudFallbackBufferStore cloudFallbackStore,
-        IMesFallbackBufferStore mesFallbackStore,
-        ICloudDeadLetterStore cloudDeadLetterStore,
-        IMesDeadLetterStore mesDeadLetterStore,
         ICriticalPersistenceFallbackWriter criticalFallbackWriter,
-        DataPipelineCapacityGuard capacityGuard,
+        DataPipelineCascadingPersistenceWriter persistenceWriter,
         DataPipelineRuntimeOptions? runtimeOptions = null)
         : base(logger)
     {
-        ArgumentNullException.ThrowIfNull(capacityGuard);
+        ArgumentNullException.ThrowIfNull(persistenceWriter);
 
         _pipelineService = pipelineService;
-        _cloudRetryStore = cloudRetryStore;
-        _mesRetryStore = mesRetryStore;
-        _cloudFallbackStore = cloudFallbackStore;
-        _mesFallbackStore = mesFallbackStore;
-        _cloudDeadLetterStore = cloudDeadLetterStore;
-        _mesDeadLetterStore = mesDeadLetterStore;
         _criticalFallbackWriter = criticalFallbackWriter;
         _consumers = consumers.OrderBy(c => c.Order).ToList();
-        _capacityGuard = capacityGuard;
+        _persistenceWriter = persistenceWriter;
         _consumerCallTimeout = (runtimeOptions ?? new DataPipelineRuntimeOptions()).GetConsumerCallTimeout();
     }
 
@@ -78,7 +59,7 @@ public class ProcessQueueTask : ScheduledTaskBase
     private async Task ProcessOneAsync(CellCompletedRecord record, CancellationToken cancellationToken)
     {
         var label = record.CellData.DisplayLabel;
-        Logger.Info($"[{record.CellData.ProcessType}] Start processing {label}");
+        Logger.Info($"[{record.CellData.ProcessType}] 开始处理 {label}。");
 
         foreach (var consumer in _consumers)
         {
@@ -92,7 +73,7 @@ public class ProcessQueueTask : ScheduledTaskBase
                     .ConfigureAwait(false);
                 if (!success)
                 {
-                    await HandleFailureAsync(record, consumer, "Consumer returned false.").ConfigureAwait(false);
+                    await HandleFailureAsync(record, consumer, "consumer_returned_false").ConfigureAwait(false);
                 }
             }
             catch (Exception ex)
@@ -101,7 +82,7 @@ public class ProcessQueueTask : ScheduledTaskBase
             }
         }
 
-        Logger.Info($"[{record.CellData.ProcessType}] {label} processing chain completed.");
+        Logger.Info($"[{record.CellData.ProcessType}] {label} 处理链路已完成。");
     }
 
     private async Task HandleFailureAsync(
@@ -113,266 +94,48 @@ public class ProcessQueueTask : ScheduledTaskBase
 
         if (consumer.FailureMode == ConsumerFailureMode.BestEffort)
         {
-            Logger.Warn($"[{record.CellData.ProcessType}] {consumer.Name} failed for {label}: {errorMessage} (best-effort)");
+            Logger.Warn($"[{record.CellData.ProcessType}] {consumer.Name} 处理 {label} 失败：{errorMessage}（非关键消费者，继续后续链路）。");
             return;
         }
 
         if (consumer.RetryChannel == DataPipelineRetryChannel.None)
         {
             var details =
-                $"[{record.CellData.ProcessType}] Durable consumer {consumer.Name} failed for {label}, but RetryChannel is not configured.";
+                $"[{record.CellData.ProcessType}] 关键消费者 {consumer.Name} 处理 {label} 失败，但未配置 RetryChannel。";
             Logger.Error(details);
             _criticalFallbackWriter.Write("DataPipeline.ProcessQueue.InvalidRetryChannel", details);
             return;
         }
 
         Logger.Warn(
-            $"[{record.CellData.ProcessType}] {consumer.Name} failed for {label}. Move to retry channel {consumer.RetryChannel}.");
+            $"[{record.CellData.ProcessType}] {consumer.Name} 处理 {label} 失败，准备写入 {consumer.RetryChannel} 补偿链路。");
 
-        switch (consumer.RetryChannel)
+        var sourceTable = consumer.RetryChannel switch
         {
-            case DataPipelineRetryChannel.Cloud:
-                await PersistCloudFailureAsync(record, consumer.Name, errorMessage).ConfigureAwait(false);
-                return;
-            case DataPipelineRetryChannel.Mes:
-                await PersistMesFailureAsync(record, consumer.Name, errorMessage).ConfigureAwait(false);
-                return;
-            case DataPipelineRetryChannel.None:
-                return;
+            DataPipelineRetryChannel.Cloud => "failed_cloud_records",
+            DataPipelineRetryChannel.Mes => "failed_mes_records",
+            _ => string.Empty
+        };
+
+        if (string.IsNullOrWhiteSpace(sourceTable))
+        {
+            var unsupportedDetails =
+                $"[{record.CellData.ProcessType}] {consumer.Name} 使用了不支持的补偿链路：{consumer.RetryChannel}。";
+            Logger.Error(unsupportedDetails);
+            _criticalFallbackWriter.Write("DataPipeline.ProcessQueue.UnsupportedRetryChannel", unsupportedDetails);
+            return;
         }
 
-        var unsupportedDetails =
-            $"[{record.CellData.ProcessType}] Unsupported retry channel {consumer.RetryChannel} for {consumer.Name}.";
-        Logger.Error(unsupportedDetails);
-        _criticalFallbackWriter.Write("DataPipeline.ProcessQueue.UnsupportedRetryChannel", unsupportedDetails);
+        await _persistenceWriter.PersistAsync(
+                record,
+                consumer.RetryChannel,
+                consumer.Name,
+                errorMessage,
+                sourceTable,
+                DeadLetterStage.FallbackPersist)
+            .ConfigureAwait(false);
     }
 
     private static string ResolveFailureMessage(Exception ex)
         => ex is TimeoutException ? "timeout_exceeded" : ex.Message;
-
-    private async Task PersistCloudFailureAsync(
-        CellCompletedRecord record,
-        string failedTarget,
-        string errorMessage)
-    {
-        // Cloud 链路失败只写 Cloud retry/fallback/deadletter。补偿表里保存完整 CellDataJson，
-        // 不拆插件字段，后续 CloudRetryTask 反序列化后再回到对应 uploader。
-        var label = record.CellData.DisplayLabel;
-        var retryBlockedReason = await _capacityGuard
-            .GetCloudRetryBlockReasonAsync(record.CellData.ProcessType)
-            .ConfigureAwait(false);
-
-        if (!string.IsNullOrWhiteSpace(retryBlockedReason))
-        {
-            await TryPersistCloudDeadLetterAsync(
-                record,
-                failedTarget,
-                sourceTable: "failed_cloud_records",
-                sourceRecordId: null,
-                DeadLetterStage.CapacityBlocked,
-                BuildCapacityBlockedFailureReason(CapacityBlockedChannel.Retry, retryBlockedReason),
-                exception: null).ConfigureAwait(false);
-            return;
-        }
-
-        try
-        {
-            await _cloudRetryStore.SaveAsync(record, failedTarget, errorMessage).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            Logger.Error($"[{record.CellData.ProcessType}] Save retry record failed for {label}: {ex.Message}");
-
-            var fallbackBlockedReason = await _capacityGuard
-                .GetCloudFallbackBlockReasonAsync(record.CellData.ProcessType)
-                .ConfigureAwait(false);
-
-            if (!string.IsNullOrWhiteSpace(fallbackBlockedReason))
-            {
-                await TryPersistCloudDeadLetterAsync(
-                    record,
-                    failedTarget,
-                    sourceTable: "failed_cloud_records",
-                    sourceRecordId: null,
-                    DeadLetterStage.CapacityBlocked,
-                    BuildCapacityBlockedFailureReason(CapacityBlockedChannel.Fallback, fallbackBlockedReason),
-                    exception: null).ConfigureAwait(false);
-                return;
-            }
-
-            try
-            {
-                await _cloudFallbackStore.SaveAsync(record, failedTarget, errorMessage).ConfigureAwait(false);
-                Logger.Error(
-                    $"[{record.CellData.ProcessType}] Main retry store unavailable. Persisted {label} to Cloud fallback buffer.");
-            }
-            catch (Exception fallbackEx)
-            {
-                await TryPersistCloudDeadLetterAsync(
-                    record,
-                    failedTarget,
-                    sourceTable: "failed_cloud_records",
-                    sourceRecordId: null,
-                    DeadLetterStage.FallbackPersist,
-                    $"Cloud retry save failed: {ex.Message}; Cloud fallback save failed: {fallbackEx.Message}",
-                    fallbackEx).ConfigureAwait(false);
-            }
-        }
-    }
-
-    private async Task PersistMesFailureAsync(
-        CellCompletedRecord record,
-        string failedTarget,
-        string errorMessage)
-    {
-        // MES 链路失败只写 MES retry/fallback/deadletter。这里不调用 MES 接口，
-        // 也不把数据转交 Cloud；MesRetryTask 会在 MES 心跳恢复后按 CellDataJson 补传。
-        var label = record.CellData.DisplayLabel;
-        var retryBlockedReason = await _capacityGuard
-            .GetMesRetryBlockReasonAsync(record.CellData.ProcessType)
-            .ConfigureAwait(false);
-
-        if (!string.IsNullOrWhiteSpace(retryBlockedReason))
-        {
-            await TryPersistMesDeadLetterAsync(
-                record,
-                failedTarget,
-                sourceTable: "failed_mes_records",
-                sourceRecordId: null,
-                DeadLetterStage.CapacityBlocked,
-                BuildCapacityBlockedFailureReason(CapacityBlockedChannel.Retry, retryBlockedReason),
-                exception: null).ConfigureAwait(false);
-            return;
-        }
-
-        try
-        {
-            // 首选写入 pipeline_mes.failed_mes_records，作为正常 MES 补传队列。
-            await _mesRetryStore.SaveAsync(record, failedTarget, errorMessage).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            Logger.Error($"[{record.CellData.ProcessType}] Save retry record failed for {label}: {ex.Message}");
-
-            var fallbackBlockedReason = await _capacityGuard
-                .GetMesFallbackBlockReasonAsync(record.CellData.ProcessType)
-                .ConfigureAwait(false);
-
-            if (!string.IsNullOrWhiteSpace(fallbackBlockedReason))
-            {
-                await TryPersistMesDeadLetterAsync(
-                    record,
-                    failedTarget,
-                    sourceTable: "failed_mes_records",
-                    sourceRecordId: null,
-                    DeadLetterStage.CapacityBlocked,
-                    BuildCapacityBlockedFailureReason(CapacityBlockedChannel.Fallback, fallbackBlockedReason),
-                    exception: null).ConfigureAwait(false);
-                return;
-            }
-
-            try
-            {
-                // retry 主表不可用时写入 pipeline_mes.mes_fallback_records，等待 MesRetryTask 恢复回 retry。
-                await _mesFallbackStore.SaveAsync(record, failedTarget, errorMessage).ConfigureAwait(false);
-                Logger.Error(
-                    $"[{record.CellData.ProcessType}] Main retry store unavailable. Persisted {label} to MES fallback buffer.");
-            }
-            catch (Exception fallbackEx)
-            {
-                await TryPersistMesDeadLetterAsync(
-                    record,
-                    failedTarget,
-                    sourceTable: "failed_mes_records",
-                    sourceRecordId: null,
-                    DeadLetterStage.FallbackPersist,
-                    $"MES retry save failed: {ex.Message}; MES fallback save failed: {fallbackEx.Message}",
-                    fallbackEx).ConfigureAwait(false);
-            }
-        }
-    }
-
-    private async Task TryPersistCloudDeadLetterAsync(
-        CellCompletedRecord record,
-        string failedTarget,
-        string sourceTable,
-        long? sourceRecordId,
-        DeadLetterStage stage,
-        string failureReason,
-        Exception? exception)
-    {
-        try
-        {
-            await _cloudDeadLetterStore.SaveAsync(BuildDeadLetterRecord(
-                record,
-                failedTarget,
-                sourceTable,
-                sourceRecordId,
-                stage,
-                failureReason)).ConfigureAwait(false);
-            Logger.Fatal(
-                $"[{record.CellData.ProcessType}] Cloud dead-letter store captured {record.CellData.DisplayLabel} after retry persistence failure.");
-        }
-        catch (Exception deadLetterEx)
-        {
-            _criticalFallbackWriter.Write(
-                "DataPipeline.ProcessQueue.CloudDeadLetterPersistFailed",
-                $"{failureReason}; Cloud dead-letter save failed: {deadLetterEx.Message}",
-                exception);
-        }
-    }
-
-    private async Task TryPersistMesDeadLetterAsync(
-        CellCompletedRecord record,
-        string failedTarget,
-        string sourceTable,
-        long? sourceRecordId,
-        DeadLetterStage stage,
-        string failureReason,
-        Exception? exception)
-    {
-        try
-        {
-            await _mesDeadLetterStore.SaveAsync(BuildDeadLetterRecord(
-                record,
-                failedTarget,
-                sourceTable,
-                sourceRecordId,
-                stage,
-                failureReason)).ConfigureAwait(false);
-            Logger.Fatal(
-                $"[{record.CellData.ProcessType}] MES dead-letter store captured {record.CellData.DisplayLabel} after retry persistence failure.");
-        }
-        catch (Exception deadLetterEx)
-        {
-            _criticalFallbackWriter.Write(
-                "DataPipeline.ProcessQueue.MesDeadLetterPersistFailed",
-                $"{failureReason}; MES dead-letter save failed: {deadLetterEx.Message}",
-                exception);
-        }
-    }
-
-    private static DeadLetterRecord BuildDeadLetterRecord(
-        CellCompletedRecord record,
-        string failedTarget,
-        string sourceTable,
-        long? sourceRecordId,
-        DeadLetterStage stage,
-        string failureReason)
-        => new()
-        {
-            ProcessType = record.CellData.ProcessType,
-            CellDataJson = CellDataJsonSerializer.Serialize(record.CellData),
-            FailedTarget = failedTarget,
-            SourceTable = sourceTable,
-            SourceRecordId = sourceRecordId,
-            FailureStage = stage.ToString(),
-            FailureReason = failureReason,
-            CreatedAt = DateTime.UtcNow
-        };
-
-    private static string BuildCapacityBlockedFailureReason(
-        CapacityBlockedChannel channel,
-        string blockedReason)
-        => $"capacity_blocked:{channel.ToString().ToLowerInvariant()}:{blockedReason}";
 }

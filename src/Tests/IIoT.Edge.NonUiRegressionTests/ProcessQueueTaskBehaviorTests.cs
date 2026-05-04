@@ -100,7 +100,7 @@ public sealed class ProcessQueueTaskBehaviorTests
         Assert.Single(cloudRetryStore.PendingRecords);
         Assert.Equal("Cloud", cloudRetryStore.PendingRecords[0].FailedTarget);
         Assert.Empty(mesRetryStore.PendingRecords);
-        Assert.Contains(logger.Entries, x => x.Message.Contains("(best-effort)", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, x => x.Message.Contains("非关键消费者", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -181,7 +181,7 @@ public sealed class ProcessQueueTaskBehaviorTests
         Assert.Equal(1, cloudRetryStore.SaveCallCount);
         Assert.Single(fallbackStore.Records);
         Assert.Equal("Cloud", fallbackStore.Records[0].FailedTarget);
-        Assert.Contains(logger.Entries, x => x.Message.Contains("Cloud fallback buffer", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, x => x.Message.Contains("云端 fallback", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -472,7 +472,7 @@ public sealed class ProcessQueueTaskBehaviorTests
         Assert.Equal(1, mesRetryStore.SaveCallCount);
         Assert.Single(mesFallbackStore.Records);
         Assert.Equal("MES", mesFallbackStore.Records[0].FailedTarget);
-        Assert.Contains(logger.Entries, x => x.Message.Contains("MES fallback buffer", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, x => x.Message.Contains("MES fallback", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -586,6 +586,33 @@ public sealed class ProcessQueueTaskBehaviorTests
             logger,
             pipelineService,
             consumers,
+            criticalWriter,
+            CreatePersistenceWriter(
+                logger,
+                cloudRetryStore,
+                mesRetryStore,
+                fallbackStore,
+                mesFallbackStore,
+                cloudDeadLetterStore,
+                mesDeadLetterStore,
+                criticalWriter,
+                capacityGuard),
+            runtimeOptions)
+    {
+        public Task ExecuteOnceAsync() => base.ExecuteAsync();
+    }
+
+    private static DataPipelineCascadingPersistenceWriter CreatePersistenceWriter(
+        FakeLogService logger,
+        FakeFailedRecordStore cloudRetryStore,
+        FakeFailedRecordStore mesRetryStore,
+        FakeCloudFallbackBufferStore fallbackStore,
+        FakeMesFallbackBufferStore mesFallbackStore,
+        FakeCloudDeadLetterStore cloudDeadLetterStore,
+        FakeMesDeadLetterStore mesDeadLetterStore,
+        FakeCriticalPersistenceFallbackWriter criticalWriter,
+        DataPipelineCapacityGuard? capacityGuard)
+        => new(
             cloudRetryStore,
             mesRetryStore,
             fallbackStore,
@@ -601,8 +628,5 @@ public sealed class ProcessQueueTaskBehaviorTests
                 mesFallbackStore,
                 new FakeCloudDiagnosticsStore(),
                 new FakeMesRetryDiagnosticsStore()),
-            runtimeOptions)
-    {
-        public Task ExecuteOnceAsync() => base.ExecuteAsync();
-    }
+            logger);
 }

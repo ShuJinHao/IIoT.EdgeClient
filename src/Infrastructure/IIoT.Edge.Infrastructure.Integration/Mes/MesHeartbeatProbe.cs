@@ -10,17 +10,20 @@ public sealed class MesHeartbeatProbe : IMesHeartbeatProbe
 {
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IMesEndpointProvider _endpointProvider;
+    private readonly IProcessIntegrationRegistry _processIntegrationRegistry;
     private readonly IOptionsMonitor<MesApiConfig> _options;
     private readonly ILogService _logger;
 
     public MesHeartbeatProbe(
         IHttpClientFactory httpClientFactory,
         IMesEndpointProvider endpointProvider,
+        IProcessIntegrationRegistry processIntegrationRegistry,
         IOptionsMonitor<MesApiConfig> options,
         ILogService logger)
     {
         _httpClientFactory = httpClientFactory;
         _endpointProvider = endpointProvider;
+        _processIntegrationRegistry = processIntegrationRegistry;
         _options = options;
         _logger = logger;
     }
@@ -34,16 +37,24 @@ public sealed class MesHeartbeatProbe : IMesHeartbeatProbe
             return NotReady("mes_heartbeat_path_missing", "MES 心跳路径未配置。", attemptedAt);
         }
 
-        if (!_endpointProvider.IsConfigured)
+        var mesProcessTypes = _processIntegrationRegistry.GetMesUploaders().Keys.ToArray();
+        if (mesProcessTypes.Length == 0)
         {
-            return NotReady("mes_base_url_missing", "MES 基础地址未配置。", attemptedAt);
+            return NotReady("mes_module_missing", "当前运行配置未启用 MES 工序。", attemptedAt);
         }
 
         var requestUrl = heartbeatPath;
         try
         {
             var client = _httpClientFactory.CreateClient("MesApi");
-            requestUrl = _endpointProvider.BuildUrl(heartbeatPath);
+            requestUrl = await _endpointProvider
+                .TryBuildFirstConfiguredUrlAsync(mesProcessTypes, heartbeatPath, cancellationToken)
+                .ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(requestUrl))
+            {
+                return NotReady("mes_base_url_missing", "MES 基础地址未配置。", attemptedAt);
+            }
+
             using var request = new HttpRequestMessage(HttpMethod.Get, requestUrl);
             foreach (var header in _endpointProvider.GetDefaultHeaders())
             {

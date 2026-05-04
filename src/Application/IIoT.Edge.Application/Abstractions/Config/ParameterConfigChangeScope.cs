@@ -5,6 +5,5 @@ namespace IIoT.Edge.Application.Abstractions.Config;
 /// </summary>
 public enum ParameterConfigChangeScope
 {
-    System,
-    Device
+    Module
 }

@@ -8,7 +8,6 @@ using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
-using IIoT.Edge.SharedKernel.Enums;
 
 namespace IIoT.Edge.Application.Modules.Mes;
 
@@ -20,7 +19,7 @@ public abstract class MesScenarioChannelBase<TCellData, TInbound, TRealtime, TRe
     where TCellData : CellDataBase
 {
     private readonly MesRequestExecutor _requestExecutor;
-    private readonly ILocalParameterConfigService _parameterConfigService;
+    private readonly IModuleParamRoleProvider _moduleParamRoleProvider;
     private readonly IProductionTimeProvider _productionTime;
     private readonly string _processType;
     protected readonly ILogService Logger;
@@ -29,7 +28,7 @@ public abstract class MesScenarioChannelBase<TCellData, TInbound, TRealtime, TRe
         string processType,
         ILogService logger,
         MesRequestExecutor requestExecutor,
-        ILocalParameterConfigService parameterConfigService,
+        IModuleParamRoleProvider moduleParamRoleProvider,
         IProductionTimeProvider productionTime)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(processType);
@@ -37,13 +36,18 @@ public abstract class MesScenarioChannelBase<TCellData, TInbound, TRealtime, TRe
         _processType = processType;
         Logger = logger;
         _requestExecutor = requestExecutor;
-        _parameterConfigService = parameterConfigService;
+        _moduleParamRoleProvider = moduleParamRoleProvider;
         _productionTime = productionTime;
     }
 
     public string ProcessType => _processType;
 
     public MesUploadMode UploadMode => MesUploadMode.Single;
+
+    /// <summary>
+    /// 生产业务时间服务，供插件 payload 在缺省业务时间时复用同一时区规则。
+    /// </summary>
+    protected IProductionTimeProvider ProductionTime => _productionTime;
 
     /// <summary>
     /// MES 签名令牌，由插件配置提供，Application 只使用它计算 sign。
@@ -127,6 +131,7 @@ public abstract class MesScenarioChannelBase<TCellData, TInbound, TRealtime, TRe
         ArgumentNullException.ThrowIfNull(payloadFactory);
 
         return _requestExecutor.ExecuteAsync(
+            ProcessType,
             device,
             relativePath,
             async (currentDevice, ct) =>
@@ -144,8 +149,12 @@ public abstract class MesScenarioChannelBase<TCellData, TInbound, TRealtime, TRe
     /// </summary>
     protected async Task<string> ResolveStationNoAsync(DeviceSession device, CancellationToken cancellationToken)
     {
-        var configuredValue = await _parameterConfigService
-            .GetSystemConfigValueAsync(SystemConfigKey.工站编号, cancellationToken)
+        var configuredValue = await _moduleParamRoleProvider
+            .GetStringAsync(
+                ProcessType,
+                ModuleParamCategory.Mes,
+                ModuleParamRole.StationNo,
+                cancellationToken: cancellationToken)
             .ConfigureAwait(false);
 
         if (!string.IsNullOrWhiteSpace(configuredValue))

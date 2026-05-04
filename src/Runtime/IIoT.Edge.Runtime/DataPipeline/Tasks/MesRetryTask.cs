@@ -141,10 +141,10 @@ public sealed class MesRetryTask : ScheduledTaskBase
             }
             catch (Exception releaseEx)
             {
-                Logger.Error($"[Retry-MES] Failed to release retry claim {claimedBatch.ClaimToken}: {releaseEx.Message}");
+                Logger.Error($"[Retry-MES] 释放 retry 领取标记 {claimedBatch.ClaimToken} 失败：{releaseEx.Message}");
             }
 
-            Logger.Error($"[Retry-MES] Retry batch failed with exception: {ex.Message}");
+            Logger.Error($"[Retry-MES] retry 批次执行异常：{ex.Message}");
             _diagnosticsStore.SetRuntimeState(MesRetryRuntimeState.LastFailed);
             return;
         }
@@ -187,7 +187,7 @@ public sealed class MesRetryTask : ScheduledTaskBase
                     sourceTable: "mes_fallback_records",
                     sourceRecordId: fallback.Id,
                     DeadLetterStage.FallbackRecoverDeserialize,
-                    $"MES fallback deserialize failed for process type {fallback.ProcessType}.").ConfigureAwait(false);
+                    $"MES fallback 记录反序列化失败，工序：{fallback.ProcessType}。").ConfigureAwait(false);
 
                 if (persisted)
                 {
@@ -207,7 +207,7 @@ public sealed class MesRetryTask : ScheduledTaskBase
                 {
                     // retry 容量已满时，fallback 继续留在 MES fallback 表，避免跨链路挪到 Cloud。
                     Logger.Warn(
-                        $"[Retry-MES] MES fallback record {fallback.Id} remains buffered because retry capacity is blocked by {retryBlockedReason}.");
+                        $"[Retry-MES] MES fallback 记录 {fallback.Id} 因 retry 容量阻塞继续保留，原因：{retryBlockedReason}。");
                     continue;
                 }
 
@@ -215,7 +215,7 @@ public sealed class MesRetryTask : ScheduledTaskBase
             }
             catch (Exception ex)
             {
-                Logger.Error($"[Retry-MES] Failed to rehydrate MES fallback record {fallback.Id}: {ex.Message}");
+                Logger.Error($"[Retry-MES] 恢复 MES fallback 记录 {fallback.Id} 失败：{ex.Message}");
             }
         }
 
@@ -227,7 +227,7 @@ public sealed class MesRetryTask : ScheduledTaskBase
         if (recoveredIds.Count > 0)
         {
             await _fallbackStore.MovePendingToRetryAsync(recoveredIds).ConfigureAwait(false);
-            Logger.Info($"[Retry-MES] Recovered {recoveredIds.Count} MES fallback record(s) into the main retry store.");
+            Logger.Info($"[Retry-MES] 已将 {recoveredIds.Count} 条 MES fallback 记录恢复到 retry 主表。");
         }
 
         await _capacityGuard.RefreshMesFallbackCapacityStatusAsync().ConfigureAwait(false);
@@ -246,7 +246,7 @@ public sealed class MesRetryTask : ScheduledTaskBase
                 sourceTable: "failed_mes_records",
                 sourceRecordId: record.Id,
                 DeadLetterStage.RetryDeserialize,
-                $"MES retry deserialize failed for process type {record.ProcessType}.").ConfigureAwait(false);
+                $"MES retry 记录反序列化失败，工序：{record.ProcessType}。").ConfigureAwait(false);
 
             if (persisted)
             {
@@ -256,7 +256,7 @@ public sealed class MesRetryTask : ScheduledTaskBase
 
             await HandleRetryFailureAsync(
                 record,
-                "MES retry deserialize failed and dead-letter persistence also failed.").ConfigureAwait(false);
+                "MES retry 记录反序列化失败，且死信持久化也失败。").ConfigureAwait(false);
             return false;
         }
 
@@ -280,11 +280,11 @@ public sealed class MesRetryTask : ScheduledTaskBase
         if (success)
         {
             await _retryStore.DeleteAsync(record.Id).ConfigureAwait(false);
-            Logger.Info($"[Retry-MES] {cellData.DisplayLabel} retry succeeded and the record was removed.");
+            Logger.Info($"[Retry-MES] {cellData.DisplayLabel} 补传成功，记录已删除。");
             return true;
         }
 
-        await HandleRetryFailureAsync(record, "Consumer returned false.").ConfigureAwait(false);
+        await HandleRetryFailureAsync(record, "消费者返回失败。").ConfigureAwait(false);
         return false;
     }
 
@@ -294,12 +294,12 @@ public sealed class MesRetryTask : ScheduledTaskBase
 
         if (newRetryCount > MaxRetryCount)
         {
-            Logger.Warn($"[Retry-MES] {record.ProcessType} reached max retry count {MaxRetryCount}. Auto retry stopped.");
+            Logger.Warn($"[Retry-MES] {record.ProcessType} 已达到最大补传次数 {MaxRetryCount}，自动补传停止。");
             await _retryStore.UpdateRetryAsync(record.Id, newRetryCount, errorMessage, AbandonedRetryTimeUtc).ConfigureAwait(false);
             return;
         }
 
-        var nextRetryTime = DateTime.UtcNow.Add(CalculateBackoff(newRetryCount));
+        var nextRetryTime = DateTime.UtcNow.Add(RetryBackoffCalculator.Calculate(newRetryCount));
         await _retryStore.UpdateRetryAsync(record.Id, newRetryCount, errorMessage, nextRetryTime).ConfigureAwait(false);
     }
 
@@ -317,11 +317,11 @@ public sealed class MesRetryTask : ScheduledTaskBase
         try
         {
             await _retryStore.ResetAllAbandonedAsync().ConfigureAwait(false);
-            Logger.Info("[Retry-MES] MES heartbeat recovered. Abandoned records were reset for retry.");
+            Logger.Info("[Retry-MES] MES 心跳已恢复，弃置记录已重置为可补传。");
         }
         catch (Exception ex)
         {
-            Logger.Warn($"[Retry-MES] Failed to reset abandoned records: {ex.Message}");
+            Logger.Warn($"[Retry-MES] 重置弃置记录失败：{ex.Message}");
         }
     }
 
@@ -343,32 +343,17 @@ public sealed class MesRetryTask : ScheduledTaskBase
 
             if (deleted > 0)
             {
-                Logger.Info($"[Retry-MES] Deleted {deleted} expired abandoned retry record(s).");
+                Logger.Info($"[Retry-MES] 已清理 {deleted} 条过期弃置 retry 记录。");
             }
         }
         catch (Exception ex)
         {
-            Logger.Warn($"[Retry-MES] Failed to cleanup expired abandoned records: {ex.Message}");
+            Logger.Warn($"[Retry-MES] 清理过期弃置记录失败：{ex.Message}");
         }
     }
 
     private bool IsMesHeartbeatReady()
         => _heartbeatStateStore.Get(ExternalSystemKind.Mes).IsReady;
-
-    private static TimeSpan CalculateBackoff(int retryCount)
-    {
-        if (retryCount <= 5)
-        {
-            return TimeSpan.FromSeconds(30);
-        }
-
-        if (retryCount <= 10)
-        {
-            return TimeSpan.FromMinutes(5);
-        }
-
-        return TimeSpan.FromMinutes(30);
-    }
 
     private CellDataBase? DeserializeCellData(string processType, string json)
     {
@@ -378,7 +363,7 @@ public sealed class MesRetryTask : ScheduledTaskBase
         }
         catch (Exception ex)
         {
-            Logger.Error($"[Retry-MES] CellData deserialize failed: {ex.Message}");
+            Logger.Error($"[Retry-MES] CellData 反序列化失败：{ex.Message}");
             return null;
         }
     }

@@ -1,5 +1,7 @@
 using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Application.Abstractions.Plc.Signals;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
 using IIoT.Edge.Module.Homogenization.Runtime;
@@ -11,21 +13,24 @@ namespace IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 /// <summary>
 /// 心跳镜像任务：周期读取 PLC 输入心跳并写回输出心跳。
 /// </summary>
-internal sealed class HomogenizationHeartbeatTask : HeartbeatMirrorPlcTaskBase
+internal sealed class HomogenizationHeartbeatTask : HeartbeatMirrorPlcTaskBase<HomogenizationSignal>
 {
     private readonly HomogenizationContext _context;
+    private readonly IProductionTimeProvider _productionTime;
     private readonly int _taskLoopInterval;
-    private HomogenizationSignalCodec? _codec;
 
     public HomogenizationHeartbeatTask(
         IPlcBuffer buffer,
+        ILogicalSignalAccessor<HomogenizationSignal> signals,
         HomogenizationContext context,
         ILogService logger,
+        IProductionTimeProvider productionTime,
         IOptions<HomogenizationModuleOptions> moduleOptions,
         IOptions<HomogenizationCodeOptions> codeOptions)
-        : base(buffer, context, logger)
+        : base(buffer, signals, context, logger)
     {
         _context = context;
+        _productionTime = productionTime;
         var runtime = moduleOptions.Value.Runtime;
         _taskLoopInterval = Math.Max(runtime.MinEventLoopIntervalMs, runtime.EventLoopIntervalMs);
     }
@@ -43,27 +48,19 @@ internal sealed class HomogenizationHeartbeatTask : HeartbeatMirrorPlcTaskBase
     /// <summary>
     /// PLC 输入心跳信号标签。
     /// </summary>
-    protected override string InputLabel => HomogenizationPlcSignalProfile.HeartbeatIn.Label;
+    protected override HomogenizationSignal InputSignal => HomogenizationSignal.心跳输入;
 
     /// <summary>
     /// 上位机写回 PLC 的输出心跳信号标签。
     /// </summary>
-    protected override string OutputLabel => HomogenizationPlcSignalProfile.HeartbeatOut.Label;
-
-    protected override ushort ReadWord(string label)
-        => Codec.ReadWord(label);
-
-    protected override void WriteWord(string label, ushort value)
-        => Codec.WriteWord(label, value);
+    protected override HomogenizationSignal OutputSignal => HomogenizationSignal.心跳输出;
 
     protected override Task OnHeartbeatMirroredAsync(
         ushort input,
         ushort output,
         CancellationToken cancellationToken)
     {
-        _context.LastHeartbeatAt = DateTime.UtcNow;
+        _context.LastHeartbeatAt = _productionTime.BusinessNow;
         return Task.CompletedTask;
     }
-
-    private HomogenizationSignalCodec Codec => _codec ??= new HomogenizationSignalCodec(Buffer, _context);
 }

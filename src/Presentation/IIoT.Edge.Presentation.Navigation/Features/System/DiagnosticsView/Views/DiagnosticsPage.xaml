@@ -58,6 +58,72 @@
                 <TextBlock Margin="0,8,0,8"
                            FontSize="18"
                            FontWeight="SemiBold"
+                           Text="{DynamicResource Navigation_Diagnostics_DeadLetters}" />
+                <TextBlock Margin="0,0,0,8"
+                           FontSize="16"
+                           FontWeight="SemiBold"
+                           Text="{DynamicResource Navigation_Diagnostics_CloudDeadLetters}" />
+                <DataGrid ItemsSource="{Binding CloudDeadLetters}"
+                          AutoGenerateColumns="False"
+                          HeadersVisibility="Column"
+                          IsReadOnly="True"
+                          CanUserAddRows="False"
+                          Margin="0,0,0,16">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="ID" Binding="{Binding Id}" />
+                        <DataGridTextColumn Header="{DynamicResource Navigation_Column_Process}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_Process" Binding="{Binding ProcessType}" />
+                        <DataGridTextColumn Header="{DynamicResource Navigation_Column_Target}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_Target" Binding="{Binding FailedTarget}" />
+                        <DataGridTextColumn Header="{DynamicResource Navigation_Column_Stage}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_Stage" Binding="{Binding FailureStage}" />
+                        <DataGridTextColumn Header="{DynamicResource Navigation_Column_Source}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_Source" Binding="{Binding Source}" />
+                        <DataGridTextColumn Header="{DynamicResource Navigation_Column_CreatedAt}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_CreatedAt" Binding="{Binding CreatedAt}" />
+                        <DataGridTextColumn Header="{DynamicResource Navigation_Column_FailureReason}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_FailureReason" Binding="{Binding FailureReason}" Width="*" />
+                        <DataGridTemplateColumn Header="{DynamicResource Navigation_Column_Action}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_Action">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Margin="0,0,6,0" Padding="10,0" Command="{Binding DataContext.RequeueDeadLetterCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Content="{DynamicResource Navigation_Button_Requeue}" />
+                                        <Button Padding="10,0" Command="{Binding DataContext.DeleteDeadLetterCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Content="{DynamicResource Navigation_Button_Delete}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <TextBlock Margin="0,0,0,8"
+                           FontSize="16"
+                           FontWeight="SemiBold"
+                           Text="{DynamicResource Navigation_Diagnostics_MesDeadLetters}" />
+                <DataGrid ItemsSource="{Binding MesDeadLetters}"
+                          AutoGenerateColumns="False"
+                          HeadersVisibility="Column"
+                          IsReadOnly="True"
+                          CanUserAddRows="False"
+                          Margin="0,0,0,16">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="ID" Binding="{Binding Id}" />
+                        <DataGridTextColumn Header="{DynamicResource Navigation_Column_Process}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_Process" Binding="{Binding ProcessType}" />
+                        <DataGridTextColumn Header="{DynamicResource Navigation_Column_Target}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_Target" Binding="{Binding FailedTarget}" />
+                        <DataGridTextColumn Header="{DynamicResource Navigation_Column_Stage}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_Stage" Binding="{Binding FailureStage}" />
+                        <DataGridTextColumn Header="{DynamicResource Navigation_Column_Source}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_Source" Binding="{Binding Source}" />
+                        <DataGridTextColumn Header="{DynamicResource Navigation_Column_CreatedAt}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_CreatedAt" Binding="{Binding CreatedAt}" />
+                        <DataGridTextColumn Header="{DynamicResource Navigation_Column_FailureReason}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_FailureReason" Binding="{Binding FailureReason}" Width="*" />
+                        <DataGridTemplateColumn Header="{DynamicResource Navigation_Column_Action}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_Action">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Margin="0,0,6,0" Padding="10,0" Command="{Binding DataContext.RequeueDeadLetterCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Content="{DynamicResource Navigation_Button_Requeue}" />
+                                        <Button Padding="10,0" Command="{Binding DataContext.DeleteDeadLetterCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Content="{DynamicResource Navigation_Button_Delete}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <TextBlock Margin="0,8,0,8"
+                           FontSize="18"
+                           FontWeight="SemiBold"
                            Text="{DynamicResource Navigation_Diagnostics_MesSync}" />
                 <Border Margin="0,0,0,16"
                         Padding="12"

@@ -1,6 +1,7 @@
 using IIoT.Edge.Application.Context;
 using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using MediatR;
@@ -35,7 +36,8 @@ public record GetMonitorSnapshotQuery : IRequest<List<DeviceMonitorSnapshot>>;
 
 public class GetMonitorSnapshotHandler(
     IProductionContextStore contextStore,
-    IEdgeSyncDiagnosticsQuery diagnosticsQuery)
+    IEdgeSyncDiagnosticsQuery diagnosticsQuery,
+    IProductionTimeProvider productionTime)
     : IRequestHandler<GetMonitorSnapshotQuery, List<DeviceMonitorSnapshot>>
 {
     public async Task<List<DeviceMonitorSnapshot>> Handle(GetMonitorSnapshotQuery request, CancellationToken ct)
@@ -76,7 +78,7 @@ public class GetMonitorSnapshotHandler(
             var cap = ctx.TodayCapacity;
             var deviceInfo = string.Join("  ",
                 ctx.DeviceBag.OrderBy(kv => kv.Key)
-                    .Select(kv => $"{kv.Key}={FormatValue(kv.Value)}"));
+                    .Select(kv => $"{kv.Key}={FormatValue(kv.Value, productionTime)}"));
             var stepInfo = string.Join("  ",
                 ctx.StepStates.Select(kv => $"{kv.Key}={kv.Value}"));
 
@@ -94,10 +96,10 @@ public class GetMonitorSnapshotHandler(
                 OkAll: cap.OkAll,
                 NgAll: cap.NgAll,
                 YieldAll: cap.YieldAll,
-                DeviceDataSummary: string.IsNullOrEmpty(deviceInfo) ? "No data" : deviceInfo,
-                StepSummary: string.IsNullOrEmpty(stepInfo) ? "No steps" : stepInfo,
+                DeviceDataSummary: string.IsNullOrEmpty(deviceInfo) ? "无数据" : deviceInfo,
+                StepSummary: string.IsNullOrEmpty(stepInfo) ? "无步骤" : stepInfo,
                 CellCount: ctx.CurrentCells.Count,
-                CellTable: BuildCellTable(ctx),
+                CellTable: BuildCellTable(ctx, productionTime),
                 CloudSync: diagnostics.Cloud,
                 MesSync: diagnostics.Mes,
                 ContextPersistence: diagnostics.ContextPersistence));
@@ -106,7 +108,7 @@ public class GetMonitorSnapshotHandler(
         return result;
     }
 
-    private static DataTable BuildCellTable(ProductionContext ctx)
+    private static DataTable BuildCellTable(ProductionContext ctx, IProductionTimeProvider productionTime)
     {
         var table = new DataTable();
         if (ctx.CurrentCells.Count == 0)
@@ -131,7 +133,7 @@ public class GetMonitorSnapshotHandler(
             var row = table.NewRow();
             foreach (var prop in properties)
             {
-                row[prop.Name] = FormatValue(prop.GetValue(cell));
+                row[prop.Name] = FormatValue(prop.GetValue(cell), productionTime);
             }
 
             table.Rows.Add(row);
@@ -140,22 +142,12 @@ public class GetMonitorSnapshotHandler(
         return table;
     }
 
-    private static string FormatValue(object? value) => value switch
+    private static string FormatValue(object? value, IProductionTimeProvider productionTime) => value switch
     {
         null => "--",
-        DateTime dt => ToLocalTime(dt).ToString("HH:mm:ss.fff"),
+        DateTime dt => productionTime.ToBusinessTime(dt).ToString("HH:mm:ss.fff"),
         bool b => b ? "OK" : "NG",
         double d => d.ToString("F3"),
         _ => value?.ToString() ?? "--"
     };
-
-    private static DateTime ToLocalTime(DateTime value)
-    {
-        return value.Kind switch
-        {
-            DateTimeKind.Utc => value.ToLocalTime(),
-            DateTimeKind.Unspecified => DateTime.SpecifyKind(value, DateTimeKind.Utc).ToLocalTime(),
-            _ => value
-        };
-    }
 }

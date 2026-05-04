@@ -30,7 +30,7 @@ public sealed class CloudHttpClientBehaviorTests
         Assert.Equal(CloudCallOutcome.HttpFailure, result.Outcome);
         Assert.Equal(HttpStatusCode.BadGateway, result.HttpStatusCode);
         Assert.Equal("http_status_502", result.ReasonCode);
-        Assert.Contains(logger.Entries, x => x.Message.Contains("Status=502", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, x => x.Message.Contains("状态码=502", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -51,7 +51,7 @@ public sealed class CloudHttpClientBehaviorTests
         Assert.Null(result.Payload);
         Assert.Equal(CloudCallOutcome.NetworkFailure, result.Outcome);
         Assert.Equal("network_exception", result.ReasonCode);
-        Assert.Contains(logger.Entries, x => x.Message.Contains("GET network exception", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, x => x.Message.Contains("GET 网络异常", StringComparison.Ordinal));
         Assert.Contains(logger.Entries, x => x.Message.Contains("network down", StringComparison.Ordinal));
     }
 

@@ -298,7 +298,7 @@ public sealed class DataPipelineCapacityGuard
 
         var processText = string.IsNullOrWhiteSpace(processType) ? "--" : processType;
         _logger.Warn(
-            $"[CapacityGuard] {channelName} {blockedChannel} channel is blocked by {blockedReason}. ProcessType={processText}, Current={currentCount}, Limit={limit}.");
+            $"[CapacityGuard] {channelName} {blockedChannel} 通道因 {blockedReason} 达到容量上限。工序={processText}，当前={currentCount}，上限={limit}。");
     }
 
     private void ClearCapacityBlocked(
@@ -314,7 +314,7 @@ public sealed class DataPipelineCapacityGuard
         }
 
         _logger.Info(
-            $"[CapacityGuard] {channelName} {existingState.Channel} channel recovered from {existingState.BlockedReason} capacity block.");
+            $"[CapacityGuard] {channelName} {existingState.Channel} 通道已解除 {existingState.BlockedReason} 容量阻塞。");
     }
 
     private void ApplyCloudDiagnosticsState()

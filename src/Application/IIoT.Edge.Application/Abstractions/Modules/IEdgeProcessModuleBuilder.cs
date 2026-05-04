@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using IIoT.Edge.Application.Modules.Descriptors;
+using IIoT.Edge.Application.Abstractions.Config;
 
 namespace IIoT.Edge.Application.Abstractions.Modules;
 
@@ -58,4 +59,19 @@ public interface IEdgeProcessModuleBuilder
     void RegisterCloudUploader(ProcessUploadMode uploadMode);
 
     void RegisterMesUploader(MesUploadMode uploadMode);
+
+    void RegisterPlcSignalProfile<TSignalKey, TProfile>()
+        where TSignalKey : struct, Enum
+        where TProfile : class, IModulePlcSignalProfile<TSignalKey>;
+
+    void RegisterHardwareProfile<TProvider>()
+        where TProvider : class, IModuleHardwareProfileProvider;
+
+    void RegisterDevelopmentSample<TContributor>()
+        where TContributor : class, IDevelopmentSampleContributor;
+
+    void RegisterParameters<TMes, TCloud, TBusiness>()
+        where TMes : struct, Enum
+        where TCloud : struct, Enum
+        where TBusiness : struct, Enum;
 }

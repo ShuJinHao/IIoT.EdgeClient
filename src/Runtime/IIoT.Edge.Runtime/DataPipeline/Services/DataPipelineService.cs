@@ -22,6 +22,7 @@ public class DataPipelineService : IDataPipelineService
     {
         _queue = Channel.CreateBounded<CellCompletedRecord>(new BoundedChannelOptions(QueueCapacity)
         {
+            // 仍保留 Wait，避免 DropWrite 静默丢数据；实际入队使用 TryWrite，队列满时立即走溢出持久化。
             FullMode = BoundedChannelFullMode.Wait,
             SingleReader = true,
             SingleWriter = false
@@ -58,13 +59,13 @@ public class DataPipelineService : IDataPipelineService
     {
         if (record is null)
         {
-            _logger.Warn("[DataPipeline] Enqueue failed: record is null.");
+            _logger.Warn("[DataPipeline] 入队失败：记录为空。");
             return DataPipelineEnqueueResult.Rejected("null_record");
         }
 
         if (record.CellData is null)
         {
-            _logger.Warn("[DataPipeline] Enqueue failed: CellData is null.");
+            _logger.Warn("[DataPipeline] 入队失败：CellData 为空。");
             return DataPipelineEnqueueResult.Rejected("null_cell_data");
         }
 
@@ -81,13 +82,13 @@ public class DataPipelineService : IDataPipelineService
             };
 
             _logger.Info(
-                $"[{cellData.DeviceCode}] {cellData.ProcessType} queued. Result:{result}, Pending:{PendingCount}");
+                $"[{cellData.DeviceCode}] {cellData.ProcessType} 已进入 DataPipeline。结果={result}，待处理={PendingCount}");
             return DataPipelineEnqueueResult.Accepted();
         }
 
         Interlocked.Increment(ref _overflowCount);
         _logger.Warn(
-            $"[DataPipeline] Queue overflow for {record.CellData.ProcessType}. Pending:{PendingCount}, Capacity:{QueueCapacity}");
+            $"[DataPipeline] 队列已满，准备写入溢出补偿。工序={record.CellData.ProcessType}，待处理={PendingCount}，容量={QueueCapacity}");
 
         var overflowResult = await _overflowPersistence
             .PersistOverflowAsync(record, cancellationToken)

@@ -35,4 +35,14 @@ public interface IEdgeCacheService
     /// 判断指定键是否存在于缓存中。
     /// </summary>
     bool Contains(string key);
+
+    /// <summary>
+    /// 获取缓存值；未命中时由同一个 key 的单一加载器构建，避免并发击穿底层存储。
+    /// </summary>
+    Task<T?> GetOrCreateAsync<T>(
+        string key,
+        Func<CancellationToken, Task<T?>> factory,
+        TimeSpan? absoluteExpirationRelativeToNow = null,
+        TimeSpan? nullValueExpirationRelativeToNow = null,
+        CancellationToken cancellationToken = default);
 }
