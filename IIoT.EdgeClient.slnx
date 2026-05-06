@@ -23,7 +23,6 @@
     <Project Path="src/Presentation/IIoT.Edge.Presentation.Panels/IIoT.Edge.Presentation.Panels.csproj" />
   </Folder>
   <Folder Name="/src/Modules/">
-    <Project Path="src/Modules/IIoT.Edge.Module.Stacking/IIoT.Edge.Module.Stacking.csproj" />
     <Project Path="src/Modules/IIoT.Edge.Module.Homogenization/IIoT.Edge.Module.Homogenization.csproj" />
   </Folder>
   <Folder Name="/src/Shared/">

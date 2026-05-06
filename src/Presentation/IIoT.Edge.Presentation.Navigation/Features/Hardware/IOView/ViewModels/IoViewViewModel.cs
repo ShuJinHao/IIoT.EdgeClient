@@ -2,7 +2,6 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Text;
 using System.Windows.Input;
-using System.Windows.Threading;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Features.Hardware.IoMappings;
@@ -21,8 +20,9 @@ public class IoViewViewModel : NavigationViewModelBase
     private readonly IPlcDataStore _dataStore;
     private readonly IPlcConnectionManager _plcConnectionManager;
     private readonly ISender _sender;
-    private readonly DispatcherTimer _refreshTimer;
+    private readonly AsyncCommand _manualReadCommand;
     private readonly string? _moduleIdFilter;
+    private IPlcBufferTransport? _selectedBuffer;
 
     public ObservableCollection<NetworkDeviceEntity> Devices { get; } = [];
 
@@ -51,9 +51,11 @@ public class IoViewViewModel : NavigationViewModelBase
                 return;
             }
 
+            UnbindSelectedBuffer();
             _selectedDevice = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(HasSelectedDevice));
+            _manualReadCommand.RaiseCanExecuteChanged();
             _ = LoadMappingsAsync();
         }
     }
@@ -77,6 +79,8 @@ public class IoViewViewModel : NavigationViewModelBase
     }
 
     public ICommand RefreshDevicesCommand { get; }
+
+    public ICommand ManualReadCommand => _manualReadCommand;
 
     public IoViewViewModel(
         IPlcDataStore dataStore,
@@ -112,12 +116,7 @@ public class IoViewViewModel : NavigationViewModelBase
         _moduleIdFilter = moduleIdFilter;
 
         RefreshDevicesCommand = new AsyncCommand(LoadDevicesAsync);
-
-        _refreshTimer = new DispatcherTimer
-        {
-            Interval = TimeSpan.FromMilliseconds(200)
-        };
-        _refreshTimer.Tick += OnRefreshTick;
+        _manualReadCommand = new AsyncCommand(ManualReadSelectedDataAsync, () => SelectedDevice is not null);
     }
 
     public async Task LoadDevicesAsync()
@@ -146,7 +145,7 @@ public class IoViewViewModel : NavigationViewModelBase
             return;
         }
 
-        await LoadMappingsAsync().ConfigureAwait(false);
+        await LoadMappingsAsync();
         UpdateConnectionStatus();
     }
 
@@ -159,6 +158,7 @@ public class IoViewViewModel : NavigationViewModelBase
 
         if (SelectedDevice is null)
         {
+            UnbindSelectedBuffer();
             UpdateConnectionStatus();
             return;
         }
@@ -166,6 +166,7 @@ public class IoViewViewModel : NavigationViewModelBase
         var result = await _sender.Send(new GetIoMappingsByDeviceQuery(SelectedDevice.Id, 0, int.MaxValue));
         if (!result.IsSuccess || result.Value is null)
         {
+            BindSelectedBuffer();
             UpdateConnectionStatus();
             return;
         }
@@ -178,7 +179,7 @@ public class IoViewViewModel : NavigationViewModelBase
 
         foreach (var mapping in result.Value.Items.OrderBy(static x => x.SortOrder))
         {
-            var isRead = string.Equals(mapping.Direction, "Read", StringComparison.OrdinalIgnoreCase);
+            var isRead = string.Equals(mapping.Direction, IoMappingOptionCatalog.DirectionRead, StringComparison.OrdinalIgnoreCase);
             var signal = CreateSignal(mapping, isRead ? readIndex : writeIndex);
 
             if (isRead)
@@ -243,6 +244,7 @@ public class IoViewViewModel : NavigationViewModelBase
             ArraySections.Add(section);
         }
 
+        BindSelectedBuffer();
         RefreshCurrentValues();
         NotifySignalCollectionsChanged();
         UpdateConnectionStatus();
@@ -263,8 +265,6 @@ public class IoViewViewModel : NavigationViewModelBase
             return;
         }
 
-        var writeSnapshot = buffer.GetWriteBuffer();
-
         foreach (var row in InteractionRows)
         {
             foreach (var signal in row.PlcSignals)
@@ -274,7 +274,7 @@ public class IoViewViewModel : NavigationViewModelBase
 
             foreach (var signal in row.HostSignals)
             {
-                UpdateWriteSignal(signal, writeSnapshot);
+                UpdateWriteSignal(signal, buffer);
             }
 
             row.InitializeWriteValueFromCurrentBuffer();
@@ -297,6 +297,44 @@ public class IoViewViewModel : NavigationViewModelBase
         }
 
         UpdateConnectionStatus();
+    }
+
+    private async Task ManualReadSelectedDataAsync()
+    {
+        if (SelectedDevice is null)
+        {
+            return;
+        }
+
+        var plc = _plcConnectionManager.GetPlc(SelectedDevice.Id);
+        var buffer = _dataStore.GetBuffer(SelectedDevice.Id);
+        if (plc is null || buffer is null)
+        {
+            UpdateConnectionStatus();
+            return;
+        }
+
+        try
+        {
+            foreach (var signal in DataSections.SelectMany(static section => section.Signals)
+                         .Concat(ArraySections.SelectMany(static section => section.Columns)))
+            {
+                var length = checked((ushort)Math.Max(1, signal.AddressCount));
+                var words = await plc.ReadDataAsync<ushort>(signal.PlcAddress, length);
+                buffer.UpdateReadSignal(signal.SignalKey, words);
+            }
+
+            RefreshCurrentValues();
+            ClearFeedback();
+        }
+        catch (Exception ex)
+        {
+            SetError($"读取 IO 数据失败：{ex.Message}");
+        }
+        finally
+        {
+            UpdateConnectionStatus();
+        }
     }
 
     private bool IsVisibleDevice(NetworkDeviceEntity device)
@@ -397,13 +435,17 @@ public class IoViewViewModel : NavigationViewModelBase
 
     private static void UpdateReadSignal(IoSignalModel signal, IPlcBuffer buffer)
     {
-        var words = ReadWords(signal, index => buffer.GetReadValue(index));
+        var words = buffer.TryGetReadWords(signal.SignalKey, out var signalWords)
+            ? EnsureLength(signalWords, signal.AddressCount)
+            : ReadWords(signal, index => buffer.GetReadValue(index));
         ApplyDecodedValue(signal, words);
     }
 
-    private static void UpdateWriteSignal(IoSignalModel signal, IReadOnlyList<ushort> writeSnapshot)
+    private static void UpdateWriteSignal(IoSignalModel signal, IPlcBuffer buffer)
     {
-        var words = ReadWords(signal, index => index >= 0 && index < writeSnapshot.Count ? writeSnapshot[index] : (ushort)0);
+        var words = buffer.TryGetWriteWords(signal.SignalKey, out var signalWords)
+            ? EnsureLength(signalWords, signal.AddressCount)
+            : ReadWords(signal, index => buffer.GetWriteBufferValue(index));
         ApplyDecodedValue(signal, words);
     }
 
@@ -413,6 +455,23 @@ public class IoViewViewModel : NavigationViewModelBase
         for (var offset = 0; offset < words.Length; offset++)
         {
             words[offset] = read(signal.StartIndex + offset);
+        }
+
+        return words;
+    }
+
+    private static ushort[] EnsureLength(IReadOnlyList<ushort> source, int addressCount)
+    {
+        var length = Math.Max(1, addressCount);
+        if (source.Count == length && source is ushort[] array)
+        {
+            return array;
+        }
+
+        var words = new ushort[length];
+        for (var index = 0; index < words.Length && index < source.Count; index++)
+        {
+            words[index] = source[index];
         }
 
         return words;
@@ -548,6 +607,7 @@ public class IoViewViewModel : NavigationViewModelBase
         var displayValue = row.WriteValue.ToString(CultureInfo.InvariantCulture);
         foreach (var signal in row.HostSignals)
         {
+            buffer.SetWriteValue(signal.SignalKey, 0, unchecked((ushort)row.WriteValue));
             buffer.SetWriteValue(signal.StartIndex, unchecked((ushort)row.WriteValue));
             signal.DisplayValue = displayValue;
             signal.PreviewValue = displayValue;
@@ -556,8 +616,41 @@ public class IoViewViewModel : NavigationViewModelBase
         row.NotifyValuesChanged();
     }
 
-    private void OnRefreshTick(object? sender, EventArgs e)
-        => RefreshCurrentValues();
+    private void BindSelectedBuffer()
+    {
+        UnbindSelectedBuffer();
+        if (SelectedDevice is null)
+        {
+            return;
+        }
+
+        _selectedBuffer = _dataStore.GetBuffer(SelectedDevice.Id);
+        if (_selectedBuffer is not null)
+        {
+            _selectedBuffer.SignalValuesChanged += OnBufferSignalValuesChanged;
+        }
+    }
+
+    private void UnbindSelectedBuffer()
+    {
+        if (_selectedBuffer is not null)
+        {
+            _selectedBuffer.SignalValuesChanged -= OnBufferSignalValuesChanged;
+            _selectedBuffer = null;
+        }
+    }
+
+    private void OnBufferSignalValuesChanged(object? sender, PlcSignalBufferChangedEventArgs e)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+        {
+            RefreshCurrentValues();
+            return;
+        }
+
+        dispatcher.BeginInvoke(new Action(RefreshCurrentValues));
+    }
 
     private void UpdateConnectionStatus()
     {
@@ -611,18 +704,25 @@ public class IoViewViewModel : NavigationViewModelBase
     }
 
     public override async Task OnActivatedAsync()
-    {
-        if (!_refreshTimer.IsEnabled)
-        {
-            _refreshTimer.Start();
-        }
-
-        await LoadDevicesAsync().ConfigureAwait(false);
-    }
+        => await LoadDevicesAsync();
 
     public override Task OnDeactivatedAsync()
     {
-        _refreshTimer.Stop();
+        UnbindSelectedBuffer();
         return Task.CompletedTask;
+    }
+}
+
+internal static class PlcBufferReadExtensions
+{
+    public static ushort GetWriteBufferValue(this IPlcBuffer buffer, int index)
+    {
+        if (buffer is not IPlcBufferTransport transport)
+        {
+            return 0;
+        }
+
+        var snapshot = transport.GetWriteBuffer();
+        return index >= 0 && index < snapshot.Length ? snapshot[index] : (ushort)0;
     }
 }

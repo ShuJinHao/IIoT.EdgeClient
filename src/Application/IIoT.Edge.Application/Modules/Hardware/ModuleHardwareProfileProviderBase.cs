@@ -138,6 +138,9 @@ public abstract class ModuleHardwareProfileProviderBase<TSignalKey> : IModuleHar
 
     public abstract ModulePlcDefaults GetDefaultPlcSettings();
 
+    public virtual PlcIoRuntimePolicy GetIoRuntimePolicy()
+        => PlcIoRuntimePolicy.Default;
+
     public IReadOnlyList<ModuleIoTemplateEntry> GetDefaultIoTemplate()
         => Signals
             .Select(CreateTemplateEntry)

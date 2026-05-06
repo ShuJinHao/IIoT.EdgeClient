@@ -12,9 +12,6 @@ Recommended layout:
 - `launcher/launcher.profiles.json`
 - `launcher/launcher.accounts.sample.json`
 - `launcher/Assets/Profiles/*`
-- `stack/IIoT.Edge.Shell.exe`
-- `stack/appsettings.machine.StackingLine.json`
-- `stack/Modules/Stacking/*`
 - `homogenization/IIoT.Edge.Shell.exe`
 - `homogenization/appsettings.machine.HomogenizationLine.json`
 - `homogenization/Modules/Homogenization/*`
@@ -46,8 +43,8 @@ If you only need to refresh module payloads inside a specific runtime root:
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\PublishEdgeModules.ps1 `
   -Configuration Release `
-  -TargetModulesRoot .\publish\stack\Modules `
-  -ModuleIds Stacking `
+  -TargetModulesRoot .\publish\homogenization\Modules `
+  -ModuleIds Homogenization `
   -CleanModulesDirectory
 ```
 
@@ -56,12 +53,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\PublishEdgeModules.ps1 `
 Visual Studio local builds now synchronize the same relative layout under:
 
 - `publish\Debug\launcher`
-- `publish\Debug\stack`
 - `publish\Debug\homogenization`
 
 Launcher cards resolve relative executable paths such as:
 
-- `..\stack\IIoT.Edge.Shell.exe`
 - `..\homogenization\IIoT.Edge.Shell.exe`
 
 This keeps local F5 behavior aligned with the shipped runtime package.
@@ -103,7 +98,7 @@ Do not add process-specific host `if/else` logic. Launcher cards and runtime dir
 Validate all of the following on a packaged runtime directory:
 
 - launcher login success and failure
-- Stacking and Homogenization cards display correctly
+- Homogenization card displays correctly
 - each card resolves to its own relative runtime directory
 - different profiles can run side by side on one machine
 - the same profile is still single-instance

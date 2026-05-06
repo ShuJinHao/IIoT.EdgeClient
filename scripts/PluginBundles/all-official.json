@@ -1,6 +1,6 @@
 {
   "bundleId": "all-official",
-  "displayName": "All Official Edge Modules",
-  "includeModules": [ "Stacking", "Homogenization" ],
-  "machineProfiles": [ "StackingLine", "HomogenizationLine" ]
+  "displayName": "Homogenization Edge Module",
+  "includeModules": [ "Homogenization" ],
+  "machineProfiles": [ "HomogenizationLine" ]
 }

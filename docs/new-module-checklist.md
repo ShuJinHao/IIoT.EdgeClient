@@ -11,13 +11,13 @@ Before implementation, read `docs/插件开发约定.md` and follow the single `
 - Do not treat Cloud upload, end-to-end closure, review assumptions, or audit suggestions as permission to modify cloud code.
 - Client-side Cloud upload work may add or adjust generic channel, payload mapping, retry, fallback, and dead-letter integration, but must not add cloud endpoints, events, workers, SQL, migrations, or query registration.
 - If the cloud contract is not ready, the client implementation must be configurable or explicitly skipped without posting to a missing endpoint or filling retry buffers with permanent failures.
-- Stacking and future process startup entries must be added through `scripts/edge-runtime.publish.json`, generated `launcher.profiles.json`, and the matching machine profile; do not add process-specific launcher XAML.
+- Future process startup entries must be added through `scripts/edge-runtime.publish.json`, generated `launcher.profiles.json`, and the matching machine profile; do not add process-specific launcher XAML.
 
 ## Cloud contract placeholder rule
 
 - When a process has no confirmed cloud contract, the uploader must return `CloudCallResult.Success()` from its pre-check and record a disabled/skipped diagnostic status.
 - Do not return `Failure` for a disabled or unimplemented cloud uploader. That path is reserved for retryable upload failures and will fill the Cloud retry buffer.
-- The current homogenization and stacking disabled-upload behavior is the reference pattern: skip locally, do not call HTTP, do not create Cloud retry records.
+- The current homogenization disabled-upload behavior is the reference pattern: skip locally, do not call HTTP, do not create Cloud retry records.
 
 ## Required implementation pieces
 
@@ -63,15 +63,17 @@ Use this order when adding a new process module:
 
 - The hardware page owns only network devices, serial devices, and IO mappings.
 - Do not add module protocol summary text blocks to the hardware page. Template availability is determined by whether the selected PLC has a registered module hardware template.
-- Applying a module template must write both `Read` and `Write` IO points from the plugin template.
+- Applying a module template must import plugin standard points from the plugin hardware profile and must not overwrite maintained local addresses.
 - IO mapping truth is `IoMappingEntity` saved per PLC `NetworkDeviceId`; IO interaction pages must read that selected PLC mapping and must not read plugin templates or JSON point seeds as runtime addresses.
 - IO mapping pages group only by `Category`. `GroupName` may describe business meaning inside the row, but must not create extra top-level headings such as `信号交互 - 心跳交互`.
 - Plugin `*PlcSignalProfile` is only the default template for applying templates and development seeding. Do not create JSON point seeds. Fixed development sample PLC devices should be defined in the sample contributor code; add a JSON seed only after the user confirms there are multiple sample sets worth configuring.
-- Plugin `*PlcSignalProfile` must split default points by business groups and expose one `Signals` aggregate for templates/seeding. Do not maintain a flat point dump or a second JSON point list.
+- Plugin `*PlcSignalProfile` must split standard IO points by the fixed categories `信号交互`, `单点读数据`, and `连续读数据`, then expose one `Signals` aggregate for templates/seeding. Do not maintain a flat point dump or a second JSON point list.
 - Plugin registration must use `builder.RegisterPlcSignalProfile<TSignalKey, TProfile>()`, `builder.RegisterHardwareProfile<TProvider>()`, and `builder.RegisterDevelopmentSample<TContributor>()`. Do not directly register these host abstractions from plugin code.
-- PLC IO scanning, read/write merge, reconnect backoff, and buffer transport belong to `IIoT.Edge.Runtime`; infrastructure projects should only provide concrete PLC communication and status reporting.
+- PLC IO scanning, read/write merge, block planning, reconnect backoff, and buffer transport belong to `IIoT.Edge.Runtime`; infrastructure projects should only provide concrete PLC communication and status reporting.
+- Realtime scanning must only process `信号交互`. `单点读数据` and `连续读数据` are read by business tasks or manual debug reads and must not be added to the realtime loop.
+- Plugin hardware profiles own IO runtime policy such as `SignalLoopIntervalMs`, `MaxSignalBlockWordCount`, `WriteGapPolicy`, and business read lengths. The host must not provide global production point defaults.
 - IO mappings are loaded for the selected device as one full list and shown with table scrolling, not host-side paging.
-- New IO buttons must be explicit: `新增读点` defaults `Direction=Read`, and `新增写点` defaults `Direction=Write`; the direction column remains editable.
+- New IO buttons must be explicit: `新增信号交互` creates a paired read/write interaction group, and `新增数据点` creates only `单点读数据` or `连续读数据`. The category must not silently default to the wrong IO class.
 
 ## Development-stage cleanup rules
 
@@ -94,12 +96,6 @@ Use this order when adding a new process module:
 - Launcher, Shell, Presentation projects, and plugin projects must consume MaterialDesign through `IIoT.Edge.UI.Shared`; do not add duplicate direct package references.
 - Third-party package fonts such as `Resources/Noto` and `Resources/Roboto` must not be copied into project source trees or publish output.
 - If a new WPF feature needs shared icons, fonts, or theme resources, add the reusable asset under `IIoT.Edge.UI.Shared/Assets/` and document why it is needed.
-
-## Stacking process standard
-
-- Stacking uses `ModuleId = Stacking`, `ProcessType = Stacking`, display name `叠片`, and machine profile `StackingLine`.
-- Stacking should follow the homogenization module's plugin structure, but its business model follows stacking rules: multi-cell data, PLC ID mapping, barcode duplicate handling, and stacking-specific PLC tasks.
-- Stacking startup is added by profile configuration only. Do not create a stacking-specific launcher page, button, or XAML branch.
 
 ## Required behavior rules
 

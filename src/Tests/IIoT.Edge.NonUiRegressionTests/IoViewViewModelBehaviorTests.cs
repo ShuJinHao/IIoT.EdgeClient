@@ -23,17 +23,17 @@ public sealed class IoViewViewModelBehaviorTests
             var devices = new[]
             {
                 CreateDevice(1, "PLC-Homogenization-01", "Homogenization"),
-                CreateDevice(2, "PLC-Stacking-02", "Stacking"),
-                CreateDevice(3, "PLC-Stacking-01", "Stacking"),
-                CreateDevice(4, "Scanner-Stacking", "Stacking", DeviceType.Scanner),
-                CreateDevice(5, "PLC-Stacking-Disabled", "Stacking", isEnabled: false)
+                CreateDevice(2, "PLC-TestProcess-02", "TestProcess"),
+                CreateDevice(3, "PLC-TestProcess-01", "TestProcess"),
+                CreateDevice(4, "Scanner-TestProcess", "TestProcess", DeviceType.Scanner),
+                CreateDevice(5, "PLC-TestProcess-Disabled", "TestProcess", isEnabled: false)
             };
-            var viewModel = CreateViewModel(devices, moduleIdFilter: "Stacking");
+            var viewModel = CreateViewModel(devices, moduleIdFilter: "TestProcess");
 
             await viewModel.LoadDevicesAsync();
 
             Assert.Equal(
-                ["PLC-Stacking-01", "PLC-Stacking-02"],
+                ["PLC-TestProcess-01", "PLC-TestProcess-02"],
                 viewModel.Devices.Select(static x => x.DeviceName).ToArray());
         });
 
@@ -110,12 +110,12 @@ public sealed class IoViewViewModelBehaviorTests
     public Task RefreshCurrentValues_WhenSwitchingDevice_ShouldReadSelectedDeviceBufferOnly()
         => RunOnStaThreadAsync(async () =>
         {
-            var deviceA = CreateDevice(21, "PLC-Stacking-01", "Stacking");
-            var deviceB = CreateDevice(22, "PLC-Stacking-02", "Stacking");
+            var deviceA = CreateDevice(21, "PLC-TestProcess-01", "TestProcess");
+            var deviceB = CreateDevice(22, "PLC-TestProcess-02", "TestProcess");
             var mappings = new Dictionary<int, List<IoMappingEntity>>
             {
-                [deviceA.Id] = [CreateMapping(deviceA.Id, "层数", "D100", 1, "UInt16", "Read", "实时数据", "叠片实时", "", 1)],
-                [deviceB.Id] = [CreateMapping(deviceB.Id, "层数", "D100", 1, "UInt16", "Read", "实时数据", "叠片实时", "", 1)]
+                [deviceA.Id] = [CreateMapping(deviceA.Id, "层数", "D100", 1, "UInt16", "Read", "实时数据", "测试实时", "", 1)],
+                [deviceB.Id] = [CreateMapping(deviceB.Id, "层数", "D100", 1, "UInt16", "Read", "实时数据", "测试实时", "", 1)]
             };
             var dataStore = new PlcDataStore();
             dataStore.Register(deviceA.Id, readSize: 4, writeSize: 0);
@@ -139,7 +139,7 @@ public sealed class IoViewViewModelBehaviorTests
         {
             var deviceA = CreateDevice(25, "PLC-Homogenization-A", "Homogenization");
             var deviceB = CreateDevice(26, "PLC-Homogenization-B", "Homogenization");
-            var signal = HomogenizationSignalTestProfile.Get(HomogenizationSignal.进站触发);
+            var signal = HomogenizationSignalTestProfile.Get(HomogenizationPlcSignals.Interaction.进站触发);
             var mappings = new Dictionary<int, List<IoMappingEntity>>
             {
                 [deviceA.Id] =

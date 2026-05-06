@@ -1,7 +1,6 @@
 ## Change Scope
 
 - [ ] Host
-- [ ] Stacking
 - [ ] Homogenization
 - [ ] Shared
 

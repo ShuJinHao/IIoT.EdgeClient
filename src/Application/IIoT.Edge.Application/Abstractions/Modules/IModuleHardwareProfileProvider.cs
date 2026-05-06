@@ -8,6 +8,8 @@ public interface IModuleHardwareProfileProvider
 
     ModulePlcDefaults GetDefaultPlcSettings();
 
+    PlcIoRuntimePolicy GetIoRuntimePolicy();
+
     IReadOnlyList<ModuleIoTemplateEntry> GetDefaultIoTemplate();
 
     ModuleHardwareValidationResult ValidatePlcConfiguration(

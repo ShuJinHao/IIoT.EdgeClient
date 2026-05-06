@@ -1,6 +1,7 @@
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc;
 using IIoT.Edge.Runtime.Base;
@@ -20,7 +21,8 @@ public sealed class PlcIoScanTask : PlcIoScanTaskBase
         NetworkDeviceEntity deviceConfig,
         IReadOnlyCollection<IoMappingEntity> ioMappings,
         ILogService logger,
-        PlcConnectionStatusStore? statusStore = null)
+        PlcConnectionStatusStore? statusStore = null,
+        PlcIoRuntimePolicy? runtimePolicy = null)
         : base(
             plcService,
             dataStore,
@@ -30,11 +32,15 @@ public sealed class PlcIoScanTask : PlcIoScanTaskBase
                 deviceConfig.IpAddress,
                 deviceConfig.Port1),
             ioMappings.Select(static mapping => new PlcIoScanMapping(
+                mapping.SignalKey,
                 mapping.PlcAddress,
                 mapping.AddressCount,
+                mapping.DataType,
                 mapping.Direction,
+                mapping.Category,
                 mapping.SortOrder)),
-            logger)
+            logger,
+            runtimePolicy)
     {
         _statusStore = statusStore;
     }

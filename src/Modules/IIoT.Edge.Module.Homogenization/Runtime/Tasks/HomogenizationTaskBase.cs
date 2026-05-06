@@ -1,10 +1,8 @@
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.Application.Abstractions.Plc.Signals;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
-using IIoT.Edge.Module.Homogenization.Config.Hardware;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using IIoT.Edge.Runtime.Base;
 using Microsoft.Extensions.Options;
@@ -18,7 +16,8 @@ internal abstract class HomogenizationTaskBase : PlcTaskBase
 {
     protected HomogenizationTaskBase(
         IPlcBuffer buffer,
-        ILogicalSignalAccessor<HomogenizationSignal> signals,
+        HomogenizationPlcHandshakeAccessor interaction,
+        HomogenizationSignalCodec codec,
         HomogenizationContext context,
         ILogService logger,
         IProductionTimeProvider productionTime,
@@ -31,8 +30,8 @@ internal abstract class HomogenizationTaskBase : PlcTaskBase
         CodeOptions = codeOptions.Value;
         var runtime = moduleOptions.Value.Runtime;
         EventLoopInterval = Math.Max(runtime.MinEventLoopIntervalMs, runtime.EventLoopIntervalMs);
-        Signals = signals;
-        Codec = new HomogenizationSignalCodec(signals, productionTime);
+        Interaction = interaction;
+        Codec = codec;
     }
 
     /// <summary>
@@ -56,9 +55,9 @@ internal abstract class HomogenizationTaskBase : PlcTaskBase
     protected int EventLoopInterval { get; }
 
     /// <summary>
-    /// Runtime 提供的强类型 PLC 信号访问器，任务只能通过枚举键读写点位。
+    /// 匀浆信号交互访问器，任务通过它表达触发、应答和复位，不直接比较 PLC code。
     /// </summary>
-    protected ILogicalSignalAccessor<HomogenizationSignal> Signals { get; }
+    protected HomogenizationPlcHandshakeAccessor Interaction { get; }
 
     /// <summary>
     /// 匀浆业务快照解码器，只负责把 PLC 连续区转换为插件 payload。
@@ -70,10 +69,4 @@ internal abstract class HomogenizationTaskBase : PlcTaskBase
     /// </summary>
     protected override int TaskLoopInterval => EventLoopInterval;
 
-    protected ushort ResolveAck(MesCallResult result)
-        => result.IsSuccess
-            ? CodeOptions.Plc.AckOk
-            : result.Outcome == MesCallOutcome.BusinessRejected
-                ? CodeOptions.Plc.AckMesNg
-                : CodeOptions.Plc.AckException;
 }

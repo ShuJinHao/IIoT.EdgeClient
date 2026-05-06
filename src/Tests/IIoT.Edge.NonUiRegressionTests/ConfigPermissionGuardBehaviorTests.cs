@@ -125,7 +125,7 @@ public sealed class ConfigPermissionGuardBehaviorTests
             Id = 1,
             DeviceName = "PLC-A",
             DeviceType = DeviceType.PLC,
-            ModuleId = "Stacking"
+            ModuleId = "TestProcess"
         });
 
         Assert.False(result.IsSuccess);
@@ -161,7 +161,7 @@ public sealed class ConfigPermissionGuardBehaviorTests
                         Id = 1,
                         DeviceName = "PLC-A",
                         DeviceType = DeviceType.PLC,
-                        ModuleId = "Stacking",
+                        ModuleId = "TestProcess",
                         IsEnabled = true
                     },
                     new NetworkDeviceVm
@@ -169,7 +169,7 @@ public sealed class ConfigPermissionGuardBehaviorTests
                         Id = 2,
                         DeviceName = "PLC-B",
                         DeviceType = DeviceType.PLC,
-                        ModuleId = "Stacking",
+                        ModuleId = "TestProcess",
                         IsEnabled = false
                     },
                     new NetworkDeviceVm

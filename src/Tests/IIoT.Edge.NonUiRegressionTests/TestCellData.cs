@@ -2,9 +2,9 @@ using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 
-internal sealed class StackingLikeCellData : CellDataBase
+public sealed class TestCellData : CellDataBase
 {
-    public override string ProcessType => "Stacking";
+    public override string ProcessType => "OtherProcess";
 
     public override string DisplayLabel => string.IsNullOrWhiteSpace(Barcode) ? ProcessType : Barcode;
 

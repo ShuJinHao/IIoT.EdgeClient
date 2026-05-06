@@ -13,14 +13,14 @@ public sealed class LauncherMainViewModelTests
         IReadOnlyList<LauncherProfileDefinition> profiles =
         [
             new(
-                "StackingLine",
-                "叠片",
-                "Stacking profile",
+                "HomogenizationLine",
+                "匀浆",
+                "Homogenization profile",
                 null,
-                "StackingLine",
-                @"..\stack\IIoT.Edge.Shell.exe",
-                "LayersTriple",
-                "#0F766E")
+                "HomogenizationLine",
+                @"..\homogenization\IIoT.Edge.Shell.exe",
+                "BeakerOutline",
+                "#4D7C0F")
         ];
 
         var viewModel = new LauncherMainViewModel(
@@ -62,8 +62,8 @@ public sealed class LauncherMainViewModelTests
     {
         IReadOnlyList<LauncherProfileDefinition> profiles =
         [
-            new("StackingLine", "Stacking", "Stacking process", null, "StackingLine", @"..\stack\IIoT.Edge.Shell.exe", "LayersTriple", "#0F766E"),
-            new("HomogenizationLine", "Homogenization", "Homogenization process", null, "HomogenizationLine", @"..\homogenization\IIoT.Edge.Shell.exe", "BeakerOutline", "#4D7C0F")
+            new("HomogenizationLine", "Homogenization", "Homogenization process", null, "HomogenizationLine", @"..\homogenization\IIoT.Edge.Shell.exe", "BeakerOutline", "#4D7C0F"),
+            new("MaintenanceLine", "Maintenance", "Maintenance process", null, "MaintenanceLine", @"..\maintenance\IIoT.Edge.Shell.exe", "Cog", "#0F766E")
         ];
 
         var viewModel = new LauncherMainViewModel(

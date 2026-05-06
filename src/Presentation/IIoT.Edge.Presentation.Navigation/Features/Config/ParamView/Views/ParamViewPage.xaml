@@ -7,6 +7,31 @@
     xmlns:sharedViews="clr-namespace:IIoT.Edge.UI.Shared.Views;assembly=IIoT.Edge.UI.Shared"
     Background="Transparent">
 
+    <sharedViews:PageActionShell.Resources>
+        <Style x:Key="ParamValueTextBoxStyle" TargetType="TextBox">
+            <Setter Property="Visibility" Value="Visible" />
+            <Setter Property="Height" Value="30" />
+            <Setter Property="MinWidth" Value="160" />
+            <Setter Property="Padding" Value="8,2" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Background" Value="#111827" />
+            <Setter Property="Foreground" Value="#E4E4E7" />
+            <Setter Property="CaretBrush" Value="#E4E4E7" />
+            <Setter Property="BorderBrush" Value="#3F3F46" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="SelectionBrush" Value="#0F766E" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsBool}" Value="True">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+                <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                    <Setter Property="BorderBrush" Value="#38BDF8" />
+                    <Setter Property="Background" Value="#0F172A" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </sharedViews:PageActionShell.Resources>
+
     <sharedViews:PageActionShell.HeaderContent>
         <TextBlock VerticalAlignment="Center" FontSize="16" FontWeight="Medium" Foreground="#E4E4E7" Text="{Binding ViewTitle}" />
     </sharedViews:PageActionShell.HeaderContent>
@@ -38,18 +63,7 @@
                                                 <DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
                                                         <Grid Margin="8,0">
-                                                            <TextBox VerticalAlignment="Center" Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
-                                                                <TextBox.Style>
-                                                                    <Style TargetType="TextBox">
-                                                                        <Setter Property="Visibility" Value="Visible" />
-                                                                        <Style.Triggers>
-                                                                            <DataTrigger Binding="{Binding IsBool}" Value="True">
-                                                                                <Setter Property="Visibility" Value="Collapsed" />
-                                                                            </DataTrigger>
-                                                                        </Style.Triggers>
-                                                                    </Style>
-                                                                </TextBox.Style>
-                                                            </TextBox>
+                                                            <TextBox Style="{StaticResource ParamValueTextBoxStyle}" Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                                             <CheckBox VerticalAlignment="Center" IsChecked="{Binding BoolValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
                                                                 <CheckBox.Style>
                                                                     <Style TargetType="CheckBox">
@@ -96,18 +110,7 @@
                                                 <DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
                                                         <Grid Margin="8,0">
-                                                            <TextBox VerticalAlignment="Center" Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
-                                                                <TextBox.Style>
-                                                                    <Style TargetType="TextBox">
-                                                                        <Setter Property="Visibility" Value="Visible" />
-                                                                        <Style.Triggers>
-                                                                            <DataTrigger Binding="{Binding IsBool}" Value="True">
-                                                                                <Setter Property="Visibility" Value="Collapsed" />
-                                                                            </DataTrigger>
-                                                                        </Style.Triggers>
-                                                                    </Style>
-                                                                </TextBox.Style>
-                                                            </TextBox>
+                                                            <TextBox Style="{StaticResource ParamValueTextBoxStyle}" Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                                             <CheckBox VerticalAlignment="Center" IsChecked="{Binding BoolValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
                                                                 <CheckBox.Style>
                                                                     <Style TargetType="CheckBox">
@@ -154,18 +157,7 @@
                                                 <DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
                                                         <Grid Margin="8,0">
-                                                            <TextBox VerticalAlignment="Center" Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
-                                                                <TextBox.Style>
-                                                                    <Style TargetType="TextBox">
-                                                                        <Setter Property="Visibility" Value="Visible" />
-                                                                        <Style.Triggers>
-                                                                            <DataTrigger Binding="{Binding IsBool}" Value="True">
-                                                                                <Setter Property="Visibility" Value="Collapsed" />
-                                                                            </DataTrigger>
-                                                                        </Style.Triggers>
-                                                                    </Style>
-                                                                </TextBox.Style>
-                                                            </TextBox>
+                                                            <TextBox Style="{StaticResource ParamValueTextBoxStyle}" Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                                             <CheckBox VerticalAlignment="Center" IsChecked="{Binding BoolValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
                                                                 <CheckBox.Style>
                                                                     <Style TargetType="CheckBox">

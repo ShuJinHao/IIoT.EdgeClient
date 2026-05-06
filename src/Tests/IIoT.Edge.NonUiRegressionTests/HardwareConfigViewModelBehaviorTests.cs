@@ -14,52 +14,60 @@ namespace IIoT.Edge.NonUiRegressionTests;
 public sealed class HardwareConfigViewModelBehaviorTests
 {
     [Fact]
-    public Task AddIoPoint_WhenStandardSignalSelected_ShouldUseProfileSignalKeyAndOnlyAllowAddressOverride()
+    public Task AddInteraction_WhenStandardGroupSelected_ShouldAddReadAndWriteTogether()
         => RunOnStaThreadAsync(() =>
     {
         var viewModel = CreateViewModel();
         viewModel.SelectedNetworkDevice = CreatePlc();
-        viewModel.StandardIoSignals.Add(new IoStandardSignalOptionVm(new ModuleIoTemplateEntry(
-            "Homogenization.InboundTrigger",
-            "D701",
-            1,
-            "Int16",
-            "Read",
-            2,
-            "进站触发",
-            IoMappingOptionCatalog.CategoryInteraction,
+        viewModel.StandardInteractionGroups.Add(new IoStandardSignalGroupOptionVm(
             "扫码进站",
-            "PLC 触发")));
+            [
+                new ModuleIoTemplateEntry(
+                    "Homogenization.InboundTrigger",
+                    "D701",
+                    1,
+                    "Int16",
+                    "Read",
+                    2,
+                    "进站触发",
+                    IoMappingOptionCatalog.CategoryInteraction,
+                    "扫码进站",
+                    "PLC 触发"),
+                new ModuleIoTemplateEntry(
+                    "Homogenization.InboundAck",
+                    "D601",
+                    1,
+                    "Int16",
+                    "Write",
+                    102,
+                    "进站应答",
+                    IoMappingOptionCatalog.CategoryInteraction,
+                    "扫码进站",
+                    "上位机应答")
+            ]));
 
-        viewModel.OpenAddIoMappingDialogCommand.Execute(null);
+        viewModel.OpenAddInteractionMappingDialogCommand.Execute(null);
 
-        Assert.NotNull(viewModel.NewIoMapping);
-        Assert.True(viewModel.NewIoMapping!.IsStandardSource);
-        Assert.Equal("D701", viewModel.NewIoMapping.PlcAddress);
-        Assert.Equal("扫码进站", viewModel.NewIoMapping.BusinessGroup);
-        Assert.Equal("PLC 触发", viewModel.NewIoMapping.SignalName);
-
-        viewModel.NewIoMapping.PlcAddress = "D1701";
+        Assert.NotNull(viewModel.NewInteractionPair);
+        Assert.True(viewModel.NewInteractionPair!.IsStandardSource);
+        Assert.Equal("扫码进站", viewModel.NewInteractionPair.BusinessGroup);
         viewModel.ConfirmAddIoMappingCommand.Execute(null);
 
-        var mapping = Assert.Single(viewModel.IoMappings);
-        Assert.Equal("Homogenization.InboundTrigger", mapping.SignalKey);
-        Assert.Equal("D1701", mapping.PlcAddress);
-        Assert.Equal("扫码进站", mapping.BusinessGroup);
-        Assert.Equal("PLC 触发", mapping.SignalName);
-        Assert.Equal("Read", mapping.Direction);
-        Assert.Equal("Int16", mapping.DataType);
+        Assert.Equal(2, viewModel.IoMappings.Count);
+        Assert.Contains(viewModel.IoMappings, x => x.SignalKey == "Homogenization.InboundTrigger" && x.Direction == "Read");
+        Assert.Contains(viewModel.IoMappings, x => x.SignalKey == "Homogenization.InboundAck" && x.Direction == "Write");
+        Assert.All(viewModel.IoMappings, x => Assert.Equal("扫码进站", x.BusinessGroup));
         return Task.CompletedTask;
     });
 
     [Fact]
-    public Task AddIoPoint_WhenCustomDebugPointSelected_ShouldGenerateManualSignalKey()
+    public Task AddDataPoint_WhenCustomPointSelected_ShouldGenerateSingleReadMapping()
         => RunOnStaThreadAsync(() =>
     {
         var viewModel = CreateViewModel();
         viewModel.SelectedNetworkDevice = CreatePlc();
 
-        viewModel.OpenAddIoMappingDialogCommand.Execute(null);
+        viewModel.OpenAddDataPointMappingDialogCommand.Execute(null);
 
         Assert.NotNull(viewModel.NewIoMapping);
         Assert.True(viewModel.NewIoMapping!.IsCustomSource);
@@ -72,9 +80,29 @@ public sealed class HardwareConfigViewModelBehaviorTests
         var mapping = Assert.Single(viewModel.IoMappings);
         Assert.StartsWith("Manual.", mapping.SignalKey);
         Assert.Equal("D900", mapping.PlcAddress);
-        Assert.Equal("自定义点位", mapping.BusinessGroup);
+        Assert.Equal("自定义单点数据", mapping.BusinessGroup);
         Assert.Equal("临时调试值", mapping.SignalName);
-        Assert.Equal("Write", mapping.Direction);
+        Assert.Equal("Read", mapping.Direction);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task DeleteIoPoint_WhenInteractionSelected_ShouldDeleteWholeBusinessGroup()
+        => RunOnStaThreadAsync(() =>
+    {
+        var viewModel = CreateViewModel();
+        viewModel.SelectedNetworkDevice = CreatePlc();
+        var read = CreateMapping("Homogenization.RecipeTrigger", "D703", "Read", "工艺参数上传");
+        var write = CreateMapping("Homogenization.RecipeAck", "D603", "Write", "工艺参数上传");
+        var data = CreateMapping("Homogenization.RealtimeTemperature", "D301", "Read", "实时数据", IoMappingOptionCatalog.CategorySingleRead);
+        viewModel.IoMappings.Add(read);
+        viewModel.IoMappings.Add(write);
+        viewModel.IoMappings.Add(data);
+
+        viewModel.DeleteIoMappingCommand.Execute(read);
+
+        var remain = Assert.Single(viewModel.IoMappings);
+        Assert.Equal("Homogenization.RealtimeTemperature", remain.SignalKey);
         return Task.CompletedTask;
     });
 
@@ -114,6 +142,26 @@ public sealed class HardwareConfigViewModelBehaviorTests
             ModuleId = "Homogenization"
         };
 
+    private static IoMappingVm CreateMapping(
+        string signalKey,
+        string address,
+        string direction,
+        string businessGroup,
+        string category = IoMappingOptionCatalog.CategoryInteraction)
+        => new()
+        {
+            NetworkDeviceId = 7,
+            SignalKey = signalKey,
+            PlcAddress = address,
+            AddressCount = 1,
+            DataType = "Int16",
+            Direction = direction,
+            Category = category,
+            BusinessGroup = businessGroup,
+            SignalName = signalKey,
+            SortOrder = 1
+        };
+
     private sealed class StubHardwareConfigCrudService : IHardwareConfigCrudService
     {
         public Task<HardwareConfigInitResult> LoadAsync(CancellationToken cancellationToken = default)
@@ -125,7 +173,7 @@ public sealed class HardwareConfigViewModelBehaviorTests
         public Task<ModuleTemplateInfoResult> GetModuleTemplateInfoAsync(
             NetworkDeviceVm? selectedNetworkDevice,
             CancellationToken cancellationToken = default)
-            => Task.FromResult(new ModuleTemplateInfoResult(false, selectedNetworkDevice?.ModuleId, [], "测试默认点位。"));
+            => Task.FromResult(new ModuleTemplateInfoResult(false, selectedNetworkDevice?.ModuleId, [], "测试标准点位。"));
 
         public Task<CrudOperationResult> ApplyModuleTemplateAsync(
             NetworkDeviceVm? selectedNetworkDevice,

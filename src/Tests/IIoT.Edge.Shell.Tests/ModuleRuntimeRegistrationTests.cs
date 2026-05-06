@@ -48,7 +48,7 @@ public sealed class ModuleRuntimeRegistrationTests
             Assert.Empty(discovery.Issues);
             Assert.Empty(activation.Issues);
             Assert.Equal(
-                ["Homogenization", "Stacking"],
+                ["Homogenization"],
                 activation.Modules.Select(x => x.ModuleId).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray());
         }
         finally
@@ -66,7 +66,7 @@ public sealed class ModuleRuntimeRegistrationTests
             var discovery = DiscoverTestPlugins(pluginRoot);
 
             Assert.Equal(
-                ["Homogenization", "Stacking"],
+                ["Homogenization"],
                 discovery.Modules.Select(x => x.ModuleId).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray());
         }
         finally
@@ -76,19 +76,19 @@ public sealed class ModuleRuntimeRegistrationTests
     }
 
     [Fact]
-    public void ConfiguredCatalog_WhenHomogenizationAndStackingAreEnabled_ShouldLoadBothModules()
+    public void ConfiguredCatalog_WhenHomogenizationIsEnabled_ShouldLoadModule()
     {
         var pluginRoot = CreatePluginRuntimeRoot();
         try
         {
             var discovery = DiscoverTestPlugins(pluginRoot);
             var activation = ShellModuleCatalog.CreateEnabledModules(
-                CreateConfiguration(["Homogenization", "Stacking"]),
+                CreateConfiguration(["Homogenization"]),
                 discovery.Modules);
 
             Assert.Empty(activation.Issues);
-            Assert.Equal(2, activation.Modules.Count);
-            Assert.Equal(["Homogenization", "Stacking"], activation.Modules.Select(module => module.ModuleId).ToArray());
+            Assert.Single(activation.Modules);
+            Assert.Equal(["Homogenization"], activation.Modules.Select(module => module.ModuleId).ToArray());
         }
         finally
         {
@@ -104,11 +104,11 @@ public sealed class ModuleRuntimeRegistrationTests
         {
             var discovery = DiscoverTestPlugins(pluginRoot);
             var activation = ShellModuleCatalog.CreateEnabledModules(
-                CreateConfiguration(["Stacking", "UnknownModule"]),
+                CreateConfiguration(["Homogenization", "UnknownModule"]),
                 discovery.Modules);
 
             Assert.Single(activation.Modules);
-            Assert.Equal("Stacking", activation.Modules[0].ModuleId);
+            Assert.Equal("Homogenization", activation.Modules[0].ModuleId);
             var issue = Assert.Single(activation.Issues);
             Assert.Equal("PLUGIN_ENABLED_NOT_FOUND", issue.Code);
             Assert.Contains("未知模块", issue.Message, StringComparison.Ordinal);
@@ -120,29 +120,24 @@ public sealed class ModuleRuntimeRegistrationTests
     }
 
     [Fact]
-    public async Task AppLifecycleManager_WhenOnlyStackingIsEnabled_ShouldReportPluginLifecycleStates()
+    public async Task AppLifecycleManager_WhenOnlyHomogenizationIsEnabled_ShouldReportPluginLifecycleStates()
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
-            enabledModules: ["Stacking"],
-            deviceModuleIds: ["Stacking"]);
+            enabledModules: ["Homogenization"],
+            deviceModuleIds: ["Homogenization"]);
 
         var result = await harness.Manager.StartAsync();
 
         Assert.True(result.Success, result.Message);
 
         var report = harness.StartupDiagnosticsStore.Current;
-        Assert.Equal(["Stacking"], report.EnabledModules);
-        Assert.Equal(["Stacking"], report.ActivatedModules);
-
-        var stackingState = Assert.Single(
-            report.PluginStates,
-            x => string.Equals(x.ModuleId, "Stacking", StringComparison.OrdinalIgnoreCase));
-        Assert.Equal(PluginLifecycleState.Activated, stackingState.State);
+        Assert.Equal(["Homogenization"], report.EnabledModules);
+        Assert.Equal(["Homogenization"], report.ActivatedModules);
 
         var homogenizationState = Assert.Single(
             report.PluginStates,
             x => string.Equals(x.ModuleId, "Homogenization", StringComparison.OrdinalIgnoreCase));
-        Assert.Equal(PluginLifecycleState.DisabledByConfig, homogenizationState.State);
+        Assert.Equal(PluginLifecycleState.Activated, homogenizationState.State);
     }
 
     [Fact]
@@ -172,12 +167,11 @@ public sealed class ModuleRuntimeRegistrationTests
                     moduleParamRegistry));
             }
 
-            Assert.Equal(2, modules.Count);
-            Assert.Equal(2, cellDataRegistry.GetRegistrations().Count);
-            Assert.Equal(2, runtimeRegistry.GetRegistrations().Count);
-            Assert.Equal(2, integrationRegistry.GetCloudUploaders().Count);
-            Assert.Equal(2, moduleParamRegistry.GetRegistrations().Count);
-            Assert.NotNull(viewRegistry.GetViewRegistration("Stacking.DataView"));
+            Assert.Single(modules);
+            Assert.Single(cellDataRegistry.GetRegistrations());
+            Assert.Single(runtimeRegistry.GetRegistrations());
+            Assert.Single(integrationRegistry.GetCloudUploaders());
+            Assert.Single(moduleParamRegistry.GetRegistrations());
             Assert.NotNull(viewRegistry.GetViewRegistration("Homogenization.DataView"));
         }
         finally
@@ -189,12 +183,12 @@ public sealed class ModuleRuntimeRegistrationTests
     [Fact]
     public void ModuleViewRegistry_ShouldRejectCorePrefixedRoutes()
     {
-        var registry = new ModuleViewRegistry(new ViewRegistry(), "Stacking");
+        var registry = new ModuleViewRegistry(new ViewRegistry(), "Homogenization");
 
         var ex = Assert.Throws<InvalidOperationException>(() =>
             registry.RegisterRoute("Core.BadRoute", typeof(object), typeof(object)));
 
-        Assert.Contains("Stacking.", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("Homogenization.", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -293,240 +287,10 @@ public sealed class ModuleRuntimeRegistrationTests
         }
     }
 
-    [Fact]
-    public async Task AppLifecycleManager_WhenDefaultModulesAreUsed_ShouldBindStackingFactoryAndRestoreState()
-    {
-        await using var harness = await AppLifecycleHarness.CreateAsync(
-            enabledModules: [],
-            deviceModuleIds: ["Stacking"]);
-
-        var result = await harness.Manager.StartAsync();
-
-        Assert.True(result.Success, result.Message);
-        Assert.Single(harness.PlcManager.RegisteredFactories);
-        Assert.Equal(1, harness.ContextStore.LoadCallCount);
-        Assert.Equal(1, harness.BackgroundCoordinator.StartCallCount);
-        Assert.Contains(
-            harness.Logger.Entries,
-            entry => entry.Message.Contains("[生命周期] 开始应用启动。", StringComparison.Ordinal));
-        Assert.True(harness.PlcManager.RegisteredFactories.TryGetValue("PLC-A", out var factory));
-
-        var tasks = factory!(
-            new PlcBuffer(8, 8),
-            new ProductionContext { DeviceName = "PLC-A" });
-
-        Assert.Single(tasks);
-        Assert.Equal("StackingSignalCaptureTask", tasks[0].GetType().Name);
-    }
-
-    [Fact]
-    public async Task AppLifecycleManager_WhenTwoStackingDevicesAreEnabled_ShouldBindBothFactories()
-    {
-        await using var harness = await AppLifecycleHarness.CreateAsync(
-            enabledModules: ["Stacking"],
-            deviceModuleIds: ["Stacking", "Stacking"]);
-
-        var result = await harness.Manager.StartAsync();
-
-        Assert.True(result.Success, result.Message);
-        Assert.Equal(2, harness.PlcManager.RegisteredFactories.Count);
-        Assert.Equal(1, harness.ContextStore.LoadCallCount);
-        Assert.Equal(1, harness.BackgroundCoordinator.StartCallCount);
-        Assert.True(harness.PlcManager.RegisteredFactories.ContainsKey("PLC-A"));
-        Assert.True(harness.PlcManager.RegisteredFactories.ContainsKey("PLC-B"));
-
-        var firstTasks = harness.PlcManager.RegisteredFactories["PLC-A"](
-            new PlcBuffer(8, 8),
-            new ProductionContext { DeviceName = "PLC-A" });
-        var secondTasks = harness.PlcManager.RegisteredFactories["PLC-B"](
-            new PlcBuffer(8, 8),
-            new ProductionContext { DeviceName = "PLC-B" });
-
-        Assert.Single(firstTasks);
-        Assert.Single(secondTasks);
-        Assert.Equal("StackingSignalCaptureTask", firstTasks[0].GetType().Name);
-        Assert.Equal("StackingSignalCaptureTask", secondTasks[0].GetType().Name);
-    }
-
-    [Fact]
-    public async Task AppLifecycleManager_WhenDeviceUsesDisabledModule_ShouldFailStartupValidation()
-    {
-        await using var harness = await AppLifecycleHarness.CreateAsync(
-            enabledModules: ["Homogenization"],
-            deviceModuleIds: ["Stacking"]);
-
-        var result = await harness.Manager.StartAsync();
-
-        Assert.False(result.Success);
-        Assert.Contains("MODULE_NOT_ENABLED", result.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.Empty(harness.PlcManager.RegisteredFactories);
-        Assert.Equal(0, harness.BackgroundCoordinator.StartCallCount);
-    }
-
-    [Fact]
-    public async Task AppLifecycleManager_WhenDevelopmentSamplesAreEnabled_ShouldSeedStackingDeviceAndContext()
-    {
-        await using var harness = await AppLifecycleHarness.CreateAsync(
-            enabledModules: ["Stacking"],
-            deviceModuleIds: [],
-            environmentName: "Development",
-            developmentSamplesEnabled: true,
-            seedStackingModule: true);
-
-        var result = await harness.Manager.StartAsync();
-
-        Assert.True(result.Success, result.Message);
-
-        var devices = await harness.GetNetworkDevicesAsync();
-        var stackingDevice = Assert.Single(devices);
-        Assert.Equal("Stacking", stackingDevice.ModuleId);
-        Assert.Equal("PLC-STACKING-DEV", stackingDevice.DeviceName);
-
-        var mappings = await harness.GetIoMappingsAsync(stackingDevice.Id);
-        Assert.Equal(4, mappings.Count);
-        Assert.Equal(
-            ["Stacking.Sequence", "Stacking.LayerCount", "Stacking.ResultCode", "Stacking.Ack"],
-            mappings.OrderBy(x => x.SortOrder).Select(x => x.SignalKey).ToArray());
-        Assert.Equal(
-            ["DB1.DBW0", "DB1.DBW2", "DB1.DBW4", "DB1.DBW6"],
-            mappings.OrderBy(x => x.SortOrder).Select(x => x.PlcAddress).ToArray());
-
-        var context = Assert.Single(harness.ContextStore.GetAll());
-        var sampleCell = Assert.Single(
-            context.CurrentCells.Values.Where(x => string.Equals(x.ProcessType, "Stacking", StringComparison.OrdinalIgnoreCase)));
-        Assert.Equal("ST-DEV-0001", GetStringProperty(sampleCell, "Barcode"));
-        Assert.Equal("开发样本", GetStringProperty(sampleCell, "RuntimeStatus"));
-    }
-
-    [Fact]
-    public async Task AppLifecycleManager_WhenDevelopmentSamplesRunTwice_ShouldRemainIdempotent()
-    {
-        await using var harness = await AppLifecycleHarness.CreateAsync(
-            enabledModules: ["Stacking"],
-            deviceModuleIds: [],
-            environmentName: "Development",
-            developmentSamplesEnabled: true,
-            seedStackingModule: true);
-
-        var firstStart = await harness.Manager.StartAsync();
-        var secondStart = await harness.Manager.StartAsync();
-
-        Assert.True(firstStart.Success, firstStart.Message);
-        Assert.True(secondStart.Success, secondStart.Message);
-
-        var devices = await harness.GetNetworkDevicesAsync();
-        var stackingDevice = Assert.Single(devices);
-        var mappings = await harness.GetIoMappingsAsync(stackingDevice.Id);
-        Assert.Equal(4, mappings.Count);
-
-        var context = Assert.Single(harness.ContextStore.GetAll());
-        Assert.Single(context.CurrentCells.Values.Where(x => string.Equals(x.ProcessType, "Stacking", StringComparison.OrdinalIgnoreCase)));
-    }
-
-    [Fact]
-    public async Task AppLifecycleManager_WhenDevelopmentSamplesAreDisabled_ShouldNotSeedStackingDevice()
-    {
-        await using var harness = await AppLifecycleHarness.CreateAsync(
-            enabledModules: ["Stacking"],
-            deviceModuleIds: [],
-            environmentName: "Development",
-            developmentSamplesEnabled: false,
-            seedStackingModule: false);
-
-        var result = await harness.Manager.StartAsync();
-
-        Assert.True(result.Success, result.Message);
-        Assert.Empty(await harness.GetNetworkDevicesAsync());
-        Assert.Empty(harness.ContextStore.GetAll());
-    }
-
-    [Fact]
-    public async Task AppLifecycleManager_WhenEnvironmentIsProduction_ShouldNotSeedDevelopmentSamples()
-    {
-        await using var harness = await AppLifecycleHarness.CreateAsync(
-            enabledModules: ["Stacking"],
-            deviceModuleIds: [],
-            environmentName: "Production",
-            developmentSamplesEnabled: true,
-            seedStackingModule: true);
-
-        var result = await harness.Manager.StartAsync();
-
-        Assert.True(result.Success, result.Message);
-        Assert.Empty(await harness.GetNetworkDevicesAsync());
-        Assert.Empty(harness.ContextStore.GetAll());
-    }
-
-    [Fact]
-    public async Task AppLifecycleManager_WhenStackingMappingIsMissing_ShouldFailStartupValidation()
-    {
-        await using var harness = await AppLifecycleHarness.CreateAsync(
-            enabledModules: ["Stacking"],
-            deviceModuleIds: ["Stacking"]);
-
-        var device = Assert.Single(await harness.GetNetworkDevicesAsync());
-        await harness.ReplaceIoMappingsAsync(device.Id,
-        [
-            CreateIoMapping(device.Id, "Stacking.Sequence", "DB1.DBW0", 1, "Int16", "Read", 1),
-            CreateIoMapping(device.Id, "Stacking.LayerCount", "DB1.DBW2", 1, "Int16", "Read", 2),
-            CreateIoMapping(device.Id, "Stacking.ResultCode", "DB1.DBW4", 1, "Int16", "Read", 3)
-        ]);
-
-        var result = await harness.Manager.StartAsync();
-
-        Assert.False(result.Success);
-        Assert.Contains("缺少信号 Stacking.Ack", result.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task AppLifecycleManager_WhenStackingAckDirectionIsWrong_ShouldFailStartupValidation()
-    {
-        await using var harness = await AppLifecycleHarness.CreateAsync(
-            enabledModules: ["Stacking"],
-            deviceModuleIds: ["Stacking"]);
-
-        var device = Assert.Single(await harness.GetNetworkDevicesAsync());
-        await harness.ReplaceIoMappingsAsync(device.Id,
-        [
-            CreateIoMapping(device.Id, "Stacking.Sequence", "DB1.DBW0", 1, "Int16", "Read", 1),
-            CreateIoMapping(device.Id, "Stacking.LayerCount", "DB1.DBW2", 1, "Int16", "Read", 2),
-            CreateIoMapping(device.Id, "Stacking.ResultCode", "DB1.DBW4", 1, "Int16", "Read", 3),
-            CreateIoMapping(device.Id, "Stacking.Ack", "DB1.DBW6", 1, "Int16", "Read", 4)
-        ]);
-
-        var result = await harness.Manager.StartAsync();
-
-        Assert.False(result.Success);
-        Assert.Contains("信号 Stacking.Ack 方向不一致", result.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task AppLifecycleManager_WhenStackingAddressCountIsInvalid_ShouldFailStartupValidation()
-    {
-        await using var harness = await AppLifecycleHarness.CreateAsync(
-            enabledModules: ["Stacking"],
-            deviceModuleIds: ["Stacking"]);
-
-        var device = Assert.Single(await harness.GetNetworkDevicesAsync());
-        await harness.ReplaceIoMappingsAsync(device.Id,
-        [
-            CreateIoMapping(device.Id, "Stacking.Sequence", "DB1.DBW0", 1, "Int16", "Read", 1),
-            CreateIoMapping(device.Id, "Stacking.LayerCount", "DB1.DBW2", 1, "Int16", "Read", 2),
-            CreateIoMapping(device.Id, "Stacking.ResultCode", "DB1.DBW4", 2, "Int16", "Read", 3),
-            CreateIoMapping(device.Id, "Stacking.Ack", "DB1.DBW6", 1, "Int16", "Write", 4)
-        ]);
-
-        var result = await harness.Manager.StartAsync();
-
-        Assert.False(result.Success);
-        Assert.Contains("信号 Stacking.ResultCode 地址长度不一致", result.Message, StringComparison.Ordinal);
-    }
-
     private static IConfiguration CreateConfiguration(
         string[]? enabledModules = null,
         string environmentName = "Production",
-        bool developmentSamplesEnabled = false,
-        bool seedStackingModule = false)
+        bool developmentSamplesEnabled = false)
     {
         var settings = new Dictionary<string, string?>
         {
@@ -534,10 +298,7 @@ public sealed class ModuleRuntimeRegistrationTests
             ["CloudApi:ClientCode"] = "CLIENT-01",
             ["Shell:Environment"] = environmentName,
             ["DevelopmentSamples:Enabled"] = developmentSamplesEnabled.ToString(),
-            ["DevelopmentSamples:SeedStackingModule"] = seedStackingModule.ToString(),
-            ["DevelopmentSamples:StackingDeviceName"] = "PLC-STACKING-DEV",
             ["DevelopmentSamples:SampleBarcode"] = "ST-DEV-0001",
-            ["DevelopmentSamples:SampleTrayCode"] = "TRAY-STACK-DEV",
             ["DevelopmentSamples:SampleLayerCount"] = "12"
         };
 
@@ -566,7 +327,7 @@ public sealed class ModuleRuntimeRegistrationTests
         Directory.CreateDirectory(pluginRoot);
 
         var runtimeModulesRoot = ShellModuleCatalog.GetPluginRootPath(AppContext.BaseDirectory);
-        foreach (var moduleId in new[] { "Homogenization", "Stacking" })
+        foreach (var moduleId in new[] { "Homogenization" })
         {
             var sourceModuleDirectory = Path.Combine(runtimeModulesRoot, moduleId);
             if (!Directory.Exists(sourceModuleDirectory))
@@ -587,7 +348,6 @@ public sealed class ModuleRuntimeRegistrationTests
     private static string GetModuleSourceDirectory(string moduleId)
         => moduleId switch
         {
-            "Stacking" => Path.Combine(FindRepoRoot(), "src", "Modules", "IIoT.Edge.Module.Stacking"),
             "Homogenization" => Path.Combine(FindRepoRoot(), "src", "Modules", "IIoT.Edge.Module.Homogenization"),
             _ => throw new InvalidOperationException($"Unsupported module id '{moduleId}'.")
         };
@@ -762,8 +522,7 @@ public sealed class ModuleRuntimeRegistrationTests
             string[] enabledModules,
             string[] deviceModuleIds,
             string environmentName = "Production",
-            bool developmentSamplesEnabled = false,
-            bool seedStackingModule = false)
+            bool developmentSamplesEnabled = false)
         {
             var tempDirectory = Path.Combine(Path.GetTempPath(), "edge-shell-tests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(tempDirectory);
@@ -771,8 +530,7 @@ public sealed class ModuleRuntimeRegistrationTests
             var configuration = CreateConfiguration(
                 enabledModules,
                 environmentName,
-                developmentSamplesEnabled,
-                seedStackingModule);
+                developmentSamplesEnabled);
             var runtimePaths = CreateRuntimePaths(tempDirectory, configuration);
 
             var services = new ServiceCollection();

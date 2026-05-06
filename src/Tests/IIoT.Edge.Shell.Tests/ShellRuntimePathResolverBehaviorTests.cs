@@ -17,14 +17,14 @@ public sealed class ShellRuntimePathResolverBehaviorTests
             var configuration = new ConfigurationBuilder()
                 .AddInMemoryCollection(new Dictionary<string, string?>
                 {
-                    ["Shell:MachineProfile"] = "StackingLine"
+                    ["Shell:MachineProfile"] = "HomogenizationLine"
                 })
                 .Build();
 
             var result = ShellRuntimePathResolver.Resolve(baseDirectory, configuration);
 
-            Assert.Equal("StackingLine", result.ProfileName);
-            Assert.Equal(Path.Combine(baseDirectory, "data", "profiles", "StackingLine"), result.RuntimeDataRoot);
+            Assert.Equal("HomogenizationLine", result.ProfileName);
+            Assert.Equal(Path.Combine(baseDirectory, "data", "profiles", "HomogenizationLine"), result.RuntimeDataRoot);
             Assert.Equal(Path.Combine(result.RuntimeDataRoot, "db"), result.DatabaseDirectory);
             Assert.Equal(Path.Combine(result.RuntimeDataRoot, "context"), result.ContextDirectory);
             Assert.Equal(Path.Combine(result.DiagnosticsDirectory, "logs"), result.LogDirectory);

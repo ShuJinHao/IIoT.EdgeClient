@@ -8,10 +8,10 @@ public sealed class PluginCatalogLifecycleContractTests
     [Fact]
     public void DiscoverModules_WhenManifestMissesHostApiVersion_ShouldReportManifestInvalid()
     {
-        var pluginRoot = CreatePluginRoot("Stacking");
+        var pluginRoot = CreatePluginRoot("Homogenization");
         try
         {
-            var manifestPath = Path.Combine(pluginRoot, "Stacking", "plugin.json");
+            var manifestPath = Path.Combine(pluginRoot, "Homogenization", "plugin.json");
             var manifest = JsonNode.Parse(File.ReadAllText(manifestPath))!.AsObject();
             manifest.Remove("hostApiVersion");
             File.WriteAllText(manifestPath, manifest.ToJsonString(new() { WriteIndented = true }));
@@ -31,10 +31,10 @@ public sealed class PluginCatalogLifecycleContractTests
     [Fact]
     public void CreateEnabledModules_WhenHostVersionIsOutsideSupportedRange_ShouldReportCompatibilityIssue()
     {
-        var pluginRoot = CreatePluginRoot("Stacking");
+        var pluginRoot = CreatePluginRoot("Homogenization");
         try
         {
-            var manifestPath = Path.Combine(pluginRoot, "Stacking", "plugin.json");
+            var manifestPath = Path.Combine(pluginRoot, "Homogenization", "plugin.json");
             var manifest = JsonNode.Parse(File.ReadAllText(manifestPath))!.AsObject();
             manifest["maxHostVersion"] = "0.9.0";
             File.WriteAllText(manifestPath, manifest.ToJsonString(new() { WriteIndented = true }));
@@ -44,7 +44,7 @@ public sealed class PluginCatalogLifecycleContractTests
                 new ConfigurationBuilder()
                     .AddInMemoryCollection(new Dictionary<string, string?>
                     {
-                        ["Modules:Enabled:0"] = "Stacking"
+                        ["Modules:Enabled:0"] = "Homogenization"
                     })
                     .Build(),
                 "Modules",
@@ -62,12 +62,12 @@ public sealed class PluginCatalogLifecycleContractTests
     [Fact]
     public void CreateEnabledModules_WhenDependencyIsNotEnabled_ShouldReportDependencyIssue()
     {
-        var pluginRoot = CreatePluginRoot("Homogenization", "Stacking");
+        var pluginRoot = CreatePluginRoot("Homogenization");
         try
         {
-            var manifestPath = Path.Combine(pluginRoot, "Stacking", "plugin.json");
+            var manifestPath = Path.Combine(pluginRoot, "Homogenization", "plugin.json");
             var manifest = JsonNode.Parse(File.ReadAllText(manifestPath))!.AsObject();
-            manifest["dependencies"] = new JsonArray("Homogenization");
+            manifest["dependencies"] = new JsonArray("MissingProcess");
             File.WriteAllText(manifestPath, manifest.ToJsonString(new() { WriteIndented = true }));
 
             var discovery = DirectoryModuleCatalog.DiscoverModules(pluginRoot);
@@ -75,7 +75,7 @@ public sealed class PluginCatalogLifecycleContractTests
                 new ConfigurationBuilder()
                     .AddInMemoryCollection(new Dictionary<string, string?>
                     {
-                        ["Modules:Enabled:0"] = "Stacking"
+                        ["Modules:Enabled:0"] = "Homogenization"
                     })
                     .Build(),
                 "Modules",

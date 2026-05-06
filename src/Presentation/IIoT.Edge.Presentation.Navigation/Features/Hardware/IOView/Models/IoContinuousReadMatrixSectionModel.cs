@@ -41,7 +41,7 @@ public sealed class IoContinuousReadMatrixSectionModel : BaseNotifyPropertyChang
                 ? GetText("Navigation_Io_NoContinuousValues", "暂无连续值")
                 : string.Format(
                     System.Globalization.CultureInfo.CurrentCulture,
-                    GetText("Navigation_Io_ArraySummaryFormat", "{0} 行 x {1} 列"),
+                    GetText("Navigation_Io_ArraySummaryFormat", "{0} 行 x {1} 项"),
                     rows,
                     columns);
 

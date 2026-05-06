@@ -86,7 +86,6 @@ internal static class ContractTestPathHelper
         var repoRoot = FindRepoRoot();
         return moduleId switch
         {
-            "Stacking" => Path.Combine(repoRoot, "src", "Modules", "IIoT.Edge.Module.Stacking"),
             "Homogenization" => Path.Combine(repoRoot, "src", "Modules", "IIoT.Edge.Module.Homogenization"),
             _ => throw new InvalidOperationException($"Unsupported module id '{moduleId}'.")
         };

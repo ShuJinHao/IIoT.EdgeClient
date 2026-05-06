@@ -1,7 +1,6 @@
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.Application.Abstractions.Plc.Signals;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
@@ -18,7 +17,7 @@ using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesS
 namespace IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 
 /// <summary>
-/// 配方握手任务：PLC 触发后按 label 读取配方数组并上传 MES。
+/// 配方握手任务：PLC 触发后按配方连续读数据区读取数组并上传 MES。
 /// </summary>
 internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
 {
@@ -26,9 +25,13 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
     private readonly HomogenizationMesScenarioChannel _mesChannel;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
 
+    /// <summary>
+    /// 创建匀浆配方上传握手任务。
+    /// </summary>
     public HomogenizationRecipeTask(
         IPlcBuffer buffer,
-        ILogicalSignalAccessor<HomogenizationSignal> signals,
+        HomogenizationPlcHandshakeAccessor interaction,
+        HomogenizationSignalCodec codec,
         HomogenizationContext context,
         IDeviceService deviceService,
         HomogenizationMesScenarioChannel mesChannel,
@@ -37,7 +40,7 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
         IProductionTimeProvider productionTime,
         IOptions<HomogenizationModuleOptions> moduleOptions,
         IOptions<HomogenizationCodeOptions> codeOptions)
-        : base(buffer, signals, context, logger, productionTime, codeOptions, moduleOptions)
+        : base(buffer, interaction, codec, context, logger, productionTime, codeOptions, moduleOptions)
     {
         _deviceService = deviceService;
         _mesChannel = mesChannel;
@@ -51,10 +54,12 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
 
     protected override async Task DoCoreAsync()
     {
+        const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.配方上传触发;
+
         switch (Step)
         {
             case 0:
-                if (Signals.ReadUInt16(HomogenizationSignal.配方上传触发) == CodeOptions.Plc.SignalTrigger)
+                if (Interaction.IsTriggered(trigger))
                 {
                     Logger.Info($"[{ModuleContext.DeviceName}] {TaskName} 配方上传触发。");
                     Step = 10;
@@ -78,7 +83,7 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
                     _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Recipe, message);
                     ModuleContext.LastRecipeAt = ProductionTime.BusinessNow;
                     ModuleContext.LastRecipeResult = message;
-                    Signals.WriteUInt16(HomogenizationSignal.配方应答, CodeOptions.Plc.AckException);
+                    Interaction.ReplyException(trigger);
                     Logger.Error($"[{ModuleContext.DeviceName}] {TaskName} {message}");
                     Step = 30;
                 }
@@ -86,9 +91,9 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
                 break;
 
             case 30:
-                if (Signals.ReadUInt16(HomogenizationSignal.配方上传触发) == CodeOptions.Plc.SignalReset)
+                if (Interaction.IsReset(trigger))
                 {
-                    Signals.WriteUInt16(HomogenizationSignal.配方应答, CodeOptions.Plc.SignalReset);
+                    Interaction.ReplyReset(trigger);
                     Logger.Info($"[{ModuleContext.DeviceName}] {TaskName} 配方上传复位。");
                     Step = 0;
                 }
@@ -99,6 +104,7 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
 
     private async Task ProcessTriggerAsync(CancellationToken cancellationToken)
     {
+        const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.配方上传触发;
         var snapshot = Codec.CaptureRecipeSnapshot();
         var result = await _mesChannel
             .UploadRecipeAsync(_deviceService.CurrentDevice, snapshot, cancellationToken)
@@ -117,6 +123,6 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
         ModuleContext.LastRecipeResult = result.Message;
         ModuleContext.LastRecipeSnapshot = snapshot;
 
-        Signals.WriteUInt16(HomogenizationSignal.配方应答, ResolveAck(result));
+        Interaction.ReplyResult(trigger, result);
     }
 }

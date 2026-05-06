@@ -3,7 +3,6 @@ using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.Application.Abstractions.Plc.Signals;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
@@ -26,22 +25,26 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
     private readonly IDataPipelineService _dataPipelineService;
     private readonly HomogenizationCellDataValidator _validator;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
-    private readonly IModuleParamProvider<MesParam, CloudParam, BusinessParam> _parameters;
+    private readonly IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> _parameters;
 
+    /// <summary>
+    /// 创建匀浆出料握手任务。
+    /// </summary>
     public HomogenizationOutboundTask(
         IPlcBuffer buffer,
-        ILogicalSignalAccessor<HomogenizationSignal> signals,
+        HomogenizationPlcHandshakeAccessor interaction,
+        HomogenizationSignalCodec codec,
         HomogenizationContext context,
         IDeviceService deviceService,
         IDataPipelineService dataPipelineService,
         HomogenizationCellDataValidator validator,
         IMesUploadDiagnosticsStore diagnosticsStore,
-        IModuleParamProvider<MesParam, CloudParam, BusinessParam> parameters,
+        IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> parameters,
         ILogService logger,
         IProductionTimeProvider productionTime,
         IOptions<HomogenizationModuleOptions> moduleOptions,
         IOptions<HomogenizationCodeOptions> codeOptions)
-        : base(buffer, signals, context, logger, productionTime, codeOptions, moduleOptions)
+        : base(buffer, interaction, codec, context, logger, productionTime, codeOptions, moduleOptions)
     {
         _deviceService = deviceService;
         _dataPipelineService = dataPipelineService;
@@ -57,10 +60,12 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
 
     protected override async Task DoCoreAsync()
     {
+        const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.出料触发;
+
         switch (Step)
         {
             case 0:
-                if (Signals.ReadUInt16(HomogenizationSignal.出料触发) == CodeOptions.Plc.SignalTrigger)
+                if (Interaction.IsTriggered(trigger))
                 {
                     Logger.Info($"[{ModuleContext.DeviceName}] {TaskName} 出料触发。");
                     Step = 10;
@@ -84,7 +89,7 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
                     ModuleContext.LastOutboundAt = ProductionTime.BusinessNow;
                     ModuleContext.LastOutboundResult = message;
                     _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Outbound, message);
-                    Signals.WriteUInt16(HomogenizationSignal.出料应答, CodeOptions.Plc.AckException);
+                    Interaction.ReplyException(trigger);
                     Logger.Error($"[{ModuleContext.DeviceName}] {TaskName} {message}");
                     Step = 30;
                 }
@@ -92,9 +97,9 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
                 break;
 
             case 30:
-                if (Signals.ReadUInt16(HomogenizationSignal.出料触发) == CodeOptions.Plc.SignalReset)
+                if (Interaction.IsReset(trigger))
                 {
-                    Signals.WriteUInt16(HomogenizationSignal.出料应答, CodeOptions.Plc.SignalReset);
+                    Interaction.ReplyReset(trigger);
                     Logger.Info($"[{ModuleContext.DeviceName}] {TaskName} 出料复位。");
                     Step = 0;
                 }
@@ -105,22 +110,23 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
 
     private async Task ProcessTriggerAsync(CancellationToken cancellationToken)
     {
+        const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.出料触发;
         var cellData = BuildRecord();
         if (!_validator.TryValidate(cellData, out var error))
         {
             var message = error ?? "出料校验失败。";
             RecordOutbound(cellData, message);
             _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Outbound, message);
-            Signals.WriteUInt16(HomogenizationSignal.出料应答, CodeOptions.Plc.AckException);
+            Interaction.ReplyException(trigger);
             return;
         }
 
         var parameters = await _parameters.GetAsync(cancellationToken).ConfigureAwait(false);
-        if (parameters.Business<bool>(BusinessParam.启用托盘码重码验证)
+        if (parameters.Business<bool>(HomogenizationParams.Business.启用托盘码重码验证)
             && ModuleContext.HasProcessedTray(HomogenizationTrayCodeStage.Outbound, cellData.TrayCode))
         {
             var message = FormatDuplicateMessage(HomogenizationTrayCodeStage.Outbound, cellData.TrayCode);
-            Signals.WriteUInt16(HomogenizationSignal.出料应答, CodeOptions.Plc.AckMesNg);
+            Interaction.ReplyMesNg(trigger);
             RecordOutbound(cellData, message);
             _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Outbound, message);
             return;
@@ -135,7 +141,7 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
             var failure = FormatRejectedResult(enqueueResult);
             RecordOutbound(cellData, failure);
             _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Outbound, failure);
-            Signals.WriteUInt16(HomogenizationSignal.出料应答, CodeOptions.Plc.AckException);
+            Interaction.ReplyException(trigger);
             return;
         }
 
@@ -151,15 +157,15 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
             "出站已接收",
             cellData.CompletedTime ?? ProductionTime.BusinessNow);
         RecordOutbound(cellData, result);
-        Signals.WriteUInt16(HomogenizationSignal.出料应答, CodeOptions.Plc.AckOk);
+        Interaction.ReplyOk(trigger);
     }
 
     private HomogenizationCellData BuildRecord()
     {
-        var trayCode = Signals.ReadAscii(HomogenizationSignal.托盘码);
+        var outbound = Codec.CaptureOutboundReadings();
         return new HomogenizationCellData
         {
-            TrayCode = trayCode,
+            TrayCode = Codec.ReadTrayCode(),
             DeviceName = ModuleContext.DeviceName,
             DeviceCode = _deviceService.CurrentDevice?.ClientCode ?? ModuleContext.DeviceName,
             InboundTime = ModuleContext.LastInboundAt,
@@ -169,17 +175,17 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
             RecipeSnapshot = ModuleContext.LastRecipeSnapshot,
             EquipmentStatusSnapshot = ModuleContext.LastEquipmentStatusSnapshot
                 ?? Codec.CaptureEquipmentStatusSnapshot(CodeOptions.Mes),
-            CntActualKg = Signals.ReadUInt16(HomogenizationSignal.出料CNT实际值),
-            CntTargetKg = Signals.ReadUInt16(HomogenizationSignal.出料CNT目标值),
-            CntTankAWeightKg = Signals.ReadUInt16(HomogenizationSignal.出料CNTA罐重量),
-            CntTankBWeightKg = Signals.ReadUInt16(HomogenizationSignal.出料CNTB罐重量),
-            NmpActualKg = Signals.ReadUInt16(HomogenizationSignal.出料NMP实际值),
-            NmpTargetKg = Signals.ReadUInt16(HomogenizationSignal.出料NMP目标值),
-            GlueActualKg = Signals.ReadUInt16(HomogenizationSignal.出料胶液实际值),
-            SetStirringTimeMinutes = Signals.ReadUInt16(HomogenizationSignal.出料设定搅拌时间),
-            RemainingStirringTimeMinutes = Signals.ReadUInt16(HomogenizationSignal.出料剩余搅拌时间),
-            SetDispersionTimeMinutes = Signals.ReadUInt16(HomogenizationSignal.出料设定分散时间),
-            RemainingDispersionTimeMinutes = Signals.ReadUInt16(HomogenizationSignal.出料剩余分散时间)
+            CntActualKg = outbound.CntActualKg,
+            CntTargetKg = outbound.CntTargetKg,
+            CntTankAWeightKg = outbound.CntTankAWeightKg,
+            CntTankBWeightKg = outbound.CntTankBWeightKg,
+            NmpActualKg = outbound.NmpActualKg,
+            NmpTargetKg = outbound.NmpTargetKg,
+            GlueActualKg = outbound.GlueActualKg,
+            SetStirringTimeMinutes = outbound.SetStirringTimeMinutes,
+            RemainingStirringTimeMinutes = outbound.RemainingStirringTimeMinutes,
+            SetDispersionTimeMinutes = outbound.SetDispersionTimeMinutes,
+            RemainingDispersionTimeMinutes = outbound.RemainingDispersionTimeMinutes
         };
     }
 

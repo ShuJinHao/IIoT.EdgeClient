@@ -17,7 +17,7 @@ public sealed class ShellConfigurationLoaderBehaviorTests
                 """
                 {
                   "Shell": {
-                    "MachineProfile": "StackingLine"
+                    "MachineProfile": "HomogenizationLine"
                   },
                   "Modules": {
                     "Enabled": [ "Homogenization" ]
@@ -25,20 +25,20 @@ public sealed class ShellConfigurationLoaderBehaviorTests
                 }
                 """);
             WriteText(
-                Path.Combine(tempDirectory, "appsettings.machine.StackingLine.json"),
+                Path.Combine(tempDirectory, "appsettings.machine.HomogenizationLine.json"),
                 """
                 {
                   "Modules": {
-                    "Enabled": [ "Stacking" ]
+                    "Enabled": [ "Homogenization" ]
                   }
                 }
                 """);
 
             var result = ShellConfigurationLoader.Load(tempDirectory);
 
-            Assert.Equal("StackingLine", result.MachineProfile);
+            Assert.Equal("HomogenizationLine", result.MachineProfile);
             Assert.True(result.IsMachineProfileLoaded);
-            Assert.Equal("Stacking", result.Configuration["Modules:Enabled:0"]);
+            Assert.Equal("Homogenization", result.Configuration["Modules:Enabled:0"]);
             Assert.Equal("True", result.Configuration["Shell:MachineProfileLoaded"]);
         }
         finally
@@ -61,7 +61,7 @@ public sealed class ShellConfigurationLoaderBehaviorTests
                     "MachineProfile": "MissingLine"
                   },
                   "Modules": {
-                    "Enabled": [ "Stacking" ]
+                    "Enabled": [ "Homogenization" ]
                   }
                 }
                 """);
@@ -70,7 +70,7 @@ public sealed class ShellConfigurationLoaderBehaviorTests
 
             Assert.Equal("MissingLine", result.MachineProfile);
             Assert.False(result.IsMachineProfileLoaded);
-            Assert.Equal("Stacking", result.Configuration["Modules:Enabled:0"]);
+            Assert.Equal("Homogenization", result.Configuration["Modules:Enabled:0"]);
             Assert.Equal("False", result.Configuration["Shell:MachineProfileLoaded"]);
             Assert.Equal("appsettings.machine.MissingLine.json", result.Configuration["Shell:MachineProfileFileName"]);
         }
@@ -99,22 +99,22 @@ public sealed class ShellConfigurationLoaderBehaviorTests
                 }
                 """);
             WriteText(
-                Path.Combine(tempDirectory, "appsettings.machine.StackingLine.json"),
+                Path.Combine(tempDirectory, "appsettings.machine.HomogenizationLine.json"),
                 """
                 {
                   "Modules": {
-                    "Enabled": [ "Stacking" ]
+                    "Enabled": [ "Homogenization" ]
                   }
                 }
                 """);
 
-            Environment.SetEnvironmentVariable(environmentVariable, "StackingLine");
+            Environment.SetEnvironmentVariable(environmentVariable, "HomogenizationLine");
 
             var result = ShellConfigurationLoader.Load(tempDirectory);
 
-            Assert.Equal("StackingLine", result.MachineProfile);
+            Assert.Equal("HomogenizationLine", result.MachineProfile);
             Assert.True(result.IsMachineProfileLoaded);
-            Assert.Equal("Stacking", result.Configuration["Modules:Enabled:0"]);
+            Assert.Equal("Homogenization", result.Configuration["Modules:Enabled:0"]);
         }
         finally
         {

@@ -62,7 +62,7 @@ public class IoMappingVm : ObservableModelBase
         set { _direction = value; OnPropertyChanged(); }
     }
 
-    private string _category = "单点读数据";
+    private string _category = IoMappingOptionCatalog.CategorySingleRead;
     public string Category
     {
         get => _category;
@@ -108,7 +108,7 @@ public class IoMappingVm : ObservableModelBase
     }
 
     /// <summary>
-    /// IO 映射统一分组标题，硬件配置页与 IO 交互页共用同一分类规则。
+    /// IO 映射统一分组标题，硬件配置页和 IO 交互页共用同一分类规则。
     /// </summary>
     public string GroupTitle
     {

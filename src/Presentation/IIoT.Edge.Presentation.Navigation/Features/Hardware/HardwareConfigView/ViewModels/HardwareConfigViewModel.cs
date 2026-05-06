@@ -1,23 +1,22 @@
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Windows.Data;
+using System.Windows.Input;
 using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Common.Crud;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Models;
 using IIoT.Edge.Application.Features.Hardware.IoMappings;
+using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Presentation.Navigation.Localization;
 using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Windows.Input;
-using System.Windows.Data;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView;
 
 public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
 {
-    // 自定义点位 SortOrder 起始号段，必须远高于任何模块标准 profile 的最大 SortOrder，
-    // 避免 Manual.<guid> 调试点位与标准信号抢占 PLC 连续读所依赖的固定号段。
     private const int ManualSortOrderBase = 10000;
 
     private readonly IHardwareConfigCrudService _crudService;
@@ -30,7 +29,8 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
     private readonly BaseCommand _deleteNetworkDeviceCommand;
     private readonly BaseCommand _addSerialDeviceCommand;
     private readonly BaseCommand _deleteSerialDeviceCommand;
-    private readonly BaseCommand _openAddIoMappingDialogCommand;
+    private readonly BaseCommand _openAddInteractionMappingDialogCommand;
+    private readonly BaseCommand _openAddDataPointMappingDialogCommand;
     private readonly BaseCommand _confirmAddIoMappingCommand;
     private readonly BaseCommand _cancelAddIoMappingDialogCommand;
     private readonly BaseCommand _deleteIoMappingCommand;
@@ -55,11 +55,18 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
     public ICollectionView IoMappingsView { get; }
 
     public IReadOnlyList<string> IoCategories => IoMappingOptionCatalog.Categories;
+    public IReadOnlyList<string> IoDataPointCategories { get; } =
+    [
+        IoMappingOptionCatalog.CategorySingleRead,
+        IoMappingOptionCatalog.CategoryContinuousRead
+    ];
     public IReadOnlyList<string> IoDirections => IoMappingOptionCatalog.Directions;
     public IReadOnlyList<string> IoDataTypes => IoMappingOptionCatalog.DataTypes;
     public IReadOnlyList<string> IoPointSources => IoMappingOptionCatalog.PointSources;
 
     public ObservableCollection<IoStandardSignalOptionVm> StandardIoSignals { get; } = new();
+    public ObservableCollection<IoStandardSignalOptionVm> StandardDataSignals { get; } = new();
+    public ObservableCollection<IoStandardSignalGroupOptionVm> StandardInteractionGroups { get; } = new();
 
     private IoStandardSignalOptionVm? _selectedStandardIoSignal;
     public IoStandardSignalOptionVm? SelectedStandardIoSignal
@@ -78,7 +85,24 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         }
     }
 
-    private string _moduleTemplateHint = "请选择 PLC 设备后补齐默认点位。";
+    private IoStandardSignalGroupOptionVm? _selectedStandardInteractionGroup;
+    public IoStandardSignalGroupOptionVm? SelectedStandardInteractionGroup
+    {
+        get => _selectedStandardInteractionGroup;
+        set
+        {
+            if (ReferenceEquals(_selectedStandardInteractionGroup, value))
+            {
+                return;
+            }
+
+            _selectedStandardInteractionGroup = value;
+            OnPropertyChanged();
+            ApplyStandardInteractionGroupToDraft(value);
+        }
+    }
+
+    private string _moduleTemplateHint = "请选择 PLC 设备后导入插件标准点位。";
     public string ModuleTemplateHint
     {
         get => _moduleTemplateHint;
@@ -100,6 +124,20 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         }
     }
 
+    private bool _isInteractionPairDialog;
+    public bool IsInteractionPairDialog
+    {
+        get => _isInteractionPairDialog;
+        private set
+        {
+            _isInteractionPairDialog = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsDataPointDialog));
+        }
+    }
+
+    public bool IsDataPointDialog => !IsInteractionPairDialog;
+
     private IoMappingDraftVm? _newIoMapping;
     public IoMappingDraftVm? NewIoMapping
     {
@@ -115,6 +153,27 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
             if (_newIoMapping is not null)
             {
                 _newIoMapping.PropertyChanged += OnNewIoMappingPropertyChanged;
+            }
+
+            OnPropertyChanged();
+        }
+    }
+
+    private IoInteractionPairDraftVm? _newInteractionPair;
+    public IoInteractionPairDraftVm? NewInteractionPair
+    {
+        get => _newInteractionPair;
+        private set
+        {
+            if (_newInteractionPair is not null)
+            {
+                _newInteractionPair.PropertyChanged -= OnNewInteractionPairPropertyChanged;
+            }
+
+            _newInteractionPair = value;
+            if (_newInteractionPair is not null)
+            {
+                _newInteractionPair.PropertyChanged += OnNewInteractionPairPropertyChanged;
             }
 
             OnPropertyChanged();
@@ -146,7 +205,10 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
             OnPropertyChanged();
             SetModuleTemplateAvailable(false);
             ReplaceItems(StandardIoSignals, Array.Empty<IoStandardSignalOptionVm>());
-            ModuleTemplateHint = "请选择 PLC 设备后补齐默认点位。";
+            ReplaceItems(StandardDataSignals, Array.Empty<IoStandardSignalOptionVm>());
+            ReplaceItems(StandardInteractionGroups, Array.Empty<IoStandardSignalGroupOptionVm>());
+            ModuleTemplateHint = "请选择 PLC 设备后导入插件标准点位。";
+            RefreshAddCommands();
             _ = RefreshSelectedNetworkDeviceAsync();
         }
     }
@@ -162,7 +224,8 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
     public ICommand DeleteNetworkDeviceCommand { get; }
     public ICommand AddSerialDeviceCommand { get; }
     public ICommand DeleteSerialDeviceCommand { get; }
-    public ICommand OpenAddIoMappingDialogCommand { get; }
+    public ICommand OpenAddInteractionMappingDialogCommand { get; }
+    public ICommand OpenAddDataPointMappingDialogCommand { get; }
     public ICommand ConfirmAddIoMappingCommand { get; }
     public ICommand CancelAddIoMappingDialogCommand { get; }
     public ICommand DeleteIoMappingCommand { get; }
@@ -211,14 +274,19 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
             () => new SerialDeviceVm(),
             () => CanEdit);
         _deleteSerialDeviceCommand = (BaseCommand)CreateDeleteCommand(SerialDevices, () => CanEdit);
-        _openAddIoMappingDialogCommand = new BaseCommand(
-            _ => OpenAddIoMappingDialog(),
+        _openAddInteractionMappingDialogCommand = new BaseCommand(
+            _ => OpenAddInteractionMappingDialog(),
+            _ => CanEdit && SelectedNetworkDevice is not null);
+        _openAddDataPointMappingDialogCommand = new BaseCommand(
+            _ => OpenAddDataPointMappingDialog(),
             _ => CanEdit && SelectedNetworkDevice is not null);
         _confirmAddIoMappingCommand = new BaseCommand(
             _ => ConfirmAddIoMapping(),
-            _ => CanEdit && IsAddIoMappingDialogOpen && NewIoMapping is not null);
+            _ => CanEdit && IsAddIoMappingDialogOpen && (NewIoMapping is not null || NewInteractionPair is not null));
         _cancelAddIoMappingDialogCommand = new BaseCommand(_ => CloseAddIoMappingDialog());
-        _deleteIoMappingCommand = (BaseCommand)CreateDeleteCommand(IoMappings, () => CanEdit);
+        _deleteIoMappingCommand = new BaseCommand(
+            parameter => DeleteIoMapping(parameter as IoMappingVm),
+            parameter => CanEdit && parameter is IoMappingVm);
         _applyModuleTemplateCommand = (AsyncCommand)CreateBusyCommand(
             ApplyModuleTemplateAsync,
             () => CanApplyModuleTemplate);
@@ -228,7 +296,8 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         DeleteNetworkDeviceCommand = _deleteNetworkDeviceCommand;
         AddSerialDeviceCommand = _addSerialDeviceCommand;
         DeleteSerialDeviceCommand = _deleteSerialDeviceCommand;
-        OpenAddIoMappingDialogCommand = _openAddIoMappingDialogCommand;
+        OpenAddInteractionMappingDialogCommand = _openAddInteractionMappingDialogCommand;
+        OpenAddDataPointMappingDialogCommand = _openAddDataPointMappingDialogCommand;
         ConfirmAddIoMappingCommand = _confirmAddIoMappingCommand;
         CancelAddIoMappingDialogCommand = _cancelAddIoMappingDialogCommand;
         DeleteIoMappingCommand = _deleteIoMappingCommand;
@@ -283,9 +352,26 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
     private async Task RefreshModuleTemplateInfoAsync()
     {
         var result = await _crudService.GetModuleTemplateInfoAsync(SelectedNetworkDevice);
+        var defaultSignals = result.DefaultSignals.ToArray();
+        ReplaceItems(StandardIoSignals, defaultSignals.Select(static x => new IoStandardSignalOptionVm(x)));
         ReplaceItems(
-            StandardIoSignals,
-            result.DefaultSignals.Select(static x => new IoStandardSignalOptionVm(x)));
+            StandardDataSignals,
+            defaultSignals
+                .Where(static x => !string.Equals(
+                    IoMappingOptionCatalog.NormalizeCategory(x.Category, x.AddressCount),
+                    IoMappingOptionCatalog.CategoryInteraction,
+                    StringComparison.OrdinalIgnoreCase))
+                .Select(static x => new IoStandardSignalOptionVm(x)));
+        ReplaceItems(
+            StandardInteractionGroups,
+            defaultSignals
+                .Where(static x => string.Equals(
+                    IoMappingOptionCatalog.NormalizeCategory(x.Category, x.AddressCount),
+                    IoMappingOptionCatalog.CategoryInteraction,
+                    StringComparison.OrdinalIgnoreCase))
+                .GroupBy(static x => string.IsNullOrWhiteSpace(x.BusinessGroup) ? x.SignalKey : x.BusinessGroup.Trim(), StringComparer.OrdinalIgnoreCase)
+                .Select(static x => new IoStandardSignalGroupOptionVm(x.Key, x.ToArray()))
+                .OrderBy(static x => x.BusinessGroup, StringComparer.OrdinalIgnoreCase));
         ModuleTemplateHint = result.Message;
         SetModuleTemplateAvailable(result.IsAvailable);
     }
@@ -308,6 +394,7 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         issues.AddRange(await ValidateAsync(NetworkDevices, _networkDeviceValidator));
         issues.AddRange(await ValidateAsync(SerialDevices, _serialDeviceValidator));
         issues.AddRange(await ValidateAsync(IoMappings, _ioMappingValidator));
+        issues.AddRange(ValidateInteractionPairs());
 
         var validationResult = CreateValidationResult(issues);
         if (!validationResult.IsSuccess)
@@ -332,8 +419,6 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         return saveResult;
     }
 
-    // 标准 profile 的 SortOrder 由模块强约束（决定 PLC 连续读合并的号段），保存时必须保留原值；
-    // Manual.<guid> 自定义点位独立放在 ≥ ManualSortOrderBase 段，避免与标准号段冲突。
     private IReadOnlyCollection<IoMappingVm> BuildMappingsToSave()
     {
         var result = new List<IoMappingVm>(IoMappings.Count);
@@ -370,6 +455,7 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
             or nameof(NetworkDeviceVm.Id))
         {
             _ = RefreshModuleTemplateInfoAsync();
+            RefreshAddCommands();
         }
     }
 
@@ -393,12 +479,18 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         _deleteNetworkDeviceCommand.RaiseCanExecuteChanged();
         _addSerialDeviceCommand.RaiseCanExecuteChanged();
         _deleteSerialDeviceCommand.RaiseCanExecuteChanged();
-        _openAddIoMappingDialogCommand.RaiseCanExecuteChanged();
+        RefreshAddCommands();
         _confirmAddIoMappingCommand.RaiseCanExecuteChanged();
         _cancelAddIoMappingDialogCommand.RaiseCanExecuteChanged();
         _deleteIoMappingCommand.RaiseCanExecuteChanged();
         _applyModuleTemplateCommand.RaiseCanExecuteChanged();
         _saveCommand.RaiseCanExecuteChanged();
+    }
+
+    private void RefreshAddCommands()
+    {
+        _openAddInteractionMappingDialogCommand.RaiseCanExecuteChanged();
+        _openAddDataPointMappingDialogCommand.RaiseCanExecuteChanged();
     }
 
     private void SetModuleTemplateAvailable(bool value)
@@ -408,7 +500,7 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         _applyModuleTemplateCommand.RaiseCanExecuteChanged();
     }
 
-    private void OpenAddIoMappingDialog()
+    private void OpenAddInteractionMappingDialog()
     {
         if (SelectedNetworkDevice is null)
         {
@@ -416,27 +508,140 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
             return;
         }
 
-        var draft = new IoMappingDraftVm
+        IsInteractionPairDialog = true;
+        var standardGroup = StandardInteractionGroups.FirstOrDefault(static x => x.HasReadAndWrite);
+        var draft = new IoInteractionPairDraftVm
         {
-            Source = StandardIoSignals.Count > 0
+            Source = standardGroup is not null
                 ? IoMappingOptionCatalog.PointSourceStandardSignal
                 : IoMappingOptionCatalog.PointSourceCustomDebug
         };
 
-        NewIoMapping = draft;
-        SelectedStandardIoSignal = draft.IsStandardSource
-            ? StandardIoSignals.FirstOrDefault()
-            : null;
+        NewInteractionPair = draft;
+        NewIoMapping = null;
+        SelectedStandardIoSignal = null;
+        SelectedStandardInteractionGroup = draft.IsStandardSource ? standardGroup : null;
         if (draft.IsCustomSource)
         {
-            ApplyCustomDebugDefaults(draft);
+            ApplyCustomInteractionDefaults(draft);
         }
 
         IsAddIoMappingDialogOpen = true;
         _confirmAddIoMappingCommand.RaiseCanExecuteChanged();
     }
 
+    private void OpenAddDataPointMappingDialog()
+    {
+        if (SelectedNetworkDevice is null)
+        {
+            SetError(GetText("Navigation_Hardware_Validation_SelectNetworkDeviceFirst", "请先选择一个 PLC 设备。"));
+            return;
+        }
+
+        IsInteractionPairDialog = false;
+        var standardSignal = FindStandardDataSignal();
+        var draft = new IoMappingDraftVm
+        {
+            Source = standardSignal is not null
+                ? IoMappingOptionCatalog.PointSourceStandardSignal
+                : IoMappingOptionCatalog.PointSourceCustomDebug
+        };
+
+        NewIoMapping = draft;
+        NewInteractionPair = null;
+        SelectedStandardInteractionGroup = null;
+        SelectedStandardIoSignal = draft.IsStandardSource ? standardSignal : null;
+        if (draft.IsCustomSource)
+        {
+            ApplyCustomDebugDefaults(draft, IoMappingOptionCatalog.CategorySingleRead);
+        }
+
+        IsAddIoMappingDialogOpen = true;
+        _confirmAddIoMappingCommand.RaiseCanExecuteChanged();
+    }
+
+    private IoStandardSignalOptionVm? FindStandardDataSignal()
+        => StandardDataSignals.FirstOrDefault();
+
     private void ConfirmAddIoMapping()
+    {
+        if (IsInteractionPairDialog)
+        {
+            ConfirmAddInteractionPair();
+            return;
+        }
+
+        ConfirmAddDataPoint();
+    }
+
+    private void ConfirmAddInteractionPair()
+    {
+        if (SelectedNetworkDevice is null || NewInteractionPair is null)
+        {
+            return;
+        }
+
+        var validationError = ValidateInteractionPairDraft(NewInteractionPair);
+        if (!string.IsNullOrWhiteSpace(validationError))
+        {
+            SetError(validationError);
+            return;
+        }
+
+        if (NewInteractionPair.IsStandardSource)
+        {
+            var group = SelectedStandardInteractionGroup!;
+            var missingSignals = group.Signals
+                .Where(signal => IoMappings.All(x => !string.Equals(x.SignalKey, signal.SignalKey, StringComparison.OrdinalIgnoreCase)))
+                .OrderBy(static x => x.SortOrder)
+                .ToArray();
+
+            if (missingSignals.Length == 0)
+            {
+                SetError(GetText("Navigation_Hardware_Validation_InteractionGroupExists", "该信号交互组已全部存在，不能重复添加。"));
+                return;
+            }
+
+            foreach (var signal in missingSignals)
+            {
+                IoMappings.Add(CreateMappingFromTemplate(signal, signal.PlcAddress));
+            }
+        }
+        else
+        {
+            var group = NewInteractionPair.BusinessGroup.Trim();
+            var sortOrder = NextSortOrder();
+            var keySuffix = Guid.NewGuid().ToString("N");
+            IoMappings.Add(CreateManualMapping(
+                $"Manual.{keySuffix}.Read",
+                NewInteractionPair.ReadPlcAddress,
+                NewInteractionPair.ReadAddressCount,
+                NewInteractionPair.ReadDataType,
+                IoMappingOptionCatalog.DirectionRead,
+                IoMappingOptionCatalog.CategoryInteraction,
+                group,
+                NewInteractionPair.ReadSignalName,
+                sortOrder,
+                NewInteractionPair.Remark));
+            IoMappings.Add(CreateManualMapping(
+                $"Manual.{keySuffix}.Write",
+                NewInteractionPair.WritePlcAddress,
+                NewInteractionPair.WriteAddressCount,
+                NewInteractionPair.WriteDataType,
+                IoMappingOptionCatalog.DirectionWrite,
+                IoMappingOptionCatalog.CategoryInteraction,
+                group,
+                NewInteractionPair.WriteSignalName,
+                sortOrder + 1,
+                NewInteractionPair.Remark));
+        }
+
+        IoMappingsView.Refresh();
+        CloseAddIoMappingDialog();
+        ClearFeedback();
+    }
+
+    private void ConfirmAddDataPoint()
     {
         if (SelectedNetworkDevice is null || NewIoMapping is null)
         {
@@ -457,13 +662,13 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
                 NewIoMapping.AddressCount);
         var businessGroup = standardSignal?.BusinessGroup
             ?? (string.IsNullOrWhiteSpace(NewIoMapping.BusinessGroup)
-                ? "自定义点位"
+                ? CreateCustomBusinessGroup(category)
                 : NewIoMapping.BusinessGroup.Trim());
         var signalKey = standardSignal?.SignalKey ?? CreateManualSignalKey();
         var signalName = standardSignal?.SignalName ?? NewIoMapping.SignalName.Trim();
         var addressCount = standardSignal?.AddressCount ?? NewIoMapping.AddressCount;
         var dataType = standardSignal?.DataType ?? NewIoMapping.DataType.Trim();
-        var direction = standardSignal?.Direction ?? NewIoMapping.Direction.Trim();
+        var direction = standardSignal?.Direction ?? IoMappingOptionCatalog.DirectionRead;
         var sortOrder = standardSignal?.SortOrder > 0 ? standardSignal.SortOrder : NextSortOrder();
 
         IoMappings.Add(new IoMappingVm
@@ -489,8 +694,11 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
     private void CloseAddIoMappingDialog()
     {
         IsAddIoMappingDialogOpen = false;
+        IsInteractionPairDialog = false;
         SelectedStandardIoSignal = null;
+        SelectedStandardInteractionGroup = null;
         NewIoMapping = null;
+        NewInteractionPair = null;
         _confirmAddIoMappingCommand.RaiseCanExecuteChanged();
     }
 
@@ -506,6 +714,14 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
             if (SelectedStandardIoSignal is null)
             {
                 return GetText("Navigation_Hardware_Validation_StandardSignalRequired", "请选择插件标准信号。");
+            }
+
+            if (string.Equals(
+                    IoMappingOptionCatalog.NormalizeCategory(SelectedStandardIoSignal.Category, SelectedStandardIoSignal.AddressCount),
+                    IoMappingOptionCatalog.CategoryInteraction,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return GetText("Navigation_Hardware_Validation_DataPointOnly", "新增数据点不能选择信号交互点位。");
             }
 
             if (IoMappings.Any(x => string.Equals(
@@ -529,9 +745,9 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
             return GetText("Navigation_Hardware_Validation_IoCategoryRequired", "请选择点位类型。");
         }
 
-        if (!IoMappingOptionCatalog.IsKnownDirection(draft.Direction))
+        if (string.Equals(draft.Category, IoMappingOptionCatalog.CategoryInteraction, StringComparison.OrdinalIgnoreCase))
         {
-            return GetText("Navigation_Hardware_Validation_IoDirectionRequired", "请选择 IO 方向。");
+            return GetText("Navigation_Hardware_Validation_DataPointOnly", "新增数据点只能选择单点读数据或连续读数据。");
         }
 
         if (!IoMappingOptionCatalog.IsKnownDataType(draft.DataType))
@@ -568,13 +784,16 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         {
             if (draft.IsStandardSource)
             {
-                SelectedStandardIoSignal ??= StandardIoSignals.FirstOrDefault();
+                SelectedStandardIoSignal ??= FindStandardDataSignal();
                 ApplyStandardSignalToDraft(SelectedStandardIoSignal);
             }
             else if (draft.IsCustomSource)
             {
+                var category = IoDataPointCategories.Contains(draft.Category, StringComparer.OrdinalIgnoreCase)
+                    ? draft.Category
+                    : IoMappingOptionCatalog.CategorySingleRead;
                 SelectedStandardIoSignal = null;
-                ApplyCustomDebugDefaults(draft);
+                ApplyCustomDebugDefaults(draft, category);
             }
         }
     }
@@ -596,16 +815,234 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         NewIoMapping.Remark = signal.Remark;
     }
 
-    private static void ApplyCustomDebugDefaults(IoMappingDraftVm draft)
+    private void OnNewInteractionPairPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        draft.Category = IoMappingOptionCatalog.CategorySingleRead;
+        if (sender is not IoInteractionPairDraftVm draft)
+        {
+            return;
+        }
+
+        if (e.PropertyName == nameof(IoInteractionPairDraftVm.Source))
+        {
+            if (draft.IsStandardSource)
+            {
+                SelectedStandardInteractionGroup ??= StandardInteractionGroups.FirstOrDefault(static x => x.HasReadAndWrite);
+                ApplyStandardInteractionGroupToDraft(SelectedStandardInteractionGroup);
+            }
+            else if (draft.IsCustomSource)
+            {
+                SelectedStandardInteractionGroup = null;
+                ApplyCustomInteractionDefaults(draft);
+            }
+        }
+    }
+
+    private void ApplyStandardInteractionGroupToDraft(IoStandardSignalGroupOptionVm? group)
+    {
+        if (NewInteractionPair is null || !NewInteractionPair.IsStandardSource || group is null)
+        {
+            return;
+        }
+
+        var read = group.ReadSignals.FirstOrDefault();
+        var write = group.WriteSignals.FirstOrDefault();
+        NewInteractionPair.BusinessGroup = group.BusinessGroup;
+        NewInteractionPair.ReadPlcAddress = read?.PlcAddress ?? string.Empty;
+        NewInteractionPair.ReadAddressCount = read?.AddressCount ?? 1;
+        NewInteractionPair.ReadDataType = read?.DataType ?? IoMappingOptionCatalog.DataTypeInt16;
+        NewInteractionPair.ReadSignalName = read?.SignalName ?? "PLC 触发";
+        NewInteractionPair.WritePlcAddress = write?.PlcAddress ?? string.Empty;
+        NewInteractionPair.WriteAddressCount = write?.AddressCount ?? 1;
+        NewInteractionPair.WriteDataType = write?.DataType ?? IoMappingOptionCatalog.DataTypeInt16;
+        NewInteractionPair.WriteSignalName = write?.SignalName ?? "上位机应答";
+        NewInteractionPair.Remark = read?.Remark ?? write?.Remark;
+    }
+
+    private static void ApplyCustomInteractionDefaults(IoInteractionPairDraftVm draft)
+    {
+        draft.BusinessGroup = "自定义信号交互";
+        draft.ReadAddressCount = 1;
+        draft.ReadDataType = IoMappingOptionCatalog.DataTypeInt16;
+        draft.ReadSignalName = "PLC 触发";
+        draft.WriteAddressCount = 1;
+        draft.WriteDataType = IoMappingOptionCatalog.DataTypeInt16;
+        draft.WriteSignalName = "上位机应答";
+        draft.Remark = null;
+    }
+
+    private static void ApplyCustomDebugDefaults(IoMappingDraftVm draft, string category)
+    {
+        draft.Category = category;
         draft.Direction = IoMappingOptionCatalog.DirectionRead;
-        draft.AddressCount = 1;
+        draft.AddressCount = string.Equals(category, IoMappingOptionCatalog.CategoryContinuousRead, StringComparison.OrdinalIgnoreCase)
+            ? 10
+            : 1;
         draft.DataType = IoMappingOptionCatalog.DataTypeInt16;
-        draft.BusinessGroup = "自定义点位";
+        draft.BusinessGroup = CreateCustomBusinessGroup(category);
         draft.SignalName = string.Empty;
         draft.Remark = null;
     }
+
+    private static string CreateCustomBusinessGroup(string category)
+    {
+        if (string.Equals(category, IoMappingOptionCatalog.CategoryInteraction, StringComparison.OrdinalIgnoreCase))
+        {
+            return "自定义信号交互";
+        }
+
+        if (string.Equals(category, IoMappingOptionCatalog.CategoryContinuousRead, StringComparison.OrdinalIgnoreCase))
+        {
+            return "自定义连续数据";
+        }
+
+        return "自定义单点数据";
+    }
+
+    private string? ValidateInteractionPairDraft(IoInteractionPairDraftVm draft)
+    {
+        if (!IoMappingOptionCatalog.IsKnownPointSource(draft.Source))
+        {
+            return GetText("Navigation_Hardware_Validation_IoSourceRequired", "请选择点位来源。");
+        }
+
+        if (draft.IsStandardSource)
+        {
+            if (SelectedStandardInteractionGroup is null)
+            {
+                return GetText("Navigation_Hardware_Validation_InteractionGroupRequired", "请选择插件标准信号交互组。");
+            }
+
+            if (!SelectedStandardInteractionGroup.HasReadAndWrite)
+            {
+                return GetText("Navigation_Hardware_Validation_InteractionGroupIncomplete", "信号交互组必须同时包含 PLC→PC 读点和 PC→PLC 写点。");
+            }
+
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(draft.BusinessGroup))
+        {
+            return GetText("Navigation_Hardware_Validation_InteractionBusinessGroupRequired", "信号交互业务组不能为空。");
+        }
+
+        if (string.IsNullOrWhiteSpace(draft.ReadPlcAddress) || string.IsNullOrWhiteSpace(draft.WritePlcAddress))
+        {
+            return GetText("Navigation_Hardware_Validation_InteractionAddressRequired", "信号交互必须同时填写读地址和写地址。");
+        }
+
+        if (draft.ReadAddressCount <= 0 || draft.WriteAddressCount <= 0)
+        {
+            return GetText("Navigation_Hardware_Validation_IoAddressCountPositive", "地址数量必须大于 0。");
+        }
+
+        if (!IoMappingOptionCatalog.IsKnownDataType(draft.ReadDataType)
+            || !IoMappingOptionCatalog.IsKnownDataType(draft.WriteDataType))
+        {
+            return GetText("Navigation_Hardware_Validation_IoDataTypeRequired", "请选择 IO 数据类型。");
+        }
+
+        if (string.IsNullOrWhiteSpace(draft.ReadSignalName) || string.IsNullOrWhiteSpace(draft.WriteSignalName))
+        {
+            return GetText("Navigation_Hardware_Validation_IoSignalNameRequired", "信号名称不能为空。");
+        }
+
+        return null;
+    }
+
+    private IReadOnlyCollection<ValidationIssue> ValidateInteractionPairs()
+    {
+        return IoMappings
+            .Where(IsInteractionMapping)
+            .GroupBy(
+                static x => string.IsNullOrWhiteSpace(x.BusinessGroup) ? x.SignalKey : x.BusinessGroup.Trim(),
+                StringComparer.OrdinalIgnoreCase)
+            .Where(static group =>
+            {
+                var hasRead = group.Any(x => string.Equals(x.Direction, IoMappingOptionCatalog.DirectionRead, StringComparison.OrdinalIgnoreCase));
+                var hasWrite = group.Any(x => string.Equals(x.Direction, IoMappingOptionCatalog.DirectionWrite, StringComparison.OrdinalIgnoreCase));
+                return !hasRead || !hasWrite;
+            })
+            .Select(group => new ValidationIssue($"信号交互组“{group.Key}”必须同时包含 PLC→PC 读点和 PC→PLC 写点。", nameof(IoMappingVm.BusinessGroup)))
+            .ToArray();
+    }
+
+    private void DeleteIoMapping(IoMappingVm? selected)
+    {
+        if (selected is null)
+        {
+            return;
+        }
+
+        if (IsInteractionMapping(selected))
+        {
+            var businessGroup = selected.BusinessGroup?.Trim() ?? string.Empty;
+            var removeItems = IoMappings
+                .Where(x => IsInteractionMapping(x)
+                    && x.NetworkDeviceId == selected.NetworkDeviceId
+                    && string.Equals(x.BusinessGroup?.Trim() ?? string.Empty, businessGroup, StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+
+            foreach (var item in removeItems)
+            {
+                IoMappings.Remove(item);
+            }
+        }
+        else
+        {
+            IoMappings.Remove(selected);
+        }
+
+        IoMappingsView.Refresh();
+        _deleteIoMappingCommand.RaiseCanExecuteChanged();
+    }
+
+    private IoMappingVm CreateMappingFromTemplate(ModuleIoTemplateEntry template, string plcAddress)
+        => new()
+        {
+            NetworkDeviceId = SelectedNetworkDevice?.Id ?? 0,
+            SignalKey = template.SignalKey,
+            PlcAddress = plcAddress.Trim(),
+            AddressCount = template.AddressCount,
+            DataType = template.DataType,
+            Direction = template.Direction,
+            Category = template.Category,
+            BusinessGroup = template.BusinessGroup,
+            SignalName = template.SignalName,
+            SortOrder = template.SortOrder,
+            Remark = template.Remark
+        };
+
+    private IoMappingVm CreateManualMapping(
+        string signalKey,
+        string plcAddress,
+        int addressCount,
+        string dataType,
+        string direction,
+        string category,
+        string businessGroup,
+        string signalName,
+        int sortOrder,
+        string? remark)
+        => new()
+        {
+            NetworkDeviceId = SelectedNetworkDevice?.Id ?? 0,
+            SignalKey = signalKey,
+            PlcAddress = plcAddress.Trim(),
+            AddressCount = addressCount,
+            DataType = dataType.Trim(),
+            Direction = direction,
+            Category = category,
+            BusinessGroup = businessGroup.Trim(),
+            SignalName = signalName.Trim(),
+            SortOrder = sortOrder,
+            Remark = string.IsNullOrWhiteSpace(remark) ? null : remark.Trim()
+        };
+
+    private static bool IsInteractionMapping(IoMappingVm mapping)
+        => string.Equals(
+            IoMappingOptionCatalog.NormalizeCategory(mapping.Category, mapping.AddressCount),
+            IoMappingOptionCatalog.CategoryInteraction,
+            StringComparison.OrdinalIgnoreCase);
 
     private int NextSortOrder()
     {

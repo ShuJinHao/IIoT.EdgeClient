@@ -28,8 +28,8 @@ public sealed class MonitorQueriesBehaviorTests
             UploadAccessTokenExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(10)
         });
 
-        cloudDiagnostics.RecordResult("Stacking", CloudCallResult.Success());
-        mesDiagnostics.RecordSuccess("Stacking");
+        cloudDiagnostics.RecordResult("TestProcess", CloudCallResult.Success());
+        mesDiagnostics.RecordSuccess("TestProcess");
 
         var handler = CreateHandler(
             deviceService,
@@ -79,7 +79,7 @@ public sealed class MonitorQueriesBehaviorTests
         {
             Id = 1,
             Channel = "Cloud",
-            ProcessType = "Stacking",
+            ProcessType = "TestProcess",
             FailedTarget = "Cloud",
             CellDataJson = "{}",
             ErrorMessage = "seed",
@@ -89,16 +89,16 @@ public sealed class MonitorQueriesBehaviorTests
         {
             Id = 2,
             Channel = "MES",
-            ProcessType = "Stacking",
+            ProcessType = "TestProcess",
             FailedTarget = "MES",
             CellDataJson = "{}",
             ErrorMessage = "seed",
             NextRetryTime = DateTime.UtcNow
         });
-        cloudDiagnostics.RecordResult("Stacking", CloudCallResult.Failure(CloudCallOutcome.SkippedUploadNotReady, "expired_upload_token"));
+        cloudDiagnostics.RecordResult("TestProcess", CloudCallResult.Failure(CloudCallOutcome.SkippedUploadNotReady, "expired_upload_token"));
         cloudDiagnostics.SetRuntimeState(CloudRetryRuntimeState.WaitingForRecovery);
         mesRetryDiagnostics.SetRuntimeState(MesRetryRuntimeState.Backoff);
-        mesDiagnostics.RecordFailure("Stacking", "mes endpoint timeout");
+        mesDiagnostics.RecordFailure("TestProcess", "mes endpoint timeout");
 
         var handler = CreateHandler(
             deviceService,

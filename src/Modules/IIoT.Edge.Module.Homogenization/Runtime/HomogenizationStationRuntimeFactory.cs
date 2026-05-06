@@ -12,10 +12,10 @@ using IIoT.Edge.Module.Homogenization.Config.Hardware;
 using IIoT.Edge.Module.Homogenization.Config.Parameters;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Runtime.Tasks;
+using IIoT.Edge.Runtime.Signals;
 using IIoT.Edge.SharedKernel.Context;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using IIoT.Edge.Runtime.Signals;
 using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesScenarioChannel<
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
     string,
@@ -36,7 +36,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
     public string ModuleId => DependencyInjection.ModuleKey;
 
     /// <summary>
-    /// 基于宿主创建的匀浆上下文和当前 PLC 缓冲区创建 6 个运行任务。
+    /// 基于宿主创建的匀浆上下文和当前 PLC 缓冲区创建运行任务。
     /// </summary>
     public List<IPlcTask> CreateTasks(
         IServiceProvider serviceProvider,
@@ -57,22 +57,35 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
         var mesChannel = serviceProvider.GetRequiredService<HomogenizationMesScenarioChannel>();
         var diagnosticsStore = serviceProvider.GetRequiredService<IMesUploadDiagnosticsStore>();
         var dataPipelineService = serviceProvider.GetRequiredService<IDataPipelineService>();
-        var parameters = serviceProvider.GetRequiredService<IModuleParamProvider<MesParam, CloudParam, BusinessParam>>();
+        var parameters = serviceProvider.GetRequiredService<IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>>();
         var productionTime = serviceProvider.GetRequiredService<IProductionTimeProvider>();
-        var signalProfile = serviceProvider.GetRequiredService<IModulePlcSignalProfile<HomogenizationSignal>>();
-        var signals = BufferLogicalSignalAccessor<HomogenizationSignal>.Create(
+        var interactionProfile = serviceProvider.GetRequiredService<IModulePlcSignalProfile<HomogenizationPlcSignals.Interaction>>();
+        var singleReadProfile = serviceProvider.GetRequiredService<IModulePlcSignalProfile<HomogenizationPlcSignals.SingleRead>>();
+        var continuousReadProfile = serviceProvider.GetRequiredService<IModulePlcSignalProfile<HomogenizationPlcSignals.ContinuousRead>>();
+        var interactionSignals = BufferLogicalSignalAccessor<HomogenizationPlcSignals.Interaction>.Create(
             buffer,
             homogenizationContext,
-            signalProfile);
+            interactionProfile);
+        var singleReadSignals = BufferLogicalSignalAccessor<HomogenizationPlcSignals.SingleRead>.Create(
+            buffer,
+            homogenizationContext,
+            singleReadProfile);
+        var continuousReadSignals = BufferLogicalSignalAccessor<HomogenizationPlcSignals.ContinuousRead>.Create(
+            buffer,
+            homogenizationContext,
+            continuousReadProfile);
         var validator = serviceProvider.GetService<HomogenizationCellDataValidator>() ?? new HomogenizationCellDataValidator();
         var moduleOptions = serviceProvider.GetRequiredService<IOptions<HomogenizationModuleOptions>>();
         var codeOptions = serviceProvider.GetRequiredService<IOptions<HomogenizationCodeOptions>>();
+        var interaction = new HomogenizationPlcHandshakeAccessor(interactionSignals, codeOptions.Value.Plc);
+        var codec = new HomogenizationSignalCodec(singleReadSignals, continuousReadSignals, productionTime);
 
         return
         [
             new HomogenizationInboundTask(
                 buffer,
-                signals,
+                interaction,
+                codec,
                 homogenizationContext,
                 deviceService,
                 mesChannel,
@@ -84,7 +97,8 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 codeOptions),
             new HomogenizationOutboundTask(
                 buffer,
-                signals,
+                interaction,
+                codec,
                 homogenizationContext,
                 deviceService,
                 dataPipelineService,
@@ -97,7 +111,8 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 codeOptions),
             new HomogenizationRecipeTask(
                 buffer,
-                signals,
+                interaction,
+                codec,
                 homogenizationContext,
                 deviceService,
                 mesChannel,
@@ -108,7 +123,8 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 codeOptions),
             new HomogenizationEquipmentStatusTask(
                 buffer,
-                signals,
+                interaction,
+                codec,
                 homogenizationContext,
                 deviceService,
                 mesChannel,
@@ -119,21 +135,19 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 codeOptions),
             new HomogenizationHeartbeatTask(
                 buffer,
-                signals,
+                interaction,
                 homogenizationContext,
                 logger,
                 productionTime,
-                moduleOptions,
-                codeOptions),
+                moduleOptions),
             new HomogenizationRealtimeTask(
                 buffer,
-                signals,
+                codec,
                 homogenizationContext,
                 deviceService,
                 mesChannel,
                 diagnosticsStore,
                 logger,
-                productionTime,
                 moduleOptions,
                 codeOptions)
         ];

@@ -16,14 +16,14 @@ public sealed class ShellLaunchServiceTests
         var starter = new SpyProcessStarter();
         var service = new ShellLaunchService(starter);
         var profile = new LauncherProfileDefinition(
-            "StackingLine",
-            "叠片",
-            "Stacking profile",
+            "HomogenizationLine",
+            "匀浆",
+            "Homogenization profile",
             null,
-            "StackingLine",
+            "HomogenizationLine",
             executablePath,
-            "LayersTriple",
-            "#0F766E");
+            "BeakerOutline",
+            "#4D7C0F");
 
         try
         {
@@ -31,7 +31,7 @@ public sealed class ShellLaunchServiceTests
 
             Assert.NotNull(starter.StartInfo);
             Assert.Equal(executablePath, starter.StartInfo!.FileName);
-            Assert.Equal("StackingLine", starter.StartInfo.EnvironmentVariables["Shell__MachineProfile"]);
+            Assert.Equal("HomogenizationLine", starter.StartInfo.EnvironmentVariables["Shell__MachineProfile"]);
             Assert.False(starter.StartInfo.UseShellExecute);
         }
         finally

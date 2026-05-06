@@ -90,7 +90,7 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
             importedMappingCount += await EnsureMappingsAsync(device, hardwareProfile, cancellationToken).ConfigureAwait(false);
         }
 
-        _logger.Info($"[匀浆][设备样本] 播种检查完成。设备导入 {importedDeviceCount} 台，IO 映射补齐 {importedMappingCount} 条。");
+        _logger.Info($"[匀浆][设备样本] 播种检查完成。设备导入 {importedDeviceCount} 台，IO 标准点位导入 {importedMappingCount} 条。");
     }
 
     private async Task ResetHomogenizationConfigurationAsync(CancellationToken cancellationToken)
@@ -272,7 +272,7 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
         => GetHardwareProfile($"匀浆设备样本导入需要模块“{DependencyInjection.ModuleKey}”的硬件模板提供器。");
 
     /// <summary>
-    /// 匀浆开发设备样本导入开关。IO 点位不在 JSON 内维护，只由硬件模板补齐。
+    /// 匀浆开发设备样本导入开关。IO 点位不在 JSON 内维护，只由插件硬件模板导入。
     /// </summary>
     private sealed class HomogenizationDeviceSeedOptions
     {
@@ -290,7 +290,7 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
     }
 
     /// <summary>
-    /// 匀浆样本设备配置，不包含 IO 点位，点位由插件硬件模板补齐。
+    /// 匀浆样本设备配置，不包含 IO 点位，点位由插件硬件模板导入。
     /// </summary>
     private sealed class HomogenizationDeviceSeed
     {

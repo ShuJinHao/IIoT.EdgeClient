@@ -1,0 +1,12 @@
+[
+  {
+    "ProfileId": "HomogenizationLine",
+    "DisplayName": "匀浆",
+    "Description": "使用匀浆工序的 profile 启动客户端，后续新增匀浆业务时只需要部署插件与 profile 配置。",
+    "ImagePath": "Assets/Profiles/homogenization.png",
+    "IconKind": "BeakerOutline",
+    "AccentColor": "#4D7C0F",
+    "MachineProfile": "HomogenizationLine",
+    "ExecutablePath": "..\\homogenization\\IIoT.Edge.Shell.exe"
+  }
+]

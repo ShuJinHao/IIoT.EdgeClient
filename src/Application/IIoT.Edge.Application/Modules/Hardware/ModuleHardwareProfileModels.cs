@@ -1,5 +1,38 @@
 namespace IIoT.Edge.Application.Modules.Hardware;
 
+/// <summary>
+/// 信号交互写入块遇到未配置地址时的处理方式。
+/// </summary>
+public enum PlcIoWriteGapPolicy
+{
+    /// <summary>
+    /// 保持一个连续写入块，未配置地址按 0 写入。
+    /// </summary>
+    Zero,
+
+    /// <summary>
+    /// 遇到未配置地址时拆分写入块，避免写入空洞地址。
+    /// </summary>
+    Split
+}
+
+/// <summary>
+/// 插件声明的 PLC IO 运行策略。地址和长度仍来自插件点位 profile 或数据库映射。
+/// </summary>
+public sealed record PlcIoRuntimePolicy(
+    int SignalLoopIntervalMs = 10,
+    int MaxSignalBlockWordCount = 100,
+    PlcIoWriteGapPolicy WriteGapPolicy = PlcIoWriteGapPolicy.Zero)
+{
+    public static PlcIoRuntimePolicy Default { get; } = new();
+
+    public int NormalizeLoopInterval()
+        => SignalLoopIntervalMs <= 0 ? Default.SignalLoopIntervalMs : SignalLoopIntervalMs;
+
+    public int NormalizeMaxBlockWordCount()
+        => MaxSignalBlockWordCount <= 0 ? Default.MaxSignalBlockWordCount : MaxSignalBlockWordCount;
+}
+
 public sealed record ModulePlcDefaults(
     string? DeviceModel,
     int? ConnectTimeout,
