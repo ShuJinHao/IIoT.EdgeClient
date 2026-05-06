@@ -1,4 +1,4 @@
-﻿using IIoT.Edge.SharedKernel.Domain;
+using IIoT.Edge.SharedKernel.Domain;
 
 namespace IIoT.Edge.Domain.Hardware.Aggregates;
 
@@ -8,29 +8,29 @@ public class IoMappingEntity : BaseEntity<int>, IAggregateRoot
 
     public IoMappingEntity(
         int networkDeviceId,
-        string label,
+        string signalKey,
         string plcAddress,
         int addressCount,
         string dataType,
         string direction,
         string category = "单点读数据",
-        string groupName = "",
-        string displayRole = "")
+        string businessGroup = "",
+        string signalName = "")
     {
         BindNetworkDevice(networkDeviceId);
         UpdateAddress(plcAddress, addressCount);
-        UpdateMetadata(label, dataType, direction, category, groupName, displayRole, null);
+        UpdateMetadata(signalKey, dataType, direction, category, businessGroup, signalName, null);
     }
 
     public int NetworkDeviceId { get; private set; }
-    public string Label { get; private set; } = null!;
+    public string SignalKey { get; private set; } = null!;
     public string PlcAddress { get; private set; } = null!;
     public int AddressCount { get; private set; } = 1;
     public string DataType { get; private set; } = "Int16";
     public string Direction { get; private set; } = "Read";
     public string Category { get; private set; } = "单点读数据";
-    public string GroupName { get; private set; } = string.Empty;
-    public string DisplayRole { get; private set; } = string.Empty;
+    public string BusinessGroup { get; private set; } = string.Empty;
+    public string SignalName { get; private set; } = string.Empty;
     public int SortOrder { get; private set; }
     public string? Remark { get; private set; }
 
@@ -38,15 +38,15 @@ public class IoMappingEntity : BaseEntity<int>, IAggregateRoot
 
     public static IoMappingEntity Create(
         int networkDeviceId,
-        string label,
+        string signalKey,
         string plcAddress,
         int addressCount,
         string dataType,
         string direction,
         string category = "单点读数据",
-        string groupName = "",
-        string displayRole = "")
-        => new(networkDeviceId, label, plcAddress, addressCount, dataType, direction, category, groupName, displayRole);
+        string businessGroup = "",
+        string signalName = "")
+        => new(networkDeviceId, signalKey, plcAddress, addressCount, dataType, direction, category, businessGroup, signalName);
 
     public void BindNetworkDevice(int networkDeviceId)
     {
@@ -70,20 +70,20 @@ public class IoMappingEntity : BaseEntity<int>, IAggregateRoot
     }
 
     public void UpdateMetadata(
-        string label,
+        string signalKey,
         string dataType,
         string direction,
         string? category,
-        string? groupName,
-        string? displayRole,
+        string? businessGroup,
+        string? signalName,
         string? remark)
     {
-        Label = Require(label, "IO 标签不能为空。");
+        SignalKey = Require(signalKey, "IO 内部信号键不能为空。");
         DataType = Require(dataType, "IO 数据类型不能为空。");
         Direction = Require(direction, "IO 方向不能为空。");
         Category = string.IsNullOrWhiteSpace(category) ? "单点读数据" : category.Trim();
-        GroupName = NormalizeToEmpty(groupName);
-        DisplayRole = NormalizeToEmpty(displayRole);
+        BusinessGroup = NormalizeToEmpty(businessGroup);
+        SignalName = NormalizeToEmpty(signalName);
         Remark = Normalize(remark);
     }
 

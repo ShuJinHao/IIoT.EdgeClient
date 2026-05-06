@@ -22,11 +22,11 @@ public class IoMappingVm : ObservableModelBase
         set { _networkDeviceId = value; OnPropertyChanged(); }
     }
 
-    private string _label = string.Empty;
-    public string Label
+    private string _signalKey = string.Empty;
+    public string SignalKey
     {
-        get => _label;
-        set { _label = value; OnPropertyChanged(); }
+        get => _signalKey;
+        set { _signalKey = value; OnPropertyChanged(); }
     }
 
     private string _plcAddress = string.Empty;
@@ -74,23 +74,23 @@ public class IoMappingVm : ObservableModelBase
         }
     }
 
-    private string _groupName = string.Empty;
-    public string GroupName
+    private string _businessGroup = string.Empty;
+    public string BusinessGroup
     {
-        get => _groupName;
+        get => _businessGroup;
         set
         {
-            _groupName = value;
+            _businessGroup = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(GroupTitle));
         }
     }
 
-    private string _displayRole = string.Empty;
-    public string DisplayRole
+    private string _signalName = string.Empty;
+    public string SignalName
     {
-        get => _displayRole;
-        set { _displayRole = value; OnPropertyChanged(); }
+        get => _signalName;
+        set { _signalName = value; OnPropertyChanged(); }
     }
 
     private int _sortOrder;
@@ -117,7 +117,7 @@ public class IoMappingVm : ObservableModelBase
             var category = IoMappingDisplay.ResolveCategory(Category, AddressCount);
             return IoMappingDisplay.BuildSectionTitle(
                 category,
-                IoMappingDisplay.ResolveGroupName(GroupName, category));
+                IoMappingDisplay.ResolveBusinessGroup(BusinessGroup, category));
         }
     }
 }

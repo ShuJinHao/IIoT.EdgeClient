@@ -15,7 +15,7 @@ public interface ITodayCapacityStore
     /// <summary>
     /// 产能计数加 1，并在内部自动判定班次和跨天清零逻辑。
     /// </summary>
-    /// <param name="deviceName">设备名，作为聚合键，例如“注液机1”。</param>
+    /// <param name="deviceName">设备名，作为聚合键，例如“PLC-1”。</param>
     /// <returns>本次记录归属的班次编码："D" 表示白班，"N" 表示夜班。</returns>
     string Increment(string deviceName, DateTime completedTime, bool isOk);
 

@@ -1,4 +1,4 @@
-﻿using IIoT.Edge.SharedKernel.Messaging;
+using IIoT.Edge.SharedKernel.Messaging;
 using IIoT.Edge.SharedKernel.Repository;
 using IIoT.Edge.SharedKernel.Result;
 using IIoT.Edge.Domain.Hardware.Aggregates;
@@ -11,14 +11,14 @@ namespace IIoT.Edge.Application.Features.Hardware.UseCases.IoMapping.Commands;
 public record IoMappingDto(
     int Id,
     int NetworkDeviceId,
-    string Label,
+    string SignalKey,
     string PlcAddress,
     int AddressCount,
     string DataType,
     string Direction,
     string Category,
-    string GroupName,
-    string DisplayRole,
+    string BusinessGroup,
+    string SignalName,
     int SortOrder,
     string? Remark
 );
@@ -73,14 +73,14 @@ public class SaveIoMappingsHandler(
                 {
                     var entity = IoMappingEntity.Create(
                         request.NetworkDeviceId,
-                        dto.Label,
+                        dto.SignalKey,
                         dto.PlcAddress,
                         dto.AddressCount,
                         dto.DataType,
                         dto.Direction,
                         Normalize(dto.Category, "单点读数据"),
-                        dto.GroupName ?? string.Empty,
-                        dto.DisplayRole ?? string.Empty);
+                        dto.BusinessGroup ?? string.Empty,
+                        dto.SignalName ?? string.Empty);
                     Apply(entity, request.NetworkDeviceId, dto);
                     repo.Add(entity);
                 }
@@ -105,12 +105,12 @@ public class SaveIoMappingsHandler(
         entity.BindNetworkDevice(networkDeviceId);
         entity.UpdateAddress(dto.PlcAddress, dto.AddressCount);
         entity.UpdateMetadata(
-            dto.Label,
+            dto.SignalKey,
             dto.DataType,
             dto.Direction,
             Normalize(dto.Category, "单点读数据"),
-            dto.GroupName,
-            dto.DisplayRole,
+            dto.BusinessGroup,
+            dto.SignalName,
             dto.Remark);
         entity.UpdateSortOrder(dto.SortOrder);
     }
@@ -121,14 +121,14 @@ public class SaveIoMappingsHandler(
         {
             var entity = IoMappingEntity.Create(
                 networkDeviceId,
-                dto.Label,
+                dto.SignalKey,
                 dto.PlcAddress,
                 dto.AddressCount,
                 dto.DataType,
                 dto.Direction,
                 Normalize(dto.Category, "单点读数据"),
-                dto.GroupName,
-                dto.DisplayRole);
+                dto.BusinessGroup,
+                dto.SignalName);
             Apply(entity, networkDeviceId, dto);
             return null;
         }

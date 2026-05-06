@@ -6,7 +6,6 @@ public sealed class ArchitectureBoundaryContractTests
 {
     private static readonly string[] ForbiddenModuleNamespaces =
     [
-        "IIoT.Edge.Module.Injection",
         "IIoT.Edge.Module.Stacking",
         "IIoT.Edge.Module.Homogenization"
     ];

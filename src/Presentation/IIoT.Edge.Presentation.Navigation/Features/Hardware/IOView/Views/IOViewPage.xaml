@@ -158,7 +158,7 @@
                             SelectionMode="Single"
                             SelectionUnit="FullRow">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Width="110" Binding="{Binding GroupName}" Header="{DynamicResource Navigation_Column_InteractionItem}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_InteractionItem" IsReadOnly="True" />
+                                <DataGridTextColumn Width="110" Binding="{Binding BusinessGroup}" Header="{DynamicResource Navigation_Column_InteractionItem}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_InteractionItem" IsReadOnly="True" />
                                 <DataGridTemplateColumn Width="2.2*" Header="{DynamicResource Navigation_Column_PlcSignal}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_PlcSignal">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
@@ -297,8 +297,7 @@
                                         SelectionMode="Single"
                                         SelectionUnit="FullRow">
                                         <DataGrid.Columns>
-                                            <DataGridTextColumn Width="2*" Binding="{Binding Label}" Header="{DynamicResource Navigation_Column_SignalName}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_SignalName" />
-                                            <DataGridTextColumn Width="140" Binding="{Binding DisplayRole}" Header="{DynamicResource Navigation_Column_DisplayRole}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_DisplayRole" />
+                                            <DataGridTextColumn Width="2*" Binding="{Binding SignalName}" Header="{DynamicResource Navigation_Column_SignalName}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_SignalName" />
                                             <DataGridTextColumn Width="120" Binding="{Binding PlcAddress}" Header="{DynamicResource Navigation_Column_Address}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_Address" />
                                             <DataGridTextColumn Width="90" Binding="{Binding DataType}" Header="{DynamicResource Navigation_Column_Type}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_Type" />
                                             <DataGridTextColumn Width="70" Binding="{Binding LengthText}" Header="{DynamicResource Navigation_Column_Length}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_Length" />

@@ -21,11 +21,11 @@ public sealed class HomogenizationHardwareProfileBehaviorTests
             .ToArray();
 
         Assert.Equal(
-            groupedSignals.Select(static signal => signal.Label),
-            HomogenizationSignalTestProfile.Signals.Select(static signal => signal.Label));
+            groupedSignals.Select(static signal => signal.SignalKey),
+            HomogenizationSignalTestProfile.Signals.Select(static signal => signal.SignalKey));
         Assert.Equal(
             HomogenizationSignalTestProfile.Signals.Count,
-            HomogenizationSignalTestProfile.Signals.Select(static signal => signal.Label).Distinct().Count());
+            HomogenizationSignalTestProfile.Signals.Select(static signal => signal.SignalKey).Distinct().Count());
         Assert.Equal(
             HomogenizationSignalTestProfile.Signals.Count,
             HomogenizationSignalTestProfile.Signals.Select(static signal => signal.SortOrder).Distinct().Count());
@@ -33,19 +33,19 @@ public sealed class HomogenizationHardwareProfileBehaviorTests
         Assert.Contains(HomogenizationSignalTestProfile.Signals, static signal => signal.Direction == ModuleSignalDirection.Write);
         Assert.Contains(
             HomogenizationSignalTestProfile.Group("IO 交互"),
-            signal => signal.Label == HomogenizationSignalTestProfile.Label(HomogenizationSignal.进站触发));
+            signal => signal.SignalKey == HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.进站触发));
         Assert.Contains(
             HomogenizationSignalTestProfile.Group("IO 交互"),
-            signal => signal.Label == HomogenizationSignalTestProfile.Label(HomogenizationSignal.进站应答));
+            signal => signal.SignalKey == HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.进站应答));
         Assert.Contains(
             HomogenizationSignalTestProfile.Group("设备状态/报警"),
-            signal => signal.Label == HomogenizationSignalTestProfile.Label(HomogenizationSignal.设备状态值));
+            signal => signal.SignalKey == HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.设备状态值));
 
         var provider = new HomogenizationHardwareProfileProvider(new HomogenizationPlcSignalProfile());
 
         Assert.Equal(
-            HomogenizationSignalTestProfile.Signals.Select(static signal => signal.Label),
-            provider.GetDefaultIoTemplate().Select(static mapping => mapping.Label));
+            HomogenizationSignalTestProfile.Signals.Select(static signal => signal.SignalKey),
+            provider.GetDefaultIoTemplate().Select(static mapping => mapping.SignalKey));
     }
 
     [Fact]
@@ -55,7 +55,7 @@ public sealed class HomogenizationHardwareProfileBehaviorTests
 
         var defaults = provider.GetDefaultPlcSettings();
         var template = provider.GetDefaultIoTemplate();
-        var trayCode = Assert.Single(template, x => x.Label == "Homogenization.TrayCode");
+        var trayCode = Assert.Single(template, x => x.SignalKey == "Homogenization.TrayCode");
 
         Assert.Equal("Mc", defaults.DeviceModel);
         Assert.Equal(3000, defaults.ConnectTimeout);
@@ -64,8 +64,8 @@ public sealed class HomogenizationHardwareProfileBehaviorTests
         Assert.Equal(30, trayCode.AddressCount);
         Assert.Equal("Ascii", trayCode.DataType);
         Assert.Equal("连续读数据", trayCode.Category);
-        Assert.Equal("托盘数据", trayCode.GroupName);
-        Assert.Equal("托盘码", trayCode.DisplayRole);
+        Assert.Equal("托盘数据", trayCode.BusinessGroup);
+        Assert.Equal("托盘码", trayCode.SignalName);
         Assert.Equal("匀浆模块 - 托盘码", trayCode.Remark);
     }
 
@@ -74,7 +74,7 @@ public sealed class HomogenizationHardwareProfileBehaviorTests
     {
         var provider = new HomogenizationHardwareProfileProvider(new HomogenizationPlcSignalProfile());
         var mappings = CreateValidSnapshots(provider)
-            .Select(static mapping => mapping.Label == "Homogenization.TrayCode"
+            .Select(static mapping => mapping.SignalKey == "Homogenization.TrayCode"
                 ? mapping with { Category = string.Empty }
                 : mapping)
             .ToArray();
@@ -111,15 +111,15 @@ public sealed class HomogenizationHardwareProfileBehaviorTests
         var accessor = CreateAccessor(
             [
                 new(
-                    binding.Label,
+                    binding.SignalKey,
                     binding.DefaultAddress,
                     binding.AddressCount,
                     "Int16",
                     binding.DirectionText,
                     binding.SortOrder,
                     binding.Category,
-                    binding.GroupName,
-                    binding.DisplayRole)
+                    binding.BusinessGroup,
+                    binding.SignalName)
             ]);
 
         var exception = Assert.Throws<InvalidOperationException>(() => accessor.ReadAscii(HomogenizationSignal.托盘码));
@@ -130,15 +130,15 @@ public sealed class HomogenizationHardwareProfileBehaviorTests
     private static ModuleIoSnapshot[] CreateValidSnapshots(HomogenizationHardwareProfileProvider provider)
         => provider.GetDefaultIoTemplate()
             .Select(static template => new ModuleIoSnapshot(
-                template.Label,
+                template.SignalKey,
                 $"D{template.SortOrder * 10}",
                 template.AddressCount,
                 template.DataType,
                 template.Direction,
                 template.SortOrder,
                 template.Category,
-                template.GroupName,
-                template.DisplayRole))
+                template.BusinessGroup,
+                template.SignalName))
             .ToArray();
 
     private static BufferLogicalSignalAccessor<HomogenizationSignal> CreateAccessor(IReadOnlyCollection<ModuleIoSnapshot> bindings)

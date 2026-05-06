@@ -363,7 +363,7 @@ public class ProductionContextStore : IProductionContextStore
     private static void CopyRuntimeState(ProductionContext source, ProductionContext target)
     {
         target.DeviceName = source.DeviceName;
-        target.DeviceId = source.DeviceId;
+        target.NetworkDeviceId = source.NetworkDeviceId;
         target.TodayCapacity = source.TodayCapacity;
 
         foreach (var entry in source.StepStateEntries)

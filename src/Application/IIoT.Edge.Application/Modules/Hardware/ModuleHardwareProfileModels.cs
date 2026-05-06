@@ -6,7 +6,7 @@ public sealed record ModulePlcDefaults(
     int? Port1 = null);
 
 public sealed record ModuleIoTemplateEntry(
-    string Label,
+    string SignalKey,
     string PlcAddress,
     int AddressCount,
     string DataType,
@@ -14,19 +14,19 @@ public sealed record ModuleIoTemplateEntry(
     int SortOrder,
     string? Remark = null,
     string Category = "单点读数据",
-    string GroupName = "",
-    string DisplayRole = "");
+    string BusinessGroup = "",
+    string SignalName = "");
 
 public sealed record ModuleIoSnapshot(
-    string Label,
+    string SignalKey,
     string PlcAddress,
     int AddressCount,
     string DataType,
     string Direction,
     int SortOrder,
     string Category = "单点读数据",
-    string GroupName = "",
-    string DisplayRole = "");
+    string BusinessGroup = "",
+    string SignalName = "");
 
 public sealed record ModuleHardwareValidationIssue(string Message);
 

@@ -189,15 +189,15 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
             x => x.NetworkDeviceId == device.Id,
             cancellationToken).ConfigureAwait(false);
 
-        var existingByLabel = existingMappings
-            .GroupBy(static x => x.Label, StringComparer.OrdinalIgnoreCase)
+        var existingBySignalKey = existingMappings
+            .GroupBy(static x => x.SignalKey, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(static x => x.Key, static x => x.First(), StringComparer.OrdinalIgnoreCase);
 
         var addedCount = 0;
         var repairedCount = 0;
         foreach (var template in hardwareProfile.GetDefaultIoTemplate().OrderBy(static x => x.SortOrder))
         {
-            if (existingByLabel.TryGetValue(template.Label, out var existingMapping))
+            if (existingBySignalKey.TryGetValue(template.SignalKey, out var existingMapping))
             {
                 if (ApplyTemplateMetadata(existingMapping, template))
                 {
@@ -210,22 +210,22 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
 
             var entity = IoMappingEntity.Create(
                 device.Id,
-                template.Label,
+                template.SignalKey,
                 template.PlcAddress,
                 template.AddressCount,
                 template.DataType,
                 template.Direction,
                 template.Category,
-                template.GroupName,
-                template.DisplayRole);
+                template.BusinessGroup,
+                template.SignalName);
             entity.UpdateSortOrder(template.SortOrder);
             entity.UpdateMetadata(
-                template.Label,
+                template.SignalKey,
                 template.DataType,
                 template.Direction,
                 template.Category,
-                template.GroupName,
-                template.DisplayRole,
+                template.BusinessGroup,
+                template.SignalName,
                 string.IsNullOrWhiteSpace(template.Remark) ? SeedRemark : template.Remark);
             _ioMappings.Add(entity);
             addedCount++;
@@ -250,19 +250,19 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
             || !string.Equals(existing.Direction, template.Direction, StringComparison.Ordinal)
             || existing.SortOrder != template.SortOrder
             || !string.Equals(existing.Category, template.Category, StringComparison.Ordinal)
-            || !string.Equals(existing.GroupName, template.GroupName, StringComparison.Ordinal)
-            || !string.Equals(existing.DisplayRole, template.DisplayRole, StringComparison.Ordinal)
+            || !string.Equals(existing.BusinessGroup, template.BusinessGroup, StringComparison.Ordinal)
+            || !string.Equals(existing.SignalName, template.SignalName, StringComparison.Ordinal)
             || !string.Equals(existing.Remark, templateRemark, StringComparison.Ordinal);
 
         existing.UpdateAddress(existing.PlcAddress, template.AddressCount);
         existing.UpdateSortOrder(template.SortOrder);
         existing.UpdateMetadata(
-            existing.Label,
+            existing.SignalKey,
             template.DataType,
             template.Direction,
             template.Category,
-            template.GroupName,
-            template.DisplayRole,
+            template.BusinessGroup,
+            template.SignalName,
             templateRemark);
 
         return changed;

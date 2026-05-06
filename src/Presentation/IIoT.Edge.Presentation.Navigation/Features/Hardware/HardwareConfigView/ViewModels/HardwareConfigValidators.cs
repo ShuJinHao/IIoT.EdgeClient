@@ -1,4 +1,4 @@
-﻿using IIoT.Edge.Application.Common.Crud;
+using IIoT.Edge.Application.Common.Crud;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Models;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView;
@@ -120,17 +120,17 @@ internal sealed class IoMappingValidator : IEditorValidator<IoMappingVm>
     {
         var issues = new List<ValidationIssue>();
 
-        if (string.IsNullOrWhiteSpace(model.Label))
+        if (string.IsNullOrWhiteSpace(model.SignalKey))
             issues.Add(new ValidationIssue(
-                _getText("Navigation_Hardware_Validation_IoLabelRequired", "IO 映射标签不能为空。"),
-                nameof(model.Label)));
+                _getText("Navigation_Hardware_Validation_IoSignalKeyRequired", "IO 内部信号键不能为空。"),
+                nameof(model.SignalKey)));
 
         if (string.IsNullOrWhiteSpace(model.PlcAddress))
             issues.Add(new ValidationIssue(
                 _formatText(
                     "Navigation_Hardware_Validation_IoAddressRequiredFormat",
                     "IO“{0}”的 PLC 地址不能为空。",
-                    [model.Label]),
+                    [model.SignalName]),
                 nameof(model.PlcAddress)));
 
         if (model.AddressCount <= 0)
@@ -138,7 +138,7 @@ internal sealed class IoMappingValidator : IEditorValidator<IoMappingVm>
                 _formatText(
                     "Navigation_Hardware_Validation_IoAddressCountPositiveFormat",
                     "IO“{0}”的地址长度必须大于 0。",
-                    [model.Label]),
+                    [model.SignalName]),
                 nameof(model.AddressCount)));
 
         if (string.IsNullOrWhiteSpace(model.Category))
@@ -146,8 +146,13 @@ internal sealed class IoMappingValidator : IEditorValidator<IoMappingVm>
                 _formatText(
                     "Navigation_Hardware_Validation_IoCategoryRequiredFormat",
                     "IO“{0}”的分类不能为空。",
-                    [model.Label]),
+                    [model.SignalName]),
                 nameof(model.Category)));
+
+        if (string.IsNullOrWhiteSpace(model.SignalName))
+            issues.Add(new ValidationIssue(
+                _getText("Navigation_Hardware_Validation_IoSignalNameRequired", "信号名称不能为空。"),
+                nameof(model.SignalName)));
 
         return Task.FromResult<IReadOnlyCollection<ValidationIssue>>(issues);
     }

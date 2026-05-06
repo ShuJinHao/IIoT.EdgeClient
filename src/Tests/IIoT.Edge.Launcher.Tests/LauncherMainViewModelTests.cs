@@ -25,13 +25,13 @@ public sealed class LauncherMainViewModelTests
 
         var viewModel = new LauncherMainViewModel(
             new StubLauncherProfileCatalog(profiles),
-            new StubLauncherAuthService(LauncherAuthenticationResult.Passed("现场管理员")),
+            new StubLauncherAuthService(LauncherAuthenticationResult.Passed("operator")),
             new StubShellLaunchService());
 
         await viewModel.LoginAsync("101650", "Ljh123456!");
 
         Assert.True(viewModel.IsAuthenticated);
-        Assert.Equal("已登录：现场管理员", viewModel.WelcomeText);
+        Assert.Equal("已登录：operator", viewModel.WelcomeText);
         Assert.Equal("请选择要启动的工序客户端。", viewModel.StatusMessage);
         Assert.Equal("共 1 个工序", viewModel.ProfileSummaryText);
         Assert.Single(viewModel.Profiles);
@@ -62,24 +62,22 @@ public sealed class LauncherMainViewModelTests
     {
         IReadOnlyList<LauncherProfileDefinition> profiles =
         [
-            new("StackingLine", "叠片", "叠片工序", null, "StackingLine", @"..\stack\IIoT.Edge.Shell.exe", "LayersTriple", "#0F766E"),
-            new("InjectionLine", "注液", "注液工序", null, "InjectionLine", @"..\injection\IIoT.Edge.Shell.exe", "Syringe", "#B45309"),
-            new("HomogenizationLine", "匀浆", "匀浆工序", null, "HomogenizationLine", @"..\homogenization\IIoT.Edge.Shell.exe", "BeakerOutline", "#4D7C0F")
+            new("StackingLine", "Stacking", "Stacking process", null, "StackingLine", @"..\stack\IIoT.Edge.Shell.exe", "LayersTriple", "#0F766E"),
+            new("HomogenizationLine", "Homogenization", "Homogenization process", null, "HomogenizationLine", @"..\homogenization\IIoT.Edge.Shell.exe", "BeakerOutline", "#4D7C0F")
         ];
 
         var viewModel = new LauncherMainViewModel(
             new StubLauncherProfileCatalog(profiles),
-            new StubLauncherAuthService(LauncherAuthenticationResult.Passed("现场管理员")),
+            new StubLauncherAuthService(LauncherAuthenticationResult.Passed("operator")),
             new StubShellLaunchService());
 
         await viewModel.LoginAsync("101650", "Ljh123456!");
-        viewModel.ProfileSearchText = "注";
+        viewModel.ProfileSearchText = "homogenization";
 
         Assert.Single(viewModel.Profiles);
-        Assert.Equal("注液", viewModel.Profiles[0].DisplayName);
-        Assert.Equal("显示 1 / 3 个工序", viewModel.ProfileSummaryText);
+        Assert.Equal("HomogenizationLine", viewModel.Profiles[0].ProfileId);
+        Assert.Contains("1 / 2", viewModel.ProfileSummaryText, StringComparison.Ordinal);
     }
-
     [Fact]
     public async Task ChangePasswordAsync_WhenPasswordChanged_ShouldReturnTrueAndRenderStatus()
     {

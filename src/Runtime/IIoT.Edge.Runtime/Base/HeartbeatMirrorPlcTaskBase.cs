@@ -6,7 +6,7 @@ using IIoT.Edge.SharedKernel.Context;
 namespace IIoT.Edge.Runtime.Base;
 
 /// <summary>
-/// 强类型心跳镜像任务基类，插件只提供输入/输出信号枚举，不直接写 PLC 字符串 Label。
+/// 强类型心跳镜像任务基类，插件只提供输入/输出信号枚举，不直接写 PLC 字符串 SignalKey。
 /// </summary>
 /// <typeparam name="TSignalKey">插件声明的 PLC 信号枚举。</typeparam>
 public abstract class HeartbeatMirrorPlcTaskBase<TSignalKey> : PlcTaskBase

@@ -8,6 +8,7 @@ using IIoT.Edge.Application.Features.Hardware.Queries;
 using IIoT.Edge.Application.Features.Hardware.UseCases.IoMapping.Commands;
 using IIoT.Edge.Application.Features.Hardware.UseCases.NetworkDevice.Commands;
 using IIoT.Edge.Application.Features.Hardware.UseCases.SerialDevice.Commands;
+using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.SharedKernel.Enums;
 using MediatR;
@@ -24,7 +25,9 @@ public record IoMappingPageResult(
 
 public record ModuleTemplateInfoResult(
     bool IsAvailable,
-    string? ModuleId);
+    string? ModuleId,
+    IReadOnlyList<ModuleIoTemplateEntry> DefaultSignals,
+    string Message);
 
 public record LoadHardwareConfigQuery : IRequest<HardwareConfigInitResult>;
 
@@ -286,35 +289,35 @@ public class SaveHardwareConfigHandler(
         var existing = existingMappings
             .Where(x => x.NetworkDeviceId == networkDeviceId)
             .Select(x => new IoMappingSnapshot(
-                Normalize(x.Label),
+                Normalize(x.SignalKey),
                 Normalize(x.PlcAddress),
                 x.AddressCount,
                 Normalize(x.DataType),
                 Normalize(x.Direction),
                 x.SortOrder,
                 Normalize(x.Category),
-                NormalizeNullable(x.GroupName),
-                NormalizeNullable(x.DisplayRole),
+                NormalizeNullable(x.BusinessGroup),
+                NormalizeNullable(x.SignalName),
                 NormalizeNullable(x.Remark)))
             .OrderBy(x => x.SortOrder)
-            .ThenBy(x => x.Label, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.SignalKey, StringComparer.OrdinalIgnoreCase)
             .ThenBy(x => x.PlcAddress, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
         var incoming = incomingMappings
             .Select(x => new IoMappingSnapshot(
-                Normalize(x.Label),
+                Normalize(x.SignalKey),
                 Normalize(x.PlcAddress),
                 x.AddressCount,
                 Normalize(x.DataType),
                 Normalize(x.Direction),
                 x.SortOrder,
                 Normalize(x.Category),
-                NormalizeNullable(x.GroupName),
-                NormalizeNullable(x.DisplayRole),
+                NormalizeNullable(x.BusinessGroup),
+                NormalizeNullable(x.SignalName),
                 NormalizeNullable(x.Remark)))
             .OrderBy(x => x.SortOrder)
-            .ThenBy(x => x.Label, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.SignalKey, StringComparer.OrdinalIgnoreCase)
             .ThenBy(x => x.PlcAddress, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
@@ -327,14 +330,14 @@ public class SaveHardwareConfigHandler(
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private readonly record struct IoMappingSnapshot(
-        string Label,
+        string SignalKey,
         string PlcAddress,
         int AddressCount,
         string DataType,
         string Direction,
         int SortOrder,
         string Category,
-        string? GroupName,
-        string? DisplayRole,
+        string? BusinessGroup,
+        string? SignalName,
         string? Remark);
 }

@@ -26,7 +26,7 @@ public sealed class StackingHardwareProfileBehaviorTests
         Assert.Equal(4, template.Count);
         Assert.Equal(
             ["Stacking.Sequence", "Stacking.LayerCount", "Stacking.ResultCode", "Stacking.Ack"],
-            template.OrderBy(x => x.SortOrder).Select(x => x.Label).ToArray());
+            template.OrderBy(x => x.SortOrder).Select(x => x.SignalKey).ToArray());
         Assert.Equal(
             ["DB1.DBW0", "DB1.DBW2", "DB1.DBW4", "DB1.DBW6"],
             template.OrderBy(x => x.SortOrder).Select(x => x.PlcAddress).ToArray());
@@ -37,7 +37,7 @@ public sealed class StackingHardwareProfileBehaviorTests
     {
         var provider = new StackingHardwareProfileProvider(new StackingPlcSignalProfile());
         var mappings = CreateValidSnapshots(provider)
-            .Select(static mapping => mapping.Label switch
+            .Select(static mapping => mapping.SignalKey switch
             {
                 "Stacking.Sequence" => mapping with { SortOrder = 2 },
                 "Stacking.LayerCount" => mapping with { SortOrder = 1 },
@@ -77,8 +77,35 @@ public sealed class StackingHardwareProfileBehaviorTests
         Assert.True(secondApply.IsSuccess, secondApply.Message);
         Assert.Single(sender.SaveCommands);
         Assert.Equal(4, sender.CurrentMappings.Count);
-        Assert.Contains(sender.CurrentMappings, x => x.Label == "Stacking.Ack" && x.Direction == "Write");
-        Assert.Equal("模块模板已存在，无需补充映射。", secondApply.Message);
+        Assert.Contains(sender.CurrentMappings, x => x.SignalKey == "Stacking.Ack" && x.Direction == "Write");
+        Assert.Equal("默认点位已存在，无需补充映射。", secondApply.Message);
+    }
+
+    [Fact]
+    public async Task HardwareConfigCrudService_GetModuleTemplateInfoAsync_ShouldExposeStandardSignalsForDialog()
+    {
+        var provider = new StackingHardwareProfileProvider(new StackingPlcSignalProfile());
+        var service = new HardwareConfigCrudService(
+            new FakeSender([]),
+            [provider],
+            new StubPermissionService { CanEditHardware = true });
+        var device = new NetworkDeviceVm
+        {
+            Id = 9,
+            DeviceName = "PLC-STACKING-DEV",
+            DeviceType = DeviceType.PLC,
+            ModuleId = "Stacking"
+        };
+
+        var info = await service.GetModuleTemplateInfoAsync(device);
+
+        Assert.True(info.IsAvailable);
+        Assert.Equal("Stacking", info.ModuleId);
+        Assert.Equal("只补齐当前 PLC 缺失的插件默认点位，不覆盖已维护地址。", info.Message);
+        Assert.Contains(info.DefaultSignals, x =>
+            x.SignalKey == "Stacking.Ack"
+            && x.Direction == "Write"
+            && x.SignalName == "采集应答");
     }
 
     [Fact]
@@ -107,23 +134,23 @@ public sealed class StackingHardwareProfileBehaviorTests
         Assert.True(result.IsSuccess, result.Message);
         Assert.Single(sender.SaveCommands);
         Assert.Equal(10, sender.SaveCommands.Single().NetworkDeviceId);
-        Assert.Contains(sender.CurrentMappings, x => x.NetworkDeviceId == 10 && x.Label == "Stacking.Ack" && x.Direction == "Write");
-        Assert.Contains(sender.CurrentMappings, x => x.NetworkDeviceId == 11 && x.Label == "Stacking.Sequence" && x.PlcAddress == "DB11.DBW0");
-        Assert.DoesNotContain(sender.CurrentMappings, x => x.NetworkDeviceId == 11 && x.Label == "Stacking.Ack");
+        Assert.Contains(sender.CurrentMappings, x => x.NetworkDeviceId == 10 && x.SignalKey == "Stacking.Ack" && x.Direction == "Write");
+        Assert.Contains(sender.CurrentMappings, x => x.NetworkDeviceId == 11 && x.SignalKey == "Stacking.Sequence" && x.PlcAddress == "DB11.DBW0");
+        Assert.DoesNotContain(sender.CurrentMappings, x => x.NetworkDeviceId == 11 && x.SignalKey == "Stacking.Ack");
     }
 
     private static ModuleIoSnapshot[] CreateValidSnapshots(StackingHardwareProfileProvider provider)
         => provider.GetDefaultIoTemplate()
             .Select(static template => new ModuleIoSnapshot(
-                template.Label,
+                template.SignalKey,
                 template.PlcAddress,
                 template.AddressCount,
                 template.DataType,
                 template.Direction,
                 template.SortOrder,
                 template.Category,
-                template.GroupName,
-                template.DisplayRole))
+                template.BusinessGroup,
+                template.SignalName))
             .ToArray();
 
     private sealed class FakeSender(List<FakeIoMappingEntity> mappings) : ISender
@@ -171,7 +198,7 @@ public sealed class StackingHardwareProfileBehaviorTests
             CurrentMappings.RemoveAll(x => x.NetworkDeviceId == command.NetworkDeviceId);
             CurrentMappings.AddRange(command.Mappings.Select(x => new FakeIoMappingEntity(
                 x.NetworkDeviceId,
-                x.Label,
+                x.SignalKey,
                 x.PlcAddress,
                 x.AddressCount,
                 x.DataType,
@@ -184,7 +211,7 @@ public sealed class StackingHardwareProfileBehaviorTests
 
     private sealed record FakeIoMappingEntity(
         int NetworkDeviceId,
-        string Label,
+        string SignalKey,
         string PlcAddress,
         int AddressCount,
         string DataType,
@@ -196,13 +223,13 @@ public sealed class StackingHardwareProfileBehaviorTests
         {
             var entity = IIoT.Edge.Domain.Hardware.Aggregates.IoMappingEntity.Create(
                 NetworkDeviceId,
-                Label,
+                SignalKey,
                 PlcAddress,
                 AddressCount,
                 DataType,
                 Direction);
             entity.UpdateSortOrder(SortOrder);
-            entity.UpdateMetadata(Label, DataType, Direction, "单点读数据", string.Empty, string.Empty, Remark);
+            entity.UpdateMetadata(SignalKey, DataType, Direction, "单点读数据", string.Empty, string.Empty, Remark);
             return entity;
         }
     }

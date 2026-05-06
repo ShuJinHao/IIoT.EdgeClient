@@ -30,5 +30,6 @@ public static class DependencyInjection
         var factory = serviceProvider.GetRequiredService<IDbContextFactory<EdgeDbContext>>();
         using var db = factory.CreateDbContext();
         db.Database.Migrate();
+        EdgeSqliteSchemaRepair.Repair(db);
     }
 }

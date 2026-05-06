@@ -26,6 +26,6 @@ public sealed class CloudUploadGate : ICloudUploadGate
         return UploadGateSnapshot.Blocked(
             System,
             gate.Reason.ToReasonCode(),
-            $"Cloud upload gate is blocked: {gate.Reason}.");
+            $"云端上传门控已阻塞：{gate.Reason}。");
     }
 }

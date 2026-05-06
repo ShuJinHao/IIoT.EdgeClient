@@ -17,13 +17,13 @@ public sealed class ModuleDiscoveryContractTests
     [Fact]
     public void DiscoverDirectoryPlugins_ShouldFindProductModules()
     {
-        var pluginRoot = ContractTestPathHelper.CreatePluginRuntimeRoot("Homogenization", "Injection", "Stacking");
+        var pluginRoot = ContractTestPathHelper.CreatePluginRuntimeRoot("Homogenization", "Stacking");
         try
         {
             var discovery = DiscoverPlugins(pluginRoot);
 
             Assert.Equal(
-                ["Homogenization", "Injection", "Stacking"],
+                ["Homogenization", "Stacking"],
                 discovery.Modules.Select(x => x.ModuleId).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray());
         }
         finally
@@ -35,15 +35,14 @@ public sealed class ModuleDiscoveryContractTests
     [Fact]
     public void CreateAllModules_ShouldInstantiateAllDiscoveredPluginsWithoutDuplicateIdentity()
     {
-        var pluginRoot = ContractTestPathHelper.CreatePluginRuntimeRoot("Homogenization", "Injection", "Stacking");
+        var pluginRoot = ContractTestPathHelper.CreatePluginRuntimeRoot("Homogenization", "Stacking");
         try
         {
             var modules = DirectoryModuleCatalog.CreateAllModules(DiscoverPlugins(pluginRoot).Modules);
 
-            Assert.Equal(3, modules.Count);
-            Assert.Equal(3, modules.Select(x => x.ModuleId).Distinct(StringComparer.OrdinalIgnoreCase).Count());
-            Assert.Equal(3, modules.Select(x => x.ProcessType).Distinct(StringComparer.OrdinalIgnoreCase).Count());
-            Assert.Contains(modules, x => string.Equals(x.ModuleId, "Injection", StringComparison.OrdinalIgnoreCase));
+            Assert.Equal(2, modules.Count);
+            Assert.Equal(2, modules.Select(x => x.ModuleId).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+            Assert.Equal(2, modules.Select(x => x.ProcessType).Distinct(StringComparer.OrdinalIgnoreCase).Count());
             Assert.Contains(modules, x => string.Equals(x.ModuleId, "Homogenization", StringComparison.OrdinalIgnoreCase));
             Assert.Contains(modules, x => string.Equals(x.ModuleId, "Stacking", StringComparison.OrdinalIgnoreCase));
         }
@@ -81,7 +80,7 @@ public sealed class ModuleDiscoveryContractTests
     [Fact]
     public void RegisterAllDiscoveredModules_ShouldNotProduceViewOrRegistrationConflicts()
     {
-        var pluginRoot = ContractTestPathHelper.CreatePluginRuntimeRoot("Homogenization", "Injection", "Stacking");
+        var pluginRoot = ContractTestPathHelper.CreatePluginRuntimeRoot("Homogenization", "Stacking");
         try
         {
             var modules = DirectoryModuleCatalog.CreateAllModules(DiscoverPlugins(pluginRoot).Modules);
@@ -103,14 +102,13 @@ public sealed class ModuleDiscoveryContractTests
                     cellDataRegistry,
                     runtimeRegistry,
                     integrationRegistry,
-                    moduleParamRegistry));
+                moduleParamRegistry));
             }
 
-            Assert.Equal(3, cellDataRegistry.GetRegistrations().Count);
-            Assert.Equal(3, runtimeRegistry.GetRegistrations().Count);
-            Assert.Equal(3, integrationRegistry.GetCloudUploaders().Count);
-            Assert.Equal(3, moduleParamRegistry.GetRegistrations().Count);
-            Assert.NotNull(viewRegistry.GetViewRegistration("Injection.DataView"));
+            Assert.Equal(2, cellDataRegistry.GetRegistrations().Count);
+            Assert.Equal(2, runtimeRegistry.GetRegistrations().Count);
+            Assert.Equal(2, integrationRegistry.GetCloudUploaders().Count);
+            Assert.Equal(2, moduleParamRegistry.GetRegistrations().Count);
             Assert.NotNull(viewRegistry.GetViewRegistration("Stacking.DataView"));
             Assert.NotNull(viewRegistry.GetViewRegistration("Homogenization.DataView"));
         }

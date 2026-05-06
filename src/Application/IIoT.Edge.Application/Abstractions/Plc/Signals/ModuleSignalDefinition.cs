@@ -15,7 +15,7 @@ public enum ModuleSignalDirection
 /// <typeparam name="TSignalKey">插件声明的 PLC 信号枚举。</typeparam>
 public sealed record ModuleSignalDefinition<TSignalKey>(
     TSignalKey Key,
-    string Label,
+    string SignalKey,
     string DisplayName,
     string DefaultAddress,
     int AddressCount,
@@ -23,8 +23,8 @@ public sealed record ModuleSignalDefinition<TSignalKey>(
     ModuleSignalDirection Direction,
     int SortOrder,
     string Category,
-    string GroupName,
-    string DisplayRole)
+    string BusinessGroup,
+    string SignalName)
     where TSignalKey : struct, Enum
 {
     /// <summary>
@@ -34,7 +34,7 @@ public sealed record ModuleSignalDefinition<TSignalKey>(
 }
 
 /// <summary>
-/// 插件 PLC 信号业务分组，用于 profile 内部组织和硬件/IO 页面折叠展示。
+/// 插件 PLC 信号业务场景分组，用于 profile 内部组织和硬件/IO 页面定位。
 /// </summary>
 /// <typeparam name="TSignalKey">插件声明的 PLC 信号枚举。</typeparam>
 public sealed record ModuleSignalGroup<TSignalKey>(

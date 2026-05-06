@@ -18,7 +18,6 @@ public sealed class MainWindowBehaviorTests
         var xaml = File.ReadAllText(ResolveLauncherXamlPath());
 
         Assert.DoesNotContain("Text=\"叠片\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("Text=\"注液\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Text=\"匀浆\"", xaml, StringComparison.Ordinal);
     }
 

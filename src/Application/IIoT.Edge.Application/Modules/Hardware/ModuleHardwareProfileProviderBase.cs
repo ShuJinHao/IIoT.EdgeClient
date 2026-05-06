@@ -45,7 +45,7 @@ public abstract class ModulePlcSignalProfileBase<TSignalKey> : IModulePlcSignalP
 
     protected ModuleSignalDefinition<TSignalKey> Signal(
         TSignalKey key,
-        string label,
+        string signalKey,
         string defaultAddress,
         ModuleSignalDirection direction,
         int addressCount,
@@ -53,11 +53,11 @@ public abstract class ModulePlcSignalProfileBase<TSignalKey> : IModulePlcSignalP
         int sortOrder,
         string displayName,
         string category,
-        string groupName,
-        string displayRole)
+        string businessGroup,
+        string signalName)
         => new(
             key,
-            label,
+            signalKey,
             displayName,
             defaultAddress,
             addressCount,
@@ -65,8 +65,8 @@ public abstract class ModulePlcSignalProfileBase<TSignalKey> : IModulePlcSignalP
             direction,
             sortOrder,
             category,
-            groupName,
-            displayRole);
+            businessGroup,
+            signalName);
 
     private IReadOnlyList<ModuleSignalDefinition<TSignalKey>> BuildAllSignals()
     {
@@ -75,7 +75,7 @@ public abstract class ModulePlcSignalProfileBase<TSignalKey> : IModulePlcSignalP
             .ToArray();
 
         EnsureUniqueKeys(signals);
-        EnsureUniqueLabels(signals);
+        EnsureUniqueSignalKeys(signals);
         EnsureUniqueSortOrders(signals);
         return signals;
     }
@@ -91,14 +91,14 @@ public abstract class ModulePlcSignalProfileBase<TSignalKey> : IModulePlcSignalP
         }
     }
 
-    private void EnsureUniqueLabels(IReadOnlyList<ModuleSignalDefinition<TSignalKey>> signals)
+    private void EnsureUniqueSignalKeys(IReadOnlyList<ModuleSignalDefinition<TSignalKey>> signals)
     {
-        var duplicate = signals.GroupBy(static signal => signal.Label)
+        var duplicate = signals.GroupBy(static signal => signal.SignalKey)
             .FirstOrDefault(static group => group.Count() > 1);
 
         if (duplicate is not null)
         {
-            throw new InvalidOperationException($"模块【{ModuleId}】PLC 信号存在重复 Label：{duplicate.Key}");
+            throw new InvalidOperationException($"模块【{ModuleId}】PLC 信号存在重复 SignalKey：{duplicate.Key}");
         }
     }
 
@@ -151,7 +151,7 @@ public abstract class ModuleHardwareProfileProviderBase<TSignalKey> : IModuleHar
             deviceName,
             mappings,
             Signals.Select(static signal => new ModuleHardwareSignalRequirement(
-                    signal.Label,
+                    signal.SignalKey,
                     signal.AddressCount,
                     signal.DataType,
                     signal.DirectionText,
@@ -164,7 +164,7 @@ public abstract class ModuleHardwareProfileProviderBase<TSignalKey> : IModuleHar
 
     private ModuleIoTemplateEntry CreateTemplateEntry(ModuleSignalDefinition<TSignalKey> signal)
         => new(
-            signal.Label,
+            signal.SignalKey,
             signal.DefaultAddress,
             signal.AddressCount,
             signal.DataType,
@@ -172,6 +172,6 @@ public abstract class ModuleHardwareProfileProviderBase<TSignalKey> : IModuleHar
             signal.SortOrder,
             CreateTemplateRemark(signal),
             signal.Category,
-            signal.GroupName,
-            signal.DisplayRole);
+            signal.BusinessGroup,
+            signal.SignalName);
 }

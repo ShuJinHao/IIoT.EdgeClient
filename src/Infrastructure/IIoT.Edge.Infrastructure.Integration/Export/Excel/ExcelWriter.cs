@@ -9,12 +9,12 @@ namespace IIoT.Edge.Infrastructure.Integration.Export.Excel;
 /// 调用方给文件路径、列名列表、数据行（字典），写入即可
 /// 
 /// 用法：
-///   var columns = new[] { "条码", "结果", "注液量" };
+///   var columns = new[] { "字段A", "字段B", "结果" };
 ///   var rowData = new Dictionary&lt;string, string&gt;
 ///   {
-///       ["条码"] = "CELL001",
-///       ["结果"] = "OK",
-///       ["注液量"] = "2.8"
+///       ["字段A"] = "CELL001",
+///       ["字段B"] = "BATCH001",
+///       ["结果"] = "OK"
 ///   };
 ///   ExcelWriter.AppendRow(filePath, columns, rowData);
 /// </summary>

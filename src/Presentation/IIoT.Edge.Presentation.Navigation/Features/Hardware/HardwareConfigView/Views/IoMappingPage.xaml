@@ -5,7 +5,6 @@
              xmlns:uiLoc="clr-namespace:IIoT.Edge.UI.Shared.Localization;assembly=IIoT.Edge.UI.Shared"
     xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
     xmlns:sharedViews="clr-namespace:IIoT.Edge.UI.Shared.Views;assembly=IIoT.Edge.UI.Shared"
-    xmlns:sys="clr-namespace:System;assembly=mscorlib"
     Background="Transparent">
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
@@ -23,7 +22,8 @@
                 Margin="0,0,8,0"
                 Padding="12,0"
                 Command="{Binding ApplyModuleTemplateCommand}"
-                Style="{StaticResource MaterialDesignOutlinedButton}">
+                Style="{StaticResource MaterialDesignOutlinedButton}"
+                ToolTip="{Binding ModuleTemplateHint}">
                 <StackPanel Orientation="Horizontal">
                     <materialDesign:PackIcon Width="14" Height="14" VerticalAlignment="Center" Kind="WrenchCog" />
                     <TextBlock Margin="4,0,0,0" VerticalAlignment="Center" FontSize="12" Text="{DynamicResource Navigation_Button_ApplyTemplate}" />
@@ -33,22 +33,11 @@
                 Height="30"
                 Margin="0,0,8,0"
                 Padding="12,0"
-                Command="{Binding AddReadIoMappingCommand}"
+                Command="{Binding OpenAddIoMappingDialogCommand}"
                 Style="{StaticResource MaterialDesignOutlinedButton}">
                 <StackPanel Orientation="Horizontal">
                     <materialDesign:PackIcon Width="14" Height="14" VerticalAlignment="Center" Kind="Plus" />
-                    <TextBlock Margin="4,0,0,0" VerticalAlignment="Center" FontSize="12" Text="{DynamicResource Navigation_Button_AddReadPoint}" />
-                </StackPanel>
-            </Button>
-            <Button
-                Height="30"
-                Margin="0,0,8,0"
-                Padding="12,0"
-                Command="{Binding AddWriteIoMappingCommand}"
-                Style="{StaticResource MaterialDesignOutlinedButton}">
-                <StackPanel Orientation="Horizontal">
-                    <materialDesign:PackIcon Width="14" Height="14" VerticalAlignment="Center" Kind="Plus" />
-                    <TextBlock Margin="4,0,0,0" VerticalAlignment="Center" FontSize="12" Text="{DynamicResource Navigation_Button_AddWritePoint}" />
+                    <TextBlock Margin="4,0,0,0" VerticalAlignment="Center" FontSize="12" Text="{DynamicResource Navigation_Button_AddIoPoint}" />
                 </StackPanel>
             </Button>
             <Button
@@ -144,13 +133,11 @@
                     </GroupStyle>
                 </DataGrid.GroupStyle>
                 <DataGrid.Columns>
-                    <DataGridTextColumn Width="120" Binding="{Binding Label}" Header="{DynamicResource Navigation_Column_Label}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_Label" />
                     <DataGridTextColumn Width="100" Binding="{Binding PlcAddress}" Header="{DynamicResource Navigation_Column_PlcAddress}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_PlcAddress" />
                     <DataGridTextColumn Width="70" Binding="{Binding AddressCount}" Header="{DynamicResource Navigation_Column_Count}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_Count" />
-                    <DataGridTextColumn Width="110" Binding="{Binding Category}" Header="{DynamicResource Navigation_Column_Category}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_Category" />
-                    <DataGridTextColumn Width="110" Binding="{Binding GroupName}" Header="{DynamicResource Navigation_Column_Group}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_Group" />
-                    <DataGridTextColumn Width="90" Binding="{Binding DisplayRole}" Header="{DynamicResource Navigation_Column_DisplayRole}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_DisplayRole" />
-                    <DataGridTemplateColumn Width="90" Header="{DynamicResource Navigation_Column_DataType}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_DataType">
+                    <DataGridTextColumn Width="130" Binding="{Binding BusinessGroup}" Header="{DynamicResource Navigation_Column_BusinessGroup}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_BusinessGroup" />
+                    <DataGridTextColumn Width="150" Binding="{Binding SignalName}" Header="{DynamicResource Navigation_Column_SignalName}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_SignalName" />
+                    <DataGridTemplateColumn Width="110" Header="{DynamicResource Navigation_Column_DataType}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_DataType">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <TextBlock Padding="4,0" VerticalAlignment="Center" Foreground="#E4E4E7" Text="{Binding DataType}" />
@@ -158,14 +145,7 @@
                         </DataGridTemplateColumn.CellTemplate>
                         <DataGridTemplateColumn.CellEditingTemplate>
                             <DataTemplate>
-                                <ComboBox SelectedItem="{Binding DataType, UpdateSourceTrigger=PropertyChanged}">
-                                    <ComboBox.Items>
-                                        <sys:String>Bool</sys:String>
-                                        <sys:String>Int16</sys:String>
-                                        <sys:String>Int32</sys:String>
-                                        <sys:String>Float</sys:String>
-                                    </ComboBox.Items>
-                                </ComboBox>
+                                <ComboBox ItemsSource="{Binding DataContext.IoDataTypes, RelativeSource={RelativeSource AncestorType=DataGrid}}" SelectedItem="{Binding DataType, UpdateSourceTrigger=PropertyChanged}" />
                             </DataTemplate>
                         </DataGridTemplateColumn.CellEditingTemplate>
                     </DataGridTemplateColumn>
@@ -177,21 +157,121 @@
                         </DataGridTemplateColumn.CellTemplate>
                         <DataGridTemplateColumn.CellEditingTemplate>
                             <DataTemplate>
-                                <ComboBox SelectedItem="{Binding Direction, UpdateSourceTrigger=PropertyChanged}">
-                                    <ComboBox.Items>
-                                        <sys:String>Read</sys:String>
-                                        <sys:String>Write</sys:String>
-                                    </ComboBox.Items>
-                                </ComboBox>
+                                <ComboBox ItemsSource="{Binding DataContext.IoDirections, RelativeSource={RelativeSource AncestorType=DataGrid}}" SelectedItem="{Binding Direction, UpdateSourceTrigger=PropertyChanged}" />
                             </DataTemplate>
                         </DataGridTemplateColumn.CellEditingTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTextColumn Width="60" Binding="{Binding SortOrder}" Header="{DynamicResource Navigation_Column_SortOrder}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_SortOrder" />
-                    <DataGridTextColumn Width="*" Binding="{Binding Remark}" Header="{DynamicResource Navigation_Column_Remark}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_Remark" />
                 </DataGrid.Columns>
             </DataGrid>
 
         </Grid>
+
+        <Border
+            Grid.ColumnSpan="2"
+            Background="#99000000"
+            Visibility="{Binding IsAddIoMappingDialogOpen, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <Border
+                Width="520"
+                Padding="20"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Background="#18181B"
+                BorderBrush="#3F3F46"
+                BorderThickness="1"
+                CornerRadius="6">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock
+                        Grid.Row="0"
+                        Margin="0,0,0,16"
+                        FontSize="16"
+                        FontWeight="SemiBold"
+                        Foreground="#E4E4E7"
+                        Text="{DynamicResource Navigation_Dialog_AddIoPoint}" />
+
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="16" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,0,12">
+                            <TextBlock Margin="0,0,0,4" Foreground="#A1A1AA" Text="{DynamicResource Navigation_Label_IoPointSource}" />
+                            <ComboBox ItemsSource="{Binding IoPointSources}" SelectedItem="{Binding NewIoMapping.Source, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        <StackPanel
+                            Grid.Row="0"
+                            Grid.Column="2"
+                            Margin="0,0,0,12"
+                            Visibility="{Binding NewIoMapping.IsStandardSource, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <TextBlock Margin="0,0,0,4" Foreground="#A1A1AA" Text="{DynamicResource Navigation_Label_StandardSignal}" />
+                            <ComboBox DisplayMemberPath="DisplayText" ItemsSource="{Binding StandardIoSignals}" SelectedItem="{Binding SelectedStandardIoSignal, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,0,12">
+                            <TextBlock Margin="0,0,0,4" Foreground="#A1A1AA" Text="{DynamicResource Navigation_Label_IoCategory}" />
+                            <ComboBox IsEnabled="{Binding NewIoMapping.IsCustomSource}" ItemsSource="{Binding IoCategories}" SelectedItem="{Binding NewIoMapping.Category, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="1" Grid.Column="2" Margin="0,0,0,12">
+                            <TextBlock Margin="0,0,0,4" Foreground="#A1A1AA" Text="{DynamicResource Navigation_Column_Direction}" />
+                            <ComboBox IsEnabled="{Binding NewIoMapping.IsCustomSource}" ItemsSource="{Binding IoDirections}" SelectedItem="{Binding NewIoMapping.Direction, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,0,0,12">
+                            <TextBlock Margin="0,0,0,4" Foreground="#A1A1AA" Text="{DynamicResource Navigation_Column_PlcAddress}" />
+                            <TextBox Text="{Binding NewIoMapping.PlcAddress, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="2" Grid.Column="2" Margin="0,0,0,12">
+                            <TextBlock Margin="0,0,0,4" Foreground="#A1A1AA" Text="{DynamicResource Navigation_Column_Count}" />
+                            <TextBox IsEnabled="{Binding NewIoMapping.IsCustomSource}" Text="{Binding NewIoMapping.AddressCount, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="3" Grid.Column="0" Margin="0,0,0,12">
+                            <TextBlock Margin="0,0,0,4" Foreground="#A1A1AA" Text="{DynamicResource Navigation_Column_DataType}" />
+                            <ComboBox IsEnabled="{Binding NewIoMapping.IsCustomSource}" ItemsSource="{Binding IoDataTypes}" SelectedItem="{Binding NewIoMapping.DataType, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="3" Grid.Column="2" Margin="0,0,0,12">
+                            <TextBlock Margin="0,0,0,4" Foreground="#A1A1AA" Text="{DynamicResource Navigation_Column_BusinessGroup}" />
+                            <TextBox IsReadOnly="True" Text="{Binding NewIoMapping.BusinessGroup, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="4" Grid.Column="0" Margin="0,0,0,12">
+                            <TextBlock Margin="0,0,0,4" Foreground="#A1A1AA" Text="{DynamicResource Navigation_Column_SignalName}" />
+                            <TextBox IsEnabled="{Binding NewIoMapping.IsCustomSource}" Text="{Binding NewIoMapping.SignalName, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="4" Grid.Column="2" Margin="0,0,0,12">
+                            <TextBlock Margin="0,0,0,4" Foreground="#A1A1AA" Text="{DynamicResource Navigation_Column_Remark}" />
+                            <TextBox Text="{Binding NewIoMapping.Remark, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                    </Grid>
+
+                    <StackPanel Grid.Row="2" HorizontalAlignment="Right" Orientation="Horizontal">
+                        <Button
+                            Margin="0,0,8,0"
+                            Command="{Binding CancelAddIoMappingDialogCommand}"
+                            Content="{DynamicResource Navigation_Button_Cancel}"
+                            Style="{StaticResource MaterialDesignOutlinedButton}" />
+                        <Button
+                            Command="{Binding ConfirmAddIoMappingCommand}"
+                            Content="{DynamicResource Navigation_Button_ConfirmAddIoPoint}"
+                            Style="{StaticResource MaterialDesignRaisedButton}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Border>
     </Grid>
     </sharedViews:PageActionShell>
 </UserControl>

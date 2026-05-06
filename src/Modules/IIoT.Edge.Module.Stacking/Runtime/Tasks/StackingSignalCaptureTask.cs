@@ -77,7 +77,7 @@ public sealed class StackingSignalCaptureTask : PlcTaskBase
             RuntimeStatus = "已采集",
             DeviceName = Context.DeviceName,
             DeviceCode = Context.DeviceName,
-            PlcDeviceId = Context.DeviceId,
+                PlcDeviceId = Context.NetworkDeviceId,
             CellResult = ToCellResult(resultCode),
             CompletedTime = observedAt
         };

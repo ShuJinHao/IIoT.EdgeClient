@@ -48,7 +48,7 @@ public sealed class ModuleRuntimeRegistrationTests
             Assert.Empty(discovery.Issues);
             Assert.Empty(activation.Issues);
             Assert.Equal(
-                ["Homogenization", "Injection", "Stacking"],
+                ["Homogenization", "Stacking"],
                 activation.Modules.Select(x => x.ModuleId).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray());
         }
         finally
@@ -66,7 +66,7 @@ public sealed class ModuleRuntimeRegistrationTests
             var discovery = DiscoverTestPlugins(pluginRoot);
 
             Assert.Equal(
-                ["Homogenization", "Injection", "Stacking"],
+                ["Homogenization", "Stacking"],
                 discovery.Modules.Select(x => x.ModuleId).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray());
         }
         finally
@@ -76,19 +76,19 @@ public sealed class ModuleRuntimeRegistrationTests
     }
 
     [Fact]
-    public void ConfiguredCatalog_WhenInjectionAndStackingAreEnabled_ShouldLoadBothModules()
+    public void ConfiguredCatalog_WhenHomogenizationAndStackingAreEnabled_ShouldLoadBothModules()
     {
         var pluginRoot = CreatePluginRuntimeRoot();
         try
         {
             var discovery = DiscoverTestPlugins(pluginRoot);
             var activation = ShellModuleCatalog.CreateEnabledModules(
-                CreateConfiguration(["Injection", "Stacking"]),
+                CreateConfiguration(["Homogenization", "Stacking"]),
                 discovery.Modules);
 
             Assert.Empty(activation.Issues);
             Assert.Equal(2, activation.Modules.Count);
-            Assert.Equal(["Injection", "Stacking"], activation.Modules.Select(module => module.ModuleId).ToArray());
+            Assert.Equal(["Homogenization", "Stacking"], activation.Modules.Select(module => module.ModuleId).ToArray());
         }
         finally
         {
@@ -104,14 +104,14 @@ public sealed class ModuleRuntimeRegistrationTests
         {
             var discovery = DiscoverTestPlugins(pluginRoot);
             var activation = ShellModuleCatalog.CreateEnabledModules(
-                CreateConfiguration(["Injection", "UnknownModule"]),
+                CreateConfiguration(["Stacking", "UnknownModule"]),
                 discovery.Modules);
 
             Assert.Single(activation.Modules);
-            Assert.Equal("Injection", activation.Modules[0].ModuleId);
+            Assert.Equal("Stacking", activation.Modules[0].ModuleId);
             var issue = Assert.Single(activation.Issues);
             Assert.Equal("PLUGIN_ENABLED_NOT_FOUND", issue.Code);
-            Assert.Contains("Unknown module configured", issue.Message, StringComparison.Ordinal);
+            Assert.Contains("未知模块", issue.Message, StringComparison.Ordinal);
         }
         finally
         {
@@ -120,29 +120,29 @@ public sealed class ModuleRuntimeRegistrationTests
     }
 
     [Fact]
-    public async Task AppLifecycleManager_WhenOnlyInjectionIsEnabled_ShouldReportPluginLifecycleStates()
+    public async Task AppLifecycleManager_WhenOnlyStackingIsEnabled_ShouldReportPluginLifecycleStates()
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
-            enabledModules: ["Injection"],
-            deviceModuleIds: ["Injection"]);
+            enabledModules: ["Stacking"],
+            deviceModuleIds: ["Stacking"]);
 
         var result = await harness.Manager.StartAsync();
 
         Assert.True(result.Success, result.Message);
 
         var report = harness.StartupDiagnosticsStore.Current;
-        Assert.Equal(["Injection"], report.EnabledModules);
-        Assert.Equal(["Injection"], report.ActivatedModules);
-
-        var injectionState = Assert.Single(
-            report.PluginStates,
-            x => string.Equals(x.ModuleId, "Injection", StringComparison.OrdinalIgnoreCase));
-        Assert.Equal(PluginLifecycleState.Activated, injectionState.State);
+        Assert.Equal(["Stacking"], report.EnabledModules);
+        Assert.Equal(["Stacking"], report.ActivatedModules);
 
         var stackingState = Assert.Single(
             report.PluginStates,
             x => string.Equals(x.ModuleId, "Stacking", StringComparison.OrdinalIgnoreCase));
-        Assert.Equal(PluginLifecycleState.DisabledByConfig, stackingState.State);
+        Assert.Equal(PluginLifecycleState.Activated, stackingState.State);
+
+        var homogenizationState = Assert.Single(
+            report.PluginStates,
+            x => string.Equals(x.ModuleId, "Homogenization", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(PluginLifecycleState.DisabledByConfig, homogenizationState.State);
     }
 
     [Fact]
@@ -172,12 +172,11 @@ public sealed class ModuleRuntimeRegistrationTests
                     moduleParamRegistry));
             }
 
-            Assert.Equal(3, modules.Count);
-            Assert.Equal(3, cellDataRegistry.GetRegistrations().Count);
-            Assert.Equal(3, runtimeRegistry.GetRegistrations().Count);
-            Assert.Equal(3, integrationRegistry.GetCloudUploaders().Count);
-            Assert.Equal(3, moduleParamRegistry.GetRegistrations().Count);
-            Assert.NotNull(viewRegistry.GetViewRegistration("Injection.DataView"));
+            Assert.Equal(2, modules.Count);
+            Assert.Equal(2, cellDataRegistry.GetRegistrations().Count);
+            Assert.Equal(2, runtimeRegistry.GetRegistrations().Count);
+            Assert.Equal(2, integrationRegistry.GetCloudUploaders().Count);
+            Assert.Equal(2, moduleParamRegistry.GetRegistrations().Count);
             Assert.NotNull(viewRegistry.GetViewRegistration("Stacking.DataView"));
             Assert.NotNull(viewRegistry.GetViewRegistration("Homogenization.DataView"));
         }
@@ -190,12 +189,12 @@ public sealed class ModuleRuntimeRegistrationTests
     [Fact]
     public void ModuleViewRegistry_ShouldRejectCorePrefixedRoutes()
     {
-        var registry = new ModuleViewRegistry(new ViewRegistry(), "Injection");
+        var registry = new ModuleViewRegistry(new ViewRegistry(), "Stacking");
 
         var ex = Assert.Throws<InvalidOperationException>(() =>
             registry.RegisterRoute("Core.BadRoute", typeof(object), typeof(object)));
 
-        Assert.Contains("Injection.", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("Stacking.", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -295,11 +294,11 @@ public sealed class ModuleRuntimeRegistrationTests
     }
 
     [Fact]
-    public async Task AppLifecycleManager_WhenDefaultModulesAreUsed_ShouldBindInjectionFactoryAndRestoreState()
+    public async Task AppLifecycleManager_WhenDefaultModulesAreUsed_ShouldBindStackingFactoryAndRestoreState()
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
             enabledModules: [],
-            deviceModuleIds: ["Injection"]);
+            deviceModuleIds: ["Stacking"]);
 
         var result = await harness.Manager.StartAsync();
 
@@ -316,15 +315,16 @@ public sealed class ModuleRuntimeRegistrationTests
             new PlcBuffer(8, 8),
             new ProductionContext { DeviceName = "PLC-A" });
 
-        Assert.Empty(tasks);
+        Assert.Single(tasks);
+        Assert.Equal("StackingSignalCaptureTask", tasks[0].GetType().Name);
     }
 
     [Fact]
-    public async Task AppLifecycleManager_WhenInjectionAndStackingAreEnabled_ShouldBindBothFactories()
+    public async Task AppLifecycleManager_WhenTwoStackingDevicesAreEnabled_ShouldBindBothFactories()
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
-            enabledModules: ["Injection", "Stacking"],
-            deviceModuleIds: ["Injection", "Stacking"]);
+            enabledModules: ["Stacking"],
+            deviceModuleIds: ["Stacking", "Stacking"]);
 
         var result = await harness.Manager.StartAsync();
 
@@ -335,23 +335,24 @@ public sealed class ModuleRuntimeRegistrationTests
         Assert.True(harness.PlcManager.RegisteredFactories.ContainsKey("PLC-A"));
         Assert.True(harness.PlcManager.RegisteredFactories.ContainsKey("PLC-B"));
 
-        var injectionTasks = harness.PlcManager.RegisteredFactories["PLC-A"](
+        var firstTasks = harness.PlcManager.RegisteredFactories["PLC-A"](
             new PlcBuffer(8, 8),
             new ProductionContext { DeviceName = "PLC-A" });
-        var stackingTasks = harness.PlcManager.RegisteredFactories["PLC-B"](
+        var secondTasks = harness.PlcManager.RegisteredFactories["PLC-B"](
             new PlcBuffer(8, 8),
             new ProductionContext { DeviceName = "PLC-B" });
 
-        Assert.Empty(injectionTasks);
-        Assert.Single(stackingTasks);
-        Assert.Equal("StackingSignalCaptureTask", stackingTasks[0].GetType().Name);
+        Assert.Single(firstTasks);
+        Assert.Single(secondTasks);
+        Assert.Equal("StackingSignalCaptureTask", firstTasks[0].GetType().Name);
+        Assert.Equal("StackingSignalCaptureTask", secondTasks[0].GetType().Name);
     }
 
     [Fact]
     public async Task AppLifecycleManager_WhenDeviceUsesDisabledModule_ShouldFailStartupValidation()
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
-            enabledModules: ["Injection"],
+            enabledModules: ["Homogenization"],
             deviceModuleIds: ["Stacking"]);
 
         var result = await harness.Manager.StartAsync();
@@ -366,7 +367,7 @@ public sealed class ModuleRuntimeRegistrationTests
     public async Task AppLifecycleManager_WhenDevelopmentSamplesAreEnabled_ShouldSeedStackingDeviceAndContext()
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
-            enabledModules: ["Injection", "Stacking"],
+            enabledModules: ["Stacking"],
             deviceModuleIds: [],
             environmentName: "Development",
             developmentSamplesEnabled: true,
@@ -385,7 +386,7 @@ public sealed class ModuleRuntimeRegistrationTests
         Assert.Equal(4, mappings.Count);
         Assert.Equal(
             ["Stacking.Sequence", "Stacking.LayerCount", "Stacking.ResultCode", "Stacking.Ack"],
-            mappings.OrderBy(x => x.SortOrder).Select(x => x.Label).ToArray());
+            mappings.OrderBy(x => x.SortOrder).Select(x => x.SignalKey).ToArray());
         Assert.Equal(
             ["DB1.DBW0", "DB1.DBW2", "DB1.DBW4", "DB1.DBW6"],
             mappings.OrderBy(x => x.SortOrder).Select(x => x.PlcAddress).ToArray());
@@ -401,7 +402,7 @@ public sealed class ModuleRuntimeRegistrationTests
     public async Task AppLifecycleManager_WhenDevelopmentSamplesRunTwice_ShouldRemainIdempotent()
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
-            enabledModules: ["Injection", "Stacking"],
+            enabledModules: ["Stacking"],
             deviceModuleIds: [],
             environmentName: "Development",
             developmentSamplesEnabled: true,
@@ -426,7 +427,7 @@ public sealed class ModuleRuntimeRegistrationTests
     public async Task AppLifecycleManager_WhenDevelopmentSamplesAreDisabled_ShouldNotSeedStackingDevice()
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
-            enabledModules: ["Injection", "Stacking"],
+            enabledModules: ["Stacking"],
             deviceModuleIds: [],
             environmentName: "Development",
             developmentSamplesEnabled: false,
@@ -443,7 +444,7 @@ public sealed class ModuleRuntimeRegistrationTests
     public async Task AppLifecycleManager_WhenEnvironmentIsProduction_ShouldNotSeedDevelopmentSamples()
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
-            enabledModules: ["Injection", "Stacking"],
+            enabledModules: ["Stacking"],
             deviceModuleIds: [],
             environmentName: "Production",
             developmentSamplesEnabled: true,
@@ -460,7 +461,7 @@ public sealed class ModuleRuntimeRegistrationTests
     public async Task AppLifecycleManager_WhenStackingMappingIsMissing_ShouldFailStartupValidation()
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
-            enabledModules: ["Injection", "Stacking"],
+            enabledModules: ["Stacking"],
             deviceModuleIds: ["Stacking"]);
 
         var device = Assert.Single(await harness.GetNetworkDevicesAsync());
@@ -481,7 +482,7 @@ public sealed class ModuleRuntimeRegistrationTests
     public async Task AppLifecycleManager_WhenStackingAckDirectionIsWrong_ShouldFailStartupValidation()
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
-            enabledModules: ["Injection", "Stacking"],
+            enabledModules: ["Stacking"],
             deviceModuleIds: ["Stacking"]);
 
         var device = Assert.Single(await harness.GetNetworkDevicesAsync());
@@ -503,7 +504,7 @@ public sealed class ModuleRuntimeRegistrationTests
     public async Task AppLifecycleManager_WhenStackingAddressCountIsInvalid_ShouldFailStartupValidation()
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
-            enabledModules: ["Injection", "Stacking"],
+            enabledModules: ["Stacking"],
             deviceModuleIds: ["Stacking"]);
 
         var device = Assert.Single(await harness.GetNetworkDevicesAsync());
@@ -565,7 +566,7 @@ public sealed class ModuleRuntimeRegistrationTests
         Directory.CreateDirectory(pluginRoot);
 
         var runtimeModulesRoot = ShellModuleCatalog.GetPluginRootPath(AppContext.BaseDirectory);
-        foreach (var moduleId in new[] { "Homogenization", "Injection", "Stacking" })
+        foreach (var moduleId in new[] { "Homogenization", "Stacking" })
         {
             var sourceModuleDirectory = Path.Combine(runtimeModulesRoot, moduleId);
             if (!Directory.Exists(sourceModuleDirectory))
@@ -586,7 +587,6 @@ public sealed class ModuleRuntimeRegistrationTests
     private static string GetModuleSourceDirectory(string moduleId)
         => moduleId switch
         {
-            "Injection" => Path.Combine(FindRepoRoot(), "src", "Modules", "IIoT.Edge.Module.Injection"),
             "Stacking" => Path.Combine(FindRepoRoot(), "src", "Modules", "IIoT.Edge.Module.Stacking"),
             "Homogenization" => Path.Combine(FindRepoRoot(), "src", "Modules", "IIoT.Edge.Module.Homogenization"),
             _ => throw new InvalidOperationException($"Unsupported module id '{moduleId}'.")
@@ -657,14 +657,14 @@ public sealed class ModuleRuntimeRegistrationTests
 
     private static IoMappingEntity CreateIoMapping(
         int networkDeviceId,
-        string label,
+        string signalKey,
         string plcAddress,
         int addressCount,
         string dataType,
         string direction,
         int sortOrder)
     {
-        var entity = IoMappingEntity.Create(networkDeviceId, label, plcAddress, addressCount, dataType, direction);
+        var entity = IoMappingEntity.Create(networkDeviceId, signalKey, plcAddress, addressCount, dataType, direction);
         entity.UpdateSortOrder(sortOrder);
         return entity;
     }
@@ -907,7 +907,7 @@ public sealed class ModuleRuntimeRegistrationTests
                     {
                         var entity = IoMappingEntity.Create(
                             device.Id,
-                            mapping.Label,
+                            mapping.SignalKey,
                             mapping.PlcAddress,
                             mapping.AddressCount,
                             mapping.DataType,

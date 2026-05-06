@@ -1,7 +1,6 @@
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.Module.Injection.Payload;
 using IIoT.Edge.Runtime.DataPipeline.Services;
 using IIoT.Edge.Runtime.DataPipeline.Tasks;
 using IIoT.Edge.SharedKernel.DataPipeline;
@@ -241,7 +240,7 @@ public sealed class ProcessQueueTaskBehaviorTests
         {
             Id = 1,
             Channel = "Cloud",
-            ProcessType = "Injection",
+            ProcessType = TestProcessCellData.ProcessTypeKey,
             FailedTarget = "Cloud",
             CellDataJson = "{}",
             ErrorMessage = "seed",
@@ -301,7 +300,7 @@ public sealed class ProcessQueueTaskBehaviorTests
         {
             Id = 1,
             Channel = "Cloud",
-            ProcessType = "Injection",
+            ProcessType = TestProcessCellData.ProcessTypeKey,
             FailedTarget = "Cloud",
             CellDataJson = "{}",
             ErrorMessage = "seed",
@@ -383,7 +382,7 @@ public sealed class ProcessQueueTaskBehaviorTests
         fallbackStore.Records.Add(new CloudFallbackRecord
         {
             Id = 1,
-            ProcessType = "Injection",
+            ProcessType = TestProcessCellData.ProcessTypeKey,
             CellDataJson = "{}",
             FailedTarget = "Cloud",
             ErrorMessage = "seed",
@@ -518,7 +517,7 @@ public sealed class ProcessQueueTaskBehaviorTests
     private static CellCompletedRecord CreateRecord()
         => new()
         {
-            CellData = new InjectionCellData
+            CellData = new TestProcessCellData
             {
                 DeviceName = "PLC-A",
                 DeviceCode = "PLC-A",

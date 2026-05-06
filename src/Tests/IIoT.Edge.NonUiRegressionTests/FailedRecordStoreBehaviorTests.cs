@@ -1,7 +1,6 @@
-﻿using IIoT.Edge.Application.Common.Persistence;
+using IIoT.Edge.Application.Common.Persistence;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Connection;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
-using IIoT.Edge.Module.Injection.Payload;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using Microsoft.Data.Sqlite;
@@ -13,7 +12,7 @@ public sealed class FailedRecordStoreBehaviorTests
     [Fact]
     public async Task GetPendingAsync_WhenDatabaseOpenFails_ShouldThrowPersistenceAccessException()
     {
-        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var tempDir = Path.Combine(Path.GetTempPath(), "edge-failed-store-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
@@ -49,7 +48,7 @@ public sealed class FailedRecordStoreBehaviorTests
     [Fact]
     public async Task DeleteExpiredAbandonedAsync_ShouldDeleteOnlyExpiredAbandonedRecords()
     {
-        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var tempDir = Path.Combine(Path.GetTempPath(), "edge-failed-store-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
@@ -111,7 +110,7 @@ public sealed class FailedRecordStoreBehaviorTests
     [Fact]
     public async Task ClaimPendingBatchAsync_ShouldRespectReleaseAndDeleteLifecycle()
     {
-        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var tempDir = Path.Combine(Path.GetTempPath(), "edge-failed-store-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
@@ -179,7 +178,7 @@ public sealed class FailedRecordStoreBehaviorTests
     [Fact]
     public async Task MovePendingToRetryAsync_ShouldMoveFallbackRowsIntoRetryTable()
     {
-        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var tempDir = Path.Combine(Path.GetTempPath(), "edge-failed-store-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
@@ -226,7 +225,7 @@ public sealed class FailedRecordStoreBehaviorTests
     {
         return new CellCompletedRecord
         {
-            CellData = new InjectionCellData
+            CellData = new TestProcessCellData
             {
                 Barcode = barcode,
                 WorkOrderNo = $"WO-{barcode}",

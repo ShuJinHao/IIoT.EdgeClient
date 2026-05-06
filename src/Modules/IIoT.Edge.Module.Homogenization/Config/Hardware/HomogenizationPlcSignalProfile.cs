@@ -4,7 +4,7 @@ using IIoT.Edge.Application.Modules.Hardware;
 namespace IIoT.Edge.Module.Homogenization.Config.Hardware;
 
 /// <summary>
-/// 匀浆 PLC 信号键。运行任务只能使用该枚举访问 IO，禁止直接写字符串 Label。
+/// 匀浆 PLC 信号键。运行任务只能使用该枚举访问 IO，禁止直接写字符串 SignalKey。
 /// </summary>
 public enum HomogenizationSignal
 {

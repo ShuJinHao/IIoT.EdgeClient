@@ -2,6 +2,7 @@ using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Common.Crud;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Models;
+using IIoT.Edge.Application.Features.Hardware.IoMappings;
 using IIoT.Edge.Presentation.Navigation.Localization;
 using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.UI.Shared.Localization;
@@ -15,6 +16,10 @@ namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView
 
 public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
 {
+    // 自定义点位 SortOrder 起始号段，必须远高于任何模块标准 profile 的最大 SortOrder，
+    // 避免 Manual.<guid> 调试点位与标准信号抢占 PLC 连续读所依赖的固定号段。
+    private const int ManualSortOrderBase = 10000;
+
     private readonly IHardwareConfigCrudService _crudService;
     private readonly IClientPermissionService _permissionService;
     private readonly IEditorValidator<NetworkDeviceVm> _networkDeviceValidator;
@@ -25,8 +30,9 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
     private readonly BaseCommand _deleteNetworkDeviceCommand;
     private readonly BaseCommand _addSerialDeviceCommand;
     private readonly BaseCommand _deleteSerialDeviceCommand;
-    private readonly BaseCommand _addReadIoMappingCommand;
-    private readonly BaseCommand _addWriteIoMappingCommand;
+    private readonly BaseCommand _openAddIoMappingDialogCommand;
+    private readonly BaseCommand _confirmAddIoMappingCommand;
+    private readonly BaseCommand _cancelAddIoMappingDialogCommand;
     private readonly BaseCommand _deleteIoMappingCommand;
     private readonly AsyncCommand _saveCommand;
     private bool _hasModuleTemplate;
@@ -47,6 +53,73 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
     public ObservableCollection<SerialDeviceVm> SerialDevices { get; } = new();
     public ObservableCollection<IoMappingVm> IoMappings { get; } = new();
     public ICollectionView IoMappingsView { get; }
+
+    public IReadOnlyList<string> IoCategories => IoMappingOptionCatalog.Categories;
+    public IReadOnlyList<string> IoDirections => IoMappingOptionCatalog.Directions;
+    public IReadOnlyList<string> IoDataTypes => IoMappingOptionCatalog.DataTypes;
+    public IReadOnlyList<string> IoPointSources => IoMappingOptionCatalog.PointSources;
+
+    public ObservableCollection<IoStandardSignalOptionVm> StandardIoSignals { get; } = new();
+
+    private IoStandardSignalOptionVm? _selectedStandardIoSignal;
+    public IoStandardSignalOptionVm? SelectedStandardIoSignal
+    {
+        get => _selectedStandardIoSignal;
+        set
+        {
+            if (ReferenceEquals(_selectedStandardIoSignal, value))
+            {
+                return;
+            }
+
+            _selectedStandardIoSignal = value;
+            OnPropertyChanged();
+            ApplyStandardSignalToDraft(value);
+        }
+    }
+
+    private string _moduleTemplateHint = "请选择 PLC 设备后补齐默认点位。";
+    public string ModuleTemplateHint
+    {
+        get => _moduleTemplateHint;
+        private set
+        {
+            _moduleTemplateHint = value;
+            OnPropertyChanged();
+        }
+    }
+
+    private bool _isAddIoMappingDialogOpen;
+    public bool IsAddIoMappingDialogOpen
+    {
+        get => _isAddIoMappingDialogOpen;
+        private set
+        {
+            _isAddIoMappingDialogOpen = value;
+            OnPropertyChanged();
+        }
+    }
+
+    private IoMappingDraftVm? _newIoMapping;
+    public IoMappingDraftVm? NewIoMapping
+    {
+        get => _newIoMapping;
+        private set
+        {
+            if (_newIoMapping is not null)
+            {
+                _newIoMapping.PropertyChanged -= OnNewIoMappingPropertyChanged;
+            }
+
+            _newIoMapping = value;
+            if (_newIoMapping is not null)
+            {
+                _newIoMapping.PropertyChanged += OnNewIoMappingPropertyChanged;
+            }
+
+            OnPropertyChanged();
+        }
+    }
 
     private NetworkDeviceVm? _selectedNetworkDevice;
     public NetworkDeviceVm? SelectedNetworkDevice
@@ -72,6 +145,8 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
 
             OnPropertyChanged();
             SetModuleTemplateAvailable(false);
+            ReplaceItems(StandardIoSignals, Array.Empty<IoStandardSignalOptionVm>());
+            ModuleTemplateHint = "请选择 PLC 设备后补齐默认点位。";
             _ = RefreshSelectedNetworkDeviceAsync();
         }
     }
@@ -87,8 +162,9 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
     public ICommand DeleteNetworkDeviceCommand { get; }
     public ICommand AddSerialDeviceCommand { get; }
     public ICommand DeleteSerialDeviceCommand { get; }
-    public ICommand AddReadIoMappingCommand { get; }
-    public ICommand AddWriteIoMappingCommand { get; }
+    public ICommand OpenAddIoMappingDialogCommand { get; }
+    public ICommand ConfirmAddIoMappingCommand { get; }
+    public ICommand CancelAddIoMappingDialogCommand { get; }
     public ICommand DeleteIoMappingCommand { get; }
     public ICommand ApplyModuleTemplateCommand => _applyModuleTemplateCommand;
     public ICommand SaveCommand { get; }
@@ -135,14 +211,13 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
             () => new SerialDeviceVm(),
             () => CanEdit);
         _deleteSerialDeviceCommand = (BaseCommand)CreateDeleteCommand(SerialDevices, () => CanEdit);
-        _addReadIoMappingCommand = (BaseCommand)CreateScopedAddCommand(
-            () => SelectedNetworkDevice is null ? null : IoMappings,
-            () => CreateIoMapping("Read"),
-            () => CanEdit && SelectedNetworkDevice is not null);
-        _addWriteIoMappingCommand = (BaseCommand)CreateScopedAddCommand(
-            () => SelectedNetworkDevice is null ? null : IoMappings,
-            () => CreateIoMapping("Write"),
-            () => CanEdit && SelectedNetworkDevice is not null);
+        _openAddIoMappingDialogCommand = new BaseCommand(
+            _ => OpenAddIoMappingDialog(),
+            _ => CanEdit && SelectedNetworkDevice is not null);
+        _confirmAddIoMappingCommand = new BaseCommand(
+            _ => ConfirmAddIoMapping(),
+            _ => CanEdit && IsAddIoMappingDialogOpen && NewIoMapping is not null);
+        _cancelAddIoMappingDialogCommand = new BaseCommand(_ => CloseAddIoMappingDialog());
         _deleteIoMappingCommand = (BaseCommand)CreateDeleteCommand(IoMappings, () => CanEdit);
         _applyModuleTemplateCommand = (AsyncCommand)CreateBusyCommand(
             ApplyModuleTemplateAsync,
@@ -153,8 +228,9 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         DeleteNetworkDeviceCommand = _deleteNetworkDeviceCommand;
         AddSerialDeviceCommand = _addSerialDeviceCommand;
         DeleteSerialDeviceCommand = _deleteSerialDeviceCommand;
-        AddReadIoMappingCommand = _addReadIoMappingCommand;
-        AddWriteIoMappingCommand = _addWriteIoMappingCommand;
+        OpenAddIoMappingDialogCommand = _openAddIoMappingDialogCommand;
+        ConfirmAddIoMappingCommand = _confirmAddIoMappingCommand;
+        CancelAddIoMappingDialogCommand = _cancelAddIoMappingDialogCommand;
         DeleteIoMappingCommand = _deleteIoMappingCommand;
         SaveCommand = _saveCommand;
 
@@ -207,6 +283,10 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
     private async Task RefreshModuleTemplateInfoAsync()
     {
         var result = await _crudService.GetModuleTemplateInfoAsync(SelectedNetworkDevice);
+        ReplaceItems(
+            StandardIoSignals,
+            result.DefaultSignals.Select(static x => new IoStandardSignalOptionVm(x)));
+        ModuleTemplateHint = result.Message;
         SetModuleTemplateAvailable(result.IsAvailable);
     }
 
@@ -252,8 +332,36 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         return saveResult;
     }
 
+    // 标准 profile 的 SortOrder 由模块强约束（决定 PLC 连续读合并的号段），保存时必须保留原值；
+    // Manual.<guid> 自定义点位独立放在 ≥ ManualSortOrderBase 段，避免与标准号段冲突。
     private IReadOnlyCollection<IoMappingVm> BuildMappingsToSave()
-        => IoMappings.Select(CloneIoMapping).ToList();
+    {
+        var result = new List<IoMappingVm>(IoMappings.Count);
+
+        foreach (var standard in IoMappings.Where(static x => !IsManualSignal(x)))
+        {
+            result.Add(CloneIoMapping(standard));
+        }
+
+        var manualOrdered = IoMappings
+            .Where(static x => IsManualSignal(x))
+            .OrderBy(static x => string.Equals(x.Direction, IoMappingOptionCatalog.DirectionWrite, StringComparison.OrdinalIgnoreCase) ? 1 : 0)
+            .ThenBy(static x => x.SortOrder <= 0 ? int.MaxValue : x.SortOrder)
+            .ThenBy(static x => x.SignalName, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        for (var index = 0; index < manualOrdered.Length; index++)
+        {
+            var clone = CloneIoMapping(manualOrdered[index]);
+            clone.SortOrder = ManualSortOrderBase + index;
+            result.Add(clone);
+        }
+
+        return result;
+    }
+
+    private static bool IsManualSignal(IoMappingVm mapping)
+        => mapping.SignalKey?.StartsWith("Manual.", StringComparison.OrdinalIgnoreCase) ?? false;
 
     private void OnSelectedNetworkDevicePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -285,8 +393,9 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         _deleteNetworkDeviceCommand.RaiseCanExecuteChanged();
         _addSerialDeviceCommand.RaiseCanExecuteChanged();
         _deleteSerialDeviceCommand.RaiseCanExecuteChanged();
-        _addReadIoMappingCommand.RaiseCanExecuteChanged();
-        _addWriteIoMappingCommand.RaiseCanExecuteChanged();
+        _openAddIoMappingDialogCommand.RaiseCanExecuteChanged();
+        _confirmAddIoMappingCommand.RaiseCanExecuteChanged();
+        _cancelAddIoMappingDialogCommand.RaiseCanExecuteChanged();
         _deleteIoMappingCommand.RaiseCanExecuteChanged();
         _applyModuleTemplateCommand.RaiseCanExecuteChanged();
         _saveCommand.RaiseCanExecuteChanged();
@@ -299,34 +408,232 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         _applyModuleTemplateCommand.RaiseCanExecuteChanged();
     }
 
-    private IoMappingVm CreateIoMapping(string direction)
+    private void OpenAddIoMappingDialog()
     {
-        var isWrite = string.Equals(direction, "Write", StringComparison.OrdinalIgnoreCase);
-        return new IoMappingVm
+        if (SelectedNetworkDevice is null)
         {
-            NetworkDeviceId = SelectedNetworkDevice!.Id,
-            Direction = isWrite ? "Write" : "Read",
-            DataType = "Int16",
-            AddressCount = 1,
-            Category = GetText(
-                isWrite ? "Navigation_Io_Category_SingleWrite" : "Navigation_Io_Category_SingleRead",
-                isWrite ? "单点写数据" : "单点读数据")
+            SetError(GetText("Navigation_Hardware_Validation_SelectNetworkDeviceFirst", "请先选择一个 PLC 设备。"));
+            return;
+        }
+
+        var draft = new IoMappingDraftVm
+        {
+            Source = StandardIoSignals.Count > 0
+                ? IoMappingOptionCatalog.PointSourceStandardSignal
+                : IoMappingOptionCatalog.PointSourceCustomDebug
         };
+
+        NewIoMapping = draft;
+        SelectedStandardIoSignal = draft.IsStandardSource
+            ? StandardIoSignals.FirstOrDefault()
+            : null;
+        if (draft.IsCustomSource)
+        {
+            ApplyCustomDebugDefaults(draft);
+        }
+
+        IsAddIoMappingDialogOpen = true;
+        _confirmAddIoMappingCommand.RaiseCanExecuteChanged();
     }
+
+    private void ConfirmAddIoMapping()
+    {
+        if (SelectedNetworkDevice is null || NewIoMapping is null)
+        {
+            return;
+        }
+
+        var validationError = ValidateDraft(NewIoMapping);
+        if (!string.IsNullOrWhiteSpace(validationError))
+        {
+            SetError(validationError);
+            return;
+        }
+
+        var standardSignal = NewIoMapping.IsStandardSource ? SelectedStandardIoSignal : null;
+        var category = standardSignal?.Category
+            ?? IoMappingOptionCatalog.NormalizeCategory(
+                NewIoMapping.Category,
+                NewIoMapping.AddressCount);
+        var businessGroup = standardSignal?.BusinessGroup
+            ?? (string.IsNullOrWhiteSpace(NewIoMapping.BusinessGroup)
+                ? "自定义点位"
+                : NewIoMapping.BusinessGroup.Trim());
+        var signalKey = standardSignal?.SignalKey ?? CreateManualSignalKey();
+        var signalName = standardSignal?.SignalName ?? NewIoMapping.SignalName.Trim();
+        var addressCount = standardSignal?.AddressCount ?? NewIoMapping.AddressCount;
+        var dataType = standardSignal?.DataType ?? NewIoMapping.DataType.Trim();
+        var direction = standardSignal?.Direction ?? NewIoMapping.Direction.Trim();
+        var sortOrder = standardSignal?.SortOrder > 0 ? standardSignal.SortOrder : NextSortOrder();
+
+        IoMappings.Add(new IoMappingVm
+        {
+            NetworkDeviceId = SelectedNetworkDevice.Id,
+            SignalKey = signalKey,
+            PlcAddress = NewIoMapping.PlcAddress.Trim(),
+            AddressCount = addressCount,
+            DataType = dataType,
+            Direction = direction,
+            Category = category,
+            BusinessGroup = businessGroup,
+            SignalName = signalName,
+            SortOrder = sortOrder,
+            Remark = string.IsNullOrWhiteSpace(NewIoMapping.Remark) ? null : NewIoMapping.Remark.Trim()
+        });
+
+        IoMappingsView.Refresh();
+        CloseAddIoMappingDialog();
+        ClearFeedback();
+    }
+
+    private void CloseAddIoMappingDialog()
+    {
+        IsAddIoMappingDialogOpen = false;
+        SelectedStandardIoSignal = null;
+        NewIoMapping = null;
+        _confirmAddIoMappingCommand.RaiseCanExecuteChanged();
+    }
+
+    private string? ValidateDraft(IoMappingDraftVm draft)
+    {
+        if (!IoMappingOptionCatalog.IsKnownPointSource(draft.Source))
+        {
+            return GetText("Navigation_Hardware_Validation_IoSourceRequired", "请选择点位来源。");
+        }
+
+        if (draft.IsStandardSource)
+        {
+            if (SelectedStandardIoSignal is null)
+            {
+                return GetText("Navigation_Hardware_Validation_StandardSignalRequired", "请选择插件标准信号。");
+            }
+
+            if (IoMappings.Any(x => string.Equals(
+                    x.SignalKey,
+                    SelectedStandardIoSignal.SignalKey,
+                    StringComparison.OrdinalIgnoreCase)))
+            {
+                return GetText("Navigation_Hardware_Validation_StandardSignalExists", "该插件标准信号已存在，不能重复添加。");
+            }
+
+            if (string.IsNullOrWhiteSpace(draft.PlcAddress))
+            {
+                return GetText("Navigation_Hardware_Validation_IoAddressRequired", "PLC 地址不能为空。");
+            }
+
+            return null;
+        }
+
+        if (!IoMappingOptionCatalog.IsKnownCategory(draft.Category))
+        {
+            return GetText("Navigation_Hardware_Validation_IoCategoryRequired", "请选择点位类型。");
+        }
+
+        if (!IoMappingOptionCatalog.IsKnownDirection(draft.Direction))
+        {
+            return GetText("Navigation_Hardware_Validation_IoDirectionRequired", "请选择 IO 方向。");
+        }
+
+        if (!IoMappingOptionCatalog.IsKnownDataType(draft.DataType))
+        {
+            return GetText("Navigation_Hardware_Validation_IoDataTypeRequired", "请选择 IO 数据类型。");
+        }
+
+        if (string.IsNullOrWhiteSpace(draft.PlcAddress))
+        {
+            return GetText("Navigation_Hardware_Validation_IoAddressRequired", "PLC 地址不能为空。");
+        }
+
+        if (draft.AddressCount <= 0)
+        {
+            return GetText("Navigation_Hardware_Validation_IoAddressCountPositive", "地址数量必须大于 0。");
+        }
+
+        if (string.IsNullOrWhiteSpace(draft.SignalName))
+        {
+            return GetText("Navigation_Hardware_Validation_IoSignalNameRequired", "信号名称不能为空。");
+        }
+
+        return null;
+    }
+
+    private void OnNewIoMappingPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (sender is not IoMappingDraftVm draft)
+        {
+            return;
+        }
+
+        if (e.PropertyName == nameof(IoMappingDraftVm.Source))
+        {
+            if (draft.IsStandardSource)
+            {
+                SelectedStandardIoSignal ??= StandardIoSignals.FirstOrDefault();
+                ApplyStandardSignalToDraft(SelectedStandardIoSignal);
+            }
+            else if (draft.IsCustomSource)
+            {
+                SelectedStandardIoSignal = null;
+                ApplyCustomDebugDefaults(draft);
+            }
+        }
+    }
+
+    private void ApplyStandardSignalToDraft(IoStandardSignalOptionVm? signal)
+    {
+        if (NewIoMapping is null || !NewIoMapping.IsStandardSource || signal is null)
+        {
+            return;
+        }
+
+        NewIoMapping.Category = signal.Category;
+        NewIoMapping.Direction = signal.Direction;
+        NewIoMapping.PlcAddress = signal.PlcAddress;
+        NewIoMapping.AddressCount = signal.AddressCount;
+        NewIoMapping.DataType = signal.DataType;
+        NewIoMapping.BusinessGroup = signal.BusinessGroup;
+        NewIoMapping.SignalName = signal.SignalName;
+        NewIoMapping.Remark = signal.Remark;
+    }
+
+    private static void ApplyCustomDebugDefaults(IoMappingDraftVm draft)
+    {
+        draft.Category = IoMappingOptionCatalog.CategorySingleRead;
+        draft.Direction = IoMappingOptionCatalog.DirectionRead;
+        draft.AddressCount = 1;
+        draft.DataType = IoMappingOptionCatalog.DataTypeInt16;
+        draft.BusinessGroup = "自定义点位";
+        draft.SignalName = string.Empty;
+        draft.Remark = null;
+    }
+
+    private int NextSortOrder()
+    {
+        var maxManual = IoMappings
+            .Where(static x => IsManualSignal(x))
+            .Select(static x => x.SortOrder)
+            .DefaultIfEmpty(ManualSortOrderBase - 1)
+            .Max();
+
+        return Math.Max(maxManual + 1, ManualSortOrderBase);
+    }
+
+    private static string CreateManualSignalKey()
+        => $"Manual.{Guid.NewGuid():N}";
 
     private static IoMappingVm CloneIoMapping(IoMappingVm source)
         => new()
         {
             Id = source.Id,
             NetworkDeviceId = source.NetworkDeviceId,
-            Label = source.Label,
+            SignalKey = source.SignalKey,
             PlcAddress = source.PlcAddress,
             AddressCount = source.AddressCount,
             DataType = source.DataType,
             Direction = source.Direction,
             Category = source.Category,
-            GroupName = source.GroupName,
-            DisplayRole = source.DisplayRole,
+            BusinessGroup = source.BusinessGroup,
+            SignalName = source.SignalName,
             SortOrder = source.SortOrder,
             Remark = source.Remark
         };

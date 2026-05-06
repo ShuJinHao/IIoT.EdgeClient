@@ -134,7 +134,7 @@ public sealed class StackingDevelopmentSampleContributor : DevelopmentSampleCont
         }
 
         var context = _contextStore.GetOrCreate(sampleDevice.DeviceName);
-        context.DeviceId = sampleDevice.Id;
+        context.NetworkDeviceId = sampleDevice.Id;
 
         if (!context.CurrentCells.Values.OfType<StackingCellData>().Any())
         {
@@ -176,13 +176,13 @@ public sealed class StackingDevelopmentSampleContributor : DevelopmentSampleCont
             x => x.NetworkDeviceId == sampleDevice.Id,
             cancellationToken).ConfigureAwait(false);
 
-        var existingLabels = new HashSet<string>(
-            mappings.Select(x => x.Label),
+        var existingSignalKeys = new HashSet<string>(
+            mappings.Select(x => x.SignalKey),
             StringComparer.OrdinalIgnoreCase);
 
         var templateEntries = GetStackingHardwareProfile().GetDefaultIoTemplate();
         var addedCount = 0;
-        foreach (var mapping in BuildStackingMappings(sampleDevice.Id, templateEntries, existingLabels))
+        foreach (var mapping in BuildStackingMappings(sampleDevice.Id, templateEntries, existingSignalKeys))
         {
             _ioMappings.Add(mapping);
             addedCount++;
@@ -229,23 +229,23 @@ public sealed class StackingDevelopmentSampleContributor : DevelopmentSampleCont
     private static List<IoMappingEntity> BuildStackingMappings(
         int networkDeviceId,
         IReadOnlyCollection<ModuleIoTemplateEntry> templateEntries,
-        ISet<string> existingLabels)
+        ISet<string> existingSignalKeys)
     {
         return templateEntries
-            .Where(x => !existingLabels.Contains(x.Label))
+            .Where(x => !existingSignalKeys.Contains(x.SignalKey))
             .OrderBy(x => x.SortOrder)
             .Select(x =>
             {
                 var entity = IoMappingEntity.Create(
                     networkDeviceId,
-                    x.Label,
+                    x.SignalKey,
                     x.PlcAddress,
                     x.AddressCount,
                     x.DataType,
                     x.Direction);
                 entity.UpdateSortOrder(x.SortOrder);
                 entity.UpdateMetadata(
-                    x.Label,
+                    x.SignalKey,
                     x.DataType,
                     x.Direction,
                     "单点读数据",

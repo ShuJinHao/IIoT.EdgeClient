@@ -28,20 +28,20 @@ public sealed class DiagnosticsViewModelBehaviorTests
                     "appsettings.machine.StackingLine.json",
                     true,
                     @"C:\EdgeRuntime\StackingLine"),
-                DiscoveredModules: ["Injection"],
-                EnabledModules: ["Injection"],
-                ActivatedModules: ["Injection"],
+                DiscoveredModules: ["Stacking"],
+                EnabledModules: ["Stacking"],
+                ActivatedModules: ["Stacking"],
                 PluginStates:
                 [
-                    new PluginLifecycleSnapshot("Injection", "Injection", "Injection", "1.0.0", PluginLifecycleState.Activated, "Plugin is enabled and activated.")
+                    new PluginLifecycleSnapshot("Stacking", "Stacking", "Stacking", "1.0.0", PluginLifecycleState.Activated, "Plugin is enabled and activated.")
                 ],
                 ModuleRegistrations:
                 [
-                    new ModuleRegistrationSnapshot("Injection", "Injection", "IIoT.Edge.Module.Injection", true, true, true, true, true, true)
+                    new ModuleRegistrationSnapshot("Stacking", "Stacking", "IIoT.Edge.Module.Stacking", true, true, true, true, true, true)
                 ],
                 DeviceBindings:
                 [
-                    new DeviceModuleBindingSnapshot("PLC-A", "Injection", true, true, true)
+                    new DeviceModuleBindingSnapshot("PLC-A", "Stacking", true, true, true)
                 ],
                 Issues: []));
 
@@ -78,7 +78,7 @@ public sealed class DiagnosticsViewModelBehaviorTests
                         "mes timeout",
                         2,
                         [
-                            new MesChannelDiagnostics("Injection", TestNow.AddMinutes(-3), TestNow.AddMinutes(-10), "Failed", "mes timeout")
+                            new MesChannelDiagnostics("Stacking", TestNow.AddMinutes(-3), TestNow.AddMinutes(-10), "Failed", "mes timeout")
                         ],
                         true,
                         CapacityBlockedChannel.Fallback,
@@ -155,9 +155,9 @@ public sealed class DiagnosticsViewModelBehaviorTests
                         "appsettings.machine.StackingLine.json",
                         true,
                         @"C:\EdgeRuntime\StackingLine"),
-                    DiscoveredModules: ["Injection"],
-                    EnabledModules: ["Injection"],
-                    ActivatedModules: ["Injection"],
+                    DiscoveredModules: ["Stacking"],
+                    EnabledModules: ["Stacking"],
+                    ActivatedModules: ["Stacking"],
                     PluginStates: [],
                     ModuleRegistrations: [],
                     DeviceBindings: [],

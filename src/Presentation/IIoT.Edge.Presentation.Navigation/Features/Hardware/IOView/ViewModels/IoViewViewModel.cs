@@ -224,21 +224,21 @@ public class IoViewViewModel : NavigationViewModelBase
 
         foreach (var row in interactionRows.Values
                      .OrderBy(static x => x.SortOrder)
-                     .ThenBy(static x => x.GroupName, StringComparer.OrdinalIgnoreCase))
+                     .ThenBy(static x => x.BusinessGroup, StringComparer.OrdinalIgnoreCase))
         {
             InteractionRows.Add(row);
         }
 
         foreach (var section in dataSections.Values
                      .OrderBy(static x => x.SortOrder)
-                     .ThenBy(static x => x.GroupName, StringComparer.OrdinalIgnoreCase))
+                     .ThenBy(static x => x.BusinessGroup, StringComparer.OrdinalIgnoreCase))
         {
             DataSections.Add(section);
         }
 
         foreach (var section in arraySections.Values
                      .OrderBy(static x => x.SortOrder)
-                     .ThenBy(static x => x.GroupName, StringComparer.OrdinalIgnoreCase))
+                     .ThenBy(static x => x.BusinessGroup, StringComparer.OrdinalIgnoreCase))
         {
             ArraySections.Add(section);
         }
@@ -314,18 +314,18 @@ public class IoViewViewModel : NavigationViewModelBase
         IDictionary<string, IoInteractionRowModel> rows,
         IoMappingEntity mapping)
     {
-        var groupName = ResolveGroupName(mapping, IoMappingDisplay.InteractionCategory);
-        if (rows.TryGetValue(groupName, out var row))
+        var businessGroup = ResolveBusinessGroup(mapping, IoMappingDisplay.InteractionCategory);
+        if (rows.TryGetValue(businessGroup, out var row))
         {
             return row;
         }
 
         row = new IoInteractionRowModel
         {
-            GroupName = groupName,
+            BusinessGroup = businessGroup,
             SortOrder = mapping.SortOrder
         };
-        rows.Add(groupName, row);
+        rows.Add(businessGroup, row);
         return row;
     }
 
@@ -334,7 +334,7 @@ public class IoViewViewModel : NavigationViewModelBase
         IoMappingEntity mapping,
         string category)
     {
-        var groupName = ResolveGroupName(mapping, category);
+        var businessGroup = ResolveBusinessGroup(mapping, category);
         var key = category;
         if (sections.TryGetValue(key, out var section))
         {
@@ -344,7 +344,7 @@ public class IoViewViewModel : NavigationViewModelBase
         section = new IoDataSectionModel
         {
             Category = category,
-            GroupName = groupName,
+            BusinessGroup = businessGroup,
             SortOrder = mapping.SortOrder
         };
         sections.Add(key, section);
@@ -356,7 +356,7 @@ public class IoViewViewModel : NavigationViewModelBase
         IoMappingEntity mapping,
         string category)
     {
-        var groupName = ResolveGroupName(mapping, category);
+        var businessGroup = ResolveBusinessGroup(mapping, category);
         var key = category;
         if (sections.TryGetValue(key, out var section))
         {
@@ -366,7 +366,7 @@ public class IoViewViewModel : NavigationViewModelBase
         section = new IoContinuousReadMatrixSectionModel
         {
             Category = category,
-            GroupName = groupName,
+            BusinessGroup = businessGroup,
             SortOrder = mapping.SortOrder
         };
         sections.Add(key, section);
@@ -375,17 +375,13 @@ public class IoViewViewModel : NavigationViewModelBase
 
     private static IoSignalModel CreateSignal(IoMappingEntity mapping, int startIndex)
     {
-        var displayName = string.IsNullOrWhiteSpace(mapping.Remark)
-            ? mapping.Label
-            : mapping.Remark.Trim();
-
         return new IoSignalModel
         {
-            Label = displayName,
-            RawLabel = mapping.Label,
+            SignalKey = mapping.SignalKey,
             PlcAddress = mapping.PlcAddress,
             Direction = mapping.Direction,
-            DisplayRole = mapping.DisplayRole,
+            SignalName = mapping.SignalName,
+            Remark = mapping.Remark,
             DataType = mapping.DataType,
             StartIndex = startIndex,
             AddressCount = Math.Max(1, mapping.AddressCount),
@@ -396,8 +392,8 @@ public class IoViewViewModel : NavigationViewModelBase
     private static string ResolveCategory(IoMappingEntity mapping)
         => IoMappingDisplay.ResolveCategory(mapping.Category, mapping.AddressCount);
 
-    private static string ResolveGroupName(IoMappingEntity mapping, string category)
-        => IoMappingDisplay.ResolveGroupName(mapping.GroupName, category);
+    private static string ResolveBusinessGroup(IoMappingEntity mapping, string category)
+        => IoMappingDisplay.ResolveBusinessGroup(mapping.BusinessGroup, category);
 
     private static void UpdateReadSignal(IoSignalModel signal, IPlcBuffer buffer)
     {

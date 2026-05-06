@@ -26,7 +26,6 @@ $launcherRequiredFiles = @(
     'launcher.profiles.json',
     'launcher.accounts.sample.json',
     'Assets\Profiles\stacking.png',
-    'Assets\Profiles\injection.png',
     'Assets\Profiles\homogenization.png'
 )
 

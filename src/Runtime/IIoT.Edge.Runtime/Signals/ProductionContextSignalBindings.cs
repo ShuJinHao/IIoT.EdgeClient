@@ -21,15 +21,15 @@ public static class ProductionContextSignalBindings
 
         var normalized = bindings
             .Select(static binding => new ModuleIoSnapshot(
-                binding.Label,
+                binding.SignalKey,
                 binding.PlcAddress,
                 binding.AddressCount,
                 binding.DataType,
                 binding.Direction,
                 binding.SortOrder,
                 binding.Category,
-                binding.GroupName,
-                binding.DisplayRole))
+                binding.BusinessGroup,
+                binding.SignalName))
             .ToArray();
 
         BindingsByContext.Remove(context);

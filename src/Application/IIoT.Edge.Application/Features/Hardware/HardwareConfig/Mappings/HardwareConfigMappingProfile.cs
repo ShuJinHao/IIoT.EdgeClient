@@ -47,14 +47,14 @@ public class HardwareConfigMappingProfile : Profile
             .ConstructUsing((src, context) => new IoMappingDto(
                 src.Id,
                 context.Items.TryGetValue(NetworkDeviceIdContextKey, out var id) ? (int)id : 0,
-                src.Label,
+                src.SignalKey,
                 src.PlcAddress,
                 src.AddressCount,
                 src.DataType,
                 src.Direction,
                 src.Category,
-                src.GroupName,
-                src.DisplayRole,
+                src.BusinessGroup,
+                src.SignalName,
                 src.SortOrder,
                 src.Remark));
     }

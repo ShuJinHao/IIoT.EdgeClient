@@ -5,7 +5,6 @@ using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Module.Homogenization.Payload;
-using IIoT.Edge.Module.Injection.Payload;
 using IIoT.Edge.Runtime.DataPipeline.Services;
 using IIoT.Edge.Runtime.DataPipeline.Tasks;
 using IIoT.Edge.SharedKernel.DataPipeline;
@@ -20,7 +19,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task MesRetry_WhenHeartbeatRecovers_ShouldResetAbandonedRecordsAndRetryThem()
     {
-        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var logger = new FakeLogService();
         var retryStore = new FakeFailedRecordStore();
@@ -32,8 +31,8 @@ public sealed class RetryTaskCloudMesBehaviorTests
         {
             Id = 1,
             Channel = "MES",
-            ProcessType = "Injection",
-            CellDataJson = SerializeCellData(new InjectionCellData
+            ProcessType = TestProcessCellData.ProcessTypeKey,
+            CellDataJson = SerializeCellData(new TestProcessCellData
             {
                 Barcode = "BC-MES-001",
                 DeviceName = "PLC-A",
@@ -72,7 +71,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         {
             Id = 1,
             Channel = "MES",
-            ProcessType = "Injection",
+            ProcessType = TestProcessCellData.ProcessTypeKey,
             CellDataJson = "{}",
             FailedTarget = "MES",
             ErrorMessage = "abandoned",
@@ -98,7 +97,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task CloudBatchRetry_WhenBatchSucceeds_ShouldDeleteBatchRecordsAndContinueOthers()
     {
-        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
         CellDataTypeRegistry.Register<StackingLikeCellData>("Stacking");
 
         var logger = new FakeLogService();
@@ -108,10 +107,10 @@ public sealed class RetryTaskCloudMesBehaviorTests
         cloudBatch.EnqueueResult(true);
         var cloudConsumer = new FakeCloudConsumer();
         var integrationRegistry = new FakeProcessIntegrationRegistry();
-        integrationRegistry.RegisterCloudUploader("Injection", ProcessUploadMode.Batch);
+        integrationRegistry.RegisterCloudUploader(TestProcessCellData.ProcessTypeKey, ProcessUploadMode.Batch);
 
-        failedStore.PendingRecords.Add(CreateFailedRecord(1, "Cloud", "Cloud", 0, "Injection", new InjectionCellData { Barcode = "INJ-1" }));
-        failedStore.PendingRecords.Add(CreateFailedRecord(2, "Cloud", "Cloud", 1, "Injection", new InjectionCellData { Barcode = "INJ-2" }));
+        failedStore.PendingRecords.Add(CreateFailedRecord(1, "Cloud", "Cloud", 0, TestProcessCellData.ProcessTypeKey, new TestProcessCellData { Barcode = "INJ-1" }));
+        failedStore.PendingRecords.Add(CreateFailedRecord(2, "Cloud", "Cloud", 1, TestProcessCellData.ProcessTypeKey, new TestProcessCellData { Barcode = "INJ-2" }));
         failedStore.PendingRecords.Add(CreateFailedRecord(3, "Cloud", "Cloud", 0, "Stacking", new StackingLikeCellData { Barcode = "ST-3" }));
 
         var task = new TestableCloudRetryTask(
@@ -140,7 +139,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task CloudBatchRetry_WhenBatchFails_ShouldBackoffBatchRecordsAndKeepThem()
     {
-        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
         CellDataTypeRegistry.Register<StackingLikeCellData>("Stacking");
 
         var logger = new FakeLogService();
@@ -150,10 +149,10 @@ public sealed class RetryTaskCloudMesBehaviorTests
         cloudBatch.EnqueueResult(CloudCallResult.Failure(CloudCallOutcome.HttpFailure, "batch_http_failure"));
         var cloudConsumer = new FakeCloudConsumer();
         var integrationRegistry = new FakeProcessIntegrationRegistry();
-        integrationRegistry.RegisterCloudUploader("Injection", ProcessUploadMode.Batch);
+        integrationRegistry.RegisterCloudUploader(TestProcessCellData.ProcessTypeKey, ProcessUploadMode.Batch);
 
-        failedStore.PendingRecords.Add(CreateFailedRecord(10, "Cloud", "Cloud", 0, "Injection", new InjectionCellData { Barcode = "INJ-10" }));
-        failedStore.PendingRecords.Add(CreateFailedRecord(11, "Cloud", "Cloud", 2, "Injection", new InjectionCellData { Barcode = "INJ-11" }));
+        failedStore.PendingRecords.Add(CreateFailedRecord(10, "Cloud", "Cloud", 0, TestProcessCellData.ProcessTypeKey, new TestProcessCellData { Barcode = "INJ-10" }));
+        failedStore.PendingRecords.Add(CreateFailedRecord(11, "Cloud", "Cloud", 2, TestProcessCellData.ProcessTypeKey, new TestProcessCellData { Barcode = "INJ-11" }));
         failedStore.PendingRecords.Add(CreateFailedRecord(12, "Cloud", "Cloud", 0, "Stacking", new StackingLikeCellData { Barcode = "ST-12" }));
 
         var task = new TestableCloudRetryTask(
@@ -249,7 +248,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
 
         await task.ExecuteOnceAsync();
 
-        Assert.Equal(0, cloudConsumer.ProcessedRecords.Count(x => string.Equals(x.CellData.ProcessType, "Injection", StringComparison.OrdinalIgnoreCase)));
+        Assert.Equal(0, cloudConsumer.ProcessedRecords.Count(x => string.Equals(x.CellData.ProcessType, TestProcessCellData.ProcessTypeKey, StringComparison.OrdinalIgnoreCase)));
         Assert.Equal(2, cloudConsumer.ProcessCallCount);
         Assert.Contains(41L, failedStore.DeletedIds);
         Assert.Contains(42L, failedStore.DeletedIds);
@@ -325,10 +324,10 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task MesRetry_ShouldRunWhenCloudIsBlocked()
     {
-        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var failedStore = new FakeFailedRecordStore();
-        failedStore.PendingRecords.Add(CreateFailedRecord(61, "MES", "MES", 0, "Injection", new InjectionCellData { Barcode = "MES-61" }));
+        failedStore.PendingRecords.Add(CreateFailedRecord(61, "MES", "MES", 0, TestProcessCellData.ProcessTypeKey, new TestProcessCellData { Barcode = "MES-61" }));
 
         var mesConsumer = new FakeMesConsumer();
         var task = new TestableMesRetryTask(
@@ -415,15 +414,15 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task CloudRetry_WhenUploadGateIsBlocked_ShouldNotBlockMesFallbackRecovery()
     {
-        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var cloudRetryStore = new FakeFailedRecordStore();
         var cloudFallbackStore = new FakeCloudFallbackBufferStore();
         cloudFallbackStore.Records.Add(new CloudFallbackRecord
         {
             Id = 501,
-            ProcessType = "Injection",
-            CellDataJson = SerializeCellData(new InjectionCellData { Barcode = "CLOUD-501" }),
+            ProcessType = TestProcessCellData.ProcessTypeKey,
+            CellDataJson = SerializeCellData(new TestProcessCellData { Barcode = "CLOUD-501" }),
             FailedTarget = "Cloud",
             ErrorMessage = "cloud-seed",
             CreatedAt = DateTime.UtcNow.AddMinutes(-2)
@@ -452,8 +451,8 @@ public sealed class RetryTaskCloudMesBehaviorTests
         mesFallbackStore.Records.Add(new MesFallbackRecord
         {
             Id = 601,
-            ProcessType = "Injection",
-            CellDataJson = SerializeCellData(new InjectionCellData { Barcode = "MES-601" }),
+            ProcessType = TestProcessCellData.ProcessTypeKey,
+            CellDataJson = SerializeCellData(new TestProcessCellData { Barcode = "MES-601" }),
             FailedTarget = "MES",
             ErrorMessage = "mes-seed",
             CreatedAt = DateTime.UtcNow.AddMinutes(-2)
@@ -479,10 +478,10 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task MesRetry_WhenMesUploadDisabled_ShouldLeaveBacklogUntouched()
     {
-        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var failedStore = new FakeFailedRecordStore();
-        failedStore.PendingRecords.Add(CreateFailedRecord(601, "MES", "MES", 0, "Injection", new InjectionCellData { Barcode = "MES-601" }));
+        failedStore.PendingRecords.Add(CreateFailedRecord(601, "MES", "MES", 0, TestProcessCellData.ProcessTypeKey, new TestProcessCellData { Barcode = "MES-601" }));
         var diagnosticsStore = new FakeMesRetryDiagnosticsStore();
 
         var task = new TestableMesRetryTask(
@@ -511,15 +510,15 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task MesRetry_WhenMesUploadDisabled_ShouldLeaveFallbackBacklogUntouched()
     {
-        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var failedStore = new FakeFailedRecordStore();
         var fallbackStore = new FakeMesFallbackBufferStore();
         fallbackStore.Records.Add(new MesFallbackRecord
         {
             Id = 604,
-            ProcessType = "Injection",
-            CellDataJson = SerializeCellData(new InjectionCellData { Barcode = "MES-604" }),
+            ProcessType = TestProcessCellData.ProcessTypeKey,
+            CellDataJson = SerializeCellData(new TestProcessCellData { Barcode = "MES-604" }),
             FailedTarget = "MES",
             ErrorMessage = "seed",
             CreatedAt = DateTime.UtcNow.AddMinutes(-2)
@@ -550,10 +549,10 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task MesRetry_WhenHeartbeatIsNotReady_ShouldLeaveBacklogUntouched()
     {
-        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var failedStore = new FakeFailedRecordStore();
-        failedStore.PendingRecords.Add(CreateFailedRecord(602, "MES", "MES", 0, "Injection", new InjectionCellData { Barcode = "MES-602" }));
+        failedStore.PendingRecords.Add(CreateFailedRecord(602, "MES", "MES", 0, TestProcessCellData.ProcessTypeKey, new TestProcessCellData { Barcode = "MES-602" }));
         var diagnosticsStore = new FakeMesRetryDiagnosticsStore();
         var heartbeatStore = new FakeExternalHeartbeatStateStore();
         heartbeatStore.MarkNotReady(ExternalSystemKind.Mes, "mes_heartbeat_timeout");
@@ -579,15 +578,15 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task MesRetry_WhenHeartbeatIsNotReady_ShouldLeaveFallbackBacklogUntouched()
     {
-        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var failedStore = new FakeFailedRecordStore();
         var fallbackStore = new FakeMesFallbackBufferStore();
         fallbackStore.Records.Add(new MesFallbackRecord
         {
             Id = 605,
-            ProcessType = "Injection",
-            CellDataJson = SerializeCellData(new InjectionCellData { Barcode = "MES-605" }),
+            ProcessType = TestProcessCellData.ProcessTypeKey,
+            CellDataJson = SerializeCellData(new TestProcessCellData { Barcode = "MES-605" }),
             FailedTarget = "MES",
             ErrorMessage = "seed",
             CreatedAt = DateTime.UtcNow.AddMinutes(-2)
@@ -614,10 +613,10 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task MesRetry_WhenHeartbeatRecovers_ShouldUploadPendingRecords()
     {
-        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var failedStore = new FakeFailedRecordStore();
-        failedStore.PendingRecords.Add(CreateFailedRecord(603, "MES", "MES", 0, "Injection", new InjectionCellData { Barcode = "MES-603" }));
+        failedStore.PendingRecords.Add(CreateFailedRecord(603, "MES", "MES", 0, TestProcessCellData.ProcessTypeKey, new TestProcessCellData { Barcode = "MES-603" }));
         var heartbeatStore = new FakeExternalHeartbeatStateStore();
         heartbeatStore.MarkReady(ExternalSystemKind.Mes);
         var mesConsumer = new FakeMesConsumer();
@@ -639,15 +638,15 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task MesRetry_WhenHeartbeatRecovers_ShouldRecoverFallbackAndUpload()
     {
-        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var failedStore = new FakeFailedRecordStore();
         var fallbackStore = new FakeMesFallbackBufferStore();
         fallbackStore.Records.Add(new MesFallbackRecord
         {
             Id = 606,
-            ProcessType = "Injection",
-            CellDataJson = SerializeCellData(new InjectionCellData { Barcode = "MES-606" }),
+            ProcessType = TestProcessCellData.ProcessTypeKey,
+            CellDataJson = SerializeCellData(new TestProcessCellData { Barcode = "MES-606" }),
             FailedTarget = "MES",
             ErrorMessage = "seed",
             CreatedAt = DateTime.UtcNow.AddMinutes(-2)
@@ -673,10 +672,10 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task MesRetry_WhenFailureOccurs_ShouldIncreaseRetryCountAndBackoff()
     {
-        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var failedStore = new FakeFailedRecordStore();
-        failedStore.PendingRecords.Add(CreateFailedRecord(62, "MES", "MES", 4, "Injection", new InjectionCellData { Barcode = "MES-62" }));
+        failedStore.PendingRecords.Add(CreateFailedRecord(62, "MES", "MES", 4, TestProcessCellData.ProcessTypeKey, new TestProcessCellData { Barcode = "MES-62" }));
 
         var mesConsumer = new FakeMesConsumer();
         mesConsumer.EnqueueResult(false);
@@ -698,10 +697,10 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task MesRetry_WhenFailureOccurs_ShouldMoveRuntimeStateToLastFailed()
     {
-        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var failedStore = new FakeFailedRecordStore();
-        failedStore.PendingRecords.Add(CreateFailedRecord(63, "MES", "MES", 0, "Injection", new InjectionCellData { Barcode = "MES-63" }));
+        failedStore.PendingRecords.Add(CreateFailedRecord(63, "MES", "MES", 0, TestProcessCellData.ProcessTypeKey, new TestProcessCellData { Barcode = "MES-63" }));
 
         var diagnosticsStore = new FakeMesRetryDiagnosticsStore();
         var mesConsumer = new FakeMesConsumer();
@@ -722,15 +721,15 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task MesRetry_ShouldRecoverFallbackRecordsIntoMainRetryStore()
     {
-        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var failedStore = new FakeFailedRecordStore();
         var mesFallbackStore = new FakeMesFallbackBufferStore();
         mesFallbackStore.Records.Add(new MesFallbackRecord
         {
             Id = 100,
-            ProcessType = "Injection",
-            CellDataJson = SerializeCellData(new InjectionCellData { Barcode = "BC-MES-100", WorkOrderNo = "WO-MES-100" }),
+            ProcessType = TestProcessCellData.ProcessTypeKey,
+            CellDataJson = SerializeCellData(new TestProcessCellData { Barcode = "BC-MES-100", WorkOrderNo = "WO-MES-100" }),
             FailedTarget = "MES",
             ErrorMessage = "seed",
             CreatedAt = DateTime.UtcNow.AddMinutes(-5)
@@ -802,18 +801,18 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task CloudRetry_WhenFallbackRehydrateHitsRetryCapacity_ShouldKeepFallbackRecordBuffered()
     {
-        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var logger = new FakeLogService();
         var failedStore = new FakeFailedRecordStore();
-        failedStore.PendingRecords.Add(CreateFailedRecord(150, "Cloud", "Cloud", 0, "Injection", new InjectionCellData { Barcode = "INJ-150" }));
+        failedStore.PendingRecords.Add(CreateFailedRecord(150, "Cloud", "Cloud", 0, TestProcessCellData.ProcessTypeKey, new TestProcessCellData { Barcode = "INJ-150" }));
 
         var cloudFallbackStore = new FakeCloudFallbackBufferStore();
         cloudFallbackStore.Records.Add(new CloudFallbackRecord
         {
             Id = 201,
-            ProcessType = "Injection",
-            CellDataJson = SerializeCellData(new InjectionCellData { Barcode = "BC-CLOUD-201", WorkOrderNo = "WO-201" }),
+            ProcessType = TestProcessCellData.ProcessTypeKey,
+            CellDataJson = SerializeCellData(new TestProcessCellData { Barcode = "BC-CLOUD-201", WorkOrderNo = "WO-201" }),
             FailedTarget = "Cloud",
             ErrorMessage = "seed",
             CreatedAt = DateTime.UtcNow.AddMinutes(-2)
@@ -821,7 +820,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
 
         var diagnosticsStore = new FakeCloudDiagnosticsStore();
         var integrationRegistry = new FakeProcessIntegrationRegistry();
-        integrationRegistry.RegisterCloudUploader("Injection", ProcessUploadMode.Batch);
+        integrationRegistry.RegisterCloudUploader(TestProcessCellData.ProcessTypeKey, ProcessUploadMode.Batch);
         var capacityGuard = CreateCapacityGuard(
             logger,
             failedStore,
@@ -859,18 +858,18 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task MesRetry_WhenFallbackRehydrateHitsRetryCapacity_ShouldKeepFallbackRecordBuffered()
     {
-        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var logger = new FakeLogService();
         var failedStore = new FakeFailedRecordStore();
-        failedStore.PendingRecords.Add(CreateFailedRecord(402, "MES", "MES", 0, "Injection", new InjectionCellData { Barcode = "MES-402" }));
+        failedStore.PendingRecords.Add(CreateFailedRecord(402, "MES", "MES", 0, TestProcessCellData.ProcessTypeKey, new TestProcessCellData { Barcode = "MES-402" }));
 
         var mesFallbackStore = new FakeMesFallbackBufferStore();
         mesFallbackStore.Records.Add(new MesFallbackRecord
         {
             Id = 502,
-            ProcessType = "Injection",
-            CellDataJson = SerializeCellData(new InjectionCellData { Barcode = "MES-502" }),
+            ProcessType = TestProcessCellData.ProcessTypeKey,
+            CellDataJson = SerializeCellData(new TestProcessCellData { Barcode = "MES-502" }),
             FailedTarget = "MES",
             ErrorMessage = "fallback-seed",
             CreatedAt = DateTime.UtcNow.AddMinutes(-3)
@@ -906,11 +905,11 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task MesRetry_WhenRetryCapacityRecovers_ShouldClearBlockedDiagnostics()
     {
-        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var logger = new FakeLogService();
         var failedStore = new FakeFailedRecordStore();
-        failedStore.PendingRecords.Add(CreateFailedRecord(401, "MES", "MES", 0, "Injection", new InjectionCellData { Barcode = "MES-401" }));
+        failedStore.PendingRecords.Add(CreateFailedRecord(401, "MES", "MES", 0, TestProcessCellData.ProcessTypeKey, new TestProcessCellData { Barcode = "MES-401" }));
 
         var diagnosticsStore = new FakeMesRetryDiagnosticsStore();
         var capacityGuard = CreateCapacityGuard(
@@ -923,7 +922,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
             diagnosticsStore,
             configure: options => options.Mes.RetryTotalLimit = 1);
 
-        var blockedReason = await capacityGuard.GetMesRetryBlockReasonAsync("Injection");
+        var blockedReason = await capacityGuard.GetMesRetryBlockReasonAsync(TestProcessCellData.ProcessTypeKey);
         Assert.Equal("total", blockedReason);
         Assert.True(diagnosticsStore.Snapshot.IsCapacityBlocked);
 
@@ -944,7 +943,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task MesRetry_WhenBacklogIsOlderThan24Hours_ShouldDrainRetryAndFallbackRecords()
     {
-        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var oldTime = DateTime.UtcNow.AddHours(-25);
         var failedStore = new FakeFailedRecordStore();
@@ -952,8 +951,8 @@ public sealed class RetryTaskCloudMesBehaviorTests
         {
             Id = 801,
             Channel = "MES",
-            ProcessType = "Injection",
-            CellDataJson = SerializeCellData(new InjectionCellData { Barcode = "MES-801", WorkOrderNo = "WO-801" }),
+            ProcessType = TestProcessCellData.ProcessTypeKey,
+            CellDataJson = SerializeCellData(new TestProcessCellData { Barcode = "MES-801", WorkOrderNo = "WO-801" }),
             FailedTarget = "MES",
             ErrorMessage = "seed",
             RetryCount = 2,
@@ -965,8 +964,8 @@ public sealed class RetryTaskCloudMesBehaviorTests
         mesFallbackStore.Records.Add(new MesFallbackRecord
         {
             Id = 1001,
-            ProcessType = "Injection",
-            CellDataJson = SerializeCellData(new InjectionCellData { Barcode = "MES-1001", WorkOrderNo = "WO-1001" }),
+            ProcessType = TestProcessCellData.ProcessTypeKey,
+            CellDataJson = SerializeCellData(new TestProcessCellData { Barcode = "MES-1001", WorkOrderNo = "WO-1001" }),
             FailedTarget = "MES",
             ErrorMessage = "fallback-seed",
             CreatedAt = oldTime
@@ -1014,7 +1013,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task CloudChannel_WhenFallbackContainsMixedValidity_ShouldContinueRecoveringRemainingRecords()
     {
-        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var logger = new FakeLogService();
         var failedStore = new FakeFailedRecordStore();
@@ -1022,7 +1021,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         cloudFallbackStore.Records.Add(new CloudFallbackRecord
         {
             Id = 201,
-            ProcessType = "Injection",
+            ProcessType = TestProcessCellData.ProcessTypeKey,
             CellDataJson = "{bad-json",
             FailedTarget = "Cloud",
             ErrorMessage = "seed-1",
@@ -1031,8 +1030,8 @@ public sealed class RetryTaskCloudMesBehaviorTests
         cloudFallbackStore.Records.Add(new CloudFallbackRecord
         {
             Id = 202,
-            ProcessType = "Injection",
-            CellDataJson = SerializeCellData(new InjectionCellData { Barcode = "BC-CLOUD-202", WorkOrderNo = "WO-202" }),
+            ProcessType = TestProcessCellData.ProcessTypeKey,
+            CellDataJson = SerializeCellData(new TestProcessCellData { Barcode = "BC-CLOUD-202", WorkOrderNo = "WO-202" }),
             FailedTarget = "Cloud",
             ErrorMessage = "seed-2",
             CreatedAt = DateTime.UtcNow.AddMinutes(-1)
@@ -1042,7 +1041,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         var cloudBatchConsumer = new FakeCloudBatchConsumer();
         var deadLetterStore = new FakeCloudDeadLetterStore();
         var integrationRegistry = new FakeProcessIntegrationRegistry();
-        integrationRegistry.RegisterCloudUploader("Injection", ProcessUploadMode.Batch);
+        integrationRegistry.RegisterCloudUploader(TestProcessCellData.ProcessTypeKey, ProcessUploadMode.Batch);
         var task = new TestableCloudRetryTask(
             logger,
             failedStore,
@@ -1072,7 +1071,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         cloudFallbackStore.Records.Add(new CloudFallbackRecord
         {
             Id = 701,
-            ProcessType = "Injection",
+            ProcessType = TestProcessCellData.ProcessTypeKey,
             CellDataJson = "{bad-json",
             FailedTarget = "Cloud",
             ErrorMessage = "cloud-seed",
@@ -1094,7 +1093,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         mesFallbackStore.Records.Add(new MesFallbackRecord
         {
             Id = 801,
-            ProcessType = "Injection",
+            ProcessType = TestProcessCellData.ProcessTypeKey,
             CellDataJson = "{bad-json",
             FailedTarget = "MES",
             ErrorMessage = "mes-seed",
@@ -1134,7 +1133,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         {
             Id = 301,
             Channel = "Cloud",
-            ProcessType = "Injection",
+            ProcessType = TestProcessCellData.ProcessTypeKey,
             CellDataJson = "{bad-json",
             FailedTarget = "Cloud",
             ErrorMessage = "seed",
@@ -1171,7 +1170,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         {
             Id = 305,
             Channel = "MES",
-            ProcessType = "Injection",
+            ProcessType = TestProcessCellData.ProcessTypeKey,
             CellDataJson = "{bad-json",
             FailedTarget = "MES",
             ErrorMessage = "seed",
@@ -1204,7 +1203,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         {
             Id = 306,
             Channel = "MES",
-            ProcessType = "Injection",
+            ProcessType = TestProcessCellData.ProcessTypeKey,
             CellDataJson = "{bad-json",
             FailedTarget = "MES",
             ErrorMessage = "abandoned",
@@ -1234,7 +1233,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         {
             Id = 302,
             Channel = "Cloud",
-            ProcessType = "Injection",
+            ProcessType = TestProcessCellData.ProcessTypeKey,
             CellDataJson = "{bad-json",
             FailedTarget = "Cloud",
             ErrorMessage = "seed",
@@ -1283,7 +1282,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         {
             Id = 303,
             Channel = "Cloud",
-            ProcessType = "Injection",
+            ProcessType = TestProcessCellData.ProcessTypeKey,
             CellDataJson = "{bad-json",
             FailedTarget = "Cloud",
             ErrorMessage = "seed",
@@ -1298,7 +1297,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         };
         var criticalWriter = new FakeCriticalPersistenceFallbackWriter();
         var integrationRegistry = new FakeProcessIntegrationRegistry();
-        integrationRegistry.RegisterCloudUploader("Injection", ProcessUploadMode.Batch);
+        integrationRegistry.RegisterCloudUploader(TestProcessCellData.ProcessTypeKey, ProcessUploadMode.Batch);
         var task = new TestableCloudRetryTask(
             new FakeLogService(),
             failedStore,
@@ -1333,7 +1332,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         {
             Id = 304,
             Channel = "MES",
-            ProcessType = "Injection",
+            ProcessType = TestProcessCellData.ProcessTypeKey,
             CellDataJson = "{bad-json",
             FailedTarget = "MES",
             ErrorMessage = "seed",

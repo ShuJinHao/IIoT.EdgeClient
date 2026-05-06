@@ -422,15 +422,15 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
                     deviceName,
                     device.DeviceModel,
                     mappings.Select(static x => new ModuleIoSnapshot(
-                            x.Label,
+                            x.SignalKey,
                             x.PlcAddress,
                             x.AddressCount,
                             x.DataType,
                             x.Direction,
                             x.SortOrder,
                             x.Category,
-                            x.GroupName,
-                            x.DisplayRole))
+                            x.BusinessGroup,
+                            x.SignalName))
                         .ToArray());
 
                 if (!validationResult.IsValid)
@@ -613,15 +613,15 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
                 cancellationToken).ConfigureAwait(false);
             var signalBindings = mappings
                 .Select(static mapping => new ModuleIoSnapshot(
-                    mapping.Label,
+                    mapping.SignalKey,
                     mapping.PlcAddress,
                     mapping.AddressCount,
                     mapping.DataType,
                     mapping.Direction,
                     mapping.SortOrder,
                     mapping.Category,
-                    mapping.GroupName,
-                    mapping.DisplayRole))
+                    mapping.BusinessGroup,
+                    mapping.SignalName))
                 .ToArray();
 
             _plcConnectionManager.RegisterTasks(

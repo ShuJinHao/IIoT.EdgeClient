@@ -49,7 +49,7 @@ public sealed class PlcDeviceRuntimeBuilder
         _dataStore.Register(device.Id, readCount, writeCount);
         var buffer = _dataStore.GetBuffer(device.Id);
         var context = _contextStore.GetOrCreate(device.DeviceName, device.ModuleId);
-        context.DeviceId = device.Id;
+        context.NetworkDeviceId = device.Id;
 
         if (!Enum.TryParse<PlcType>(device.DeviceModel, ignoreCase: true, out var plcType))
         {

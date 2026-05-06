@@ -1,8 +1,8 @@
 ## Change Scope
 
 - [ ] Host
-- [ ] Injection
 - [ ] Stacking
+- [ ] Homogenization
 - [ ] Shared
 
 ## Module Contract Impact
