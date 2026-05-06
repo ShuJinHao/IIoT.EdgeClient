@@ -10,12 +10,6 @@ public sealed class LauncherAccountCatalog : ILauncherAccountCatalog
 
     public const string SampleCatalogFileName = "launcher.accounts.sample.json";
 
-    public const string DevelopmentDefaultUserName = "edge-admin";
-
-    public const string DevelopmentDefaultDisplayName = "现场启动管理员";
-
-    public const string DevelopmentDefaultPassword = "123456";
-
     private readonly string _catalogPath;
 
     public LauncherAccountCatalog(string baseDirectory, string catalogFileName = DefaultCatalogFileName)
@@ -59,28 +53,6 @@ public sealed class LauncherAccountCatalog : ILauncherAccountCatalog
         File.WriteAllText(
             _catalogPath,
             JsonSerializer.Serialize(entries, JsonOptionsIndented()));
-    }
-
-    public static void EnsureDevelopmentCatalog(string baseDirectory)
-    {
-        var path = GetCatalogPath(baseDirectory);
-        if (File.Exists(path))
-        {
-            return;
-        }
-
-        var entries = new[]
-        {
-            new LauncherAccountFileEntry
-            {
-                UserName = DevelopmentDefaultUserName,
-                DisplayName = DevelopmentDefaultDisplayName,
-                PasswordHash = LauncherPasswordHasher.ComputeSha256(DevelopmentDefaultPassword),
-                IsEnabled = true
-            }
-        };
-
-        File.WriteAllText(path, JsonSerializer.Serialize(entries, JsonOptionsIndented()));
     }
 
     private static LauncherAccountRecord Map(LauncherAccountFileEntry entry)

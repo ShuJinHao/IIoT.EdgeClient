@@ -15,19 +15,6 @@
       "accentColor": "#0F766E"
     },
     {
-      "runtimeId": "injection",
-      "profileId": "InjectionLine",
-      "machineProfile": "InjectionLine",
-      "outputDirectory": "injection",
-      "machineConfig": "src/Edge/IIoT.Edge.Shell/appsettings.machine.InjectionLine.json",
-      "moduleIds": [ "Injection" ],
-      "displayName": "\u6ce8\u6db2",
-      "description": "\u4f7f\u7528\u6ce8\u6db2\u5de5\u5e8f\u7684 profile \u542f\u52a8\u5ba2\u6237\u7aef\uff0c\u5e76\u52a0\u8f7d\u6ce8\u6db2\u6a21\u5757\u4e0e\u72ec\u7acb\u8fd0\u884c\u6001\u3002",
-      "imagePath": "Assets/Profiles/injection.png",
-      "iconKind": "Syringe",
-      "accentColor": "#B45309"
-    },
-    {
       "runtimeId": "homogenization",
       "profileId": "HomogenizationLine",
       "machineProfile": "HomogenizationLine",

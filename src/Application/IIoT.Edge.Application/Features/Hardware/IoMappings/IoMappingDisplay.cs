@@ -5,30 +5,22 @@ namespace IIoT.Edge.Application.Features.Hardware.IoMappings;
 /// </summary>
 public static class IoMappingDisplay
 {
-    public const string InteractionCategory = "信号交互";
-    public const string SingleReadCategory = "单点读数据";
-    public const string SingleWriteCategory = "单点写数据";
-    public const string ContinuousReadCategory = "连续读数据";
+    public const string InteractionCategory = IoMappingOptionCatalog.CategoryInteraction;
+    public const string SingleReadCategory = IoMappingOptionCatalog.CategorySingleRead;
+    public const string ContinuousReadCategory = IoMappingOptionCatalog.CategoryContinuousRead;
 
     public static string ResolveCategory(string? category, int addressCount)
-    {
-        if (!string.IsNullOrWhiteSpace(category))
-        {
-            return category.Trim();
-        }
+        => IoMappingOptionCatalog.NormalizeCategory(category, addressCount);
 
-        return addressCount > 1 ? ContinuousReadCategory : SingleReadCategory;
-    }
-
-    public static string ResolveGroupName(string? groupName, string category)
-        => string.IsNullOrWhiteSpace(groupName)
+    public static string ResolveBusinessGroup(string? businessGroup, string category)
+        => string.IsNullOrWhiteSpace(businessGroup)
             ? category
-            : groupName.Trim();
+            : businessGroup.Trim();
 
     public static bool IsContinuousMatrix(string? dataType, int addressCount)
         => addressCount > 1
             && !string.Equals(dataType, "Ascii", StringComparison.OrdinalIgnoreCase);
 
-    public static string BuildSectionTitle(string? category, string? groupName)
+    public static string BuildSectionTitle(string? category, string? businessGroup)
         => ResolveCategory(category, addressCount: 1);
 }

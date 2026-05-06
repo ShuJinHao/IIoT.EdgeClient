@@ -38,7 +38,7 @@ public sealed class IoViewViewModelBehaviorTests
         });
 
     [Fact]
-    public Task LoadMappingsAsync_WhenInteractionUsesSameGroupName_ShouldMergeReadAndWriteIntoOneRow()
+    public Task LoadMappingsAsync_WhenInteractionUsesSameBusinessGroup_ShouldMergeReadAndWriteIntoOneRow()
         => RunOnStaThreadAsync(async () =>
         {
             var device = CreateDevice(10, "PLC-Homogenization-01", "Homogenization");
@@ -57,9 +57,9 @@ public sealed class IoViewViewModelBehaviorTests
             await viewModel.LoadMappingsAsync();
 
             var row = Assert.Single(viewModel.InteractionRows);
-            Assert.Equal("扫码进站", row.GroupName);
-            Assert.Equal("进站触发（触发）", row.PlcSignalText);
-            Assert.Equal("进站应答（应答）", row.HostSignalText);
+            Assert.Equal("扫码进站", row.BusinessGroup);
+            Assert.Equal("触发", row.PlcSignalText);
+            Assert.Equal("应答", row.HostSignalText);
             Assert.Equal("D701", row.PlcAddressSummary);
             Assert.Equal("D601", row.HostReplyAddressText);
             Assert.DoesNotContain(Environment.NewLine, row.PlcSignalSummary);
@@ -146,28 +146,28 @@ public sealed class IoViewViewModelBehaviorTests
                 [
                     CreateMapping(
                         deviceA.Id,
-                        signal.Label,
+                        signal.SignalKey,
                         "D901",
                         signal.AddressCount,
                         signal.DataType,
                         signal.DirectionText,
                         signal.Category,
-                        signal.GroupName,
-                        signal.DisplayRole,
+                        signal.BusinessGroup,
+                        signal.SignalName,
                         signal.SortOrder)
                 ],
                 [deviceB.Id] =
                 [
                     CreateMapping(
                         deviceB.Id,
-                        signal.Label,
+                        signal.SignalKey,
                         "D902",
                         signal.AddressCount,
                         signal.DataType,
                         signal.DirectionText,
                         signal.Category,
-                        signal.GroupName,
-                        signal.DisplayRole,
+                        signal.BusinessGroup,
+                        signal.SignalName,
                         signal.SortOrder)
                 ]
             };
@@ -281,8 +281,8 @@ public sealed class IoViewViewModelBehaviorTests
 
             viewModel.SelectedDevice = device;
             await viewModel.LoadMappingsAsync();
-            var inboundRow = viewModel.InteractionRows.Single(static x => x.GroupName == "扫码进站");
-            var outboundRow = viewModel.InteractionRows.Single(static x => x.GroupName == "出料上传");
+            var inboundRow = viewModel.InteractionRows.Single(static x => x.BusinessGroup == "扫码进站");
+            var outboundRow = viewModel.InteractionRows.Single(static x => x.BusinessGroup == "出料上传");
             Assert.Equal("5", inboundRow.CurrentReplyValueText);
             Assert.Equal("7", outboundRow.CurrentReplyValueText);
             Assert.Equal("5", inboundRow.HostReplyValueText);
@@ -326,17 +326,17 @@ public sealed class IoViewViewModelBehaviorTests
 
     private static IoMappingEntity CreateMapping(
         int networkDeviceId,
-        string label,
+        string signalKey,
         string address,
         int count,
         string dataType,
         string direction,
         string category,
-        string groupName,
-        string displayRole,
+        string businessGroup,
+        string signalName,
         int sortOrder)
     {
-        var entity = IoMappingEntity.Create(networkDeviceId, label, address, count, dataType, direction, category, groupName, displayRole);
+        var entity = IoMappingEntity.Create(networkDeviceId, signalKey, address, count, dataType, direction, category, businessGroup, signalName);
         entity.UpdateSortOrder(sortOrder);
         return entity;
     }

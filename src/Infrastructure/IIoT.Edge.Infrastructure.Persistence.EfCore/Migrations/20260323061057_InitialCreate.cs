@@ -62,7 +62,7 @@ namespace IIoT.Edge.Infrastructure.Persistence.EfCore.Migrations
                     id = table.Column<int>(type: "INTEGER", nullable: false)
                         .Annotation("Sqlite:Autoincrement", true),
                     network_device_id = table.Column<int>(type: "INTEGER", nullable: false),
-                    label = table.Column<string>(type: "TEXT", maxLength: 100, nullable: false),
+                    signal_key = table.Column<string>(type: "TEXT", maxLength: 100, nullable: false),
                     plc_address = table.Column<string>(type: "TEXT", maxLength: 50, nullable: false),
                     address_count = table.Column<int>(type: "INTEGER", nullable: false),
                     data_type = table.Column<string>(type: "TEXT", maxLength: 20, nullable: false),

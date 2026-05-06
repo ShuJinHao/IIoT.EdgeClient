@@ -1,5 +1,6 @@
 using IIoT.Edge.Launcher.ViewModels;
 using System.Windows;
+using System.Windows.Input;
 
 namespace IIoT.Edge.Launcher;
 
@@ -57,6 +58,20 @@ public partial class ChangePasswordWindow : Window
     }
 
     private void CancelButton_Click(object sender, RoutedEventArgs e)
+    {
+        DialogResult = false;
+        Close();
+    }
+
+    private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ButtonState == MouseButtonState.Pressed)
+        {
+            DragMove();
+        }
+    }
+
+    private void CloseWindowButton_Click(object sender, RoutedEventArgs e)
     {
         DialogResult = false;
         Close();

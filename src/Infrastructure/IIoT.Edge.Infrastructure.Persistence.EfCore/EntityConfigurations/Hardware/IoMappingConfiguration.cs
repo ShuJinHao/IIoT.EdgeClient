@@ -15,10 +15,10 @@ public class IoMappingConfiguration : IEntityTypeConfiguration<IoMappingEntity>
 
         builder.Property(x => x.NetworkDeviceId).HasColumnName("network_device_id");
 
-        builder.Property(x => x.Label)
+        builder.Property(x => x.SignalKey)
             .IsRequired()
             .HasMaxLength(100)
-            .HasColumnName("label");
+            .HasColumnName("signal_key");
 
         builder.Property(x => x.PlcAddress)
             .IsRequired()
@@ -42,15 +42,15 @@ public class IoMappingConfiguration : IEntityTypeConfiguration<IoMappingEntity>
             .HasMaxLength(50)
             .HasColumnName("category");
 
-        builder.Property(x => x.GroupName)
+        builder.Property(x => x.BusinessGroup)
             .IsRequired()
             .HasMaxLength(100)
-            .HasColumnName("group_name");
+            .HasColumnName("business_group");
 
-        builder.Property(x => x.DisplayRole)
+        builder.Property(x => x.SignalName)
             .IsRequired()
             .HasMaxLength(50)
-            .HasColumnName("display_role");
+            .HasColumnName("signal_name");
 
         builder.Property(x => x.SortOrder).HasColumnName("sort_order");
         builder.Property(x => x.Remark).HasMaxLength(500).HasColumnName("remark");

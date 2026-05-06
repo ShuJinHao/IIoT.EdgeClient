@@ -13,7 +13,6 @@ This repository has one production client solution. Use the paths below as the d
 
 Keep all process modules in `src/Modules`.
 
-- `src/Modules/IIoT.Edge.Module.Injection`
 - `src/Modules/IIoT.Edge.Module.Stacking`
 - `src/Modules/IIoT.Edge.Module.Homogenization`
 

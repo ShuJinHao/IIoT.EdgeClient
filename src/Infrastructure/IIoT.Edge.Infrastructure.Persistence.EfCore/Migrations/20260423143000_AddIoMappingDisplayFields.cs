@@ -23,7 +23,7 @@ namespace IIoT.Edge.Infrastructure.Persistence.EfCore.Migrations
                 defaultValue: "单点读数据");
 
             migrationBuilder.AddColumn<string>(
-                name: "display_role",
+                name: "signal_name",
                 table: "hw_io_mapping",
                 type: "TEXT",
                 maxLength: 50,
@@ -31,7 +31,7 @@ namespace IIoT.Edge.Infrastructure.Persistence.EfCore.Migrations
                 defaultValue: "");
 
             migrationBuilder.AddColumn<string>(
-                name: "group_name",
+                name: "business_group",
                 table: "hw_io_mapping",
                 type: "TEXT",
                 maxLength: 100,
@@ -47,11 +47,11 @@ namespace IIoT.Edge.Infrastructure.Persistence.EfCore.Migrations
                 table: "hw_io_mapping");
 
             migrationBuilder.DropColumn(
-                name: "display_role",
+                name: "signal_name",
                 table: "hw_io_mapping");
 
             migrationBuilder.DropColumn(
-                name: "group_name",
+                name: "business_group",
                 table: "hw_io_mapping");
         }
     }

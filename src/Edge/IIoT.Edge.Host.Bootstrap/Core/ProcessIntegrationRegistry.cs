@@ -11,13 +11,13 @@ public sealed class ProcessIntegrationRegistry : IProcessIntegrationRegistry
     {
         if (string.IsNullOrWhiteSpace(processType))
         {
-            throw new InvalidOperationException("ProcessType cannot be empty when registering cloud integration.");
+            throw new InvalidOperationException("注册云端上传集成时 ProcessType 不能为空。");
         }
 
         if (_cloudUploaders.ContainsKey(processType))
         {
             throw new InvalidOperationException(
-                $"Cloud uploader for process type '{processType}' is already registered.");
+                $"工序“{processType}”的云端上传器已注册。");
         }
 
         _cloudUploaders[processType] = new CloudUploaderRegistration(processType, uploadMode);
@@ -27,13 +27,13 @@ public sealed class ProcessIntegrationRegistry : IProcessIntegrationRegistry
     {
         if (string.IsNullOrWhiteSpace(processType))
         {
-            throw new InvalidOperationException("ProcessType cannot be empty when registering MES integration.");
+            throw new InvalidOperationException("注册 MES 上传集成时 ProcessType 不能为空。");
         }
 
         if (_mesUploaders.ContainsKey(processType))
         {
             throw new InvalidOperationException(
-                $"MES uploader for process type '{processType}' is already registered.");
+                $"工序“{processType}”的 MES 上传器已注册。");
         }
 
         _mesUploaders[processType] = new MesUploaderRegistration(processType, uploadMode);

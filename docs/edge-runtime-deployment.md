@@ -15,9 +15,6 @@ Recommended layout:
 - `stack/IIoT.Edge.Shell.exe`
 - `stack/appsettings.machine.StackingLine.json`
 - `stack/Modules/Stacking/*`
-- `injection/IIoT.Edge.Shell.exe`
-- `injection/appsettings.machine.InjectionLine.json`
-- `injection/Modules/Injection/*`
 - `homogenization/IIoT.Edge.Shell.exe`
 - `homogenization/appsettings.machine.HomogenizationLine.json`
 - `homogenization/Modules/Homogenization/*`
@@ -60,13 +57,11 @@ Visual Studio local builds now synchronize the same relative layout under:
 
 - `publish\Debug\launcher`
 - `publish\Debug\stack`
-- `publish\Debug\injection`
 - `publish\Debug\homogenization`
 
 Launcher cards resolve relative executable paths such as:
 
 - `..\stack\IIoT.Edge.Shell.exe`
-- `..\injection\IIoT.Edge.Shell.exe`
 - `..\homogenization\IIoT.Edge.Shell.exe`
 
 This keeps local F5 behavior aligned with the shipped runtime package.
@@ -108,7 +103,7 @@ Do not add process-specific host `if/else` logic. Launcher cards and runtime dir
 Validate all of the following on a packaged runtime directory:
 
 - launcher login success and failure
-- Stacking, Injection, and Homogenization cards display correctly
+- Stacking and Homogenization cards display correctly
 - each card resolves to its own relative runtime directory
 - different profiles can run side by side on one machine
 - the same profile is still single-instance

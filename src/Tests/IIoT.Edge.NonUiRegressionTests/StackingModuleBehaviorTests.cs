@@ -207,7 +207,7 @@ public sealed class StackingModuleBehaviorTests
         var context = new ProductionContext
         {
             DeviceName = "PLC-STACKING-DEV",
-            DeviceId = 7
+            NetworkDeviceId = 7
         };
 
         var profile = new StackingPlcSignalProfile();
@@ -244,7 +244,7 @@ public sealed class StackingModuleBehaviorTests
         var context = new ProductionContext
         {
             DeviceName = "PLC-STACKING-DEV",
-            DeviceId = 8
+            NetworkDeviceId = 8
         };
 
         var profile = new StackingPlcSignalProfile();
@@ -263,7 +263,7 @@ public sealed class StackingModuleBehaviorTests
     }
 
     [Fact]
-    public async Task StackingSignalCaptureTask_WhenReadOrderChanges_ShouldStillCaptureBySignalLabel()
+    public async Task StackingSignalCaptureTask_WhenReadOrderChanges_ShouldStillCaptureBySignalKey()
     {
         var logger = new FakeLogService();
         var pipeline = new FakeDataPipelineService();
@@ -271,16 +271,16 @@ public sealed class StackingModuleBehaviorTests
         var context = new ProductionContext
         {
             DeviceName = "PLC-STACKING-DEV",
-            DeviceId = 18
+            NetworkDeviceId = 18
         };
 
         var profile = new StackingPlcSignalProfile();
         ProductionContextSignalBindings.Set(context,
         [
-            new ModuleIoSnapshot(profile.Get(StackingSignal.叠片层数).Label, "DB1.DBW2", 1, "Int16", "Read", 1),
-            new ModuleIoSnapshot(profile.Get(StackingSignal.结果码).Label, "DB1.DBW4", 1, "Int16", "Read", 2),
-            new ModuleIoSnapshot(profile.Get(StackingSignal.工序序号).Label, "DB1.DBW0", 1, "Int16", "Read", 3),
-            new ModuleIoSnapshot(profile.Get(StackingSignal.采集应答).Label, "DB1.DBW6", 1, "Int16", "Write", 1)
+            new ModuleIoSnapshot(profile.Get(StackingSignal.叠片层数).SignalKey, "DB1.DBW2", 1, "Int16", "Read", 1),
+            new ModuleIoSnapshot(profile.Get(StackingSignal.结果码).SignalKey, "DB1.DBW4", 1, "Int16", "Read", 2),
+            new ModuleIoSnapshot(profile.Get(StackingSignal.工序序号).SignalKey, "DB1.DBW0", 1, "Int16", "Read", 3),
+            new ModuleIoSnapshot(profile.Get(StackingSignal.采集应答).SignalKey, "DB1.DBW6", 1, "Int16", "Write", 1)
         ]);
 
         var signals = BufferLogicalSignalAccessor<StackingSignal>.Create(buffer, context, profile);

@@ -1,7 +1,7 @@
 namespace IIoT.Edge.Application.Abstractions.Plc.Signals;
 
 /// <summary>
-/// 按插件强类型信号键读写 PLC 缓冲区，运行任务不得直接使用字符串 Label 访问点位。
+/// 按插件强类型信号键读写 PLC 缓冲区，运行任务不得直接使用字符串 SignalKey 访问点位。
 /// </summary>
 /// <typeparam name="TSignalKey">插件声明的 PLC 信号枚举。</typeparam>
 public interface ILogicalSignalAccessor<TSignalKey>

@@ -42,6 +42,16 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        LauncherAccountCatalog.EnsureDevelopmentCatalog(baseDirectory);
+        var samplePath = LauncherAccountCatalog.GetCatalogPath(
+            baseDirectory,
+            LauncherAccountCatalog.SampleCatalogFileName);
+        if (!File.Exists(samplePath))
+        {
+            throw new FileNotFoundException(
+                $"启动账号文件不存在，且未找到样例文件：{samplePath}",
+                samplePath);
+        }
+
+        File.Copy(samplePath, accountsPath, overwrite: false);
     }
 }

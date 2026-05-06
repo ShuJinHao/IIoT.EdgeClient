@@ -12,13 +12,13 @@ public sealed class StationRuntimeRegistry : IStationRuntimeRegistry
 
         if (string.IsNullOrWhiteSpace(factory.ModuleId))
         {
-            throw new InvalidOperationException("ModuleId cannot be empty when registering PLC runtime.");
+            throw new InvalidOperationException("注册 PLC 运行时时 ModuleId 不能为空。");
         }
 
         if (_registrations.ContainsKey(factory.ModuleId))
         {
             throw new InvalidOperationException(
-                $"PLC runtime factory for module '{factory.ModuleId}' is already registered.");
+                $"模块“{factory.ModuleId}”的 PLC 运行时工厂已注册。");
         }
 
         _registrations[factory.ModuleId] = factory;

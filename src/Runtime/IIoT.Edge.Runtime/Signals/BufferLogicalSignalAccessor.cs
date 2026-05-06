@@ -176,8 +176,8 @@ public sealed class BufferLogicalSignalAccessor<TSignalKey> : ILogicalSignalAcce
         ModuleSignalDirection direction,
         IModulePlcSignalProfile<TSignalKey> profile)
     {
-        var definitionsByLabel = profile.Signals.ToDictionary(
-            static signal => NormalizeLabel(signal.Label),
+        var definitionsBySignalKey = profile.Signals.ToDictionary(
+            static signal => NormalizeSignalKey(signal.SignalKey),
             static signal => signal,
             StringComparer.OrdinalIgnoreCase);
         var indexes = new Dictionary<TSignalKey, SignalBinding>();
@@ -188,8 +188,8 @@ public sealed class BufferLogicalSignalAccessor<TSignalKey> : ILogicalSignalAcce
                      .Where(binding => string.Equals(binding.Direction, directionText, StringComparison.OrdinalIgnoreCase))
                      .OrderBy(binding => binding.SortOrder))
         {
-            var label = NormalizeLabel(binding.Label);
-            if (!definitionsByLabel.TryGetValue(label, out var definition))
+            var signalKey = NormalizeSignalKey(binding.SignalKey);
+            if (!definitionsBySignalKey.TryGetValue(signalKey, out var definition))
             {
                 currentOffset += Math.Max(1, binding.AddressCount);
                 continue;
@@ -220,21 +220,21 @@ public sealed class BufferLogicalSignalAccessor<TSignalKey> : ILogicalSignalAcce
     private static IReadOnlyCollection<ModuleIoSnapshot> ToFallbackBindings(
         IModulePlcSignalProfile<TSignalKey> profile)
         => profile.Signals.Select(static signal => new ModuleIoSnapshot(
-                signal.Label,
+                signal.SignalKey,
                 signal.DefaultAddress,
                 signal.AddressCount,
                 signal.DataType,
                 signal.DirectionText,
                 signal.SortOrder,
                 signal.Category,
-                signal.GroupName,
-                signal.DisplayRole))
+                signal.BusinessGroup,
+                signal.SignalName))
             .ToArray();
 
-    private static string NormalizeLabel(string label)
+    private static string NormalizeSignalKey(string signalKey)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(label);
-        return label.Trim();
+        ArgumentException.ThrowIfNullOrWhiteSpace(signalKey);
+        return signalKey.Trim();
     }
 
     private static float CombineToFloat(ushort high, ushort low)

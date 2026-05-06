@@ -28,10 +28,10 @@ internal sealed class EdgeProcessModuleBuilder : IEdgeProcessModuleBuilder
         IModuleParamRegistry moduleParamRegistry)
     {
         ModuleId = string.IsNullOrWhiteSpace(moduleId)
-            ? throw new ArgumentException("ModuleId cannot be empty.", nameof(moduleId))
+            ? throw new ArgumentException("ModuleId 不能为空。", nameof(moduleId))
             : moduleId;
         ProcessType = string.IsNullOrWhiteSpace(processType)
-            ? throw new ArgumentException("ProcessType cannot be empty.", nameof(processType))
+            ? throw new ArgumentException("ProcessType 不能为空。", nameof(processType))
             : processType;
         Services = services ?? throw new ArgumentNullException(nameof(services));
         Configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
@@ -168,13 +168,13 @@ internal sealed class EdgeProcessModuleBuilder : IEdgeProcessModuleBuilder
         if (runtimeFactory is not IStationRuntimeFactory factory)
         {
             throw new InvalidOperationException(
-                $"Runtime factory for module '{ModuleId}' must implement {nameof(IStationRuntimeFactory)}.");
+                $"模块“{ModuleId}”的运行时工厂必须实现 {nameof(IStationRuntimeFactory)}。");
         }
 
         if (!string.Equals(factory.ModuleId, ModuleId, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                $"Runtime factory module id '{factory.ModuleId}' does not match builder module id '{ModuleId}'.");
+                $"运行时工厂 ModuleId“{factory.ModuleId}”与当前模块“{ModuleId}”不一致。");
         }
 
         _runtimeRegistry.Register(factory);
@@ -246,6 +246,6 @@ internal sealed class EdgeProcessModuleBuilder : IEdgeProcessModuleBuilder
         var viewModel = viewModelFactory(serviceProvider);
         return viewModel as ViewModelBase
             ?? throw new InvalidOperationException(
-                $"View model factory for '{viewId}' must return {nameof(ViewModelBase)}.");
+                $"视图“{viewId}”的 ViewModel 工厂必须返回 {nameof(ViewModelBase)}。");
     }
 }

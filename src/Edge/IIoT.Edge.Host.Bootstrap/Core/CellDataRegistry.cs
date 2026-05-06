@@ -14,13 +14,13 @@ public sealed class CellDataRegistry : ICellDataRegistry
     {
         if (string.IsNullOrWhiteSpace(processType))
         {
-            throw new InvalidOperationException("CellData processType cannot be empty.");
+            throw new InvalidOperationException("CellData 的 processType 不能为空。");
         }
 
         if (!typeof(CellDataBase).IsAssignableFrom(cellDataType))
         {
             throw new InvalidOperationException(
-                $"CellData type '{cellDataType.FullName}' must inherit from {nameof(CellDataBase)}.");
+                $"CellData 类型“{cellDataType.FullName}”必须继承 {nameof(CellDataBase)}。");
         }
 
         if (_registrations.TryGetValue(processType, out var existingType))
@@ -31,7 +31,7 @@ public sealed class CellDataRegistry : ICellDataRegistry
             }
 
             throw new InvalidOperationException(
-                $"ProcessType '{processType}' is already bound to '{existingType.Name}'.");
+                $"ProcessType“{processType}”已绑定到“{existingType.Name}”。");
         }
 
         _registrations[processType] = cellDataType;

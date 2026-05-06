@@ -36,7 +36,7 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
         mesRetryDiagnostics.SetRuntimeState(MesRetryRuntimeState.Backoff);
 
         var mesDiagnostics = new FakeMesUploadDiagnosticsStore();
-        mesDiagnostics.RecordSuccess("Injection");
+        mesDiagnostics.RecordSuccess("Homogenization");
         mesDiagnostics.RecordFailure("Stacking", "mes timeout");
 
         var cloudRetryStore = new FakeFailedRecordStore();
@@ -44,7 +44,7 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
         {
             Id = 1,
             Channel = "Cloud",
-            ProcessType = "Injection",
+            ProcessType = "Stacking",
             FailedTarget = "Cloud",
             CellDataJson = "{}",
             ErrorMessage = "seed",
@@ -208,7 +208,7 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
         {
             Id = 1,
             Channel = "Cloud",
-            ProcessType = "Injection",
+            ProcessType = "Stacking",
             FailedTarget = "Cloud",
             CellDataJson = "{}",
             ErrorMessage = "seed",
@@ -300,7 +300,7 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
         await cloudDeadLetters.SaveAsync(new DeadLetterRecord
         {
             Id = 1,
-            ProcessType = "Injection",
+            ProcessType = "Stacking",
             FailedTarget = "Cloud",
             SourceTable = "failed_cloud_records",
             FailureStage = "RetryDeserialize",
@@ -338,7 +338,7 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
         var snapshot = await query.GetCurrentAsync();
 
         Assert.Equal(1, snapshot.Cloud.DeadLetters?.TotalCount);
-        Assert.Equal("Injection", snapshot.Cloud.DeadLetters?.GroupSummary.Single().ProcessType);
+        Assert.Equal("Stacking", snapshot.Cloud.DeadLetters?.GroupSummary.Single().ProcessType);
         Assert.Equal(1, snapshot.Mes.DeadLetters?.TotalCount);
         Assert.Equal("Homogenization", snapshot.Mes.DeadLetters?.LatestRecords.Single().ProcessType);
     }

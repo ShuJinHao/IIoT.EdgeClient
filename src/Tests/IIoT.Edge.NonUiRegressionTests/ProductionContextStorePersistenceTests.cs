@@ -1,5 +1,4 @@
 using IIoT.Edge.Application.Abstractions.Context;
-using IIoT.Edge.Module.Injection.Payload;
 using IIoT.Edge.Runtime.Context;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using IIoT.Edge.SharedKernel.Context;
@@ -11,7 +10,7 @@ public sealed class ProductionContextStorePersistenceTests
     [Fact]
     public void SaveAndLoad_ShouldRestoreCoreRuntimeState()
     {
-        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
         var tempDir = Path.Combine(Path.GetTempPath(), "edge-context-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
 
@@ -23,12 +22,12 @@ public sealed class ProductionContextStorePersistenceTests
             var ctx = source.GetOrCreate("PLC-A");
             ctx.SetStep("Scan", 3);
             ctx.Set("CurrentRecipeId", 42);
-            ctx.AddCell("BC-1001", new InjectionCellData
+            ctx.AddCell("BC-1001", new TestProcessCellData
             {
                 Barcode = "BC-1001",
                 WorkOrderNo = "WO-001",
                 ScanTime = DateTime.UtcNow,
-                InjectionVolume = 1.25
+                MeasurementValue = 1.25
             });
             ctx.TodayCapacity.Increment(
                 new DateTime(2026, 1, 2, 9, 0, 0),
@@ -233,7 +232,7 @@ public sealed class ProductionContextStorePersistenceTests
             var store = new ProductionContextStore(logger, [new TestProductionContextFactory()], tempDir);
 
             var baseContext = store.GetOrCreate("PLC-H");
-            baseContext.DeviceId = 9;
+            baseContext.NetworkDeviceId = 9;
             baseContext.SetStep("Homogenization.Inbound", 30);
             baseContext.Set("BatchNo", "B-1001");
             baseContext.AddCell("BC-1001", new NamedCellData { Label = "Display-Only" });
@@ -241,7 +240,7 @@ public sealed class ProductionContextStorePersistenceTests
             var upgraded = store.GetOrCreate("PLC-H", TestProductionContextFactory.TestModuleId);
 
             var typedContext = Assert.IsType<TestProductionContext>(upgraded);
-            Assert.Equal(9, typedContext.DeviceId);
+            Assert.Equal(9, typedContext.NetworkDeviceId);
             Assert.Equal(30, typedContext.GetStep("Homogenization.Inbound"));
             Assert.Equal("B-1001", typedContext.Get<string>("BatchNo"));
             Assert.True(typedContext.HasCell("BC-1001"));

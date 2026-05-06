@@ -35,8 +35,8 @@ public sealed class PlcIoScanTaskBehaviorTests
 
         var binding = Assert.Single(ProductionContextSignalBindings.Get(context));
         Assert.Equal("信号交互", binding.Category);
-        Assert.Equal("扫码进站", binding.GroupName);
-        Assert.Equal("PLC 触发", binding.DisplayRole);
+        Assert.Equal("扫码进站", binding.BusinessGroup);
+        Assert.Equal("PLC 触发", binding.SignalName);
     }
 
     [Fact]

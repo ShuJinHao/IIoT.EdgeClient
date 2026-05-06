@@ -5,7 +5,6 @@ using IIoT.Edge.Infrastructure.Integration.Config;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Infrastructure.Integration.Http;
 using IIoT.Edge.Infrastructure.Integration.Mes;
-using IIoT.Edge.Module.Injection.Payload;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using Microsoft.Extensions.Options;
@@ -27,7 +26,7 @@ public sealed class MesFrameworkBehaviorTests
             new FakeMesUploadDiagnosticsStore(),
             new FakeLogService());
 
-        var success = await consumer.ProcessAsync(CreateRecord("Injection"));
+        var success = await consumer.ProcessAsync(CreateRecord(TestProcessCellData.ProcessTypeKey));
 
         Assert.True(success);
     }
@@ -35,7 +34,7 @@ public sealed class MesFrameworkBehaviorTests
     [Fact]
     public async Task MesConsumer_WhenCloudGateIsBlocked_ShouldIgnoreCloudGateAndUpload()
     {
-        var uploader = new FakeMesUploader("Injection");
+        var uploader = new FakeMesUploader(TestProcessCellData.ProcessTypeKey);
         var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
         var deviceService = CreateOnlineDeviceService();
         deviceService.MarkUploadGateBlocked(EdgeUploadBlockReason.UploadTokenRejected, DateTimeOffset.UtcNow);
@@ -47,11 +46,11 @@ public sealed class MesFrameworkBehaviorTests
             diagnosticsStore,
             new FakeLogService());
 
-        var success = await consumer.ProcessAsync(CreateRecord("Injection"));
+        var success = await consumer.ProcessAsync(CreateRecord(TestProcessCellData.ProcessTypeKey));
 
         Assert.True(success);
         Assert.Equal(1, uploader.UploadCallCount);
-        var diagnostics = diagnosticsStore.Get("Injection");
+        var diagnostics = diagnosticsStore.Get(TestProcessCellData.ProcessTypeKey);
         Assert.NotNull(diagnostics);
         Assert.Equal("Success", diagnostics!.LastResult);
         Assert.Null(diagnostics.LastFailureReason);
@@ -60,7 +59,7 @@ public sealed class MesFrameworkBehaviorTests
     [Fact]
     public async Task MesConsumer_WhenUploaderSucceeds_ShouldRecordSuccess()
     {
-        var uploader = new FakeMesUploader("Injection");
+        var uploader = new FakeMesUploader(TestProcessCellData.ProcessTypeKey);
         var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
         var consumer = new MesConsumer(
             CreateOnlineDeviceService(),
@@ -69,11 +68,11 @@ public sealed class MesFrameworkBehaviorTests
             diagnosticsStore,
             new FakeLogService());
 
-        var success = await consumer.ProcessAsync(CreateRecord("Injection"));
+        var success = await consumer.ProcessAsync(CreateRecord(TestProcessCellData.ProcessTypeKey));
 
         Assert.True(success);
         Assert.Equal(1, uploader.UploadCallCount);
-        var diagnostics = diagnosticsStore.Get("Injection");
+        var diagnostics = diagnosticsStore.Get(TestProcessCellData.ProcessTypeKey);
         Assert.NotNull(diagnostics);
         Assert.Equal("Success", diagnostics!.LastResult);
         Assert.NotNull(diagnostics.LastSuccessAt);
@@ -83,7 +82,7 @@ public sealed class MesFrameworkBehaviorTests
     [Fact]
     public async Task MesConsumer_WhenMesUploadDisabled_ShouldReturnTrueWithoutCallingUploader()
     {
-        var uploader = new FakeMesUploader("Injection");
+        var uploader = new FakeMesUploader(TestProcessCellData.ProcessTypeKey);
         var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
         var runtimeConfig = new FakeLocalSystemRuntimeConfigService
         {
@@ -99,17 +98,17 @@ public sealed class MesFrameworkBehaviorTests
             diagnosticsStore,
             new FakeLogService());
 
-        var success = await consumer.ProcessAsync(CreateRecord("Injection"));
+        var success = await consumer.ProcessAsync(CreateRecord(TestProcessCellData.ProcessTypeKey));
 
         Assert.True(success);
         Assert.Equal(0, uploader.UploadCallCount);
-        Assert.Null(diagnosticsStore.Get("Injection"));
+        Assert.Null(diagnosticsStore.Get(TestProcessCellData.ProcessTypeKey));
     }
 
     [Fact]
     public async Task MesConsumer_WhenHeartbeatIsNotReady_ShouldReturnFalseWithoutCallingUploader()
     {
-        var uploader = new FakeMesUploader("Injection");
+        var uploader = new FakeMesUploader(TestProcessCellData.ProcessTypeKey);
         var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
         var heartbeatStore = new FakeExternalHeartbeatStateStore();
         heartbeatStore.MarkNotReady(ExternalSystemKind.Mes, "mes_heartbeat_timeout");
@@ -121,11 +120,11 @@ public sealed class MesFrameworkBehaviorTests
             diagnosticsStore,
             new FakeLogService());
 
-        var success = await consumer.ProcessAsync(CreateRecord("Injection"));
+        var success = await consumer.ProcessAsync(CreateRecord(TestProcessCellData.ProcessTypeKey));
 
         Assert.False(success);
         Assert.Equal(0, uploader.UploadCallCount);
-        var diagnostics = diagnosticsStore.Get("Injection");
+        var diagnostics = diagnosticsStore.Get(TestProcessCellData.ProcessTypeKey);
         Assert.NotNull(diagnostics);
         Assert.Equal("Failed", diagnostics!.LastResult);
         Assert.Equal("mes_heartbeat_timeout", diagnostics.LastFailureReason);
@@ -134,7 +133,7 @@ public sealed class MesFrameworkBehaviorTests
     [Fact]
     public async Task MesConsumer_WhenHeartbeatRecovers_ShouldAllowUpload()
     {
-        var uploader = new FakeMesUploader("Injection");
+        var uploader = new FakeMesUploader(TestProcessCellData.ProcessTypeKey);
         var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
         var heartbeatStore = new FakeExternalHeartbeatStateStore();
         heartbeatStore.MarkReady(ExternalSystemKind.Mes);
@@ -146,11 +145,11 @@ public sealed class MesFrameworkBehaviorTests
             diagnosticsStore,
             new FakeLogService());
 
-        var success = await consumer.ProcessAsync(CreateRecord("Injection"));
+        var success = await consumer.ProcessAsync(CreateRecord(TestProcessCellData.ProcessTypeKey));
 
         Assert.True(success);
         Assert.Equal(1, uploader.UploadCallCount);
-        Assert.Equal("Success", diagnosticsStore.Get("Injection")!.LastResult);
+        Assert.Equal("Success", diagnosticsStore.Get(TestProcessCellData.ProcessTypeKey)!.LastResult);
     }
 
     [Fact]
@@ -287,11 +286,11 @@ public sealed class MesFrameworkBehaviorTests
 
     private static CellCompletedRecord CreateRecord(string processType)
     {
-        CellDataTypeRegistry.Register<InjectionCellData>("Injection");
+        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         return new CellCompletedRecord
         {
-            CellData = new InjectionCellData
+            CellData = new TestProcessCellData
             {
                 Barcode = "MES-BC-01",
                 WorkOrderNo = "MES-WO-01"

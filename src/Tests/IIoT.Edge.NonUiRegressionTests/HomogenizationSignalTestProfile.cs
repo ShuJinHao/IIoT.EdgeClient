@@ -18,6 +18,6 @@ internal static class HomogenizationSignalTestProfile
     public static ModuleSignalDefinition<HomogenizationSignal> Get(HomogenizationSignal key)
         => Profile.Get(key);
 
-    public static string Label(HomogenizationSignal key)
-        => Get(key).Label;
+    public static string SignalKey(HomogenizationSignal key)
+        => Get(key).SignalKey;
 }

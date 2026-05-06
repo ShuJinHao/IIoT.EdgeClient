@@ -17,7 +17,6 @@ This repository is the only Edge collaboration entry point. Modules stay plugini
   - `src/Shared/IIoT.Edge.SharedKernel`
   - `src/Shared/IIoT.Edge.UI.Shared`
 - Module code:
-  - `src/Modules/IIoT.Edge.Module.Injection`
   - `src/Modules/IIoT.Edge.Module.Stacking`
   - `src/Modules/IIoT.Edge.Module.Homogenization`
 During the adaptation phase, `CODEOWNERS` routes all approvals to `@ShuJinHao`. When module owners are stable, replace the module entries with their real GitHub usernames.

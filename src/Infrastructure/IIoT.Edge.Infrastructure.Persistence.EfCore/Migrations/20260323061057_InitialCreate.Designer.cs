@@ -42,11 +42,11 @@ namespace IIoT.Edge.Infrastructure.Persistence.EfCore.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("direction");
 
-                    b.Property<string>("Label")
+                    b.Property<string>("SignalKey")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("TEXT")
-                        .HasColumnName("label");
+                        .HasColumnName("signal_key");
 
                     b.Property<int>("NetworkDeviceId")
                         .HasColumnType("INTEGER")

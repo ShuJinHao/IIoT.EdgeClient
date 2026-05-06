@@ -24,7 +24,7 @@ public sealed class CloudHttpClientBehaviorTests
             new FakeCloudApiEndpointProvider(),
             logger);
 
-        var result = await client.PostAsync("/api/v1/edge/pass-stations/injection/batch", new { barcode = "BC-001" });
+        var result = await client.PostAsync("/api/v1/edge/pass-stations/stacking/batch", new { barcode = "BC-001" });
 
         Assert.False(result.IsSuccess);
         Assert.Equal(CloudCallOutcome.HttpFailure, result.Outcome);

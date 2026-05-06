@@ -5,7 +5,7 @@ using IIoT.Edge.Module.Stacking.Constants;
 namespace IIoT.Edge.Module.Stacking.Config.Hardware;
 
 /// <summary>
-/// 叠片 PLC 信号键。运行任务只能使用该枚举访问 IO，禁止直接写字符串 Label。
+/// 叠片 PLC 信号键。运行任务只能使用该枚举访问 IO，禁止直接写字符串 SignalKey。
 /// </summary>
 public enum StackingSignal
 {

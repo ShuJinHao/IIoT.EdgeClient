@@ -20,7 +20,7 @@ public sealed class ShellConfigurationLoaderBehaviorTests
                     "MachineProfile": "StackingLine"
                   },
                   "Modules": {
-                    "Enabled": [ "Injection" ]
+                    "Enabled": [ "Homogenization" ]
                   }
                 }
                 """);
@@ -61,7 +61,7 @@ public sealed class ShellConfigurationLoaderBehaviorTests
                     "MachineProfile": "MissingLine"
                   },
                   "Modules": {
-                    "Enabled": [ "Injection" ]
+                    "Enabled": [ "Stacking" ]
                   }
                 }
                 """);
@@ -70,7 +70,7 @@ public sealed class ShellConfigurationLoaderBehaviorTests
 
             Assert.Equal("MissingLine", result.MachineProfile);
             Assert.False(result.IsMachineProfileLoaded);
-            Assert.Equal("Injection", result.Configuration["Modules:Enabled:0"]);
+            Assert.Equal("Stacking", result.Configuration["Modules:Enabled:0"]);
             Assert.Equal("False", result.Configuration["Shell:MachineProfileLoaded"]);
             Assert.Equal("appsettings.machine.MissingLine.json", result.Configuration["Shell:MachineProfileFileName"]);
         }
@@ -94,7 +94,7 @@ public sealed class ShellConfigurationLoaderBehaviorTests
                 """
                 {
                   "Shell": {
-                    "MachineProfile": "InjectionLine"
+                    "MachineProfile": "HomogenizationLine"
                   }
                 }
                 """);

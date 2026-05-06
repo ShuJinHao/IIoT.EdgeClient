@@ -74,14 +74,14 @@ public sealed class HardwareConfigFullSyncBehaviorTests
     [InlineData(1, "Signal.A", "D0", 1, "Int16", "")]
     public void IoMappingEntity_WhenRequiredFieldsInvalid_ShouldReject(
         int networkDeviceId,
-        string label,
+        string signalKey,
         string plcAddress,
         int addressCount,
         string dataType,
         string direction)
     {
         Assert.ThrowsAny<ArgumentException>(() =>
-            IoMappingEntity.Create(networkDeviceId, label, plcAddress, addressCount, dataType, direction));
+            IoMappingEntity.Create(networkDeviceId, signalKey, plcAddress, addressCount, dataType, direction));
     }
 
     [Fact]
@@ -163,7 +163,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
                         "PLC-A-UPDATED",
                         DeviceType.PLC,
                         "S7",
-                        "Injection",
+                        "Stacking",
                         "192.168.0.11",
                         102,
                         null,
@@ -235,9 +235,9 @@ public sealed class HardwareConfigFullSyncBehaviorTests
     public async Task SaveIoMappingsHandler_WhenMappingMissingFromSubmission_ShouldDeleteItAndPreserveRemark()
     {
         var repo = new InMemoryRepository<IoMappingEntity>(
-            CreateIoMapping(id: 1, deviceId: 9, label: "Signal.A", remark: "keep"),
-            CreateIoMapping(id: 2, deviceId: 9, label: "Signal.B", remark: "delete"),
-            CreateIoMapping(id: 3, deviceId: 10, label: "Signal.C", remark: "other-device"));
+            CreateIoMapping(id: 1, deviceId: 9, signalKey: "Signal.A", remark: "keep"),
+            CreateIoMapping(id: 2, deviceId: 9, signalKey: "Signal.B", remark: "delete"),
+            CreateIoMapping(id: 3, deviceId: 10, signalKey: "Signal.C", remark: "other-device"));
         var handler = new SaveIoMappingsHandler(repo);
 
         var result = await handler.Handle(
@@ -306,7 +306,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
             ],
             ExistingIoMappings =
             [
-                CreateIoMapping(id: 11, deviceId: 1, label: "Signal.A", plcAddress: "DB1.DBW0", remark: "old")
+                CreateIoMapping(id: 11, deviceId: 1, signalKey: "Signal.A", plcAddress: "DB1.DBW0", remark: "old")
             ]
         };
         var plcManager = new FakePlcConnectionManager();
@@ -322,7 +322,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
                     {
                         Id = 11,
                         NetworkDeviceId = 1,
-                        Label = "Signal.A",
+                        SignalKey = "Signal.A",
                         PlcAddress = "DB1.DBW0",
                         AddressCount = 1,
                         DataType = "Int16",
@@ -350,7 +350,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
             ],
             ExistingIoMappings =
             [
-                CreateIoMapping(id: 11, deviceId: 1, label: "Signal.A", plcAddress: "DB1.DBW0", remark: "same")
+                CreateIoMapping(id: 11, deviceId: 1, signalKey: "Signal.A", plcAddress: "DB1.DBW0", remark: "same")
             ]
         };
         var plcManager = new FakePlcConnectionManager();
@@ -366,7 +366,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
                     {
                         Id = 11,
                         NetworkDeviceId = 1,
-                        Label = "Signal.A",
+                        SignalKey = "Signal.A",
                         PlcAddress = "DB1.DBW0",
                         AddressCount = 1,
                         DataType = "Int16",
@@ -472,7 +472,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
     {
         var entity = NetworkDeviceEntity.Create(name, DeviceType.PLC, ipAddress, port1);
         entity.WithId(id);
-        entity.AssignModule("Injection", "S7");
+        entity.AssignModule("Stacking", "S7");
         entity.UpdateEndpoint(ipAddress, port1, null, 3000);
         entity.Enable();
         return entity;
@@ -489,7 +489,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
             DeviceName = name,
             DeviceType = DeviceType.PLC,
             DeviceModel = "S7",
-            ModuleId = "Injection",
+            ModuleId = "Stacking",
             IpAddress = ipAddress,
             Port1 = port1,
             ConnectTimeout = 3000,
@@ -508,14 +508,14 @@ public sealed class HardwareConfigFullSyncBehaviorTests
     private static IoMappingEntity CreateIoMapping(
         int id,
         int deviceId,
-        string label,
+        string signalKey,
         string plcAddress = "DB1.DBW0",
         string? remark = null)
     {
-        var entity = IoMappingEntity.Create(deviceId, label, plcAddress, 1, "Int16", "Read");
+        var entity = IoMappingEntity.Create(deviceId, signalKey, plcAddress, 1, "Int16", "Read");
         entity.WithId(id);
         entity.UpdateSortOrder(1);
-        entity.UpdateMetadata(label, "Int16", "Read", "单点读数据", string.Empty, string.Empty, remark);
+        entity.UpdateMetadata(signalKey, "Int16", "Read", "单点读数据", string.Empty, string.Empty, remark);
         return entity;
     }
 
@@ -684,23 +684,23 @@ public sealed class HardwareConfigFullSyncBehaviorTests
         {
             var clone = IoMappingEntity.Create(
                 entity.NetworkDeviceId,
-                entity.Label,
+                entity.SignalKey,
                 entity.PlcAddress,
                 entity.AddressCount,
                 entity.DataType,
                 entity.Direction,
                 entity.Category,
-                entity.GroupName,
-                entity.DisplayRole);
+                entity.BusinessGroup,
+                entity.SignalName);
             clone.WithId(entity.Id);
             clone.UpdateSortOrder(entity.SortOrder);
             clone.UpdateMetadata(
-                entity.Label,
+                entity.SignalKey,
                 entity.DataType,
                 entity.Direction,
                 entity.Category,
-                entity.GroupName,
-                entity.DisplayRole,
+                entity.BusinessGroup,
+                entity.SignalName,
                 entity.Remark);
             return clone;
         }

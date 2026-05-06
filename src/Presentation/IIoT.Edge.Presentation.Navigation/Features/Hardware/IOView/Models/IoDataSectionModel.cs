@@ -8,11 +8,11 @@ public sealed class IoDataSectionModel : BaseNotifyPropertyChanged
 {
     public string Category { get; init; } = "单点读数据";
 
-    public string GroupName { get; init; } = string.Empty;
+    public string BusinessGroup { get; init; } = string.Empty;
 
     public int SortOrder { get; set; }
 
-    public string Title => IoMappingDisplay.BuildSectionTitle(Category, GroupName);
+    public string Title => IoMappingDisplay.BuildSectionTitle(Category, BusinessGroup);
 
     public ObservableCollection<IoSignalModel> Signals { get; } = [];
 

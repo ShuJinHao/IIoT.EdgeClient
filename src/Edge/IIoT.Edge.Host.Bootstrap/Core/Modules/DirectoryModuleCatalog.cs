@@ -23,7 +23,7 @@ public static class DirectoryModuleCatalog
                 [
                     new ModuleCatalogIssue(
                         "PLUGIN_ROOT_MISSING",
-                        $"Plugin root directory '{pluginRootPath}' was not found.")
+                        $"插件根目录“{pluginRootPath}”不存在。")
                 ]);
         }
 
@@ -89,7 +89,7 @@ public static class DirectoryModuleCatalog
             {
                 issues.Add(new ModuleCatalogIssue(
                     "PLUGIN_ENABLED_NOT_FOUND",
-                    $"Unknown module configured in {sectionName}:Enabled: {moduleId}",
+                    $"{sectionName}:Enabled 配置了未知模块：{moduleId}",
                     moduleId));
                 continue;
             }
@@ -124,7 +124,7 @@ public static class DirectoryModuleCatalog
 
             issues.Add(new ModuleCatalogIssue(
                 "PLUGIN_DEPENDENCY_MISSING",
-                $"Plugin '{descriptor.ModuleId}' requires enabled dependencies: {string.Join(", ", missingDependencies)}.",
+                $"插件“{descriptor.ModuleId}”依赖的模块未启用：{string.Join(", ", missingDependencies)}。",
                 descriptor.ModuleId,
                 descriptor.ManifestPath,
                 descriptor.EntryAssemblyPath,
@@ -177,7 +177,7 @@ public static class DirectoryModuleCatalog
 
                 issues.Add(new ModuleCatalogIssue(
                     "PLUGIN_DEPENDENCY_MISSING",
-                    $"Plugin '{descriptor.ModuleId}' cannot be activated because dependencies are unavailable: {string.Join(", ", unresolvedDependencies)}.",
+                    $"插件“{descriptor.ModuleId}”无法激活，依赖模块不可用：{string.Join(", ", unresolvedDependencies)}。",
                     descriptor.ModuleId,
                     descriptor.ManifestPath,
                     descriptor.EntryAssemblyPath,
@@ -191,7 +191,7 @@ public static class DirectoryModuleCatalog
         {
             issues.Add(new ModuleCatalogIssue(
                 "PLUGIN_NONE_ENABLED",
-                $"No enabled plugins could be loaded from section '{sectionName}'."));
+                $"未能从配置节“{sectionName}”加载任何已启用插件。"));
         }
 
         return new ModuleCatalogActivationResult(modules, configuredEnabledModuleIds, issues);
@@ -240,7 +240,7 @@ public static class DirectoryModuleCatalog
             {
                 issues.Add(new ModuleCatalogIssue(
                     "PLUGIN_ENABLED_DUPLICATE",
-                    $"Duplicate module id configured in {sectionName}:Enabled: {moduleId}",
+                    $"{sectionName}:Enabled 中重复配置了模块：{moduleId}",
                     moduleId));
                 continue;
             }
@@ -258,7 +258,7 @@ public static class DirectoryModuleCatalog
             File.ReadAllText(manifestPath),
             JsonOptions)
             ?? throw new InvalidOperationException(
-                $"Plugin manifest '{manifestPath}' could not be parsed.");
+                $"插件清单“{manifestPath}”无法解析。");
 
         ValidateManifest(manifest, manifestPath);
 
@@ -266,7 +266,7 @@ public static class DirectoryModuleCatalog
         if (!File.Exists(entryAssemblyPath))
         {
             throw new InvalidOperationException(
-                $"Plugin '{manifest.ModuleId}' entry assembly '{manifest.EntryAssembly}' was not found at '{entryAssemblyPath}'.");
+                $"插件“{manifest.ModuleId}”的入口程序集“{manifest.EntryAssembly}”不存在：{entryAssemblyPath}。");
         }
 
         return new ModulePluginDescriptor(
@@ -293,54 +293,54 @@ public static class DirectoryModuleCatalog
     {
         if (string.IsNullOrWhiteSpace(manifest.ModuleId))
         {
-            throw new InvalidOperationException($"Plugin manifest '{manifestPath}' is missing moduleId.");
+            throw new InvalidOperationException($"插件清单“{manifestPath}”缺少 moduleId。");
         }
 
         if (string.IsNullOrWhiteSpace(manifest.DisplayName))
         {
-            throw new InvalidOperationException($"Plugin manifest '{manifestPath}' is missing displayName.");
+            throw new InvalidOperationException($"插件清单“{manifestPath}”缺少 displayName。");
         }
 
         if (string.IsNullOrWhiteSpace(manifest.Version))
         {
-            throw new InvalidOperationException($"Plugin manifest '{manifestPath}' is missing version.");
+            throw new InvalidOperationException($"插件清单“{manifestPath}”缺少 version。");
         }
 
         if (!ModulePluginHostRuntime.TryParseVersion(manifest.Version, out _))
         {
-            throw new InvalidOperationException($"Plugin manifest '{manifestPath}' has an invalid version: {manifest.Version}.");
+            throw new InvalidOperationException($"插件清单“{manifestPath}”的 version 无效：{manifest.Version}。");
         }
 
         if (string.IsNullOrWhiteSpace(manifest.HostApiVersion))
         {
-            throw new InvalidOperationException($"Plugin manifest '{manifestPath}' is missing hostApiVersion.");
+            throw new InvalidOperationException($"插件清单“{manifestPath}”缺少 hostApiVersion。");
         }
 
         if (string.IsNullOrWhiteSpace(manifest.MinHostVersion)
             || !ModulePluginHostRuntime.TryParseVersion(manifest.MinHostVersion, out _))
         {
-            throw new InvalidOperationException($"Plugin manifest '{manifestPath}' has an invalid minHostVersion: {manifest.MinHostVersion}.");
+            throw new InvalidOperationException($"插件清单“{manifestPath}”的 minHostVersion 无效：{manifest.MinHostVersion}。");
         }
 
         if (string.IsNullOrWhiteSpace(manifest.MaxHostVersion)
             || !ModulePluginHostRuntime.TryParseVersion(manifest.MaxHostVersion, out _))
         {
-            throw new InvalidOperationException($"Plugin manifest '{manifestPath}' has an invalid maxHostVersion: {manifest.MaxHostVersion}.");
+            throw new InvalidOperationException($"插件清单“{manifestPath}”的 maxHostVersion 无效：{manifest.MaxHostVersion}。");
         }
 
         if (string.IsNullOrWhiteSpace(manifest.SupportedProcessType))
         {
-            throw new InvalidOperationException($"Plugin manifest '{manifestPath}' is missing supportedProcessType.");
+            throw new InvalidOperationException($"插件清单“{manifestPath}”缺少 supportedProcessType。");
         }
 
         if (string.IsNullOrWhiteSpace(manifest.EntryAssembly))
         {
-            throw new InvalidOperationException($"Plugin manifest '{manifestPath}' is missing entryAssembly.");
+            throw new InvalidOperationException($"插件清单“{manifestPath}”缺少 entryAssembly。");
         }
 
         if (string.IsNullOrWhiteSpace(manifest.EntryType))
         {
-            throw new InvalidOperationException($"Plugin manifest '{manifestPath}' is missing entryType.");
+            throw new InvalidOperationException($"插件清单“{manifestPath}”缺少 entryType。");
         }
     }
 
@@ -352,7 +352,7 @@ public static class DirectoryModuleCatalog
                 StringComparison.OrdinalIgnoreCase))
         {
             message =
-                $"Plugin '{descriptor.ModuleId}' targets host API {descriptor.HostApiVersion}, but the current host API is {ModulePluginHostRuntime.HostApiVersion}.";
+                $"插件“{descriptor.ModuleId}”要求的运行 API 版本为 {descriptor.HostApiVersion}，当前宿主 API 版本为 {ModulePluginHostRuntime.HostApiVersion}。";
             return false;
         }
 
@@ -363,7 +363,7 @@ public static class DirectoryModuleCatalog
         if (hostVersion < minVersion || hostVersion > maxVersion)
         {
             message =
-                $"Plugin '{descriptor.ModuleId}' supports host versions {descriptor.MinHostVersion} - {descriptor.MaxHostVersion}, but the current host version is {ModulePluginHostRuntime.HostVersion}.";
+                $"插件“{descriptor.ModuleId}”支持的宿主版本范围为 {descriptor.MinHostVersion} - {descriptor.MaxHostVersion}，当前宿主版本为 {ModulePluginHostRuntime.HostVersion}。";
             return false;
         }
 
@@ -383,7 +383,7 @@ public static class DirectoryModuleCatalog
             {
                 issues.Add(new ModuleCatalogIssue(
                     "PLUGIN_DISCOVERY_DUPLICATE_MODULE",
-                    $"Duplicate discovered module id detected: {descriptor.ModuleId}",
+                    $"发现重复的模块标识：{descriptor.ModuleId}",
                     descriptor.ModuleId,
                     descriptor.ManifestPath,
                     descriptor.EntryAssemblyPath,
@@ -394,7 +394,7 @@ public static class DirectoryModuleCatalog
             {
                 issues.Add(new ModuleCatalogIssue(
                     "PLUGIN_DISCOVERY_DUPLICATE_PROCESS",
-                    $"Duplicate discovered process type detected: {descriptor.ProcessType}",
+                    $"发现重复的工序类型：{descriptor.ProcessType}",
                     descriptor.ModuleId,
                     descriptor.ManifestPath,
                     descriptor.EntryAssemblyPath,

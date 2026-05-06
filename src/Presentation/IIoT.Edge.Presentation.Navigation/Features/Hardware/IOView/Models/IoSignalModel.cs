@@ -5,16 +5,16 @@ namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
 
 public class IoSignalModel : BaseNotifyPropertyChanged
 {
-    public string Label { get; set; } = "";
-    public string RawLabel { get; set; } = "";
+    public string SignalKey { get; set; } = "";
     public string PlcAddress { get; set; } = "";
     public string Direction { get; set; } = "Read";
     public string DirectionText => Direction == "Write"
         ? GetText("Navigation_Io_Direction_HostToPlc", "上位机到 PLC")
         : GetText("Navigation_Io_Direction_PlcToHost", "PLC 到上位机");
     public string DataType { get; set; } = "Int16";
-    public string DisplayRole { get; set; } = "";
-    public string MatrixColumnTitle => string.IsNullOrWhiteSpace(DisplayRole) ? Label : DisplayRole;
+    public string SignalName { get; set; } = "";
+    public string MatrixColumnTitle => string.IsNullOrWhiteSpace(SignalName) ? SignalKey : SignalName;
+    public string? Remark { get; set; }
     public int StartIndex { get; set; }
     public int AddressCount { get; set; } = 1;
     public int SortOrder { get; set; }

@@ -28,7 +28,7 @@ public sealed class FooterViewModelBehaviorTests
                     LastFailureAt: null,
                     LastOutcome: CloudCallOutcome.Success,
                     LastReasonCode: "success",
-                    LastProcessType: "Injection",
+                    LastProcessType: "Stacking",
                     PendingRetryCount: 0,
                     PendingDeviceLogCount: 0,
                     PendingCapacityCount: 0,

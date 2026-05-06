@@ -1,5 +1,4 @@
 using IIoT.Edge.Application.Abstractions.DataPipeline;
-using IIoT.Edge.Module.Injection.Payload;
 using IIoT.Edge.Runtime.DataPipeline.Services;
 using IIoT.Edge.SharedKernel.DataPipeline;
 
@@ -40,7 +39,7 @@ public sealed class DataPipelineServiceBehaviorTests
     private static CellCompletedRecord CreateRecord(string barcode)
         => new()
         {
-            CellData = new InjectionCellData
+            CellData = new TestProcessCellData
             {
                 Barcode = barcode,
                 WorkOrderNo = $"WO-{barcode}",

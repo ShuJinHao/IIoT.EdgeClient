@@ -1,7 +1,0 @@
-<ResourceDictionary
-    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
-    <sys:String x:Key="Injection_DisplayName">Injection</sys:String>
-    <sys:String x:Key="Injection_Title_Data">Injection Product Data</sys:String>
-</ResourceDictionary>

@@ -19,7 +19,7 @@ public sealed class IoContinuousReadMatrixSectionModel : BaseNotifyPropertyChang
 
     public string Category { get; init; } = IoMappingDisplay.ContinuousReadCategory;
 
-    public string GroupName { get; init; } = string.Empty;
+    public string BusinessGroup { get; init; } = string.Empty;
 
     public int SortOrder { get; set; }
 
@@ -29,7 +29,7 @@ public sealed class IoContinuousReadMatrixSectionModel : BaseNotifyPropertyChang
 
     public ICommand ToggleExpandedCommand { get; }
 
-    public string Title => IoMappingDisplay.BuildSectionTitle(Category, GroupName);
+    public string Title => IoMappingDisplay.BuildSectionTitle(Category, BusinessGroup);
 
     public string Summary
     {
