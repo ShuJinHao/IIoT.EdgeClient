@@ -590,28 +590,45 @@ public sealed class ModuleRuntimeRegistrationTests
 
             await SeedDevicesAsync(serviceProvider, deviceModuleIds).ConfigureAwait(false);
 
-            var manager = new AppLifecycleManager(
-                serviceProvider,
+            var diagnosticsStore = serviceProvider.GetRequiredService<IStartupDiagnosticsStore>();
+            var developmentSampleInitializer = serviceProvider.GetRequiredService<IDevelopmentSampleInitializer>();
+            var networkDevices = serviceProvider.GetRequiredService<IRepository<NetworkDeviceEntity>>();
+            var ioMappings = serviceProvider.GetRequiredService<IRepository<IoMappingEntity>>();
+            var diagnosticsReportBuilder = new StartupDiagnosticsReportBuilder(
                 configuration,
                 runtimePaths,
                 shiftConfig,
-                serviceProvider.GetRequiredService<IRepository<NetworkDeviceEntity>>(),
-                serviceProvider.GetRequiredService<IRepository<IoMappingEntity>>(),
-                contextStore,
-                recipeService,
-                backgroundCoordinator,
-                logger,
-                plcManager,
-                serviceProvider.GetRequiredService<IDevelopmentSampleInitializer>(),
+                networkDevices,
+                ioMappings,
                 cellDataRegistry,
                 runtimeRegistry,
                 integrationRegistry,
-                serviceProvider.GetRequiredService<IStartupDiagnosticsStore>(),
+                new StartupPluginLifecycleSnapshotBuilder(),
                 discovery.Modules,
                 [.. discovery.Issues, .. activation.Issues],
                 activation.EnabledModuleIds,
                 activation.Modules,
                 serviceProvider.GetServices<IModuleHardwareProfileProvider>());
+            var manager = new AppLifecycleManager(
+                new AppStartupInitializer(
+                    serviceProvider,
+                    developmentSampleInitializer,
+                    logger),
+                diagnosticsReportBuilder,
+                diagnosticsStore,
+                new PlcRuntimeTaskBinder(
+                    serviceProvider,
+                    networkDevices,
+                    ioMappings,
+                    plcManager,
+                    runtimeRegistry),
+                new AppRuntimeStateCoordinator(
+                    contextStore,
+                    recipeService,
+                    developmentSampleInitializer,
+                    logger),
+                backgroundCoordinator,
+                logger);
 
             return new AppLifecycleHarness(
                 serviceProvider,
@@ -621,7 +638,7 @@ public sealed class ModuleRuntimeRegistrationTests
                 contextStore,
                 backgroundCoordinator,
                 logger,
-                serviceProvider.GetRequiredService<IStartupDiagnosticsStore>());
+                diagnosticsStore);
         }
 
         public async ValueTask DisposeAsync()
