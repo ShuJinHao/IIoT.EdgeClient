@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
-using System.Text;
 using System.Windows.Input;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
@@ -21,6 +20,8 @@ public class IoViewViewModel : NavigationViewModelBase
     private readonly IPlcConnectionManager _plcConnectionManager;
     private readonly ISender _sender;
     private readonly AsyncCommand _manualReadCommand;
+    private readonly IoViewMappingBuilder _mappingBuilder;
+    private readonly IoViewSignalValueUpdater _signalValueUpdater;
     private readonly string? _moduleIdFilter;
     private IPlcBufferTransport? _selectedBuffer;
 
@@ -95,7 +96,9 @@ public class IoViewViewModel : NavigationViewModelBase
             "Hardware.IOView",
             "Navigation_Title_IoInteract",
             "IO 交互",
-            moduleIdFilter: null)
+            moduleIdFilter: null,
+            new IoViewMappingBuilder(),
+            new IoViewSignalValueUpdater())
     {
     }
 
@@ -108,11 +111,38 @@ public class IoViewViewModel : NavigationViewModelBase
         string titleResourceKey,
         string titleFallback,
         string? moduleIdFilter = null)
+        : this(
+            dataStore,
+            plcConnectionManager,
+            sender,
+            languageService,
+            viewId,
+            titleResourceKey,
+            titleFallback,
+            moduleIdFilter,
+            new IoViewMappingBuilder(),
+            new IoViewSignalValueUpdater())
+    {
+    }
+
+    private IoViewViewModel(
+        IPlcDataStore dataStore,
+        IPlcConnectionManager plcConnectionManager,
+        ISender sender,
+        IAppLanguageService languageService,
+        string viewId,
+        string titleResourceKey,
+        string titleFallback,
+        string? moduleIdFilter,
+        IoViewMappingBuilder mappingBuilder,
+        IoViewSignalValueUpdater signalValueUpdater)
         : base(languageService, viewId, titleResourceKey, titleFallback)
     {
         _dataStore = dataStore;
         _plcConnectionManager = plcConnectionManager;
         _sender = sender;
+        _mappingBuilder = mappingBuilder;
+        _signalValueUpdater = signalValueUpdater;
         _moduleIdFilter = moduleIdFilter;
 
         RefreshDevicesCommand = new AsyncCommand(LoadDevicesAsync);
@@ -171,75 +201,19 @@ public class IoViewViewModel : NavigationViewModelBase
             return;
         }
 
-        var readIndex = 0;
-        var writeIndex = 0;
-        var interactionRows = new Dictionary<string, IoInteractionRowModel>(StringComparer.OrdinalIgnoreCase);
-        var dataSections = new Dictionary<string, IoDataSectionModel>(StringComparer.OrdinalIgnoreCase);
-        var arraySections = new Dictionary<string, IoContinuousReadMatrixSectionModel>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var mapping in result.Value.Items.OrderBy(static x => x.SortOrder))
+        var mappedSignals = _mappingBuilder.Build(result.Value.Items);
+        foreach (var row in mappedSignals.InteractionRows)
         {
-            var isRead = string.Equals(mapping.Direction, IoMappingOptionCatalog.DirectionRead, StringComparison.OrdinalIgnoreCase);
-            var signal = CreateSignal(mapping, isRead ? readIndex : writeIndex);
-
-            if (isRead)
-            {
-                readIndex += Math.Max(1, mapping.AddressCount);
-            }
-            else
-            {
-                writeIndex += Math.Max(1, mapping.AddressCount);
-            }
-
-            var category = ResolveCategory(mapping);
-            if (string.Equals(category, IoMappingDisplay.InteractionCategory, StringComparison.OrdinalIgnoreCase))
-            {
-                var row = GetOrCreateInteractionRow(interactionRows, mapping);
-                row.SortOrder = Math.Min(row.SortOrder, mapping.SortOrder);
-                row.WriteCommand ??= new BaseCommand(_ => WriteInteractionRow(row), _ => row.CanWrite);
-
-                if (isRead)
-                {
-                    row.AddPlcSignal(signal);
-                }
-                else
-                {
-                    row.AddHostSignal(signal);
-                }
-
-                continue;
-            }
-
-            if (IoMappingDisplay.IsContinuousMatrix(signal.DataType, signal.AddressCount))
-            {
-                var arraySection = GetOrCreateArraySection(arraySections, mapping, category);
-                arraySection.SortOrder = Math.Min(arraySection.SortOrder, mapping.SortOrder);
-                arraySection.Columns.Add(signal);
-                continue;
-            }
-
-            var section = GetOrCreateDataSection(dataSections, mapping, category);
-            section.SortOrder = Math.Min(section.SortOrder, mapping.SortOrder);
-            section.Signals.Add(signal);
-        }
-
-        foreach (var row in interactionRows.Values
-                     .OrderBy(static x => x.SortOrder)
-                     .ThenBy(static x => x.BusinessGroup, StringComparer.OrdinalIgnoreCase))
-        {
+            row.WriteCommand ??= new BaseCommand(_ => WriteInteractionRow(row), _ => row.CanWrite);
             InteractionRows.Add(row);
         }
 
-        foreach (var section in dataSections.Values
-                     .OrderBy(static x => x.SortOrder)
-                     .ThenBy(static x => x.BusinessGroup, StringComparer.OrdinalIgnoreCase))
+        foreach (var section in mappedSignals.DataSections)
         {
             DataSections.Add(section);
         }
 
-        foreach (var section in arraySections.Values
-                     .OrderBy(static x => x.SortOrder)
-                     .ThenBy(static x => x.BusinessGroup, StringComparer.OrdinalIgnoreCase))
+        foreach (var section in mappedSignals.ArraySections)
         {
             ArraySections.Add(section);
         }
@@ -265,51 +239,7 @@ public class IoViewViewModel : NavigationViewModelBase
             return;
         }
 
-        foreach (var row in InteractionRows)
-        {
-            foreach (var signal in row.PlcSignals)
-            {
-                UpdateReadSignal(signal, buffer);
-            }
-
-            foreach (var signal in row.HostSignals)
-            {
-                UpdateWriteSignal(signal, buffer);
-            }
-
-            row.InitializeWriteValueFromCurrentBuffer();
-            row.NotifyValuesChanged();
-        }
-
-        foreach (var signal in DataSections.SelectMany(static section => section.Signals))
-        {
-            if (string.Equals(signal.Direction, IoMappingOptionCatalog.DirectionWrite, StringComparison.OrdinalIgnoreCase))
-            {
-                UpdateWriteSignal(signal, buffer);
-            }
-            else
-            {
-                UpdateReadSignal(signal, buffer);
-            }
-        }
-
-        foreach (var section in ArraySections)
-        {
-            foreach (var signal in section.Columns)
-            {
-                if (string.Equals(signal.Direction, IoMappingOptionCatalog.DirectionWrite, StringComparison.OrdinalIgnoreCase))
-                {
-                    UpdateWriteSignal(signal, buffer);
-                }
-                else
-                {
-                    UpdateReadSignal(signal, buffer);
-                }
-            }
-
-            section.RebuildRows();
-        }
-
+        _signalValueUpdater.Refresh(InteractionRows, DataSections, ArraySections, buffer);
         UpdateConnectionStatus();
     }
 
@@ -364,249 +294,6 @@ public class IoViewViewModel : NavigationViewModelBase
 
         return string.IsNullOrWhiteSpace(_moduleIdFilter)
             || string.Equals(device.ModuleId, _moduleIdFilter, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static IoInteractionRowModel GetOrCreateInteractionRow(
-        IDictionary<string, IoInteractionRowModel> rows,
-        IoMappingEntity mapping)
-    {
-        var businessGroup = ResolveBusinessGroup(mapping, IoMappingDisplay.InteractionCategory);
-        if (rows.TryGetValue(businessGroup, out var row))
-        {
-            return row;
-        }
-
-        row = new IoInteractionRowModel
-        {
-            BusinessGroup = businessGroup,
-            SortOrder = mapping.SortOrder
-        };
-        rows.Add(businessGroup, row);
-        return row;
-    }
-
-    private static IoDataSectionModel GetOrCreateDataSection(
-        IDictionary<string, IoDataSectionModel> sections,
-        IoMappingEntity mapping,
-        string category)
-    {
-        var businessGroup = ResolveBusinessGroup(mapping, category);
-        var key = category;
-        if (sections.TryGetValue(key, out var section))
-        {
-            return section;
-        }
-
-        section = new IoDataSectionModel
-        {
-            Category = category,
-            BusinessGroup = businessGroup,
-            SortOrder = mapping.SortOrder
-        };
-        sections.Add(key, section);
-        return section;
-    }
-
-    private static IoContinuousReadMatrixSectionModel GetOrCreateArraySection(
-        IDictionary<string, IoContinuousReadMatrixSectionModel> sections,
-        IoMappingEntity mapping,
-        string category)
-    {
-        var businessGroup = ResolveBusinessGroup(mapping, category);
-        var key = category;
-        if (sections.TryGetValue(key, out var section))
-        {
-            return section;
-        }
-
-        section = new IoContinuousReadMatrixSectionModel
-        {
-            Category = category,
-            BusinessGroup = businessGroup,
-            SortOrder = mapping.SortOrder
-        };
-        sections.Add(key, section);
-        return section;
-    }
-
-    private static IoSignalModel CreateSignal(IoMappingEntity mapping, int startIndex)
-    {
-        return new IoSignalModel
-        {
-            SignalKey = mapping.SignalKey,
-            PlcAddress = mapping.PlcAddress,
-            Direction = mapping.Direction,
-            SignalName = mapping.SignalName,
-            Remark = mapping.Remark,
-            DataType = mapping.DataType,
-            StartIndex = startIndex,
-            AddressCount = Math.Max(1, mapping.AddressCount),
-            SortOrder = mapping.SortOrder
-        };
-    }
-
-    private static string ResolveCategory(IoMappingEntity mapping)
-        => IoMappingDisplay.ResolveCategory(mapping.Category, mapping.AddressCount);
-
-    private static string ResolveBusinessGroup(IoMappingEntity mapping, string category)
-        => IoMappingDisplay.ResolveBusinessGroup(mapping.BusinessGroup, category);
-
-    private static void UpdateReadSignal(IoSignalModel signal, IPlcBuffer buffer)
-    {
-        var words = buffer.TryGetReadWords(signal.SignalKey, out var signalWords)
-            ? EnsureLength(signalWords, signal.AddressCount)
-            : ReadWords(signal, index => buffer.GetReadValue(index));
-        ApplyDecodedValue(signal, words);
-    }
-
-    private static void UpdateWriteSignal(IoSignalModel signal, IPlcBuffer buffer)
-    {
-        var words = buffer.TryGetWriteWords(signal.SignalKey, out var signalWords)
-            ? EnsureLength(signalWords, signal.AddressCount)
-            : ReadWords(signal, index => buffer.GetWriteBufferValue(index));
-        ApplyDecodedValue(signal, words);
-    }
-
-    private static ushort[] ReadWords(IoSignalModel signal, Func<int, ushort> read)
-    {
-        var words = new ushort[Math.Max(1, signal.AddressCount)];
-        for (var offset = 0; offset < words.Length; offset++)
-        {
-            words[offset] = read(signal.StartIndex + offset);
-        }
-
-        return words;
-    }
-
-    private static ushort[] EnsureLength(IReadOnlyList<ushort> source, int addressCount)
-    {
-        var length = Math.Max(1, addressCount);
-        if (source.Count == length && source is ushort[] array)
-        {
-            return array;
-        }
-
-        var words = new ushort[length];
-        for (var index = 0; index < words.Length && index < source.Count; index++)
-        {
-            words[index] = source[index];
-        }
-
-        return words;
-    }
-
-    private static void ApplyDecodedValue(IoSignalModel signal, IReadOnlyList<ushort> words)
-    {
-        var values = DecodeWords(signal.DataType, words);
-        var display = values.Count == 0 ? string.Empty : string.Join(", ", values);
-        var preview = values.Count <= 8
-            ? display
-            : $"{string.Join(", ", values.Take(8))} ...";
-
-        signal.DisplayValue = string.IsNullOrWhiteSpace(display) ? "-" : display;
-        signal.PreviewValue = string.IsNullOrWhiteSpace(preview) ? "-" : preview;
-        signal.Value = DecodeSingleEditValue(signal.DataType, words);
-        signal.ExpandedValues.Clear();
-
-        if (signal.IsContinuous
-            && values.Count > 0
-            && !string.Equals(signal.DataType, "Ascii", StringComparison.OrdinalIgnoreCase))
-        {
-            for (var index = 0; index < values.Count; index++)
-            {
-                signal.ExpandedValues.Add(new IoSignalValueModel
-                {
-                    Index = index + 1,
-                    Value = values[index]
-                });
-            }
-        }
-
-        signal.OnPropertyChanged(nameof(IoSignalModel.HasExpandedValues));
-    }
-
-    private static int DecodeSingleEditValue(string dataType, IReadOnlyList<ushort> words)
-    {
-        if (words.Count == 0)
-        {
-            return 0;
-        }
-
-        return string.Equals(dataType, "Int16", StringComparison.OrdinalIgnoreCase)
-            ? unchecked((short)words[0])
-            : words[0];
-    }
-
-    private static IReadOnlyList<string> DecodeWords(string dataType, IReadOnlyList<ushort> words)
-    {
-        var normalizedType = (dataType ?? string.Empty).Trim();
-        if (string.Equals(normalizedType, "Ascii", StringComparison.OrdinalIgnoreCase))
-        {
-            return [DecodeAscii(words)];
-        }
-
-        if (string.Equals(normalizedType, "Float", StringComparison.OrdinalIgnoreCase))
-        {
-            var values = new List<string>();
-            for (var index = 0; index + 1 < words.Count; index += 2)
-            {
-                values.Add(CombineToFloat(words[index + 1], words[index]).ToString("0.###", CultureInfo.InvariantCulture));
-            }
-
-            return values;
-        }
-
-        if (string.Equals(normalizedType, "Bool", StringComparison.OrdinalIgnoreCase))
-        {
-            return words.Select(static word => word == 0 ? "False" : "True").ToArray();
-        }
-
-        if (string.Equals(normalizedType, "Int16", StringComparison.OrdinalIgnoreCase))
-        {
-            return words.Select(static word => unchecked((short)word).ToString(CultureInfo.InvariantCulture)).ToArray();
-        }
-
-        return words.Select(static word => word.ToString(CultureInfo.InvariantCulture)).ToArray();
-    }
-
-    private static string DecodeAscii(IReadOnlyList<ushort> words)
-    {
-        var builder = new StringBuilder(words.Count * 2);
-        foreach (var word in words)
-        {
-            var low = (byte)(word & 0xFF);
-            var high = (byte)(word >> 8);
-
-            if (low != 0)
-            {
-                builder.Append((char)low);
-            }
-
-            if (high != 0)
-            {
-                builder.Append((char)high);
-            }
-        }
-
-        return builder.ToString().Trim();
-    }
-
-    private static float CombineToFloat(ushort high, ushort low)
-    {
-        byte[] bytes =
-        [
-            (byte)(high >> 8),
-            (byte)high,
-            (byte)(low >> 8),
-            (byte)low
-        ];
-
-        if (BitConverter.IsLittleEndian)
-        {
-            Array.Reverse(bytes);
-        }
-
-        return BitConverter.ToSingle(bytes, 0);
     }
 
     private void WriteInteractionRow(IoInteractionRowModel row)
@@ -728,19 +415,5 @@ public class IoViewViewModel : NavigationViewModelBase
     {
         UnbindSelectedBuffer();
         return Task.CompletedTask;
-    }
-}
-
-internal static class PlcBufferReadExtensions
-{
-    public static ushort GetWriteBufferValue(this IPlcBuffer buffer, int index)
-    {
-        if (buffer is not IPlcBufferTransport transport)
-        {
-            return 0;
-        }
-
-        var snapshot = transport.GetWriteBuffer();
-        return index >= 0 && index < snapshot.Length ? snapshot[index] : (ushort)0;
     }
 }
