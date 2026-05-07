@@ -1457,29 +1457,47 @@ public sealed class RetryTaskCloudMesBehaviorTests
         {
             fallbackStore.RetryStore = retryStore;
             var cloudDiagnosticsStore = diagnosticsStore ?? new FakeCloudDiagnosticsStore();
-            _inner = new CloudRetryTask(
+            var cloudDeadLetterStore = deadLetterStore ?? new FakeCloudDeadLetterStore();
+            var fallbackWriter = criticalWriter ?? new FakeCriticalPersistenceFallbackWriter();
+            var cloudCapacityGuard = capacityGuard ?? CreateCapacityGuard(
                 logger,
                 retryStore,
+                new FakeFailedRecordStore(),
                 fallbackStore,
-                deadLetterStore ?? new FakeCloudDeadLetterStore(),
-                criticalWriter ?? new FakeCriticalPersistenceFallbackWriter(),
+                new FakeMesFallbackBufferStore(),
+                cloudDiagnosticsStore,
+                new FakeMesRetryDiagnosticsStore());
+            var cloudDeadLetterWriter = new DataPipelineDeadLetterWriter();
+
+            _inner = new CloudRetryTask(
+                logger,
                 deviceService,
-                cloudConsumer,
-                cloudBatchConsumer,
                 deviceLogSync,
                 capacitySync,
                 cloudDiagnosticsStore,
-                capacityGuard ?? CreateCapacityGuard(
+                cloudCapacityGuard,
+                new CloudFallbackRecoveryService(
+                    logger,
+                    fallbackStore,
+                    cloudDeadLetterStore,
+                    fallbackWriter,
+                    cloudCapacityGuard,
+                    cloudDeadLetterWriter),
+                new CloudRetryRecordProcessor(
                     logger,
                     retryStore,
-                    new FakeFailedRecordStore(),
-                    fallbackStore,
-                    new FakeMesFallbackBufferStore(),
+                    cloudDeadLetterStore,
+                    fallbackWriter,
+                    cloudConsumer,
+                    cloudBatchConsumer,
                     cloudDiagnosticsStore,
-                    new FakeMesRetryDiagnosticsStore()),
-                new DefaultRetryBackoffStrategy(),
-                new DataPipelineDeadLetterWriter(),
-                processIntegrationRegistry);
+                    new DefaultRetryBackoffStrategy(),
+                    cloudDeadLetterWriter,
+                    processIntegrationRegistry),
+                new CloudRetryHousekeepingService(
+                    logger,
+                    retryStore,
+                    cloudDiagnosticsStore));
         }
 
         public Task ExecuteOnceAsync()

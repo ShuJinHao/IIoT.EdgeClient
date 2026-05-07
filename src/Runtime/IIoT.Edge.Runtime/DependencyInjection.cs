@@ -41,6 +41,9 @@ public static class DependencyInjection
         services.AddSingleton<IIngressOverflowPersistence, IngressOverflowPersistence>();
         services.AddSingleton<IRetryBackoffStrategy, DefaultRetryBackoffStrategy>();
         services.AddSingleton<IDataPipelineDeadLetterWriter, DataPipelineDeadLetterWriter>();
+        services.AddSingleton<ICloudFallbackRecoveryService, CloudFallbackRecoveryService>();
+        services.AddSingleton<ICloudRetryRecordProcessor, CloudRetryRecordProcessor>();
+        services.AddSingleton<ICloudRetryHousekeepingService, CloudRetryHousekeepingService>();
         services.AddSingleton<DataPipelineService>();
         services.AddSingleton<IDataPipelineService>(sp => sp.GetRequiredService<DataPipelineService>());
 
