@@ -47,12 +47,9 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
             return response;
         });
 
-        var service = new DeviceService(
-            new TestHttpClientFactory(new HttpClient(handler)),
-            new FakeEndpointProvider("LINE-A-01"),
-            new DeviceSessionFileCacheStore(),
-            CreateRuntimeConfig(),
-            new FakeLogService());
+        var service = CreateDeviceService(
+            new HttpClient(handler),
+            new FakeEndpointProvider("LINE-A-01"));
 
         using var cts = new CancellationTokenSource();
 
@@ -107,12 +104,9 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
             return new HttpResponseMessage(HttpStatusCode.NotFound);
         });
 
-        var service = new DeviceService(
-            new TestHttpClientFactory(new HttpClient(handler)),
-            new FakeEndpointProvider("LINE-R-01"),
-            new DeviceSessionFileCacheStore(),
-            CreateRuntimeConfig(),
-            new FakeLogService());
+        var service = CreateDeviceService(
+            new HttpClient(handler),
+            new FakeEndpointProvider("LINE-R-01"));
 
         service.GetType().GetProperty(nameof(DeviceService.CurrentDevice))!.SetValue(service, new DeviceSession
         {
@@ -182,12 +176,10 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
             })
         });
 
-        var service = new DeviceService(
-            new TestHttpClientFactory(new HttpClient(handler)),
+        var service = CreateDeviceService(
+            new HttpClient(handler),
             new FakeEndpointProvider("LINE-C-03"),
-            new DeviceSessionFileCacheStore(),
-            CreateRuntimeConfig(),
-            logger);
+            logger: logger);
 
         using var cts = new CancellationTokenSource();
 
@@ -222,12 +214,10 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
             })
         });
 
-        var service = new DeviceService(
-            new TestHttpClientFactory(new HttpClient(handler)),
+        var service = CreateDeviceService(
+            new HttpClient(handler),
             new FakeEndpointProvider("LINE-D-04"),
-            new DeviceSessionFileCacheStore(),
-            CreateRuntimeConfig(),
-            logger);
+            logger: logger);
 
         using var cts = new CancellationTokenSource();
 
@@ -266,18 +256,16 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
             };
         });
 
-        var service = new DeviceService(
-            new TestHttpClientFactory(new HttpClient(handler)),
+        var service = CreateDeviceService(
+            new HttpClient(handler),
             new FakeEndpointProvider("LINE-HB-01"),
-            new DeviceSessionFileCacheStore(),
-            new FakeLocalSystemRuntimeConfigService
+            runtimeConfig: new FakeLocalSystemRuntimeConfigService
             {
                 Current = SystemRuntimeConfigSnapshot.Default with
                 {
                     OnlineHeartbeatInterval = TimeSpan.FromSeconds(1)
                 }
-            },
-            new FakeLogService());
+            });
 
         using var cts = new CancellationTokenSource();
 
@@ -310,18 +298,16 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
             };
         });
 
-        var service = new DeviceService(
-            new TestHttpClientFactory(new HttpClient(handler)),
+        var service = CreateDeviceService(
+            new HttpClient(handler),
             new FakeEndpointProvider("LINE-HB-STOP-01"),
-            new DeviceSessionFileCacheStore(),
-            new FakeLocalSystemRuntimeConfigService
+            runtimeConfig: new FakeLocalSystemRuntimeConfigService
             {
                 Current = SystemRuntimeConfigSnapshot.Default with
                 {
                     OnlineHeartbeatInterval = TimeSpan.FromSeconds(1)
                 }
-            },
-            new FakeLogService());
+            });
 
         using var cts = new CancellationTokenSource();
 
@@ -351,12 +337,9 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
             return new HttpResponseMessage(HttpStatusCode.OK);
         });
 
-        var service = new DeviceService(
-            new TestHttpClientFactory(new HttpClient(handler)),
-            new FakeEndpointProvider("LINE-HB-STOP-02"),
-            new DeviceSessionFileCacheStore(),
-            CreateRuntimeConfig(),
-            new FakeLogService());
+        var service = CreateDeviceService(
+            new HttpClient(handler),
+            new FakeEndpointProvider("LINE-HB-STOP-02"));
 
         using var cts = new CancellationTokenSource();
 
@@ -421,6 +404,24 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
         {
             Current = SystemRuntimeConfigSnapshot.Default
         };
+
+    private static DeviceService CreateDeviceService(
+        HttpClient httpClient,
+        ICloudApiEndpointProvider endpointProvider,
+        ILocalSystemRuntimeConfigService? runtimeConfig = null,
+        FakeLogService? logger = null)
+    {
+        var logService = logger ?? new FakeLogService();
+        return new DeviceService(
+            new CloudDeviceBootstrapClient(
+                new TestHttpClientFactory(httpClient),
+                endpointProvider),
+            new DeviceUploadGatePolicy(),
+            new DeviceBootstrapEventLogger(logService),
+            new DeviceSessionFileCacheStore(),
+            runtimeConfig ?? CreateRuntimeConfig(),
+            logService);
+    }
 
     private sealed class FakeEndpointProvider(string clientCode) : ICloudApiEndpointProvider
     {

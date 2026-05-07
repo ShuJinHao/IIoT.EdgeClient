@@ -3,7 +3,14 @@ using IIoT.Edge.Application.Abstractions.Device;
 
 namespace IIoT.Edge.Infrastructure.Integration.Device.Cache;
 
-public class DeviceSessionFileCacheStore
+public interface IDeviceSessionCacheStore
+{
+    void Save(DeviceSession session);
+
+    DeviceSession? TryLoad(string clientCode);
+}
+
+public class DeviceSessionFileCacheStore : IDeviceSessionCacheStore
 {
     private readonly string _cacheFilePath;
 
