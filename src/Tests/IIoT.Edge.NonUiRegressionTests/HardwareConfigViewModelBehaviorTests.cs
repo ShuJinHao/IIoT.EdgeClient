@@ -437,10 +437,19 @@ public sealed class HardwareConfigViewModelBehaviorTests
     }
 
     private static HardwareConfigViewModel CreateViewModel(StubHardwareConfigCrudService? service = null)
-        => new(
-            service ?? new StubHardwareConfigCrudService(),
+    {
+        var validationPresenter = new HardwareConfigValidationPresenter();
+        var editSession = new HardwareConfigEditSession(validationPresenter);
+        return new HardwareConfigViewModel(
             new StubPermissionService { CanEditHardware = true },
-            new TestLanguageService());
+            new TestLanguageService(),
+            new HardwareConfigLoadSaveCoordinator(
+                service ?? new StubHardwareConfigCrudService(),
+                validationPresenter,
+                editSession),
+            new HardwareConfigDeviceSelectionCoordinator(),
+            editSession);
+    }
 
     private static NetworkDeviceVm CreatePlc()
         => new()

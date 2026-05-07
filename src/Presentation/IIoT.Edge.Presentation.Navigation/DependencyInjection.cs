@@ -16,6 +16,10 @@ public static class DependencyInjection
     {
         services.AddSingleton<ParamViewModel>();
         services.AddSingleton<IoViewViewModel>();
+        services.AddSingleton<IHardwareConfigValidationPresenter, HardwareConfigValidationPresenter>();
+        services.AddSingleton<IHardwareConfigEditSession, HardwareConfigEditSession>();
+        services.AddSingleton<IHardwareConfigDeviceSelectionCoordinator, HardwareConfigDeviceSelectionCoordinator>();
+        services.AddSingleton<IHardwareConfigLoadSaveCoordinator, HardwareConfigLoadSaveCoordinator>();
         services.AddSingleton<HardwareConfigViewModel>();
         services.AddSingleton<RecipeViewModel>();
         services.AddSingleton<CapacityViewModel>();
