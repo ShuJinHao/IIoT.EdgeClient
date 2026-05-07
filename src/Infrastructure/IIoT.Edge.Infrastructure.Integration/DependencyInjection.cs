@@ -50,7 +50,9 @@ public static class DependencyInjection
         services.AddSingleton<ICloudApiPathProvider>(sp =>
             sp.GetRequiredService<ICloudApiEndpointProvider>());
         services.AddSingleton<IMesEndpointProvider, MesEndpointProvider>();
-        services.AddSingleton(new DeviceSessionFileCacheStore(runtimePaths.DeviceCacheFilePath));
+        var deviceSessionCacheStore = new DeviceSessionFileCacheStore(runtimePaths.DeviceCacheFilePath);
+        services.AddSingleton<IDeviceSessionCacheStore>(deviceSessionCacheStore);
+        services.AddSingleton(deviceSessionCacheStore);
 
         services.AddSingleton(new LocalAdminConfig
         {
@@ -64,6 +66,9 @@ public static class DependencyInjection
         services.AddSingleton<IAuthService, AuthService>();
 
         services.AddHttpClient(DeviceService.HttpClientName, client => client.Timeout = timeout);
+        services.AddSingleton<ICloudDeviceBootstrapClient, CloudDeviceBootstrapClient>();
+        services.AddSingleton<IDeviceUploadGatePolicy, DeviceUploadGatePolicy>();
+        services.AddSingleton<IDeviceBootstrapEventLogger, DeviceBootstrapEventLogger>();
         services.AddSingleton<DeviceService>();
         services.AddSingleton<IDeviceService>(sp => sp.GetRequiredService<DeviceService>());
         services.AddSingleton<IDeviceAccessTokenProvider>(sp => sp.GetRequiredService<DeviceService>());

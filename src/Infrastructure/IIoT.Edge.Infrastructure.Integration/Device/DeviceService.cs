@@ -1,12 +1,9 @@
-using System.Net.Http.Json;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Integration;
-using IIoT.Edge.Application.Common.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
-using IIoT.Edge.Infrastructure.Integration.Config;
+using IIoT.Edge.Application.Common.Device;
 using IIoT.Edge.Infrastructure.Integration.Device.Cache;
-using IIoT.Edge.Infrastructure.Integration.Http;
 
 namespace IIoT.Edge.Infrastructure.Integration.Device;
 
@@ -14,9 +11,12 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
 {
     public const string HttpClientName = "CloudDevice";
 
-    private readonly IHttpClientFactory _httpClientFactory;
-    private readonly ICloudApiEndpointProvider _endpointProvider;
-    private readonly DeviceSessionFileCacheStore _cacheStore;
+    private static readonly TimeSpan OfflineInterval = TimeSpan.FromSeconds(10);
+
+    private readonly ICloudDeviceBootstrapClient _bootstrapClient;
+    private readonly IDeviceUploadGatePolicy _uploadGatePolicy;
+    private readonly IDeviceBootstrapEventLogger _bootstrapEventLogger;
+    private readonly IDeviceSessionCacheStore _cacheStore;
     private readonly ILocalSystemRuntimeConfigService _runtimeConfig;
     private readonly ILogService _logger;
     private readonly IExternalHeartbeatStateStore? _heartbeatStateStore;
@@ -26,7 +26,6 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
     private CancellationTokenSource? _cts;
     private Task? _heartbeatTask;
     private bool _isRunning;
-    private static readonly TimeSpan OfflineInterval = TimeSpan.FromSeconds(10);
 
     public DeviceSession? CurrentDevice { get; private set; }
     public string? AccessToken => CurrentDevice?.UploadAccessToken;
@@ -46,15 +45,17 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
     public event Action<EdgeUploadGateSnapshot>? UploadGateChanged;
 
     public DeviceService(
-        IHttpClientFactory httpClientFactory,
-        ICloudApiEndpointProvider endpointProvider,
-        DeviceSessionFileCacheStore cacheStore,
+        ICloudDeviceBootstrapClient bootstrapClient,
+        IDeviceUploadGatePolicy uploadGatePolicy,
+        IDeviceBootstrapEventLogger bootstrapEventLogger,
+        IDeviceSessionCacheStore cacheStore,
         ILocalSystemRuntimeConfigService runtimeConfig,
         ILogService logger,
         IExternalHeartbeatStateStore? heartbeatStateStore = null)
     {
-        _httpClientFactory = httpClientFactory;
-        _endpointProvider = endpointProvider;
+        _bootstrapClient = bootstrapClient;
+        _uploadGatePolicy = uploadGatePolicy;
+        _bootstrapEventLogger = bootstrapEventLogger;
         _cacheStore = cacheStore;
         _runtimeConfig = runtimeConfig;
         _logger = logger;
@@ -97,22 +98,24 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
             _heartbeatTask = null;
         }
 
-        if (localCts is not null)
+        if (localCts is null)
         {
-            await localCts.CancelAsync().ConfigureAwait(false);
-            if (localTask is not null)
-            {
-                try
-                {
-                    await localTask.ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
-                {
-                }
-            }
-
-            localCts.Dispose();
+            return;
         }
+
+        await localCts.CancelAsync().ConfigureAwait(false);
+        if (localTask is not null)
+        {
+            try
+            {
+                await localTask.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }
+
+        localCts.Dispose();
     }
 
     public Task RefreshBootstrapAsync(CancellationToken ct = default)
@@ -131,7 +134,7 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
             nextGate = CurrentUploadGate with
             {
                 State = EdgeUploadGateState.Blocked,
-                Reason = ResolveBlockReason(CurrentDevice, reason),
+                Reason = _uploadGatePolicy.ResolveBlockReason(CurrentDevice, reason),
                 TokenExpiresAtUtc = CurrentDevice?.UploadAccessTokenExpiresAtUtc,
                 LastBootstrapFailedAtUtc = occurredAtUtc
             };
@@ -197,7 +200,7 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
         EdgeUploadGateSnapshot previousGate,
         CancellationToken ct)
     {
-        if (CanRefreshCurrentDevice())
+        if (_uploadGatePolicy.CanRefresh(CurrentDevice))
         {
             var refreshResult = await TryRefreshCurrentDeviceAsync(attemptedAtUtc, ct).ConfigureAwait(false);
             if (refreshResult == DeviceRefreshResult.Refreshed)
@@ -207,11 +210,7 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
 
             if (refreshResult == DeviceRefreshResult.Cancelled)
             {
-                UpdateUploadGate(
-                    previousGate with
-                    {
-                        LastBootstrapAttemptedAtUtc = attemptedAtUtc
-                    });
+                RestoreCancelledGate(previousGate, attemptedAtUtc);
                 return;
             }
         }
@@ -224,87 +223,25 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
         EdgeUploadGateSnapshot previousGate,
         CancellationToken ct)
     {
-        var clientCode = string.Empty;
-        try
+        var result = await _bootstrapClient.BootstrapAsync(ct).ConfigureAwait(false);
+        if (result.Kind == CloudDeviceBootstrapResultKind.Cancelled)
         {
-            clientCode = _endpointProvider.GetClientCode();
-            var deviceInstancePath = _endpointProvider.GetDeviceInstancePath();
-            var url = _endpointProvider.BuildUrl(
-                $"{deviceInstancePath}?clientCode={Uri.EscapeDataString(clientCode)}");
-
-            using var response = await CreateHttpClient().GetAsync(url, ct).ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode)
-            {
-                var errorMessage = await TryReadFirstErrorAsync(response, ct).ConfigureAwait(false);
-                _logger.Warn(
-                    $"事件(edge.bootstrap.failure) 客户端编码={FormatValue(clientCode)} 状态码={(int)response.StatusCode} 结果=失败 原因=HTTP状态 错误={FormatValue(errorMessage)}");
-                GoOffline(clientCode, null, EdgeUploadBlockReason.BootstrapHttpFailure, attemptedAtUtc);
-                return;
-            }
-
-            var dto = await response.Content.ReadFromJsonAsync<DeviceResponseDto>(ct).ConfigureAwait(false);
-            if (dto is null)
-            {
-                _logger.Warn(
-                    $"事件(edge.bootstrap.failure) 客户端编码={FormatValue(clientCode)} 结果=失败 原因=空响应");
-                GoOffline(clientCode, null, EdgeUploadBlockReason.BootstrapPayloadInvalid, attemptedAtUtc);
-                return;
-            }
-
-            dto.RefreshToken ??= CloudAuthHeaders.ReadRefreshToken(response);
-            dto.RefreshTokenExpiresAtUtc ??= CloudAuthHeaders.ReadRefreshTokenExpiresAtUtc(response);
-            dto.UploadAccessTokenExpiresAtUtc ??= CloudAuthHeaders.ReadAccessTokenExpiresAtUtc(response);
-
-            var session = new DeviceSession
-            {
-                DeviceId = dto.Id,
-                DeviceName = dto.DeviceName,
-                ClientCode = string.IsNullOrWhiteSpace(dto.ClientCode) ? clientCode : dto.ClientCode,
-                ProcessId = dto.ProcessId,
-                UploadAccessToken = dto.UploadAccessToken,
-                UploadAccessTokenExpiresAtUtc = dto.UploadAccessTokenExpiresAtUtc,
-                RefreshToken = dto.RefreshToken,
-                RefreshTokenExpiresAtUtc = dto.RefreshTokenExpiresAtUtc
-            };
-
-            if (!TryResolveTokenBlockReason(session, out var invalidReason))
-            {
-                _logger.Info(
-                    $"事件(edge.bootstrap.success) 客户端编码={FormatValue(session.ClientCode)} 设备ID={session.DeviceId} 工序ID={session.ProcessId} 令牌过期时间={FormatTimestamp(session.UploadAccessTokenExpiresAtUtc)} 结果=成功");
-                GoOnline(session, attemptedAtUtc);
-                return;
-            }
-
-            _logger.Warn(
-                $"事件(edge.bootstrap.invalid_token) 客户端编码={FormatValue(session.ClientCode)} 设备ID={session.DeviceId} 工序ID={session.ProcessId} 令牌过期时间={FormatTimestamp(session.UploadAccessTokenExpiresAtUtc)} 结果=无效 原因={invalidReason.ToReasonCode()}");
-            GoOffline(session.ClientCode, session, invalidReason, attemptedAtUtc);
+            RestoreCancelledGate(previousGate, attemptedAtUtc);
+            return;
         }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+
+        if (result.Kind != CloudDeviceBootstrapResultKind.Success || result.Session is null)
         {
-            UpdateUploadGate(
-                previousGate with
-                {
-                    LastBootstrapAttemptedAtUtc = attemptedAtUtc
-                });
+            _bootstrapEventLogger.LogBootstrapFailure(result);
+            GoOffline(result.ClientCode, null, ResolveBootstrapFailureReason(result.Kind), attemptedAtUtc);
+            return;
         }
-        catch (TaskCanceledException)
-        {
-            _logger.Warn(
-                $"事件(edge.bootstrap.failure) 客户端编码={FormatValue(clientCode)} 结果=失败 原因=超时");
-            GoOffline(clientCode, null, EdgeUploadBlockReason.BootstrapTimeout, attemptedAtUtc);
-        }
-        catch (HttpRequestException ex)
-        {
-            _logger.Warn(
-                $"事件(edge.bootstrap.failure) 客户端编码={FormatValue(clientCode)} 结果=失败 原因=网络异常 消息={SanitizeValue(ex.Message)}");
-            GoOffline(clientCode, null, EdgeUploadBlockReason.BootstrapNetworkFailure, attemptedAtUtc);
-        }
-        catch (Exception ex)
-        {
-            _logger.Error(
-                $"事件(edge.bootstrap.failure) 客户端编码={FormatValue(clientCode)} 结果=失败 原因=异常 消息={SanitizeValue(ex.Message)}");
-            GoOffline(clientCode, null, EdgeUploadBlockReason.BootstrapPayloadInvalid, attemptedAtUtc);
-        }
+
+        HandleIdentifiedSession(
+            result.Session,
+            attemptedAtUtc,
+            successEventName: "edge.bootstrap.success",
+            invalidTokenEventName: "edge.bootstrap.invalid_token");
     }
 
     private async Task<DeviceRefreshResult> TryRefreshCurrentDeviceAsync(
@@ -317,118 +254,41 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
             return DeviceRefreshResult.FallbackToBootstrap;
         }
 
-        var clientCode = string.IsNullOrWhiteSpace(session.ClientCode)
-            ? _endpointProvider.GetClientCode()
-            : session.ClientCode;
-
-        try
-        {
-            using var request = new HttpRequestMessage(
-                HttpMethod.Post,
-                _endpointProvider.BuildUrl(_endpointProvider.GetBootstrapRefreshPath()));
-            request.Headers.TryAddWithoutValidation(CloudAuthHeaders.RefreshToken, session.RefreshToken);
-
-            using var response = await CreateHttpClient().SendAsync(request, ct).ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode)
-            {
-                var errorMessage = await TryReadFirstErrorAsync(response, ct).ConfigureAwait(false);
-                _logger.Warn(
-                    $"事件(edge.bootstrap.refresh.failure) 客户端编码={FormatValue(clientCode)} 状态码={(int)response.StatusCode} 结果=失败 原因=HTTP状态 错误={FormatValue(errorMessage)}");
-                return DeviceRefreshResult.FallbackToBootstrap;
-            }
-
-            var dto = await response.Content.ReadFromJsonAsync<DeviceResponseDto>(ct).ConfigureAwait(false);
-            if (dto is null)
-            {
-                _logger.Warn(
-                    $"事件(edge.bootstrap.refresh.failure) 客户端编码={FormatValue(clientCode)} 结果=失败 原因=空响应");
-                return DeviceRefreshResult.FallbackToBootstrap;
-            }
-
-            dto.RefreshToken ??= CloudAuthHeaders.ReadRefreshToken(response);
-            dto.RefreshTokenExpiresAtUtc ??= CloudAuthHeaders.ReadRefreshTokenExpiresAtUtc(response);
-            dto.UploadAccessTokenExpiresAtUtc ??= CloudAuthHeaders.ReadAccessTokenExpiresAtUtc(response);
-
-            var refreshedSession = new DeviceSession
-            {
-                DeviceId = dto.Id,
-                DeviceName = dto.DeviceName,
-                ClientCode = string.IsNullOrWhiteSpace(dto.ClientCode) ? clientCode : dto.ClientCode,
-                ProcessId = dto.ProcessId,
-                UploadAccessToken = dto.UploadAccessToken,
-                UploadAccessTokenExpiresAtUtc = dto.UploadAccessTokenExpiresAtUtc,
-                RefreshToken = dto.RefreshToken,
-                RefreshTokenExpiresAtUtc = dto.RefreshTokenExpiresAtUtc
-            };
-
-            if (TryResolveTokenBlockReason(refreshedSession, out var invalidReason))
-            {
-                _logger.Warn(
-                    $"事件(edge.bootstrap.refresh.invalid_token) 客户端编码={FormatValue(refreshedSession.ClientCode)} 设备ID={refreshedSession.DeviceId} 工序ID={refreshedSession.ProcessId} 令牌过期时间={FormatTimestamp(refreshedSession.UploadAccessTokenExpiresAtUtc)} 结果=无效 原因={invalidReason.ToReasonCode()}");
-                GoOffline(refreshedSession.ClientCode, refreshedSession, invalidReason, attemptedAtUtc);
-                return DeviceRefreshResult.Refreshed;
-            }
-
-            _logger.Info(
-                $"事件(edge.bootstrap.refresh.success) 客户端编码={FormatValue(refreshedSession.ClientCode)} 设备ID={refreshedSession.DeviceId} 工序ID={refreshedSession.ProcessId} 令牌过期时间={FormatTimestamp(refreshedSession.UploadAccessTokenExpiresAtUtc)} 结果=成功");
-            GoOnline(refreshedSession, attemptedAtUtc);
-            return DeviceRefreshResult.Refreshed;
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        var result = await _bootstrapClient.RefreshAsync(session, ct).ConfigureAwait(false);
+        if (result.Kind == CloudDeviceBootstrapResultKind.Cancelled)
         {
             return DeviceRefreshResult.Cancelled;
         }
-        catch (TaskCanceledException)
+
+        if (result.Kind != CloudDeviceBootstrapResultKind.Success || result.Session is null)
         {
-            _logger.Warn(
-                $"事件(edge.bootstrap.refresh.failure) 客户端编码={FormatValue(clientCode)} 结果=失败 原因=超时");
+            _bootstrapEventLogger.LogRefreshFailure(result);
             return DeviceRefreshResult.FallbackToBootstrap;
         }
-        catch (HttpRequestException ex)
-        {
-            _logger.Warn(
-                $"事件(edge.bootstrap.refresh.failure) 客户端编码={FormatValue(clientCode)} 结果=失败 原因=网络异常 消息={SanitizeValue(ex.Message)}");
-            return DeviceRefreshResult.FallbackToBootstrap;
-        }
-        catch (Exception ex)
-        {
-            _logger.Error(
-                $"事件(edge.bootstrap.refresh.failure) 客户端编码={FormatValue(clientCode)} 结果=失败 原因=异常 消息={SanitizeValue(ex.Message)}");
-            return DeviceRefreshResult.FallbackToBootstrap;
-        }
+
+        HandleIdentifiedSession(
+            result.Session,
+            attemptedAtUtc,
+            successEventName: "edge.bootstrap.refresh.success",
+            invalidTokenEventName: "edge.bootstrap.refresh.invalid_token");
+        return DeviceRefreshResult.Refreshed;
     }
 
-    private bool CanRefreshCurrentDevice()
+    private void HandleIdentifiedSession(
+        DeviceSession session,
+        DateTimeOffset attemptedAtUtc,
+        string successEventName,
+        string invalidTokenEventName)
     {
-        var session = CurrentDevice;
-        return session is not null
-            && !string.IsNullOrWhiteSpace(session.RefreshToken)
-            && (!session.RefreshTokenExpiresAtUtc.HasValue || session.RefreshTokenExpiresAtUtc.Value > DateTimeOffset.UtcNow);
-    }
-
-    private static bool TryResolveTokenBlockReason(DeviceSession? session, out EdgeUploadBlockReason reason)
-    {
-        if (session is null || session.DeviceId == Guid.Empty)
+        if (!_uploadGatePolicy.TryResolveTokenBlockReason(session, out var invalidReason))
         {
-            reason = EdgeUploadBlockReason.DeviceUnidentified;
-            return true;
+            _bootstrapEventLogger.LogSessionAccepted(successEventName, session);
+            GoOnline(session, attemptedAtUtc);
+            return;
         }
 
-        if (string.IsNullOrWhiteSpace(session.UploadAccessToken))
-        {
-            reason = EdgeUploadBlockReason.MissingUploadToken;
-            return true;
-        }
-
-        if (session.UploadAccessTokenExpiresAtUtc.HasValue
-            && session.UploadAccessTokenExpiresAtUtc.Value <= DateTimeOffset.UtcNow)
-        {
-            reason = EdgeUploadBlockReason.ExpiredUploadToken;
-            return true;
-        }
-
-        reason = EdgeUploadBlockReason.None;
-        return false;
+        _bootstrapEventLogger.LogSessionRejected(invalidTokenEventName, session, invalidReason);
+        GoOffline(session.ClientCode, session, invalidReason, attemptedAtUtc);
     }
 
     private void GoOnline(DeviceSession session, DateTimeOffset attemptedAtUtc)
@@ -490,20 +350,7 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
             }
             else if (CurrentDevice is null)
             {
-                try
-                {
-                    var cached = _cacheStore.TryLoad(clientCode);
-                    if (cached is not null)
-                    {
-                        CurrentDevice = cached;
-                        _logger.Info($"[设备服务] 已加载本地缓存：{cached.DeviceName}");
-                        raiseDeviceIdentified = true;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.Warn($"[设备服务] 加载本地缓存失败：{ex.Message}");
-                }
+                raiseDeviceIdentified = TryLoadCachedDevice(clientCode);
             }
 
             if (CurrentState != NetworkState.Offline)
@@ -516,7 +363,7 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
             nextGate = CurrentUploadGate with
             {
                 State = EdgeUploadGateState.Blocked,
-                Reason = ResolveBlockReason(CurrentDevice, blockReason),
+                Reason = _uploadGatePolicy.ResolveBlockReason(CurrentDevice, blockReason),
                 TokenExpiresAtUtc = CurrentDevice?.UploadAccessTokenExpiresAtUtc,
                 LastBootstrapAttemptedAtUtc = attemptedAtUtc,
                 LastBootstrapFailedAtUtc = attemptedAtUtc
@@ -539,6 +386,27 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
             nextGate.Reason.ToReasonCode(),
             null,
             attemptedAtUtc.UtcDateTime);
+    }
+
+    private bool TryLoadCachedDevice(string clientCode)
+    {
+        try
+        {
+            var cached = _cacheStore.TryLoad(clientCode);
+            if (cached is null)
+            {
+                return false;
+            }
+
+            CurrentDevice = cached;
+            _logger.Info($"[设备服务] 已加载本地缓存：{cached.DeviceName}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"[设备服务] 加载本地缓存失败：{ex.Message}");
+            return false;
+        }
     }
 
     private bool SetCurrentDevice(DeviceSession session, bool persistToCache)
@@ -571,33 +439,6 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
         return deviceChanged;
     }
 
-    private static EdgeUploadBlockReason ResolveBlockReason(
-        DeviceSession? session,
-        EdgeUploadBlockReason explicitReason)
-    {
-        if (explicitReason == EdgeUploadBlockReason.MissingUploadToken
-            || explicitReason == EdgeUploadBlockReason.ExpiredUploadToken)
-        {
-            return explicitReason;
-        }
-
-        if (session is null)
-        {
-            return explicitReason == EdgeUploadBlockReason.None
-                ? EdgeUploadBlockReason.DeviceUnidentified
-                : explicitReason;
-        }
-
-        return explicitReason == EdgeUploadBlockReason.None
-            ? ResolveFallbackTokenReason(session)
-            : explicitReason;
-    }
-
-    private static EdgeUploadBlockReason ResolveFallbackTokenReason(DeviceSession session)
-        => TryResolveTokenBlockReason(session, out var tokenReason)
-            ? tokenReason
-            : EdgeUploadBlockReason.DeviceUnidentified;
-
     private void UpdateUploadGate(EdgeUploadGateSnapshot? nextGate)
     {
         if (nextGate is null)
@@ -623,30 +464,21 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
         }
     }
 
-    private static async Task<string?> TryReadFirstErrorAsync(HttpResponseMessage response, CancellationToken ct)
-    {
-        try
+    private void RestoreCancelledGate(EdgeUploadGateSnapshot previousGate, DateTimeOffset attemptedAtUtc)
+        => UpdateUploadGate(
+            previousGate with
+            {
+                LastBootstrapAttemptedAtUtc = attemptedAtUtc
+            });
+
+    private static EdgeUploadBlockReason ResolveBootstrapFailureReason(CloudDeviceBootstrapResultKind kind)
+        => kind switch
         {
-            var envelope = await response.Content.ReadFromJsonAsync<ApiErrorEnvelope>(ct).ConfigureAwait(false);
-            return envelope?.Errors?.FirstOrDefault();
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static string FormatTimestamp(DateTimeOffset? value)
-        => value?.ToString("O") ?? "空";
-
-    private static string FormatValue(string? value)
-        => string.IsNullOrWhiteSpace(value) ? "未知" : SanitizeValue(value);
-
-    private static string SanitizeValue(string value)
-        => value.Replace(' ', '_');
-
-    private HttpClient CreateHttpClient()
-        => _httpClientFactory.CreateClient(HttpClientName);
+            CloudDeviceBootstrapResultKind.HttpFailure => EdgeUploadBlockReason.BootstrapHttpFailure,
+            CloudDeviceBootstrapResultKind.Timeout => EdgeUploadBlockReason.BootstrapTimeout,
+            CloudDeviceBootstrapResultKind.NetworkFailure => EdgeUploadBlockReason.BootstrapNetworkFailure,
+            _ => EdgeUploadBlockReason.BootstrapPayloadInvalid
+        };
 
     private enum DeviceRefreshResult
     {
