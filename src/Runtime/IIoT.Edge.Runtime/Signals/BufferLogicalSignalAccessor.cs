@@ -38,7 +38,10 @@ public sealed class BufferLogicalSignalAccessor<TSignalKey> : ILogicalSignalAcce
     {
         ArgumentNullException.ThrowIfNull(context);
         var bindings = ProductionContextSignalBindings.Get(context);
-        return new BufferLogicalSignalAccessor<TSignalKey>(buffer, bindings.Count > 0 ? bindings : ToFallbackBindings(profile), profile);
+        return new BufferLogicalSignalAccessor<TSignalKey>(
+            buffer,
+            bindings.Count > 0 ? bindings : ToFallbackBindings(profile),
+            profile);
     }
 
     public bool CanRead(TSignalKey key)
@@ -52,7 +55,7 @@ public sealed class BufferLogicalSignalAccessor<TSignalKey> : ILogicalSignalAcce
         if (_readBindings.TryGetValue(key, out var binding))
         {
             EnsureDataType(binding, key, "UInt16", "Int16", "Bool");
-            value = _buffer.GetReadValue(binding.Offset);
+            value = ReadWords(binding)[0];
             return true;
         }
 
@@ -64,25 +67,25 @@ public sealed class BufferLogicalSignalAccessor<TSignalKey> : ILogicalSignalAcce
     {
         var binding = GetBinding(_readBindings, key, ModuleSignalDirection.Read);
         EnsureDataType(binding, key, "UInt16", "Int16", "Bool");
-        return _buffer.GetReadValue(binding.Offset);
+        return ReadWords(binding)[0];
     }
 
     public short ReadInt16(TSignalKey key)
     {
         var binding = GetBinding(_readBindings, key, ModuleSignalDirection.Read);
         EnsureDataType(binding, key, "Int16", "UInt16");
-        return unchecked((short)_buffer.GetReadValue(binding.Offset));
+        return unchecked((short)ReadWords(binding)[0]);
     }
 
     public string ReadAscii(TSignalKey key)
     {
         var binding = GetBinding(_readBindings, key, ModuleSignalDirection.Read);
         EnsureDataType(binding, key, "Ascii");
-        var builder = new StringBuilder(binding.AddressCount * 2);
+        var words = ReadWords(binding);
+        var builder = new StringBuilder(words.Length * 2);
 
-        for (var offset = 0; offset < binding.AddressCount; offset++)
+        foreach (var word in words)
         {
-            var word = _buffer.GetReadValue(binding.Offset + offset);
             var low = (byte)(word & 0xFF);
             var high = (byte)(word >> 8);
 
@@ -104,12 +107,13 @@ public sealed class BufferLogicalSignalAccessor<TSignalKey> : ILogicalSignalAcce
     {
         var binding = GetBinding(_readBindings, key, ModuleSignalDirection.Read);
         EnsureDataType(binding, key, "Int16", "UInt16");
-        var size = Math.Min(count, binding.AddressCount);
+        var words = ReadWords(binding);
+        var size = Math.Min(count, words.Length);
         var values = new int[size];
 
         for (var index = 0; index < size; index++)
         {
-            values[index] = _buffer.GetReadValue(binding.Offset + index);
+            values[index] = words[index];
         }
 
         return values;
@@ -119,12 +123,13 @@ public sealed class BufferLogicalSignalAccessor<TSignalKey> : ILogicalSignalAcce
     {
         var binding = GetBinding(_readBindings, key, ModuleSignalDirection.Read);
         EnsureDataType(binding, key, "Bool");
-        var size = Math.Min(count, binding.AddressCount);
+        var words = ReadWords(binding);
+        var size = Math.Min(count, words.Length);
         var values = new bool[size];
 
         for (var index = 0; index < size; index++)
         {
-            values[index] = _buffer.GetReadValue(binding.Offset + index) != 0;
+            values[index] = words[index] != 0;
         }
 
         return values;
@@ -134,15 +139,14 @@ public sealed class BufferLogicalSignalAccessor<TSignalKey> : ILogicalSignalAcce
     {
         var binding = GetBinding(_readBindings, key, ModuleSignalDirection.Read);
         EnsureDataType(binding, key, "Float");
-        var size = Math.Min(count, binding.AddressCount / 2);
+        var words = ReadWords(binding);
+        var size = Math.Min(count, words.Length / 2);
         var values = new double[size];
 
         for (var index = 0; index < size; index++)
         {
-            var baseOffset = binding.Offset + (index * 2);
-            values[index] = CombineToFloat(
-                _buffer.GetReadValue(baseOffset + 1),
-                _buffer.GetReadValue(baseOffset));
+            var baseOffset = index * 2;
+            values[index] = CombineToFloat(words[baseOffset + 1], words[baseOffset]);
         }
 
         return values;
@@ -152,7 +156,24 @@ public sealed class BufferLogicalSignalAccessor<TSignalKey> : ILogicalSignalAcce
     {
         var binding = GetBinding(_writeBindings, key, ModuleSignalDirection.Write);
         EnsureDataType(binding, key, "UInt16", "Int16", "Bool");
-        _buffer.SetWriteValue(binding.Offset, value);
+        _buffer.SetWriteValue(binding.SignalKey, 0, value);
+        _buffer.SetWriteValue(binding.FallbackOffset, value);
+    }
+
+    private ushort[] ReadWords(SignalBinding binding)
+    {
+        if (_buffer.TryGetReadWords(binding.SignalKey, out var signalWords))
+        {
+            return NormalizeWords(signalWords, binding.AddressCount);
+        }
+
+        var words = new ushort[binding.AddressCount];
+        for (var offset = 0; offset < words.Length; offset++)
+        {
+            words[offset] = _buffer.GetReadValue(binding.FallbackOffset + offset);
+        }
+
+        return words;
     }
 
     private SignalBinding GetBinding(
@@ -165,7 +186,7 @@ public sealed class BufferLogicalSignalAccessor<TSignalKey> : ILogicalSignalAcce
             return binding;
         }
 
-        var signal = _profile.Get(key);
+        var signal = _profile.Get(key, direction);
         var directionText = direction == ModuleSignalDirection.Write ? "Write" : "Read";
         throw new InvalidOperationException(
             $"模块【{_profile.ModuleId}】信号【{signal.DisplayName}】未绑定 {directionText} IO 映射。");
@@ -176,7 +197,9 @@ public sealed class BufferLogicalSignalAccessor<TSignalKey> : ILogicalSignalAcce
         ModuleSignalDirection direction,
         IModulePlcSignalProfile<TSignalKey> profile)
     {
-        var definitionsBySignalKey = profile.Signals.ToDictionary(
+        var definitionsBySignalKey = profile.Signals
+            .Where(signal => signal.Direction == direction)
+            .ToDictionary(
             static signal => NormalizeSignalKey(signal.SignalKey),
             static signal => signal,
             StringComparer.OrdinalIgnoreCase);
@@ -196,9 +219,11 @@ public sealed class BufferLogicalSignalAccessor<TSignalKey> : ILogicalSignalAcce
             }
 
             indexes[definition.Key] = new SignalBinding(
+                signalKey,
                 currentOffset,
                 Math.Max(1, binding.AddressCount),
-                binding.DataType);
+                binding.DataType,
+                direction);
             currentOffset += Math.Max(1, binding.AddressCount);
         }
 
@@ -212,7 +237,7 @@ public sealed class BufferLogicalSignalAccessor<TSignalKey> : ILogicalSignalAcce
             return;
         }
 
-        var signal = _profile.Get(key);
+        var signal = _profile.Get(key, binding.Direction);
         throw new InvalidOperationException(
             $"模块【{_profile.ModuleId}】信号【{signal.DisplayName}】数据类型不匹配，当前为【{binding.DataType}】，允许类型为【{string.Join("、", allowedTypes)}】。");
     }
@@ -237,6 +262,17 @@ public sealed class BufferLogicalSignalAccessor<TSignalKey> : ILogicalSignalAcce
         return signalKey.Trim();
     }
 
+    private static ushort[] NormalizeWords(IReadOnlyList<ushort> words, int count)
+    {
+        var result = new ushort[Math.Max(1, count)];
+        for (var index = 0; index < result.Length; index++)
+        {
+            result[index] = index < words.Count ? words[index] : (ushort)0;
+        }
+
+        return result;
+    }
+
     private static float CombineToFloat(ushort high, ushort low)
     {
         byte[] bytes =
@@ -255,5 +291,10 @@ public sealed class BufferLogicalSignalAccessor<TSignalKey> : ILogicalSignalAcce
         return BitConverter.ToSingle(bytes, 0);
     }
 
-    private sealed record SignalBinding(int Offset, int AddressCount, string DataType);
+    private sealed record SignalBinding(
+        string SignalKey,
+        int FallbackOffset,
+        int AddressCount,
+        string DataType,
+        ModuleSignalDirection Direction);
 }

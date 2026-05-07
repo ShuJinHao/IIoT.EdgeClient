@@ -13,7 +13,6 @@ This repository has one production client solution. Use the paths below as the d
 
 Keep all process modules in `src/Modules`.
 
-- `src/Modules/IIoT.Edge.Module.Stacking`
 - `src/Modules/IIoT.Edge.Module.Homogenization`
 
 New device support should be added as a new module project under `src/Modules`.

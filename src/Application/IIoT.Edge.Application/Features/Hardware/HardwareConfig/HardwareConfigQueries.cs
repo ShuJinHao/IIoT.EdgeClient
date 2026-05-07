@@ -27,6 +27,7 @@ public record ModuleTemplateInfoResult(
     bool IsAvailable,
     string? ModuleId,
     IReadOnlyList<ModuleIoTemplateEntry> DefaultSignals,
+    IReadOnlyList<ModuleIoTemplateEntry> CandidateSignals,
     string Message);
 
 public record LoadHardwareConfigQuery : IRequest<HardwareConfigInitResult>;

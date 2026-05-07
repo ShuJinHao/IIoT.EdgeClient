@@ -11,6 +11,8 @@ public static class IoMappingOptionCatalog
     public const string CategoryInteraction = "信号交互";
     public const string CategorySingleRead = "单点读数据";
     public const string CategoryContinuousRead = "连续读数据";
+    public const string CategorySingleWrite = "单点写数据";
+    public const string CategoryContinuousWrite = "连续写数据";
 
     public const string DirectionRead = "Read";
     public const string DirectionWrite = "Write";
@@ -32,7 +34,17 @@ public static class IoMappingOptionCatalog
     [
         CategoryInteraction,
         CategorySingleRead,
-        CategoryContinuousRead
+        CategoryContinuousRead,
+        CategorySingleWrite,
+        CategoryContinuousWrite
+    ];
+
+    public static IReadOnlyList<string> DataPointCategories { get; } =
+    [
+        CategorySingleRead,
+        CategoryContinuousRead,
+        CategorySingleWrite,
+        CategoryContinuousWrite
     ];
 
     public static IReadOnlyList<string> Directions { get; } =
@@ -53,6 +65,59 @@ public static class IoMappingOptionCatalog
 
     public static bool IsKnownCategory(string? value)
         => Contains(Categories, value);
+
+    public static bool IsDataPointCategory(string? value)
+        => Contains(DataPointCategories, value);
+
+    public static bool IsInteractionCategory(string? value)
+        => string.Equals(NormalizeCategory(value, addressCount: 1), CategoryInteraction, StringComparison.OrdinalIgnoreCase);
+
+    public static bool IsReadDataCategory(string? value)
+        => string.Equals(NormalizeCategory(value, addressCount: 1), CategorySingleRead, StringComparison.OrdinalIgnoreCase)
+           || string.Equals(NormalizeCategory(value, addressCount: 2), CategoryContinuousRead, StringComparison.OrdinalIgnoreCase);
+
+    public static bool IsWriteDataCategory(string? value)
+        => string.Equals(NormalizeCategory(value, addressCount: 1), CategorySingleWrite, StringComparison.OrdinalIgnoreCase)
+           || string.Equals(NormalizeCategory(value, addressCount: 2), CategoryContinuousWrite, StringComparison.OrdinalIgnoreCase);
+
+    public static bool IsFixedAddressCountCategory(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        var normalized = NormalizeCategory(value, addressCount: 1);
+        return string.Equals(normalized, CategoryInteraction, StringComparison.OrdinalIgnoreCase)
+               || string.Equals(normalized, CategorySingleRead, StringComparison.OrdinalIgnoreCase)
+               || string.Equals(normalized, CategorySingleWrite, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool CanEditAddressCount(string? value)
+        => !IsFixedAddressCountCategory(value);
+
+    public static int NormalizeAddressCount(string? category, int addressCount)
+        => IsFixedAddressCountCategory(category)
+            ? 1
+            : Math.Max(1, addressCount);
+
+    public static string? GetDirectionForCategory(string? category)
+    {
+        var normalized = NormalizeCategory(category, addressCount: 1);
+        if (string.Equals(normalized, CategorySingleRead, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(normalized, CategoryContinuousRead, StringComparison.OrdinalIgnoreCase))
+        {
+            return DirectionRead;
+        }
+
+        if (string.Equals(normalized, CategorySingleWrite, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(normalized, CategoryContinuousWrite, StringComparison.OrdinalIgnoreCase))
+        {
+            return DirectionWrite;
+        }
+
+        return null;
+    }
 
     public static bool IsKnownDirection(string? value)
         => Contains(Directions, value);
@@ -78,7 +143,9 @@ public static class IoMappingOptionCatalog
     {
         if (!string.IsNullOrWhiteSpace(category))
         {
-            return category.Trim();
+            var trimmed = category.Trim();
+            return Categories.FirstOrDefault(x => string.Equals(x, trimmed, StringComparison.OrdinalIgnoreCase))
+                   ?? trimmed;
         }
 
         return addressCount > 1 ? CategoryContinuousRead : CategorySingleRead;

@@ -19,6 +19,6 @@ JSON 文件保持标准 JSON 格式，不能直接写注释；字段含义以本
 
 ## 开发样本
 
-匀浆开发样本 PLC 由 `Samples/HomogenizationDevelopmentSampleContributor.cs` 内置默认设备生成，不再额外维护设备 JSON。IO 点位唯一真实来源是硬件配置里按 `NetworkDeviceId` 保存的 `IoMappingEntity`，开发播种只会用 `HomogenizationPlcSignalProfile.Signals` 作为默认模板补齐当前 PLC 缺失的映射。
+匀浆开发样本 PLC 由 `Samples/HomogenizationDevelopmentSampleContributor.cs` 内置默认设备生成，不再额外维护设备 JSON。IO 点位唯一真实来源是硬件配置里按 `NetworkDeviceId` 保存的 `IoMappingEntity`，开发播种只会用 `HomogenizationPlcSignalProfile.Signals` 作为插件标准点位来源，导入当前 PLC 缺失的映射。
 
 点位 label、默认地址、长度、方向、分类、分组和显示角色全部维护在 `Config/Hardware/HomogenizationPlcSignalProfile.cs`。如果后续接真实设备，应在硬件配置页维护每台 PLC 的实际地址。插件模板只负责初始化，不允许再新增 JSON 点位源，也不允许 IO 交互绕过数据库直接读取模板。

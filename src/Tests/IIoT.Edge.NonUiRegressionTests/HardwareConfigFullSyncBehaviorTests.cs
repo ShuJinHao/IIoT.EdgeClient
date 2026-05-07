@@ -163,7 +163,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
                         "PLC-A-UPDATED",
                         DeviceType.PLC,
                         "S7",
-                        "Stacking",
+                        "TestProcess",
                         "192.168.0.11",
                         102,
                         null,
@@ -371,6 +371,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
                         AddressCount = 1,
                         DataType = "Int16",
                         Direction = "Read",
+                        Category = "单点读数据",
                         SortOrder = 1,
                         Remark = "same"
                     }
@@ -472,7 +473,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
     {
         var entity = NetworkDeviceEntity.Create(name, DeviceType.PLC, ipAddress, port1);
         entity.WithId(id);
-        entity.AssignModule("Stacking", "S7");
+        entity.AssignModule("TestProcess", "S7");
         entity.UpdateEndpoint(ipAddress, port1, null, 3000);
         entity.Enable();
         return entity;
@@ -489,7 +490,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
             DeviceName = name,
             DeviceType = DeviceType.PLC,
             DeviceModel = "S7",
-            ModuleId = "Stacking",
+            ModuleId = "TestProcess",
             IpAddress = ipAddress,
             Port1 = port1,
             ConnectTimeout = 3000,

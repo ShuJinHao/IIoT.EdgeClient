@@ -1,13 +1,16 @@
 using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Factory;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Infrastructure.DeviceComm.Signals;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.SharedKernel.Repository;
+using IIoT.Edge.Runtime.Plc;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Plc;
 
@@ -19,6 +22,8 @@ public sealed class PlcDeviceRuntimeBuilder
     private readonly IProductionContextStore _contextStore;
     private readonly ILogService _logger;
     private readonly PlcConnectionStatusStore _statusStore;
+    private readonly IPlcSignalBlockPlanner _signalBlockPlanner;
+    private readonly IReadOnlyDictionary<string, IModuleHardwareProfileProvider> _hardwareProfiles;
 
     public PlcDeviceRuntimeBuilder(
         IRepository<IoMappingEntity> ioMappings,
@@ -26,7 +31,9 @@ public sealed class PlcDeviceRuntimeBuilder
         IPlcServiceFactory plcServiceFactory,
         IProductionContextStore contextStore,
         ILogService logger,
-        PlcConnectionStatusStore statusStore)
+        PlcConnectionStatusStore statusStore,
+        IPlcSignalBlockPlanner signalBlockPlanner,
+        IEnumerable<IModuleHardwareProfileProvider> hardwareProfiles)
     {
         _ioMappings = ioMappings;
         _dataStore = dataStore;
@@ -34,6 +41,8 @@ public sealed class PlcDeviceRuntimeBuilder
         _contextStore = contextStore;
         _logger = logger;
         _statusStore = statusStore;
+        _signalBlockPlanner = signalBlockPlanner;
+        _hardwareProfiles = hardwareProfiles.ToDictionary(x => x.ModuleId, StringComparer.OrdinalIgnoreCase);
     }
 
     public async Task<PlcDeviceRuntimeHandle> BuildAsync(
@@ -45,8 +54,9 @@ public sealed class PlcDeviceRuntimeBuilder
         var mappingArray = mappings.OrderBy(x => x.SortOrder).ToArray();
         var readCount = mappingArray.Where(x => x.Direction == "Read").Sum(x => x.AddressCount);
         var writeCount = mappingArray.Where(x => x.Direction == "Write").Sum(x => x.AddressCount);
+        var signalBindings = BuildSignalBindings(mappingArray);
 
-        _dataStore.Register(device.Id, readCount, writeCount);
+        _dataStore.Register(device.Id, readCount, writeCount, signalBindings);
         var buffer = _dataStore.GetBuffer(device.Id);
         var context = _contextStore.GetOrCreate(device.DeviceName, device.ModuleId);
         context.NetworkDeviceId = device.Id;
@@ -60,6 +70,7 @@ public sealed class PlcDeviceRuntimeBuilder
         _statusStore.EnsureTracked(device.Id, device.DeviceName);
         var plcService = _plcServiceFactory.Create(plcType, device.DeviceName);
         var deviceCts = new CancellationTokenSource();
+        var runtimePolicy = ResolveRuntimePolicy(device.ModuleId);
 
         var ioScanTask = new PlcIoScanTask(
             plcService,
@@ -67,7 +78,9 @@ public sealed class PlcDeviceRuntimeBuilder
             device,
             mappingArray,
             _logger,
-            _statusStore);
+            _signalBlockPlanner,
+            _statusStore,
+            runtimePolicy);
         await ioScanTask.ConnectAsync().ConfigureAwait(false);
 
         var tasks = new List<IPlcTask> { ioScanTask };
@@ -84,5 +97,41 @@ public sealed class PlcDeviceRuntimeBuilder
             CancellationTokenSource = deviceCts,
             Tasks = tasks
         };
+    }
+
+    private PlcIoRuntimePolicy ResolveRuntimePolicy(string? moduleId)
+        => !string.IsNullOrWhiteSpace(moduleId)
+           && _hardwareProfiles.TryGetValue(moduleId, out var provider)
+            ? provider.GetIoRuntimePolicy()
+            : PlcIoRuntimePolicy.Default;
+
+    private static IReadOnlyCollection<PlcBufferSignalBinding> BuildSignalBindings(
+        IReadOnlyCollection<IoMappingEntity> mappings)
+    {
+        var bindings = new List<PlcBufferSignalBinding>(mappings.Count);
+        var readOffset = 0;
+        var writeOffset = 0;
+
+        foreach (var mapping in mappings.Where(static x => x.Direction == "Read").OrderBy(static x => x.SortOrder))
+        {
+            bindings.Add(new PlcBufferSignalBinding(
+                mapping.SignalKey,
+                mapping.Direction,
+                readOffset,
+                Math.Max(1, mapping.AddressCount)));
+            readOffset += Math.Max(1, mapping.AddressCount);
+        }
+
+        foreach (var mapping in mappings.Where(static x => x.Direction == "Write").OrderBy(static x => x.SortOrder))
+        {
+            bindings.Add(new PlcBufferSignalBinding(
+                mapping.SignalKey,
+                mapping.Direction,
+                writeOffset,
+                Math.Max(1, mapping.AddressCount)));
+            writeOffset += Math.Max(1, mapping.AddressCount);
+        }
+
+        return bindings;
     }
 }

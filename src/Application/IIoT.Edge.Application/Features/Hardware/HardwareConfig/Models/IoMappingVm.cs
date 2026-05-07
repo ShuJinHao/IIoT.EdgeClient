@@ -42,7 +42,13 @@ public class IoMappingVm : ObservableModelBase
         get => _addressCount;
         set
         {
-            _addressCount = value;
+            var normalized = IoMappingOptionCatalog.NormalizeAddressCount(Category, value);
+            if (_addressCount == normalized)
+            {
+                return;
+            }
+
+            _addressCount = normalized;
             OnPropertyChanged();
             OnPropertyChanged(nameof(GroupTitle));
         }
@@ -59,18 +65,47 @@ public class IoMappingVm : ObservableModelBase
     public string Direction
     {
         get => _direction;
-        set { _direction = value; OnPropertyChanged(); }
+        set
+        {
+            if (_direction == value)
+            {
+                return;
+            }
+
+            _direction = value;
+            OnPropertyChanged();
+        }
     }
 
-    private string _category = "单点读数据";
+    private string _category = string.Empty;
     public string Category
     {
         get => _category;
         set
         {
-            _category = value;
+            var normalized = IoMappingOptionCatalog.NormalizeCategory(value, _addressCount);
+            if (_category == normalized)
+            {
+                return;
+            }
+
+            _category = normalized;
+            var derivedDirection = IoMappingOptionCatalog.GetDirectionForCategory(_category);
+            if (!string.IsNullOrWhiteSpace(derivedDirection))
+            {
+                Direction = derivedDirection;
+            }
+
+            var normalizedAddressCount = IoMappingOptionCatalog.NormalizeAddressCount(_category, _addressCount);
+            if (_addressCount != normalizedAddressCount)
+            {
+                _addressCount = normalizedAddressCount;
+                OnPropertyChanged(nameof(AddressCount));
+            }
+
             OnPropertyChanged();
             OnPropertyChanged(nameof(GroupTitle));
+            OnPropertyChanged(nameof(IsAddressCountEditable));
         }
     }
 
@@ -108,7 +143,7 @@ public class IoMappingVm : ObservableModelBase
     }
 
     /// <summary>
-    /// IO 映射统一分组标题，硬件配置页与 IO 交互页共用同一分类规则。
+    /// IO 映射统一分组标题，硬件配置页和 IO 交互页共用同一分类规则。
     /// </summary>
     public string GroupTitle
     {
@@ -120,4 +155,10 @@ public class IoMappingVm : ObservableModelBase
                 IoMappingDisplay.ResolveBusinessGroup(BusinessGroup, category));
         }
     }
+
+    /// <summary>
+    /// 硬件配置表格中地址数量是否允许现场修改；信号交互和单点读写固定为 1。
+    /// </summary>
+    public bool IsAddressCountEditable
+        => IoMappingOptionCatalog.CanEditAddressCount(Category);
 }

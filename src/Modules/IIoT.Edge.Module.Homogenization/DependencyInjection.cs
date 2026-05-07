@@ -51,7 +51,7 @@ public sealed class DependencyInjection : EdgeProcessModuleBase<HomogenizationCe
     /// </summary>
     protected override void ConfigureModuleServices(IEdgeProcessModuleBuilder builder)
     {
-        builder.RegisterParameters<MesParam, CloudParam, BusinessParam>();
+        builder.RegisterParameters<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>();
 
         var section = builder.Configuration.GetSection($"Modules:{ModuleKey}");
         builder.Services.AddOptions<HomogenizationModuleOptions>()
@@ -75,7 +75,11 @@ public sealed class DependencyInjection : EdgeProcessModuleBase<HomogenizationCe
         builder.Services.AddSingleton<IProcessMesUploader>(sp =>
             sp.GetRequiredService<HomogenizationMesChannel>());
         builder.Services.AddSingleton<IProductionContextFactory, HomogenizationContextFactory>();
-        builder.RegisterPlcSignalProfile<HomogenizationSignal, HomogenizationPlcSignalProfile>();
+        builder.RegisterPlcSignalProfile<HomogenizationPlcSignals.Interaction, HomogenizationInteractionSignalProfile>();
+        builder.RegisterPlcSignalProfile<HomogenizationPlcSignals.SingleRead, HomogenizationSingleReadSignalProfile>();
+        builder.RegisterPlcSignalProfile<HomogenizationPlcSignals.ContinuousRead, HomogenizationContinuousReadSignalProfile>();
+        builder.RegisterPlcSignalProfile<HomogenizationPlcSignals.SingleWrite, HomogenizationSingleWriteSignalProfile>();
+        builder.RegisterPlcSignalProfile<HomogenizationPlcSignals.ContinuousWrite, HomogenizationContinuousWriteSignalProfile>();
         builder.RegisterHardwareProfile<HomogenizationHardwareProfileProvider>();
         builder.Services.AddSingleton<HomogenizationCellDataValidator>();
         builder.RegisterDevelopmentSample<HomogenizationDevelopmentSampleContributor>();
@@ -85,4 +89,5 @@ public sealed class DependencyInjection : EdgeProcessModuleBase<HomogenizationCe
     protected override void RegisterModuleViews(IEdgeProcessModuleBuilder builder)
         => builder.RegisterHomogenizationViews();
 }
+
 

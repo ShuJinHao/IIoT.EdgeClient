@@ -4,6 +4,8 @@ namespace IIoT.Edge.Domain.Hardware.Aggregates;
 
 public class IoMappingEntity : BaseEntity<int>, IAggregateRoot
 {
+    private const string DefaultCategory = "单点读数据";
+
     protected IoMappingEntity() { }
 
     public IoMappingEntity(
@@ -13,7 +15,7 @@ public class IoMappingEntity : BaseEntity<int>, IAggregateRoot
         int addressCount,
         string dataType,
         string direction,
-        string category = "单点读数据",
+        string category = DefaultCategory,
         string businessGroup = "",
         string signalName = "")
     {
@@ -28,7 +30,7 @@ public class IoMappingEntity : BaseEntity<int>, IAggregateRoot
     public int AddressCount { get; private set; } = 1;
     public string DataType { get; private set; } = "Int16";
     public string Direction { get; private set; } = "Read";
-    public string Category { get; private set; } = "单点读数据";
+    public string Category { get; private set; } = DefaultCategory;
     public string BusinessGroup { get; private set; } = string.Empty;
     public string SignalName { get; private set; } = string.Empty;
     public int SortOrder { get; private set; }
@@ -43,7 +45,7 @@ public class IoMappingEntity : BaseEntity<int>, IAggregateRoot
         int addressCount,
         string dataType,
         string direction,
-        string category = "单点读数据",
+        string category = DefaultCategory,
         string businessGroup = "",
         string signalName = "")
         => new(networkDeviceId, signalKey, plcAddress, addressCount, dataType, direction, category, businessGroup, signalName);
@@ -81,7 +83,7 @@ public class IoMappingEntity : BaseEntity<int>, IAggregateRoot
         SignalKey = Require(signalKey, "IO 内部信号键不能为空。");
         DataType = Require(dataType, "IO 数据类型不能为空。");
         Direction = Require(direction, "IO 方向不能为空。");
-        Category = string.IsNullOrWhiteSpace(category) ? "单点读数据" : category.Trim();
+        Category = string.IsNullOrWhiteSpace(category) ? DefaultCategory : category.Trim();
         BusinessGroup = NormalizeToEmpty(businessGroup);
         SignalName = NormalizeToEmpty(signalName);
         Remark = Normalize(remark);

@@ -67,7 +67,7 @@ function Load-EdgeRuntimePublishManifest {
     $profileIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 
     foreach ($runtime in $manifest.runtimes) {
-        foreach ($requiredProperty in @('runtimeId', 'profileId', 'machineProfile', 'outputDirectory', 'machineConfig', 'displayName', 'description', 'iconKind', 'accentColor')) {
+        foreach ($requiredProperty in @('runtimeId', 'profileId', 'machineProfile', 'outputDirectory', 'machineConfig')) {
             $value = $runtime.$requiredProperty
             if ([string]::IsNullOrWhiteSpace($value)) {
                 throw "Runtime entry in '$resolvedManifestPath' is missing $requiredProperty."
@@ -153,130 +153,112 @@ function Build-EdgeModuleProjects {
     }
 }
 
-function New-EdgeLauncherProfiles {
+function Get-EdgeLauncherProfileCatalog {
     param(
         [Parameter(Mandatory = $true)]
-        $Manifest
+        [string]$RepoRoot,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ProfileCatalogPath
     )
 
-    return @(
-        foreach ($runtime in $Manifest.runtimes) {
-            [ordered]@{
-                ProfileId = $runtime.profileId
-                DisplayName = $runtime.displayName
-                Description = $runtime.description
-                ImagePath = if ([string]::IsNullOrWhiteSpace($runtime.imagePath)) { $null } else { $runtime.imagePath }
-                IconKind = $runtime.iconKind
-                AccentColor = $runtime.accentColor
-                MachineProfile = $runtime.machineProfile
-                ExecutablePath = "..\$($runtime.outputDirectory)\IIoT.Edge.Shell.exe"
+    $resolvedCatalogPath = Resolve-EdgeAbsolutePath -BasePath $RepoRoot -PathValue $ProfileCatalogPath
+    if (-not (Test-Path $resolvedCatalogPath)) {
+        throw "Launcher profile catalog source was not found: $resolvedCatalogPath"
+    }
+
+    $parsedProfiles = Get-Content -Raw -Encoding UTF8 -Path $resolvedCatalogPath | ConvertFrom-Json
+    if ($null -eq $parsedProfiles) {
+        throw "Launcher profile catalog '$resolvedCatalogPath' could not be parsed."
+    }
+
+    $profiles = @($parsedProfiles)
+    if ($profiles.Count -eq 0) {
+        throw "Launcher profile catalog '$resolvedCatalogPath' is empty."
+    }
+
+    $profileIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($profile in $profiles) {
+        foreach ($requiredProperty in @('ProfileId', 'DisplayName', 'MachineProfile', 'ExecutablePath')) {
+            $value = $profile.$requiredProperty
+            if ([string]::IsNullOrWhiteSpace($value)) {
+                throw "Launcher profile catalog '$resolvedCatalogPath' contains a profile missing $requiredProperty."
             }
         }
-    )
+
+        if (-not $profileIds.Add($profile.ProfileId)) {
+            throw "Launcher profile id '$($profile.ProfileId)' is duplicated in '$resolvedCatalogPath'."
+        }
+    }
+
+    return [PSCustomObject]@{
+        Path = $resolvedCatalogPath
+        Profiles = $profiles
+    }
 }
 
-function Convert-EdgeJsonStringLiteral {
+function Copy-EdgeLauncherProfileCatalog {
     param(
-        [AllowNull()]
-        [string]$Value
+        [Parameter(Mandatory = $true)]
+        [string]$SourcePath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$LauncherRuntimeRoot
     )
 
-    if ($null -eq $Value) {
-        return 'null'
+    if (-not (Test-Path $LauncherRuntimeRoot)) {
+        New-Item -Path $LauncherRuntimeRoot -ItemType Directory -Force | Out-Null
     }
 
-    $builder = New-Object System.Text.StringBuilder
-    [void]$builder.Append('"')
-
-    foreach ($character in $Value.ToCharArray()) {
-        $codePoint = [int][char]$character
-
-        if ($character -eq '"') {
-            [void]$builder.Append('\"')
-            continue
-        }
-
-        if ($character -eq '\') {
-            [void]$builder.Append('\\')
-            continue
-        }
-
-        if ($character -eq "`r") {
-            [void]$builder.Append('\r')
-            continue
-        }
-
-        if ($character -eq "`n") {
-            [void]$builder.Append('\n')
-            continue
-        }
-
-        if ($character -eq "`t") {
-            [void]$builder.Append('\t')
-            continue
-        }
-
-        if ($codePoint -lt 32 -or $codePoint -gt 126) {
-            [void]$builder.AppendFormat('\u{0:x4}', $codePoint)
-            continue
-        }
-
-        [void]$builder.Append($character)
-    }
-
-    [void]$builder.Append('"')
-    return $builder.ToString()
+    $targetPath = Join-Path $LauncherRuntimeRoot 'launcher.profiles.json'
+    Copy-Item -Path $SourcePath -Destination $targetPath -Force
+    return $targetPath
 }
 
-function Write-EdgeLauncherProfiles {
+function Test-EdgeLauncherProfilesMatchManifest {
     param(
         [Parameter(Mandatory = $true)]
         $Manifest,
 
         [Parameter(Mandatory = $true)]
-        [string]$OutputPath
+        [System.Collections.IEnumerable]$Profiles,
+
+        [Parameter(Mandatory = $true)]
+        [string]$LauncherRuntimeRoot,
+
+        [switch]$CheckExecutablePath
     )
 
-    $profiles = New-EdgeLauncherProfiles -Manifest $Manifest
-    $jsonLines = New-Object System.Collections.Generic.List[string]
-    [void]$jsonLines.Add('[')
+    $runtimeByProfileId = @{}
+    foreach ($runtime in $Manifest.runtimes) {
+        $runtimeByProfileId[$runtime.profileId] = $runtime
+    }
 
-    for ($index = 0; $index -lt $profiles.Count; $index++) {
-        $profile = $profiles[$index]
-        [void]$jsonLines.Add('  {')
-
-        $properties = @(
-            @{ Name = 'ProfileId'; Value = $profile.ProfileId },
-            @{ Name = 'DisplayName'; Value = $profile.DisplayName },
-            @{ Name = 'Description'; Value = $profile.Description },
-            @{ Name = 'ImagePath'; Value = $profile.ImagePath },
-            @{ Name = 'IconKind'; Value = $profile.IconKind },
-            @{ Name = 'AccentColor'; Value = $profile.AccentColor },
-            @{ Name = 'MachineProfile'; Value = $profile.MachineProfile },
-            @{ Name = 'ExecutablePath'; Value = $profile.ExecutablePath }
-        )
-
-        for ($propertyIndex = 0; $propertyIndex -lt $properties.Count; $propertyIndex++) {
-            $property = $properties[$propertyIndex]
-            $suffix = if ($propertyIndex -lt ($properties.Count - 1)) { ',' } else { '' }
-            [void]$jsonLines.Add(("    ""{0}"": {1}{2}" -f $property.Name, (Convert-EdgeJsonStringLiteral -Value $property.Value), $suffix))
+    $profileIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($profile in $Profiles) {
+        [void]$profileIds.Add($profile.ProfileId)
+        if (-not $runtimeByProfileId.ContainsKey($profile.ProfileId)) {
+            throw "Launcher profile '$($profile.ProfileId)' does not match any runtime profileId in edge-runtime.publish.json."
         }
 
-        $objectSuffix = if ($index -lt ($profiles.Count - 1)) { '  },' } else { '  }' }
-        [void]$jsonLines.Add($objectSuffix)
+        $runtime = $runtimeByProfileId[$profile.ProfileId]
+        if ($profile.MachineProfile -ne $runtime.machineProfile) {
+            throw "Launcher profile '$($profile.ProfileId)' machineProfile '$($profile.MachineProfile)' does not match runtime machineProfile '$($runtime.machineProfile)'."
+        }
+
+        if ($CheckExecutablePath) {
+            $resolvedExecutablePath = Resolve-EdgeAbsolutePath -BasePath $LauncherRuntimeRoot -PathValue $profile.ExecutablePath
+            if (-not (Test-Path $resolvedExecutablePath)) {
+                throw "Launcher profile '$($profile.ProfileId)' points to a missing executable: $resolvedExecutablePath"
+            }
+        }
     }
 
-    [void]$jsonLines.Add(']')
-    $json = [string]::Join([Environment]::NewLine, $jsonLines)
-    $parentDirectory = Split-Path -Parent $OutputPath
-    if (-not (Test-Path $parentDirectory)) {
-        New-Item -Path $parentDirectory -ItemType Directory -Force | Out-Null
+    foreach ($runtime in $Manifest.runtimes) {
+        if (-not $profileIds.Contains($runtime.profileId)) {
+            throw "Runtime '$($runtime.runtimeId)' profileId '$($runtime.profileId)' is missing from launcher.profiles.json."
+        }
     }
-
-    [System.IO.File]::WriteAllText(
-        $OutputPath,
-        $json,
-        [System.Text.UTF8Encoding]::new($false))
 }
 
 function Remove-EdgeLauncherShellArtifacts {

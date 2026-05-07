@@ -8,7 +8,11 @@ public interface IModuleHardwareProfileProvider
 
     ModulePlcDefaults GetDefaultPlcSettings();
 
+    PlcIoRuntimePolicy GetIoRuntimePolicy();
+
     IReadOnlyList<ModuleIoTemplateEntry> GetDefaultIoTemplate();
+
+    IReadOnlyList<ModuleIoTemplateEntry> GetIoMappingCandidates();
 
     ModuleHardwareValidationResult ValidatePlcConfiguration(
         string deviceName,

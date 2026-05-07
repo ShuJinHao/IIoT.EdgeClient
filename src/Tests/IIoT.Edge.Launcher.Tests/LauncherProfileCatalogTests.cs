@@ -17,10 +17,10 @@ public sealed class LauncherProfileCatalogTests
                 """
                 [
                   {
-                    "ProfileId": "StackingLine",
-                    "DisplayName": "叠片",
-                    "Description": "Stacking profile",
-                    "MachineProfile": "StackingLine"
+                    "ProfileId": "HomogenizationLine",
+                    "DisplayName": "匀浆",
+                    "Description": "Homogenization profile",
+                    "MachineProfile": "HomogenizationLine"
                   }
                 ]
                 """);
@@ -30,7 +30,7 @@ public sealed class LauncherProfileCatalogTests
             var profile = Assert.Single(catalog.LoadProfiles());
             Assert.Equal(Path.Combine(tempDirectory, "IIoT.Edge.Shell.exe"), profile.ExecutablePath);
             Assert.Null(profile.ImagePath);
-            Assert.Equal("StackingLine", profile.MachineProfile);
+            Assert.Equal("HomogenizationLine", profile.MachineProfile);
             Assert.Equal("Cog", profile.IconKind);
             Assert.Equal("#0F766E", profile.AccentColor);
         }
@@ -80,7 +80,7 @@ public sealed class LauncherProfileCatalogTests
     }
 
     [Fact]
-    public void LoadProfiles_WhenRequiredFieldIsMissing_ShouldThrow()
+    public void LoadProfiles_WhenRequiredFieldIsMissing_ShouldThrowChineseError()
     {
         var tempDirectory = CreateTempDirectory();
         try
@@ -99,12 +99,91 @@ public sealed class LauncherProfileCatalogTests
             var catalog = new LauncherProfileCatalog(tempDirectory);
 
             var ex = Assert.Throws<InvalidOperationException>(() => catalog.LoadProfiles());
+            Assert.Contains("启动器工序", ex.Message, StringComparison.Ordinal);
             Assert.Contains("MachineProfile", ex.Message, StringComparison.Ordinal);
         }
         finally
         {
             DeleteDirectory(tempDirectory);
         }
+    }
+
+    [Fact]
+    public void LoadProfiles_WhenProfileIdIsMissing_ShouldThrowChineseError()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            WriteText(
+                Path.Combine(tempDirectory, "launcher.profiles.json"),
+                """
+                [
+                  {
+                    "DisplayName": "匀浆",
+                    "MachineProfile": "HomogenizationLine"
+                  }
+                ]
+                """);
+
+            var catalog = new LauncherProfileCatalog(tempDirectory);
+
+            var ex = Assert.Throws<InvalidOperationException>(() => catalog.LoadProfiles());
+            Assert.Contains("缺少 ProfileId", ex.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public void LoadProfiles_WhenCatalogIsMissing_ShouldThrowChineseError()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var catalog = new LauncherProfileCatalog(tempDirectory);
+
+            var ex = Assert.Throws<FileNotFoundException>(() => catalog.LoadProfiles());
+            Assert.Contains("未找到启动器工序清单", ex.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public void SourceProfileCatalog_ShouldLoadHomogenizationProfile()
+    {
+        var repoRoot = FindRepoRoot();
+        var catalogPath = Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.Launcher", "launcher.profiles.json");
+        var catalog = new LauncherProfileCatalog(Path.GetDirectoryName(catalogPath)!, Path.GetFileName(catalogPath));
+
+        var profile = Assert.Single(catalog.LoadProfiles());
+        Assert.Equal("HomogenizationLine", profile.ProfileId);
+        Assert.Equal("匀浆", profile.DisplayName);
+        Assert.Equal("HomogenizationLine", profile.MachineProfile);
+        Assert.EndsWith(
+            Path.Combine("homogenization", "IIoT.Edge.Shell.exe"),
+            profile.ExecutablePath,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string FindRepoRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "IIoT.EdgeClient.slnx")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("未找到 IIoT.EdgeClient 仓库根目录。");
     }
 
     private static string CreateTempDirectory()

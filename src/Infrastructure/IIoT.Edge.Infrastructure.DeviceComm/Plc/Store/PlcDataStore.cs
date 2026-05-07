@@ -8,13 +8,27 @@ public class PlcDataStore : IPlcDataStore
     private readonly ConcurrentDictionary<int, PlcBuffer> _buffers = new();
 
     public void Register(int networkDeviceId, int readSize, int writeSize)
+        => Register(networkDeviceId, readSize, writeSize, []);
+
+    public void Register(
+        int networkDeviceId,
+        int readSize,
+        int writeSize,
+        IReadOnlyCollection<PlcBufferSignalBinding> signalBindings)
     {
         _buffers.AddOrUpdate(
             networkDeviceId,
-            _ => new PlcBuffer(readSize, writeSize),
-            (_, existing) => existing.Matches(readSize, writeSize)
-                ? existing
-                : new PlcBuffer(readSize, writeSize));
+            _ => new PlcBuffer(readSize, writeSize, signalBindings),
+            (_, existing) =>
+            {
+                if (!existing.Matches(readSize, writeSize))
+                {
+                    return new PlcBuffer(readSize, writeSize, signalBindings);
+                }
+
+                existing.SetSignalBindings(signalBindings);
+                return existing;
+            });
     }
 
     public IPlcBufferTransport? GetBuffer(int networkDeviceId)

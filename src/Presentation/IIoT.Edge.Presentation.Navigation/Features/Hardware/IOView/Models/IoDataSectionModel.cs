@@ -6,11 +6,13 @@ namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
 
 public sealed class IoDataSectionModel : BaseNotifyPropertyChanged
 {
-    public string Category { get; init; } = "单点读数据";
+    public string Category { get; init; } = IoMappingOptionCatalog.CategorySingleRead;
 
     public string BusinessGroup { get; init; } = string.Empty;
 
     public int SortOrder { get; set; }
+
+    public bool CanManualRead => IoMappingOptionCatalog.IsReadDataCategory(Category);
 
     public string Title => IoMappingDisplay.BuildSectionTitle(Category, BusinessGroup);
 

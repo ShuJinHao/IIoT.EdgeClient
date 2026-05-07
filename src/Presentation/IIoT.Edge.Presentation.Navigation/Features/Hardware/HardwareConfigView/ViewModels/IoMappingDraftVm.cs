@@ -31,7 +31,19 @@ public sealed class IoMappingDraftVm : BaseNotifyPropertyChanged
     public string Category
     {
         get => _category;
-        set { _category = value; OnPropertyChanged(); }
+        set
+        {
+            var normalized = IoMappingOptionCatalog.NormalizeCategory(value, _addressCount);
+            if (_category == normalized)
+            {
+                return;
+            }
+
+            _category = normalized;
+            ApplyCategoryRules();
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsAddressCountEditable));
+        }
     }
 
     private string _direction = IoMappingOptionCatalog.DirectionRead;
@@ -52,7 +64,17 @@ public sealed class IoMappingDraftVm : BaseNotifyPropertyChanged
     public int AddressCount
     {
         get => _addressCount;
-        set { _addressCount = value; OnPropertyChanged(); }
+        set
+        {
+            var normalized = IoMappingOptionCatalog.NormalizeAddressCount(Category, value);
+            if (_addressCount == normalized)
+            {
+                return;
+            }
+
+            _addressCount = normalized;
+            OnPropertyChanged();
+        }
     }
 
     private string _dataType = IoMappingOptionCatalog.DataTypeInt16;
@@ -81,5 +103,25 @@ public sealed class IoMappingDraftVm : BaseNotifyPropertyChanged
     {
         get => _remark;
         set { _remark = value; OnPropertyChanged(); }
+    }
+
+    public bool IsAddressCountEditable
+        => IoMappingOptionCatalog.CanEditAddressCount(Category);
+
+    private void ApplyCategoryRules()
+    {
+        var direction = IoMappingOptionCatalog.GetDirectionForCategory(_category);
+        if (!string.IsNullOrWhiteSpace(direction) && !string.Equals(_direction, direction, StringComparison.OrdinalIgnoreCase))
+        {
+            _direction = direction;
+            OnPropertyChanged(nameof(Direction));
+        }
+
+        var normalizedCount = IoMappingOptionCatalog.NormalizeAddressCount(_category, _addressCount);
+        if (_addressCount != normalizedCount)
+        {
+            _addressCount = normalizedCount;
+            OnPropertyChanged(nameof(AddressCount));
+        }
     }
 }

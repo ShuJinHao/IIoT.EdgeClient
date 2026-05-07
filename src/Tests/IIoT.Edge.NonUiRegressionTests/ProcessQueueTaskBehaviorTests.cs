@@ -324,8 +324,8 @@ public sealed class ProcessQueueTaskBehaviorTests
 
         var injectionPipeline = new FakeDataPipelineService();
         await injectionPipeline.EnqueueAsync(CreateRecord());
-        var stackingPipeline = new FakeDataPipelineService();
-        await stackingPipeline.EnqueueAsync(CreateStackingRecord());
+        var testProcessPipeline = new FakeDataPipelineService();
+        await testProcessPipeline.EnqueueAsync(CreateTestProcessRecord());
 
         var consumer = new FakeCellDataConsumer(
             name: "Cloud",
@@ -349,9 +349,9 @@ public sealed class ProcessQueueTaskBehaviorTests
 
         await injectionTask.ExecuteOnceAsync();
 
-        var stackingTask = new TestableProcessQueueTask(
+        var testProcessTask = new TestableProcessQueueTask(
             logger,
-            stackingPipeline,
+            testProcessPipeline,
             [consumer],
             cloudRetryStore,
             new FakeFailedRecordStore(),
@@ -362,11 +362,11 @@ public sealed class ProcessQueueTaskBehaviorTests
             new FakeCriticalPersistenceFallbackWriter(),
             capacityGuard);
 
-        await stackingTask.ExecuteOnceAsync();
+        await testProcessTask.ExecuteOnceAsync();
 
         Assert.Contains(cloudDeadLetterStore.Records, x => x.FailureReason == "capacity_blocked:retry:process_type");
         Assert.Equal(2, cloudRetryStore.PendingRecords.Count);
-        Assert.Contains(cloudRetryStore.PendingRecords, x => x.ProcessType == "Stacking");
+        Assert.Contains(cloudRetryStore.PendingRecords, x => x.ProcessType == "OtherProcess");
     }
 
     [Fact]
@@ -528,10 +528,10 @@ public sealed class ProcessQueueTaskBehaviorTests
             }
         };
 
-    private static CellCompletedRecord CreateStackingRecord()
+    private static CellCompletedRecord CreateTestProcessRecord()
         => new()
         {
-            CellData = new StackingLikeCellData
+            CellData = new TestCellData
             {
                 DeviceName = "PLC-B",
                 DeviceCode = "PLC-B",

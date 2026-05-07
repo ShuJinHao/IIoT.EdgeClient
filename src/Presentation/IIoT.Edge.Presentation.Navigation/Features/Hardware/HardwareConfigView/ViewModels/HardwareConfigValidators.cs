@@ -1,5 +1,6 @@
 using IIoT.Edge.Application.Common.Crud;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Models;
+using IIoT.Edge.Application.Features.Hardware.IoMappings;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView;
 
@@ -141,6 +142,14 @@ internal sealed class IoMappingValidator : IEditorValidator<IoMappingVm>
                     [model.SignalName]),
                 nameof(model.AddressCount)));
 
+        if (IoMappingOptionCatalog.IsFixedAddressCountCategory(model.Category) && model.AddressCount != 1)
+            issues.Add(new ValidationIssue(
+                _formatText(
+                    "Navigation_Hardware_Validation_IoFixedAddressCountFormat",
+                    "IO“{0}”属于信号交互或单点读写，地址数量必须固定为 1。",
+                    [model.SignalName]),
+                nameof(model.AddressCount)));
+
         if (string.IsNullOrWhiteSpace(model.Category))
             issues.Add(new ValidationIssue(
                 _formatText(
@@ -148,6 +157,23 @@ internal sealed class IoMappingValidator : IEditorValidator<IoMappingVm>
                     "IO“{0}”的分类不能为空。",
                     [model.SignalName]),
                 nameof(model.Category)));
+        else if (!IoMappingOptionCatalog.IsKnownCategory(model.Category))
+            issues.Add(new ValidationIssue(
+                _formatText(
+                    "Navigation_Hardware_Validation_IoCategoryKnownFormat",
+                    "IO“{0}”的分类不在五类 IO 模型内。",
+                    [model.SignalName]),
+                nameof(model.Category)));
+
+        var derivedDirection = IoMappingOptionCatalog.GetDirectionForCategory(model.Category);
+        if (!string.IsNullOrWhiteSpace(derivedDirection)
+            && !string.Equals(model.Direction, derivedDirection, StringComparison.OrdinalIgnoreCase))
+            issues.Add(new ValidationIssue(
+                _formatText(
+                    "Navigation_Hardware_Validation_IoDirectionByCategoryFormat",
+                    "IO“{0}”的方向必须由分类决定，不能手工改成其他方向。",
+                    [model.SignalName]),
+                nameof(model.Direction)));
 
         if (string.IsNullOrWhiteSpace(model.SignalName))
             issues.Add(new ValidationIssue(

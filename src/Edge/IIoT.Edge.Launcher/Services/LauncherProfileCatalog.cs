@@ -26,7 +26,7 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
     {
         if (!File.Exists(_catalogPath))
         {
-            throw new FileNotFoundException($"Launcher profile catalog was not found: '{_catalogPath}'.", _catalogPath);
+            throw new FileNotFoundException($"未找到启动器工序清单：'{_catalogPath}'。", _catalogPath);
         }
 
         var json = File.ReadAllText(_catalogPath);
@@ -34,7 +34,7 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
             ?? [];
         if (entries.Count == 0)
         {
-            throw new InvalidOperationException("Launcher profile catalog is empty.");
+            throw new InvalidOperationException("启动器工序清单为空。");
         }
 
         return entries.Select(Map).ToArray();
@@ -44,17 +44,17 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
     {
         if (string.IsNullOrWhiteSpace(entry.ProfileId))
         {
-            throw new InvalidOperationException("Launcher profile catalog contains a profile without ProfileId.");
+            throw new InvalidOperationException("启动器工序清单包含缺少 ProfileId 的工序。");
         }
 
         if (string.IsNullOrWhiteSpace(entry.DisplayName))
         {
-            throw new InvalidOperationException($"Launcher profile '{entry.ProfileId}' is missing DisplayName.");
+            throw new InvalidOperationException($"启动器工序 '{entry.ProfileId}' 缺少 DisplayName。");
         }
 
         if (string.IsNullOrWhiteSpace(entry.MachineProfile))
         {
-            throw new InvalidOperationException($"Launcher profile '{entry.ProfileId}' is missing MachineProfile.");
+            throw new InvalidOperationException($"启动器工序 '{entry.ProfileId}' 缺少 MachineProfile。");
         }
 
         var executablePath = string.IsNullOrWhiteSpace(entry.ExecutablePath)

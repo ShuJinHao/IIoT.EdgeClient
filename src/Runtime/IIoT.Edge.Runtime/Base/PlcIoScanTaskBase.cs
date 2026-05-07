@@ -1,29 +1,26 @@
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Application.Features.Hardware.IoMappings;
+using IIoT.Edge.Application.Modules.Hardware;
+using IIoT.Edge.Runtime.Plc;
 
 namespace IIoT.Edge.Runtime.Base;
 
 /// <summary>
-/// PLC IO 扫描任务基类，统一承载连接恢复、读写合并、缓冲区搬运和中文运行日志。
+/// PLC 信号交互扫描任务基类，只承载实时信号交互的循环读写。
 /// </summary>
 public abstract class PlcIoScanTaskBase : IPlcIoScanTask
 {
-    private const int TaskLoopInterval = 10;
     private const int DisconnectLogIntervalSeconds = 30;
 
     private readonly IPlcService _plcService;
     private readonly IPlcDataStore _dataStore;
     private readonly ILogService _logger;
     private readonly PlcIoScanDevice _device;
-    private readonly PlcIoScanMapping[] _readMappings;
-    private readonly PlcIoScanMapping[] _writeMappings;
-    private readonly bool _canMergeRead;
-    private readonly string? _mergedReadAddress;
-    private readonly ushort _mergedReadCount;
-    private readonly bool _canMergeWrite;
-    private readonly string? _mergedWriteAddress;
-    private readonly ushort _mergedWriteCount;
+    private readonly int _loopIntervalMs;
+    private readonly IReadOnlyList<PlcSignalBlock> _readBlocks;
+    private readonly IReadOnlyList<PlcSignalBlock> _writeBlocks;
     private int _retryCount;
     private DateTime _lastDisconnectLogTime = DateTime.MinValue;
 
@@ -32,19 +29,37 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
         IPlcDataStore dataStore,
         PlcIoScanDevice device,
         IEnumerable<PlcIoScanMapping> mappings,
-        ILogService logger)
+        ILogService logger,
+        IPlcSignalBlockPlanner signalBlockPlanner,
+        PlcIoRuntimePolicy? runtimePolicy = null)
     {
         _plcService = plcService ?? throw new ArgumentNullException(nameof(plcService));
         _dataStore = dataStore ?? throw new ArgumentNullException(nameof(dataStore));
         _device = device ?? throw new ArgumentNullException(nameof(device));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(signalBlockPlanner);
 
-        var mappingArray = mappings?.OrderBy(static x => x.SortOrder).ToArray()
-            ?? throw new ArgumentNullException(nameof(mappings));
-        _readMappings = mappingArray.Where(static x => x.IsRead).ToArray();
-        _writeMappings = mappingArray.Where(static x => x.IsWrite).ToArray();
-        (_canMergeRead, _mergedReadAddress, _mergedReadCount) = TryMergeMappings(_readMappings);
-        (_canMergeWrite, _mergedWriteAddress, _mergedWriteCount) = TryMergeMappings(_writeMappings);
+        var policy = runtimePolicy ?? PlcIoRuntimePolicy.Default;
+        _loopIntervalMs = policy.NormalizeLoopInterval();
+
+        var interactionMappings = (mappings ?? throw new ArgumentNullException(nameof(mappings)))
+            .Where(static mapping => string.Equals(
+                mapping.Category,
+                IoMappingOptionCatalog.CategoryInteraction,
+                StringComparison.OrdinalIgnoreCase))
+            .OrderBy(static mapping => mapping.SortOrder)
+            .ToArray();
+
+        _readBlocks = signalBlockPlanner.Plan(
+            interactionMappings.Where(static x => x.IsRead).ToArray(),
+            policy.NormalizeMaxBlockWordCount(),
+            policy.WriteGapPolicy,
+            isWrite: false);
+        _writeBlocks = signalBlockPlanner.Plan(
+            interactionMappings.Where(static x => x.IsWrite).ToArray(),
+            policy.NormalizeMaxBlockWordCount(),
+            policy.WriteGapPolicy,
+            isWrite: true);
     }
 
     public string TaskName => $"PlcIoScan_{_device.DeviceName}";
@@ -141,7 +156,7 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
             try
             {
                 await ExecuteOneCycleAsync(ct).ConfigureAwait(false);
-                await Task.Delay(TaskLoopInterval, ct).ConfigureAwait(false);
+                await Task.Delay(_loopIntervalMs, ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -152,7 +167,7 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
                 _retryCount++;
                 if (ShouldLogDisconnect())
                 {
-                    _logger.Error($"[{_device.DeviceName}] PLC IO 扫描循环异常：{ex.Message}");
+                    _logger.Error($"[{_device.DeviceName}] PLC 信号交互循环异常：{ex.Message}");
                 }
 
                 await Task.Delay(GetBackoffDelay(), ct).ConfigureAwait(false);
@@ -164,29 +179,20 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
     {
         try
         {
-            ushort[] allReadData;
-            if (_canMergeRead && _mergedReadAddress is not null)
+            foreach (var block in _readBlocks)
             {
                 var data = await _plcService
-                    .ReadDataAsync<ushort>(_mergedReadAddress, _mergedReadCount)
+                    .ReadDataAsync<ushort>(block.StartAddress, (ushort)block.WordCount)
                     .ConfigureAwait(false);
-                allReadData = data.ToArray();
-            }
-            else
-            {
-                var list = new List<ushort>();
-                foreach (var mapping in _readMappings)
+                var words = data.ToArray();
+
+                foreach (var item in block.Items)
                 {
-                    var data = await _plcService
-                        .ReadDataAsync<ushort>(mapping.PlcAddress, (ushort)mapping.AddressCount)
-                        .ConfigureAwait(false);
-                    list.AddRange(data);
+                    buffer.UpdateReadSignal(
+                        item.Mapping.SignalKey,
+                        SliceWords(words, item.Offset, item.Mapping.AddressCount));
                 }
-
-                allReadData = list.ToArray();
             }
-
-            buffer.UpdateReadBuffer(allReadData);
         }
         catch (Exception ex)
         {
@@ -205,21 +211,27 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
     {
         try
         {
-            var writeData = buffer.GetWriteBuffer();
-            if (_canMergeWrite && _mergedWriteAddress is not null)
+            foreach (var block in _writeBlocks)
             {
-                await _plcService.WriteDataAsync(_mergedWriteAddress, writeData.ToList()).ConfigureAwait(false);
-                return;
-            }
+                var blockWords = new ushort[block.WordCount];
+                foreach (var item in block.Items)
+                {
+                    if (!buffer.TryGetWriteWords(item.Mapping.SignalKey, out var signalWords))
+                    {
+                        continue;
+                    }
 
-            var writeOffset = 0;
-            foreach (var mapping in _writeMappings)
-            {
-                var count = mapping.AddressCount;
-                var segment = new ushort[count];
-                Array.Copy(writeData, writeOffset, segment, 0, count);
-                await _plcService.WriteDataAsync(mapping.PlcAddress, segment.ToList()).ConfigureAwait(false);
-                writeOffset += count;
+                    for (var index = 0; index < Math.Min(signalWords.Length, item.Mapping.AddressCount); index++)
+                    {
+                        var blockIndex = item.Offset + index;
+                        if (blockIndex >= 0 && blockIndex < blockWords.Length)
+                        {
+                            blockWords[blockIndex] = signalWords[index];
+                        }
+                    }
+                }
+
+                await _plcService.WriteDataAsync(block.StartAddress, blockWords.ToList()).ConfigureAwait(false);
             }
         }
         catch (Exception ex)
@@ -267,53 +279,16 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
         return true;
     }
 
-    private static (bool canMerge, string? startAddress, ushort totalCount) TryMergeMappings(IReadOnlyList<PlcIoScanMapping> mappings)
+    private static ushort[] SliceWords(IReadOnlyList<ushort> words, int offset, int count)
     {
-        if (mappings.Count == 0)
+        var result = new ushort[Math.Max(1, count)];
+        for (var index = 0; index < result.Length; index++)
         {
-            return (false, null, 0);
+            var sourceIndex = offset + index;
+            result[index] = sourceIndex >= 0 && sourceIndex < words.Count ? words[sourceIndex] : (ushort)0;
         }
 
-        if (mappings.Count == 1)
-        {
-            return (true, mappings[0].PlcAddress, (ushort)mappings[0].AddressCount);
-        }
-
-        var firstNum = ParseAddressNumber(mappings[0].PlcAddress);
-        if (firstNum < 0)
-        {
-            return (false, null, 0);
-        }
-
-        var expectedNext = firstNum + mappings[0].AddressCount;
-        for (var index = 1; index < mappings.Count; index++)
-        {
-            var num = ParseAddressNumber(mappings[index].PlcAddress);
-            if (num != expectedNext)
-            {
-                return (false, null, 0);
-            }
-
-            expectedNext = num + mappings[index].AddressCount;
-        }
-
-        return (true, mappings[0].PlcAddress, (ushort)mappings.Sum(static x => x.AddressCount));
-    }
-
-    private static int ParseAddressNumber(string address)
-    {
-        var index = address.Length - 1;
-        while (index >= 0 && char.IsDigit(address[index]))
-        {
-            index--;
-        }
-
-        if (index == address.Length - 1)
-        {
-            return -1;
-        }
-
-        return int.TryParse(address[(index + 1)..], out var num) ? num : -1;
+        return result;
     }
 }
 
@@ -325,7 +300,14 @@ public sealed record PlcIoScanDevice(int DeviceId, string DeviceName, string IpA
 /// <summary>
 /// PLC IO 扫描任务使用的数据库映射快照。
 /// </summary>
-public sealed record PlcIoScanMapping(string PlcAddress, int AddressCount, string Direction, int SortOrder)
+public sealed record PlcIoScanMapping(
+    string SignalKey,
+    string PlcAddress,
+    int AddressCount,
+    string DataType,
+    string Direction,
+    string Category,
+    int SortOrder)
 {
     public bool IsRead => string.Equals(Direction, "Read", StringComparison.OrdinalIgnoreCase);
 

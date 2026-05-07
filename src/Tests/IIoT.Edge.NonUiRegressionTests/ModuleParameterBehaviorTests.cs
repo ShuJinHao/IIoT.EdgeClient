@@ -1,9 +1,9 @@
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Features.Config.ModuleParameters;
 using IIoT.Edge.Infrastructure.Persistence.EfCore.Caching.Memory;
-using HomogenizationBusinessParam = IIoT.Edge.Module.Homogenization.Config.Parameters.BusinessParam;
-using HomogenizationCloudParam = IIoT.Edge.Module.Homogenization.Config.Parameters.CloudParam;
-using HomogenizationMesParam = IIoT.Edge.Module.Homogenization.Config.Parameters.MesParam;
+using HomogenizationBusinessParam = IIoT.Edge.Module.Homogenization.Config.Parameters.HomogenizationParams.Business;
+using HomogenizationCloudParam = IIoT.Edge.Module.Homogenization.Config.Parameters.HomogenizationParams.Cloud;
+using HomogenizationMesParam = IIoT.Edge.Module.Homogenization.Config.Parameters.HomogenizationParams.Mes;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 

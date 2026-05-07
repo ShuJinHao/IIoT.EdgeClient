@@ -17,13 +17,13 @@ public sealed class ModuleDiscoveryContractTests
     [Fact]
     public void DiscoverDirectoryPlugins_ShouldFindProductModules()
     {
-        var pluginRoot = ContractTestPathHelper.CreatePluginRuntimeRoot("Homogenization", "Stacking");
+        var pluginRoot = ContractTestPathHelper.CreatePluginRuntimeRoot("Homogenization");
         try
         {
             var discovery = DiscoverPlugins(pluginRoot);
 
             Assert.Equal(
-                ["Homogenization", "Stacking"],
+                ["Homogenization"],
                 discovery.Modules.Select(x => x.ModuleId).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray());
         }
         finally
@@ -35,16 +35,15 @@ public sealed class ModuleDiscoveryContractTests
     [Fact]
     public void CreateAllModules_ShouldInstantiateAllDiscoveredPluginsWithoutDuplicateIdentity()
     {
-        var pluginRoot = ContractTestPathHelper.CreatePluginRuntimeRoot("Homogenization", "Stacking");
+        var pluginRoot = ContractTestPathHelper.CreatePluginRuntimeRoot("Homogenization");
         try
         {
             var modules = DirectoryModuleCatalog.CreateAllModules(DiscoverPlugins(pluginRoot).Modules);
 
-            Assert.Equal(2, modules.Count);
-            Assert.Equal(2, modules.Select(x => x.ModuleId).Distinct(StringComparer.OrdinalIgnoreCase).Count());
-            Assert.Equal(2, modules.Select(x => x.ProcessType).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+            Assert.Single(modules);
+            Assert.Single(modules.Select(x => x.ModuleId).Distinct(StringComparer.OrdinalIgnoreCase));
+            Assert.Single(modules.Select(x => x.ProcessType).Distinct(StringComparer.OrdinalIgnoreCase));
             Assert.Contains(modules, x => string.Equals(x.ModuleId, "Homogenization", StringComparison.OrdinalIgnoreCase));
-            Assert.Contains(modules, x => string.Equals(x.ModuleId, "Stacking", StringComparison.OrdinalIgnoreCase));
         }
         finally
         {
@@ -80,7 +79,7 @@ public sealed class ModuleDiscoveryContractTests
     [Fact]
     public void RegisterAllDiscoveredModules_ShouldNotProduceViewOrRegistrationConflicts()
     {
-        var pluginRoot = ContractTestPathHelper.CreatePluginRuntimeRoot("Homogenization", "Stacking");
+        var pluginRoot = ContractTestPathHelper.CreatePluginRuntimeRoot("Homogenization");
         try
         {
             var modules = DirectoryModuleCatalog.CreateAllModules(DiscoverPlugins(pluginRoot).Modules);
@@ -105,11 +104,10 @@ public sealed class ModuleDiscoveryContractTests
                 moduleParamRegistry));
             }
 
-            Assert.Equal(2, cellDataRegistry.GetRegistrations().Count);
-            Assert.Equal(2, runtimeRegistry.GetRegistrations().Count);
-            Assert.Equal(2, integrationRegistry.GetCloudUploaders().Count);
-            Assert.Equal(2, moduleParamRegistry.GetRegistrations().Count);
-            Assert.NotNull(viewRegistry.GetViewRegistration("Stacking.DataView"));
+            Assert.Single(cellDataRegistry.GetRegistrations());
+            Assert.Single(runtimeRegistry.GetRegistrations());
+            Assert.Single(integrationRegistry.GetCloudUploaders());
+            Assert.Single(moduleParamRegistry.GetRegistrations());
             Assert.NotNull(viewRegistry.GetViewRegistration("Homogenization.DataView"));
         }
         finally
@@ -143,21 +141,25 @@ public sealed class ModuleDiscoveryContractTests
     {
         var repoRoot = ContractTestPathHelper.FindRepoRoot();
 
+        Assert.False(Directory.Exists(Path.Combine(
+            repoRoot,
+            "src",
+            "Modules",
+            "IIoT.Edge.Module.Stacking")));
         Assert.True(File.Exists(Path.Combine(
             repoRoot,
             "src",
             "Modules",
-            "IIoT.Edge.Module.Stacking",
+            "IIoT.Edge.Module.Homogenization",
             "Runtime",
-            "Tasks",
-            "StackingSignalCaptureTask.cs")));
+            "HomogenizationStationRuntimeFactory.cs")));
         Assert.False(File.Exists(Path.Combine(
             repoRoot,
             "src",
             "Modules",
-            "IIoT.Edge.Module.Stacking",
+            "IIoT.Edge.Module.Homogenization",
             "Runtime",
-            "StackingSignalCaptureTask.cs")));
+            "HomogenizationDevelopmentSampleContributor.cs")));
         Assert.True(File.Exists(Path.Combine(
             repoRoot,
             "src",

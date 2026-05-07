@@ -1,9 +1,7 @@
 using IIoT.Edge.Application.Abstractions.Logging;
-using IIoT.Edge.Application.Abstractions.Plc.Signals;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
-using IIoT.Edge.Module.Homogenization.Config.Hardware;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using IIoT.Edge.Runtime.Base;
 using Microsoft.Extensions.Options;
@@ -13,22 +11,26 @@ namespace IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 /// <summary>
 /// 心跳镜像任务：周期读取 PLC 输入心跳并写回输出心跳。
 /// </summary>
-internal sealed class HomogenizationHeartbeatTask : HeartbeatMirrorPlcTaskBase<HomogenizationSignal>
+internal sealed class HomogenizationHeartbeatTask : PlcTaskBase
 {
+    private readonly HomogenizationPlcHandshakeAccessor _interaction;
     private readonly HomogenizationContext _context;
     private readonly IProductionTimeProvider _productionTime;
     private readonly int _taskLoopInterval;
 
+    /// <summary>
+    /// 创建匀浆心跳镜像任务，心跳点位属于信号交互枚举但不使用触发/应答业务码。
+    /// </summary>
     public HomogenizationHeartbeatTask(
         IPlcBuffer buffer,
-        ILogicalSignalAccessor<HomogenizationSignal> signals,
+        HomogenizationPlcHandshakeAccessor interaction,
         HomogenizationContext context,
         ILogService logger,
         IProductionTimeProvider productionTime,
-        IOptions<HomogenizationModuleOptions> moduleOptions,
-        IOptions<HomogenizationCodeOptions> codeOptions)
-        : base(buffer, signals, context, logger)
+        IOptions<HomogenizationModuleOptions> moduleOptions)
+        : base(buffer, context, logger)
     {
+        _interaction = interaction;
         _context = context;
         _productionTime = productionTime;
         var runtime = moduleOptions.Value.Runtime;
@@ -45,21 +47,12 @@ internal sealed class HomogenizationHeartbeatTask : HeartbeatMirrorPlcTaskBase<H
     /// </summary>
     protected override int TaskLoopInterval => _taskLoopInterval;
 
-    /// <summary>
-    /// PLC 输入心跳信号标签。
-    /// </summary>
-    protected override HomogenizationSignal InputSignal => HomogenizationSignal.心跳输入;
-
-    /// <summary>
-    /// 上位机写回 PLC 的输出心跳信号标签。
-    /// </summary>
-    protected override HomogenizationSignal OutputSignal => HomogenizationSignal.心跳输出;
-
-    protected override Task OnHeartbeatMirroredAsync(
-        ushort input,
-        ushort output,
-        CancellationToken cancellationToken)
+    protected override Task DoCoreAsync()
     {
+        var (input, output) = _interaction.MirrorHeartbeat();
+        Context.Set($"Runtime.Tasks.{TaskName}.LastHeartbeatAtUtc", DateTime.UtcNow);
+        Context.Set($"Runtime.Tasks.{TaskName}.LastHeartbeatIn", input);
+        Context.Set($"Runtime.Tasks.{TaskName}.LastHeartbeatOut", output);
         _context.LastHeartbeatAt = _productionTime.BusinessNow;
         return Task.CompletedTask;
     }

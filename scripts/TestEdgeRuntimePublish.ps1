@@ -25,7 +25,6 @@ $launcherRequiredFiles = @(
     'IIoT.Edge.Launcher.exe',
     'launcher.profiles.json',
     'launcher.accounts.sample.json',
-    'Assets\Profiles\stacking.png',
     'Assets\Profiles\homogenization.png'
 )
 
@@ -41,6 +40,8 @@ $launcherProfiles = Get-Content -Raw -Encoding UTF8 -Path $launcherProfilesPath 
 if ($launcherProfiles.Count -ne $manifest.runtimes.Count) {
     throw "Generated launcher.profiles.json does not match runtime manifest count."
 }
+
+Test-EdgeLauncherProfilesMatchManifest -Manifest $manifest -Profiles @($launcherProfiles) -LauncherRuntimeRoot $launcherRoot -CheckExecutablePath
 
 foreach ($profile in $launcherProfiles) {
     $resolvedExecutablePath = Resolve-EdgeAbsolutePath -BasePath $launcherRoot -PathValue $profile.ExecutablePath

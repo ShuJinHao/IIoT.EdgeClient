@@ -41,7 +41,7 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
         services.AddSingleton<IMesUploadDiagnosticsStore, ContractMesUploadDiagnosticsStore>();
         services.AddSingleton<HomogenizationMesScenarioChannel, ContractHomogenizationMesChannel>();
         services.AddSingleton<HomogenizationCellDataValidator>();
-        services.AddSingleton<IModuleParamProvider<MesParam, CloudParam, BusinessParam>, ContractHomogenizationModuleParamProvider>();
+        services.AddSingleton<IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>, ContractHomogenizationModuleParamProvider>();
         services.AddSingleton(Options.Create(new HomogenizationModuleOptions()));
         services.AddSingleton(Options.Create(new HomogenizationCodeOptions()));
     }
@@ -188,37 +188,37 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
     }
 
     private sealed class ContractHomogenizationModuleParamProvider
-        : IModuleParamProvider<MesParam, CloudParam, BusinessParam>
+        : IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>
     {
-        public Task<ModuleParamSnapshot<MesParam, CloudParam, BusinessParam>> GetAsync(
+        public Task<ModuleParamSnapshot<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>> GetAsync(
             CancellationToken cancellationToken = default)
-            => Task.FromResult(new ModuleParamSnapshot<MesParam, CloudParam, BusinessParam>(
+            => Task.FromResult(new ModuleParamSnapshot<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>(
                 DependencyInjection.ModuleKey,
-                new ModuleParamGroup<MesParam>(
+                new ModuleParamGroup<HomogenizationParams.Mes>(
                     DependencyInjection.ModuleKey,
                     ModuleParamCategory.Mes,
-                    new Dictionary<MesParam, string>(),
-                    new Dictionary<MesParam, string?>(),
-                    new Dictionary<MesParam, ParamValueKind>(),
+                    new Dictionary<HomogenizationParams.Mes, string>(),
+                    new Dictionary<HomogenizationParams.Mes, string?>(),
+                    new Dictionary<HomogenizationParams.Mes, ParamValueKind>(),
                     warn: null),
-                new ModuleParamGroup<CloudParam>(
+                new ModuleParamGroup<HomogenizationParams.Cloud>(
                     DependencyInjection.ModuleKey,
                     ModuleParamCategory.Cloud,
-                    new Dictionary<CloudParam, string>(),
-                    new Dictionary<CloudParam, string?>(),
-                    new Dictionary<CloudParam, ParamValueKind>(),
+                    new Dictionary<HomogenizationParams.Cloud, string>(),
+                    new Dictionary<HomogenizationParams.Cloud, string?>(),
+                    new Dictionary<HomogenizationParams.Cloud, ParamValueKind>(),
                     warn: null),
-                new ModuleParamGroup<BusinessParam>(
+                new ModuleParamGroup<HomogenizationParams.Business>(
                     DependencyInjection.ModuleKey,
                     ModuleParamCategory.Business,
-                    new Dictionary<BusinessParam, string>(),
-                    new Dictionary<BusinessParam, string?>
+                    new Dictionary<HomogenizationParams.Business, string>(),
+                    new Dictionary<HomogenizationParams.Business, string?>
                     {
-                        [BusinessParam.启用托盘码重码验证] = "false"
+                        [HomogenizationParams.Business.启用托盘码重码验证] = "false"
                     },
-                    new Dictionary<BusinessParam, ParamValueKind>
+                    new Dictionary<HomogenizationParams.Business, ParamValueKind>
                     {
-                        [BusinessParam.启用托盘码重码验证] = ParamValueKind.Bool
+                        [HomogenizationParams.Business.启用托盘码重码验证] = ParamValueKind.Bool
                     },
                     warn: null)));
     }

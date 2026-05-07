@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Features.Hardware.Queries;
@@ -23,17 +23,17 @@ public sealed class IoViewViewModelBehaviorTests
             var devices = new[]
             {
                 CreateDevice(1, "PLC-Homogenization-01", "Homogenization"),
-                CreateDevice(2, "PLC-Stacking-02", "Stacking"),
-                CreateDevice(3, "PLC-Stacking-01", "Stacking"),
-                CreateDevice(4, "Scanner-Stacking", "Stacking", DeviceType.Scanner),
-                CreateDevice(5, "PLC-Stacking-Disabled", "Stacking", isEnabled: false)
+                CreateDevice(2, "PLC-TestProcess-02", "TestProcess"),
+                CreateDevice(3, "PLC-TestProcess-01", "TestProcess"),
+                CreateDevice(4, "Scanner-TestProcess", "TestProcess", DeviceType.Scanner),
+                CreateDevice(5, "PLC-TestProcess-Disabled", "TestProcess", isEnabled: false)
             };
-            var viewModel = CreateViewModel(devices, moduleIdFilter: "Stacking");
+            var viewModel = CreateViewModel(devices, moduleIdFilter: "TestProcess");
 
             await viewModel.LoadDevicesAsync();
 
             Assert.Equal(
-                ["PLC-Stacking-01", "PLC-Stacking-02"],
+                ["PLC-TestProcess-01", "PLC-TestProcess-02"],
                 viewModel.Devices.Select(static x => x.DeviceName).ToArray());
         });
 
@@ -110,12 +110,12 @@ public sealed class IoViewViewModelBehaviorTests
     public Task RefreshCurrentValues_WhenSwitchingDevice_ShouldReadSelectedDeviceBufferOnly()
         => RunOnStaThreadAsync(async () =>
         {
-            var deviceA = CreateDevice(21, "PLC-Stacking-01", "Stacking");
-            var deviceB = CreateDevice(22, "PLC-Stacking-02", "Stacking");
+            var deviceA = CreateDevice(21, "PLC-TestProcess-01", "TestProcess");
+            var deviceB = CreateDevice(22, "PLC-TestProcess-02", "TestProcess");
             var mappings = new Dictionary<int, List<IoMappingEntity>>
             {
-                [deviceA.Id] = [CreateMapping(deviceA.Id, "层数", "D100", 1, "UInt16", "Read", "实时数据", "叠片实时", "", 1)],
-                [deviceB.Id] = [CreateMapping(deviceB.Id, "层数", "D100", 1, "UInt16", "Read", "实时数据", "叠片实时", "", 1)]
+                [deviceA.Id] = [CreateMapping(deviceA.Id, "层数", "D100", 1, "UInt16", "Read", "实时数据", "测试实时", "", 1)],
+                [deviceB.Id] = [CreateMapping(deviceB.Id, "层数", "D100", 1, "UInt16", "Read", "实时数据", "测试实时", "", 1)]
             };
             var dataStore = new PlcDataStore();
             dataStore.Register(deviceA.Id, readSize: 4, writeSize: 0);
@@ -139,7 +139,7 @@ public sealed class IoViewViewModelBehaviorTests
         {
             var deviceA = CreateDevice(25, "PLC-Homogenization-A", "Homogenization");
             var deviceB = CreateDevice(26, "PLC-Homogenization-B", "Homogenization");
-            var signal = HomogenizationSignalTestProfile.Get(HomogenizationSignal.进站触发);
+            var signal = HomogenizationSignalTestProfile.Get(HomogenizationPlcSignals.Interaction.扫码进站);
             var mappings = new Dictionary<int, List<IoMappingEntity>>
             {
                 [deviceA.Id] =
@@ -259,6 +259,40 @@ public sealed class IoViewViewModelBehaviorTests
         });
 
     [Fact]
+    public Task RefreshCurrentValues_WhenWriteDataConfigured_ShouldUseWriteBufferAndDisableManualRead()
+        => RunOnStaThreadAsync(async () =>
+        {
+            var device = CreateDevice(36, "PLC-Homogenization-01", "Homogenization");
+            var mappings = new Dictionary<int, List<IoMappingEntity>>
+            {
+                [device.Id] =
+                [
+                    CreateMapping(device.Id, "单点写入", "D200", 1, "UInt16", "Write", "单点写数据", "写入数据", "设定值", 1),
+                    CreateMapping(device.Id, "连续写入", "D220", 3, "UInt16", "Write", "连续写数据", "写入数据", "连续设定", 2)
+                ]
+            };
+            var dataStore = new PlcDataStore();
+            dataStore.Register(device.Id, readSize: 0, writeSize: 0);
+            dataStore.GetBuffer(device.Id)!.SetWriteValue("单点写入", 0, 42);
+            dataStore.GetBuffer(device.Id)!.SetWriteValue("连续写入", 0, 10);
+            dataStore.GetBuffer(device.Id)!.SetWriteValue("连续写入", 1, 20);
+            dataStore.GetBuffer(device.Id)!.SetWriteValue("连续写入", 2, 30);
+            var viewModel = CreateViewModel([device], mappings, dataStore);
+
+            viewModel.SelectedDevice = device;
+            await viewModel.LoadMappingsAsync();
+
+            var singleWrite = Assert.Single(viewModel.DataSections);
+            Assert.False(singleWrite.CanManualRead);
+            Assert.Equal("42", singleWrite.Signals.Single().DisplayValue);
+
+            var continuousWrite = Assert.Single(viewModel.ArraySections);
+            Assert.False(continuousWrite.CanManualRead);
+            Assert.Equal("10", continuousWrite.Rows[0].Values.Single().Value);
+            Assert.Equal("30", continuousWrite.Rows[2].Values.Single().Value);
+        });
+
+    [Fact]
     public Task WriteInteractionRow_ShouldOnlyWriteCurrentRowOutputIndex()
         => RunOnStaThreadAsync(async () =>
         {
@@ -269,8 +303,8 @@ public sealed class IoViewViewModelBehaviorTests
                 [
                     CreateMapping(device.Id, "进站触发", "D701", 1, "Int16", "Read", "信号交互", "扫码进站", "触发", 1),
                     CreateMapping(device.Id, "进站应答", "D601", 1, "Int16", "Write", "信号交互", "扫码进站", "应答", 2),
-                    CreateMapping(device.Id, "出料触发", "D702", 1, "Int16", "Read", "信号交互", "出料上传", "触发", 3),
-                    CreateMapping(device.Id, "出料应答", "D602", 1, "Int16", "Write", "信号交互", "出料上传", "应答", 4)
+                    CreateMapping(device.Id, "PLC 出料上传", "D702", 1, "Int16", "Read", "信号交互", "出料上传", "触发", 3),
+                    CreateMapping(device.Id, "上位机出料上传", "D602", 1, "Int16", "Write", "信号交互", "出料上传", "应答", 4)
                 ]
             };
             var dataStore = new PlcDataStore();
@@ -488,3 +522,5 @@ public sealed class IoViewViewModelBehaviorTests
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }
+
+

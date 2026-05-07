@@ -24,24 +24,24 @@ public sealed class DiagnosticsViewModelBehaviorTests
                 GeneratedAt: new DateTime(2026, 4, 18, 10, 0, 0),
                 ConfigurationProfile: new ConfigurationProfileSnapshot(
                     "Production",
-                    "StackingLine",
-                    "appsettings.machine.StackingLine.json",
+                    "HomogenizationLine",
+                    "appsettings.machine.HomogenizationLine.json",
                     true,
-                    @"C:\EdgeRuntime\StackingLine"),
-                DiscoveredModules: ["Stacking"],
-                EnabledModules: ["Stacking"],
-                ActivatedModules: ["Stacking"],
+                    @"C:\EdgeRuntime\HomogenizationLine"),
+                DiscoveredModules: ["Homogenization"],
+                EnabledModules: ["Homogenization"],
+                ActivatedModules: ["Homogenization"],
                 PluginStates:
                 [
-                    new PluginLifecycleSnapshot("Stacking", "Stacking", "Stacking", "1.0.0", PluginLifecycleState.Activated, "Plugin is enabled and activated.")
+                    new PluginLifecycleSnapshot("Homogenization", "Homogenization", "Homogenization", "1.0.0", PluginLifecycleState.Activated, "Plugin is enabled and activated.")
                 ],
                 ModuleRegistrations:
                 [
-                    new ModuleRegistrationSnapshot("Stacking", "Stacking", "IIoT.Edge.Module.Stacking", true, true, true, true, true, true)
+                    new ModuleRegistrationSnapshot("Homogenization", "Homogenization", "IIoT.Edge.Module.Homogenization", true, true, true, true, true, true)
                 ],
                 DeviceBindings:
                 [
-                    new DeviceModuleBindingSnapshot("PLC-A", "Stacking", true, true, true)
+                    new DeviceModuleBindingSnapshot("PLC-A", "Homogenization", true, true, true)
                 ],
                 Issues: []));
 
@@ -78,7 +78,7 @@ public sealed class DiagnosticsViewModelBehaviorTests
                         "mes timeout",
                         2,
                         [
-                            new MesChannelDiagnostics("Stacking", TestNow.AddMinutes(-3), TestNow.AddMinutes(-10), "Failed", "mes timeout")
+                            new MesChannelDiagnostics("Homogenization", TestNow.AddMinutes(-3), TestNow.AddMinutes(-10), "Failed", "mes timeout")
                         ],
                         true,
                         CapacityBlockedChannel.Fallback,
@@ -101,7 +101,7 @@ public sealed class DiagnosticsViewModelBehaviorTests
             Assert.Contains("存储故障：是", viewModel.CloudPersistenceSummary, StringComparison.Ordinal);
             Assert.Contains("存储故障：是", viewModel.MesPersistenceSummary, StringComparison.Ordinal);
             Assert.Contains("损坏文件数：2", viewModel.ContextPersistenceSummary, StringComparison.Ordinal);
-            Assert.Contains("机型：StackingLine", viewModel.ConfigurationProfileSummary, StringComparison.Ordinal);
+            Assert.Contains("机型：HomogenizationLine", viewModel.ConfigurationProfileSummary, StringComparison.Ordinal);
             Assert.Single(viewModel.ModuleRegistrations);
             Assert.Single(viewModel.PluginStates);
             Assert.Single(viewModel.DeviceBindings);
@@ -151,13 +151,13 @@ public sealed class DiagnosticsViewModelBehaviorTests
                     GeneratedAt: new DateTime(2026, 4, 18, 10, 0, 0),
                     ConfigurationProfile: new ConfigurationProfileSnapshot(
                         "Production",
-                        "StackingLine",
-                        "appsettings.machine.StackingLine.json",
+                        "HomogenizationLine",
+                        "appsettings.machine.HomogenizationLine.json",
                         true,
-                        @"C:\EdgeRuntime\StackingLine"),
-                    DiscoveredModules: ["Stacking"],
-                    EnabledModules: ["Stacking"],
-                    ActivatedModules: ["Stacking"],
+                        @"C:\EdgeRuntime\HomogenizationLine"),
+                    DiscoveredModules: ["Homogenization"],
+                    EnabledModules: ["Homogenization"],
+                    ActivatedModules: ["Homogenization"],
                     PluginStates: [],
                     ModuleRegistrations: [],
                     DeviceBindings: [],

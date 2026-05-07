@@ -37,14 +37,14 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
 
         var mesDiagnostics = new FakeMesUploadDiagnosticsStore();
         mesDiagnostics.RecordSuccess("Homogenization");
-        mesDiagnostics.RecordFailure("Stacking", "mes timeout");
+        mesDiagnostics.RecordFailure("TestProcess", "mes timeout");
 
         var cloudRetryStore = new FakeFailedRecordStore();
         cloudRetryStore.PendingRecords.Add(new FailedCellRecord
         {
             Id = 1,
             Channel = "Cloud",
-            ProcessType = "Stacking",
+            ProcessType = "TestProcess",
             FailedTarget = "Cloud",
             CellDataJson = "{}",
             ErrorMessage = "seed",
@@ -56,7 +56,7 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
         {
             Id = 2,
             Channel = "MES",
-            ProcessType = "Stacking",
+            ProcessType = "TestProcess",
             FailedTarget = "MES",
             CellDataJson = "{}",
             ErrorMessage = "seed",
@@ -208,7 +208,7 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
         {
             Id = 1,
             Channel = "Cloud",
-            ProcessType = "Stacking",
+            ProcessType = "TestProcess",
             FailedTarget = "Cloud",
             CellDataJson = "{}",
             ErrorMessage = "seed",
@@ -224,7 +224,7 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
         {
             Id = 2,
             Channel = "MES",
-            ProcessType = "Stacking",
+            ProcessType = "TestProcess",
             FailedTarget = "MES",
             CellDataJson = "{}",
             ErrorMessage = "seed",
@@ -300,7 +300,7 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
         await cloudDeadLetters.SaveAsync(new DeadLetterRecord
         {
             Id = 1,
-            ProcessType = "Stacking",
+            ProcessType = "TestProcess",
             FailedTarget = "Cloud",
             SourceTable = "failed_cloud_records",
             FailureStage = "RetryDeserialize",
@@ -338,7 +338,7 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
         var snapshot = await query.GetCurrentAsync();
 
         Assert.Equal(1, snapshot.Cloud.DeadLetters?.TotalCount);
-        Assert.Equal("Stacking", snapshot.Cloud.DeadLetters?.GroupSummary.Single().ProcessType);
+        Assert.Equal("TestProcess", snapshot.Cloud.DeadLetters?.GroupSummary.Single().ProcessType);
         Assert.Equal(1, snapshot.Mes.DeadLetters?.TotalCount);
         Assert.Equal("Homogenization", snapshot.Mes.DeadLetters?.LatestRecords.Single().ProcessType);
     }

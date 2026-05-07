@@ -1,10 +1,10 @@
-using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Common.Crud;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Models;
 using IIoT.Edge.Application.Features.Hardware.Queries;
 using IIoT.Edge.Application.Features.Hardware.UseCases.IoMapping.Commands;
+using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.SharedKernel.Enums;
 using MediatR;
 
@@ -68,6 +68,7 @@ public sealed class HardwareConfigCrudService(
                 false,
                 null,
                 [],
+                [],
                 "请选择一个 PLC 设备。"));
         }
 
@@ -77,7 +78,8 @@ public sealed class HardwareConfigCrudService(
                 false,
                 selectedNetworkDevice.ModuleId,
                 [],
-                "默认点位只支持 PLC 设备。"));
+                [],
+                "插件标准点位只支持 PLC 设备。"));
         }
 
         if (string.IsNullOrWhiteSpace(selectedNetworkDevice.ModuleId)
@@ -87,27 +89,34 @@ public sealed class HardwareConfigCrudService(
                 false,
                 selectedNetworkDevice.ModuleId,
                 [],
-                "当前 PLC 未绑定可用的插件默认点位。"));
+                [],
+                "当前 PLC 未绑定可用的插件标准点位。"));
         }
 
         var defaultSignals = provider.GetDefaultIoTemplate()
             .OrderBy(static x => x.SortOrder)
             .ThenBy(static x => x.SignalKey, StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        if (defaultSignals.Length == 0)
+        var candidateSignals = provider.GetIoMappingCandidates()
+            .OrderBy(static x => x.SortOrder)
+            .ThenBy(static x => x.SignalKey, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (candidateSignals.Length == 0)
         {
             return Task.FromResult(new ModuleTemplateInfoResult(
                 false,
                 provider.ModuleId,
                 [],
-                "当前模块没有默认 IO 点位。"));
+                [],
+                "当前模块没有插件标准 IO 点位。"));
         }
 
         return Task.FromResult(new ModuleTemplateInfoResult(
             true,
             provider.ModuleId,
             defaultSignals,
-            "只补齐当前 PLC 缺失的插件默认点位，不覆盖已维护地址。"));
+            candidateSignals,
+            "重置当前 PLC 的 IO 映射为插件标准点位，会清理旧手工错误点位。"));
     }
 
     public async Task<CrudOperationResult> ApplyModuleTemplateAsync(
@@ -126,58 +135,24 @@ public sealed class HardwareConfigCrudService(
 
         if (selectedNetworkDevice.DeviceType != DeviceType.PLC)
         {
-            return CrudOperationResult.Failure("默认点位只支持 PLC 设备。");
+            return CrudOperationResult.Failure("插件标准点位只支持 PLC 设备。");
         }
 
         if (selectedNetworkDevice.Id <= 0)
         {
-            return CrudOperationResult.Failure("请先保存设备，再补齐默认点位。");
+            return CrudOperationResult.Failure("请先保存设备，再重置插件标准点位。");
         }
 
         if (string.IsNullOrWhiteSpace(selectedNetworkDevice.ModuleId)
             || !_hardwareProfiles.TryGetValue(selectedNetworkDevice.ModuleId, out var provider))
         {
-            return CrudOperationResult.Failure("当前 PLC 未绑定可用的插件默认点位。");
+            return CrudOperationResult.Failure("当前 PLC 未绑定可用的插件标准点位。");
         }
 
-        var existingMappings = await sender.Send(
-            new GetIoMappingsByDeviceQuery(selectedNetworkDevice.Id, 0, int.MaxValue),
-            cancellationToken);
-
-        if (!existingMappings.IsSuccess || existingMappings.Value is null)
-        {
-            return CrudOperationResult.Failure("加载当前 IO 映射失败，无法补齐默认点位。");
-        }
-
-        var allMappings = existingMappings.Value.Items
-            .Select(static x => new IoMappingDto(
-                x.Id,
-                x.NetworkDeviceId,
-                x.SignalKey,
-                x.PlcAddress,
-                x.AddressCount,
-                x.DataType,
-                x.Direction,
-                x.Category,
-                x.BusinessGroup,
-                x.SignalName,
-                x.SortOrder,
-                x.Remark))
-            .ToList();
-
-        var existingSignalKeys = new HashSet<string>(
-            allMappings.Select(x => x.SignalKey),
-            StringComparer.OrdinalIgnoreCase);
-
-        var addedCount = 0;
-        foreach (var template in provider.GetDefaultIoTemplate().OrderBy(x => x.SortOrder))
-        {
-            if (existingSignalKeys.Contains(template.SignalKey))
-            {
-                continue;
-            }
-
-            allMappings.Add(new IoMappingDto(
+        var resetMappings = provider.GetDefaultIoTemplate()
+            .Where(static x => !string.IsNullOrWhiteSpace(x.PlcAddress))
+            .OrderBy(x => x.SortOrder)
+            .Select(template => new IoMappingDto(
                 0,
                 selectedNetworkDevice.Id,
                 template.SignalKey,
@@ -189,21 +164,14 @@ public sealed class HardwareConfigCrudService(
                 template.BusinessGroup,
                 template.SignalName,
                 template.SortOrder,
-                null));
-            existingSignalKeys.Add(template.SignalKey);
-            addedCount++;
-        }
-
-        if (addedCount == 0)
-        {
-            return CrudOperationResult.Success("默认点位已存在，无需补充映射。");
-        }
+                template.Remark))
+            .ToList();
 
         await sender.Send(
-            new SaveIoMappingsCommand(selectedNetworkDevice.Id, allMappings),
+            new SaveIoMappingsCommand(selectedNetworkDevice.Id, resetMappings),
             cancellationToken);
 
-        return CrudOperationResult.Success($"已补齐 {addedCount} 条插件默认点位。");
+        return CrudOperationResult.Success($"已重置 {resetMappings.Count} 条插件标准点位。");
     }
 
     public Task<CrudOperationResult> SaveAsync(

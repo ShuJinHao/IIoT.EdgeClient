@@ -5,6 +5,8 @@ param(
 
     [string]$ManifestPath = 'scripts\edge-runtime.publish.json',
 
+    [string]$LauncherProfileCatalogPath = 'src\Edge\IIoT.Edge.Launcher\launcher.profiles.json',
+
     [string]$LauncherAccountsSource,
 
     [switch]$CleanOutput
@@ -16,11 +18,13 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot 'EdgeRuntime.Common.ps1')
 
 $manifest = Load-EdgeRuntimePublishManifest -RepoRoot $repoRoot -ManifestPath $ManifestPath
+$launcherProfileCatalog = Get-EdgeLauncherProfileCatalog -RepoRoot $repoRoot -ProfileCatalogPath $LauncherProfileCatalogPath
 $resolvedOutputRoot = Resolve-EdgeAbsolutePath -BasePath $repoRoot -PathValue $OutputRoot
 $stagingRoot = Join-Path $resolvedOutputRoot ('.staging\' + [Guid]::NewGuid().ToString('N'))
 $launcherPublishRoot = Join-Path $stagingRoot 'launcher'
 $shellPublishRoot = Join-Path $stagingRoot 'shell'
 $launcherRuntimeRoot = Join-Path $resolvedOutputRoot $manifest.launcherDirectory
+Test-EdgeLauncherProfilesMatchManifest -Manifest $manifest -Profiles $launcherProfileCatalog.Profiles -LauncherRuntimeRoot $launcherRuntimeRoot
 
 function Publish-Project {
     param(
@@ -63,7 +67,7 @@ try {
     }
 
     Copy-EdgeDirectoryContent -SourceDirectory $launcherPublishRoot -TargetDirectory $launcherRuntimeRoot
-    Write-EdgeLauncherProfiles -Manifest $manifest -OutputPath (Join-Path $launcherRuntimeRoot 'launcher.profiles.json')
+    Copy-EdgeLauncherProfileCatalog -SourcePath $launcherProfileCatalog.Path -LauncherRuntimeRoot $launcherRuntimeRoot | Out-Null
     Remove-EdgeLauncherShellArtifacts -LauncherRuntimeRoot $launcherRuntimeRoot
 
     $accountsSource = if (-not [string]::IsNullOrWhiteSpace($LauncherAccountsSource)) {
@@ -98,6 +102,8 @@ try {
             -RuntimeDefinition $runtime `
             -LayoutRoot $resolvedOutputRoot
     }
+
+    Test-EdgeLauncherProfilesMatchManifest -Manifest $manifest -Profiles $launcherProfileCatalog.Profiles -LauncherRuntimeRoot $launcherRuntimeRoot -CheckExecutablePath
 
     Write-Host "Published runtime layout root: $resolvedOutputRoot"
 }

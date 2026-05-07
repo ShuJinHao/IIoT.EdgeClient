@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Abstractions.Auth;
+using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Auth;
@@ -11,6 +12,7 @@ using IIoT.Edge.Application.Features.Hardware.Queries;
 using IIoT.Edge.Application.Features.Hardware.UseCases.IoMapping.Commands;
 using IIoT.Edge.Application.Features.Hardware.UseCases.NetworkDevice.Commands;
 using IIoT.Edge.Application.Features.Hardware.UseCases.SerialDevice.Commands;
+using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.Enums;
@@ -125,11 +127,47 @@ public sealed class ConfigPermissionGuardBehaviorTests
             Id = 1,
             DeviceName = "PLC-A",
             DeviceType = DeviceType.PLC,
-            ModuleId = "Stacking"
+            ModuleId = "TestProcess"
         });
 
         Assert.False(result.IsSuccess);
         Assert.Equal(0, sender.SendCount);
+    }
+
+    [Fact]
+    public async Task HardwareConfigCrudService_ApplyModuleTemplateAsync_WhenAllowed_ShouldResetCurrentPlcMappings()
+    {
+        SaveIoMappingsCommand? savedCommand = null;
+        var sender = new CountingSender(request => request switch
+        {
+            SaveIoMappingsCommand command => Capture(command),
+            _ => throw new NotSupportedException(request.GetType().FullName)
+        });
+        var service = new HardwareConfigCrudService(
+            sender,
+            [new ResetTemplateProfile()],
+            new StubPermissionService { CanEditHardware = true });
+
+        var result = await service.ApplyModuleTemplateAsync(new NetworkDeviceVm
+        {
+            Id = 7,
+            DeviceName = "PLC-A",
+            DeviceType = DeviceType.PLC,
+            ModuleId = "TestModule"
+        });
+
+        Assert.True(result.IsSuccess, result.Message);
+        Assert.NotNull(savedCommand);
+        Assert.Equal(2, savedCommand!.Mappings.Count);
+        Assert.DoesNotContain(savedCommand.Mappings, x => x.SignalKey == "TEST");
+        Assert.Contains(savedCommand.Mappings, x => x.SignalKey == "Test.Interaction.Outbound" && x.Direction == "Read");
+        Assert.Contains(savedCommand.Mappings, x => x.SignalKey == "Test.Interaction.Outbound" && x.Direction == "Write");
+
+        Result Capture(SaveIoMappingsCommand command)
+        {
+            savedCommand = command;
+            return Result.Success();
+        }
     }
 
     [Fact]
@@ -161,7 +199,7 @@ public sealed class ConfigPermissionGuardBehaviorTests
                         Id = 1,
                         DeviceName = "PLC-A",
                         DeviceType = DeviceType.PLC,
-                        ModuleId = "Stacking",
+                        ModuleId = "TestProcess",
                         IsEnabled = true
                     },
                     new NetworkDeviceVm
@@ -169,7 +207,7 @@ public sealed class ConfigPermissionGuardBehaviorTests
                         Id = 2,
                         DeviceName = "PLC-B",
                         DeviceType = DeviceType.PLC,
-                        ModuleId = "Stacking",
+                        ModuleId = "TestProcess",
                         IsEnabled = false
                     },
                     new NetworkDeviceVm
@@ -325,6 +363,53 @@ public sealed class ConfigPermissionGuardBehaviorTests
             object request,
             CancellationToken cancellationToken = default)
             => throw new NotSupportedException(request.GetType().FullName);
+    }
+
+    private sealed class ResetTemplateProfile : IModuleHardwareProfileProvider
+    {
+        public string ModuleId => "TestModule";
+
+        public ModulePlcDefaults GetDefaultPlcSettings()
+            => new("Mc", 3000, 6000);
+
+        public PlcIoRuntimePolicy GetIoRuntimePolicy()
+            => PlcIoRuntimePolicy.Default;
+
+        public IReadOnlyList<ModuleIoTemplateEntry> GetDefaultIoTemplate()
+            =>
+            [
+                new(
+                    "Test.Interaction.Outbound",
+                    "D702",
+                    1,
+                    "Int16",
+                    "Read",
+                    1,
+                    "测试交互读点",
+                    "信号交互",
+                    "出料上传",
+                    "PLC 触发"),
+                new(
+                    "Test.Interaction.Outbound",
+                    "D602",
+                    1,
+                    "Int16",
+                    "Write",
+                    101,
+                    "测试交互写点",
+                    "信号交互",
+                    "出料上传",
+                    "上位机应答")
+            ];
+
+        public IReadOnlyList<ModuleIoTemplateEntry> GetIoMappingCandidates()
+            => GetDefaultIoTemplate();
+
+        public ModuleHardwareValidationResult ValidatePlcConfiguration(
+            string deviceName,
+            string? deviceModel,
+            IReadOnlyCollection<ModuleIoSnapshot> mappings)
+            => ModuleHardwareValidationResult.Success();
     }
 
     private sealed class FakePlcConnectionManager : IPlcConnectionManager

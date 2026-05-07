@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Modules.Hardware;
+﻿using IIoT.Edge.Application.Modules.Hardware;
 using System.Linq.Expressions;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
@@ -56,7 +56,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
             networkDevices,
             ioMappings,
             new FakeLogService(),
-            [new HomogenizationHardwareProfileProvider(new HomogenizationPlcSignalProfile())]);
+            [new HomogenizationHardwareProfileProvider()]);
 
         await contributor.EnsureConfigurationSamplesAsync();
         await contributor.EnsureConfigurationSamplesAsync();
@@ -64,14 +64,14 @@ public sealed class HomogenizationRuntimeBehaviorTests
         var device = Assert.Single(networkDevices.Items);
         Assert.Equal(DependencyInjection.ModuleKey, device.ModuleId);
         Assert.Equal(DeviceType.PLC, device.DeviceType);
-        Assert.Equal(HomogenizationSignalTestProfile.Signals.Count, ioMappings.Items.Count);
+        Assert.Equal(SeedableSignals().Count, ioMappings.Items.Count);
         Assert.Equal(
-            HomogenizationSignalTestProfile.Signals.Select(static signal => signal.SignalKey).OrderBy(static signalKey => signalKey),
+            SeedableSignals().Select(static signal => signal.SignalKey).OrderBy(static signalKey => signalKey),
             ioMappings.Items.Select(static mapping => mapping.SignalKey).OrderBy(static signalKey => signalKey));
         Assert.Contains(ioMappings.Items, static mapping => mapping.Category == "信号交互" && mapping.BusinessGroup == "扫码进站");
         Assert.Contains(ioMappings.Items, static mapping => mapping.Category == "连续读数据" && mapping.SignalName == "托盘码");
         Assert.Contains(ioMappings.Items, static mapping => mapping.Category == "单点读数据" && mapping.BusinessGroup == "实时数据");
-        Assert.Contains(ioMappings.Items, static mapping => mapping.SignalKey == "Homogenization.InboundTrigger" && mapping.PlcAddress == "D701");
+        Assert.Contains(ioMappings.Items, static mapping => mapping.SignalKey == "Homogenization.Interaction.Inbound" && mapping.Direction == "Read" && mapping.PlcAddress == "D701");
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
     }
 
     [Fact]
-    public async Task HomogenizationDevelopmentSampleContributor_WhenExistingMappingsHaveOldClassification_ShouldRepairMetadataAndKeepAddress()
+    public async Task HomogenizationDevelopmentSampleContributor_WhenExistingMappingsHaveOldClassification_ShouldKeepUserMappingsWithoutRepair()
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -106,7 +106,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
 
         var legacyMapping = IoMappingEntity.Create(
             device.Id,
-            "Homogenization.InboundTrigger",
+            "Homogenization.Interaction.Inbound",
             "D999",
             1,
             "UInt16",
@@ -130,31 +130,116 @@ public sealed class HomogenizationRuntimeBehaviorTests
             networkDevices,
             ioMappings,
             new FakeLogService(),
-            [new HomogenizationHardwareProfileProvider(new HomogenizationPlcSignalProfile())]);
+            [new HomogenizationHardwareProfileProvider()]);
 
         await contributor.EnsureConfigurationSamplesAsync();
 
-        var repaired = ioMappings.Items.Single(static mapping => mapping.SignalKey == "Homogenization.InboundTrigger");
-        Assert.Equal("D999", repaired.PlcAddress);
-        Assert.Equal(1, repaired.AddressCount);
-        Assert.Equal(HomogenizationSignalTestProfile.Get(HomogenizationSignal.进站触发).DataType, repaired.DataType);
-        Assert.Equal("Read", repaired.Direction);
-        Assert.Equal("信号交互", repaired.Category);
-        Assert.Equal("扫码进站", repaired.BusinessGroup);
-        Assert.Equal("PLC 触发", repaired.SignalName);
-        Assert.Equal(2, repaired.SortOrder);
+        var preserved = Assert.Single(ioMappings.Items);
+        Assert.Equal("D999", preserved.PlcAddress);
+        Assert.Equal(1, preserved.AddressCount);
+        Assert.Equal("UInt16", preserved.DataType);
+        Assert.Equal("Read", preserved.Direction);
+        Assert.Equal("单点读数据", preserved.Category);
+        Assert.Equal("单点读数据", preserved.BusinessGroup);
+        Assert.Equal(string.Empty, preserved.SignalName);
+        Assert.Equal(999, preserved.SortOrder);
+    }
+
+    [Fact]
+    public async Task HomogenizationDevelopmentSampleContributor_WhenGeneratedRuntimeHasLegacyStandardIo_ShouldNotAutoResetExistingMappings()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "homogenization-template-reset-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+
+        try
+        {
+            var configuration = CreateEnabledSeedConfiguration(resetBeforeImport: false);
+            var networkDevices = new InMemoryRepository<NetworkDeviceEntity>();
+            var ioMappings = new InMemoryRepository<IoMappingEntity>();
+            var runtimePaths = CreateRuntimePaths(tempDirectory);
+            var device = NetworkDeviceEntity.Create("PLC-Homogenization-01", DeviceType.PLC, "127.0.0.1", 6000);
+            device.AssignModule(DependencyInjection.ModuleKey, "Mc");
+            device.UpdateEndpoint("127.0.0.1", 6000, null, 3000);
+            device.Enable();
+            networkDevices.Add(device);
+
+            var oldHeartbeat = IoMappingEntity.Create(device.Id, "Homogenization.HeartbeatIn", "D700", 1, "Int16", "Read", "信号交互", "心跳交互", "PLC 心跳");
+            oldHeartbeat.UpdateSortOrder(1);
+            ioMappings.Add(oldHeartbeat);
+            var oldDebugWrite = IoMappingEntity.Create(device.Id, "TEST", "D801", 1, "Int16", "Write", "信号交互", "111", "TEST");
+            oldDebugWrite.UpdateSortOrder(101);
+            ioMappings.Add(oldDebugWrite);
+
+            var contributor = new HomogenizationDevelopmentSampleContributor(
+                configuration,
+                networkDevices,
+                ioMappings,
+                new FakeLogService(),
+                [new HomogenizationHardwareProfileProvider()],
+                runtimePaths);
+
+            await contributor.EnsureConfigurationSamplesAsync();
+
+            Assert.Equal(2, ioMappings.Items.Count);
+            Assert.Contains(ioMappings.Items, static mapping => mapping.SignalKey == "Homogenization.HeartbeatIn");
+            Assert.Contains(ioMappings.Items, static mapping => mapping.SignalKey == "TEST");
+            Assert.DoesNotContain(ioMappings.Items, static mapping => mapping.SignalKey == "Homogenization.Interaction.Heartbeat");
+            Assert.False(File.Exists(Path.Combine(runtimePaths.ContextDirectory, "hardware-profile.Homogenization.json")));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task HomogenizationDevelopmentSampleContributor_WhenTemplateSignatureUnchanged_ShouldKeepEditedAddress()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "homogenization-template-signature-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+
+        try
+        {
+            var configuration = CreateEnabledSeedConfiguration(resetBeforeImport: false);
+            var networkDevices = new InMemoryRepository<NetworkDeviceEntity>();
+            var ioMappings = new InMemoryRepository<IoMappingEntity>();
+            var runtimePaths = CreateRuntimePaths(tempDirectory);
+            var contributor = new HomogenizationDevelopmentSampleContributor(
+                configuration,
+                networkDevices,
+                ioMappings,
+                new FakeLogService(),
+                [new HomogenizationHardwareProfileProvider()],
+                runtimePaths);
+
+            await contributor.EnsureConfigurationSamplesAsync();
+
+            var inboundRead = ioMappings.Items.Single(static mapping =>
+                mapping.SignalKey == "Homogenization.Interaction.Inbound" && mapping.Direction == "Read");
+            inboundRead.UpdateAddress("D999", inboundRead.AddressCount);
+
+            await contributor.EnsureConfigurationSamplesAsync();
+
+            var preserved = ioMappings.Items.Single(static mapping =>
+                mapping.SignalKey == "Homogenization.Interaction.Inbound" && mapping.Direction == "Read");
+            Assert.Equal("D999", preserved.PlcAddress);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
     }
 
     [Fact]
     public async Task HomogenizationDevelopmentSampleContributor_WhenResetEnabled_ShouldOnlyReplaceHomogenizationData()
     {
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["Modules:Homogenization:DeviceSeed:Enabled"] = "true",
-                ["Modules:Homogenization:DeviceSeed:ResetBeforeImport"] = "true"
-            })
-            .Build();
+        var configuration = CreateEnabledSeedConfiguration(resetBeforeImport: true);
 
         var networkDevices = new InMemoryRepository<NetworkDeviceEntity>();
         var ioMappings = new InMemoryRepository<IoMappingEntity>();
@@ -184,7 +269,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
             networkDevices,
             ioMappings,
             new FakeLogService(),
-            [new HomogenizationHardwareProfileProvider(new HomogenizationPlcSignalProfile())]);
+            [new HomogenizationHardwareProfileProvider()]);
 
         await contributor.EnsureConfigurationSamplesAsync();
 
@@ -199,7 +284,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
         Assert.Equal("PLC-Homogenization-01", homogenizationDevices[0].DeviceName);
         Assert.DoesNotContain(ioMappings.Items, static mapping => mapping.SignalKey == "Homogenization.Legacy");
         Assert.Equal(
-            HomogenizationSignalTestProfile.Signals.Count + 1,
+            SeedableSignals().Count + 1,
             ioMappings.Items.Count);
     }
 
@@ -220,14 +305,16 @@ public sealed class HomogenizationRuntimeBehaviorTests
         });
 
         var services = new ServiceCollection();
-        services.AddSingleton<IModulePlcSignalProfile<HomogenizationSignal>>(new HomogenizationPlcSignalProfile());
+                services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.Interaction>>(new HomogenizationInteractionSignalProfile());
+        services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.SingleRead>>(new HomogenizationSingleReadSignalProfile());
+        services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.ContinuousRead>>(new HomogenizationContinuousReadSignalProfile());
         services.AddSingleton<ILogService>(logger);
         services.AddSingleton<IDeviceService>(deviceService);
         services.AddSingleton<IMesUploadDiagnosticsStore>(diagnostics);
         services.AddSingleton<HomogenizationMesScenarioChannel>(mesApi);
         services.AddSingleton<IDataPipelineService>(pipeline);
         services.AddSingleton<IProductionTimeProvider>(new FakeProductionTimeProvider());
-        services.AddSingleton<IModuleParamProvider<MesParam, CloudParam, BusinessParam>>(new RuntimeFakeModuleParamProvider());
+        services.AddSingleton<IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>>(new RuntimeFakeModuleParamProvider());
         services.AddSingleton(new HomogenizationCellDataValidator());
         services.AddSingleton(Options.Create(new HomogenizationModuleOptions()));
         services.AddSingleton(Options.Create(TestCodeOptions));
@@ -246,30 +333,30 @@ public sealed class HomogenizationRuntimeBehaviorTests
         ProductionContextSignalBindings.Set(context, bindings);
 
         var readValues = new ushort[GetBufferSize(bindings, "Read")];
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.心跳输入), 7);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.进站触发), TestCodeOptions.Plc.SignalReset);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.出料触发), TestCodeOptions.Plc.SignalReset);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.配方上传触发), TestCodeOptions.Plc.SignalReset);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.设备状态上传触发), TestCodeOptions.Plc.SignalReset);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.设备状态值), 0);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.实时搅拌转速), 123);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.实时搅拌电流), 11);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.实时分散转速), 222);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.实时分散电流), 12);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.实时温度), 26);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.实时真空度), unchecked((ushort)(short)-9));
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.出料CNT实际值), 15);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.出料CNT目标值), 18);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.出料CNTA罐重量), 2);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.出料CNTB罐重量), 3);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.出料NMP实际值), 27);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.出料NMP目标值), 30);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.出料胶液实际值), 31);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.出料设定搅拌时间), 40);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.出料剩余搅拌时间), 5);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.出料设定分散时间), 50);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.出料剩余分散时间), 6);
-        SetAscii(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.托盘码), "TRAY-9001", 30);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.心跳), 7);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.扫码进站), TestCodeOptions.Plc.SignalReset);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.出料上传), TestCodeOptions.Plc.SignalReset);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.工艺参数上传), TestCodeOptions.Plc.SignalReset);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.设备状态上传), TestCodeOptions.Plc.SignalReset);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.设备状态值), 0);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时搅拌转速), 123);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时搅拌电流), 11);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时分散转速), 222);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时分散电流), 12);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时温度), 26);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时真空度), unchecked((ushort)(short)-9));
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.出料CNT实际值), 15);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.出料CNT目标值), 18);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.出料CNTA罐重量), 2);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.出料CNTB罐重量), 3);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.出料NMP实际值), 27);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.出料NMP目标值), 30);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.出料胶液实际值), 31);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.出料设定搅拌时间), 40);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.出料剩余搅拌时间), 5);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.出料设定分散时间), 50);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.出料剩余分散时间), 6);
+        SetAscii(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.托盘码), "TRAY-9001", 30);
         buffer.UpdateReadBuffer(readValues);
 
         var tasks = new HomogenizationStationRuntimeFactory().CreateTasks(provider, buffer, context);
@@ -277,10 +364,10 @@ public sealed class HomogenizationRuntimeBehaviorTests
         var runningTasks = tasks.Select(task => task.StartAsync(cancellation.Token)).ToArray();
 
         await WaitUntilAsync(() =>
-            buffer.GetWriteBuffer()[writeOffsets[HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.心跳输出)]] == 7
+            buffer.GetWriteBuffer()[writeOffsets[HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.心跳)]] == 7
             && mesApi.LastRealtimeSnapshot is not null
             && context.LastRealtimeSnapshot is not null);
-        Assert.Equal((ushort)7, buffer.GetWriteBuffer()[writeOffsets[HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.心跳输出)]]);
+        Assert.Equal((ushort)7, buffer.GetWriteBuffer()[writeOffsets[HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.心跳)]]);
         Assert.NotNull(mesApi.LastRealtimeSnapshot);
         Assert.Equal(123, mesApi.LastRealtimeSnapshot!.StirringSpeed);
         Assert.Equal(26, context.LastRealtimeSnapshot!.Temperature);
@@ -289,7 +376,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
         Assert.Equal(0, context.GetStep("Homogenization.Outbound"));
 
         mesApi.InboundGate = NewGate();
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.进站触发), TestCodeOptions.Plc.SignalTrigger);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.扫码进站), TestCodeOptions.Plc.SignalTrigger);
         buffer.UpdateReadBuffer(readValues);
         await WaitUntilAsync(() => context.GetStep("Homogenization.Inbound") == 10);
         await WaitUntilAsync(() => mesApi.InboundTrayCodes.Contains("TRAY-9001"));
@@ -298,16 +385,16 @@ public sealed class HomogenizationRuntimeBehaviorTests
         await WaitUntilAsync(() => context.GetStep("Homogenization.Inbound") == 30);
 
         Assert.Contains("TRAY-9001", mesApi.InboundTrayCodes);
-        Assert.Equal(TestCodeOptions.Plc.AckOk, buffer.GetWriteBuffer()[writeOffsets[HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.进站应答)]]);
+        Assert.Equal(TestCodeOptions.Plc.AckOk, buffer.GetWriteBuffer()[writeOffsets[HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.扫码进站)]]);
 
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.进站触发), TestCodeOptions.Plc.SignalReset);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.扫码进站), TestCodeOptions.Plc.SignalReset);
         buffer.UpdateReadBuffer(readValues);
         await WaitUntilAsync(() => context.GetStep("Homogenization.Inbound") == 0);
-        Assert.Equal(TestCodeOptions.Plc.SignalReset, buffer.GetWriteBuffer()[writeOffsets[HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.进站应答)]]);
+        Assert.Equal(TestCodeOptions.Plc.SignalReset, buffer.GetWriteBuffer()[writeOffsets[HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.扫码进站)]]);
 
         mesApi.EquipmentStatusGate = NewGate();
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.设备状态值), 1);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.设备状态上传触发), TestCodeOptions.Plc.SignalTrigger);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.设备状态值), 1);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.设备状态上传), TestCodeOptions.Plc.SignalTrigger);
         buffer.UpdateReadBuffer(readValues);
         await WaitUntilAsync(() => context.GetStep("Homogenization.EquipmentStatus") == 10);
         await WaitUntilAsync(() => mesApi.LastEquipmentStatusSnapshot is not null);
@@ -318,15 +405,15 @@ public sealed class HomogenizationRuntimeBehaviorTests
         Assert.NotNull(mesApi.LastEquipmentStatusSnapshot);
         Assert.Equal(1, mesApi.LastEquipmentStatusSnapshot!.StatusCode);
         Assert.Equal("空闲", mesApi.LastEquipmentStatusSnapshot.StatusText);
-        Assert.Equal(TestCodeOptions.Plc.AckOk, buffer.GetWriteBuffer()[writeOffsets[HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.设备状态应答)]]);
+        Assert.Equal(TestCodeOptions.Plc.AckOk, buffer.GetWriteBuffer()[writeOffsets[HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.设备状态上传)]]);
 
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.设备状态上传触发), TestCodeOptions.Plc.SignalReset);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.设备状态上传), TestCodeOptions.Plc.SignalReset);
         buffer.UpdateReadBuffer(readValues);
         await WaitUntilAsync(() => context.GetStep("Homogenization.EquipmentStatus") == 0);
-        Assert.Equal(TestCodeOptions.Plc.SignalReset, buffer.GetWriteBuffer()[writeOffsets[HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.设备状态应答)]]);
+        Assert.Equal(TestCodeOptions.Plc.SignalReset, buffer.GetWriteBuffer()[writeOffsets[HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.设备状态上传)]]);
 
         pipeline.EnqueueGate = NewGate();
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.出料触发), TestCodeOptions.Plc.SignalTrigger);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.出料上传), TestCodeOptions.Plc.SignalTrigger);
         buffer.UpdateReadBuffer(readValues);
         await WaitUntilAsync(() => context.GetStep("Homogenization.Outbound") == 10);
         await WaitUntilAsync(() => pipeline.PendingCount == 1);
@@ -342,12 +429,12 @@ public sealed class HomogenizationRuntimeBehaviorTests
         Assert.Equal(-9, cellData.RealtimeSnapshot.Vacuum);
         Assert.Equal(15d, cellData.CntActualKg);
         Assert.Equal(31d, cellData.GlueActualKg);
-        Assert.Equal(TestCodeOptions.Plc.AckOk, buffer.GetWriteBuffer()[writeOffsets[HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.出料应答)]]);
+        Assert.Equal(TestCodeOptions.Plc.AckOk, buffer.GetWriteBuffer()[writeOffsets[HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.出料上传)]]);
 
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.出料触发), TestCodeOptions.Plc.SignalReset);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.出料上传), TestCodeOptions.Plc.SignalReset);
         buffer.UpdateReadBuffer(readValues);
         await WaitUntilAsync(() => context.GetStep("Homogenization.Outbound") == 0);
-        Assert.Equal(TestCodeOptions.Plc.SignalReset, buffer.GetWriteBuffer()[writeOffsets[HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.出料应答)]]);
+        Assert.Equal(TestCodeOptions.Plc.SignalReset, buffer.GetWriteBuffer()[writeOffsets[HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.出料上传)]]);
 
         cancellation.Cancel();
         await Task.WhenAll(runningTasks);
@@ -370,14 +457,16 @@ public sealed class HomogenizationRuntimeBehaviorTests
         });
 
         var services = new ServiceCollection();
-        services.AddSingleton<IModulePlcSignalProfile<HomogenizationSignal>>(new HomogenizationPlcSignalProfile());
+                services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.Interaction>>(new HomogenizationInteractionSignalProfile());
+        services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.SingleRead>>(new HomogenizationSingleReadSignalProfile());
+        services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.ContinuousRead>>(new HomogenizationContinuousReadSignalProfile());
         services.AddSingleton<ILogService>(logger);
         services.AddSingleton<IDeviceService>(deviceService);
         services.AddSingleton<IMesUploadDiagnosticsStore>(diagnostics);
         services.AddSingleton<HomogenizationMesScenarioChannel>(mesApi);
         services.AddSingleton<IDataPipelineService>(pipeline);
         services.AddSingleton<IProductionTimeProvider>(new FakeProductionTimeProvider());
-        services.AddSingleton<IModuleParamProvider<MesParam, CloudParam, BusinessParam>>(new RuntimeFakeModuleParamProvider());
+        services.AddSingleton<IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>>(new RuntimeFakeModuleParamProvider());
         services.AddSingleton(new HomogenizationCellDataValidator());
         services.AddSingleton(Options.Create(new HomogenizationModuleOptions()));
         services.AddSingleton(Options.Create(TestCodeOptions));
@@ -395,29 +484,29 @@ public sealed class HomogenizationRuntimeBehaviorTests
         ProductionContextSignalBindings.Set(context, bindings);
 
         var readValues = new ushort[GetBufferSize(bindings, "Read")];
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.心跳输入), 3);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.进站触发), TestCodeOptions.Plc.SignalReset);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.出料触发), TestCodeOptions.Plc.SignalReset);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.配方上传触发), TestCodeOptions.Plc.SignalReset);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.设备状态上传触发), TestCodeOptions.Plc.SignalReset);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.实时搅拌转速), 101);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.实时搅拌电流), 11);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.实时分散转速), 202);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.实时分散电流), 12);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.实时温度), 30);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.实时真空度), unchecked((ushort)(short)-12));
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.设备状态值), 0);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.配方搅拌转速), 55);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.配方分散转速), 66);
-        SetFloat(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.配方NCM), 1, 12.5f);
-        SetFloat(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.配方SP1), 2, 8.75f);
-        SetFloat(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.配方NMP), 0, 99.25f);
-        SetFloat(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.配方胶液), 0, 5.5f);
-        SetFloat(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.配方CNT), 0, 2.25f);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.配方真空), 1);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.配方时间), 0, 15);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.配方温度), 0, 45);
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.配方停机步), 0, 1);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.心跳), 3);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.扫码进站), TestCodeOptions.Plc.SignalReset);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.出料上传), TestCodeOptions.Plc.SignalReset);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.工艺参数上传), TestCodeOptions.Plc.SignalReset);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.设备状态上传), TestCodeOptions.Plc.SignalReset);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时搅拌转速), 101);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时搅拌电流), 11);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时分散转速), 202);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时分散电流), 12);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时温度), 30);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时真空度), unchecked((ushort)(short)-12));
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.设备状态值), 0);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.配方搅拌转速), 55);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.配方分散转速), 66);
+        SetFloat(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.配方NCM), 1, 12.5f);
+        SetFloat(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.配方SP1), 2, 8.75f);
+        SetFloat(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.配方NMP), 0, 99.25f);
+        SetFloat(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.配方胶液), 0, 5.5f);
+        SetFloat(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.配方CNT), 0, 2.25f);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.配方真空), 1);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.配方时间), 0, 15);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.配方温度), 0, 45);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.配方停机步), 0, 1);
         buffer.UpdateReadBuffer(readValues);
 
         var tasks = new HomogenizationStationRuntimeFactory().CreateTasks(provider, buffer, context);
@@ -425,11 +514,11 @@ public sealed class HomogenizationRuntimeBehaviorTests
         var runningTasks = tasks.Select(task => task.StartAsync(cancellation.Token)).ToArray();
 
         await WaitUntilAsync(() =>
-            buffer.GetWriteBuffer()[writeOffsets[HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.心跳输出)]] == 3);
+            buffer.GetWriteBuffer()[writeOffsets[HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.心跳)]] == 3);
         Assert.Equal(0, context.GetStep("Homogenization.Recipe"));
 
         mesApi.RecipeGate = NewGate();
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.配方上传触发), TestCodeOptions.Plc.SignalTrigger);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.工艺参数上传), TestCodeOptions.Plc.SignalTrigger);
         buffer.UpdateReadBuffer(readValues);
         await WaitUntilAsync(() => context.GetStep("Homogenization.Recipe") == 10);
         await WaitUntilAsync(() => mesApi.LastRecipeSnapshot is not null);
@@ -448,10 +537,10 @@ public sealed class HomogenizationRuntimeBehaviorTests
         Assert.Equal(45d, mesApi.LastRecipeSnapshot.Temperature[0], 3);
         Assert.True(mesApi.LastRecipeSnapshot.StopStep[0]);
 
-        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.配方上传触发), TestCodeOptions.Plc.SignalReset);
+        SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.工艺参数上传), TestCodeOptions.Plc.SignalReset);
         buffer.UpdateReadBuffer(readValues);
         await WaitUntilAsync(() => context.GetStep("Homogenization.Recipe") == 0);
-        Assert.Equal(TestCodeOptions.Plc.SignalReset, buffer.GetWriteBuffer()[writeOffsets[HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.配方应答)]]);
+        Assert.Equal(TestCodeOptions.Plc.SignalReset, buffer.GetWriteBuffer()[writeOffsets[HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.工艺参数上传)]]);
 
         cancellation.Cancel();
         await Task.WhenAll(runningTasks);
@@ -460,35 +549,35 @@ public sealed class HomogenizationRuntimeBehaviorTests
     private static IReadOnlyList<ModuleIoSnapshot> BuildInboundOutboundBindings()
         =>
         [
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.出料CNT实际值), "D3030", 1, "UInt16", "Read", 1),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.进站触发), "D701", 1, "Int16", "Read", 2),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.托盘码), "D24500", 30, "Ascii", "Read", 3),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.实时温度), "D301", 1, "Int16", "Read", 4),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.实时真空度), "D300", 1, "Int16", "Read", 5),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.心跳输入), "D700", 1, "Int16", "Read", 6),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.出料触发), "D702", 1, "Int16", "Read", 7),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.配方上传触发), "D703", 1, "Int16", "Read", 8),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.设备状态上传触发), "D707", 1, "Int16", "Read", 9),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.实时搅拌转速), "D1618", 1, "Int16", "Read", 10),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.实时搅拌电流), "D1616", 1, "Int16", "Read", 11),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.实时分散转速), "D1638", 1, "Int16", "Read", 12),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.实时分散电流), "D1636", 1, "Int16", "Read", 13),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.设备状态值), "D711", 1, "Int16", "Read", 14),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.出料CNT目标值), "D8000", 1, "UInt16", "Read", 15),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.出料CNTA罐重量), "D7000", 1, "UInt16", "Read", 16),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.出料CNTB罐重量), "D7002", 1, "UInt16", "Read", 17),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.出料NMP实际值), "D812", 1, "UInt16", "Read", 18),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.出料NMP目标值), "D810", 1, "UInt16", "Read", 19),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.出料胶液实际值), "D822", 1, "UInt16", "Read", 20),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.出料设定搅拌时间), "D2054", 1, "UInt16", "Read", 21),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.出料剩余搅拌时间), "D2056", 1, "UInt16", "Read", 22),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.出料设定分散时间), "D2044", 1, "UInt16", "Read", 23),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.出料剩余分散时间), "D2046", 1, "UInt16", "Read", 24),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.出料应答), "D602", 1, "Int16", "Write", 1),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.心跳输出), "D600", 1, "Int16", "Write", 2),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.进站应答), "D601", 1, "Int16", "Write", 3),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.配方应答), "D603", 1, "Int16", "Write", 4),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.设备状态应答), "D607", 1, "Int16", "Write", 5)
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.出料CNT实际值), "D3030", 1, "UInt16", "Read", 1),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.扫码进站), "D701", 1, "Int16", "Read", 2),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.托盘码), "D24500", 30, "Ascii", "Read", 3),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时温度), "D301", 1, "Int16", "Read", 4),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时真空度), "D300", 1, "Int16", "Read", 5),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.心跳), "D700", 1, "Int16", "Read", 6),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.出料上传), "D702", 1, "Int16", "Read", 7),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.工艺参数上传), "D703", 1, "Int16", "Read", 8),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.设备状态上传), "D707", 1, "Int16", "Read", 9),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时搅拌转速), "D1618", 1, "Int16", "Read", 10),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时搅拌电流), "D1616", 1, "Int16", "Read", 11),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时分散转速), "D1638", 1, "Int16", "Read", 12),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时分散电流), "D1636", 1, "Int16", "Read", 13),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.设备状态值), "D711", 1, "Int16", "Read", 14),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.出料CNT目标值), "D8000", 1, "UInt16", "Read", 15),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.出料CNTA罐重量), "D7000", 1, "UInt16", "Read", 16),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.出料CNTB罐重量), "D7002", 1, "UInt16", "Read", 17),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.出料NMP实际值), "D812", 1, "UInt16", "Read", 18),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.出料NMP目标值), "D810", 1, "UInt16", "Read", 19),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.出料胶液实际值), "D822", 1, "UInt16", "Read", 20),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.出料设定搅拌时间), "D2054", 1, "UInt16", "Read", 21),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.出料剩余搅拌时间), "D2056", 1, "UInt16", "Read", 22),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.出料设定分散时间), "D2044", 1, "UInt16", "Read", 23),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.出料剩余分散时间), "D2046", 1, "UInt16", "Read", 24),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.出料上传), "D602", 1, "Int16", "Write", 1),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.心跳), "D600", 1, "Int16", "Write", 2),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.扫码进站), "D601", 1, "Int16", "Write", 3),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.工艺参数上传), "D603", 1, "Int16", "Write", 4),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.设备状态上传), "D607", 1, "Int16", "Write", 5)
         ];
 
     private static HomogenizationCodeOptions CreateCodeOptions()
@@ -526,31 +615,31 @@ public sealed class HomogenizationRuntimeBehaviorTests
     private static IReadOnlyList<ModuleIoSnapshot> BuildRecipeBindings()
         =>
         [
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.配方NMP), "ZR1200", 60, "Float", "Read", 1),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.配方上传触发), "D703", 1, "Int16", "Read", 2),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.心跳输入), "D700", 1, "Int16", "Read", 3),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.配方搅拌转速), "ZR400", 30, "UInt16", "Read", 4),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.实时搅拌转速), "D1618", 1, "Int16", "Read", 5),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.进站触发), "D701", 1, "Int16", "Read", 6),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.出料触发), "D702", 1, "Int16", "Read", 7),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.设备状态上传触发), "D707", 1, "Int16", "Read", 8),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.设备状态值), "D711", 1, "Int16", "Read", 9),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.实时搅拌电流), "D1616", 1, "Int16", "Read", 10),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.实时分散转速), "D1638", 1, "Int16", "Read", 11),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.实时分散电流), "D1636", 1, "Int16", "Read", 12),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.实时温度), "D301", 1, "Int16", "Read", 13),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.实时真空度), "D300", 1, "Int16", "Read", 14),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.配方分散转速), "ZR500", 30, "UInt16", "Read", 15),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.配方NCM), "ZR1000", 60, "Float", "Read", 16),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.配方SP1), "ZR1800", 60, "Float", "Read", 17),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.配方胶液), "ZR1400", 60, "Float", "Read", 18),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.配方CNT), "ZR1600", 60, "Float", "Read", 19),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.配方真空), "R300", 30, "Bool", "Read", 20),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.配方时间), "ZR0", 30, "UInt16", "Read", 21),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.配方温度), "ZR100", 30, "Int16", "Read", 22),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.配方停机步), "ZR200", 30, "Bool", "Read", 23),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.心跳输出), "D600", 1, "Int16", "Write", 1),
-            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationSignal.配方应答), "D603", 1, "Int16", "Write", 2)
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.配方NMP), "ZR1200", 60, "Float", "Read", 1),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.工艺参数上传), "D703", 1, "Int16", "Read", 2),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.心跳), "D700", 1, "Int16", "Read", 3),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.配方搅拌转速), "ZR400", 30, "UInt16", "Read", 4),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时搅拌转速), "D1618", 1, "Int16", "Read", 5),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.扫码进站), "D701", 1, "Int16", "Read", 6),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.出料上传), "D702", 1, "Int16", "Read", 7),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.设备状态上传), "D707", 1, "Int16", "Read", 8),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.设备状态值), "D711", 1, "Int16", "Read", 9),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时搅拌电流), "D1616", 1, "Int16", "Read", 10),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时分散转速), "D1638", 1, "Int16", "Read", 11),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时分散电流), "D1636", 1, "Int16", "Read", 12),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时温度), "D301", 1, "Int16", "Read", 13),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时真空度), "D300", 1, "Int16", "Read", 14),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.配方分散转速), "ZR500", 30, "UInt16", "Read", 15),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.配方NCM), "ZR1000", 60, "Float", "Read", 16),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.配方SP1), "ZR1800", 60, "Float", "Read", 17),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.配方胶液), "ZR1400", 60, "Float", "Read", 18),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.配方CNT), "ZR1600", 60, "Float", "Read", 19),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.配方真空), "R300", 30, "Bool", "Read", 20),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.配方时间), "ZR0", 30, "UInt16", "Read", 21),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.配方温度), "ZR100", 30, "Int16", "Read", 22),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.配方停机步), "ZR200", 30, "Bool", "Read", 23),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.心跳), "D600", 1, "Int16", "Write", 1),
+            new(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.工艺参数上传), "D603", 1, "Int16", "Write", 2)
         ];
 
     private static Dictionary<string, int> BuildOffsets(IReadOnlyList<ModuleIoSnapshot> bindings, string direction)
@@ -610,6 +699,35 @@ public sealed class HomogenizationRuntimeBehaviorTests
     private static TaskCompletionSource<bool> NewGate()
         => new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+    private static IConfiguration CreateEnabledSeedConfiguration(bool resetBeforeImport)
+        => new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Modules:Homogenization:DeviceSeed:Enabled"] = "true",
+                ["Modules:Homogenization:DeviceSeed:ResetBeforeImport"] = resetBeforeImport.ToString()
+            })
+            .Build();
+
+    private static EdgeRuntimePaths CreateRuntimePaths(string runtimeRoot)
+        => new(
+            BaseDirectory: runtimeRoot,
+            ProfileName: "HomogenizationLine",
+            RuntimeDataRoot: runtimeRoot,
+            DatabaseDirectory: Path.Combine(runtimeRoot, "db"),
+            ContextDirectory: Path.Combine(runtimeRoot, "context"),
+            RecipeDirectory: Path.Combine(runtimeRoot, "recipe"),
+            ExcelDirectory: Path.Combine(runtimeRoot, "excel"),
+            DiagnosticsDirectory: Path.Combine(runtimeRoot, "diagnostics"),
+            LogDirectory: Path.Combine(runtimeRoot, "diagnostics", "logs"),
+            DeviceCacheFilePath: Path.Combine(runtimeRoot, "device_cache.json"),
+            PrimaryCrashLogPath: Path.Combine(runtimeRoot, "diagnostics", "crash.log"),
+            FallbackCrashLogPath: Path.Combine(runtimeRoot, "diagnostics", "crash.fallback.log"));
+
+    private static IReadOnlyList<HomogenizationTestSignalDefinition> SeedableSignals()
+        => HomogenizationSignalTestProfile.Signals
+            .Where(static signal => !string.IsNullOrWhiteSpace(signal.DefaultAddress))
+            .ToArray();
+
     private static async Task WaitUntilAsync(Func<bool> condition)
     {
         var deadline = DateTime.UtcNow.AddSeconds(5);
@@ -627,25 +745,25 @@ public sealed class HomogenizationRuntimeBehaviorTests
     }
 
     private sealed class RuntimeFakeModuleParamProvider
-        : IModuleParamProvider<MesParam, CloudParam, BusinessParam>
+        : IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>
     {
-        public Task<ModuleParamSnapshot<MesParam, CloudParam, BusinessParam>> GetAsync(
+        public Task<ModuleParamSnapshot<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>> GetAsync(
             CancellationToken cancellationToken = default)
-            => Task.FromResult(new ModuleParamSnapshot<MesParam, CloudParam, BusinessParam>(
+            => Task.FromResult(new ModuleParamSnapshot<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>(
                 DependencyInjection.ModuleKey,
-                EmptyGroup<MesParam>(ModuleParamCategory.Mes),
-                EmptyGroup<CloudParam>(ModuleParamCategory.Cloud),
-                new ModuleParamGroup<BusinessParam>(
+                EmptyGroup<HomogenizationParams.Mes>(ModuleParamCategory.Mes),
+                EmptyGroup<HomogenizationParams.Cloud>(ModuleParamCategory.Cloud),
+                new ModuleParamGroup<HomogenizationParams.Business>(
                     DependencyInjection.ModuleKey,
                     ModuleParamCategory.Business,
-                    new Dictionary<BusinessParam, string>(),
-                    new Dictionary<BusinessParam, string?>
+                    new Dictionary<HomogenizationParams.Business, string>(),
+                    new Dictionary<HomogenizationParams.Business, string?>
                     {
-                        [BusinessParam.启用托盘码重码验证] = "false"
+                        [HomogenizationParams.Business.启用托盘码重码验证] = "false"
                     },
-                    new Dictionary<BusinessParam, ParamValueKind>
+                    new Dictionary<HomogenizationParams.Business, ParamValueKind>
                     {
-                        [BusinessParam.启用托盘码重码验证] = ParamValueKind.Bool
+                        [HomogenizationParams.Business.启用托盘码重码验证] = ParamValueKind.Bool
                     },
                     warn: null)));
 
@@ -873,3 +991,6 @@ public sealed class HomogenizationRuntimeBehaviorTests
             => throw new NotSupportedException();
     }
 }
+
+
+

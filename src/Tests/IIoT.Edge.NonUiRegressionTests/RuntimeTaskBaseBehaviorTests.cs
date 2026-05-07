@@ -168,10 +168,30 @@ public sealed class RuntimeTaskBaseBehaviorTests
 
     private sealed class NullPlcBuffer : IPlcBuffer
     {
+        public event EventHandler<PlcSignalBufferChangedEventArgs>? SignalValuesChanged;
+
         public ushort GetReadValue(int index) => 0;
+
+        public bool TryGetReadWords(string signalKey, out ushort[] values)
+        {
+            values = [];
+            return false;
+        }
+
+        public bool TryGetWriteWords(string signalKey, out ushort[] values)
+        {
+            values = [];
+            return false;
+        }
 
         public void SetWriteValue(int index, ushort value)
         {
+            SignalValuesChanged?.Invoke(this, new PlcSignalBufferChangedEventArgs(string.Empty, "Write"));
+        }
+
+        public void SetWriteValue(string signalKey, int offset, ushort value)
+        {
+            SignalValuesChanged?.Invoke(this, new PlcSignalBufferChangedEventArgs(signalKey, "Write"));
         }
     }
 }

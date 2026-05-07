@@ -12,6 +12,19 @@ namespace IIoT.Edge.NonUiRegressionTests;
 
 public sealed class RetryTaskBehaviorTests
 {
+    [Theory]
+    [InlineData(1, 30)]
+    [InlineData(5, 30)]
+    [InlineData(6, 300)]
+    [InlineData(10, 300)]
+    [InlineData(11, 1800)]
+    public void DefaultRetryBackoffStrategy_ShouldPreserveRetryBoundaries(int retryCount, int expectedSeconds)
+    {
+        var strategy = new DefaultRetryBackoffStrategy();
+
+        Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), strategy.Calculate(retryCount));
+    }
+
     [Fact]
     public async Task Reconnect_ShouldResetAbandonedRecordsOnlyOnRecovery()
     {
@@ -74,7 +87,7 @@ public sealed class RetryTaskBehaviorTests
     [InlineData(10, 1500, 2100)]
     public async Task RetryFailure_ShouldUseExpectedBackoffWindow(int currentRetryCount, int minSeconds, int maxSeconds)
     {
-        CellDataTypeRegistry.Register<StackingLikeCellData>("Stacking");
+        CellDataTypeRegistry.Register<TestCellData>("OtherProcess");
 
         var logger = new FakeLogService();
         var failedStore = new FakeFailedRecordStore();
@@ -92,8 +105,8 @@ public sealed class RetryTaskBehaviorTests
         {
             Id = recordIdBase + currentRetryCount,
             Channel = "Cloud",
-            ProcessType = "Stacking",
-            CellDataJson = SerializeCellData(new StackingLikeCellData
+            ProcessType = "OtherProcess",
+            CellDataJson = SerializeCellData(new TestCellData
             {
                 Barcode = "BC-TEST"
             }),
@@ -129,9 +142,60 @@ public sealed class RetryTaskBehaviorTests
     }
 
     [Fact]
+    public async Task RetryFailure_ShouldUseInjectedBackoffStrategy()
+    {
+        CellDataTypeRegistry.Register<TestCellData>("OtherProcess");
+
+        var failedStore = new FakeFailedRecordStore();
+        var deviceService = new FakeDeviceService();
+        deviceService.SetOnline(new DeviceSession
+        {
+            DeviceId = Guid.NewGuid(),
+            DeviceName = "PLC-A",
+            ClientCode = "CLIENT-01",
+            ProcessId = Guid.NewGuid()
+        });
+
+        failedStore.PendingRecords.Add(new FailedCellRecord
+        {
+            Id = 901,
+            Channel = "Cloud",
+            ProcessType = "OtherProcess",
+            CellDataJson = SerializeCellData(new TestCellData { Barcode = "BC-INJECT" }),
+            FailedTarget = "Cloud",
+            ErrorMessage = "seed",
+            RetryCount = 2,
+            NextRetryTime = DateTime.UtcNow.AddMinutes(-1),
+            CreatedAt = DateTime.UtcNow.AddMinutes(-2)
+        });
+
+        var cloudConsumer = new FakeCloudConsumer();
+        cloudConsumer.EnqueueResult(CloudCallResult.Failure(CloudCallOutcome.HttpFailure, "http_failure"));
+        var strategy = new FixedRetryBackoffStrategy(TimeSpan.FromSeconds(7));
+        var task = new TestableCloudRetryTask(
+            new FakeLogService(),
+            failedStore,
+            new FakeCloudFallbackBufferStore(),
+            deviceService,
+            cloudConsumer,
+            new FakeCloudBatchConsumer(),
+            new FakeDeviceLogSyncTask(),
+            new FakeCapacitySyncTask(),
+            retryBackoffStrategy: strategy);
+
+        var before = DateTime.UtcNow;
+        await task.ExecuteOnceAsync();
+
+        Assert.Equal(1, strategy.CallCount);
+        Assert.Equal(3, strategy.LastRetryCount);
+        Assert.True(failedStore.Updates.TryGetValue(901, out var update));
+        Assert.InRange((update!.NextRetryTime - before).TotalSeconds, 6, 9);
+    }
+
+    [Fact]
     public async Task RetryFailure_WhenExceedMaxRetry_ShouldStopWithMaxValue()
     {
-        CellDataTypeRegistry.Register<StackingLikeCellData>("Stacking");
+        CellDataTypeRegistry.Register<TestCellData>("OtherProcess");
 
         var logger = new FakeLogService();
         var failedStore = new FakeFailedRecordStore();
@@ -149,8 +213,8 @@ public sealed class RetryTaskBehaviorTests
         {
             Id = recordId,
             Channel = "Cloud",
-            ProcessType = "Stacking",
-            CellDataJson = SerializeCellData(new StackingLikeCellData { Barcode = "BC-MAX" }),
+            ProcessType = "OtherProcess",
+            CellDataJson = SerializeCellData(new TestCellData { Barcode = "BC-MAX" }),
             FailedTarget = "Cloud",
             ErrorMessage = "seed",
             RetryCount = 20,
@@ -213,7 +277,7 @@ public sealed class RetryTaskBehaviorTests
     [Fact]
     public async Task RetryFailure_ShouldMoveCloudRuntimeStateToBackoff()
     {
-        CellDataTypeRegistry.Register<StackingLikeCellData>("Stacking");
+        CellDataTypeRegistry.Register<TestCellData>("OtherProcess");
 
         var diagnosticsStore = new FakeCloudDiagnosticsStore();
         var failedStore = new FakeFailedRecordStore();
@@ -221,8 +285,8 @@ public sealed class RetryTaskBehaviorTests
         {
             Id = 1001,
             Channel = "Cloud",
-            ProcessType = "Stacking",
-            CellDataJson = SerializeCellData(new StackingLikeCellData { Barcode = "BC-BACKOFF" }),
+            ProcessType = "OtherProcess",
+            CellDataJson = SerializeCellData(new TestCellData { Barcode = "BC-BACKOFF" }),
             FailedTarget = "Cloud",
             ErrorMessage = "seed",
             NextRetryTime = DateTime.UtcNow.AddMinutes(-1)
@@ -285,7 +349,9 @@ public sealed class RetryTaskBehaviorTests
             FakeCapacitySyncTask capacitySync,
             FakeCloudDiagnosticsStore? diagnosticsStore = null,
             FakeCloudDeadLetterStore? deadLetterStore = null,
-            FakeCriticalPersistenceFallbackWriter? criticalWriter = null)
+            FakeCriticalPersistenceFallbackWriter? criticalWriter = null,
+            IRetryBackoffStrategy? retryBackoffStrategy = null,
+            IDataPipelineDeadLetterWriter? deadLetterWriter = null)
         {
             fallbackStore.RetryStore = failedStore;
             var cloudDiagnosticsStore = diagnosticsStore ?? new FakeCloudDiagnosticsStore();
@@ -308,11 +374,27 @@ public sealed class RetryTaskBehaviorTests
                     fallbackStore,
                     new FakeMesFallbackBufferStore(),
                     cloudDiagnosticsStore,
-                    new FakeMesRetryDiagnosticsStore()));
+                    new FakeMesRetryDiagnosticsStore()),
+                retryBackoffStrategy ?? new DefaultRetryBackoffStrategy(),
+                deadLetterWriter ?? new DataPipelineDeadLetterWriter());
         }
 
         public Task ExecuteOnceAsync()
             => _inner.ExecuteOneIterationAsync();
+    }
+
+    private sealed class FixedRetryBackoffStrategy(TimeSpan delay) : IRetryBackoffStrategy
+    {
+        public int CallCount { get; private set; }
+
+        public int LastRetryCount { get; private set; }
+
+        public TimeSpan Calculate(int retryCount)
+        {
+            CallCount++;
+            LastRetryCount = retryCount;
+            return delay;
+        }
     }
 
     private static DataPipelineCapacityGuard CreateCapacityGuard(

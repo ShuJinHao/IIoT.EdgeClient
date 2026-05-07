@@ -1,7 +1,6 @@
-using IIoT.Edge.Application.Abstractions.Device;
+﻿using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.Application.Abstractions.Plc.Signals;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
@@ -26,9 +25,13 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
     private readonly HomogenizationMesScenarioChannel _mesChannel;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
 
+    /// <summary>
+    /// 创建匀浆设备状态上传握手任务。
+    /// </summary>
     public HomogenizationEquipmentStatusTask(
         IPlcBuffer buffer,
-        ILogicalSignalAccessor<HomogenizationSignal> signals,
+        HomogenizationPlcHandshakeAccessor interaction,
+        HomogenizationSignalCodec codec,
         HomogenizationContext context,
         IDeviceService deviceService,
         HomogenizationMesScenarioChannel mesChannel,
@@ -37,7 +40,7 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
         IProductionTimeProvider productionTime,
         IOptions<HomogenizationModuleOptions> moduleOptions,
         IOptions<HomogenizationCodeOptions> codeOptions)
-        : base(buffer, signals, context, logger, productionTime, codeOptions, moduleOptions)
+        : base(buffer, interaction, codec, context, logger, productionTime, codeOptions, moduleOptions)
     {
         _deviceService = deviceService;
         _mesChannel = mesChannel;
@@ -51,10 +54,12 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
 
     protected override async Task DoCoreAsync()
     {
+        const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.设备状态上传;
+
         switch (Step)
         {
             case 0:
-                if (Signals.ReadUInt16(HomogenizationSignal.设备状态上传触发) == CodeOptions.Plc.SignalTrigger)
+                if (Interaction.IsTriggered(trigger))
                 {
                     Logger.Info($"[{ModuleContext.DeviceName}] {TaskName} 设备状态上传触发。");
                     Step = 10;
@@ -78,7 +83,7 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
                     _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.EquipmentStatus, message);
                     ModuleContext.LastEquipmentStatusAt = ProductionTime.BusinessNow;
                     ModuleContext.LastEquipmentStatusResult = message;
-                    Signals.WriteUInt16(HomogenizationSignal.设备状态应答, CodeOptions.Plc.AckException);
+                    Interaction.ReplyException(trigger);
                     Logger.Error($"[{ModuleContext.DeviceName}] {TaskName} {message}");
                     Step = 30;
                 }
@@ -86,9 +91,9 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
                 break;
 
             case 30:
-                if (Signals.ReadUInt16(HomogenizationSignal.设备状态上传触发) == CodeOptions.Plc.SignalReset)
+                if (Interaction.IsReset(trigger))
                 {
-                    Signals.WriteUInt16(HomogenizationSignal.设备状态应答, CodeOptions.Plc.SignalReset);
+                    Interaction.ReplyReset(trigger);
                     Logger.Info($"[{ModuleContext.DeviceName}] {TaskName} 设备状态上传复位。");
                     Step = 0;
                 }
@@ -99,6 +104,7 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
 
     private async Task ProcessTriggerAsync(CancellationToken cancellationToken)
     {
+        const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.设备状态上传;
         var snapshot = Codec.CaptureEquipmentStatusSnapshot(CodeOptions.Mes);
         var result = await _mesChannel
             .UploadEquipmentStatusAsync(_deviceService.CurrentDevice, snapshot, cancellationToken)
@@ -117,6 +123,7 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
         ModuleContext.LastEquipmentStatusResult = result.Message;
         ModuleContext.LastEquipmentStatusSnapshot = snapshot;
 
-        Signals.WriteUInt16(HomogenizationSignal.设备状态应答, ResolveAck(result));
+        Interaction.ReplyResult(trigger, result);
     }
 }
+

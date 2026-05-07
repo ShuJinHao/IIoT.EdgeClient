@@ -3,6 +3,8 @@ param(
 
     [string]$ManifestPath = 'scripts\edge-runtime.publish.json',
 
+    [string]$LauncherProfileCatalogPath = 'src\Edge\IIoT.Edge.Launcher\launcher.profiles.json',
+
     [string]$LayoutRoot = "..\publish\$Configuration",
 
     [string]$LauncherRuntimeRoot = "..\publish\$Configuration\launcher",
@@ -16,9 +18,11 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot 'EdgeRuntime.Common.ps1')
 
 $manifest = Load-EdgeRuntimePublishManifest -RepoRoot $repoRoot -ManifestPath $ManifestPath
+$launcherProfileCatalog = Get-EdgeLauncherProfileCatalog -RepoRoot $repoRoot -ProfileCatalogPath $LauncherProfileCatalogPath
 $resolvedLayoutRoot = Resolve-EdgeAbsolutePath -BasePath $repoRoot -PathValue $LayoutRoot
 $resolvedLauncherRuntimeRoot = Resolve-EdgeAbsolutePath -BasePath $repoRoot -PathValue $LauncherRuntimeRoot
 $resolvedShellRuntimeRoot = Resolve-EdgeAbsolutePath -BasePath $repoRoot -PathValue $ShellRuntimeRoot
+Test-EdgeLauncherProfilesMatchManifest -Manifest $manifest -Profiles $launcherProfileCatalog.Profiles -LauncherRuntimeRoot $resolvedLauncherRuntimeRoot
 $legacyRuntimeRoot = Join-Path $resolvedLayoutRoot 'net10.0-windows'
 
 if (-not (Test-Path $resolvedLauncherRuntimeRoot)) {
@@ -33,7 +37,7 @@ if (Test-Path $legacyRuntimeRoot) {
     Remove-Item -LiteralPath $legacyRuntimeRoot -Recurse -Force
 }
 
-Write-EdgeLauncherProfiles -Manifest $manifest -OutputPath (Join-Path $resolvedLauncherRuntimeRoot 'launcher.profiles.json')
+Copy-EdgeLauncherProfileCatalog -SourcePath $launcherProfileCatalog.Path -LauncherRuntimeRoot $resolvedLauncherRuntimeRoot | Out-Null
 Remove-EdgeLauncherShellArtifacts -LauncherRuntimeRoot $resolvedLauncherRuntimeRoot
 
 foreach ($runtime in $manifest.runtimes) {
@@ -44,5 +48,7 @@ foreach ($runtime in $manifest.runtimes) {
         -RuntimeDefinition $runtime `
         -LayoutRoot $resolvedLayoutRoot
 }
+
+Test-EdgeLauncherProfilesMatchManifest -Manifest $manifest -Profiles $launcherProfileCatalog.Profiles -LauncherRuntimeRoot $resolvedLauncherRuntimeRoot -CheckExecutablePath
 
 Write-Host "Synchronized local runtime layout: $resolvedLayoutRoot"

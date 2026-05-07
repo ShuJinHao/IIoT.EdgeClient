@@ -1,11 +1,9 @@
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.Application.Abstractions.Plc.Signals;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
-using IIoT.Edge.Module.Homogenization.Config.Hardware;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using IIoT.Edge.Runtime.Base;
@@ -20,7 +18,7 @@ using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesS
 namespace IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 
 /// <summary>
-/// 实时上传任务：周期采集 PLC 实时数据快照并上传 MES。
+/// 实时上传任务：周期采集 PLC 单点实时数据快照并上传 MES。
 /// </summary>
 internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBase<HomogenizationRealtimeSnapshot>
 {
@@ -32,15 +30,17 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
     private readonly int _taskLoopInterval;
     private readonly HomogenizationSignalCodec _codec;
 
+    /// <summary>
+    /// 创建匀浆实时数据上传任务。
+    /// </summary>
     public HomogenizationRealtimeTask(
         IPlcBuffer buffer,
-        ILogicalSignalAccessor<HomogenizationSignal> signals,
+        HomogenizationSignalCodec codec,
         HomogenizationContext context,
         IDeviceService deviceService,
         HomogenizationMesScenarioChannel mesChannel,
         IMesUploadDiagnosticsStore diagnosticsStore,
         ILogService logger,
-        IProductionTimeProvider productionTime,
         IOptions<HomogenizationModuleOptions> moduleOptions,
         IOptions<HomogenizationCodeOptions> codeOptions)
         : base(buffer, context, logger)
@@ -50,7 +50,7 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
         _mesChannel = mesChannel;
         _diagnosticsStore = diagnosticsStore;
         _codeOptions = codeOptions.Value;
-        _codec = new HomogenizationSignalCodec(signals, productionTime);
+        _codec = codec;
         var runtime = moduleOptions.Value.Runtime;
         _taskLoopInterval = Math.Max(runtime.MinRealtimeLoopIntervalMs, runtime.RealtimeLoopIntervalMs);
     }
@@ -66,7 +66,7 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
     protected override int TaskLoopInterval => _taskLoopInterval;
 
     protected override HomogenizationRealtimeSnapshot CaptureSnapshot()
-        => Codec.CaptureRealtimeSnapshot();
+        => _codec.CaptureRealtimeSnapshot();
 
     protected override Task<MesCallResult> UploadSnapshotAsync(
         HomogenizationRealtimeSnapshot snapshot,
@@ -92,6 +92,4 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
         _context.LastRealtimeSnapshot = snapshot;
         return Task.CompletedTask;
     }
-
-    private HomogenizationSignalCodec Codec => _codec;
 }

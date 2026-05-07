@@ -22,17 +22,17 @@ public sealed class ModuleParamSnapshot<TMes, TCloud, TBusiness>(
     public string ModuleId { get; } = moduleId;
 
     /// <summary>
-    /// 读取 MES 参数，调用方用泛型声明期望类型，例如 Mes&lt;string&gt;(MesParam.服务地址)。
+    /// 读取 MES 参数，调用方用泛型声明期望类型，例如 Mes&lt;string&gt;(TMesParam.服务地址)。
     /// </summary>
     public T Mes<T>(TMes key) => _mes.Get<T>(key);
 
     /// <summary>
-    /// 读取云端参数，调用方用泛型声明期望类型，例如 Cloud&lt;bool&gt;(CloudParam.启用)。
+    /// 读取云端参数，调用方用泛型声明期望类型，例如 Cloud&lt;bool&gt;(TCloudParam.启用)。
     /// </summary>
     public T Cloud<T>(TCloud key) => _cloud.Get<T>(key);
 
     /// <summary>
-    /// 读取插件业务参数，调用方用泛型声明期望类型，例如 Business&lt;bool&gt;(BusinessParam.启用托盘码重码验证)。
+    /// 读取插件业务参数，调用方用泛型声明期望类型，例如 Business&lt;bool&gt;(TBusinessParam.启用托盘码重码验证)。
     /// </summary>
     public T Business<T>(TBusiness key) => _business.Get<T>(key);
 }

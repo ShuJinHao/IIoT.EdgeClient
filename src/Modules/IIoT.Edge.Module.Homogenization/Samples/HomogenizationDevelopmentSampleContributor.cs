@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Modules.Hardware;
@@ -39,7 +40,8 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
         IRepository<NetworkDeviceEntity> networkDevices,
         IRepository<IoMappingEntity> ioMappings,
         ILogService logger,
-        IEnumerable<IModuleHardwareProfileProvider> hardwareProfiles)
+        IEnumerable<IModuleHardwareProfileProvider> hardwareProfiles,
+        EdgeRuntimePaths? runtimePaths = null)
         : base(configuration, hardwareProfiles)
     {
         _networkDevices = networkDevices;
@@ -90,7 +92,7 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
             importedMappingCount += await EnsureMappingsAsync(device, hardwareProfile, cancellationToken).ConfigureAwait(false);
         }
 
-        _logger.Info($"[匀浆][设备样本] 播种检查完成。设备导入 {importedDeviceCount} 台，IO 映射补齐 {importedMappingCount} 条。");
+        _logger.Info($"[匀浆][设备样本] 播种检查完成。设备导入 {importedDeviceCount} 台，IO 标准点位导入 {importedMappingCount} 条。");
     }
 
     private async Task ResetHomogenizationConfigurationAsync(CancellationToken cancellationToken)
@@ -185,94 +187,63 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
         IModuleHardwareProfileProvider hardwareProfile,
         CancellationToken cancellationToken)
     {
+        var templates = hardwareProfile.GetDefaultIoTemplate()
+            .Where(static x => !string.IsNullOrWhiteSpace(x.PlcAddress))
+            .OrderBy(static x => x.SortOrder)
+            .ThenBy(static x => x.Direction, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(static x => x.SignalKey, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
         var existingMappings = await _ioMappings.GetListAsync(
             x => x.NetworkDeviceId == device.Id,
             cancellationToken).ConfigureAwait(false);
 
-        var existingBySignalKey = existingMappings
-            .GroupBy(static x => x.SignalKey, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(static x => x.Key, static x => x.First(), StringComparer.OrdinalIgnoreCase);
-
-        var addedCount = 0;
-        var repairedCount = 0;
-        foreach (var template in hardwareProfile.GetDefaultIoTemplate().OrderBy(static x => x.SortOrder))
+        if (existingMappings.Count > 0)
         {
-            if (existingBySignalKey.TryGetValue(template.SignalKey, out var existingMapping))
-            {
-                if (ApplyTemplateMetadata(existingMapping, template))
-                {
-                    _ioMappings.Update(existingMapping);
-                    repairedCount++;
-                }
-
-                continue;
-            }
-
-            var entity = IoMappingEntity.Create(
-                device.Id,
-                template.SignalKey,
-                template.PlcAddress,
-                template.AddressCount,
-                template.DataType,
-                template.Direction,
-                template.Category,
-                template.BusinessGroup,
-                template.SignalName);
-            entity.UpdateSortOrder(template.SortOrder);
-            entity.UpdateMetadata(
-                template.SignalKey,
-                template.DataType,
-                template.Direction,
-                template.Category,
-                template.BusinessGroup,
-                template.SignalName,
-                string.IsNullOrWhiteSpace(template.Remark) ? SeedRemark : template.Remark);
-            _ioMappings.Add(entity);
-            addedCount++;
-        }
-
-        if (addedCount == 0 && repairedCount == 0)
-        {
-            _logger.Info($"[匀浆][设备样本] 设备“{device.DeviceName}”无需补写映射。");
+            _logger.Info($"[匀浆][设备样本] 设备“{device.DeviceName}”已有 IO 映射，跳过标准点位播种。");
             return 0;
         }
 
+        foreach (var template in templates)
+        {
+            var entity = CreateMappingFromTemplate(device.Id, template);
+            _ioMappings.Add(entity);
+        }
+
         await _ioMappings.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-        _logger.Info($"[匀浆][设备样本] 已为“{device.DeviceName}”新增 {addedCount} 条映射，修复 {repairedCount} 条模板元数据。");
-        return addedCount + repairedCount;
+        _logger.Info($"[匀浆][设备样本] 设备“{device.DeviceName}”首次初始化 IO 映射，已播种 {templates.Length} 条标准点位。");
+        return templates.Length;
     }
 
-    private static bool ApplyTemplateMetadata(IoMappingEntity existing, ModuleIoTemplateEntry template)
+    private static IoMappingEntity CreateMappingFromTemplate(int networkDeviceId, ModuleIoTemplateEntry template)
     {
-        var templateRemark = string.IsNullOrWhiteSpace(template.Remark) ? SeedRemark : template.Remark.Trim();
-        var changed = existing.AddressCount != template.AddressCount
-            || !string.Equals(existing.DataType, template.DataType, StringComparison.Ordinal)
-            || !string.Equals(existing.Direction, template.Direction, StringComparison.Ordinal)
-            || existing.SortOrder != template.SortOrder
-            || !string.Equals(existing.Category, template.Category, StringComparison.Ordinal)
-            || !string.Equals(existing.BusinessGroup, template.BusinessGroup, StringComparison.Ordinal)
-            || !string.Equals(existing.SignalName, template.SignalName, StringComparison.Ordinal)
-            || !string.Equals(existing.Remark, templateRemark, StringComparison.Ordinal);
-
-        existing.UpdateAddress(existing.PlcAddress, template.AddressCount);
-        existing.UpdateSortOrder(template.SortOrder);
-        existing.UpdateMetadata(
-            existing.SignalKey,
+        var entity = IoMappingEntity.Create(
+            networkDeviceId,
+            template.SignalKey,
+            template.PlcAddress,
+            template.AddressCount,
+            template.DataType,
+            template.Direction,
+            template.Category,
+            template.BusinessGroup,
+            template.SignalName);
+        entity.UpdateSortOrder(template.SortOrder);
+        entity.UpdateMetadata(
+            template.SignalKey,
             template.DataType,
             template.Direction,
             template.Category,
             template.BusinessGroup,
             template.SignalName,
-            templateRemark);
-
-        return changed;
+            string.IsNullOrWhiteSpace(template.Remark) ? SeedRemark : template.Remark);
+        return entity;
     }
+
 
     private IModuleHardwareProfileProvider GetHardwareProfile()
         => GetHardwareProfile($"匀浆设备样本导入需要模块“{DependencyInjection.ModuleKey}”的硬件模板提供器。");
 
     /// <summary>
-    /// 匀浆开发设备样本导入开关。IO 点位不在 JSON 内维护，只由硬件模板补齐。
+    /// 匀浆开发设备样本导入开关。IO 点位不在 JSON 内维护，只由插件硬件模板导入。
     /// </summary>
     private sealed class HomogenizationDeviceSeedOptions
     {
@@ -290,7 +261,7 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
     }
 
     /// <summary>
-    /// 匀浆样本设备配置，不包含 IO 点位，点位由插件硬件模板补齐。
+    /// 匀浆样本设备配置，不包含 IO 点位，点位由插件硬件模板导入。
     /// </summary>
     private sealed class HomogenizationDeviceSeed
     {

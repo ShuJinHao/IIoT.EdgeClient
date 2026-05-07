@@ -13,13 +13,19 @@ public abstract class ModulePlcSignalProfileBase<TSignalKey> : IModulePlcSignalP
     private readonly Lazy<IReadOnlyList<ModuleSignalGroup<TSignalKey>>> _groups;
     private readonly Lazy<IReadOnlyList<ModuleSignalDefinition<TSignalKey>>> _signals;
     private readonly Lazy<IReadOnlyDictionary<TSignalKey, ModuleSignalDefinition<TSignalKey>>> _signalsByKey;
+    private readonly Lazy<IReadOnlyDictionary<(TSignalKey Key, ModuleSignalDirection Direction), ModuleSignalDefinition<TSignalKey>>> _signalsByKeyAndDirection;
 
     protected ModulePlcSignalProfileBase()
     {
         _groups = new Lazy<IReadOnlyList<ModuleSignalGroup<TSignalKey>>>(() => BuildGroups().ToArray());
         _signals = new Lazy<IReadOnlyList<ModuleSignalDefinition<TSignalKey>>>(BuildAllSignals);
         _signalsByKey = new Lazy<IReadOnlyDictionary<TSignalKey, ModuleSignalDefinition<TSignalKey>>>(() =>
-            Signals.ToDictionary(static signal => signal.Key));
+            Signals.GroupBy(static signal => signal.Key)
+                .ToDictionary(
+                    static group => group.Key,
+                    static group => group.OrderBy(static signal => signal.Direction == ModuleSignalDirection.Read ? 0 : 1).First()));
+        _signalsByKeyAndDirection = new Lazy<IReadOnlyDictionary<(TSignalKey Key, ModuleSignalDirection Direction), ModuleSignalDefinition<TSignalKey>>>(() =>
+            Signals.ToDictionary(static signal => (signal.Key, signal.Direction)));
     }
 
     public abstract string ModuleId { get; }
@@ -32,6 +38,11 @@ public abstract class ModulePlcSignalProfileBase<TSignalKey> : IModulePlcSignalP
         => _signalsByKey.Value.TryGetValue(key, out var signal)
             ? signal
             : throw new InvalidOperationException($"模块【{ModuleId}】未声明 PLC 信号：{key}");
+
+    public ModuleSignalDefinition<TSignalKey> Get(TSignalKey key, ModuleSignalDirection direction)
+        => _signalsByKeyAndDirection.Value.TryGetValue((key, direction), out var signal)
+            ? signal
+            : throw new InvalidOperationException($"模块【{ModuleId}】未声明 PLC 信号：{key} / {direction}");
 
     /// <summary>
     /// 插件按业务含义构建信号分组，禁止把所有点位堆成一个扁平清单。
@@ -82,23 +93,28 @@ public abstract class ModulePlcSignalProfileBase<TSignalKey> : IModulePlcSignalP
 
     private void EnsureUniqueKeys(IReadOnlyList<ModuleSignalDefinition<TSignalKey>> signals)
     {
-        var duplicate = signals.GroupBy(static signal => signal.Key)
+        var duplicate = signals.GroupBy(static signal => (signal.Key, signal.Direction))
             .FirstOrDefault(static group => group.Count() > 1);
 
         if (duplicate is not null)
         {
-            throw new InvalidOperationException($"模块【{ModuleId}】PLC 信号存在重复 Key：{duplicate.Key}");
+            throw new InvalidOperationException($"模块【{ModuleId}】PLC 信号存在重复 Key/方向：{duplicate.Key.Key} / {duplicate.Key.Direction}");
         }
     }
 
     private void EnsureUniqueSignalKeys(IReadOnlyList<ModuleSignalDefinition<TSignalKey>> signals)
     {
-        var duplicate = signals.GroupBy(static signal => signal.SignalKey)
+        var duplicate = signals
+            .GroupBy(static signal => new
+            {
+                SignalKey = signal.SignalKey.Trim().ToUpperInvariant(),
+                signal.Direction
+            })
             .FirstOrDefault(static group => group.Count() > 1);
 
         if (duplicate is not null)
         {
-            throw new InvalidOperationException($"模块【{ModuleId}】PLC 信号存在重复 SignalKey：{duplicate.Key}");
+            throw new InvalidOperationException($"模块【{ModuleId}】PLC 信号存在重复 SignalKey/方向：{duplicate.Key.SignalKey} / {duplicate.Key.Direction}");
         }
     }
 
@@ -138,10 +154,16 @@ public abstract class ModuleHardwareProfileProviderBase<TSignalKey> : IModuleHar
 
     public abstract ModulePlcDefaults GetDefaultPlcSettings();
 
+    public virtual PlcIoRuntimePolicy GetIoRuntimePolicy()
+        => PlcIoRuntimePolicy.Default;
+
     public IReadOnlyList<ModuleIoTemplateEntry> GetDefaultIoTemplate()
         => Signals
             .Select(CreateTemplateEntry)
             .ToArray();
+
+    public virtual IReadOnlyList<ModuleIoTemplateEntry> GetIoMappingCandidates()
+        => GetDefaultIoTemplate();
 
     public ModuleHardwareValidationResult ValidatePlcConfiguration(
         string deviceName,
@@ -155,7 +177,8 @@ public abstract class ModuleHardwareProfileProviderBase<TSignalKey> : IModuleHar
                     signal.AddressCount,
                     signal.DataType,
                     signal.DirectionText,
-                    signal.SortOrder))
+                    signal.SortOrder,
+                    signal.Category))
                 .ToArray(),
             RequireCategory,
             ValidateSequentialOrder);
