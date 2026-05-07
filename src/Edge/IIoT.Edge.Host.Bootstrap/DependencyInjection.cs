@@ -193,6 +193,11 @@ public static class DependencyInjection
                 sp.GetRequiredService<RecipeSyncTask>()));
 
         services.AddSingleton<INavigationService, NavigationService>();
+        services.AddSingleton<IAppStartupInitializer, AppStartupInitializer>();
+        services.AddSingleton<IStartupPluginLifecycleSnapshotBuilder, StartupPluginLifecycleSnapshotBuilder>();
+        services.AddSingleton<IStartupDiagnosticsReportBuilder, StartupDiagnosticsReportBuilder>();
+        services.AddSingleton<IPlcRuntimeTaskBinder, PlcRuntimeTaskBinder>();
+        services.AddSingleton<IAppRuntimeStateCoordinator, AppRuntimeStateCoordinator>();
         services.AddSingleton<IAppLifecycleCoordinator, AppLifecycleManager>();
         services.AddSingleton<AppLifecycleManager>(sp =>
             (AppLifecycleManager)sp.GetRequiredService<IAppLifecycleCoordinator>());
