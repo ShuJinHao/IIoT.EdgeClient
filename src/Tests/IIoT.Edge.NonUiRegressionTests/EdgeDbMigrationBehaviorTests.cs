@@ -88,7 +88,7 @@ public sealed class EdgeDbMigrationBehaviorTests
 
             await using var reader = await command.ExecuteReaderAsync();
             Assert.True(await reader.ReadAsync());
-            Assert.Equal("Homogenization.InboundTrigger", reader.GetString(0));
+            Assert.Equal("Homogenization.Interaction.Inbound", reader.GetString(0));
             Assert.Equal("扫码进站", reader.GetString(1));
             Assert.Equal("PLC 触发", reader.GetString(2));
         }
@@ -154,7 +154,7 @@ public sealed class EdgeDbMigrationBehaviorTests
             VALUES (
                 1,
                 10,
-                'Homogenization.InboundTrigger',
+                'Homogenization.Interaction.Inbound',
                 'D701',
                 1,
                 'Int16',

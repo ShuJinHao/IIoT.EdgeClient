@@ -1477,6 +1477,8 @@ public sealed class RetryTaskCloudMesBehaviorTests
                     new FakeMesFallbackBufferStore(),
                     cloudDiagnosticsStore,
                     new FakeMesRetryDiagnosticsStore()),
+                new DefaultRetryBackoffStrategy(),
+                new DataPipelineDeadLetterWriter(),
                 processIntegrationRegistry);
         }
 
@@ -1525,7 +1527,9 @@ public sealed class RetryTaskCloudMesBehaviorTests
                     fallbackStore,
                     new FakeCloudDiagnosticsStore(),
                     mesDiagnosticsStore),
-                mesHeartbeatStore);
+                mesHeartbeatStore,
+                new DefaultRetryBackoffStrategy(),
+                new DataPipelineDeadLetterWriter());
         }
 
         public Task ExecuteOnceAsync()

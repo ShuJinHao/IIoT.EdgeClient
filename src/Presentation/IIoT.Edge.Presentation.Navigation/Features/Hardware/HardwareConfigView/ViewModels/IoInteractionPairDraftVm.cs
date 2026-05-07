@@ -4,11 +4,11 @@ using IIoT.Edge.UI.Shared.Mvvm;
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView;
 
 /// <summary>
-/// 新增信号交互弹窗的临时配对模型，一次生成同一业务组下的读写点。
+/// 新增信号交互弹窗的临时配对模型，一次生成同一标准业务动作下的一读一写。
 /// </summary>
 public sealed class IoInteractionPairDraftVm : BaseNotifyPropertyChanged
 {
-    private string _source = IoMappingOptionCatalog.PointSourceCustomDebug;
+    private string _source = IoMappingOptionCatalog.PointSourceStandardSignal;
     public string Source
     {
         get => _source;
@@ -45,7 +45,16 @@ public sealed class IoInteractionPairDraftVm : BaseNotifyPropertyChanged
     public int ReadAddressCount
     {
         get => _readAddressCount;
-        set { _readAddressCount = value; OnPropertyChanged(); }
+        set
+        {
+            if (_readAddressCount == 1)
+            {
+                return;
+            }
+
+            _readAddressCount = 1;
+            OnPropertyChanged();
+        }
     }
 
     private string _readDataType = IoMappingOptionCatalog.DataTypeInt16;
@@ -73,7 +82,16 @@ public sealed class IoInteractionPairDraftVm : BaseNotifyPropertyChanged
     public int WriteAddressCount
     {
         get => _writeAddressCount;
-        set { _writeAddressCount = value; OnPropertyChanged(); }
+        set
+        {
+            if (_writeAddressCount == 1)
+            {
+                return;
+            }
+
+            _writeAddressCount = 1;
+            OnPropertyChanged();
+        }
     }
 
     private string _writeDataType = IoMappingOptionCatalog.DataTypeInt16;

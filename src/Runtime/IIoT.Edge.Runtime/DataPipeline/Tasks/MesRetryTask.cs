@@ -33,6 +33,8 @@ public sealed class MesRetryTask : ScheduledTaskBase
     private readonly IMesRetryDiagnosticsStore _diagnosticsStore;
     private readonly DataPipelineCapacityGuard _capacityGuard;
     private readonly IExternalHeartbeatStateStore _heartbeatStateStore;
+    private readonly IRetryBackoffStrategy _retryBackoffStrategy;
+    private readonly IDataPipelineDeadLetterWriter _deadLetterWriter;
     private readonly TimeSpan _consumerCallTimeout;
     private bool _wasUnavailable = true;
     private DateOnly? _lastAbandonedCleanupDateUtc;
@@ -55,11 +57,15 @@ public sealed class MesRetryTask : ScheduledTaskBase
         IMesRetryDiagnosticsStore diagnosticsStore,
         DataPipelineCapacityGuard capacityGuard,
         IExternalHeartbeatStateStore heartbeatStateStore,
+        IRetryBackoffStrategy retryBackoffStrategy,
+        IDataPipelineDeadLetterWriter deadLetterWriter,
         DataPipelineRuntimeOptions? runtimeOptions = null)
         : base(logger)
     {
         ArgumentNullException.ThrowIfNull(capacityGuard);
         ArgumentNullException.ThrowIfNull(heartbeatStateStore);
+        ArgumentNullException.ThrowIfNull(retryBackoffStrategy);
+        ArgumentNullException.ThrowIfNull(deadLetterWriter);
 
         _retryStore = retryStore;
         _fallbackStore = fallbackStore;
@@ -70,6 +76,8 @@ public sealed class MesRetryTask : ScheduledTaskBase
         _diagnosticsStore = diagnosticsStore;
         _capacityGuard = capacityGuard;
         _heartbeatStateStore = heartbeatStateStore;
+        _retryBackoffStrategy = retryBackoffStrategy;
+        _deadLetterWriter = deadLetterWriter;
         _consumerCallTimeout = (runtimeOptions ?? new DataPipelineRuntimeOptions()).GetConsumerCallTimeout();
     }
 
@@ -299,7 +307,7 @@ public sealed class MesRetryTask : ScheduledTaskBase
             return;
         }
 
-        var nextRetryTime = DateTime.UtcNow.Add(RetryBackoffCalculator.Calculate(newRetryCount));
+        var nextRetryTime = DateTime.UtcNow.Add(_retryBackoffStrategy.Calculate(newRetryCount));
         await _retryStore.UpdateRetryAsync(record.Id, newRetryCount, errorMessage, nextRetryTime).ConfigureAwait(false);
     }
 
@@ -376,7 +384,7 @@ public sealed class MesRetryTask : ScheduledTaskBase
         long sourceRecordId,
         DeadLetterStage stage,
         string failureReason)
-        => await DataPipelineDeadLetterWriter.TryPersistAsync(
+        => await _deadLetterWriter.TryPersistAsync(
             _deadLetterStore.SaveAsync,
             _criticalFallbackWriter,
             Logger,

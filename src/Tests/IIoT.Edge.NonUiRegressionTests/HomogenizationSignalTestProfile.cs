@@ -1,22 +1,26 @@
-using IIoT.Edge.Application.Abstractions.Plc.Signals;
+﻿using IIoT.Edge.Application.Abstractions.Plc.Signals;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 
 /// <summary>
-/// 测试侧统一通过匀浆三类信号 profile 实例读取点位定义，避免回到生产代码里的静态信号链路。
+/// 测试侧统一通过匀浆五类信号 profile 实例读取点位定义，避免回到生产代码里的静态信号链路。
 /// </summary>
 internal static class HomogenizationSignalTestProfile
 {
     private static readonly HomogenizationInteractionSignalProfile InteractionProfile = new();
     private static readonly HomogenizationSingleReadSignalProfile SingleReadProfile = new();
     private static readonly HomogenizationContinuousReadSignalProfile ContinuousReadProfile = new();
+    private static readonly HomogenizationSingleWriteSignalProfile SingleWriteProfile = new();
+    private static readonly HomogenizationContinuousWriteSignalProfile ContinuousWriteProfile = new();
 
     public static IReadOnlyList<HomogenizationTestSignalDefinition> Signals { get; } =
     [
         .. InteractionProfile.Signals.Select(HomogenizationTestSignalDefinition.From)
             .Concat(SingleReadProfile.Signals.Select(HomogenizationTestSignalDefinition.From))
             .Concat(ContinuousReadProfile.Signals.Select(HomogenizationTestSignalDefinition.From))
+            .Concat(SingleWriteProfile.Signals.Select(HomogenizationTestSignalDefinition.From))
+            .Concat(ContinuousWriteProfile.Signals.Select(HomogenizationTestSignalDefinition.From))
             .OrderBy(static signal => signal.SortOrder)
     ];
 
@@ -25,11 +29,16 @@ internal static class HomogenizationSignalTestProfile
         [
             .. InteractionProfile.Groups.Where(group => group.Name == name).SelectMany(static group => group.Signals).Select(HomogenizationTestSignalDefinition.From),
             .. SingleReadProfile.Groups.Where(group => group.Name == name).SelectMany(static group => group.Signals).Select(HomogenizationTestSignalDefinition.From),
-            .. ContinuousReadProfile.Groups.Where(group => group.Name == name).SelectMany(static group => group.Signals).Select(HomogenizationTestSignalDefinition.From)
+            .. ContinuousReadProfile.Groups.Where(group => group.Name == name).SelectMany(static group => group.Signals).Select(HomogenizationTestSignalDefinition.From),
+            .. SingleWriteProfile.Groups.Where(group => group.Name == name).SelectMany(static group => group.Signals).Select(HomogenizationTestSignalDefinition.From),
+            .. ContinuousWriteProfile.Groups.Where(group => group.Name == name).SelectMany(static group => group.Signals).Select(HomogenizationTestSignalDefinition.From)
         ];
 
     public static HomogenizationTestSignalDefinition Get(HomogenizationPlcSignals.Interaction key)
         => HomogenizationTestSignalDefinition.From(InteractionProfile.Get(key));
+
+    public static HomogenizationTestSignalDefinition Get(HomogenizationPlcSignals.Interaction key, ModuleSignalDirection direction)
+        => HomogenizationTestSignalDefinition.From(InteractionProfile.Get(key, direction));
 
     public static HomogenizationTestSignalDefinition Get(HomogenizationPlcSignals.SingleRead key)
         => HomogenizationTestSignalDefinition.From(SingleReadProfile.Get(key));
@@ -75,3 +84,4 @@ internal sealed record HomogenizationTestSignalDefinition(
             signal.BusinessGroup,
             signal.SignalName);
 }
+

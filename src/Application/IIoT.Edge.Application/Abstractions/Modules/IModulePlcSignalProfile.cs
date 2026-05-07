@@ -28,4 +28,9 @@ public interface IModulePlcSignalProfile<TSignalKey>
     /// 按强类型信号键获取信号定义。
     /// </summary>
     ModuleSignalDefinition<TSignalKey> Get(TSignalKey key);
+
+    /// <summary>
+    /// 按强类型信号键和 PLC 方向获取信号定义；信号交互允许同一业务键同时拥有读点和写点。
+    /// </summary>
+    ModuleSignalDefinition<TSignalKey> Get(TSignalKey key, ModuleSignalDirection direction);
 }

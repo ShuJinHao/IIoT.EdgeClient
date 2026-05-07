@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Modules.Hardware;
+﻿using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Application.Abstractions.Plc.Signals;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
@@ -11,11 +11,11 @@ public sealed class HomogenizationHardwareProfileBehaviorTests
     [Fact]
     public void HomogenizationPlcSignalProfiles_ShouldBuildTemplateFromBusinessGroups()
     {
-        var groupedSignals = HomogenizationSignalTestProfile.Group("IO 交互")
-            .Concat(HomogenizationSignalTestProfile.Group("设备状态/报警"))
-            .Concat(HomogenizationSignalTestProfile.Group("托盘信息"))
+        var groupedSignals = HomogenizationSignalTestProfile.Group("信号交互")
+            .Concat(HomogenizationSignalTestProfile.Group("设备状态"))
+            .Concat(HomogenizationSignalTestProfile.Group("托盘数据"))
             .Concat(HomogenizationSignalTestProfile.Group("实时数据"))
-            .Concat(HomogenizationSignalTestProfile.Group("配方数据"))
+            .Concat(HomogenizationSignalTestProfile.Group("配方数组"))
             .Concat(HomogenizationSignalTestProfile.Group("出料数据"))
             .OrderBy(static signal => signal.SortOrder)
             .ToArray();
@@ -25,20 +25,22 @@ public sealed class HomogenizationHardwareProfileBehaviorTests
             HomogenizationSignalTestProfile.Signals.Select(static signal => signal.SignalKey));
         Assert.Equal(
             HomogenizationSignalTestProfile.Signals.Count,
-            HomogenizationSignalTestProfile.Signals.Select(static signal => signal.SignalKey).Distinct().Count());
+            HomogenizationSignalTestProfile.Signals.Select(static signal => $"{signal.SignalKey}:{signal.DirectionText}").Distinct().Count());
         Assert.Equal(
             HomogenizationSignalTestProfile.Signals.Count,
             HomogenizationSignalTestProfile.Signals.Select(static signal => signal.SortOrder).Distinct().Count());
         Assert.Contains(HomogenizationSignalTestProfile.Signals, static signal => signal.Direction == ModuleSignalDirection.Read);
         Assert.Contains(HomogenizationSignalTestProfile.Signals, static signal => signal.Direction == ModuleSignalDirection.Write);
         Assert.Contains(
-            HomogenizationSignalTestProfile.Group("IO 交互"),
-            signal => signal.SignalKey == HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.进站触发));
+            HomogenizationSignalTestProfile.Group("信号交互"),
+            signal => signal.SignalKey == HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.扫码进站)
+                && signal.Direction == ModuleSignalDirection.Read);
         Assert.Contains(
-            HomogenizationSignalTestProfile.Group("IO 交互"),
-            signal => signal.SignalKey == HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.进站应答));
+            HomogenizationSignalTestProfile.Group("信号交互"),
+            signal => signal.SignalKey == HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.扫码进站)
+                && signal.Direction == ModuleSignalDirection.Write);
         Assert.Contains(
-            HomogenizationSignalTestProfile.Group("设备状态/报警"),
+            HomogenizationSignalTestProfile.Group("设备状态"),
             signal => signal.SignalKey == HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.设备状态值));
 
         var provider = new HomogenizationHardwareProfileProvider();
@@ -103,6 +105,7 @@ public sealed class HomogenizationHardwareProfileBehaviorTests
         Assert.Contains(template, static mapping => mapping.Category == "信号交互");
         Assert.Contains(template, static mapping => mapping.Category == "单点读数据");
         Assert.Contains(template, static mapping => mapping.Category == "连续读数据");
+        Assert.DoesNotContain(template, static mapping => mapping.BusinessGroup == "test1");
 
         foreach (var group in template.Where(static mapping => mapping.Category == "信号交互").GroupBy(static mapping => mapping.BusinessGroup))
         {
@@ -112,11 +115,61 @@ public sealed class HomogenizationHardwareProfileBehaviorTests
     }
 
     [Fact]
+    public void HomogenizationHardwareProfileProvider_ShouldExposeEnumCandidatesWithoutSeedingNoAttributeSignals()
+    {
+        var provider = new HomogenizationHardwareProfileProvider();
+
+        var defaults = provider.GetDefaultIoTemplate();
+        var candidates = provider.GetIoMappingCandidates();
+
+        Assert.DoesNotContain(defaults, static mapping => mapping.SignalKey == "Homogenization.Interaction.test1");
+
+        var testCandidates = candidates
+            .Where(static mapping => mapping.SignalKey == "Homogenization.Interaction.test1")
+            .ToArray();
+        Assert.Equal(2, testCandidates.Length);
+        Assert.Contains(testCandidates, static mapping =>
+            mapping.Direction == "Read"
+            && mapping.Category == "信号交互"
+            && mapping.BusinessGroup == "test1"
+            && mapping.PlcAddress == string.Empty
+            && mapping.AddressCount == 1);
+        Assert.Contains(testCandidates, static mapping =>
+            mapping.Direction == "Write"
+            && mapping.Category == "信号交互"
+            && mapping.BusinessGroup == "test1"
+            && mapping.PlcAddress == string.Empty
+            && mapping.AddressCount == 1);
+    }
+
+    [Fact]
+    public void HomogenizationPlcSignalsSource_ShouldOnlyContainSignalEnums()
+    {
+        var root = FindRepositoryRoot();
+        var signalFile = Path.Combine(
+            root,
+            "src",
+            "Modules",
+            "IIoT.Edge.Module.Homogenization",
+            "Config",
+            "Hardware",
+            "HomogenizationPlcSignals.cs");
+        var text = File.ReadAllText(signalFile);
+
+        Assert.Contains("public static class HomogenizationPlcSignals", text);
+        Assert.Contains("public enum Interaction", text);
+        Assert.Contains("public enum SingleRead", text);
+        Assert.DoesNotContain("Attribute : Attribute", text);
+        Assert.DoesNotContain("HomogenizationSignalMetadata", text);
+        Assert.DoesNotContain("Profile", text);
+    }
+
+    [Fact]
     public void BufferLogicalSignalAccessor_ShouldThrowChineseErrorForMissingMapping()
     {
         var accessor = CreateInteractionAccessor([]);
 
-        var exception = Assert.Throws<InvalidOperationException>(() => accessor.ReadUInt16(HomogenizationPlcSignals.Interaction.进站触发));
+        var exception = Assert.Throws<InvalidOperationException>(() => accessor.ReadUInt16(HomogenizationPlcSignals.Interaction.扫码进站));
 
         Assert.Contains("未绑定 Read IO 映射", exception.Message);
     }
@@ -176,6 +229,22 @@ public sealed class HomogenizationHardwareProfileBehaviorTests
             new HomogenizationContinuousReadSignalProfile());
     }
 
+    private static string FindRepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "IIoT.EdgeClient.slnx")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("未找到 IIoT.EdgeClient.slnx。");
+    }
+
     private sealed class TestPlcBuffer : IPlcBuffer
     {
         public event EventHandler<PlcSignalBufferChangedEventArgs>? SignalValuesChanged;
@@ -205,3 +274,6 @@ public sealed class HomogenizationHardwareProfileBehaviorTests
         }
     }
 }
+
+
+

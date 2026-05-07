@@ -661,7 +661,7 @@ public sealed class ModuleRuntimeRegistrationTests
 
                 if (hardwareProfiles.TryGetValue(moduleIds[index], out var provider))
                 {
-                    foreach (var mapping in provider.GetDefaultIoTemplate())
+                    foreach (var mapping in provider.GetDefaultIoTemplate().Where(static x => !string.IsNullOrWhiteSpace(x.PlcAddress)))
                     {
                         var entity = IoMappingEntity.Create(
                             device.Id,

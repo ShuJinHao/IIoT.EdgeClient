@@ -3,9 +3,18 @@ using IIoT.Edge.Runtime.Base;
 
 namespace IIoT.Edge.Runtime.Plc;
 
-internal static class PlcSignalBlockPlanner
+public interface IPlcSignalBlockPlanner
 {
-    public static IReadOnlyList<PlcSignalBlock> Plan(
+    IReadOnlyList<PlcSignalBlock> Plan(
+        IReadOnlyCollection<PlcIoScanMapping> mappings,
+        int maxBlockWordCount,
+        PlcIoWriteGapPolicy writeGapPolicy,
+        bool isWrite);
+}
+
+public sealed class DefaultPlcSignalBlockPlanner : IPlcSignalBlockPlanner
+{
+    public IReadOnlyList<PlcSignalBlock> Plan(
         IReadOnlyCollection<PlcIoScanMapping> mappings,
         int maxBlockWordCount,
         PlcIoWriteGapPolicy writeGapPolicy,
@@ -168,11 +177,11 @@ internal static class PlcSignalBlockPlanner
     }
 }
 
-internal sealed record PlcSignalBlock(
+public sealed record PlcSignalBlock(
     string StartAddress,
     int WordCount,
     IReadOnlyList<PlcSignalBlockItem> Items);
 
-internal sealed record PlcSignalBlockItem(
+public sealed record PlcSignalBlockItem(
     PlcIoScanMapping Mapping,
     int Offset);

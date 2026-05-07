@@ -23,6 +23,8 @@ public sealed class IoContinuousReadMatrixSectionModel : BaseNotifyPropertyChang
 
     public int SortOrder { get; set; }
 
+    public bool CanManualRead => IoMappingOptionCatalog.IsReadDataCategory(Category);
+
     public ObservableCollection<IoSignalModel> Columns { get; } = [];
 
     public ObservableCollection<IoContinuousReadMatrixRowModel> Rows { get; } = [];

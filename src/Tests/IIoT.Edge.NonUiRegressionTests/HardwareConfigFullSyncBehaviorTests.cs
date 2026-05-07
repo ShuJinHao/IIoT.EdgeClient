@@ -371,6 +371,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
                         AddressCount = 1,
                         DataType = "Int16",
                         Direction = "Read",
+                        Category = "单点读数据",
                         SortOrder = 1,
                         Remark = "same"
                     }

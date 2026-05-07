@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Plc.Signals;
+﻿using IIoT.Edge.Application.Abstractions.Plc.Signals;
 using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
@@ -134,3 +134,4 @@ internal sealed record HomogenizationOutboundReadings(
     ushort RemainingStirringTimeMinutes,
     ushort SetDispersionTimeMinutes,
     ushort RemainingDispersionTimeMinutes);
+

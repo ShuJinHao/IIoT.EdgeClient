@@ -11,6 +11,7 @@ using IIoT.Edge.Runtime.Context;
 using IIoT.Edge.Runtime.DataPipeline.Consumers;
 using IIoT.Edge.Runtime.DataPipeline.Services;
 using IIoT.Edge.Runtime.DataPipeline.Tasks;
+using IIoT.Edge.Runtime.Plc;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace IIoT.Edge.Runtime;
@@ -26,6 +27,7 @@ public static class DependencyInjection
                 runtimePaths.ContextDirectory));
         services.AddSingleton<IProductionContextStore>(sp => sp.GetRequiredService<ProductionContextStore>());
         services.AddSingleton<ITodayCapacityStore, TodayCapacityStore>();
+        services.AddSingleton<IPlcSignalBlockPlanner, DefaultPlcSignalBlockPlanner>();
 
         AddDataPipelineRuntimeCore(services);
 
@@ -37,6 +39,8 @@ public static class DependencyInjection
         services.AddSingleton<DataPipelineCapacityGuard>();
         services.AddSingleton<DataPipelineCascadingPersistenceWriter>();
         services.AddSingleton<IIngressOverflowPersistence, IngressOverflowPersistence>();
+        services.AddSingleton<IRetryBackoffStrategy, DefaultRetryBackoffStrategy>();
+        services.AddSingleton<IDataPipelineDeadLetterWriter, DataPipelineDeadLetterWriter>();
         services.AddSingleton<DataPipelineService>();
         services.AddSingleton<IDataPipelineService>(sp => sp.GetRequiredService<DataPipelineService>());
 

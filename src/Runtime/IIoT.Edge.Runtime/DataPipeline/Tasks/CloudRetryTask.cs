@@ -31,6 +31,8 @@ public sealed class CloudRetryTask : ScheduledTaskBase
     private readonly ICloudUploadDiagnosticsStore _diagnosticsStore;
     private readonly IProcessIntegrationRegistry? _processIntegrationRegistry;
     private readonly DataPipelineCapacityGuard _capacityGuard;
+    private readonly IRetryBackoffStrategy _retryBackoffStrategy;
+    private readonly IDataPipelineDeadLetterWriter _deadLetterWriter;
     private readonly TimeSpan _consumerCallTimeout;
     private bool _wasUnavailable = true;
     private DateOnly? _lastAbandonedCleanupDateUtc;
@@ -55,11 +57,15 @@ public sealed class CloudRetryTask : ScheduledTaskBase
         ICapacitySyncTask capacitySync,
         ICloudUploadDiagnosticsStore diagnosticsStore,
         DataPipelineCapacityGuard capacityGuard,
+        IRetryBackoffStrategy retryBackoffStrategy,
+        IDataPipelineDeadLetterWriter deadLetterWriter,
         IProcessIntegrationRegistry? processIntegrationRegistry = null,
         DataPipelineRuntimeOptions? runtimeOptions = null)
         : base(logger)
     {
         ArgumentNullException.ThrowIfNull(capacityGuard);
+        ArgumentNullException.ThrowIfNull(retryBackoffStrategy);
+        ArgumentNullException.ThrowIfNull(deadLetterWriter);
 
         _retryStore = retryStore;
         _fallbackStore = fallbackStore;
@@ -73,6 +79,8 @@ public sealed class CloudRetryTask : ScheduledTaskBase
         _diagnosticsStore = diagnosticsStore;
         _processIntegrationRegistry = processIntegrationRegistry;
         _capacityGuard = capacityGuard;
+        _retryBackoffStrategy = retryBackoffStrategy;
+        _deadLetterWriter = deadLetterWriter;
         _consumerCallTimeout = (runtimeOptions ?? new DataPipelineRuntimeOptions()).GetConsumerCallTimeout();
     }
 
@@ -447,7 +455,7 @@ public sealed class CloudRetryTask : ScheduledTaskBase
             return;
         }
 
-        var nextRetryTime = DateTime.UtcNow.Add(RetryBackoffCalculator.Calculate(newRetryCount));
+        var nextRetryTime = DateTime.UtcNow.Add(_retryBackoffStrategy.Calculate(newRetryCount));
         await _retryStore.UpdateRetryAsync(record.Id, newRetryCount, errorMessage, nextRetryTime).ConfigureAwait(false);
     }
 
@@ -530,7 +538,7 @@ public sealed class CloudRetryTask : ScheduledTaskBase
         long sourceRecordId,
         DeadLetterStage stage,
         string failureReason)
-        => await DataPipelineDeadLetterWriter.TryPersistAsync(
+        => await _deadLetterWriter.TryPersistAsync(
             _deadLetterStore.SaveAsync,
             _criticalFallbackWriter,
             Logger,

@@ -7,9 +7,25 @@ namespace IIoT.Edge.Runtime.DataPipeline.Services;
 /// <summary>
 /// 统一构造 deadletter 记录和最终文件兜底，但具体写入哪个 Cloud/MES store 由调用方传入。
 /// </summary>
-internal static class DataPipelineDeadLetterWriter
+public interface IDataPipelineDeadLetterWriter
 {
-    public static async Task<bool> TryPersistAsync(
+    Task<bool> TryPersistAsync(
+        Func<DeadLetterRecord, Task> saveAsync,
+        ICriticalPersistenceFallbackWriter criticalFallbackWriter,
+        ILogService logger,
+        DataPipelineDeadLetterChannel channel,
+        string processType,
+        string cellDataJson,
+        string failedTarget,
+        string sourceTable,
+        long sourceRecordId,
+        DeadLetterStage stage,
+        string failureReason);
+}
+
+public sealed class DataPipelineDeadLetterWriter : IDataPipelineDeadLetterWriter
+{
+    public async Task<bool> TryPersistAsync(
         Func<DeadLetterRecord, Task> saveAsync,
         ICriticalPersistenceFallbackWriter criticalFallbackWriter,
         ILogService logger,
@@ -53,7 +69,7 @@ internal static class DataPipelineDeadLetterWriter
 /// <summary>
 /// 标识当前 deadletter 写入属于哪条补偿链路，避免 Cloud/MES 的日志源和兜底源被散字符串误接。
 /// </summary>
-internal readonly record struct DataPipelineDeadLetterChannel(
+public readonly record struct DataPipelineDeadLetterChannel(
     string LogPrefix,
     string DeadLetterName,
     string CriticalSource);

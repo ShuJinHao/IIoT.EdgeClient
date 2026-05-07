@@ -10,6 +10,7 @@ using IIoT.Edge.Infrastructure.DeviceComm.Signals;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.SharedKernel.Repository;
+using IIoT.Edge.Runtime.Plc;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Plc;
 
@@ -21,6 +22,7 @@ public sealed class PlcDeviceRuntimeBuilder
     private readonly IProductionContextStore _contextStore;
     private readonly ILogService _logger;
     private readonly PlcConnectionStatusStore _statusStore;
+    private readonly IPlcSignalBlockPlanner _signalBlockPlanner;
     private readonly IReadOnlyDictionary<string, IModuleHardwareProfileProvider> _hardwareProfiles;
 
     public PlcDeviceRuntimeBuilder(
@@ -30,6 +32,7 @@ public sealed class PlcDeviceRuntimeBuilder
         IProductionContextStore contextStore,
         ILogService logger,
         PlcConnectionStatusStore statusStore,
+        IPlcSignalBlockPlanner signalBlockPlanner,
         IEnumerable<IModuleHardwareProfileProvider> hardwareProfiles)
     {
         _ioMappings = ioMappings;
@@ -38,6 +41,7 @@ public sealed class PlcDeviceRuntimeBuilder
         _contextStore = contextStore;
         _logger = logger;
         _statusStore = statusStore;
+        _signalBlockPlanner = signalBlockPlanner;
         _hardwareProfiles = hardwareProfiles.ToDictionary(x => x.ModuleId, StringComparer.OrdinalIgnoreCase);
     }
 
@@ -74,6 +78,7 @@ public sealed class PlcDeviceRuntimeBuilder
             device,
             mappingArray,
             _logger,
+            _signalBlockPlanner,
             _statusStore,
             runtimePolicy);
         await ioScanTask.ConnectAsync().ConfigureAwait(false);

@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Modules;
+﻿using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc.Signals;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
@@ -14,15 +14,15 @@ public sealed class HomogenizationPlcHandshakeAccessorBehaviorTests
         var signals = new FakeInteractionSignals();
         var accessor = new HomogenizationPlcHandshakeAccessor(signals, CreateCodeOptions());
 
-        signals.SetRead(HomogenizationPlcSignals.Interaction.出料触发, 11);
+        signals.SetRead(HomogenizationPlcSignals.Interaction.出料上传, 11);
 
-        Assert.True(accessor.IsTriggered(HomogenizationPlcSignals.Interaction.出料触发));
-        Assert.False(accessor.IsReset(HomogenizationPlcSignals.Interaction.出料触发));
+        Assert.True(accessor.IsTriggered(HomogenizationPlcSignals.Interaction.出料上传));
+        Assert.False(accessor.IsReset(HomogenizationPlcSignals.Interaction.出料上传));
 
-        signals.SetRead(HomogenizationPlcSignals.Interaction.出料触发, 10);
+        signals.SetRead(HomogenizationPlcSignals.Interaction.出料上传, 10);
 
-        Assert.False(accessor.IsTriggered(HomogenizationPlcSignals.Interaction.出料触发));
-        Assert.True(accessor.IsReset(HomogenizationPlcSignals.Interaction.出料触发));
+        Assert.False(accessor.IsTriggered(HomogenizationPlcSignals.Interaction.出料上传));
+        Assert.True(accessor.IsReset(HomogenizationPlcSignals.Interaction.出料上传));
     }
 
     [Fact]
@@ -31,17 +31,17 @@ public sealed class HomogenizationPlcHandshakeAccessorBehaviorTests
         var signals = new FakeInteractionSignals();
         var accessor = new HomogenizationPlcHandshakeAccessor(signals, CreateCodeOptions());
 
-        accessor.ReplyOk(HomogenizationPlcSignals.Interaction.出料触发);
-        Assert.Equal((ushort)21, signals.GetWrite(HomogenizationPlcSignals.Interaction.出料应答));
+        accessor.ReplyOk(HomogenizationPlcSignals.Interaction.出料上传);
+        Assert.Equal((ushort)21, signals.GetWrite(HomogenizationPlcSignals.Interaction.出料上传));
 
-        accessor.ReplyException(HomogenizationPlcSignals.Interaction.出料触发);
-        Assert.Equal((ushort)22, signals.GetWrite(HomogenizationPlcSignals.Interaction.出料应答));
+        accessor.ReplyException(HomogenizationPlcSignals.Interaction.出料上传);
+        Assert.Equal((ushort)22, signals.GetWrite(HomogenizationPlcSignals.Interaction.出料上传));
 
-        accessor.ReplyMesNg(HomogenizationPlcSignals.Interaction.出料触发);
-        Assert.Equal((ushort)23, signals.GetWrite(HomogenizationPlcSignals.Interaction.出料应答));
+        accessor.ReplyMesNg(HomogenizationPlcSignals.Interaction.出料上传);
+        Assert.Equal((ushort)23, signals.GetWrite(HomogenizationPlcSignals.Interaction.出料上传));
 
-        accessor.ReplyReset(HomogenizationPlcSignals.Interaction.出料触发);
-        Assert.Equal((ushort)10, signals.GetWrite(HomogenizationPlcSignals.Interaction.出料应答));
+        accessor.ReplyReset(HomogenizationPlcSignals.Interaction.出料上传);
+        Assert.Equal((ushort)10, signals.GetWrite(HomogenizationPlcSignals.Interaction.出料上传));
     }
 
     [Fact]
@@ -50,11 +50,11 @@ public sealed class HomogenizationPlcHandshakeAccessorBehaviorTests
         var signals = new FakeInteractionSignals();
         var accessor = new HomogenizationPlcHandshakeAccessor(signals, CreateCodeOptions());
 
-        accessor.ReplyResult(HomogenizationPlcSignals.Interaction.进站触发, MesCallResult.BusinessRejected("NG"));
-        Assert.Equal((ushort)23, signals.GetWrite(HomogenizationPlcSignals.Interaction.进站应答));
+        accessor.ReplyResult(HomogenizationPlcSignals.Interaction.扫码进站, MesCallResult.BusinessRejected("NG"));
+        Assert.Equal((ushort)23, signals.GetWrite(HomogenizationPlcSignals.Interaction.扫码进站));
 
-        accessor.ReplyResult(HomogenizationPlcSignals.Interaction.进站触发, MesCallResult.TransportFailure("网络异常"));
-        Assert.Equal((ushort)22, signals.GetWrite(HomogenizationPlcSignals.Interaction.进站应答));
+        accessor.ReplyResult(HomogenizationPlcSignals.Interaction.扫码进站, MesCallResult.TransportFailure("网络异常"));
+        Assert.Equal((ushort)22, signals.GetWrite(HomogenizationPlcSignals.Interaction.扫码进站));
     }
 
     private static HomogenizationPlcCodeOptions CreateCodeOptions()
@@ -107,3 +107,4 @@ public sealed class HomogenizationPlcHandshakeAccessorBehaviorTests
             => _writes[key];
     }
 }
+

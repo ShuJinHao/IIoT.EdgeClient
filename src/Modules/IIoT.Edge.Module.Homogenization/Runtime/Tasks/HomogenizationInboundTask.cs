@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Config;
+﻿using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
@@ -60,7 +60,7 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
 
     protected override async Task DoCoreAsync()
     {
-        const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.进站触发;
+        const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.扫码进站;
 
         switch (Step)
         {
@@ -109,7 +109,7 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
 
     private async Task ProcessTriggerAsync(CancellationToken cancellationToken)
     {
-        const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.进站触发;
+        const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.扫码进站;
         var trayCode = Codec.ReadTrayCode();
         if (string.IsNullOrWhiteSpace(trayCode))
         {
@@ -166,3 +166,4 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
         ModuleContext.LastInboundResult = result;
     }
 }
+

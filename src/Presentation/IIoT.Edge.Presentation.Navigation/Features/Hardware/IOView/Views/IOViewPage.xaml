@@ -286,7 +286,8 @@
                                                 Background="#3F3F46"
                                                 BorderThickness="0"
                                                 Command="{Binding DataContext.ManualReadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                Style="{StaticResource MaterialDesignFlatButton}">
+                                                Style="{StaticResource MaterialDesignFlatButton}"
+                                                Visibility="{Binding CanManualRead, Converter={StaticResource BooleanToVisibilityConverter}}">
                                                 <StackPanel Orientation="Horizontal">
                                                     <materialDesign:PackIcon Width="13" Height="13" VerticalAlignment="Center" Foreground="#E4E4E7" Kind="Refresh" />
                                                     <TextBlock Margin="4,0,0,0" FontSize="12" Foreground="#E4E4E7" Text="{DynamicResource Navigation_Button_ReadIoData}" />
@@ -367,7 +368,8 @@
                                                     Background="#3F3F46"
                                                     BorderThickness="0"
                                                     Command="{Binding DataContext.ManualReadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                    Style="{StaticResource MaterialDesignFlatButton}">
+                                                    Style="{StaticResource MaterialDesignFlatButton}"
+                                                    Visibility="{Binding CanManualRead, Converter={StaticResource BooleanToVisibilityConverter}}">
                                                     <StackPanel Orientation="Horizontal">
                                                         <materialDesign:PackIcon Width="13" Height="13" VerticalAlignment="Center" Foreground="#E4E4E7" Kind="Refresh" />
                                                         <TextBlock Margin="4,0,0,0" FontSize="12" Foreground="#E4E4E7" Text="{DynamicResource Navigation_Button_ReadIoData}" />

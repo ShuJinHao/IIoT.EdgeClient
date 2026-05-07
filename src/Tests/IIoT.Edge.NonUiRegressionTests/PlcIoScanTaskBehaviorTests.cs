@@ -7,6 +7,8 @@ using IIoT.Edge.Infrastructure.DeviceComm.Barcode.Readers;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Infrastructure.DeviceComm.Signals;
+using IIoT.Edge.Runtime.Base;
+using IIoT.Edge.Runtime.Plc;
 using IIoT.Edge.Runtime.Signals;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.Enums;
@@ -16,6 +18,8 @@ namespace IIoT.Edge.NonUiRegressionTests;
 
 public sealed class PlcIoScanTaskBehaviorTests
 {
+    private static readonly IPlcSignalBlockPlanner SignalBlockPlanner = new DefaultPlcSignalBlockPlanner();
+
     [Fact]
     public void ProductionContextSignalBindings_ShouldPreserveIoDisplayMetadata()
     {
@@ -25,7 +29,7 @@ public sealed class PlcIoScanTaskBehaviorTests
             context,
             [
                 new(
-                    "Homogenization.InboundTrigger",
+                    "Homogenization.Interaction.Inbound",
                     "D701",
                     1,
                     "Int16",
@@ -66,6 +70,7 @@ public sealed class PlcIoScanTaskBehaviorTests
             CreateDevice(1, "PLC-A"),
             [],
             logger,
+            SignalBlockPlanner,
             statusStore);
 
         await interaction.ConnectAsync();
@@ -96,6 +101,7 @@ public sealed class PlcIoScanTaskBehaviorTests
             CreateDevice(1, "PLC-A"),
             [CreateIoMapping(1, "Read", "D100", 1)],
             new FakeLogService(),
+            SignalBlockPlanner,
             statusStore);
 
         var buffer = Assert.IsType<PlcBuffer>(dataStore.GetBuffer(1));
@@ -137,6 +143,7 @@ public sealed class PlcIoScanTaskBehaviorTests
             CreateDevice(2, "PLC-B"),
             [CreateIoMapping(2, "Write", "D200", 1)],
             new FakeLogService(),
+            SignalBlockPlanner,
             statusStore);
 
         await interaction.ConnectAsync();
@@ -171,7 +178,8 @@ public sealed class PlcIoScanTaskBehaviorTests
                 CreateIoMapping(5, "Read", "D700", 1, sortOrder: 1),
                 CreateIoMapping(5, "Read", "D703", 1, sortOrder: 4)
             ],
-            new FakeLogService());
+            new FakeLogService(),
+            SignalBlockPlanner);
 
         await interaction.ExecuteOneCycleAsync();
 
@@ -184,6 +192,38 @@ public sealed class PlcIoScanTaskBehaviorTests
         Assert.True(buffer.TryGetReadWords("Read-D703", out var second));
         Assert.Equal((ushort)10, Assert.Single(first));
         Assert.Equal((ushort)13, Assert.Single(second));
+    }
+
+    [Fact]
+    public async Task PlcIoScanTask_ShouldUseInjectedSignalBlockPlanner()
+    {
+        var plcService = new ScriptedPlcService();
+        plcService.ConnectOutcomes.Enqueue(true);
+        plcService.ReadOutcomes.Enqueue(new ushort[] { 42 });
+
+        var dataStore = new PlcDataStore();
+        dataStore.Register(10, readSize: 0, writeSize: 0);
+        var planner = new SpySignalBlockPlanner();
+
+        var interaction = new PlcIoScanTask(
+            plcService,
+            dataStore,
+            CreateDevice(10, "PLC-INJECT"),
+            [CreateIoMapping(10, "Read", "D700", 1)],
+            new FakeLogService(),
+            planner);
+
+        await interaction.ExecuteOneCycleAsync();
+
+        Assert.Equal(2, planner.PlanCalls.Count);
+        Assert.Contains(planner.PlanCalls, call => !call.IsWrite && call.MappingCount == 1);
+
+        var request = Assert.Single(plcService.ReadRequests);
+        Assert.Equal("D900", request.Address);
+
+        var buffer = Assert.IsType<PlcBuffer>(dataStore.GetBuffer(10));
+        Assert.True(buffer.TryGetReadWords("Read-D700", out var words));
+        Assert.Equal((ushort)42, Assert.Single(words));
     }
 
     [Fact]
@@ -206,6 +246,7 @@ public sealed class PlcIoScanTaskBehaviorTests
                 CreateIoMapping(6, "Read", "D720", 1, sortOrder: 2)
             ],
             new FakeLogService(),
+            SignalBlockPlanner,
             runtimePolicy: new PlcIoRuntimePolicy(MaxSignalBlockWordCount: 10));
 
         await interaction.ExecuteOneCycleAsync();
@@ -235,6 +276,7 @@ public sealed class PlcIoScanTaskBehaviorTests
                 CreateIoMapping(7, "Write", "D603", 1, sortOrder: 4)
             ],
             new FakeLogService(),
+            SignalBlockPlanner,
             runtimePolicy: new PlcIoRuntimePolicy(WriteGapPolicy: PlcIoWriteGapPolicy.Zero));
 
         await interaction.ExecuteOneCycleAsync();
@@ -265,6 +307,7 @@ public sealed class PlcIoScanTaskBehaviorTests
                 CreateIoMapping(8, "Write", "D603", 1, sortOrder: 4)
             ],
             new FakeLogService(),
+            SignalBlockPlanner,
             runtimePolicy: new PlcIoRuntimePolicy(WriteGapPolicy: PlcIoWriteGapPolicy.Split));
 
         await interaction.ExecuteOneCycleAsync();
@@ -291,14 +334,18 @@ public sealed class PlcIoScanTaskBehaviorTests
             [
                 CreateIoMapping(9, "Read", "D700", 1, category: IoMappingOptionCatalog.CategoryInteraction, sortOrder: 1),
                 CreateIoMapping(9, "Read", "D300", 1, category: IoMappingOptionCatalog.CategorySingleRead, sortOrder: 2),
-                CreateIoMapping(9, "Read", "D24500", 30, category: IoMappingOptionCatalog.CategoryContinuousRead, sortOrder: 3)
+                CreateIoMapping(9, "Read", "D24500", 30, category: IoMappingOptionCatalog.CategoryContinuousRead, sortOrder: 3),
+                CreateIoMapping(9, "Write", "D200", 1, category: IoMappingOptionCatalog.CategorySingleWrite, sortOrder: 4),
+                CreateIoMapping(9, "Write", "D220", 8, category: IoMappingOptionCatalog.CategoryContinuousWrite, sortOrder: 5)
             ],
-            new FakeLogService());
+            new FakeLogService(),
+            SignalBlockPlanner);
 
         await interaction.ExecuteOneCycleAsync();
 
         var request = Assert.Single(plcService.ReadRequests);
         Assert.Equal("D700", request.Address);
+        Assert.Empty(plcService.WriteRequests);
     }
 
     [Fact]
@@ -315,7 +362,8 @@ public sealed class PlcIoScanTaskBehaviorTests
             dataStore,
             CreateDevice(3, "PLC-C"),
             [CreateIoMapping(3, "Read", "D300", 1)],
-            new FakeLogService());
+            new FakeLogService(),
+            SignalBlockPlanner);
 
         using var cts = new CancellationTokenSource();
         var runTask = interaction.StartAsync(cts.Token);
@@ -342,7 +390,8 @@ public sealed class PlcIoScanTaskBehaviorTests
             new PlcDataStore(),
             CreateDevice(4, "PLC-D"),
             [],
-            new FakeLogService());
+            new FakeLogService(),
+            SignalBlockPlanner);
 
         using var cts = new CancellationTokenSource();
         cts.Cancel();
@@ -449,6 +498,27 @@ public sealed class PlcIoScanTaskBehaviorTests
 
         public void Dispose()
         {
+        }
+    }
+
+    private sealed class SpySignalBlockPlanner : IPlcSignalBlockPlanner
+    {
+        public List<(bool IsWrite, int MappingCount)> PlanCalls { get; } = [];
+
+        public IReadOnlyList<PlcSignalBlock> Plan(
+            IReadOnlyCollection<PlcIoScanMapping> mappings,
+            int maxBlockWordCount,
+            PlcIoWriteGapPolicy writeGapPolicy,
+            bool isWrite)
+        {
+            PlanCalls.Add((isWrite, mappings.Count));
+            if (isWrite || mappings.Count == 0)
+            {
+                return [];
+            }
+
+            var mapping = Assert.Single(mappings);
+            return [new PlcSignalBlock("D900", 1, [new PlcSignalBlockItem(mapping, 0)])];
         }
     }
 

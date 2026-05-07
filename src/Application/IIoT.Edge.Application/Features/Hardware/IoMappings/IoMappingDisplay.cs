@@ -8,6 +8,8 @@ public static class IoMappingDisplay
     public const string InteractionCategory = IoMappingOptionCatalog.CategoryInteraction;
     public const string SingleReadCategory = IoMappingOptionCatalog.CategorySingleRead;
     public const string ContinuousReadCategory = IoMappingOptionCatalog.CategoryContinuousRead;
+    public const string SingleWriteCategory = IoMappingOptionCatalog.CategorySingleWrite;
+    public const string ContinuousWriteCategory = IoMappingOptionCatalog.CategoryContinuousWrite;
 
     public static string ResolveCategory(string? category, int addressCount)
         => IoMappingOptionCatalog.NormalizeCategory(category, addressCount);

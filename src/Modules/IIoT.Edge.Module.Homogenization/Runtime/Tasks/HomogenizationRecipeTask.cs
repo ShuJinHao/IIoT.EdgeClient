@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Device;
+﻿using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
@@ -54,14 +54,14 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
 
     protected override async Task DoCoreAsync()
     {
-        const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.配方上传触发;
+        const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.工艺参数上传;
 
         switch (Step)
         {
             case 0:
                 if (Interaction.IsTriggered(trigger))
                 {
-                    Logger.Info($"[{ModuleContext.DeviceName}] {TaskName} 配方上传触发。");
+                    Logger.Info($"[{ModuleContext.DeviceName}] {TaskName} 工艺参数上传已触发。");
                     Step = 10;
                 }
 
@@ -104,7 +104,7 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
 
     private async Task ProcessTriggerAsync(CancellationToken cancellationToken)
     {
-        const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.配方上传触发;
+        const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.工艺参数上传;
         var snapshot = Codec.CaptureRecipeSnapshot();
         var result = await _mesChannel
             .UploadRecipeAsync(_deviceService.CurrentDevice, snapshot, cancellationToken)
@@ -126,3 +126,4 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
         Interaction.ReplyResult(trigger, result);
     }
 }
+

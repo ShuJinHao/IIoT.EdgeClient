@@ -30,12 +30,14 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
         PlcIoScanDevice device,
         IEnumerable<PlcIoScanMapping> mappings,
         ILogService logger,
+        IPlcSignalBlockPlanner signalBlockPlanner,
         PlcIoRuntimePolicy? runtimePolicy = null)
     {
         _plcService = plcService ?? throw new ArgumentNullException(nameof(plcService));
         _dataStore = dataStore ?? throw new ArgumentNullException(nameof(dataStore));
         _device = device ?? throw new ArgumentNullException(nameof(device));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(signalBlockPlanner);
 
         var policy = runtimePolicy ?? PlcIoRuntimePolicy.Default;
         _loopIntervalMs = policy.NormalizeLoopInterval();
@@ -48,12 +50,12 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
             .OrderBy(static mapping => mapping.SortOrder)
             .ToArray();
 
-        _readBlocks = PlcSignalBlockPlanner.Plan(
+        _readBlocks = signalBlockPlanner.Plan(
             interactionMappings.Where(static x => x.IsRead).ToArray(),
             policy.NormalizeMaxBlockWordCount(),
             policy.WriteGapPolicy,
             isWrite: false);
-        _writeBlocks = PlcSignalBlockPlanner.Plan(
+        _writeBlocks = signalBlockPlanner.Plan(
             interactionMappings.Where(static x => x.IsWrite).ToArray(),
             policy.NormalizeMaxBlockWordCount(),
             policy.WriteGapPolicy,

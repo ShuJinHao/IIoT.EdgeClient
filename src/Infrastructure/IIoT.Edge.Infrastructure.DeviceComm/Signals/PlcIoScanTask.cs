@@ -5,6 +5,7 @@ using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc;
 using IIoT.Edge.Runtime.Base;
+using IIoT.Edge.Runtime.Plc;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Signals;
 
@@ -21,6 +22,7 @@ public sealed class PlcIoScanTask : PlcIoScanTaskBase
         NetworkDeviceEntity deviceConfig,
         IReadOnlyCollection<IoMappingEntity> ioMappings,
         ILogService logger,
+        IPlcSignalBlockPlanner signalBlockPlanner,
         PlcConnectionStatusStore? statusStore = null,
         PlcIoRuntimePolicy? runtimePolicy = null)
         : base(
@@ -40,6 +42,7 @@ public sealed class PlcIoScanTask : PlcIoScanTaskBase
                 mapping.Category,
                 mapping.SortOrder)),
             logger,
+            signalBlockPlanner,
             runtimePolicy)
     {
         _statusStore = statusStore;

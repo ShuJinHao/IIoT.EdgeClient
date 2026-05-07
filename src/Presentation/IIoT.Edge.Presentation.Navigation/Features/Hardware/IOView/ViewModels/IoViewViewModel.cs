@@ -283,14 +283,28 @@ public class IoViewViewModel : NavigationViewModelBase
 
         foreach (var signal in DataSections.SelectMany(static section => section.Signals))
         {
-            UpdateReadSignal(signal, buffer);
+            if (string.Equals(signal.Direction, IoMappingOptionCatalog.DirectionWrite, StringComparison.OrdinalIgnoreCase))
+            {
+                UpdateWriteSignal(signal, buffer);
+            }
+            else
+            {
+                UpdateReadSignal(signal, buffer);
+            }
         }
 
         foreach (var section in ArraySections)
         {
             foreach (var signal in section.Columns)
             {
-                UpdateReadSignal(signal, buffer);
+                if (string.Equals(signal.Direction, IoMappingOptionCatalog.DirectionWrite, StringComparison.OrdinalIgnoreCase))
+                {
+                    UpdateWriteSignal(signal, buffer);
+                }
+                else
+                {
+                    UpdateReadSignal(signal, buffer);
+                }
             }
 
             section.RebuildRows();
@@ -317,7 +331,11 @@ public class IoViewViewModel : NavigationViewModelBase
         try
         {
             foreach (var signal in DataSections.SelectMany(static section => section.Signals)
-                         .Concat(ArraySections.SelectMany(static section => section.Columns)))
+                         .Concat(ArraySections.SelectMany(static section => section.Columns))
+                         .Where(static signal => string.Equals(
+                             signal.Direction,
+                             IoMappingOptionCatalog.DirectionRead,
+                             StringComparison.OrdinalIgnoreCase)))
             {
                 var length = checked((ushort)Math.Max(1, signal.AddressCount));
                 var words = await plc.ReadDataAsync<ushort>(signal.PlcAddress, length);

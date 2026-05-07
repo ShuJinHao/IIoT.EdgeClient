@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Config;
+﻿using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
@@ -60,14 +60,14 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
 
     protected override async Task DoCoreAsync()
     {
-        const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.出料触发;
+        const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.出料上传;
 
         switch (Step)
         {
             case 0:
                 if (Interaction.IsTriggered(trigger))
                 {
-                    Logger.Info($"[{ModuleContext.DeviceName}] {TaskName} 出料触发。");
+                    Logger.Info($"[{ModuleContext.DeviceName}] {TaskName} 出料上传已触发。");
                     Step = 10;
                 }
 
@@ -110,7 +110,7 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
 
     private async Task ProcessTriggerAsync(CancellationToken cancellationToken)
     {
-        const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.出料触发;
+        const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.出料上传;
         var cellData = BuildRecord();
         if (!_validator.TryValidate(cellData, out var error))
         {
@@ -214,3 +214,4 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
             : $"出料未接收，数据管道拒绝入队（{reason}）。";
     }
 }
+

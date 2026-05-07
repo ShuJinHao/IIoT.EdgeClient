@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Device;
+﻿using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
@@ -54,7 +54,7 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
 
     protected override async Task DoCoreAsync()
     {
-        const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.设备状态上传触发;
+        const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.设备状态上传;
 
         switch (Step)
         {
@@ -104,7 +104,7 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
 
     private async Task ProcessTriggerAsync(CancellationToken cancellationToken)
     {
-        const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.设备状态上传触发;
+        const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.设备状态上传;
         var snapshot = Codec.CaptureEquipmentStatusSnapshot(CodeOptions.Mes);
         var result = await _mesChannel
             .UploadEquipmentStatusAsync(_deviceService.CurrentDevice, snapshot, cancellationToken)
@@ -126,3 +126,4 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
         Interaction.ReplyResult(trigger, result);
     }
 }
+

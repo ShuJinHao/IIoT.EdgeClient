@@ -1,3 +1,5 @@
+using IIoT.Edge.Application.Features.Hardware.IoMappings;
+
 namespace IIoT.Edge.Application.Modules.Hardware;
 
 public sealed record ModuleHardwareSignalRequirement(
@@ -5,7 +7,8 @@ public sealed record ModuleHardwareSignalRequirement(
     int AddressCount,
     string DataType,
     string Direction,
-    int SortOrder);
+    int SortOrder,
+    string Category = "");
 
 public static class ModuleHardwareProfileValidator
 {
@@ -18,20 +21,21 @@ public static class ModuleHardwareProfileValidator
     {
         var issues = new List<ModuleHardwareValidationIssue>();
         var mappingsBySignalKey = mappings
-            .GroupBy(static mapping => mapping.SignalKey, StringComparer.OrdinalIgnoreCase)
+            .GroupBy(static mapping => CreateDirectionSignalKey(mapping.SignalKey, mapping.Direction), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(static group => group.Key, static group => group.ToList(), StringComparer.OrdinalIgnoreCase);
 
         foreach (var requirement in requirements)
         {
-            if (!mappingsBySignalKey.TryGetValue(requirement.SignalKey, out var candidates) || candidates.Count == 0)
+            var requirementKey = CreateDirectionSignalKey(requirement.SignalKey, requirement.Direction);
+            if (!mappingsBySignalKey.TryGetValue(requirementKey, out var candidates) || candidates.Count == 0)
             {
-                issues.Add(new ModuleHardwareValidationIssue($"PLC[{deviceName}] 缺少信号 {requirement.SignalKey}。"));
+                issues.Add(new ModuleHardwareValidationIssue($"PLC[{deviceName}] 缺少信号 {requirement.SignalKey} / {requirement.Direction}。"));
                 continue;
             }
 
             if (candidates.Count > 1)
             {
-                issues.Add(new ModuleHardwareValidationIssue($"PLC[{deviceName}] 的信号 {requirement.SignalKey} 存在重复映射。"));
+                issues.Add(new ModuleHardwareValidationIssue($"PLC[{deviceName}] 的信号 {requirement.SignalKey} / {requirement.Direction} 存在重复映射。"));
                 continue;
             }
 
@@ -65,7 +69,8 @@ public static class ModuleHardwareProfileValidator
                 $"PLC[{deviceName}] 的信号 {requirement.SignalKey} 方向不一致。期望：{requirement.Direction}，实际：{mapping.Direction}。"));
         }
 
-        if (mapping.AddressCount != requirement.AddressCount)
+        if (IoMappingOptionCatalog.IsFixedAddressCountCategory(requirement.Category)
+            && mapping.AddressCount != requirement.AddressCount)
         {
             issues.Add(new ModuleHardwareValidationIssue(
                 $"PLC[{deviceName}] 的信号 {requirement.SignalKey} 地址长度不一致。期望：{requirement.AddressCount}，实际：{mapping.AddressCount}。"));
@@ -148,4 +153,7 @@ public static class ModuleHardwareProfileValidator
             }
         }
     }
+
+    private static string CreateDirectionSignalKey(string signalKey, string direction)
+        => $"{direction.Trim().ToUpperInvariant()}:{signalKey.Trim().ToUpperInvariant()}";
 }

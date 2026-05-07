@@ -186,7 +186,7 @@ public sealed class BufferLogicalSignalAccessor<TSignalKey> : ILogicalSignalAcce
             return binding;
         }
 
-        var signal = _profile.Get(key);
+        var signal = _profile.Get(key, direction);
         var directionText = direction == ModuleSignalDirection.Write ? "Write" : "Read";
         throw new InvalidOperationException(
             $"模块【{_profile.ModuleId}】信号【{signal.DisplayName}】未绑定 {directionText} IO 映射。");
@@ -197,7 +197,9 @@ public sealed class BufferLogicalSignalAccessor<TSignalKey> : ILogicalSignalAcce
         ModuleSignalDirection direction,
         IModulePlcSignalProfile<TSignalKey> profile)
     {
-        var definitionsBySignalKey = profile.Signals.ToDictionary(
+        var definitionsBySignalKey = profile.Signals
+            .Where(signal => signal.Direction == direction)
+            .ToDictionary(
             static signal => NormalizeSignalKey(signal.SignalKey),
             static signal => signal,
             StringComparer.OrdinalIgnoreCase);
@@ -220,7 +222,8 @@ public sealed class BufferLogicalSignalAccessor<TSignalKey> : ILogicalSignalAcce
                 signalKey,
                 currentOffset,
                 Math.Max(1, binding.AddressCount),
-                binding.DataType);
+                binding.DataType,
+                direction);
             currentOffset += Math.Max(1, binding.AddressCount);
         }
 
@@ -234,7 +237,7 @@ public sealed class BufferLogicalSignalAccessor<TSignalKey> : ILogicalSignalAcce
             return;
         }
 
-        var signal = _profile.Get(key);
+        var signal = _profile.Get(key, binding.Direction);
         throw new InvalidOperationException(
             $"模块【{_profile.ModuleId}】信号【{signal.DisplayName}】数据类型不匹配，当前为【{binding.DataType}】，允许类型为【{string.Join("、", allowedTypes)}】。");
     }
@@ -292,5 +295,6 @@ public sealed class BufferLogicalSignalAccessor<TSignalKey> : ILogicalSignalAcce
         string SignalKey,
         int FallbackOffset,
         int AddressCount,
-        string DataType);
+        string DataType,
+        ModuleSignalDirection Direction);
 }

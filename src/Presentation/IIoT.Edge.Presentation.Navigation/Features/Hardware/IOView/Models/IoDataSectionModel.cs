@@ -12,6 +12,8 @@ public sealed class IoDataSectionModel : BaseNotifyPropertyChanged
 
     public int SortOrder { get; set; }
 
+    public bool CanManualRead => IoMappingOptionCatalog.IsReadDataCategory(Category);
+
     public string Title => IoMappingDisplay.BuildSectionTitle(Category, BusinessGroup);
 
     public ObservableCollection<IoSignalModel> Signals { get; } = [];
