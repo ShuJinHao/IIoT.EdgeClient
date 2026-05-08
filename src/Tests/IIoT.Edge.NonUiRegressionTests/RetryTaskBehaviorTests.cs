@@ -391,7 +391,8 @@ public sealed class RetryTaskBehaviorTests
                     cloudBatchConsumer,
                     cloudDiagnosticsStore,
                     backoffStrategy,
-                    cloudDeadLetterWriter),
+                    cloudDeadLetterWriter,
+                    new DefaultDataPipelineConsumerInvoker()),
                 new CloudRetryHousekeepingService(
                     logger,
                     failedStore,

@@ -35,6 +35,7 @@ public sealed class MesRetryTask : ScheduledTaskBase
     private readonly IExternalHeartbeatStateStore _heartbeatStateStore;
     private readonly IRetryBackoffStrategy _retryBackoffStrategy;
     private readonly IDataPipelineDeadLetterWriter _deadLetterWriter;
+    private readonly IDataPipelineConsumerInvoker _consumerInvoker;
     private readonly TimeSpan _consumerCallTimeout;
     private bool _wasUnavailable = true;
     private DateOnly? _lastAbandonedCleanupDateUtc;
@@ -59,6 +60,7 @@ public sealed class MesRetryTask : ScheduledTaskBase
         IExternalHeartbeatStateStore heartbeatStateStore,
         IRetryBackoffStrategy retryBackoffStrategy,
         IDataPipelineDeadLetterWriter deadLetterWriter,
+        IDataPipelineConsumerInvoker consumerInvoker,
         DataPipelineRuntimeOptions? runtimeOptions = null)
         : base(logger)
     {
@@ -66,6 +68,7 @@ public sealed class MesRetryTask : ScheduledTaskBase
         ArgumentNullException.ThrowIfNull(heartbeatStateStore);
         ArgumentNullException.ThrowIfNull(retryBackoffStrategy);
         ArgumentNullException.ThrowIfNull(deadLetterWriter);
+        ArgumentNullException.ThrowIfNull(consumerInvoker);
 
         _retryStore = retryStore;
         _fallbackStore = fallbackStore;
@@ -78,6 +81,7 @@ public sealed class MesRetryTask : ScheduledTaskBase
         _heartbeatStateStore = heartbeatStateStore;
         _retryBackoffStrategy = retryBackoffStrategy;
         _deadLetterWriter = deadLetterWriter;
+        _consumerInvoker = consumerInvoker;
         _consumerCallTimeout = (runtimeOptions ?? new DataPipelineRuntimeOptions()).GetConsumerCallTimeout();
     }
 
@@ -272,7 +276,7 @@ public sealed class MesRetryTask : ScheduledTaskBase
         bool success;
         try
         {
-            success = await DataPipelineConsumerCall
+            success = await _consumerInvoker
                 .ExecuteAsync(
                     ct => _mesConsumer.ProcessAsync(completedRecord, ct),
                     _consumerCallTimeout,

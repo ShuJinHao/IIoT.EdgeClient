@@ -16,6 +16,7 @@ public class ProcessQueueTask : ScheduledTaskBase
     private readonly List<ICellDataConsumer> _consumers;
     private readonly ICriticalPersistenceFallbackWriter _criticalFallbackWriter;
     private readonly DataPipelineCascadingPersistenceWriter _persistenceWriter;
+    private readonly IDataPipelineConsumerInvoker _consumerInvoker;
     private readonly TimeSpan _consumerCallTimeout;
 
     public override string TaskName => "ProcessQueueTask";
@@ -27,15 +28,18 @@ public class ProcessQueueTask : ScheduledTaskBase
         IEnumerable<ICellDataConsumer> consumers,
         ICriticalPersistenceFallbackWriter criticalFallbackWriter,
         DataPipelineCascadingPersistenceWriter persistenceWriter,
+        IDataPipelineConsumerInvoker consumerInvoker,
         DataPipelineRuntimeOptions? runtimeOptions = null)
         : base(logger)
     {
         ArgumentNullException.ThrowIfNull(persistenceWriter);
+        ArgumentNullException.ThrowIfNull(consumerInvoker);
 
         _pipelineService = pipelineService;
         _criticalFallbackWriter = criticalFallbackWriter;
         _consumers = consumers.OrderBy(c => c.Order).ToList();
         _persistenceWriter = persistenceWriter;
+        _consumerInvoker = consumerInvoker;
         _consumerCallTimeout = (runtimeOptions ?? new DataPipelineRuntimeOptions()).GetConsumerCallTimeout();
     }
 
@@ -65,7 +69,7 @@ public class ProcessQueueTask : ScheduledTaskBase
         {
             try
             {
-                var success = await DataPipelineConsumerCall
+                var success = await _consumerInvoker
                     .ExecuteAsync(
                         ct => consumer.ProcessAsync(record, ct),
                         _consumerCallTimeout,

@@ -1,8 +1,22 @@
 namespace IIoT.Edge.Runtime.DataPipeline.Services;
 
-internal static class DataPipelineConsumerCall
+/// <summary>
+/// 统一封装 DataPipeline 消费者调用的超时和取消语义。
+/// </summary>
+public interface IDataPipelineConsumerInvoker
 {
-    public static async Task<T> ExecuteAsync<T>(
+    Task<T> ExecuteAsync<T>(
+        Func<CancellationToken, Task<T>> action,
+        TimeSpan timeout,
+        CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// 默认消费者调用器：内部超时统一转换为 timeout_exceeded，外部取消保持原始取消语义。
+/// </summary>
+public sealed class DefaultDataPipelineConsumerInvoker : IDataPipelineConsumerInvoker
+{
+    public async Task<T> ExecuteAsync<T>(
         Func<CancellationToken, Task<T>> action,
         TimeSpan timeout,
         CancellationToken cancellationToken)

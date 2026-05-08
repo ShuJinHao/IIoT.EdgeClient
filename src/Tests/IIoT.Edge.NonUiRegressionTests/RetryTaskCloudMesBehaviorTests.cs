@@ -1493,6 +1493,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
                     cloudDiagnosticsStore,
                     new DefaultRetryBackoffStrategy(),
                     cloudDeadLetterWriter,
+                    new DefaultDataPipelineConsumerInvoker(),
                     processIntegrationRegistry),
                 new CloudRetryHousekeepingService(
                     logger,
@@ -1547,7 +1548,8 @@ public sealed class RetryTaskCloudMesBehaviorTests
                     mesDiagnosticsStore),
                 mesHeartbeatStore,
                 new DefaultRetryBackoffStrategy(),
-                new DataPipelineDeadLetterWriter());
+                new DataPipelineDeadLetterWriter(),
+                new DefaultDataPipelineConsumerInvoker());
         }
 
         public Task ExecuteOnceAsync()
