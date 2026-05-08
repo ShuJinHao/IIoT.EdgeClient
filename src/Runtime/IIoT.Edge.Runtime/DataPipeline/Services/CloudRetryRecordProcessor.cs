@@ -37,6 +37,7 @@ internal sealed class CloudRetryRecordProcessor : ICloudRetryRecordProcessor
     private readonly IRetryBackoffStrategy _retryBackoffStrategy;
     private readonly IDataPipelineDeadLetterWriter _deadLetterWriter;
     private readonly IDataPipelineConsumerInvoker _consumerInvoker;
+    private readonly ICellDataJsonSerializer _cellDataJsonSerializer;
     private readonly IProcessIntegrationRegistry? _processIntegrationRegistry;
     private readonly TimeSpan _consumerCallTimeout;
 
@@ -51,6 +52,7 @@ internal sealed class CloudRetryRecordProcessor : ICloudRetryRecordProcessor
         IRetryBackoffStrategy retryBackoffStrategy,
         IDataPipelineDeadLetterWriter deadLetterWriter,
         IDataPipelineConsumerInvoker consumerInvoker,
+        ICellDataJsonSerializer cellDataJsonSerializer,
         IProcessIntegrationRegistry? processIntegrationRegistry = null,
         DataPipelineRuntimeOptions? runtimeOptions = null)
     {
@@ -66,6 +68,7 @@ internal sealed class CloudRetryRecordProcessor : ICloudRetryRecordProcessor
         _retryBackoffStrategy = retryBackoffStrategy;
         _deadLetterWriter = deadLetterWriter;
         _consumerInvoker = consumerInvoker;
+        _cellDataJsonSerializer = cellDataJsonSerializer;
         _processIntegrationRegistry = processIntegrationRegistry;
         _consumerCallTimeout = (runtimeOptions ?? new DataPipelineRuntimeOptions()).GetConsumerCallTimeout();
     }
@@ -333,7 +336,7 @@ internal sealed class CloudRetryRecordProcessor : ICloudRetryRecordProcessor
     {
         try
         {
-            return CellDataJsonSerializer.Deserialize(processType, json);
+            return _cellDataJsonSerializer.Deserialize(processType, json);
         }
         catch (Exception ex)
         {

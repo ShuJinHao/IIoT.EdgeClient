@@ -11,6 +11,7 @@ public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TE
     where TEntity : class
 {
     private static readonly TimeSpan InitialRetryDelay = TimeSpan.FromSeconds(30);
+    private readonly ICellDataJsonSerializer _cellDataJsonSerializer;
 
     protected abstract string ChannelName { get; }
 
@@ -18,15 +19,17 @@ public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TE
 
     protected FallbackBufferStoreBase(
         SqliteConnectionFactory connectionFactory,
-        ILogService logger)
+        ILogService logger,
+        ICellDataJsonSerializer cellDataJsonSerializer)
         : base(connectionFactory, logger)
     {
+        _cellDataJsonSerializer = cellDataJsonSerializer;
     }
 
     public async Task SaveAsync(CellCompletedRecord record, string failedTarget, string errorMessage)
     {
         var cellData = record.CellData;
-        var cellDataJson = CellDataJsonSerializer.Serialize(cellData);
+        var cellDataJson = _cellDataJsonSerializer.Serialize(cellData);
 
         var sql = $@"
             INSERT INTO {TableName}

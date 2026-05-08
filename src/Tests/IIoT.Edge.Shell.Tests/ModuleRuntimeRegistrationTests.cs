@@ -21,6 +21,7 @@ using IIoT.Edge.Presentation.Navigation;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
+using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using IIoT.Edge.SharedKernel.DataPipeline.Recipe;
 using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.SharedKernel.Repository;
@@ -148,7 +149,7 @@ public sealed class ModuleRuntimeRegistrationTests
         {
             var modules = ShellModuleCatalog.CreateAllModulesForValidation(DiscoverTestPlugins(pluginRoot).Modules);
             var viewRegistry = new ViewRegistry();
-            var cellDataRegistry = new CellDataRegistry();
+        var cellDataRegistry = new CellDataRegistry(new CellDataTypeRegistry());
             var runtimeRegistry = new StationRuntimeRegistry();
             var integrationRegistry = new ProcessIntegrationRegistry();
             var moduleParamRegistry = new ModuleParamRegistry();
@@ -562,7 +563,7 @@ public sealed class ModuleRuntimeRegistrationTests
             var discovery = DiscoverTestPlugins(pluginRoot);
             var activation = ShellModuleCatalog.CreateEnabledModules(configuration, discovery.Modules);
             var moduleViewRegistry = new ViewRegistry();
-            var cellDataRegistry = new CellDataRegistry();
+        var cellDataRegistry = new CellDataRegistry(new CellDataTypeRegistry());
             var runtimeRegistry = new StationRuntimeRegistry();
             var integrationRegistry = new ProcessIntegrationRegistry();
             var moduleParamRegistry = new ModuleParamRegistry();

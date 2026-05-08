@@ -36,6 +36,7 @@ public sealed class MesRetryTask : ScheduledTaskBase
     private readonly IRetryBackoffStrategy _retryBackoffStrategy;
     private readonly IDataPipelineDeadLetterWriter _deadLetterWriter;
     private readonly IDataPipelineConsumerInvoker _consumerInvoker;
+    private readonly ICellDataJsonSerializer _cellDataJsonSerializer;
     private readonly TimeSpan _consumerCallTimeout;
     private bool _wasUnavailable = true;
     private DateOnly? _lastAbandonedCleanupDateUtc;
@@ -61,6 +62,7 @@ public sealed class MesRetryTask : ScheduledTaskBase
         IRetryBackoffStrategy retryBackoffStrategy,
         IDataPipelineDeadLetterWriter deadLetterWriter,
         IDataPipelineConsumerInvoker consumerInvoker,
+        ICellDataJsonSerializer cellDataJsonSerializer,
         DataPipelineRuntimeOptions? runtimeOptions = null)
         : base(logger)
     {
@@ -69,6 +71,7 @@ public sealed class MesRetryTask : ScheduledTaskBase
         ArgumentNullException.ThrowIfNull(retryBackoffStrategy);
         ArgumentNullException.ThrowIfNull(deadLetterWriter);
         ArgumentNullException.ThrowIfNull(consumerInvoker);
+        ArgumentNullException.ThrowIfNull(cellDataJsonSerializer);
 
         _retryStore = retryStore;
         _fallbackStore = fallbackStore;
@@ -82,6 +85,7 @@ public sealed class MesRetryTask : ScheduledTaskBase
         _retryBackoffStrategy = retryBackoffStrategy;
         _deadLetterWriter = deadLetterWriter;
         _consumerInvoker = consumerInvoker;
+        _cellDataJsonSerializer = cellDataJsonSerializer;
         _consumerCallTimeout = (runtimeOptions ?? new DataPipelineRuntimeOptions()).GetConsumerCallTimeout();
     }
 
@@ -371,7 +375,7 @@ public sealed class MesRetryTask : ScheduledTaskBase
     {
         try
         {
-            return CellDataJsonSerializer.Deserialize(processType, json);
+            return _cellDataJsonSerializer.Deserialize(processType, json);
         }
         catch (Exception ex)
         {

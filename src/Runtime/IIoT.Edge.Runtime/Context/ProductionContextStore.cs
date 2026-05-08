@@ -22,51 +22,49 @@ public class ProductionContextStore : IProductionContextStore
     private readonly IProductionContextPersistenceFileSystem _fileSystem;
     private readonly ILogService _logger;
     private readonly string _persistPath;
+    private readonly JsonSerializerOptions _jsonOptions;
     private readonly object _lock = new();
     private ProductionContextPersistenceDiagnostics _persistenceDiagnostics = new(0, null);
 
-    private static readonly JsonSerializerOptions _jsonOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters =
-        {
-            new ObjectToInferredTypesConverter(),
-            new CellDataBaseConverter()
-        }
-    };
-
-    public ProductionContextStore(ILogService logger, string? persistDirectory = null)
-        : this(logger, Array.Empty<IProductionContextFactory>(), new ProductionContextPersistenceFileSystem(), persistDirectory)
+    public ProductionContextStore(
+        ILogService logger,
+        ICellDataTypeRegistry cellDataTypeRegistry,
+        string? persistDirectory = null)
+        : this(logger, Array.Empty<IProductionContextFactory>(), cellDataTypeRegistry, new ProductionContextPersistenceFileSystem(), persistDirectory)
     {
     }
 
     public ProductionContextStore(
         ILogService logger,
         IEnumerable<IProductionContextFactory> contextFactories,
+        ICellDataTypeRegistry cellDataTypeRegistry,
         string? persistDirectory = null)
-        : this(logger, contextFactories, new ProductionContextPersistenceFileSystem(), persistDirectory)
+        : this(logger, contextFactories, cellDataTypeRegistry, new ProductionContextPersistenceFileSystem(), persistDirectory)
     {
     }
 
     internal ProductionContextStore(
         ILogService logger,
+        ICellDataTypeRegistry cellDataTypeRegistry,
         IProductionContextPersistenceFileSystem fileSystem,
         string? persistDirectory = null)
-        : this(logger, Array.Empty<IProductionContextFactory>(), fileSystem, persistDirectory)
+        : this(logger, Array.Empty<IProductionContextFactory>(), cellDataTypeRegistry, fileSystem, persistDirectory)
     {
     }
 
     internal ProductionContextStore(
         ILogService logger,
         IEnumerable<IProductionContextFactory> contextFactories,
+        ICellDataTypeRegistry cellDataTypeRegistry,
         IProductionContextPersistenceFileSystem fileSystem,
         string? persistDirectory = null)
     {
         ArgumentNullException.ThrowIfNull(fileSystem);
+        ArgumentNullException.ThrowIfNull(cellDataTypeRegistry);
 
         _logger = logger;
         _fileSystem = fileSystem;
+        _jsonOptions = CreateJsonOptions(cellDataTypeRegistry);
         _contextFactories = (contextFactories ?? Array.Empty<IProductionContextFactory>())
             .Where(static x => !string.IsNullOrWhiteSpace(x.ModuleId))
             .GroupBy(static x => x.ModuleId, StringComparer.OrdinalIgnoreCase)
@@ -83,6 +81,18 @@ public class ProductionContextStore : IProductionContextStore
         Directory.CreateDirectory(dir);
         _persistPath = Path.Combine(dir, PersistFileName);
     }
+
+    private static JsonSerializerOptions CreateJsonOptions(ICellDataTypeRegistry cellDataTypeRegistry)
+        => new()
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters =
+            {
+                new ObjectToInferredTypesConverter(),
+                new CellDataBaseConverter(cellDataTypeRegistry)
+            }
+        };
 
     public ProductionContext GetOrCreate(string deviceName)
         => GetOrCreate(deviceName, moduleId: null);
@@ -428,6 +438,13 @@ public class ProductionContextStore : IProductionContextStore
 
 internal class CellDataBaseConverter : JsonConverter<CellDataBase>
 {
+    private readonly ICellDataTypeRegistry _cellDataTypeRegistry;
+
+    public CellDataBaseConverter(ICellDataTypeRegistry cellDataTypeRegistry)
+    {
+        _cellDataTypeRegistry = cellDataTypeRegistry;
+    }
+
     public override CellDataBase? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         using var doc = JsonDocument.ParseValue(ref reader);
@@ -441,7 +458,7 @@ internal class CellDataBaseConverter : JsonConverter<CellDataBase>
                 throw new JsonException("CellData 缺少 processType 属性。");
 
         var json = root.GetRawText();
-        var result = CellDataTypeRegistry.Deserialize(processType, json, options);
+        var result = _cellDataTypeRegistry.Deserialize(processType, json, options);
 
         return result ?? throw new JsonException($"Unknown process type: {processType}");
     }

@@ -12,7 +12,9 @@ using IIoT.Edge.Runtime.DataPipeline.Consumers;
 using IIoT.Edge.Runtime.DataPipeline.Services;
 using IIoT.Edge.Runtime.DataPipeline.Tasks;
 using IIoT.Edge.Runtime.Plc;
+using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace IIoT.Edge.Runtime;
 
@@ -20,10 +22,13 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddEdgeRuntime(this IServiceCollection services, EdgeRuntimePaths runtimePaths)
     {
+        services.TryAddSingleton<ICellDataTypeRegistry, CellDataTypeRegistry>();
+        services.TryAddSingleton<ICellDataJsonSerializer, CellDataJsonSerializer>();
         services.AddSingleton(sp =>
             new ProductionContextStore(
                 sp.GetRequiredService<ILogService>(),
                 sp.GetServices<IProductionContextFactory>(),
+                sp.GetRequiredService<ICellDataTypeRegistry>(),
                 runtimePaths.ContextDirectory));
         services.AddSingleton<IProductionContextStore>(sp => sp.GetRequiredService<ProductionContextStore>());
         services.AddSingleton<ITodayCapacityStore, TodayCapacityStore>();

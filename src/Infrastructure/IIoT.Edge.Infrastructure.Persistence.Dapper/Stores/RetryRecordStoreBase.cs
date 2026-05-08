@@ -12,15 +12,18 @@ public abstract class RetryRecordStoreBase : DapperRepositoryBase<FailedCellReco
 {
     private static readonly DateTime AbandonedRetryTimeUtc = DateTime.SpecifyKind(DateTime.MaxValue, DateTimeKind.Utc);
     private static readonly TimeSpan ClaimTimeout = TimeSpan.FromMinutes(10);
+    private readonly ICellDataJsonSerializer _cellDataJsonSerializer;
 
     protected abstract string ChannelName { get; }
     protected abstract string ClaimTableName { get; }
 
     protected RetryRecordStoreBase(
         SqliteConnectionFactory connectionFactory,
-        ILogService logger)
+        ILogService logger,
+        ICellDataJsonSerializer cellDataJsonSerializer)
         : base(connectionFactory, logger)
     {
+        _cellDataJsonSerializer = cellDataJsonSerializer;
     }
 
     public async Task SaveAsync(
@@ -29,7 +32,7 @@ public abstract class RetryRecordStoreBase : DapperRepositoryBase<FailedCellReco
         string errorMessage)
     {
         var cellData = record.CellData;
-        var cellDataJson = CellDataJsonSerializer.Serialize(cellData);
+        var cellDataJson = _cellDataJsonSerializer.Serialize(cellData);
         await SaveRawAsync(cellData.ProcessType, cellDataJson, failedTarget, errorMessage).ConfigureAwait(false);
     }
 

@@ -85,7 +85,7 @@ public sealed class ModuleDiscoveryContractTests
             var modules = DirectoryModuleCatalog.CreateAllModules(DiscoverPlugins(pluginRoot).Modules);
             var services = new ServiceCollection();
             var viewRegistry = new ViewRegistry();
-            var cellDataRegistry = new CellDataRegistry();
+        var cellDataRegistry = new CellDataRegistry(new CellDataTypeRegistry());
             var runtimeRegistry = new StationRuntimeRegistry();
             var integrationRegistry = new ProcessIntegrationRegistry();
             var moduleParamRegistry = new ModuleParamRegistry();

@@ -4,6 +4,7 @@ using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Runtime.DataPipeline.Services;
 using IIoT.Edge.Runtime.DataPipeline.Tasks;
 using IIoT.Edge.SharedKernel.DataPipeline;
+using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using Microsoft.Extensions.Options;
 
 namespace IIoT.Edge.NonUiRegressionTests;
@@ -628,5 +629,6 @@ public sealed class ProcessQueueTaskBehaviorTests
                 mesFallbackStore,
                 new FakeCloudDiagnosticsStore(),
                 new FakeMesRetryDiagnosticsStore()),
-            logger);
-}
+            logger,
+            new CellDataJsonSerializer(new CellDataTypeRegistry()));
+    }

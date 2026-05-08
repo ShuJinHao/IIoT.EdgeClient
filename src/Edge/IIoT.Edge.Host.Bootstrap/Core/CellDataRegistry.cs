@@ -6,6 +6,12 @@ namespace IIoT.Edge.Shell.Core;
 public sealed class CellDataRegistry : ICellDataRegistry
 {
     private readonly Dictionary<string, Type> _registrations = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ICellDataTypeRegistry _cellDataTypeRegistry;
+
+    public CellDataRegistry(ICellDataTypeRegistry cellDataTypeRegistry)
+    {
+        _cellDataTypeRegistry = cellDataTypeRegistry ?? throw new ArgumentNullException(nameof(cellDataTypeRegistry));
+    }
 
     public void Register<TCellData>(string processType) where TCellData : CellDataBase
         => Register(processType, typeof(TCellData));
@@ -35,7 +41,7 @@ public sealed class CellDataRegistry : ICellDataRegistry
         }
 
         _registrations[processType] = cellDataType;
-        CellDataTypeRegistry.Register(processType, cellDataType);
+        _cellDataTypeRegistry.Register(processType, cellDataType);
     }
 
     public bool IsRegistered(string processType) => _registrations.ContainsKey(processType);

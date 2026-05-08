@@ -1,17 +1,22 @@
 using IIoT.Edge.SharedKernel.DataPipeline;
-using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 
 namespace IIoT.Edge.Application.Common.Http;
 
 public static class CloudIdempotencyKeyBuilder
 {
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
+
     public static string ForRecord(
         string processType,
         string uploaderName,
         CellCompletedRecord record)
-        => ComputeHash($"{processType}|{uploaderName}|{CellDataJsonSerializer.Serialize(record.CellData)}");
+        => ComputeHash($"{processType}|{uploaderName}|{SerializeCellData(record)}");
 
     public static string ForBatch(
         string processType,
@@ -39,4 +44,7 @@ public static class CloudIdempotencyKeyBuilder
         var hash = SHA256.HashData(bytes);
         return Convert.ToHexString(hash);
     }
+
+    private static string SerializeCellData(CellCompletedRecord record)
+        => JsonSerializer.Serialize(record.CellData, record.CellData.GetType(), JsonOptions);
 }

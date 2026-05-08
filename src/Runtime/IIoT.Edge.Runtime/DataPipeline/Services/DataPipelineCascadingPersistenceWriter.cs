@@ -21,6 +21,7 @@ public sealed class DataPipelineCascadingPersistenceWriter
     private readonly ICriticalPersistenceFallbackWriter _criticalFallbackWriter;
     private readonly DataPipelineCapacityGuard _capacityGuard;
     private readonly ILogService _logger;
+    private readonly ICellDataJsonSerializer _cellDataJsonSerializer;
 
     public DataPipelineCascadingPersistenceWriter(
         ICloudRetryRecordStore cloudRetryStore,
@@ -31,7 +32,8 @@ public sealed class DataPipelineCascadingPersistenceWriter
         IMesDeadLetterStore mesDeadLetterStore,
         ICriticalPersistenceFallbackWriter criticalFallbackWriter,
         DataPipelineCapacityGuard capacityGuard,
-        ILogService logger)
+        ILogService logger,
+        ICellDataJsonSerializer cellDataJsonSerializer)
     {
         _cloudRetryStore = cloudRetryStore;
         _mesRetryStore = mesRetryStore;
@@ -42,6 +44,7 @@ public sealed class DataPipelineCascadingPersistenceWriter
         _criticalFallbackWriter = criticalFallbackWriter;
         _capacityGuard = capacityGuard;
         _logger = logger;
+        _cellDataJsonSerializer = cellDataJsonSerializer;
     }
 
     public Task<bool> PersistAsync(
@@ -189,7 +192,7 @@ public sealed class DataPipelineCascadingPersistenceWriter
             _ => throw new InvalidOperationException($"不支持的补偿链路：{channel}。")
         };
 
-    private static DeadLetterRecord BuildDeadLetterRecord(
+    private DeadLetterRecord BuildDeadLetterRecord(
         CellCompletedRecord record,
         string failedTarget,
         string sourceTable,
@@ -199,7 +202,7 @@ public sealed class DataPipelineCascadingPersistenceWriter
         => new()
         {
             ProcessType = record.CellData.ProcessType,
-            CellDataJson = CellDataJsonSerializer.Serialize(record.CellData),
+            CellDataJson = _cellDataJsonSerializer.Serialize(record.CellData),
             FailedTarget = failedTarget,
             SourceTable = sourceTable,
             SourceRecordId = sourceRecordId,
