@@ -36,6 +36,7 @@ internal sealed class CloudRetryRecordProcessor : ICloudRetryRecordProcessor
     private readonly ICloudUploadDiagnosticsStore _diagnosticsStore;
     private readonly IRetryBackoffStrategy _retryBackoffStrategy;
     private readonly IDataPipelineDeadLetterWriter _deadLetterWriter;
+    private readonly IDataPipelineConsumerInvoker _consumerInvoker;
     private readonly IProcessIntegrationRegistry? _processIntegrationRegistry;
     private readonly TimeSpan _consumerCallTimeout;
 
@@ -49,9 +50,12 @@ internal sealed class CloudRetryRecordProcessor : ICloudRetryRecordProcessor
         ICloudUploadDiagnosticsStore diagnosticsStore,
         IRetryBackoffStrategy retryBackoffStrategy,
         IDataPipelineDeadLetterWriter deadLetterWriter,
+        IDataPipelineConsumerInvoker consumerInvoker,
         IProcessIntegrationRegistry? processIntegrationRegistry = null,
         DataPipelineRuntimeOptions? runtimeOptions = null)
     {
+        ArgumentNullException.ThrowIfNull(consumerInvoker);
+
         _logger = logger;
         _retryStore = retryStore;
         _deadLetterStore = deadLetterStore;
@@ -61,6 +65,7 @@ internal sealed class CloudRetryRecordProcessor : ICloudRetryRecordProcessor
         _diagnosticsStore = diagnosticsStore;
         _retryBackoffStrategy = retryBackoffStrategy;
         _deadLetterWriter = deadLetterWriter;
+        _consumerInvoker = consumerInvoker;
         _processIntegrationRegistry = processIntegrationRegistry;
         _consumerCallTimeout = (runtimeOptions ?? new DataPipelineRuntimeOptions()).GetConsumerCallTimeout();
     }
@@ -178,7 +183,7 @@ internal sealed class CloudRetryRecordProcessor : ICloudRetryRecordProcessor
         CloudCallResult result;
         try
         {
-            result = await DataPipelineConsumerCall
+            result = await _consumerInvoker
                 .ExecuteAsync(
                     ct => _cloudBatchConsumer.ProcessBatchAsync(completedRecords, ct),
                     _consumerCallTimeout,
@@ -269,7 +274,7 @@ internal sealed class CloudRetryRecordProcessor : ICloudRetryRecordProcessor
         CloudCallResult result;
         try
         {
-            result = await DataPipelineConsumerCall
+            result = await _consumerInvoker
                 .ExecuteAsync(
                     ct => _cloudConsumer.ProcessWithResultAsync(new CellCompletedRecord { CellData = cellData }, ct),
                     _consumerCallTimeout,

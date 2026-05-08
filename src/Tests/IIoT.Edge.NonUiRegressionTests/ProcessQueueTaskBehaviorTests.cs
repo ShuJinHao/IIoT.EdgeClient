@@ -596,6 +596,7 @@ public sealed class ProcessQueueTaskBehaviorTests
                 mesDeadLetterStore,
                 criticalWriter,
                 capacityGuard),
+            new DefaultDataPipelineConsumerInvoker(),
             runtimeOptions)
     {
         public Task ExecuteOnceAsync() => base.ExecuteAsync();
