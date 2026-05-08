@@ -192,17 +192,23 @@ public sealed class RepositoryHygieneTests
     public void EfCoreSqliteConnection_ShouldEnableWalMode()
     {
         var root = FindRepositoryRoot();
-        var sqliteConnection = File.ReadAllText(Path.Combine(
+        var efCoreRoot = Path.Combine(
             root,
             "src",
             "Infrastructure",
             "IIoT.Edge.Infrastructure.Persistence.EfCore",
-            "EdgeSqliteConnection.cs"));
+            string.Empty);
+        var efCoreSource = string.Join(
+            Environment.NewLine,
+            EnumerateFiles(efCoreRoot, "*.cs").Select(File.ReadAllText));
 
-        Assert.Contains("PRAGMA journal_mode=WAL;", sqliteConnection, StringComparison.Ordinal);
-        Assert.Contains("BusyTimeoutMilliseconds = 5000", sqliteConnection, StringComparison.Ordinal);
-        Assert.Contains("PRAGMA busy_timeout={BusyTimeoutMilliseconds};", sqliteConnection, StringComparison.Ordinal);
-        Assert.DoesNotContain("Data Source=edge_design.db", sqliteConnection, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("IEdgeSqliteConnection", efCoreSource, StringComparison.Ordinal);
+        Assert.Contains("AddSingleton<IEdgeSqliteConnection>", efCoreSource, StringComparison.Ordinal);
+        Assert.Contains("PRAGMA journal_mode=WAL;", efCoreSource, StringComparison.Ordinal);
+        Assert.Contains("BusyTimeoutMilliseconds = 5000", efCoreSource, StringComparison.Ordinal);
+        Assert.Contains("PRAGMA busy_timeout={BusyTimeoutMilliseconds};", efCoreSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("static class EdgeSqliteConnection", efCoreSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("Data Source=edge_design.db", efCoreSource, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
