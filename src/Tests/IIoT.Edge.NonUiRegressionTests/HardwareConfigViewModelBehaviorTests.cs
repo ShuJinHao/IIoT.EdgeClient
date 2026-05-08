@@ -439,7 +439,10 @@ public sealed class HardwareConfigViewModelBehaviorTests
     private static HardwareConfigViewModel CreateViewModel(StubHardwareConfigCrudService? service = null)
     {
         var validationPresenter = new HardwareConfigValidationPresenter();
-        var editSession = new HardwareConfigEditSession(validationPresenter);
+        var editSession = new HardwareConfigEditSession(
+            validationPresenter,
+            new HardwareConfigStandardSignalDraftService(),
+            new HardwareConfigMappingSaveBuilder());
         return new HardwareConfigViewModel(
             new StubPermissionService { CanEditHardware = true },
             new TestLanguageService(),

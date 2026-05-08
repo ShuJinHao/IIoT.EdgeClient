@@ -297,7 +297,9 @@ public sealed class DiagnosticsViewModelBehaviorTests
             displayNameResolver,
             new DiagnosticsSummaryBuilder(languageService, diagnosticsText, displayNameResolver),
             new DiagnosticsRowsBuilder(diagnosticsText, displayNameResolver),
-            new DiagnosticsInitialSummaryFactory(languageService, diagnosticsText));
+            new DiagnosticsInitialSummaryFactory(languageService, diagnosticsText),
+            new DiagnosticsRefreshCoordinator(),
+            new DiagnosticsDeadLetterOperator());
     }
 
     private sealed class FakeStartupDiagnosticsStore : IStartupDiagnosticsStore

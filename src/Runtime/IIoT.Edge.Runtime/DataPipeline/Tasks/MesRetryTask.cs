@@ -100,8 +100,7 @@ public sealed class MesRetryTask : ScheduledTaskBase
         // MES 总开关关闭时不能领取补传记录，只刷新容量状态，保留 backlog 等待后续恢复。
         if (!_runtimeConfig.Current.MesUploadEnabled)
         {
-            await _capacityGuard.RefreshMesRetryCapacityStatusAsync().ConfigureAwait(false);
-            await _capacityGuard.RefreshMesFallbackCapacityStatusAsync().ConfigureAwait(false);
+            await RefreshMesCapacityStatusAsync().ConfigureAwait(false);
 
             _diagnosticsStore.SetRuntimeState(MesRetryRuntimeState.Idle);
             _wasUnavailable = true;
@@ -130,8 +129,7 @@ public sealed class MesRetryTask : ScheduledTaskBase
         var claimedBatch = await _retryStore.ClaimPendingBatchAsync(batchSize: 5).ConfigureAwait(false);
         if (claimedBatch is null || claimedBatch.Records.Count == 0)
         {
-            await _capacityGuard.RefreshMesRetryCapacityStatusAsync().ConfigureAwait(false);
-            await _capacityGuard.RefreshMesFallbackCapacityStatusAsync().ConfigureAwait(false);
+            await RefreshMesCapacityStatusAsync().ConfigureAwait(false);
 
             await ApplyIdleOrBackoffStateAsync().ConfigureAwait(false);
             return;
@@ -167,15 +165,13 @@ public sealed class MesRetryTask : ScheduledTaskBase
 
         if (hadFailure)
         {
-            await _capacityGuard.RefreshMesRetryCapacityStatusAsync().ConfigureAwait(false);
-            await _capacityGuard.RefreshMesFallbackCapacityStatusAsync().ConfigureAwait(false);
+            await RefreshMesCapacityStatusAsync().ConfigureAwait(false);
 
             _diagnosticsStore.SetRuntimeState(MesRetryRuntimeState.LastFailed);
             return;
         }
 
-        await _capacityGuard.RefreshMesRetryCapacityStatusAsync().ConfigureAwait(false);
-        await _capacityGuard.RefreshMesFallbackCapacityStatusAsync().ConfigureAwait(false);
+        await RefreshMesCapacityStatusAsync().ConfigureAwait(false);
 
         await ApplyIdleOrBackoffStateAsync().ConfigureAwait(false);
     }
@@ -326,6 +322,12 @@ public sealed class MesRetryTask : ScheduledTaskBase
             pendingCount > 0
                 ? MesRetryRuntimeState.Backoff
                 : MesRetryRuntimeState.Idle);
+    }
+
+    private async Task RefreshMesCapacityStatusAsync()
+    {
+        await _capacityGuard.RefreshMesRetryCapacityStatusAsync().ConfigureAwait(false);
+        await _capacityGuard.RefreshMesFallbackCapacityStatusAsync().ConfigureAwait(false);
     }
 
     private async Task RecoverAbandonedRecordsAsync()

@@ -1,9 +1,7 @@
 using System.Collections.ObjectModel;
-using System.Globalization;
 using System.Windows.Input;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
-using IIoT.Edge.Application.Features.Hardware.IoMappings;
 using IIoT.Edge.Application.Features.Hardware.Queries;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Presentation.Navigation.Localization;
@@ -22,8 +20,10 @@ public class IoViewViewModel : NavigationViewModelBase
     private readonly AsyncCommand _manualReadCommand;
     private readonly IIoViewMappingBuilder _mappingBuilder;
     private readonly IIoViewSignalValueUpdater _signalValueUpdater;
+    private readonly IIoViewBufferBindingCoordinator _bufferBindingCoordinator;
+    private readonly IIoViewInteractionWriter _interactionWriter;
+    private readonly IIoViewManualReadService _manualReadService;
     private readonly string? _moduleIdFilter;
-    private IPlcBufferTransport? _selectedBuffer;
 
     public ObservableCollection<NetworkDeviceEntity> Devices { get; } = [];
 
@@ -89,7 +89,10 @@ public class IoViewViewModel : NavigationViewModelBase
         ISender sender,
         IAppLanguageService languageService,
         IIoViewMappingBuilder mappingBuilder,
-        IIoViewSignalValueUpdater signalValueUpdater)
+        IIoViewSignalValueUpdater signalValueUpdater,
+        IIoViewBufferBindingCoordinator bufferBindingCoordinator,
+        IIoViewInteractionWriter interactionWriter,
+        IIoViewManualReadService manualReadService)
         : this(
             dataStore,
             plcConnectionManager,
@@ -100,7 +103,10 @@ public class IoViewViewModel : NavigationViewModelBase
             "IO 交互",
             moduleIdFilter: null,
             mappingBuilder,
-            signalValueUpdater)
+            signalValueUpdater,
+            bufferBindingCoordinator,
+            interactionWriter,
+            manualReadService)
     {
     }
 
@@ -114,6 +120,9 @@ public class IoViewViewModel : NavigationViewModelBase
         string titleFallback,
         IIoViewMappingBuilder mappingBuilder,
         IIoViewSignalValueUpdater signalValueUpdater,
+        IIoViewBufferBindingCoordinator bufferBindingCoordinator,
+        IIoViewInteractionWriter interactionWriter,
+        IIoViewManualReadService manualReadService,
         string? moduleIdFilter = null)
         : this(
             dataStore,
@@ -125,7 +134,10 @@ public class IoViewViewModel : NavigationViewModelBase
             titleFallback,
             moduleIdFilter,
             mappingBuilder,
-            signalValueUpdater)
+            signalValueUpdater,
+            bufferBindingCoordinator,
+            interactionWriter,
+            manualReadService)
     {
     }
 
@@ -139,7 +151,10 @@ public class IoViewViewModel : NavigationViewModelBase
         string titleFallback,
         string? moduleIdFilter,
         IIoViewMappingBuilder mappingBuilder,
-        IIoViewSignalValueUpdater signalValueUpdater)
+        IIoViewSignalValueUpdater signalValueUpdater,
+        IIoViewBufferBindingCoordinator bufferBindingCoordinator,
+        IIoViewInteractionWriter interactionWriter,
+        IIoViewManualReadService manualReadService)
         : base(languageService, viewId, titleResourceKey, titleFallback)
     {
         _dataStore = dataStore;
@@ -147,6 +162,9 @@ public class IoViewViewModel : NavigationViewModelBase
         _sender = sender;
         _mappingBuilder = mappingBuilder;
         _signalValueUpdater = signalValueUpdater;
+        _bufferBindingCoordinator = bufferBindingCoordinator;
+        _interactionWriter = interactionWriter;
+        _manualReadService = manualReadService;
         _moduleIdFilter = moduleIdFilter;
 
         RefreshDevicesCommand = new AsyncCommand(LoadDevicesAsync);
@@ -254,39 +272,19 @@ public class IoViewViewModel : NavigationViewModelBase
             return;
         }
 
-        var plc = _plcConnectionManager.GetPlc(SelectedDevice.Id);
-        var buffer = _dataStore.GetBuffer(SelectedDevice.Id);
-        if (plc is null || buffer is null)
+        var result = await _manualReadService.ReadAsync(SelectedDevice.Id, DataSections, ArraySections);
+        if (result.ShouldRefreshValues)
         {
-            UpdateConnectionStatus();
-            return;
-        }
-
-        try
-        {
-            foreach (var signal in DataSections.SelectMany(static section => section.Signals)
-                         .Concat(ArraySections.SelectMany(static section => section.Columns))
-                         .Where(static signal => string.Equals(
-                             signal.Direction,
-                             IoMappingOptionCatalog.DirectionRead,
-                             StringComparison.OrdinalIgnoreCase)))
-            {
-                var length = checked((ushort)Math.Max(1, signal.AddressCount));
-                var words = await plc.ReadDataAsync<ushort>(signal.PlcAddress, length);
-                buffer.UpdateReadSignal(signal.SignalKey, words);
-            }
-
             RefreshCurrentValues();
             ClearFeedback();
         }
-        catch (Exception ex)
+
+        if (!string.IsNullOrWhiteSpace(result.ErrorMessage))
         {
-            SetError($"读取 IO 数据失败：{ex.Message}");
+            SetError(result.ErrorMessage);
         }
-        finally
-        {
-            UpdateConnectionStatus();
-        }
+
+        UpdateConnectionStatus();
     }
 
     private bool IsVisibleDevice(NetworkDeviceEntity device)
@@ -302,27 +300,12 @@ public class IoViewViewModel : NavigationViewModelBase
 
     private void WriteInteractionRow(IoInteractionRowModel row)
     {
-        if (SelectedDevice is null || row.HostSignals.Count == 0)
+        if (SelectedDevice is null)
         {
             return;
         }
 
-        var buffer = _dataStore.GetBuffer(SelectedDevice.Id);
-        if (buffer is null)
-        {
-            return;
-        }
-
-        var displayValue = row.WriteValue.ToString(CultureInfo.InvariantCulture);
-        foreach (var signal in row.HostSignals)
-        {
-            buffer.SetWriteValue(signal.SignalKey, 0, unchecked((ushort)row.WriteValue));
-            buffer.SetWriteValue(signal.StartIndex, unchecked((ushort)row.WriteValue));
-            signal.DisplayValue = displayValue;
-            signal.PreviewValue = displayValue;
-        }
-
-        row.NotifyValuesChanged();
+        _interactionWriter.Write(SelectedDevice.Id, row);
     }
 
     private void BindSelectedBuffer()
@@ -333,33 +316,11 @@ public class IoViewViewModel : NavigationViewModelBase
             return;
         }
 
-        _selectedBuffer = _dataStore.GetBuffer(SelectedDevice.Id);
-        if (_selectedBuffer is not null)
-        {
-            _selectedBuffer.SignalValuesChanged += OnBufferSignalValuesChanged;
-        }
+        _bufferBindingCoordinator.Bind(SelectedDevice.Id, RefreshCurrentValues);
     }
 
     private void UnbindSelectedBuffer()
-    {
-        if (_selectedBuffer is not null)
-        {
-            _selectedBuffer.SignalValuesChanged -= OnBufferSignalValuesChanged;
-            _selectedBuffer = null;
-        }
-    }
-
-    private void OnBufferSignalValuesChanged(object? sender, PlcSignalBufferChangedEventArgs e)
-    {
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher is null || dispatcher.CheckAccess())
-        {
-            RefreshCurrentValues();
-            return;
-        }
-
-        dispatcher.BeginInvoke(new Action(RefreshCurrentValues));
-    }
+        => _bufferBindingCoordinator.Unbind();
 
     private void UpdateConnectionStatus()
     {

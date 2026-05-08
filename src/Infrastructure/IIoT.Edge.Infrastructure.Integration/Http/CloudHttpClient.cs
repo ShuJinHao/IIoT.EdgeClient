@@ -5,8 +5,6 @@ using IIoT.Edge.Infrastructure.Integration.Config;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using Polly.Timeout;
 
 namespace IIoT.Edge.Infrastructure.Integration.Http;
@@ -17,20 +15,13 @@ namespace IIoT.Edge.Infrastructure.Integration.Http;
 /// </summary>
 public class CloudHttpClient : ICloudHttpClient
 {
-    private static readonly HashSet<string> BlockedIdentityKeys = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "macAddress",
-        "mac_address",
-        "clientCode",
-        "client_code"
-    };
-
     private static readonly HashSet<HttpMethod> AnonymousMethods = [HttpMethod.Get, HttpMethod.Post];
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IDeviceAccessTokenProvider _tokenProvider;
     private readonly IDeviceService _deviceService;
     private readonly ICloudApiEndpointProvider _endpointProvider;
+    private readonly ICloudPayloadSanitizer _payloadSanitizer;
     private readonly ILogService _logger;
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
 
@@ -40,11 +31,23 @@ public class CloudHttpClient : ICloudHttpClient
         IDeviceService deviceService,
         ICloudApiEndpointProvider endpointProvider,
         ILogService logger)
+        : this(httpClientFactory, tokenProvider, deviceService, endpointProvider, logger, new CloudPayloadSanitizer())
+    {
+    }
+
+    internal CloudHttpClient(
+        IHttpClientFactory httpClientFactory,
+        IDeviceAccessTokenProvider tokenProvider,
+        IDeviceService deviceService,
+        ICloudApiEndpointProvider endpointProvider,
+        ILogService logger,
+        ICloudPayloadSanitizer payloadSanitizer)
     {
         _httpClientFactory = httpClientFactory;
         _tokenProvider = tokenProvider;
         _deviceService = deviceService;
         _endpointProvider = endpointProvider;
+        _payloadSanitizer = payloadSanitizer;
         _logger = logger;
     }
 
@@ -54,7 +57,7 @@ public class CloudHttpClient : ICloudHttpClient
 
         try
         {
-            var sanitizedPayload = SanitizePayload(payload);
+            var sanitizedPayload = _payloadSanitizer.Sanitize(payload);
             var sendResult = await SendWithRetryAsync(
                 HttpMethod.Post,
                 requestUrl,
@@ -106,7 +109,7 @@ public class CloudHttpClient : ICloudHttpClient
 
         try
         {
-            var sanitizedPayload = SanitizePayload(payload);
+            var sanitizedPayload = _payloadSanitizer.Sanitize(payload);
             var sendResult = await SendWithRetryAsync(
                 HttpMethod.Post,
                 requestUrl,
@@ -406,26 +409,6 @@ public class CloudHttpClient : ICloudHttpClient
         var requestPath = GetRequestRoute(requestUrl);
         return string.Equals(requestPath, _endpointProvider.GetDeviceInstancePath(), StringComparison.OrdinalIgnoreCase)
             || string.Equals(requestPath, _endpointProvider.GetIdentityDeviceLoginPath(), StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static object SanitizePayload(object payload)
-    {
-        var node = JsonSerializer.SerializeToNode(payload);
-        if (node is JsonObject obj)
-        {
-            RemoveIdentityKeys(obj);
-            return obj;
-        }
-
-        return payload;
-    }
-
-    private static void RemoveIdentityKeys(JsonObject obj)
-    {
-        foreach (var key in BlockedIdentityKeys.ToList())
-        {
-            obj.Remove(key);
-        }
     }
 
     private sealed class SendWithRetryResult

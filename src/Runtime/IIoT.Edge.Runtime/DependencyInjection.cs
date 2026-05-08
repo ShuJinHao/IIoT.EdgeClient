@@ -24,12 +24,17 @@ public static class DependencyInjection
     {
         services.TryAddSingleton<ICellDataTypeRegistry, CellDataTypeRegistry>();
         services.TryAddSingleton<ICellDataJsonSerializer, CellDataJsonSerializer>();
+        services.TryAddSingleton<IProductionContextCorruptFileQuarantine, ProductionContextCorruptFileQuarantine>();
+        services.TryAddSingleton<IProductionContextRuntimeStateCopier, ProductionContextRuntimeStateCopier>();
         services.AddSingleton(sp =>
             new ProductionContextStore(
                 sp.GetRequiredService<ILogService>(),
                 sp.GetServices<IProductionContextFactory>(),
                 sp.GetRequiredService<ICellDataTypeRegistry>(),
-                runtimePaths.ContextDirectory));
+                new ProductionContextPersistenceFileSystem(),
+                runtimePaths.ContextDirectory,
+                sp.GetRequiredService<IProductionContextCorruptFileQuarantine>(),
+                sp.GetRequiredService<IProductionContextRuntimeStateCopier>()));
         services.AddSingleton<IProductionContextStore>(sp => sp.GetRequiredService<ProductionContextStore>());
         services.AddSingleton<ITodayCapacityStore, TodayCapacityStore>();
         services.AddSingleton<IPlcSignalBlockPlanner, DefaultPlcSignalBlockPlanner>();

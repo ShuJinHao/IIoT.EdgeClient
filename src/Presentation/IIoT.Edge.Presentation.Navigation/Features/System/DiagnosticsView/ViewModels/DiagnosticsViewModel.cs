@@ -2,7 +2,6 @@ using System.Collections.ObjectModel;
 using System.Threading;
 using System.Windows.Input;
 using System.Windows.Threading;
-using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Presentation.Navigation.Localization;
 using IIoT.Edge.UI.Shared.Localization;
@@ -14,13 +13,13 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
 {
     private readonly IStartupDiagnosticsStore _diagnosticsStore;
     private readonly IEdgeSyncDiagnosticsQuery _syncDiagnosticsQuery;
-    private readonly IDeadLetterMaintenanceService? _deadLetterMaintenanceService;
     private readonly IDiagnosticsModuleDisplayNameResolver _displayNameResolver;
     private readonly IDiagnosticsSummaryBuilder _summaryBuilder;
     private readonly IDiagnosticsRowsBuilder _rowsBuilder;
     private readonly IDiagnosticsInitialSummaryFactory _initialSummaryFactory;
+    private readonly IDiagnosticsRefreshCoordinator _refreshCoordinator;
+    private readonly IDiagnosticsDeadLetterOperator _deadLetterOperator;
     private readonly DispatcherTimer _refreshTimer;
-    private int _refreshInProgress;
 
     public ObservableCollection<ModuleRegistrationRow> ModuleRegistrations { get; } = [];
     public ObservableCollection<PluginLifecycleRow> PluginStates { get; } = [];
@@ -294,17 +293,19 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         IDiagnosticsSummaryBuilder summaryBuilder,
         IDiagnosticsRowsBuilder rowsBuilder,
         IDiagnosticsInitialSummaryFactory initialSummaryFactory,
-        IDeadLetterMaintenanceService? deadLetterMaintenanceService = null)
+        IDiagnosticsRefreshCoordinator refreshCoordinator,
+        IDiagnosticsDeadLetterOperator deadLetterOperator)
         : base(languageService, CoreViewIds.Diagnostics, "Navigation_Menu_CoreDiagnostics", "系统诊断")
     {
         _diagnosticsStore = diagnosticsStore;
         _syncDiagnosticsQuery = syncDiagnosticsQuery;
-        _deadLetterMaintenanceService = deadLetterMaintenanceService;
 
         _displayNameResolver = displayNameResolver;
         _summaryBuilder = summaryBuilder;
         _rowsBuilder = rowsBuilder;
         _initialSummaryFactory = initialSummaryFactory;
+        _refreshCoordinator = refreshCoordinator;
+        _deadLetterOperator = deadLetterOperator;
 
         RequeueDeadLetterCommand = new AsyncCommand<DeadLetterRow>(RequeueDeadLetterAsync, CanOperateDeadLetter);
         DeleteDeadLetterCommand = new AsyncCommand<DeadLetterRow>(DeleteDeadLetterAsync, CanOperateDeadLetter);
@@ -326,7 +327,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
     public override Task OnActivatedAsync() => RefreshAsync();
 
     internal Task RefreshAsync(CancellationToken ct = default)
-        => RefreshIfIdleAsync(ct);
+        => _refreshCoordinator.RunIfIdleAsync(RefreshCoreAsync, ct);
 
     private async void OnRefreshTimerTick(object? sender, EventArgs e)
     {
@@ -337,28 +338,11 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
     {
         try
         {
-            await RefreshIfIdleAsync(ct);
+            await RefreshAsync(ct);
         }
         catch
         {
             // 诊断页刷新失败不应导致界面轮询崩溃。
-        }
-    }
-
-    private async Task RefreshIfIdleAsync(CancellationToken ct)
-    {
-        if (Interlocked.Exchange(ref _refreshInProgress, 1) == 1)
-        {
-            return;
-        }
-
-        try
-        {
-            await RefreshCoreAsync(ct);
-        }
-        finally
-        {
-            Volatile.Write(ref _refreshInProgress, 0);
         }
     }
 
@@ -419,17 +403,11 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
     }
 
     private bool CanOperateDeadLetter(DeadLetterRow? row)
-        => _deadLetterMaintenanceService is not null && row is not null;
+        => _deadLetterOperator.CanOperate(row);
 
     private async Task RequeueDeadLetterAsync(DeadLetterRow row)
     {
-        if (_deadLetterMaintenanceService is null)
-        {
-            SetError("死信运维服务未注册。");
-            return;
-        }
-
-        var result = await _deadLetterMaintenanceService.RequeueAsync(row.Channel, row.Id);
+        var result = await _deadLetterOperator.RequeueAsync(row);
         if (result.IsSuccess)
         {
             SetStatus(result.Message);
@@ -442,13 +420,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
 
     private async Task DeleteDeadLetterAsync(DeadLetterRow row)
     {
-        if (_deadLetterMaintenanceService is null)
-        {
-            SetError("死信运维服务未注册。");
-            return;
-        }
-
-        var result = await _deadLetterMaintenanceService.DeleteAsync(row.Channel, row.Id);
+        var result = await _deadLetterOperator.DeleteAsync(row);
         if (result.IsSuccess)
         {
             SetStatus(result.Message);

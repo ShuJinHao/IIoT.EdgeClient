@@ -32,13 +32,18 @@ public interface IHardwareConfigEditSession
 
 public sealed class HardwareConfigEditSession : IHardwareConfigEditSession
 {
-    private const int ManualSortOrderBase = 10000;
-
     private readonly IHardwareConfigValidationPresenter _validationPresenter;
+    private readonly IHardwareConfigStandardSignalDraftService _standardSignalDraftService;
+    private readonly IHardwareConfigMappingSaveBuilder _mappingSaveBuilder;
 
-    public HardwareConfigEditSession(IHardwareConfigValidationPresenter validationPresenter)
+    public HardwareConfigEditSession(
+        IHardwareConfigValidationPresenter validationPresenter,
+        IHardwareConfigStandardSignalDraftService standardSignalDraftService,
+        IHardwareConfigMappingSaveBuilder mappingSaveBuilder)
     {
         _validationPresenter = validationPresenter;
+        _standardSignalDraftService = standardSignalDraftService;
+        _mappingSaveBuilder = mappingSaveBuilder;
     }
 
     public void OpenAddInteractionMappingDialog(HardwareConfigViewModel viewModel)
@@ -81,15 +86,15 @@ public sealed class HardwareConfigEditSession : IHardwareConfigEditSession
         viewModel.NewIoMapping = new IoMappingDraftVm
         {
             Source = IoMappingOptionCatalog.PointSourceStandardSignal,
-            Category = FindInitialDataPointCategory(viewModel)
+            Category = _standardSignalDraftService.FindInitialDataPointCategory(viewModel)
         };
         viewModel.NewInteractionPair = null;
         viewModel.SelectedStandardInteractionGroup = null;
         RefreshFilteredStandardDataSignals(viewModel);
-        viewModel.SelectedStandardIoSignal = FindStandardDataSignal(viewModel);
+        viewModel.SelectedStandardIoSignal = _standardSignalDraftService.FindStandardDataSignal(viewModel);
         if (viewModel.SelectedStandardIoSignal is null)
         {
-            ClearStandardSignalDraftForCurrentCategory(viewModel);
+            _standardSignalDraftService.ClearStandardSignalDraftForCurrentCategory(viewModel);
         }
 
         viewModel.IsAddIoMappingDialogOpen = true;
@@ -164,7 +169,7 @@ public sealed class HardwareConfigEditSession : IHardwareConfigEditSession
         {
             if (draft.IsStandardSource)
             {
-                SelectNextStandardDataSignal(viewModel);
+                _standardSignalDraftService.SelectNextStandardDataSignal(viewModel);
             }
             else if (draft.IsCustomSource)
             {
@@ -174,7 +179,7 @@ public sealed class HardwareConfigEditSession : IHardwareConfigEditSession
 
         if (e.PropertyName == nameof(IoMappingDraftVm.Category))
         {
-            SelectNextStandardDataSignal(viewModel);
+            _standardSignalDraftService.SelectNextStandardDataSignal(viewModel);
         }
     }
 
@@ -205,35 +210,7 @@ public sealed class HardwareConfigEditSession : IHardwareConfigEditSession
     public void ApplyStandardSignalToDraft(
         HardwareConfigViewModel viewModel,
         IoStandardSignalOptionVm? signal)
-    {
-        if (viewModel.NewIoMapping is null || !viewModel.NewIoMapping.IsStandardSource)
-        {
-            return;
-        }
-
-        if (signal is null)
-        {
-            ClearStandardSignalDraftForCurrentCategory(viewModel);
-            return;
-        }
-
-        var draftCategory = IoMappingOptionCatalog.NormalizeCategory(viewModel.NewIoMapping.Category, viewModel.NewIoMapping.AddressCount);
-        var signalCategory = IoMappingOptionCatalog.NormalizeCategory(signal.Category, signal.AddressCount);
-        if (!string.Equals(draftCategory, signalCategory, StringComparison.OrdinalIgnoreCase))
-        {
-            ClearStandardSignalDraftForCurrentCategory(viewModel);
-            return;
-        }
-
-        viewModel.NewIoMapping.Category = draftCategory;
-        viewModel.NewIoMapping.Direction = IoMappingOptionCatalog.GetDirectionForCategory(draftCategory) ?? signal.Direction;
-        viewModel.NewIoMapping.PlcAddress = signal.PlcAddress;
-        viewModel.NewIoMapping.AddressCount = signal.AddressCount;
-        viewModel.NewIoMapping.DataType = signal.DataType;
-        viewModel.NewIoMapping.BusinessGroup = signal.BusinessGroup;
-        viewModel.NewIoMapping.SignalName = signal.SignalName;
-        viewModel.NewIoMapping.Remark = signal.Remark;
-    }
+        => _standardSignalDraftService.ApplyStandardSignalToDraft(viewModel, signal);
 
     public void ApplyStandardInteractionGroupToDraft(
         HardwareConfigViewModel viewModel,
@@ -259,46 +236,10 @@ public sealed class HardwareConfigEditSession : IHardwareConfigEditSession
     }
 
     public void RefreshFilteredStandardDataSignals(HardwareConfigViewModel viewModel)
-    {
-        var category = viewModel.NewIoMapping?.Category ?? IoMappingOptionCatalog.CategorySingleRead;
-        var normalizedCategory = IoMappingOptionCatalog.NormalizeCategory(category, addressCount: 1);
-        HardwareConfigViewModel.ReplaceCollection(
-            viewModel.FilteredStandardDataSignals,
-            viewModel.StandardDataSignals
-                .Where(signal => string.Equals(
-                    IoMappingOptionCatalog.NormalizeCategory(signal.Category, signal.AddressCount),
-                    normalizedCategory,
-                    StringComparison.OrdinalIgnoreCase))
-                .OrderBy(static signal => signal.SortOrder)
-                .ThenBy(static signal => signal.DisplayText, StringComparer.OrdinalIgnoreCase));
-    }
+        => _standardSignalDraftService.RefreshFilteredStandardDataSignals(viewModel);
 
     public IReadOnlyCollection<IoMappingVm> BuildMappingsToSave(IEnumerable<IoMappingVm> ioMappings)
-    {
-        var mappings = ioMappings.ToArray();
-        var result = new List<IoMappingVm>(mappings.Length);
-
-        foreach (var standard in mappings.Where(static x => !IsManualSignal(x)))
-        {
-            result.Add(CloneIoMapping(standard));
-        }
-
-        var manualOrdered = mappings
-            .Where(static x => IsManualSignal(x))
-            .OrderBy(static x => string.Equals(x.Direction, IoMappingOptionCatalog.DirectionWrite, StringComparison.OrdinalIgnoreCase) ? 1 : 0)
-            .ThenBy(static x => x.SortOrder <= 0 ? int.MaxValue : x.SortOrder)
-            .ThenBy(static x => x.SignalName, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-
-        for (var index = 0; index < manualOrdered.Length; index++)
-        {
-            var clone = CloneIoMapping(manualOrdered[index]);
-            clone.SortOrder = ManualSortOrderBase + index;
-            result.Add(clone);
-        }
-
-        return result;
-    }
+        => _mappingSaveBuilder.BuildMappingsToSave(ioMappings);
 
     private void ConfirmAddInteractionPair(HardwareConfigViewModel viewModel)
     {
@@ -385,58 +326,6 @@ public sealed class HardwareConfigEditSession : IHardwareConfigEditSession
         viewModel.ClearUserFeedback();
     }
 
-    private static IoStandardSignalOptionVm? FindStandardDataSignal(HardwareConfigViewModel viewModel)
-        => viewModel.FilteredStandardDataSignals.FirstOrDefault();
-
-    private static string FindInitialDataPointCategory(HardwareConfigViewModel viewModel)
-    {
-        var singleRead = viewModel.StandardDataSignals.FirstOrDefault(static signal => string.Equals(
-            IoMappingOptionCatalog.NormalizeCategory(signal.Category, signal.AddressCount),
-            IoMappingOptionCatalog.CategorySingleRead,
-            StringComparison.OrdinalIgnoreCase));
-        var firstSignal = singleRead ?? viewModel.StandardDataSignals
-            .OrderBy(static signal => signal.SortOrder)
-            .ThenBy(static signal => signal.DisplayText, StringComparer.OrdinalIgnoreCase)
-            .FirstOrDefault();
-
-        return firstSignal is null
-            ? IoMappingOptionCatalog.CategorySingleRead
-            : IoMappingOptionCatalog.NormalizeCategory(firstSignal.Category, firstSignal.AddressCount);
-    }
-
-    private void SelectNextStandardDataSignal(HardwareConfigViewModel viewModel)
-    {
-        RefreshFilteredStandardDataSignals(viewModel);
-        var nextSignal = FindStandardDataSignal(viewModel);
-        if (!ReferenceEquals(viewModel.SelectedStandardIoSignal, nextSignal))
-        {
-            viewModel.SelectedStandardIoSignal = nextSignal;
-        }
-        else
-        {
-            ApplyStandardSignalToDraft(viewModel, nextSignal);
-        }
-    }
-
-    private static void ClearStandardSignalDraftForCurrentCategory(HardwareConfigViewModel viewModel)
-    {
-        if (viewModel.NewIoMapping is null || !viewModel.NewIoMapping.IsStandardSource)
-        {
-            return;
-        }
-
-        var category = IoMappingOptionCatalog.NormalizeCategory(viewModel.NewIoMapping.Category, viewModel.NewIoMapping.AddressCount);
-        viewModel.NewIoMapping.Category = category;
-        viewModel.NewIoMapping.Direction = IoMappingOptionCatalog.GetDirectionForCategory(category)
-                                           ?? IoMappingOptionCatalog.DirectionRead;
-        viewModel.NewIoMapping.PlcAddress = string.Empty;
-        viewModel.NewIoMapping.AddressCount = IoMappingOptionCatalog.NormalizeAddressCount(category, viewModel.NewIoMapping.AddressCount);
-        viewModel.NewIoMapping.DataType = IoMappingOptionCatalog.DataTypeInt16;
-        viewModel.NewIoMapping.BusinessGroup = string.Empty;
-        viewModel.NewIoMapping.SignalName = string.Empty;
-        viewModel.NewIoMapping.Remark = null;
-    }
-
     private static IoMappingVm CreateMappingFromTemplate(
         HardwareConfigViewModel viewModel,
         ModuleIoTemplateEntry template,
@@ -469,23 +358,4 @@ public sealed class HardwareConfigEditSession : IHardwareConfigEditSession
         => viewModel.IoMappings.Any(x => string.Equals(x.SignalKey, signalKey, StringComparison.OrdinalIgnoreCase)
             && string.Equals(x.Direction, direction, StringComparison.OrdinalIgnoreCase));
 
-    private static bool IsManualSignal(IoMappingVm mapping)
-        => mapping.SignalKey?.StartsWith("Manual.", StringComparison.OrdinalIgnoreCase) ?? false;
-
-    private static IoMappingVm CloneIoMapping(IoMappingVm source)
-        => new()
-        {
-            Id = source.Id,
-            NetworkDeviceId = source.NetworkDeviceId,
-            SignalKey = source.SignalKey,
-            PlcAddress = source.PlcAddress,
-            Category = source.Category,
-            AddressCount = source.AddressCount,
-            DataType = source.DataType,
-            Direction = source.Direction,
-            BusinessGroup = source.BusinessGroup,
-            SignalName = source.SignalName,
-            SortOrder = source.SortOrder,
-            Remark = source.Remark
-        };
 }

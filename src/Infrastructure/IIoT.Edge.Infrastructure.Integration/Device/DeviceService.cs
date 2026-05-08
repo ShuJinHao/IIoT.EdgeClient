@@ -480,10 +480,4 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
             _ => EdgeUploadBlockReason.BootstrapPayloadInvalid
         };
 
-    private enum DeviceRefreshResult
-    {
-        FallbackToBootstrap,
-        Refreshed,
-        Cancelled
-    }
 }

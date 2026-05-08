@@ -411,6 +411,9 @@ public sealed class IoViewViewModelBehaviorTests
             "IO 交互",
             new IoViewMappingBuilder(),
             new IoViewSignalValueUpdater(),
+            new IoViewBufferBindingCoordinator(dataStore),
+            new IoViewInteractionWriter(dataStore),
+            new IoViewManualReadService(plcConnectionManager, dataStore),
             moduleIdFilter);
 
     private sealed class TestLanguageService : IAppLanguageService

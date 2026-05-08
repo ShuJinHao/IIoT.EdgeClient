@@ -3,23 +3,19 @@ using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
-using System.Globalization;
 using System.Text.Json;
-using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 
 namespace IIoT.Edge.Runtime.Context;
 
 public class ProductionContextStore : IProductionContextStore
 {
     private const string PersistFileName = "production_context.json";
-    private static readonly Regex CorruptFileTimestampPattern = new(
-        @"^production_context\.corrupt-(\d{17})(?:-\d+)?\.json$",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private readonly Dictionary<string, ProductionContext> _contexts = new();
     private readonly IReadOnlyDictionary<string, IProductionContextFactory> _contextFactories;
     private readonly IProductionContextPersistenceFileSystem _fileSystem;
+    private readonly IProductionContextCorruptFileQuarantine _corruptFileQuarantine;
+    private readonly IProductionContextRuntimeStateCopier _stateCopier;
     private readonly ILogService _logger;
     private readonly string _persistPath;
     private readonly JsonSerializerOptions _jsonOptions;
@@ -57,13 +53,17 @@ public class ProductionContextStore : IProductionContextStore
         IEnumerable<IProductionContextFactory> contextFactories,
         ICellDataTypeRegistry cellDataTypeRegistry,
         IProductionContextPersistenceFileSystem fileSystem,
-        string? persistDirectory = null)
+        string? persistDirectory = null,
+        IProductionContextCorruptFileQuarantine? corruptFileQuarantine = null,
+        IProductionContextRuntimeStateCopier? stateCopier = null)
     {
         ArgumentNullException.ThrowIfNull(fileSystem);
         ArgumentNullException.ThrowIfNull(cellDataTypeRegistry);
 
         _logger = logger;
         _fileSystem = fileSystem;
+        _corruptFileQuarantine = corruptFileQuarantine ?? new ProductionContextCorruptFileQuarantine(logger);
+        _stateCopier = stateCopier ?? new ProductionContextRuntimeStateCopier();
         _jsonOptions = CreateJsonOptions(cellDataTypeRegistry);
         _contextFactories = (contextFactories ?? Array.Empty<IProductionContextFactory>())
             .Where(static x => !string.IsNullOrWhiteSpace(x.ModuleId))
@@ -107,7 +107,7 @@ public class ProductionContextStore : IProductionContextStore
                     && !factory.ContextType.IsInstanceOfType(ctx))
                 {
                     var upgraded = CreateContext(factory, deviceName);
-                    CopyRuntimeState(ctx, upgraded);
+                    _stateCopier.Copy(ctx, upgraded);
                     _contexts[deviceName] = upgraded;
                     return upgraded;
                 }
@@ -270,7 +270,7 @@ public class ProductionContextStore : IProductionContextStore
             _contexts.Clear();
         }
 
-        var quarantinedPath = TryQuarantineCorruptFile();
+        var quarantinedPath = _corruptFileQuarantine.TryQuarantine(_persistPath, PersistFileName);
         if (quarantinedPath is not null)
         {
             _logger.Error(
@@ -285,53 +285,11 @@ public class ProductionContextStore : IProductionContextStore
         RefreshPersistenceDiagnostics();
     }
 
-    private string? TryQuarantineCorruptFile()
-    {
-        try
-        {
-            var directory = Path.GetDirectoryName(_persistPath) ?? ".";
-            var baseName = Path.GetFileNameWithoutExtension(PersistFileName);
-            var extension = Path.GetExtension(PersistFileName);
-            var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmssfff");
-            var candidatePath = Path.Combine(directory, $"{baseName}.corrupt-{timestamp}{extension}");
-            var suffix = 0;
-
-            while (File.Exists(candidatePath))
-            {
-                suffix++;
-                candidatePath = Path.Combine(directory, $"{baseName}.corrupt-{timestamp}-{suffix}{extension}");
-            }
-
-            File.Move(_persistPath, candidatePath);
-            return candidatePath;
-        }
-        catch (Exception moveEx)
-        {
-            _logger.Error($"[ContextStore] 隔离损坏运行状态失败：{moveEx.Message}");
-            return null;
-        }
-    }
-
     private void RefreshPersistenceDiagnostics()
     {
         try
         {
-            var directory = Path.GetDirectoryName(_persistPath) ?? ".";
-            if (!Directory.Exists(directory))
-            {
-                UpdatePersistenceDiagnostics(new ProductionContextPersistenceDiagnostics(0, null));
-                return;
-            }
-
-            var files = Directory.GetFiles(directory, "production_context.corrupt-*.json");
-            var lastCorruptDetectedAt = files
-                .Select(ParseCorruptTimestamp)
-                .Where(x => x.HasValue)
-                .Max();
-
-            UpdatePersistenceDiagnostics(new ProductionContextPersistenceDiagnostics(
-                CorruptFileCount: files.Length,
-                LastCorruptDetectedAt: lastCorruptDetectedAt));
+            UpdatePersistenceDiagnostics(_corruptFileQuarantine.BuildDiagnostics(_persistPath));
         }
         catch (Exception ex)
         {
@@ -370,28 +328,6 @@ public class ProductionContextStore : IProductionContextStore
         return context;
     }
 
-    private static void CopyRuntimeState(ProductionContext source, ProductionContext target)
-    {
-        target.DeviceName = source.DeviceName;
-        target.NetworkDeviceId = source.NetworkDeviceId;
-        target.TodayCapacity = source.TodayCapacity;
-
-        foreach (var entry in source.StepStateEntries)
-        {
-            target.StepStateEntries[entry.Key] = entry.Value;
-        }
-
-        foreach (var entry in source.DeviceBagEntries)
-        {
-            target.DeviceBagEntries[entry.Key] = entry.Value;
-        }
-
-        foreach (var entry in source.CurrentCellEntries)
-        {
-            target.CurrentCellEntries[entry.Key] = entry.Value;
-        }
-    }
-
     private string CleanupTempFile(string tempPath)
     {
         try
@@ -408,86 +344,5 @@ public class ProductionContextStore : IProductionContextStore
         {
             return $"临时文件清理：删除残留 .tmp 文件失败：{cleanupEx.Message}";
         }
-    }
-
-    private static DateTime? ParseCorruptTimestamp(string path)
-    {
-        var fileName = Path.GetFileName(path);
-        if (string.IsNullOrWhiteSpace(fileName))
-        {
-            return null;
-        }
-
-        var match = CorruptFileTimestampPattern.Match(fileName);
-        if (match.Success
-            && DateTime.TryParseExact(
-                match.Groups[1].Value,
-                "yyyyMMddHHmmssfff",
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
-                out var timestampUtc))
-        {
-            return timestampUtc;
-        }
-
-        return File.Exists(path)
-            ? File.GetLastWriteTimeUtc(path)
-            : null;
-    }
-}
-
-internal class CellDataBaseConverter : JsonConverter<CellDataBase>
-{
-    private readonly ICellDataTypeRegistry _cellDataTypeRegistry;
-
-    public CellDataBaseConverter(ICellDataTypeRegistry cellDataTypeRegistry)
-    {
-        _cellDataTypeRegistry = cellDataTypeRegistry;
-    }
-
-    public override CellDataBase? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-    {
-        using var doc = JsonDocument.ParseValue(ref reader);
-        var root = doc.RootElement;
-
-        var processType = root.TryGetProperty("processType", out var prop)
-            ? prop.GetString()
-            : null;
-
-        if (processType is null)
-                throw new JsonException("CellData 缺少 processType 属性。");
-
-        var json = root.GetRawText();
-        var result = _cellDataTypeRegistry.Deserialize(processType, json, options);
-
-        return result ?? throw new JsonException($"Unknown process type: {processType}");
-    }
-
-    public override void Write(Utf8JsonWriter writer, CellDataBase value, JsonSerializerOptions options)
-    {
-        JsonSerializer.Serialize(writer, value, value.GetType(), options);
-    }
-}
-
-public class ObjectToInferredTypesConverter : JsonConverter<object>
-{
-    public override object? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-    {
-        return reader.TokenType switch
-        {
-            JsonTokenType.True => true,
-            JsonTokenType.False => false,
-            JsonTokenType.Number when reader.TryGetInt32(out var i) => i,
-            JsonTokenType.Number when reader.TryGetInt64(out var l) => l,
-            JsonTokenType.Number => reader.GetDouble(),
-            JsonTokenType.String when reader.TryGetDateTime(out var dt) => dt,
-            JsonTokenType.String => reader.GetString()!,
-            _ => JsonDocument.ParseValue(ref reader).RootElement.Clone()
-        };
-    }
-
-    public override void Write(Utf8JsonWriter writer, object value, JsonSerializerOptions options)
-    {
-        JsonSerializer.Serialize(writer, value, value.GetType(), options);
     }
 }

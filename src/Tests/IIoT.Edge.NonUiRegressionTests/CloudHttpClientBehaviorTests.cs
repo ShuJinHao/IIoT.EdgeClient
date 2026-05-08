@@ -4,6 +4,7 @@ using IIoT.Edge.Infrastructure.Integration.Http;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Text.Json;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 
@@ -127,6 +128,41 @@ public sealed class CloudHttpClientBehaviorTests
         Assert.NotNull(authHeader);
         Assert.Equal("Bearer", authHeader!.Scheme);
         Assert.Equal(deviceService.CurrentDevice!.UploadAccessToken, authHeader.Parameter);
+    }
+
+    [Fact]
+    public async Task PostAsync_WhenPayloadContainsIdentityKeys_ShouldRemoveClientIdentityFields()
+    {
+        string? requestBody = null;
+        var deviceService = CreateOnlineDeviceService();
+        var client = new CloudHttpClient(
+            new StubHttpClientFactory(request =>
+            {
+                requestBody = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+                return new HttpResponseMessage(HttpStatusCode.OK);
+            }),
+            deviceService,
+            deviceService,
+            new FakeCloudApiEndpointProvider(),
+            new FakeLogService());
+
+        var result = await client.PostAsync(
+            "/api/v1/edge/device-logs",
+            new
+            {
+                deviceId = deviceService.CurrentDevice!.DeviceId,
+                clientCode = "LINE-01",
+                macAddress = "00-11-22-33",
+                level = "INFO"
+            });
+
+        Assert.True(result.IsSuccess);
+        using var doc = JsonDocument.Parse(requestBody!);
+        var root = doc.RootElement;
+        Assert.True(root.TryGetProperty("deviceId", out _));
+        Assert.True(root.TryGetProperty("level", out _));
+        Assert.False(root.TryGetProperty("clientCode", out _));
+        Assert.False(root.TryGetProperty("macAddress", out _));
     }
 
     [Fact]

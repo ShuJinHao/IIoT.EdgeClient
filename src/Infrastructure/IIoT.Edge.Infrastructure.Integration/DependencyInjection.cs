@@ -88,7 +88,15 @@ public static class DependencyInjection
                 builder.AddRetry(retryOptions);
                 builder.AddTimeout(timeout);
             });
-        services.AddSingleton<ICloudHttpClient, CloudHttpClient>();
+        services.AddSingleton<ICloudPayloadSanitizer, CloudPayloadSanitizer>();
+        services.AddSingleton<ICloudHttpClient>(sp =>
+            new CloudHttpClient(
+                sp.GetRequiredService<IHttpClientFactory>(),
+                sp.GetRequiredService<IDeviceAccessTokenProvider>(),
+                sp.GetRequiredService<IDeviceService>(),
+                sp.GetRequiredService<ICloudApiEndpointProvider>(),
+                sp.GetRequiredService<ILogService>(),
+                sp.GetRequiredService<ICloudPayloadSanitizer>()));
         services.AddHttpClient("MesApi", client => client.Timeout = mesTimeout);
         services.AddSingleton<IMesHttpClient, MesHttpClient>();
         services.AddSingleton<IMesHeartbeatProbe, MesHeartbeatProbe>();

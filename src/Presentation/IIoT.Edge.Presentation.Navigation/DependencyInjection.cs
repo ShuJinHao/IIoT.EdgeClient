@@ -20,8 +20,13 @@ public static class DependencyInjection
         services.AddSingleton<ParamViewModel>();
         services.AddSingleton<IIoViewMappingBuilder, IoViewMappingBuilder>();
         services.AddSingleton<IIoViewSignalValueUpdater, IoViewSignalValueUpdater>();
+        services.AddSingleton<IIoViewBufferBindingCoordinator, IoViewBufferBindingCoordinator>();
+        services.AddSingleton<IIoViewInteractionWriter, IoViewInteractionWriter>();
+        services.AddSingleton<IIoViewManualReadService, IoViewManualReadService>();
         services.AddSingleton<IoViewViewModel>();
         services.AddSingleton<IHardwareConfigValidationPresenter, HardwareConfigValidationPresenter>();
+        services.AddSingleton<IHardwareConfigStandardSignalDraftService, HardwareConfigStandardSignalDraftService>();
+        services.AddSingleton<IHardwareConfigMappingSaveBuilder, HardwareConfigMappingSaveBuilder>();
         services.AddSingleton<IHardwareConfigEditSession, HardwareConfigEditSession>();
         services.AddSingleton<IHardwareConfigDeviceSelectionCoordinator, HardwareConfigDeviceSelectionCoordinator>();
         services.AddSingleton<IHardwareConfigLoadSaveCoordinator, HardwareConfigLoadSaveCoordinator>();
@@ -36,6 +41,8 @@ public static class DependencyInjection
         services.AddSingleton<IDiagnosticsSummaryBuilder, DiagnosticsSummaryBuilder>();
         services.AddSingleton<IDiagnosticsRowsBuilder, DiagnosticsRowsBuilder>();
         services.AddSingleton<IDiagnosticsInitialSummaryFactory, DiagnosticsInitialSummaryFactory>();
+        services.AddSingleton<IDiagnosticsRefreshCoordinator, DiagnosticsRefreshCoordinator>();
+        services.AddSingleton<IDiagnosticsDeadLetterOperator, DiagnosticsDeadLetterOperator>();
         services.AddSingleton<DiagnosticsViewModel>();
 
         services.AddTransient<ParamViewPage>();
