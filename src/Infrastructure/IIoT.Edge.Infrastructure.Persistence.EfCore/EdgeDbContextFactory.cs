@@ -7,11 +7,12 @@ public class EdgeDbContextFactory : IDesignTimeDbContextFactory<EdgeDbContext>
 {
     public EdgeDbContext CreateDbContext(string[] args)
     {
-        var dbPath = EdgeSqliteConnection.ResolveDesignTimeDbPath(args);
-        EdgeSqliteConnection.EnsureRuntimePragmas(dbPath);
+        var sqliteConnection = new EdgeSqliteConnection();
+        var dbPath = sqliteConnection.ResolveDesignTimeDbPath(args);
+        sqliteConnection.EnsureRuntimePragmas(dbPath);
 
         var optionsBuilder = new DbContextOptionsBuilder<EdgeDbContext>();
-        optionsBuilder.UseSqlite(EdgeSqliteConnection.BuildConnectionString(dbPath));
+        optionsBuilder.UseSqlite(sqliteConnection.BuildConnectionString(dbPath));
         return new EdgeDbContext(optionsBuilder.Options);
     }
 }

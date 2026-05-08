@@ -2,12 +2,21 @@ using Microsoft.Data.Sqlite;
 
 namespace IIoT.Edge.Infrastructure.Persistence.EfCore;
 
-internal static class EdgeSqliteConnection
+internal interface IEdgeSqliteConnection
+{
+    string BuildConnectionString(string dbPath);
+
+    void EnsureRuntimePragmas(string dbPath);
+
+    string ResolveDesignTimeDbPath(string[] args);
+}
+
+internal sealed class EdgeSqliteConnection : IEdgeSqliteConnection
 {
     private const int BusyTimeoutSeconds = 5;
     private const int BusyTimeoutMilliseconds = 5000;
 
-    public static string BuildConnectionString(string dbPath)
+    public string BuildConnectionString(string dbPath)
     {
         if (string.IsNullOrWhiteSpace(dbPath))
         {
@@ -24,7 +33,7 @@ internal static class EdgeSqliteConnection
         }.ToString();
     }
 
-    public static void EnsureRuntimePragmas(string dbPath)
+    public void EnsureRuntimePragmas(string dbPath)
     {
         var directory = Path.GetDirectoryName(Path.GetFullPath(dbPath));
         if (!string.IsNullOrWhiteSpace(directory))
@@ -39,7 +48,7 @@ internal static class EdgeSqliteConnection
         ExecutePragma(connection, $"PRAGMA busy_timeout={BusyTimeoutMilliseconds};");
     }
 
-    public static string ResolveDesignTimeDbPath(string[] args)
+    public string ResolveDesignTimeDbPath(string[] args)
     {
         var fromArgs = args
             .FirstOrDefault(arg => arg.StartsWith("--dbPath=", StringComparison.OrdinalIgnoreCase))
