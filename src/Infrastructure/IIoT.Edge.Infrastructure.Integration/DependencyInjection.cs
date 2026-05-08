@@ -104,6 +104,7 @@ public static class DependencyInjection
         services.AddSingleton<ICapacityConsumer, CapacityConsumer>();
         services.AddSingleton<ICapacitySyncTask, CapacitySyncTask>();
         services.AddSingleton<IDeviceLogSyncTask, DeviceLogSyncTask>();
+        services.AddSingleton<IExcelWriter, ClosedXmlExcelWriter>();
         services.AddSingleton<IRecipeService>(sp =>
             new RecipeService(
                 sp.GetRequiredService<ICloudHttpClient>(),
@@ -117,7 +118,8 @@ public static class DependencyInjection
             new ExcelConsumer(
                 runtimePaths.ExcelDirectory,
                 sp.GetRequiredService<ILogService>(),
-                sp.GetRequiredService<IProductionTimeProvider>()));
+                sp.GetRequiredService<IProductionTimeProvider>(),
+                sp.GetRequiredService<IExcelWriter>()));
         services.AddSingleton<ICellDataConsumer>(sp =>
             sp.GetRequiredService<IExcelConsumer>());
 

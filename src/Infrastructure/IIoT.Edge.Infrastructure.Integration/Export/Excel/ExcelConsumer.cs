@@ -12,14 +12,15 @@ namespace IIoT.Edge.Infrastructure.Integration.Export.Excel;
 /// Excel 本地存储消费者
 /// 
 /// 从 CellData 强类型属性自动提取列名和数据
-/// 调用 ExcelWriter 通用工具写入
+/// 调用可注入的 Excel 写入器落盘
 /// 按天生成文件：2026-03-25_生产数据.xlsx
 /// </summary>
-public class ExcelConsumer : IExcelConsumer
+internal sealed class ExcelConsumer : IExcelConsumer
 {
     private readonly string _excelDirectory;
     private readonly ILogService _logger;
     private readonly IProductionTimeProvider _productionTime;
+    private readonly IExcelWriter _excelWriter;
     private readonly object _fileLock = new();
     public IIoT.Edge.Application.Abstractions.DataPipeline.ConsumerFailureMode FailureMode
         => IIoT.Edge.Application.Abstractions.DataPipeline.ConsumerFailureMode.BestEffort;
@@ -30,11 +31,13 @@ public class ExcelConsumer : IExcelConsumer
     public ExcelConsumer(
         string excelDirectory,
         ILogService logger,
-        IProductionTimeProvider productionTime)
+        IProductionTimeProvider productionTime,
+        IExcelWriter excelWriter)
     {
         _excelDirectory = excelDirectory;
         _logger = logger;
         _productionTime = productionTime;
+        _excelWriter = excelWriter;
         Directory.CreateDirectory(_excelDirectory);
     }
 
@@ -52,7 +55,7 @@ public class ExcelConsumer : IExcelConsumer
 
             lock (_fileLock)
             {
-                ExcelWriter.AppendRow(filePath, columns, rowData);
+                _excelWriter.AppendRow(filePath, columns, rowData);
             }
 
             _logger.Info($"[Excel] 写入成功，{cellData.DisplayLabel}");
