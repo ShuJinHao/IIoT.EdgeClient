@@ -161,6 +161,8 @@
     <sys:String x:Key="Navigation_PlcTaskBinding_SaveCanceled">已取消保存。</sys:String>
     <sys:String x:Key="Navigation_PlcTaskBinding_SaveSuccess">任务绑定已保存。</sys:String>
     <sys:String x:Key="Navigation_PlcTaskBinding_SaveFailed">保存 PLC 任务绑定失败。</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_DisableHeartbeatConfirmTitle">确认关闭心跳任务</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_DisableHeartbeatConfirmMessageFormat">即将关闭 PLC“{0}”的心跳类任务：{1}。&#x0a;关闭后该 PLC 不再执行心跳握手，可能影响运行状态判断。是否继续保存？</sys:String>
     <sys:String x:Key="Navigation_Capacity_Device">设备</sys:String>
     <sys:String x:Key="Navigation_Capacity_QueryDate">查询日期</sys:String>
     <sys:String x:Key="Navigation_Capacity_QueryMode">查询方式</sys:String>

@@ -777,6 +777,11 @@ public sealed class ModuleRuntimeRegistrationTests
         public void MarkRuntimeFault(int networkDeviceId, string deviceName, string error)
             => RuntimeFaults.Add(new RuntimeFault(networkDeviceId, deviceName, error));
 
+        public PlcConnectionRuntimeSnapshot? GetRuntimeStatus(int networkDeviceId) => null;
+
+        public IReadOnlyCollection<PlcConnectionRuntimeSnapshot> GetRuntimeStatuses()
+            => Array.Empty<PlcConnectionRuntimeSnapshot>();
+
         public void Dispose()
         {
         }

@@ -55,6 +55,7 @@ foreach ($runtime in $manifest.runtimes) {
     $requiredFiles = @(
         'IIoT.Edge.Shell.exe',
         'appsettings.json',
+        'appsettings.Production.json',
         (Split-Path -Leaf $runtime.machineConfig)
     )
 

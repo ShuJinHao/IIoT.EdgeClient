@@ -100,6 +100,10 @@ public sealed class EquipmentQueriesBehaviorTests
 
         public ProductionContext? GetContext(string deviceName) => null;
 
+        public void MarkRuntimeFault(int networkDeviceId, string deviceName, string error)
+        {
+        }
+
         public PlcConnectionRuntimeSnapshot? GetRuntimeStatus(int networkDeviceId)
             => snapshot?.NetworkDeviceId == networkDeviceId ? snapshot : null;
 

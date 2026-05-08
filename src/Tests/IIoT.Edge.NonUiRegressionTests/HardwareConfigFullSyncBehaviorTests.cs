@@ -753,6 +753,15 @@ public sealed class HardwareConfigFullSyncBehaviorTests
 
         public ProductionContext? GetContext(string deviceName) => null;
 
+        public void MarkRuntimeFault(int networkDeviceId, string deviceName, string error)
+        {
+        }
+
+        public PlcConnectionRuntimeSnapshot? GetRuntimeStatus(int networkDeviceId) => null;
+
+        public IReadOnlyCollection<PlcConnectionRuntimeSnapshot> GetRuntimeStatuses()
+            => Array.Empty<PlcConnectionRuntimeSnapshot>();
+
         public void Dispose()
         {
         }

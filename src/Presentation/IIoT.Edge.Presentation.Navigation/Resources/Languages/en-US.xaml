@@ -161,6 +161,8 @@
     <sys:String x:Key="Navigation_PlcTaskBinding_SaveCanceled">Save canceled.</sys:String>
     <sys:String x:Key="Navigation_PlcTaskBinding_SaveSuccess">Task bindings saved.</sys:String>
     <sys:String x:Key="Navigation_PlcTaskBinding_SaveFailed">Failed to save PLC task bindings.</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_DisableHeartbeatConfirmTitle">Confirm Disable Heartbeat Task</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_DisableHeartbeatConfirmMessageFormat">You are about to disable heartbeat-like tasks for PLC "{0}": {1}.&#x0a;After this, the PLC will no longer execute heartbeat handshakes, which may affect runtime status detection. Continue saving?</sys:String>
     <sys:String x:Key="Navigation_Capacity_Device">Device</sys:String>
     <sys:String x:Key="Navigation_Capacity_QueryDate">Query Date</sys:String>
     <sys:String x:Key="Navigation_Capacity_QueryMode">Query Mode</sys:String>
