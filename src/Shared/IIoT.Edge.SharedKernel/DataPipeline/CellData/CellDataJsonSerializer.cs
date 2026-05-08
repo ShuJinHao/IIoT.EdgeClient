@@ -2,19 +2,34 @@ using System.Text.Json;
 
 namespace IIoT.Edge.SharedKernel.DataPipeline.CellData;
 
-public static class CellDataJsonSerializer
+public interface ICellDataJsonSerializer
 {
-    public static readonly JsonSerializerOptions Options = new()
+    string Serialize(CellDataBase cellData);
+
+    string SerializeMany(IEnumerable<CellDataBase> cellData);
+
+    CellDataBase? Deserialize(string processType, string json);
+}
+
+public sealed class CellDataJsonSerializer : ICellDataJsonSerializer
+{
+    private readonly ICellDataTypeRegistry _typeRegistry;
+    private readonly JsonSerializerOptions _options = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
-    public static string Serialize(CellDataBase cellData)
-        => JsonSerializer.Serialize(cellData, cellData.GetType(), Options);
+    public CellDataJsonSerializer(ICellDataTypeRegistry typeRegistry)
+    {
+        _typeRegistry = typeRegistry;
+    }
 
-    public static string SerializeMany(IEnumerable<CellDataBase> cellData)
-        => JsonSerializer.Serialize(cellData, Options);
+    public string Serialize(CellDataBase cellData)
+        => JsonSerializer.Serialize(cellData, cellData.GetType(), _options);
 
-    public static CellDataBase? Deserialize(string processType, string json)
-        => CellDataTypeRegistry.Deserialize(processType, json, Options);
+    public string SerializeMany(IEnumerable<CellDataBase> cellData)
+        => JsonSerializer.Serialize(cellData, _options);
+
+    public CellDataBase? Deserialize(string processType, string json)
+        => _typeRegistry.Deserialize(processType, json, _options);
 }

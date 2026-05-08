@@ -12,8 +12,6 @@ public sealed class FailedRecordStoreBehaviorTests
     [Fact]
     public async Task GetPendingAsync_WhenDatabaseOpenFails_ShouldThrowPersistenceAccessException()
     {
-        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
-
         var tempDir = Path.Combine(Path.GetTempPath(), "edge-failed-store-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
 
@@ -23,7 +21,7 @@ public sealed class FailedRecordStoreBehaviorTests
 
             var logger = new FakeLogService();
             var connectionFactory = new SqliteConnectionFactory(tempDir);
-            var store = new CloudRetryRecordStore(connectionFactory, logger);
+            var store = new CloudRetryRecordStore(connectionFactory, logger, CreateCellDataJsonSerializer());
 
             var exception = await Assert.ThrowsAsync<PersistenceAccessException>(
                 () => store.GetPendingAsync());
@@ -48,8 +46,6 @@ public sealed class FailedRecordStoreBehaviorTests
     [Fact]
     public async Task DeleteExpiredAbandonedAsync_ShouldDeleteOnlyExpiredAbandonedRecords()
     {
-        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
-
         var tempDir = Path.Combine(Path.GetTempPath(), "edge-failed-store-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
 
@@ -57,7 +53,7 @@ public sealed class FailedRecordStoreBehaviorTests
         {
             var logger = new FakeLogService();
             var connectionFactory = new SqliteConnectionFactory(tempDir);
-            var store = new CloudRetryRecordStore(connectionFactory, logger);
+            var store = new CloudRetryRecordStore(connectionFactory, logger, CreateCellDataJsonSerializer());
 
             using (var connection = connectionFactory.Create(store.DbName))
             {
@@ -110,8 +106,6 @@ public sealed class FailedRecordStoreBehaviorTests
     [Fact]
     public async Task ClaimPendingBatchAsync_ShouldRespectReleaseAndDeleteLifecycle()
     {
-        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
-
         var tempDir = Path.Combine(Path.GetTempPath(), "edge-failed-store-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
 
@@ -119,7 +113,7 @@ public sealed class FailedRecordStoreBehaviorTests
         {
             var logger = new FakeLogService();
             var connectionFactory = new SqliteConnectionFactory(tempDir);
-            var store = new CloudRetryRecordStore(connectionFactory, logger);
+            var store = new CloudRetryRecordStore(connectionFactory, logger, CreateCellDataJsonSerializer());
 
             using (var connection = connectionFactory.Create(store.DbName))
             {
@@ -178,8 +172,6 @@ public sealed class FailedRecordStoreBehaviorTests
     [Fact]
     public async Task MovePendingToRetryAsync_ShouldMoveFallbackRowsIntoRetryTable()
     {
-        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
-
         var tempDir = Path.Combine(Path.GetTempPath(), "edge-failed-store-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
 
@@ -187,8 +179,9 @@ public sealed class FailedRecordStoreBehaviorTests
         {
             var logger = new FakeLogService();
             var connectionFactory = new SqliteConnectionFactory(tempDir);
-            var retryStore = new CloudRetryRecordStore(connectionFactory, logger);
-            var fallbackStore = new CloudFallbackBufferStore(connectionFactory, logger);
+            var cellDataJsonSerializer = CreateCellDataJsonSerializer();
+            var retryStore = new CloudRetryRecordStore(connectionFactory, logger, cellDataJsonSerializer);
+            var fallbackStore = new CloudFallbackBufferStore(connectionFactory, logger, cellDataJsonSerializer);
 
             using (var connection = connectionFactory.Create(retryStore.DbName))
             {
@@ -233,6 +226,9 @@ public sealed class FailedRecordStoreBehaviorTests
             }
         };
     }
+
+    private static ICellDataJsonSerializer CreateCellDataJsonSerializer()
+        => new CellDataJsonSerializer(new CellDataTypeRegistry());
 
     private static async Task UpdateFailedRecordAsync(
         SqliteConnectionFactory connectionFactory,

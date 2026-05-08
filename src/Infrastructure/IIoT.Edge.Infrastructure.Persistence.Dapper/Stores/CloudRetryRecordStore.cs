@@ -1,6 +1,7 @@
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Connection;
+using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 
 namespace IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
 
@@ -43,8 +44,9 @@ public sealed class CloudRetryRecordStore : RetryRecordStoreBase, ICloudRetryRec
 
     public CloudRetryRecordStore(
         SqliteConnectionFactory connectionFactory,
-        ILogService logger)
-        : base(connectionFactory, logger)
+        ILogService logger,
+        ICellDataJsonSerializer cellDataJsonSerializer)
+        : base(connectionFactory, logger, cellDataJsonSerializer)
     {
     }
 }

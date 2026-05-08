@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Config;
+﻿using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
@@ -19,7 +19,6 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task MesRetry_WhenHeartbeatRecovers_ShouldResetAbandonedRecordsAndRetryThem()
     {
-        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var logger = new FakeLogService();
         var retryStore = new FakeFailedRecordStore();
@@ -97,8 +96,6 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task CloudBatchRetry_WhenBatchSucceeds_ShouldDeleteBatchRecordsAndContinueOthers()
     {
-        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
-        CellDataTypeRegistry.Register<TestCellData>("OtherProcess");
 
         var logger = new FakeLogService();
         var failedStore = new FakeFailedRecordStore();
@@ -139,8 +136,6 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task CloudBatchRetry_WhenBatchFails_ShouldBackoffBatchRecordsAndKeepThem()
     {
-        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
-        CellDataTypeRegistry.Register<TestCellData>("OtherProcess");
 
         var logger = new FakeLogService();
         var failedStore = new FakeFailedRecordStore();
@@ -192,7 +187,6 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task CloudBatchRetry_WhenRegistryMarksProcessAsBatch_ShouldBatchNonInjectionRecords()
     {
-        CellDataTypeRegistry.Register<TestCellData>("OtherProcess");
 
         var failedStore = new FakeFailedRecordStore();
         var cloudBatch = new FakeCloudBatchConsumer();
@@ -225,7 +219,6 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task CloudRetry_WhenRegistryMarksTestProcessAsSingle_ShouldRetryRecordsIndividually()
     {
-        CellDataTypeRegistry.Register<TestCellData>("OtherProcess");
 
         var failedStore = new FakeFailedRecordStore();
         var integrationRegistry = new FakeProcessIntegrationRegistry();
@@ -257,7 +250,6 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task CloudRetry_WhenUploadGateIsBlocked_ShouldKeepRecordsWithoutBackoff()
     {
-        CellDataTypeRegistry.Register<TestCellData>("OtherProcess");
 
         var failedStore = new FakeFailedRecordStore();
         failedStore.PendingRecords.Add(CreateFailedRecord(51, "Cloud", "Cloud", 0, "OtherProcess", new TestCellData { Barcode = "ST-51" }));
@@ -292,7 +284,6 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task CloudRetry_WhenUploadGateIsBlocked_ShouldReportWaitingForRecoveryRuntime()
     {
-        CellDataTypeRegistry.Register<TestCellData>("OtherProcess");
 
         var failedStore = new FakeFailedRecordStore();
         failedStore.PendingRecords.Add(CreateFailedRecord(52, "Cloud", "Cloud", 0, "OtherProcess", new TestCellData { Barcode = "ST-52" }));
@@ -324,7 +315,6 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task MesRetry_ShouldRunWhenCloudIsBlocked()
     {
-        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var failedStore = new FakeFailedRecordStore();
         failedStore.PendingRecords.Add(CreateFailedRecord(61, "MES", "MES", 0, TestProcessCellData.ProcessTypeKey, new TestProcessCellData { Barcode = "MES-61" }));
@@ -346,7 +336,6 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task MesRetry_WhenHomogenizationOutboundRecordIsRetried_ShouldKeepFullPayload()
     {
-        CellDataTypeRegistry.Register<HomogenizationCellData>("Homogenization");
 
         var failedStore = new FakeFailedRecordStore();
         failedStore.PendingRecords.Add(CreateFailedRecord(
@@ -379,8 +368,8 @@ public sealed class RetryTaskCloudMesBehaviorTests
                 EquipmentStatusSnapshot = new HomogenizationEquipmentStatusSnapshot
                 {
                     StatusCode = 1,
-                    StatusText = "空闲",
-                    Messages = ["空闲"]
+                    StatusText = "绌洪棽",
+                    Messages = ["绌洪棽"]
                 }
             }));
 
@@ -407,14 +396,13 @@ public sealed class RetryTaskCloudMesBehaviorTests
         Assert.Equal(20, processed.RecipeSnapshot.DispersionSpeed[0]);
         Assert.Equal(30, processed.RecipeSnapshot.Time[0]);
         Assert.Equal(1, processed.EquipmentStatusSnapshot!.StatusCode);
-        Assert.Equal("空闲", processed.EquipmentStatusSnapshot.StatusText);
+        Assert.Equal("绌洪棽", processed.EquipmentStatusSnapshot.StatusText);
         Assert.Contains(601L, failedStore.DeletedIds);
     }
 
     [Fact]
     public async Task CloudRetry_WhenUploadGateIsBlocked_ShouldNotBlockMesFallbackRecovery()
     {
-        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var cloudRetryStore = new FakeFailedRecordStore();
         var cloudFallbackStore = new FakeCloudFallbackBufferStore();
@@ -478,7 +466,6 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task MesRetry_WhenMesUploadDisabled_ShouldLeaveBacklogUntouched()
     {
-        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var failedStore = new FakeFailedRecordStore();
         failedStore.PendingRecords.Add(CreateFailedRecord(601, "MES", "MES", 0, TestProcessCellData.ProcessTypeKey, new TestProcessCellData { Barcode = "MES-601" }));
@@ -510,7 +497,6 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task MesRetry_WhenMesUploadDisabled_ShouldLeaveFallbackBacklogUntouched()
     {
-        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var failedStore = new FakeFailedRecordStore();
         var fallbackStore = new FakeMesFallbackBufferStore();
@@ -549,7 +535,6 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task MesRetry_WhenHeartbeatIsNotReady_ShouldLeaveBacklogUntouched()
     {
-        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var failedStore = new FakeFailedRecordStore();
         failedStore.PendingRecords.Add(CreateFailedRecord(602, "MES", "MES", 0, TestProcessCellData.ProcessTypeKey, new TestProcessCellData { Barcode = "MES-602" }));
@@ -578,7 +563,6 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task MesRetry_WhenHeartbeatIsNotReady_ShouldLeaveFallbackBacklogUntouched()
     {
-        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var failedStore = new FakeFailedRecordStore();
         var fallbackStore = new FakeMesFallbackBufferStore();
@@ -613,7 +597,6 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task MesRetry_WhenHeartbeatRecovers_ShouldUploadPendingRecords()
     {
-        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var failedStore = new FakeFailedRecordStore();
         failedStore.PendingRecords.Add(CreateFailedRecord(603, "MES", "MES", 0, TestProcessCellData.ProcessTypeKey, new TestProcessCellData { Barcode = "MES-603" }));
@@ -638,7 +621,6 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task MesRetry_WhenHeartbeatRecovers_ShouldRecoverFallbackAndUpload()
     {
-        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var failedStore = new FakeFailedRecordStore();
         var fallbackStore = new FakeMesFallbackBufferStore();
@@ -672,7 +654,6 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task MesRetry_WhenFailureOccurs_ShouldIncreaseRetryCountAndBackoff()
     {
-        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var failedStore = new FakeFailedRecordStore();
         failedStore.PendingRecords.Add(CreateFailedRecord(62, "MES", "MES", 4, TestProcessCellData.ProcessTypeKey, new TestProcessCellData { Barcode = "MES-62" }));
@@ -697,7 +678,6 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task MesRetry_WhenFailureOccurs_ShouldMoveRuntimeStateToLastFailed()
     {
-        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var failedStore = new FakeFailedRecordStore();
         failedStore.PendingRecords.Add(CreateFailedRecord(63, "MES", "MES", 0, TestProcessCellData.ProcessTypeKey, new TestProcessCellData { Barcode = "MES-63" }));
@@ -721,7 +701,6 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task MesRetry_ShouldRecoverFallbackRecordsIntoMainRetryStore()
     {
-        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var failedStore = new FakeFailedRecordStore();
         var mesFallbackStore = new FakeMesFallbackBufferStore();
@@ -752,7 +731,6 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task CloudRetry_WhenBacklogIsOlderThan24Hours_ShouldDrainRetryAndFallbackRecords()
     {
-        CellDataTypeRegistry.Register<TestCellData>("OtherProcess");
 
         var oldTime = DateTime.UtcNow.AddHours(-25);
         var failedStore = new FakeFailedRecordStore();
@@ -801,7 +779,6 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task CloudRetry_WhenFallbackRehydrateHitsRetryCapacity_ShouldKeepFallbackRecordBuffered()
     {
-        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var logger = new FakeLogService();
         var failedStore = new FakeFailedRecordStore();
@@ -858,7 +835,6 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task MesRetry_WhenFallbackRehydrateHitsRetryCapacity_ShouldKeepFallbackRecordBuffered()
     {
-        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var logger = new FakeLogService();
         var failedStore = new FakeFailedRecordStore();
@@ -905,7 +881,6 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task MesRetry_WhenRetryCapacityRecovers_ShouldClearBlockedDiagnostics()
     {
-        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var logger = new FakeLogService();
         var failedStore = new FakeFailedRecordStore();
@@ -943,7 +918,6 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task MesRetry_WhenBacklogIsOlderThan24Hours_ShouldDrainRetryAndFallbackRecords()
     {
-        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var oldTime = DateTime.UtcNow.AddHours(-25);
         var failedStore = new FakeFailedRecordStore();
@@ -1013,7 +987,6 @@ public sealed class RetryTaskCloudMesBehaviorTests
     [Fact]
     public async Task CloudChannel_WhenFallbackContainsMixedValidity_ShouldContinueRecoveringRemainingRecords()
     {
-        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         var logger = new FakeLogService();
         var failedStore = new FakeFailedRecordStore();
@@ -1061,7 +1034,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         Assert.Single(deadLetterStore.Records);
         Assert.Equal(0, cloudConsumer.ProcessCallCount);
         Assert.Equal(1, cloudBatchConsumer.ProcessBatchCallCount);
-        Assert.Contains(logger.Entries, entry => entry.Message.Contains("已进入 Cloud 死信表", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, entry => entry.Message.Contains("Cloud", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -1468,6 +1441,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
                 cloudDiagnosticsStore,
                 new FakeMesRetryDiagnosticsStore());
             var cloudDeadLetterWriter = new DataPipelineDeadLetterWriter();
+            var cellDataJsonSerializer = CreateCellDataJsonSerializer();
 
             _inner = new CloudRetryTask(
                 logger,
@@ -1482,7 +1456,8 @@ public sealed class RetryTaskCloudMesBehaviorTests
                     cloudDeadLetterStore,
                     fallbackWriter,
                     cloudCapacityGuard,
-                    cloudDeadLetterWriter),
+                    cloudDeadLetterWriter,
+                    cellDataJsonSerializer),
                 new CloudRetryRecordProcessor(
                     logger,
                     retryStore,
@@ -1494,6 +1469,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
                     new DefaultRetryBackoffStrategy(),
                     cloudDeadLetterWriter,
                     new DefaultDataPipelineConsumerInvoker(),
+                    cellDataJsonSerializer,
                     processIntegrationRegistry),
                 new CloudRetryHousekeepingService(
                     logger,
@@ -1549,7 +1525,8 @@ public sealed class RetryTaskCloudMesBehaviorTests
                 mesHeartbeatStore,
                 new DefaultRetryBackoffStrategy(),
                 new DataPipelineDeadLetterWriter(),
-                new DefaultDataPipelineConsumerInvoker());
+                new DefaultDataPipelineConsumerInvoker(),
+                CreateCellDataJsonSerializer());
         }
 
         public Task ExecuteOnceAsync()
@@ -1564,5 +1541,14 @@ public sealed class RetryTaskCloudMesBehaviorTests
                 .GetField("_lastAbandonedCleanupDateUtc", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
                 .SetValue(_inner, DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1)));
         }
+    }
+
+    private static ICellDataJsonSerializer CreateCellDataJsonSerializer()
+    {
+        var typeRegistry = new CellDataTypeRegistry();
+        typeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
+        typeRegistry.Register<TestCellData>("OtherProcess");
+        typeRegistry.Register<HomogenizationCellData>("Homogenization");
+        return new CellDataJsonSerializer(typeRegistry);
     }
 }

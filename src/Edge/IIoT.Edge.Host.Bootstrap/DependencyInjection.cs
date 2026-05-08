@@ -27,6 +27,7 @@ using IIoT.Edge.Presentation.Shell;
 using IIoT.Edge.Runtime;
 using IIoT.Edge.Runtime.DataPipeline.Tasks;
 using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
+using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using IIoT.Edge.Shell.Core;
 using IIoT.Edge.UI.Shared.Modularity;
 using Microsoft.Extensions.Configuration;
@@ -68,6 +69,9 @@ public static class DependencyInjection
 
         services.AddSingleton(configuration);
         services.AddSingleton(runtimePaths);
+        var cellDataTypeRegistry = new CellDataTypeRegistry();
+        services.AddSingleton<ICellDataTypeRegistry>(cellDataTypeRegistry);
+        services.AddSingleton<ICellDataJsonSerializer, CellDataJsonSerializer>();
         var productionTimeOptions =
             configuration.GetSection(ProductionTimeOptions.SectionName).Get<ProductionTimeOptions>()
             ?? new ProductionTimeOptions();
@@ -133,7 +137,7 @@ public static class DependencyInjection
         services.AddPanelPresentation();
 
         RegisterHostViews(new HostViewRegistry(viewRegistry));
-        RegisterModules(services, viewRegistry, configuration, enabledModules);
+        RegisterModules(services, viewRegistry, configuration, enabledModules, cellDataTypeRegistry);
         viewRegistry.RegisterPanelViews();
 
         services.AddSingleton<IManagedBackgroundService>(sp =>
@@ -236,9 +240,10 @@ public static class DependencyInjection
         IServiceCollection services,
         IViewRegistry viewRegistry,
         IConfiguration configuration,
-        IReadOnlyCollection<IEdgeProcessModule> modules)
+        IReadOnlyCollection<IEdgeProcessModule> modules,
+        ICellDataTypeRegistry cellDataTypeRegistry)
     {
-        var cellDataRegistry = new CellDataRegistry();
+        var cellDataRegistry = new CellDataRegistry(cellDataTypeRegistry);
         var runtimeRegistry = new StationRuntimeRegistry();
         var integrationRegistry = new ProcessIntegrationRegistry();
         var moduleParamRegistry = new ModuleParamRegistry();

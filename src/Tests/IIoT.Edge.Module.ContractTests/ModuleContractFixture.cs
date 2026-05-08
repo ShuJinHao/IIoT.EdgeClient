@@ -3,6 +3,7 @@ using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc.Signals;
 using IIoT.Edge.Application.Features.Config.ModuleParameters;
+using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using Microsoft.Extensions.Configuration;
 
 namespace IIoT.Edge.Module.ContractTests;
@@ -16,7 +17,7 @@ public sealed class ModuleContractFixture
         var services = new ServiceCollection();
         var viewRegistry = new ViewRegistry();
         var moduleViewRegistry = new ModuleViewRegistry(viewRegistry, module.ModuleId);
-        var cellDataRegistry = new CellDataRegistry();
+        var cellDataRegistry = new CellDataRegistry(new CellDataTypeRegistry());
         var runtimeRegistry = new StationRuntimeRegistry();
         var integrationRegistry = new ProcessIntegrationRegistry();
         var moduleParamRegistry = new ModuleParamRegistry();

@@ -10,14 +10,14 @@ public sealed class ProductionContextStorePersistenceTests
     [Fact]
     public void SaveAndLoad_ShouldRestoreCoreRuntimeState()
     {
-        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
         var tempDir = Path.Combine(Path.GetTempPath(), "edge-context-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
 
         try
         {
             var logger = new FakeLogService();
-            var source = new ProductionContextStore(logger, tempDir);
+            var typeRegistry = CreateCellDataTypeRegistry();
+            var source = new ProductionContextStore(logger, typeRegistry, tempDir);
 
             var ctx = source.GetOrCreate("PLC-A");
             ctx.SetStep("Scan", 3);
@@ -37,7 +37,7 @@ public sealed class ProductionContextStorePersistenceTests
 
             source.SaveToFile();
 
-            var restored = new ProductionContextStore(logger, tempDir);
+            var restored = new ProductionContextStore(logger, typeRegistry, tempDir);
             restored.LoadFromFile();
 
             var reloaded = restored.GetOrCreate("PLC-A");
@@ -76,20 +76,20 @@ public sealed class ProductionContextStorePersistenceTests
     [Fact]
     public void SaveAndLoad_WhenDisplayLabelDiffers_ShouldPreserveOriginalBarcodeKeys()
     {
-        CellDataTypeRegistry.Register<NamedCellData>("Named");
         var tempDir = Path.Combine(Path.GetTempPath(), "edge-context-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
 
         try
         {
             var logger = new FakeLogService();
-            var source = new ProductionContextStore(logger, tempDir);
+            var typeRegistry = CreateCellDataTypeRegistry();
+            var source = new ProductionContextStore(logger, typeRegistry, tempDir);
 
             var ctx = source.GetOrCreate("PLC-A");
             ctx.AddCell("BC-3001", new NamedCellData { Label = "Display-Only" });
             source.SaveToFile();
 
-            var restored = new ProductionContextStore(logger, tempDir);
+            var restored = new ProductionContextStore(logger, typeRegistry, tempDir);
             restored.LoadFromFile();
 
             var reloaded = restored.GetOrCreate("PLC-A");
@@ -115,7 +115,7 @@ public sealed class ProductionContextStorePersistenceTests
         try
         {
             var logger = new FakeLogService();
-            var store = new ProductionContextStore(logger, tempDir);
+            var store = new ProductionContextStore(logger, CreateCellDataTypeRegistry(), tempDir);
 
             store.LoadFromFile();
 
@@ -143,7 +143,7 @@ public sealed class ProductionContextStorePersistenceTests
             var persistPath = Path.Combine(tempDir, "production_context.json");
             File.WriteAllText(persistPath, "{ bad json");
 
-            var store = new ProductionContextStore(logger, tempDir);
+            var store = new ProductionContextStore(logger, CreateCellDataTypeRegistry(), tempDir);
             store.LoadFromFile();
 
             Assert.Empty(store.GetAll());
@@ -179,7 +179,7 @@ public sealed class ProductionContextStorePersistenceTests
                 Path.Combine(tempDir, "production_context.corrupt-20260418153045002.json"),
                 "{ bad json 2");
 
-            var store = new ProductionContextStore(logger, tempDir);
+            var store = new ProductionContextStore(logger, CreateCellDataTypeRegistry(), tempDir);
             store.LoadFromFile();
 
             var diagnostics = store.GetPersistenceDiagnostics();
@@ -204,7 +204,7 @@ public sealed class ProductionContextStorePersistenceTests
 
         try
         {
-            var store = new ProductionContextStore(logger, [new TestProductionContextFactory()], tempDir);
+            var store = new ProductionContextStore(logger, [new TestProductionContextFactory()], CreateCellDataTypeRegistry(), tempDir);
 
             var context = store.GetOrCreate("PLC-H", TestProductionContextFactory.TestModuleId);
 
@@ -229,7 +229,7 @@ public sealed class ProductionContextStorePersistenceTests
 
         try
         {
-            var store = new ProductionContextStore(logger, [new TestProductionContextFactory()], tempDir);
+            var store = new ProductionContextStore(logger, [new TestProductionContextFactory()], CreateCellDataTypeRegistry(), tempDir);
 
             var baseContext = store.GetOrCreate("PLC-H");
             baseContext.NetworkDeviceId = 9;
@@ -269,7 +269,7 @@ public sealed class ProductionContextStorePersistenceTests
                 FailOnWrite = true,
                 LeaveTempFileOnWriteFailure = true
             };
-            var store = new ProductionContextStore(logger, fileSystem, tempDir);
+            var store = new ProductionContextStore(logger, CreateCellDataTypeRegistry(), fileSystem, tempDir);
             store.GetOrCreate("PLC-A").Set("WorkOrder", "WO-001");
 
             store.SaveToFile();
@@ -306,7 +306,7 @@ public sealed class ProductionContextStorePersistenceTests
             var persistPath = Path.Combine(tempDir, "production_context.json");
             File.WriteAllText(persistPath, "seed");
 
-            var store = new ProductionContextStore(logger, fileSystem, tempDir);
+            var store = new ProductionContextStore(logger, CreateCellDataTypeRegistry(), fileSystem, tempDir);
             store.GetOrCreate("PLC-A").Set("WorkOrder", "WO-002");
 
             store.SaveToFile();
@@ -335,6 +335,14 @@ public sealed class ProductionContextStorePersistenceTests
         public override string DisplayLabel => Label;
 
         public string Label { get; set; } = string.Empty;
+    }
+
+    private static ICellDataTypeRegistry CreateCellDataTypeRegistry()
+    {
+        var typeRegistry = new CellDataTypeRegistry();
+        typeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
+        typeRegistry.Register<NamedCellData>("Named");
+        return typeRegistry;
     }
 
     private sealed class TestProductionContext : ProductionContext

@@ -24,6 +24,7 @@ internal sealed class CloudFallbackRecoveryService : ICloudFallbackRecoveryServi
     private readonly ICriticalPersistenceFallbackWriter _criticalFallbackWriter;
     private readonly DataPipelineCapacityGuard _capacityGuard;
     private readonly IDataPipelineDeadLetterWriter _deadLetterWriter;
+    private readonly ICellDataJsonSerializer _cellDataJsonSerializer;
 
     public CloudFallbackRecoveryService(
         ILogService logger,
@@ -31,7 +32,8 @@ internal sealed class CloudFallbackRecoveryService : ICloudFallbackRecoveryServi
         ICloudDeadLetterStore deadLetterStore,
         ICriticalPersistenceFallbackWriter criticalFallbackWriter,
         DataPipelineCapacityGuard capacityGuard,
-        IDataPipelineDeadLetterWriter deadLetterWriter)
+        IDataPipelineDeadLetterWriter deadLetterWriter,
+        ICellDataJsonSerializer cellDataJsonSerializer)
     {
         _logger = logger;
         _fallbackStore = fallbackStore;
@@ -39,6 +41,7 @@ internal sealed class CloudFallbackRecoveryService : ICloudFallbackRecoveryServi
         _criticalFallbackWriter = criticalFallbackWriter;
         _capacityGuard = capacityGuard;
         _deadLetterWriter = deadLetterWriter;
+        _cellDataJsonSerializer = cellDataJsonSerializer;
     }
 
     public async Task RecoverAsync()
@@ -112,7 +115,7 @@ internal sealed class CloudFallbackRecoveryService : ICloudFallbackRecoveryServi
     {
         try
         {
-            return CellDataJsonSerializer.Deserialize(processType, json);
+            return _cellDataJsonSerializer.Deserialize(processType, json);
         }
         catch (Exception ex)
         {

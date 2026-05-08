@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Config;
+﻿using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Infrastructure.Integration.Config;
@@ -286,7 +286,6 @@ public sealed class MesFrameworkBehaviorTests
 
     private static CellCompletedRecord CreateRecord(string processType)
     {
-        CellDataTypeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
 
         return new CellCompletedRecord
         {

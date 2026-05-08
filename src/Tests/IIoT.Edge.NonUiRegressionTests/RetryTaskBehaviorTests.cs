@@ -87,8 +87,6 @@ public sealed class RetryTaskBehaviorTests
     [InlineData(10, 1500, 2100)]
     public async Task RetryFailure_ShouldUseExpectedBackoffWindow(int currentRetryCount, int minSeconds, int maxSeconds)
     {
-        CellDataTypeRegistry.Register<TestCellData>("OtherProcess");
-
         var logger = new FakeLogService();
         var failedStore = new FakeFailedRecordStore();
         var deviceService = new FakeDeviceService();
@@ -144,8 +142,6 @@ public sealed class RetryTaskBehaviorTests
     [Fact]
     public async Task RetryFailure_ShouldUseInjectedBackoffStrategy()
     {
-        CellDataTypeRegistry.Register<TestCellData>("OtherProcess");
-
         var failedStore = new FakeFailedRecordStore();
         var deviceService = new FakeDeviceService();
         deviceService.SetOnline(new DeviceSession
@@ -195,8 +191,6 @@ public sealed class RetryTaskBehaviorTests
     [Fact]
     public async Task RetryFailure_WhenExceedMaxRetry_ShouldStopWithMaxValue()
     {
-        CellDataTypeRegistry.Register<TestCellData>("OtherProcess");
-
         var logger = new FakeLogService();
         var failedStore = new FakeFailedRecordStore();
         var deviceService = new FakeDeviceService();
@@ -277,8 +271,6 @@ public sealed class RetryTaskBehaviorTests
     [Fact]
     public async Task RetryFailure_ShouldMoveCloudRuntimeStateToBackoff()
     {
-        CellDataTypeRegistry.Register<TestCellData>("OtherProcess");
-
         var diagnosticsStore = new FakeCloudDiagnosticsStore();
         var failedStore = new FakeFailedRecordStore();
         failedStore.PendingRecords.Add(new FailedCellRecord
@@ -367,6 +359,7 @@ public sealed class RetryTaskBehaviorTests
                 new FakeMesRetryDiagnosticsStore());
             var backoffStrategy = retryBackoffStrategy ?? new DefaultRetryBackoffStrategy();
             var cloudDeadLetterWriter = deadLetterWriter ?? new DataPipelineDeadLetterWriter();
+            var cellDataJsonSerializer = CreateCellDataJsonSerializer();
 
             _inner = new CloudRetryTask(
                 logger,
@@ -381,7 +374,8 @@ public sealed class RetryTaskBehaviorTests
                     cloudDeadLetterStore,
                     fallbackWriter,
                     capacityGuard,
-                    cloudDeadLetterWriter),
+                    cloudDeadLetterWriter,
+                    cellDataJsonSerializer),
                 new CloudRetryRecordProcessor(
                     logger,
                     failedStore,
@@ -392,7 +386,8 @@ public sealed class RetryTaskBehaviorTests
                     cloudDiagnosticsStore,
                     backoffStrategy,
                     cloudDeadLetterWriter,
-                    new DefaultDataPipelineConsumerInvoker()),
+                    new DefaultDataPipelineConsumerInvoker(),
+                    cellDataJsonSerializer),
                 new CloudRetryHousekeepingService(
                     logger,
                     failedStore,
@@ -401,6 +396,14 @@ public sealed class RetryTaskBehaviorTests
 
         public Task ExecuteOnceAsync()
             => _inner.ExecuteOneIterationAsync();
+    }
+
+    private static ICellDataJsonSerializer CreateCellDataJsonSerializer()
+    {
+        var typeRegistry = new CellDataTypeRegistry();
+        typeRegistry.Register<TestCellData>("OtherProcess");
+        typeRegistry.Register<TestProcessCellData>(TestProcessCellData.ProcessTypeKey);
+        return new CellDataJsonSerializer(typeRegistry);
     }
 
     private sealed class FixedRetryBackoffStrategy(TimeSpan delay) : IRetryBackoffStrategy
