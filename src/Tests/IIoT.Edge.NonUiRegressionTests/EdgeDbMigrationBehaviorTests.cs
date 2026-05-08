@@ -16,14 +16,9 @@ public sealed class EdgeDbMigrationBehaviorTests
         try
         {
             var dbPath = Path.Combine(tempDir, "edge.db");
-            var options = new DbContextOptionsBuilder<EdgeDbContext>()
-                .UseSqlite($"Data Source={dbPath}")
-                .Options;
+            using var services = CreateServiceProvider(dbPath);
 
-            await using (var db = new EdgeDbContext(options))
-            {
-                await db.Database.MigrateAsync();
-            }
+            services.ApplyMigrations();
 
             await using var connection = new SqliteConnection($"Data Source={dbPath}");
             await connection.OpenAsync();
@@ -55,6 +50,36 @@ public sealed class EdgeDbMigrationBehaviorTests
     }
 
     [Fact]
+    public void ApplyMigrations_ShouldResolveSchemaRepairFromServiceProvider()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "edge-ef-migration-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var dbPath = Path.Combine(tempDir, "edge.db");
+            var repair = new RecordingSchemaRepair();
+            using var services = new ServiceCollection()
+                .AddDbContextFactory<EdgeDbContext>(options => options.UseSqlite($"Data Source={dbPath}"))
+                .AddSingleton<IEdgeSqliteSchemaRepair>(repair)
+                .BuildServiceProvider();
+
+            services.ApplyMigrations();
+
+            Assert.Equal(1, repair.CallCount);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task ApplyMigrations_WhenOldIoMappingColumnsAlreadyApplied_ShouldRepairRenamedColumns()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "edge-ef-migration-tests", Guid.NewGuid().ToString("N"));
@@ -65,9 +90,7 @@ public sealed class EdgeDbMigrationBehaviorTests
             var dbPath = Path.Combine(tempDir, "edge.db");
             await CreateOldIoMappingDatabaseAsync(dbPath);
 
-            var services = new ServiceCollection()
-                .AddEfCorePersistenceInfrastructure(dbPath)
-                .BuildServiceProvider();
+            using var services = CreateServiceProvider(dbPath);
 
             services.ApplyMigrations();
 
@@ -101,6 +124,43 @@ public sealed class EdgeDbMigrationBehaviorTests
                 Directory.Delete(tempDir, recursive: true);
             }
         }
+    }
+
+    [Fact]
+    public void Repair_WhenIoMappingTableDoesNotExist_ShouldNotThrow()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "edge-ef-migration-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var dbPath = Path.Combine(tempDir, "edge.db");
+            var options = new DbContextOptionsBuilder<EdgeDbContext>()
+                .UseSqlite($"Data Source={dbPath}")
+                .Options;
+            using var db = new EdgeDbContext(options);
+            var repair = new EdgeSqliteSchemaRepair();
+
+            var exception = Record.Exception(() => repair.Repair(db));
+
+            Assert.Null(exception);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    private static ServiceProvider CreateServiceProvider(string dbPath)
+    {
+        return new ServiceCollection()
+            .AddEfCorePersistenceInfrastructure(dbPath)
+            .BuildServiceProvider();
     }
 
     private static async Task CreateOldIoMappingDatabaseAsync(string dbPath)
@@ -182,5 +242,16 @@ public sealed class EdgeDbMigrationBehaviorTests
         }
 
         return columns;
+    }
+
+    private sealed class RecordingSchemaRepair : IEdgeSqliteSchemaRepair
+    {
+        public int CallCount { get; private set; }
+
+        public void Repair(EdgeDbContext db)
+        {
+            ArgumentNullException.ThrowIfNull(db);
+            CallCount++;
+        }
     }
 }
