@@ -409,6 +409,8 @@ public sealed class IoViewViewModelBehaviorTests
             "Test.IO",
             "Navigation_Title_IoInteract",
             "IO 交互",
+            new IoViewMappingBuilder(),
+            new IoViewSignalValueUpdater(),
             moduleIdFilter);
 
     private sealed class TestLanguageService : IAppLanguageService

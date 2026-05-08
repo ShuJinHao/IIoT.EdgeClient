@@ -3,7 +3,24 @@ using IIoT.Edge.Presentation.Navigation.Localization;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
 
+public interface IDiagnosticsModuleDisplayNameResolver
+{
+    IReadOnlyDictionary<string, string> BuildModuleNameMap(StartupDiagnosticsReport report);
+
+    string ResolveModuleDisplayName(
+        string moduleId,
+        IReadOnlyDictionary<string, string> moduleNameMap);
+
+    string ResolveProcessDisplayName(
+        string moduleId,
+        string? processType,
+        IReadOnlyDictionary<string, string> moduleNameMap);
+
+    string ResolveProcessDisplayName(string? processType, string? processDisplayName);
+}
+
 internal sealed class DiagnosticsModuleDisplayNameResolver(LocalizedSyncDiagnosticsText diagnosticsText)
+    : IDiagnosticsModuleDisplayNameResolver
 {
     public IReadOnlyDictionary<string, string> BuildModuleNameMap(StartupDiagnosticsReport report)
     {

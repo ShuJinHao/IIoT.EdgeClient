@@ -70,7 +70,7 @@ public sealed record DeadLetterRow(
             DiagnosticsTextNormalizer.Normalize(record.CellDataJson));
 }
 
-internal sealed record DiagnosticsRowsSnapshot(
+public sealed record DiagnosticsRowsSnapshot(
     IReadOnlyList<ModuleRegistrationRow> ModuleRegistrations,
     IReadOnlyList<PluginLifecycleRow> PluginStates,
     IReadOnlyList<DeviceModuleBindingRow> DeviceBindings,
