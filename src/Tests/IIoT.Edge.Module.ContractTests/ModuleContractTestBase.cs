@@ -126,7 +126,8 @@ public abstract class ModuleContractTestBase<TModule>
         var tasks = factory.CreateTasks(
             services.BuildServiceProvider(),
             new PlcBuffer(16, 16),
-            CreateRuntimeContext());
+            CreateRuntimeContext(),
+            factory.GetTaskCandidates().Select(static x => x.Key).ToHashSet(StringComparer.OrdinalIgnoreCase));
 
         Assert.Equal(ExpectedRuntimeTaskCount, tasks.Count);
     }

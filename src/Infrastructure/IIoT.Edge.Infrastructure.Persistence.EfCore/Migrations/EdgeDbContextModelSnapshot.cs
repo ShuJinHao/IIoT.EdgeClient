@@ -252,6 +252,40 @@ namespace IIoT.Edge.Infrastructure.Persistence.EfCore.Migrations
                     b.ToTable("hw_network_device", (string)null);
                 });
 
+            modelBuilder.Entity("IIoT.Edge.Domain.Hardware.Aggregates.PlcTaskBindingEntity", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("enabled");
+
+                    b.Property<int>("NetworkDeviceId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("network_device_id");
+
+                    b.Property<string>("TaskKey")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("task_key");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NetworkDeviceId", "TaskKey")
+                        .IsUnique()
+                        .HasDatabaseName("ux_hw_plc_task_binding_device_task");
+
+                    b.ToTable("hw_plc_task_binding", (string)null);
+                });
+
             modelBuilder.Entity("IIoT.Edge.Domain.Hardware.Aggregates.SerialDeviceEntity", b =>
                 {
                     b.Property<int>("Id")
@@ -346,9 +380,21 @@ namespace IIoT.Edge.Infrastructure.Persistence.EfCore.Migrations
                     b.Navigation("NetworkDevice");
                 });
 
+            modelBuilder.Entity("IIoT.Edge.Domain.Hardware.Aggregates.PlcTaskBindingEntity", b =>
+                {
+                    b.HasOne("IIoT.Edge.Domain.Hardware.Aggregates.NetworkDeviceEntity", "NetworkDevice")
+                        .WithMany("PlcTaskBindings")
+                        .HasForeignKey("NetworkDeviceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("NetworkDevice");
+                });
+
             modelBuilder.Entity("IIoT.Edge.Domain.Hardware.Aggregates.NetworkDeviceEntity", b =>
                 {
                     b.Navigation("IoMappings");
+                    b.Navigation("PlcTaskBindings");
                 });
 #pragma warning restore 612, 618
         }

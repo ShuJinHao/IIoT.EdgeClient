@@ -32,6 +32,8 @@ using IIoT.Edge.Shell.Core;
 using IIoT.Edge.UI.Shared.Modularity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
 using System.IO;
 
 namespace IIoT.Edge.Host.Bootstrap;
@@ -43,6 +45,7 @@ public static class DependencyInjection
         IViewRegistry viewRegistry,
         IConfiguration configuration,
         EdgeRuntimePaths runtimePaths,
+        string environmentName,
         IReadOnlyCollection<ModulePluginDescriptor> discoveredModules,
         IReadOnlyCollection<ModuleCatalogIssue> moduleCatalogIssues,
         IReadOnlyCollection<string> configuredEnabledModuleIds,
@@ -69,6 +72,8 @@ public static class DependencyInjection
 
         services.AddSingleton(configuration);
         services.AddSingleton(runtimePaths);
+        services.AddSingleton<IHostEnvironment>(
+            new EdgeHostEnvironment(environmentName, AppContext.BaseDirectory));
         var cellDataTypeRegistry = new CellDataTypeRegistry();
         services.AddSingleton<ICellDataTypeRegistry>(cellDataTypeRegistry);
         services.AddSingleton<ICellDataJsonSerializer, CellDataJsonSerializer>();
@@ -342,5 +347,18 @@ public static class DependencyInjection
         public Task StartAsync(CancellationToken ct) => _startAsync(ct);
 
         public Task StopAsync(CancellationToken ct) => _stopAsync(ct);
+    }
+
+    private sealed class EdgeHostEnvironment(string environmentName, string contentRootPath) : IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = string.IsNullOrWhiteSpace(environmentName)
+            ? Environments.Production
+            : environmentName.Trim();
+
+        public string ApplicationName { get; set; } = "IIoT.Edge.Shell";
+
+        public string ContentRootPath { get; set; } = contentRootPath;
+
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
 }

@@ -359,7 +359,12 @@ public sealed class HomogenizationRuntimeBehaviorTests
         SetAscii(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.托盘码), "TRAY-9001", 30);
         buffer.UpdateReadBuffer(readValues);
 
-        var tasks = new HomogenizationStationRuntimeFactory().CreateTasks(provider, buffer, context);
+        var factory = new HomogenizationStationRuntimeFactory();
+        var tasks = factory.CreateTasks(
+            provider,
+            buffer,
+            context,
+            factory.GetTaskCandidates().Select(static x => x.Key).ToHashSet(StringComparer.OrdinalIgnoreCase));
         using var cancellation = new CancellationTokenSource();
         var runningTasks = tasks.Select(task => task.StartAsync(cancellation.Token)).ToArray();
 
@@ -509,7 +514,12 @@ public sealed class HomogenizationRuntimeBehaviorTests
         SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.配方停机步), 0, 1);
         buffer.UpdateReadBuffer(readValues);
 
-        var tasks = new HomogenizationStationRuntimeFactory().CreateTasks(provider, buffer, context);
+        var factory = new HomogenizationStationRuntimeFactory();
+        var tasks = factory.CreateTasks(
+            provider,
+            buffer,
+            context,
+            factory.GetTaskCandidates().Select(static x => x.Key).ToHashSet(StringComparer.OrdinalIgnoreCase));
         using var cancellation = new CancellationTokenSource();
         var runningTasks = tasks.Select(task => task.StartAsync(cancellation.Token)).ToArray();
 

@@ -8,11 +8,24 @@ public interface IStationRuntimeFactory
 {
     string ModuleId { get; }
 
+    IReadOnlyCollection<TaskCandidate> GetTaskCandidates();
+
     List<IPlcTask> CreateTasks(
         IServiceProvider serviceProvider,
         IPlcBuffer buffer,
-        ProductionContext context);
+        ProductionContext context,
+        IReadOnlySet<string> enabledTaskKeys);
 }
+
+public sealed record TaskCandidate(
+    string Key,
+    string DisplayName,
+    IReadOnlyList<TaskRequiredSignal> RequiredSignals,
+    bool IsHeartbeatLike = false);
+
+public sealed record TaskRequiredSignal(
+    string SignalKey,
+    string Direction);
 
 public interface IStationRuntimeRegistry
 {

@@ -5,6 +5,7 @@ using IIoT.Edge.Presentation.Navigation.Features.Config.ParamView;
 using IIoT.Edge.Presentation.Navigation.Features.Formula.RecipeView;
 using IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView;
 using IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
+using IIoT.Edge.Presentation.Navigation.Features.Hardware.PlcTaskBindingView;
 using IIoT.Edge.Presentation.Navigation.Features.Production.CapacityView;
 using IIoT.Edge.Presentation.Navigation.Features.Production.DataView;
 using IIoT.Edge.Presentation.Navigation.Features.Production.Monitor;
@@ -70,7 +71,8 @@ public static class StandardModuleNavigationRegistration
             .RegisterStandardMonitorView(viewIds.Monitor)
             .RegisterStandardRecipeView(viewIds.RecipeView)
             .RegisterStandardParamView(viewIds.ParamView)
-            .RegisterStandardHardwareConfigView(viewIds.HardwareConfigView);
+            .RegisterStandardHardwareConfigView(viewIds.HardwareConfigView)
+            .RegisterStandardPlcTaskBindingView(viewIds.PlcTaskBindingView);
     }
 
     public static IEdgeProcessModuleBuilder RegisterStandardDataView(
@@ -236,6 +238,36 @@ public static class StandardModuleNavigationRegistration
             order,
             Permissions.HardwareConfig,
             "Navigation_Menu_HardwareConfig"));
+        return builder;
+    }
+
+    public static IEdgeProcessModuleBuilder RegisterStandardPlcTaskBindingView(
+        this IEdgeProcessModuleBuilder builder,
+        string viewId,
+        string? title = null,
+        int order = 8,
+        string icon = "Tune",
+        bool cacheView = false)
+    {
+        title ??= "任务绑定";
+        builder.RegisterRoute(
+            viewId,
+            typeof(PlcTaskBindingPage),
+            typeof(PlcTaskBindingViewModel),
+            sp => ActivatorUtilities.CreateInstance<PlcTaskBindingViewModel>(
+                sp,
+                viewId,
+                "Navigation_Title_PlcTaskBinding",
+                title,
+                builder.ModuleId),
+            cacheView);
+        builder.RegisterMenu(CreateMenu(
+            "任务绑定",
+            viewId,
+            icon,
+            order,
+            Permissions.HardwareConfig,
+            "Navigation_Menu_PlcTaskBinding"));
         return builder;
     }
 

@@ -553,7 +553,12 @@ public sealed class HomogenizationBusinessChainBehaviorTests
 
         public Task StartAsync()
         {
-            var tasks = new HomogenizationStationRuntimeFactory().CreateTasks(_provider, Buffer, Context);
+        var factory = new HomogenizationStationRuntimeFactory();
+        var tasks = factory.CreateTasks(
+            _provider,
+            Buffer,
+            Context,
+            factory.GetTaskCandidates().Select(static x => x.Key).ToHashSet(StringComparer.OrdinalIgnoreCase));
             _runningTasks = tasks.Select(task => task.StartAsync(_cancellation.Token)).ToArray();
             return Task.CompletedTask;
         }

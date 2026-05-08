@@ -10,7 +10,8 @@ public sealed record StandardModuleViewIds(
     string IoView,
     string RecipeView,
     string ParamView,
-    string HardwareConfigView)
+    string HardwareConfigView,
+    string PlcTaskBindingView)
 {
     public static StandardModuleViewIds Create(string moduleKey)
     {
@@ -23,6 +24,7 @@ public sealed record StandardModuleViewIds(
             $"{prefix}.IOView",
             $"{prefix}.RecipeView",
             $"{prefix}.ParamView",
-            $"{prefix}.HardwareConfigView");
+            $"{prefix}.HardwareConfigView",
+            $"{prefix}.PlcTaskBindingView");
     }
 }

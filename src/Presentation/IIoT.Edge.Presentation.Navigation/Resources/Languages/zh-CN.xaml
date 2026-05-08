@@ -10,6 +10,7 @@
     <sys:String x:Key="Navigation_Menu_Recipe">配方</sys:String>
     <sys:String x:Key="Navigation_Menu_ParamConfig">参数配置</sys:String>
     <sys:String x:Key="Navigation_Menu_HardwareConfig">硬件配置</sys:String>
+    <sys:String x:Key="Navigation_Menu_PlcTaskBinding">任务绑定</sys:String>
     <sys:String x:Key="Navigation_Title_Data">生产数据</sys:String>
     <sys:String x:Key="Navigation_Title_CapacityQuery">产能查询</sys:String>
     <sys:String x:Key="Navigation_Title_IoInteract">IO 交互</sys:String>
@@ -17,6 +18,7 @@
     <sys:String x:Key="Navigation_Title_ProductRecipe">产品配方</sys:String>
     <sys:String x:Key="Navigation_Title_ParamConfig">参数配置</sys:String>
     <sys:String x:Key="Navigation_Title_HardwareConfig">硬件配置</sys:String>
+    <sys:String x:Key="Navigation_Title_PlcTaskBinding">任务绑定</sys:String>
     <sys:String x:Key="Navigation_Button_Save">保存</sys:String>
     <sys:String x:Key="Navigation_Button_Query">查询</sys:String>
     <sys:String x:Key="Navigation_Button_Export">导出</sys:String>
@@ -92,6 +94,11 @@
     <sys:String x:Key="Navigation_Column_CurrentReply">当前回复</sys:String>
     <sys:String x:Key="Navigation_Column_PendingWriteOperation">待写/操作</sys:String>
     <sys:String x:Key="Navigation_Column_SignalName">信号名称</sys:String>
+    <sys:String x:Key="Navigation_Column_TaskName">任务名称</sys:String>
+    <sys:String x:Key="Navigation_Column_TaskType">任务类型</sys:String>
+    <sys:String x:Key="Navigation_Column_TaskBindingSource">绑定来源</sys:String>
+    <sys:String x:Key="Navigation_Column_RequiredSignals">所需信号</sys:String>
+    <sys:String x:Key="Navigation_Column_TaskKey">任务 Key</sys:String>
     <sys:String x:Key="Navigation_Column_Address">地址</sys:String>
     <sys:String x:Key="Navigation_Column_Type">类型</sys:String>
     <sys:String x:Key="Navigation_Column_Length">长度</sys:String>
@@ -147,6 +154,13 @@
     <sys:String x:Key="Navigation_Status_Connected">已连接</sys:String>
     <sys:String x:Key="Navigation_Status_Disconnected">未连接</sys:String>
     <sys:String x:Key="Navigation_Status_NoDevice">未选择设备</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_NoDevices">当前模块暂无 PLC 设备。</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_DeviceCountFormat">已加载 {0} 台 PLC 的任务绑定。</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_LoadFailed">加载 PLC 任务绑定失败。</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_SelectDeviceFirst">请先选择 PLC 设备。</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_SaveCanceled">已取消保存。</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_SaveSuccess">任务绑定已保存。</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_SaveFailed">保存 PLC 任务绑定失败。</sys:String>
     <sys:String x:Key="Navigation_Capacity_Device">设备</sys:String>
     <sys:String x:Key="Navigation_Capacity_QueryDate">查询日期</sys:String>
     <sys:String x:Key="Navigation_Capacity_QueryMode">查询方式</sys:String>

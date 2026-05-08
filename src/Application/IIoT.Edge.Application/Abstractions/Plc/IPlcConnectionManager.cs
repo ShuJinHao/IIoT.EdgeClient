@@ -21,6 +21,8 @@ public interface IPlcConnectionManager : IDisposable, IAsyncDisposable
 
     ProductionContext? GetContext(string deviceName);
 
+    void MarkRuntimeFault(int networkDeviceId, string deviceName, string error) { }
+
     PlcConnectionRuntimeSnapshot? GetRuntimeStatus(int networkDeviceId) => null;
 
     IReadOnlyCollection<PlcConnectionRuntimeSnapshot> GetRuntimeStatuses() => Array.Empty<PlcConnectionRuntimeSnapshot>();

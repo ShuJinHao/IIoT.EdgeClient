@@ -11,6 +11,7 @@ using IIoT.Edge.Application.Abstractions.Recipe;
 using IIoT.Edge.Application.Abstractions.Tasks;
 using IIoT.Edge.Application.Common.Models;
 using IIoT.Edge.Application.Features.Config.ModuleParameters;
+using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Infrastructure.Persistence.Dapper;
@@ -30,6 +31,8 @@ using IIoT.Edge.Shell.Modules;
 using IIoT.Edge.UI.Shared.PluginSystem;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
 using System.Reflection;
 using Xunit;
 
@@ -139,6 +142,32 @@ public sealed class ModuleRuntimeRegistrationTests
             report.PluginStates,
             x => string.Equals(x.ModuleId, "Homogenization", StringComparison.OrdinalIgnoreCase));
         Assert.Equal(PluginLifecycleState.Activated, homogenizationState.State);
+    }
+
+    [Fact]
+    public async Task AppLifecycleManager_WhenEnabledTaskSignalIsMissing_ShouldMarkRuntimeFaultAndSkipTaskRegistration()
+    {
+        await using var harness = await AppLifecycleHarness.CreateAsync(
+            enabledModules: ["Homogenization"],
+            deviceModuleIds: ["Homogenization"],
+            environmentName: "Production");
+        var device = Assert.Single(await harness.GetNetworkDevicesAsync());
+        var mappings = await harness.GetIoMappingsAsync(device.Id);
+        var incompleteMappings = mappings
+            .Where(static x => !string.Equals(x.SignalKey, "Homogenization.Interaction.Inbound", StringComparison.OrdinalIgnoreCase)
+                               || !string.Equals(x.Direction, "Write", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        await harness.ReplaceIoMappingsAsync(device.Id, incompleteMappings);
+
+        var result = await harness.Manager.StartAsync();
+
+        Assert.True(result.Success, result.Message);
+        Assert.Empty(harness.PlcManager.RegisteredFactories);
+        var fault = Assert.Single(harness.PlcManager.RuntimeFaults);
+        Assert.Equal(device.Id, fault.NetworkDeviceId);
+        Assert.Contains("任务绑定校验失败", fault.Error, StringComparison.Ordinal);
+        Assert.Contains("Homogenization.Inbound", fault.Error, StringComparison.Ordinal);
+        Assert.Contains("Homogenization.Interaction.Inbound/Write", fault.Error, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -266,6 +295,7 @@ public sealed class ModuleRuntimeRegistrationTests
                 viewRegistry,
                 configuration,
                 runtimePaths,
+                "Production",
                 discovery.Modules,
                 [.. discovery.Issues, .. activation.Issues],
                 activation.EnabledModuleIds,
@@ -316,6 +346,17 @@ public sealed class ModuleRuntimeRegistrationTests
 
     private static EdgeRuntimePaths CreateRuntimePaths(string baseDirectory, IConfiguration configuration)
         => ShellRuntimePathResolver.Resolve(baseDirectory, configuration);
+
+    private sealed class TestHostEnvironment(string environmentName) : IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = environmentName;
+
+        public string ApplicationName { get; set; } = "IIoT.Edge.Shell.Tests";
+
+        public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
+
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+    }
 
     private static ModuleCatalogDiscoveryResult DiscoverTestPlugins(string pluginRoot)
     {
@@ -553,6 +594,7 @@ public sealed class ModuleRuntimeRegistrationTests
             var recipeService = new SpyRecipeService();
 
             services.AddSingleton<IConfiguration>(configuration);
+            services.AddSingleton<IHostEnvironment>(new TestHostEnvironment(environmentName));
             services.AddSingleton(shiftConfig);
             services.AddSingleton<IPlcConnectionManager>(plcManager);
             services.AddSingleton<IProductionContextStore>(contextStore);
@@ -560,6 +602,7 @@ public sealed class ModuleRuntimeRegistrationTests
             services.AddSingleton<ILogService>(logger);
             services.AddSingleton<IRecipeService>(recipeService);
             services.AddSingleton<IDataPipelineService, SpyDataPipelineService>();
+            services.AddTransient<IPlcTaskBindingService, PlcTaskBindingService>();
             var discovery = DiscoverTestPlugins(pluginRoot);
             var activation = ShellModuleCatalog.CreateEnabledModules(configuration, discovery.Modules);
             var moduleViewRegistry = new ViewRegistry();
@@ -567,6 +610,7 @@ public sealed class ModuleRuntimeRegistrationTests
             var runtimeRegistry = new StationRuntimeRegistry();
             var integrationRegistry = new ProcessIntegrationRegistry();
             var moduleParamRegistry = new ModuleParamRegistry();
+            services.AddSingleton<IStationRuntimeRegistry>(runtimeRegistry);
 
             foreach (var module in activation.Modules)
             {
@@ -622,7 +666,9 @@ public sealed class ModuleRuntimeRegistrationTests
                     networkDevices,
                     ioMappings,
                     plcManager,
-                    runtimeRegistry),
+                    runtimeRegistry,
+                    serviceProvider.GetRequiredService<IPlcTaskBindingService>(),
+                    logger),
                 new AppRuntimeStateCoordinator(
                     contextStore,
                     recipeService,
@@ -704,8 +750,12 @@ public sealed class ModuleRuntimeRegistrationTests
 
     private sealed class SpyPlcConnectionManager : IPlcConnectionManager
     {
+        public sealed record RuntimeFault(int NetworkDeviceId, string DeviceName, string Error);
+
         public Dictionary<string, Func<IPlcBuffer, ProductionContext, List<IPlcTask>>> RegisteredFactories { get; }
             = new(StringComparer.OrdinalIgnoreCase);
+
+        public List<RuntimeFault> RuntimeFaults { get; } = [];
 
         public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
 
@@ -723,6 +773,9 @@ public sealed class ModuleRuntimeRegistrationTests
         public IPlcService? GetPlc(int networkDeviceId) => null;
 
         public ProductionContext? GetContext(string deviceName) => null;
+
+        public void MarkRuntimeFault(int networkDeviceId, string deviceName, string error)
+            => RuntimeFaults.Add(new RuntimeFault(networkDeviceId, deviceName, error));
 
         public void Dispose()
         {

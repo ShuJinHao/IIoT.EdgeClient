@@ -9,12 +9,31 @@ public sealed class PlcRuntimeRegistry
     private readonly object _stateLock = new();
     private readonly Dictionary<int, PlcDeviceRuntimeHandle> _runtimes = new();
     private readonly Dictionary<string, Func<IPlcBuffer, ProductionContext, List<IPlcTask>>> _taskFactories = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _runtimeBlockedDevices = new(StringComparer.OrdinalIgnoreCase);
 
     public void RegisterTaskFactory(string deviceName, Func<IPlcBuffer, ProductionContext, List<IPlcTask>> factory)
     {
         lock (_stateLock)
         {
+            _runtimeBlockedDevices.Remove(deviceName);
             _taskFactories[deviceName] = factory;
+        }
+    }
+
+    public void BlockRuntime(string deviceName)
+    {
+        lock (_stateLock)
+        {
+            _runtimeBlockedDevices.Add(deviceName);
+            _taskFactories.Remove(deviceName);
+        }
+    }
+
+    public bool IsRuntimeBlocked(string deviceName)
+    {
+        lock (_stateLock)
+        {
+            return _runtimeBlockedDevices.Contains(deviceName);
         }
     }
 

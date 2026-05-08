@@ -3,6 +3,7 @@ using IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
 using IIoT.Edge.Presentation.Navigation.Features.Formula.RecipeView;
 using IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView;
 using IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
+using IIoT.Edge.Presentation.Navigation.Features.Hardware.PlcTaskBindingView;
 using IIoT.Edge.Presentation.Navigation.Features.Production.CapacityView;
 using IIoT.Edge.Presentation.Navigation.Features.Production.DataView;
 using IIoT.Edge.Presentation.Navigation.Features.Production.Monitor;
@@ -25,6 +26,8 @@ public static class DependencyInjection
         services.AddSingleton<IHardwareConfigDeviceSelectionCoordinator, HardwareConfigDeviceSelectionCoordinator>();
         services.AddSingleton<IHardwareConfigLoadSaveCoordinator, HardwareConfigLoadSaveCoordinator>();
         services.AddSingleton<HardwareConfigViewModel>();
+        services.AddSingleton<IPlcTaskBindingConfirmationService, PlcTaskBindingConfirmationService>();
+        services.AddSingleton<PlcTaskBindingViewModel>();
         services.AddSingleton<RecipeViewModel>();
         services.AddSingleton<CapacityViewModel>();
         services.AddSingleton<MonitorViewModel>();
@@ -38,6 +41,7 @@ public static class DependencyInjection
         services.AddTransient<ParamViewPage>();
         services.AddTransient<IOViewPage>();
         services.AddTransient<HardwareConfigPage>();
+        services.AddTransient<PlcTaskBindingPage>();
         services.AddTransient<RecipeViewPage>();
         services.AddTransient<CapacityViewPage>();
         services.AddTransient<MonitorViewPage>();

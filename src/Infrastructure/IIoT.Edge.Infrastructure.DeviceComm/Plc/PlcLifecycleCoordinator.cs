@@ -189,6 +189,12 @@ public sealed class PlcLifecycleCoordinator
     {
         ThrowIfDisposed();
 
+        if (_runtimeRegistry.IsRuntimeBlocked(device.DeviceName))
+        {
+            _logger.Warn($"[{device.DeviceName}] PLC 运行启动已被任务绑定校验阻断。");
+            return;
+        }
+
         if (_runtimeRegistry.ContainsRuntime(device.Id))
         {
             _logger.Info($"[{device.DeviceName}] Skipped initialization because the device is already running.");

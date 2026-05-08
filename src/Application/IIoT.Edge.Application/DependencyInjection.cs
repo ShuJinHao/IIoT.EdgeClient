@@ -12,6 +12,7 @@ using IIoT.Edge.Application.Features.Config.ModuleParameters;
 using IIoT.Edge.Application.Features.Config.ParamView;
 using IIoT.Edge.Application.Features.Formula.RecipeView;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView;
+using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 using IIoT.Edge.Application.Features.Production.CapacityView;
 using IIoT.Edge.Application.Features.Production.DataView;
 using IIoT.Edge.Application.Features.Production.Equipment;
@@ -37,6 +38,7 @@ public static class DependencyInjection
         services.AddSingleton<IDeadLetterMaintenanceService, DeadLetterMaintenanceService>();
         services.AddTransient<IParamViewCrudService, ParamViewCrudService>();
         services.AddTransient<IHardwareConfigCrudService, HardwareConfigCrudService>();
+        services.AddTransient<IPlcTaskBindingService, PlcTaskBindingService>();
         services.AddTransient<IRecipeViewCrudService, RecipeViewCrudService>();
         services.AddTransient<ICapacityViewService, CapacityViewService>();
         services.AddTransient<IDataViewService, DataViewService>();

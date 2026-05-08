@@ -10,6 +10,7 @@
     <sys:String x:Key="Navigation_Menu_Recipe">Recipe</sys:String>
     <sys:String x:Key="Navigation_Menu_ParamConfig">Parameters</sys:String>
     <sys:String x:Key="Navigation_Menu_HardwareConfig">Hardware</sys:String>
+    <sys:String x:Key="Navigation_Menu_PlcTaskBinding">Task Binding</sys:String>
     <sys:String x:Key="Navigation_Title_Data">Production Data</sys:String>
     <sys:String x:Key="Navigation_Title_CapacityQuery">Capacity Query</sys:String>
     <sys:String x:Key="Navigation_Title_IoInteract">IO Interaction</sys:String>
@@ -17,6 +18,7 @@
     <sys:String x:Key="Navigation_Title_ProductRecipe">Product Recipe</sys:String>
     <sys:String x:Key="Navigation_Title_ParamConfig">Parameter Configuration</sys:String>
     <sys:String x:Key="Navigation_Title_HardwareConfig">Hardware Configuration</sys:String>
+    <sys:String x:Key="Navigation_Title_PlcTaskBinding">Task Binding</sys:String>
     <sys:String x:Key="Navigation_Button_Save">Save</sys:String>
     <sys:String x:Key="Navigation_Button_Query">Query</sys:String>
     <sys:String x:Key="Navigation_Button_Export">Export</sys:String>
@@ -92,6 +94,11 @@
     <sys:String x:Key="Navigation_Column_CurrentReply">Current Reply</sys:String>
     <sys:String x:Key="Navigation_Column_PendingWriteOperation">Pending Write/Action</sys:String>
     <sys:String x:Key="Navigation_Column_SignalName">Signal Name</sys:String>
+    <sys:String x:Key="Navigation_Column_TaskName">Task Name</sys:String>
+    <sys:String x:Key="Navigation_Column_TaskType">Task Type</sys:String>
+    <sys:String x:Key="Navigation_Column_TaskBindingSource">Source</sys:String>
+    <sys:String x:Key="Navigation_Column_RequiredSignals">Required Signals</sys:String>
+    <sys:String x:Key="Navigation_Column_TaskKey">Task Key</sys:String>
     <sys:String x:Key="Navigation_Column_Address">Address</sys:String>
     <sys:String x:Key="Navigation_Column_Type">Type</sys:String>
     <sys:String x:Key="Navigation_Column_Length">Length</sys:String>
@@ -147,6 +154,13 @@
     <sys:String x:Key="Navigation_Status_Connected">Connected</sys:String>
     <sys:String x:Key="Navigation_Status_Disconnected">Disconnected</sys:String>
     <sys:String x:Key="Navigation_Status_NoDevice">No device selected</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_NoDevices">No PLC devices are configured for this module.</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_DeviceCountFormat">Loaded task bindings for {0} PLC device(s).</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_LoadFailed">Failed to load PLC task bindings.</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_SelectDeviceFirst">Select a PLC device first.</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_SaveCanceled">Save canceled.</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_SaveSuccess">Task bindings saved.</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_SaveFailed">Failed to save PLC task bindings.</sys:String>
     <sys:String x:Key="Navigation_Capacity_Device">Device</sys:String>
     <sys:String x:Key="Navigation_Capacity_QueryDate">Query Date</sys:String>
     <sys:String x:Key="Navigation_Capacity_QueryMode">Query Mode</sys:String>

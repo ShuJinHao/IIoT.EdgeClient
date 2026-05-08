@@ -16,6 +16,8 @@ public class EdgeDbContext(
         => Set<SerialDeviceEntity>();
     public DbSet<IoMappingEntity> IoMappings
         => Set<IoMappingEntity>();
+    public DbSet<PlcTaskBindingEntity> PlcTaskBindings
+        => Set<PlcTaskBindingEntity>();
 
     // Config
     public DbSet<SystemConfigEntity> SystemConfigs

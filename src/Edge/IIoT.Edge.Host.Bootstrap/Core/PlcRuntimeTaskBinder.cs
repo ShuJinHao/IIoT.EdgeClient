@@ -1,5 +1,7 @@
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc;
+using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Runtime.Signals;
@@ -20,19 +22,25 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
     private readonly IRepository<IoMappingEntity> _ioMappings;
     private readonly IPlcConnectionManager _plcConnectionManager;
     private readonly IStationRuntimeRegistry _runtimeRegistry;
+    private readonly IPlcTaskBindingService _taskBindingService;
+    private readonly ILogService _logger;
 
     public PlcRuntimeTaskBinder(
         IServiceProvider serviceProvider,
         IRepository<NetworkDeviceEntity> networkDevices,
         IRepository<IoMappingEntity> ioMappings,
         IPlcConnectionManager plcConnectionManager,
-        IStationRuntimeRegistry runtimeRegistry)
+        IStationRuntimeRegistry runtimeRegistry,
+        IPlcTaskBindingService taskBindingService,
+        ILogService logger)
     {
         _serviceProvider = serviceProvider;
         _networkDevices = networkDevices;
         _ioMappings = ioMappings;
         _plcConnectionManager = plcConnectionManager;
         _runtimeRegistry = runtimeRegistry;
+        _taskBindingService = taskBindingService;
+        _logger = logger;
     }
 
     public async Task BindAsync(CancellationToken cancellationToken = default)
@@ -65,14 +73,38 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
                     mapping.BusinessGroup,
                     mapping.SignalName))
                 .ToArray();
+            var candidates = factory.GetTaskCandidates();
+            var enabledTaskKeys = await _taskBindingService.GetEnabledTaskKeysAsync(
+                device.Id,
+                candidates,
+                cancellationToken).ConfigureAwait(false);
+            var validation = _taskBindingService.ValidateEnabledTasks(candidates, enabledTaskKeys, signalBindings);
+            if (!validation.IsValid)
+            {
+                var message = BuildValidationFailureMessage(device.DeviceName, validation);
+                _plcConnectionManager.MarkRuntimeFault(device.Id, device.DeviceName, message);
+                _logger.Error(message);
+                continue;
+            }
 
             _plcConnectionManager.RegisterTasks(
                 device.DeviceName,
                 (buffer, context) =>
                 {
                     ProductionContextSignalBindings.Set(context, signalBindings);
-                    return factory.CreateTasks(_serviceProvider, buffer, context);
+                    return factory.CreateTasks(_serviceProvider, buffer, context, enabledTaskKeys);
                 });
         }
+    }
+
+    private static string BuildValidationFailureMessage(
+        string deviceName,
+        PlcTaskBindingValidationResult validation)
+    {
+        var missing = validation.Issues
+            .Select(static issue => $"{issue.TaskDisplayName}({issue.TaskKey}) 缺少 {issue.RequiredSignal.SignalKey}/{issue.RequiredSignal.Direction}")
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+
+        return $"PLC“{deviceName}”任务绑定校验失败：{string.Join("；", missing)}。";
     }
 }

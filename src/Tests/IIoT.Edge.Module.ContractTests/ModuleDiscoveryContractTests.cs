@@ -257,10 +257,14 @@ public sealed class ModuleDiscoveryContractTests
     {
         public string ModuleId => MockEdgeProcessModule.Module;
 
+        public IReadOnlyCollection<TaskCandidate> GetTaskCandidates()
+            => [];
+
         public List<IPlcTask> CreateTasks(
             IServiceProvider serviceProvider,
             IPlcBuffer buffer,
-            ProductionContext context)
+            ProductionContext context,
+            IReadOnlySet<string> enabledTaskKeys)
             => [];
     }
 }

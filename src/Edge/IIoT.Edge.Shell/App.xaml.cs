@@ -50,7 +50,10 @@ public partial class App : WpfApplication
 
         try
         {
-            _serviceProvider = ConfigureServices(configuration, runtimePaths).BuildServiceProvider();
+            _serviceProvider = ConfigureServices(
+                configuration,
+                runtimePaths,
+                configurationResult.EnvironmentName).BuildServiceProvider();
             _serviceProvider.GetRequiredService<IAppLanguageService>().Initialize();
         }
         catch (Exception ex)
@@ -234,7 +237,10 @@ public partial class App : WpfApplication
 
     private void ReleaseMutex() => _instanceLock.Release();
 
-    private ServiceCollection ConfigureServices(IConfiguration configuration, EdgeRuntimePaths runtimePaths)
+    private ServiceCollection ConfigureServices(
+        IConfiguration configuration,
+        EdgeRuntimePaths runtimePaths,
+        string environmentName)
     {
         var services = new ServiceCollection();
         var viewRegistry = new ViewRegistry();
@@ -249,6 +255,7 @@ public partial class App : WpfApplication
             viewRegistry,
             configuration,
             runtimePaths,
+            environmentName,
             discoveryResult.Modules,
             moduleCatalogIssues,
             activationResult.EnabledModuleIds,

@@ -32,6 +32,7 @@ public class NetworkDeviceEntity : BaseEntity<int>, IAggregateRoot
     public string? Remark { get; private set; }
 
     public ICollection<IoMappingEntity> IoMappings { get; private set; } = new List<IoMappingEntity>();
+    public ICollection<PlcTaskBindingEntity> PlcTaskBindings { get; private set; } = new List<PlcTaskBindingEntity>();
 
     public static NetworkDeviceEntity Create(
         string deviceName,

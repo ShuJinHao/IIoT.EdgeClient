@@ -63,6 +63,9 @@ public sealed class PlcConnectionStatusStore
         }
     }
 
+    public void MarkRuntimeFault(int networkDeviceId, string deviceName, string error)
+        => MarkDisconnected(networkDeviceId, deviceName, error);
+
     public PlcConnectionRuntimeSnapshot? GetSnapshot(int networkDeviceId)
     {
         lock (_stateLock)
