@@ -6,7 +6,9 @@ using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
+using IIoT.Edge.Presentation.Navigation.Localization;
 using IIoT.Edge.Presentation.Shell.Localization;
+using IIoT.Edge.UI.Shared.Localization;
 using Xunit;
 
 namespace IIoT.Edge.Shell.Tests;
@@ -90,7 +92,7 @@ public sealed class DiagnosticsViewModelBehaviorTests
                     new ProductionContextPersistenceDiagnostics(2, TestNow.AddMinutes(-4)))
             };
 
-            var viewModel = new DiagnosticsViewModel(startupStore, diagnosticsQuery, new TestAppLanguageService());
+            var viewModel = CreateViewModel(startupStore, diagnosticsQuery, new TestAppLanguageService());
 
             await viewModel.RefreshAsync();
 
@@ -116,7 +118,7 @@ public sealed class DiagnosticsViewModelBehaviorTests
             startupStore.Update(StartupDiagnosticsReport.Empty());
 
             var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery();
-            var viewModel = new DiagnosticsViewModel(startupStore, diagnosticsQuery, new TestAppLanguageService());
+            var viewModel = CreateViewModel(startupStore, diagnosticsQuery, new TestAppLanguageService());
             await viewModel.RefreshAsync();
 
             diagnosticsQuery.ResetCounters();
@@ -206,7 +208,7 @@ public sealed class DiagnosticsViewModelBehaviorTests
                         new ProductionContextPersistenceDiagnostics(0, null))
                 };
 
-                var viewModel = new DiagnosticsViewModel(startupStore, diagnosticsQuery, languageService);
+                var viewModel = CreateViewModel(startupStore, diagnosticsQuery, languageService);
                 await viewModel.RefreshAsync();
 
                 Assert.Equal("上传门禁：已就绪", viewModel.CloudGateSummary);
@@ -279,6 +281,23 @@ public sealed class DiagnosticsViewModelBehaviorTests
         catch
         {
         }
+    }
+
+    private static DiagnosticsViewModel CreateViewModel(
+        IStartupDiagnosticsStore startupStore,
+        IEdgeSyncDiagnosticsQuery diagnosticsQuery,
+        IAppLanguageService languageService)
+    {
+        var diagnosticsText = new LocalizedSyncDiagnosticsText(languageService);
+        var displayNameResolver = new DiagnosticsModuleDisplayNameResolver(diagnosticsText);
+        return new DiagnosticsViewModel(
+            startupStore,
+            diagnosticsQuery,
+            languageService,
+            displayNameResolver,
+            new DiagnosticsSummaryBuilder(languageService, diagnosticsText, displayNameResolver),
+            new DiagnosticsRowsBuilder(diagnosticsText, displayNameResolver),
+            new DiagnosticsInitialSummaryFactory(languageService, diagnosticsText));
     }
 
     private sealed class FakeStartupDiagnosticsStore : IStartupDiagnosticsStore

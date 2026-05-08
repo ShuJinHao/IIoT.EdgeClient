@@ -6,6 +6,7 @@ using IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
 using IIoT.Edge.Presentation.Navigation.Features.Production.CapacityView;
 using IIoT.Edge.Presentation.Navigation.Features.Production.DataView;
 using IIoT.Edge.Presentation.Navigation.Features.Production.Monitor;
+using IIoT.Edge.Presentation.Navigation.Localization;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace IIoT.Edge.Presentation.Navigation;
@@ -14,7 +15,10 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddNavigationPresentation(this IServiceCollection services)
     {
+        services.AddSingleton<LocalizedSyncDiagnosticsText>();
         services.AddSingleton<ParamViewModel>();
+        services.AddSingleton<IIoViewMappingBuilder, IoViewMappingBuilder>();
+        services.AddSingleton<IIoViewSignalValueUpdater, IoViewSignalValueUpdater>();
         services.AddSingleton<IoViewViewModel>();
         services.AddSingleton<IHardwareConfigValidationPresenter, HardwareConfigValidationPresenter>();
         services.AddSingleton<IHardwareConfigEditSession, HardwareConfigEditSession>();
@@ -25,6 +29,10 @@ public static class DependencyInjection
         services.AddSingleton<CapacityViewModel>();
         services.AddSingleton<MonitorViewModel>();
         services.AddSingleton<DataViewModel>();
+        services.AddSingleton<IDiagnosticsModuleDisplayNameResolver, DiagnosticsModuleDisplayNameResolver>();
+        services.AddSingleton<IDiagnosticsSummaryBuilder, DiagnosticsSummaryBuilder>();
+        services.AddSingleton<IDiagnosticsRowsBuilder, DiagnosticsRowsBuilder>();
+        services.AddSingleton<IDiagnosticsInitialSummaryFactory, DiagnosticsInitialSummaryFactory>();
         services.AddSingleton<DiagnosticsViewModel>();
 
         services.AddTransient<ParamViewPage>();

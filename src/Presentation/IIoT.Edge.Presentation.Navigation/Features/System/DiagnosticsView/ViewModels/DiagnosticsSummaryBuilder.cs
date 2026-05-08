@@ -6,10 +6,19 @@ using IIoT.Edge.UI.Shared.Localization;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
 
+public interface IDiagnosticsSummaryBuilder
+{
+    DiagnosticsSummarySnapshot Build(
+        StartupDiagnosticsReport report,
+        EdgeSyncDiagnosticsSnapshot syncDiagnostics,
+        IReadOnlyDictionary<string, string> moduleNameMap);
+}
+
 internal sealed class DiagnosticsSummaryBuilder(
     IAppLanguageService languageService,
     LocalizedSyncDiagnosticsText diagnosticsText,
-    DiagnosticsModuleDisplayNameResolver displayNameResolver)
+    IDiagnosticsModuleDisplayNameResolver displayNameResolver)
+    : IDiagnosticsSummaryBuilder
 {
     public DiagnosticsSummarySnapshot Build(
         StartupDiagnosticsReport report,

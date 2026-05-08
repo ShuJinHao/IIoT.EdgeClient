@@ -1,6 +1,7 @@
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Runtime.DataPipeline.Services;
 using IIoT.Edge.Runtime.DataPipeline.Tasks;
@@ -186,6 +187,45 @@ public sealed class RetryTaskBehaviorTests
         Assert.Equal(3, strategy.LastRetryCount);
         Assert.True(failedStore.Updates.TryGetValue(901, out var update));
         Assert.InRange((update!.NextRetryTime - before).TotalSeconds, 6, 9);
+    }
+
+    [Fact]
+    public async Task RetryDeserializeFailure_ShouldUseInjectedDeadLetterWriter()
+    {
+        var failedStore = new FakeFailedRecordStore();
+        failedStore.PendingRecords.Add(new FailedCellRecord
+        {
+            Id = 902,
+            Channel = "Cloud",
+            ProcessType = "OtherProcess",
+            CellDataJson = "{invalid-json",
+            FailedTarget = "Cloud",
+            ErrorMessage = "seed",
+            RetryCount = 0,
+            NextRetryTime = DateTime.UtcNow.AddMinutes(-1),
+            CreatedAt = DateTime.UtcNow.AddMinutes(-2)
+        });
+
+        var deadLetterWriter = new SpyDataPipelineDeadLetterWriter();
+        var task = new TestableCloudRetryTask(
+            new FakeLogService(),
+            failedStore,
+            new FakeCloudFallbackBufferStore(),
+            CreateOnlineDeviceService(),
+            new FakeCloudConsumer(),
+            new FakeCloudBatchConsumer(),
+            new FakeDeviceLogSyncTask(),
+            new FakeCapacitySyncTask(),
+            deadLetterWriter: deadLetterWriter);
+
+        await task.ExecuteOnceAsync();
+
+        Assert.Equal(1, deadLetterWriter.CallCount);
+        Assert.Equal("OtherProcess", deadLetterWriter.LastProcessType);
+        Assert.Equal("failed_cloud_records", deadLetterWriter.LastSourceTable);
+        Assert.Equal(902, deadLetterWriter.LastSourceRecordId);
+        Assert.Equal(DeadLetterStage.RetryDeserialize, deadLetterWriter.LastStage);
+        Assert.Contains(902, failedStore.DeletedIds);
     }
 
     [Fact]
@@ -417,6 +457,36 @@ public sealed class RetryTaskBehaviorTests
             CallCount++;
             LastRetryCount = retryCount;
             return delay;
+        }
+    }
+
+    private sealed class SpyDataPipelineDeadLetterWriter : IDataPipelineDeadLetterWriter
+    {
+        public int CallCount { get; private set; }
+        public string? LastProcessType { get; private set; }
+        public string? LastSourceTable { get; private set; }
+        public long LastSourceRecordId { get; private set; }
+        public DeadLetterStage LastStage { get; private set; }
+
+        public Task<bool> TryPersistAsync(
+            Func<DeadLetterRecord, Task> saveAsync,
+            ICriticalPersistenceFallbackWriter criticalFallbackWriter,
+            ILogService logger,
+            DataPipelineDeadLetterChannel channel,
+            string processType,
+            string cellDataJson,
+            string failedTarget,
+            string sourceTable,
+            long sourceRecordId,
+            DeadLetterStage stage,
+            string failureReason)
+        {
+            CallCount++;
+            LastProcessType = processType;
+            LastSourceTable = sourceTable;
+            LastSourceRecordId = sourceRecordId;
+            LastStage = stage;
+            return Task.FromResult(true);
         }
     }
 

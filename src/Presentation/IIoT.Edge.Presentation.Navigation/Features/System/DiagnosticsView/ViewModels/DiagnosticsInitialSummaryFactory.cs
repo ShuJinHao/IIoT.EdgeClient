@@ -4,9 +4,15 @@ using IIoT.Edge.UI.Shared.Localization;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
 
+public interface IDiagnosticsInitialSummaryFactory
+{
+    DiagnosticsSummarySnapshot Create();
+}
+
 internal sealed class DiagnosticsInitialSummaryFactory(
     IAppLanguageService languageService,
     LocalizedSyncDiagnosticsText diagnosticsText)
+    : IDiagnosticsInitialSummaryFactory
 {
     public DiagnosticsSummarySnapshot Create()
         => new()

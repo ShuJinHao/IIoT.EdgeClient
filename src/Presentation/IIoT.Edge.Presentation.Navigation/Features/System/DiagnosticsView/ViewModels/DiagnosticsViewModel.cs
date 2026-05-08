@@ -4,7 +4,6 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Presentation.Navigation.Localization;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
@@ -16,10 +15,10 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
     private readonly IStartupDiagnosticsStore _diagnosticsStore;
     private readonly IEdgeSyncDiagnosticsQuery _syncDiagnosticsQuery;
     private readonly IDeadLetterMaintenanceService? _deadLetterMaintenanceService;
-    private readonly DiagnosticsModuleDisplayNameResolver _displayNameResolver;
-    private readonly DiagnosticsSummaryBuilder _summaryBuilder;
-    private readonly DiagnosticsRowsBuilder _rowsBuilder;
-    private readonly DiagnosticsInitialSummaryFactory _initialSummaryFactory;
+    private readonly IDiagnosticsModuleDisplayNameResolver _displayNameResolver;
+    private readonly IDiagnosticsSummaryBuilder _summaryBuilder;
+    private readonly IDiagnosticsRowsBuilder _rowsBuilder;
+    private readonly IDiagnosticsInitialSummaryFactory _initialSummaryFactory;
     private readonly DispatcherTimer _refreshTimer;
     private int _refreshInProgress;
 
@@ -291,19 +290,21 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         IStartupDiagnosticsStore diagnosticsStore,
         IEdgeSyncDiagnosticsQuery syncDiagnosticsQuery,
         IAppLanguageService languageService,
-        IDeadLetterMaintenanceService? deadLetterMaintenanceService = null,
-        IProductionTimeProvider? productionTime = null)
+        IDiagnosticsModuleDisplayNameResolver displayNameResolver,
+        IDiagnosticsSummaryBuilder summaryBuilder,
+        IDiagnosticsRowsBuilder rowsBuilder,
+        IDiagnosticsInitialSummaryFactory initialSummaryFactory,
+        IDeadLetterMaintenanceService? deadLetterMaintenanceService = null)
         : base(languageService, CoreViewIds.Diagnostics, "Navigation_Menu_CoreDiagnostics", "系统诊断")
     {
         _diagnosticsStore = diagnosticsStore;
         _syncDiagnosticsQuery = syncDiagnosticsQuery;
         _deadLetterMaintenanceService = deadLetterMaintenanceService;
 
-        var diagnosticsText = new LocalizedSyncDiagnosticsText(languageService, productionTime);
-        _displayNameResolver = new DiagnosticsModuleDisplayNameResolver(diagnosticsText);
-        _summaryBuilder = new DiagnosticsSummaryBuilder(languageService, diagnosticsText, _displayNameResolver);
-        _rowsBuilder = new DiagnosticsRowsBuilder(diagnosticsText, _displayNameResolver);
-        _initialSummaryFactory = new DiagnosticsInitialSummaryFactory(languageService, diagnosticsText);
+        _displayNameResolver = displayNameResolver;
+        _summaryBuilder = summaryBuilder;
+        _rowsBuilder = rowsBuilder;
+        _initialSummaryFactory = initialSummaryFactory;
 
         RequeueDeadLetterCommand = new AsyncCommand<DeadLetterRow>(RequeueDeadLetterAsync, CanOperateDeadLetter);
         DeleteDeadLetterCommand = new AsyncCommand<DeadLetterRow>(DeleteDeadLetterAsync, CanOperateDeadLetter);

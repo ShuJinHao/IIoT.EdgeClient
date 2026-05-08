@@ -1,6 +1,6 @@
 namespace IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
 
-internal sealed record DiagnosticsSummarySnapshot
+public sealed record DiagnosticsSummarySnapshot
 {
     public string DiscoveredModulesSummary { get; init; } = string.Empty;
     public string EnabledModulesSummary { get; init; } = string.Empty;

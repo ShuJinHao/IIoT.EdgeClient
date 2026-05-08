@@ -3,7 +3,12 @@ using IIoT.Edge.Domain.Hardware.Aggregates;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
 
-internal sealed class IoViewMappingBuilder
+public interface IIoViewMappingBuilder
+{
+    IoViewMappingBuildResult Build(IEnumerable<IoMappingEntity> mappings);
+}
+
+internal sealed class IoViewMappingBuilder : IIoViewMappingBuilder
 {
     public IoViewMappingBuildResult Build(IEnumerable<IoMappingEntity> mappings)
     {
@@ -169,7 +174,7 @@ internal sealed class IoViewMappingBuilder
         => IoMappingDisplay.ResolveBusinessGroup(mapping.BusinessGroup, category);
 }
 
-internal sealed record IoViewMappingBuildResult(
+public sealed record IoViewMappingBuildResult(
     IReadOnlyList<IoInteractionRowModel> InteractionRows,
     IReadOnlyList<IoDataSectionModel> DataSections,
     IReadOnlyList<IoContinuousReadMatrixSectionModel> ArraySections);

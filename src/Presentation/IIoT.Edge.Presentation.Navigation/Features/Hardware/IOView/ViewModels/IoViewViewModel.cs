@@ -20,8 +20,8 @@ public class IoViewViewModel : NavigationViewModelBase
     private readonly IPlcConnectionManager _plcConnectionManager;
     private readonly ISender _sender;
     private readonly AsyncCommand _manualReadCommand;
-    private readonly IoViewMappingBuilder _mappingBuilder;
-    private readonly IoViewSignalValueUpdater _signalValueUpdater;
+    private readonly IIoViewMappingBuilder _mappingBuilder;
+    private readonly IIoViewSignalValueUpdater _signalValueUpdater;
     private readonly string? _moduleIdFilter;
     private IPlcBufferTransport? _selectedBuffer;
 
@@ -87,7 +87,9 @@ public class IoViewViewModel : NavigationViewModelBase
         IPlcDataStore dataStore,
         IPlcConnectionManager plcConnectionManager,
         ISender sender,
-        IAppLanguageService languageService)
+        IAppLanguageService languageService,
+        IIoViewMappingBuilder mappingBuilder,
+        IIoViewSignalValueUpdater signalValueUpdater)
         : this(
             dataStore,
             plcConnectionManager,
@@ -97,8 +99,8 @@ public class IoViewViewModel : NavigationViewModelBase
             "Navigation_Title_IoInteract",
             "IO 交互",
             moduleIdFilter: null,
-            new IoViewMappingBuilder(),
-            new IoViewSignalValueUpdater())
+            mappingBuilder,
+            signalValueUpdater)
     {
     }
 
@@ -110,6 +112,8 @@ public class IoViewViewModel : NavigationViewModelBase
         string viewId,
         string titleResourceKey,
         string titleFallback,
+        IIoViewMappingBuilder mappingBuilder,
+        IIoViewSignalValueUpdater signalValueUpdater,
         string? moduleIdFilter = null)
         : this(
             dataStore,
@@ -120,8 +124,8 @@ public class IoViewViewModel : NavigationViewModelBase
             titleResourceKey,
             titleFallback,
             moduleIdFilter,
-            new IoViewMappingBuilder(),
-            new IoViewSignalValueUpdater())
+            mappingBuilder,
+            signalValueUpdater)
     {
     }
 
@@ -134,8 +138,8 @@ public class IoViewViewModel : NavigationViewModelBase
         string titleResourceKey,
         string titleFallback,
         string? moduleIdFilter,
-        IoViewMappingBuilder mappingBuilder,
-        IoViewSignalValueUpdater signalValueUpdater)
+        IIoViewMappingBuilder mappingBuilder,
+        IIoViewSignalValueUpdater signalValueUpdater)
         : base(languageService, viewId, titleResourceKey, titleFallback)
     {
         _dataStore = dataStore;

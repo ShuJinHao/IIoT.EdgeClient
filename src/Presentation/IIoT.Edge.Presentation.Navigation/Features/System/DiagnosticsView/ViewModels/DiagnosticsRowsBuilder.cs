@@ -7,9 +7,18 @@ using IIoT.Edge.SharedKernel.DataPipeline;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
 
+public interface IDiagnosticsRowsBuilder
+{
+    DiagnosticsRowsSnapshot Build(
+        StartupDiagnosticsReport report,
+        EdgeSyncDiagnosticsSnapshot syncDiagnostics,
+        IReadOnlyDictionary<string, string> moduleNameMap);
+}
+
 internal sealed class DiagnosticsRowsBuilder(
     LocalizedSyncDiagnosticsText diagnosticsText,
-    DiagnosticsModuleDisplayNameResolver displayNameResolver)
+    IDiagnosticsModuleDisplayNameResolver displayNameResolver)
+    : IDiagnosticsRowsBuilder
 {
     public DiagnosticsRowsSnapshot Build(
         StartupDiagnosticsReport report,

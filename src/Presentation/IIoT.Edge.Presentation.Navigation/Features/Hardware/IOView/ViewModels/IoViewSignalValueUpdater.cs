@@ -6,7 +6,16 @@ using IIoT.Edge.Application.Features.Hardware.IoMappings;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
 
-internal sealed class IoViewSignalValueUpdater
+public interface IIoViewSignalValueUpdater
+{
+    void Refresh(
+        IEnumerable<IoInteractionRowModel> interactionRows,
+        IEnumerable<IoDataSectionModel> dataSections,
+        IEnumerable<IoContinuousReadMatrixSectionModel> arraySections,
+        IPlcBuffer buffer);
+}
+
+internal sealed class IoViewSignalValueUpdater : IIoViewSignalValueUpdater
 {
     public void Refresh(
         IEnumerable<IoInteractionRowModel> interactionRows,
