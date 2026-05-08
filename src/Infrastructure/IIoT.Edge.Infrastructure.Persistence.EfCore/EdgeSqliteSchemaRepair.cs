@@ -7,11 +7,16 @@ namespace IIoT.Edge.Infrastructure.Persistence.EfCore;
 /// <summary>
 /// 开发阶段 SQLite 结构修复器，用于收口已改名但本地库已应用旧迁移的字段。
 /// </summary>
-internal static class EdgeSqliteSchemaRepair
+internal interface IEdgeSqliteSchemaRepair
+{
+    void Repair(EdgeDbContext db);
+}
+
+internal sealed class EdgeSqliteSchemaRepair : IEdgeSqliteSchemaRepair
 {
     private const string IoMappingTable = "hw_io_mapping";
 
-    public static void Repair(EdgeDbContext db)
+    public void Repair(EdgeDbContext db)
     {
         ArgumentNullException.ThrowIfNull(db);
 

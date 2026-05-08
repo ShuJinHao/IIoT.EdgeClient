@@ -21,6 +21,7 @@ public static class DependencyInjection
         services.AddSingleton(typeof(IReadRepository<>), typeof(EfReadRepository<>));
         services.AddSingleton(typeof(IRepository<>), typeof(EfRepository<>));
         services.AddSingleton<IEdgeCacheService, EdgeMemoryCacheService>();
+        services.AddSingleton<IEdgeSqliteSchemaRepair, EdgeSqliteSchemaRepair>();
 
         return services;
     }
@@ -28,8 +29,9 @@ public static class DependencyInjection
     public static void ApplyMigrations(this IServiceProvider serviceProvider)
     {
         var factory = serviceProvider.GetRequiredService<IDbContextFactory<EdgeDbContext>>();
+        var schemaRepair = serviceProvider.GetRequiredService<IEdgeSqliteSchemaRepair>();
         using var db = factory.CreateDbContext();
         db.Database.Migrate();
-        EdgeSqliteSchemaRepair.Repair(db);
+        schemaRepair.Repair(db);
     }
 }
