@@ -20,7 +20,7 @@ public sealed class HomogenizationCloudUploader : CloudUploadChannelBase<Homogen
     public HomogenizationCloudUploader(
         ICloudHttpClient cloudHttp,
         ILogService logger)
-        : base(DependencyInjection.ModuleKey, ProcessUploadMode.Batch, UploadPathValue, cloudHttp, logger)
+        : base(HomogenizationModuleIdentity.ProcessType, ProcessUploadMode.Batch, UploadPathValue, cloudHttp, logger)
     {
     }
 

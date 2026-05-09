@@ -13,6 +13,7 @@ using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
+using IIoT.Edge.Module.Homogenization;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
 using IIoT.Edge.Module.Homogenization.Runtime;
@@ -188,10 +189,10 @@ public sealed class PlcTaskBindingBehaviorTests
             provider,
             buffer,
             context,
-            new HashSet<string>(["Homogenization.Heartbeat"], StringComparer.OrdinalIgnoreCase));
+            new HashSet<string>([HomogenizationTaskKeys.Heartbeat], StringComparer.OrdinalIgnoreCase));
 
         var task = Assert.Single(tasks);
-        Assert.Equal("Homogenization.Heartbeat", task.TaskName);
+        Assert.Equal(HomogenizationTaskKeys.Heartbeat, task.TaskName);
     }
 
     [Fact]

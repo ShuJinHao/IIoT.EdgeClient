@@ -11,7 +11,7 @@ namespace IIoT.Edge.NonUiRegressionTests;
 /// </summary>
 internal static class HomogenizationSignalTestProfile
 {
-    private const string ModuleId = IIoT.Edge.Module.Homogenization.DependencyInjection.ModuleKey;
+    private const string ModuleId = IIoT.Edge.Module.Homogenization.HomogenizationModuleIdentity.ModuleId;
 
     private static readonly EnumInteractionSignalProfile<HomogenizationPlcSignals.Interaction> InteractionProfile = new(ModuleId);
     private static readonly EnumReadSignalProfile<HomogenizationPlcSignals.SingleRead> SingleReadProfile = new(ModuleId, IoMappingOptionCatalog.CategorySingleRead);

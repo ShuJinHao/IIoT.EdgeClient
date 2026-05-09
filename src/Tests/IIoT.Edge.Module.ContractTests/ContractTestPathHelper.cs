@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using IIoT.Edge.Module.Homogenization;
 
 namespace IIoT.Edge.Module.ContractTests;
 
@@ -86,7 +87,7 @@ internal static class ContractTestPathHelper
         var repoRoot = FindRepoRoot();
         return moduleId switch
         {
-            "Homogenization" => Path.Combine(repoRoot, "src", "Modules", "IIoT.Edge.Module.Homogenization"),
+            HomogenizationModuleIdentity.ModuleId => Path.Combine(repoRoot, "src", "Modules", "IIoT.Edge.Module.Homogenization"),
             _ => throw new InvalidOperationException($"Unsupported module id '{moduleId}'.")
         };
     }

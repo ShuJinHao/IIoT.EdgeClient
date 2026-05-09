@@ -18,6 +18,7 @@ using IIoT.Edge.Infrastructure.Persistence.Dapper;
 using IIoT.Edge.Infrastructure.Persistence.EfCore;
 using IIoT.Edge.Host.Bootstrap;
 using IIoT.Edge.Host.Bootstrap.Modules;
+using IIoT.Edge.Module.Homogenization;
 using IIoT.Edge.Presentation.Navigation;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.DataPipeline;
@@ -157,12 +158,12 @@ public sealed class ModuleRuntimeRegistrationTests
             "Homogenization",
             new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase)
             {
-                ["Homogenization.Heartbeat"] = false,
-                ["Homogenization.Inbound"] = true,
-                ["Homogenization.Outbound"] = false,
-                ["Homogenization.Recipe"] = false,
-                ["Homogenization.EquipmentStatus"] = false,
-                ["Homogenization.Realtime"] = false
+                [HomogenizationTaskKeys.Heartbeat] = false,
+                [HomogenizationTaskKeys.Inbound] = true,
+                [HomogenizationTaskKeys.Outbound] = false,
+                [HomogenizationTaskKeys.Recipe] = false,
+                [HomogenizationTaskKeys.EquipmentStatus] = false,
+                [HomogenizationTaskKeys.Realtime] = false
             });
         var mappings = await harness.GetIoMappingsAsync(device.Id);
         var incompleteMappings = mappings
@@ -178,7 +179,7 @@ public sealed class ModuleRuntimeRegistrationTests
         var fault = Assert.Single(harness.PlcManager.RuntimeFaults);
         Assert.Equal(device.Id, fault.NetworkDeviceId);
         Assert.Contains("任务绑定校验失败", fault.Error, StringComparison.Ordinal);
-        Assert.Contains("Homogenization.Inbound", fault.Error, StringComparison.Ordinal);
+        Assert.Contains(HomogenizationTaskKeys.Inbound, fault.Error, StringComparison.Ordinal);
         Assert.Contains("Homogenization.Interaction.Inbound/Write", fault.Error, StringComparison.Ordinal);
     }
 

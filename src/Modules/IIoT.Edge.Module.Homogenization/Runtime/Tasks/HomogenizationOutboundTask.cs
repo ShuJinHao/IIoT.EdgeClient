@@ -1,4 +1,4 @@
-﻿using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
@@ -56,7 +56,7 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
     /// <summary>
     /// 出料握手任务名称，用于运行日志和任务诊断。
     /// </summary>
-    public override string TaskName => "Homogenization.Outbound";
+    public override string TaskName => HomogenizationTaskKeys.Outbound;
 
     protected override async Task DoCoreAsync()
     {

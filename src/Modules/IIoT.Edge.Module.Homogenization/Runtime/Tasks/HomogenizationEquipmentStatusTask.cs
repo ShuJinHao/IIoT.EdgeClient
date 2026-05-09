@@ -1,4 +1,4 @@
-﻿using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
@@ -50,7 +50,7 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
     /// <summary>
     /// 设备状态上传任务名称，用于运行日志和任务诊断。
     /// </summary>
-    public override string TaskName => "Homogenization.EquipmentStatus";
+    public override string TaskName => HomogenizationTaskKeys.EquipmentStatus;
 
     protected override async Task DoCoreAsync()
     {

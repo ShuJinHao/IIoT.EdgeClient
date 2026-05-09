@@ -2,6 +2,7 @@ using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Modules.Mes;
+using System.Text.Json;
 using IIoT.Edge.Module.Homogenization;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Parameters;
@@ -58,6 +59,21 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
     }
 
     [Fact]
+    public void PluginManifest_ShouldMatchHomogenizationIdentityConstants()
+    {
+        var manifestPath = Path.Combine(
+            ContractTestPathHelper.GetModuleSourceDirectory(HomogenizationModuleIdentity.ModuleId),
+            "plugin.json");
+
+        using var document = JsonDocument.Parse(File.ReadAllText(manifestPath));
+        var root = document.RootElement;
+
+        Assert.Equal(HomogenizationModuleIdentity.ModuleId, root.GetProperty("moduleId").GetString());
+        Assert.Equal(HomogenizationModuleIdentity.ProcessType, root.GetProperty("supportedProcessType").GetString());
+        Assert.Equal(HomogenizationModuleIdentity.EntryType, root.GetProperty("entryType").GetString());
+    }
+
+    [Fact]
     public void RegisterServices_ShouldRegisterMesChannelAsProcessUploader()
     {
         var result = new ModuleContractFixture().RegisterModule(new DependencyInjection());
@@ -101,7 +117,7 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
         var configuration = new ConfigurationBuilder()
             .AddJsonFile(
                 Path.Combine(
-                    ContractTestPathHelper.GetModuleSourceDirectory(DependencyInjection.ModuleKey),
+                    ContractTestPathHelper.GetModuleSourceDirectory(HomogenizationModuleIdentity.ModuleId),
                     "Config",
                     "homogenization.module.json"),
                 optional: false,
@@ -120,7 +136,7 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
     public void HomogenizationLanguageDictionaries_ShouldContainSameNonEmptyKeys()
     {
         var resourceDirectory = Path.Combine(
-            ContractTestPathHelper.GetModuleSourceDirectory(DependencyInjection.ModuleKey),
+            ContractTestPathHelper.GetModuleSourceDirectory(HomogenizationModuleIdentity.ModuleId),
             "Resources",
             "Languages");
         var zhKeys = ReadLanguageDictionary(resourceDirectory, "zh-CN.xaml");
@@ -193,23 +209,23 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
         public Task<ModuleParamSnapshot<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>> GetAsync(
             CancellationToken cancellationToken = default)
             => Task.FromResult(new ModuleParamSnapshot<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>(
-                DependencyInjection.ModuleKey,
+                HomogenizationModuleIdentity.ModuleId,
                 new ModuleParamGroup<HomogenizationParams.Mes>(
-                    DependencyInjection.ModuleKey,
+                    HomogenizationModuleIdentity.ModuleId,
                     ModuleParamCategory.Mes,
                     new Dictionary<HomogenizationParams.Mes, string>(),
                     new Dictionary<HomogenizationParams.Mes, string?>(),
                     new Dictionary<HomogenizationParams.Mes, ParamValueKind>(),
                     warn: null),
                 new ModuleParamGroup<HomogenizationParams.Cloud>(
-                    DependencyInjection.ModuleKey,
+                    HomogenizationModuleIdentity.ModuleId,
                     ModuleParamCategory.Cloud,
                     new Dictionary<HomogenizationParams.Cloud, string>(),
                     new Dictionary<HomogenizationParams.Cloud, string?>(),
                     new Dictionary<HomogenizationParams.Cloud, ParamValueKind>(),
                     warn: null),
                 new ModuleParamGroup<HomogenizationParams.Business>(
-                    DependencyInjection.ModuleKey,
+                    HomogenizationModuleIdentity.ModuleId,
                     ModuleParamCategory.Business,
                     new Dictionary<HomogenizationParams.Business, string>(),
                     new Dictionary<HomogenizationParams.Business, string?>
@@ -225,7 +241,7 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
 
     private sealed class ContractHomogenizationMesChannel : HomogenizationMesScenarioChannel
     {
-        public string ProcessType => DependencyInjection.ModuleKey;
+        public string ProcessType => HomogenizationModuleIdentity.ProcessType;
         public MesUploadMode UploadMode => MesUploadMode.Single;
 
         public Task<MesCallResult> UploadAsync(

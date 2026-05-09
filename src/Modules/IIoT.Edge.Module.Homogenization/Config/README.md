@@ -2,6 +2,12 @@
 
 本目录只存放匀浆插件自己的业务配置。共享层不能在这里替插件决定 MES 字段、PLC 点位、设备状态文本或样本数据。
 
+## 插件身份与任务 Key
+
+匀浆插件身份统一维护在 `HomogenizationModuleIdentity`，包括 `ModuleId`、`ProcessType`、配置 Section、开发样本 Section 和 `plugin.json` 的入口类型。`plugin.json` 是宿主加载程序集前必须读取的 manifest，里面的字符串保留不改，但必须通过契约测试和代码常量保持一致。
+
+匀浆任务 Key 统一维护在 `HomogenizationTaskKeys`。运行时工厂、PLC 任务、任务绑定测试和上下文步骤都只能引用这些常量，不允许散落手写 `Homogenization.*` 任务 Key。后续新插件也必须建立自己的身份常量类和任务 Key 常量类；运行配置只放参数、开关、路径和码表，不承载模块身份或任务持久化 Key。
+
 ## homogenization.module.json
 
 - `Modules:Homogenization:Module:Presentation`：匀浆 UI 刷新和页面缓存配置，`DataViewRefreshIntervalMs` 控制数据页刷新间隔，`MaxOutboundRecords` 控制内存中保留的最近出料记录数量。

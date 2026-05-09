@@ -30,13 +30,13 @@ namespace IIoT.Edge.Module.Homogenization;
 /// </summary>
 public sealed class DependencyInjection : EdgeProcessModuleBase<HomogenizationCellData>
 {
-    public const string ModuleKey = "Homogenization";
+    public override string ModuleId => HomogenizationModuleIdentity.ModuleId;
 
-    public override string ModuleId => ModuleKey;
+    public override string ProcessType => HomogenizationModuleIdentity.ProcessType;
 
-    public override string ProcessType => ModuleKey;
-
-    public override string DisplayName => HomogenizationText.Get("Homogenization_DisplayName", "匀浆");
+    public override string DisplayName => HomogenizationText.Get(
+        "Homogenization_DisplayName",
+        HomogenizationModuleIdentity.DisplayNameFallback);
 
     protected override ProcessUploadMode CloudUploadMode => ProcessUploadMode.Batch;
 
@@ -53,7 +53,7 @@ public sealed class DependencyInjection : EdgeProcessModuleBase<HomogenizationCe
     {
         builder.RegisterParameters<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>();
 
-        var section = builder.Configuration.GetSection($"Modules:{ModuleKey}");
+        var section = builder.Configuration.GetSection(HomogenizationModuleIdentity.ConfigurationSection);
         builder.Services.AddOptions<HomogenizationModuleOptions>()
             .Bind(section.GetSection("Module"));
         builder.Services.AddOptions<HomogenizationMesOptions>()

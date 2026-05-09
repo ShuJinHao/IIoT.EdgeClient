@@ -40,7 +40,7 @@ internal sealed class HomogenizationHeartbeatTask : PlcTaskBase
     /// <summary>
     /// 心跳镜像任务名称，用于运行日志和任务诊断。
     /// </summary>
-    public override string TaskName => "Homogenization.Heartbeat";
+    public override string TaskName => HomogenizationTaskKeys.Heartbeat;
 
     /// <summary>
     /// 心跳镜像循环间隔，复用匀浆触发-应答任务间隔配置。
