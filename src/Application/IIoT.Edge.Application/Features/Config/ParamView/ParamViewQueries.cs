@@ -69,6 +69,12 @@ public class LoadParamViewHandler(
                         Category = descriptor.Category,
                         Key = descriptor.StorageKey,
                         Name = descriptor.Name,
+                        DisplayNameResourceKey = descriptor.DisplayNameResourceKey ?? string.Empty,
+                        DisplayNameFallback = descriptor.DisplayNameFallback ?? descriptor.Name,
+                        DescriptionResourceKey = descriptor.DescriptionResourceKey ?? string.Empty,
+                        DescriptionFallback = descriptor.DescriptionFallback ?? string.Empty,
+                        DisplayName = descriptor.DisplayNameFallback ?? descriptor.Name,
+                        Description = descriptor.DescriptionFallback ?? string.Empty,
                         ValueKind = descriptor.ValueKind,
                         Value = moduleValues.TryGetValue(descriptor.StorageKey, out var configured)
                             ? configured

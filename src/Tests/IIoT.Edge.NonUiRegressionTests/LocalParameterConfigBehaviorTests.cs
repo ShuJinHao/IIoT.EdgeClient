@@ -100,6 +100,7 @@ public sealed class LocalParameterConfigBehaviorTests
                     Category = ModuleParamCategory.Business,
                     Key = moduleKey,
                     Name = "启用托盘码重码验证",
+                    DisplayName = "托盘码重码验证启用",
                     Value = "true"
                 }
             ]);

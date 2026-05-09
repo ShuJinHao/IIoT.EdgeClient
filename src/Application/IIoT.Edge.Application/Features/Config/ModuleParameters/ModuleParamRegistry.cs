@@ -93,6 +93,10 @@ public sealed class ModuleParamRegistry : IModuleParamRegistry
                 attribute.MinValue,
                 attribute.MaxValue,
                 attribute.Role,
+                attribute.DisplayNameResourceKey,
+                attribute.DisplayNameFallback,
+                attribute.DescriptionResourceKey,
+                attribute.DescriptionFallback,
                 index + 1);
         }
     }

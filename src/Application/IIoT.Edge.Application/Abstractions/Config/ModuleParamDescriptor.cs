@@ -15,6 +15,10 @@ public sealed record ModuleParamDescriptor(
     string? MinValue,
     string? MaxValue,
     ModuleParamRole Role,
+    string? DisplayNameResourceKey,
+    string? DisplayNameFallback,
+    string? DescriptionResourceKey,
+    string? DescriptionFallback,
     int SortOrder);
 
 /// <summary>

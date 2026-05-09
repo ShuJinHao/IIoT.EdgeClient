@@ -58,7 +58,13 @@
                                     </Border>
                                     <DataGrid Grid.Row="1" AutoGenerateColumns="False" Background="Transparent" BorderThickness="0" CanUserAddRows="False" CanUserDeleteRows="False" CanUserSortColumns="False" Foreground="#E4E4E7" GridLinesVisibility="Horizontal" HeadersVisibility="Column" HorizontalGridLinesBrush="#333" IsReadOnly="{Binding DataContext.CanEdit, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBooleanConverter}}" ItemsSource="{Binding Params}" RowBackground="#1E1E1E" RowHeight="42">
                                         <DataGrid.Columns>
-                                            <DataGridTextColumn Width="180" Binding="{Binding Name}" Header="{DynamicResource Navigation_Column_ParamName}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_ParamName" IsReadOnly="True" />
+                                            <DataGridTemplateColumn Width="180" Header="{DynamicResource Navigation_Column_ParamName}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_ParamName" IsReadOnly="True">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Margin="8,0" VerticalAlignment="Center" Text="{Binding DisplayName}" ToolTip="{Binding Description}" />
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
                                             <DataGridTemplateColumn Width="220" Header="{DynamicResource Navigation_Column_ParamValue}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_ParamValue">
                                                 <DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
@@ -105,7 +111,13 @@
                                     </Border>
                                     <DataGrid Grid.Row="1" AutoGenerateColumns="False" Background="Transparent" BorderThickness="0" CanUserAddRows="False" CanUserDeleteRows="False" CanUserSortColumns="False" Foreground="#E4E4E7" GridLinesVisibility="Horizontal" HeadersVisibility="Column" HorizontalGridLinesBrush="#333" IsReadOnly="{Binding DataContext.CanEdit, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBooleanConverter}}" ItemsSource="{Binding Params}" RowBackground="#1E1E1E" RowHeight="42">
                                         <DataGrid.Columns>
-                                            <DataGridTextColumn Width="180" Binding="{Binding Name}" Header="{DynamicResource Navigation_Column_ParamName}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_ParamName" IsReadOnly="True" />
+                                            <DataGridTemplateColumn Width="180" Header="{DynamicResource Navigation_Column_ParamName}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_ParamName" IsReadOnly="True">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Margin="8,0" VerticalAlignment="Center" Text="{Binding DisplayName}" ToolTip="{Binding Description}" />
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
                                             <DataGridTemplateColumn Width="220" Header="{DynamicResource Navigation_Column_ParamValue}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_ParamValue">
                                                 <DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
@@ -152,7 +164,13 @@
                                     </Border>
                                     <DataGrid Grid.Row="1" AutoGenerateColumns="False" Background="Transparent" BorderThickness="0" CanUserAddRows="False" CanUserDeleteRows="False" CanUserSortColumns="False" Foreground="#E4E4E7" GridLinesVisibility="Horizontal" HeadersVisibility="Column" HorizontalGridLinesBrush="#333" IsReadOnly="{Binding DataContext.CanEdit, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBooleanConverter}}" ItemsSource="{Binding Params}" RowBackground="#1E1E1E" RowHeight="42">
                                         <DataGrid.Columns>
-                                            <DataGridTextColumn Width="180" Binding="{Binding Name}" Header="{DynamicResource Navigation_Column_ParamName}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_ParamName" IsReadOnly="True" />
+                                            <DataGridTemplateColumn Width="180" Header="{DynamicResource Navigation_Column_ParamName}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_ParamName" IsReadOnly="True">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Margin="8,0" VerticalAlignment="Center" Text="{Binding DisplayName}" ToolTip="{Binding Description}" />
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
                                             <DataGridTemplateColumn Width="220" Header="{DynamicResource Navigation_Column_ParamValue}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_ParamValue">
                                                 <DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>

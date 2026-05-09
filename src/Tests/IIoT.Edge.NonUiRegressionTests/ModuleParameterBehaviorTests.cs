@@ -1,5 +1,7 @@
 using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Features.Config.ModuleParameters;
+using IIoT.Edge.Application.Features.Config.ParamView;
 using IIoT.Edge.Infrastructure.Persistence.EfCore.Caching.Memory;
 using HomogenizationBusinessParam = IIoT.Edge.Module.Homogenization.Config.Parameters.HomogenizationParams.Business;
 using HomogenizationCloudParam = IIoT.Edge.Module.Homogenization.Config.Parameters.HomogenizationParams.Cloud;
@@ -23,6 +25,58 @@ public sealed class ModuleParameterBehaviorTests
             && x.Role == ModuleParamRole.CloudEnabled);
         Assert.Contains(registry.GetDescriptors(ModuleParamCategory.Business), x =>
             x.Name == nameof(HomogenizationBusinessParam.启用托盘码重码验证));
+    }
+
+    [Fact]
+    public void ModuleParamRegistry_WhenHomogenizationRegistered_ShouldKeepInternalNameAndExposeDisplayResources()
+    {
+        var registry = CreateHomogenizationRegistry();
+
+        var mesEnabled = registry.GetDescriptors(ModuleParamCategory.Mes)
+            .Single(x => x.ModuleId == "Homogenization" && x.Name == nameof(HomogenizationMesParam.启用));
+        var cloudEnabled = registry.GetDescriptors(ModuleParamCategory.Cloud)
+            .Single(x => x.ModuleId == "Homogenization" && x.Name == nameof(HomogenizationCloudParam.启用));
+
+        Assert.Equal("启用", mesEnabled.Name);
+        Assert.Equal("Module:Homogenization:Mes:启用", mesEnabled.StorageKey);
+        Assert.Equal("Homogenization_Param_MesEnabled_DisplayName", mesEnabled.DisplayNameResourceKey);
+        Assert.Equal("MES上传启用", mesEnabled.DisplayNameFallback);
+        Assert.Equal("Homogenization_Param_MesEnabled_Description", mesEnabled.DescriptionResourceKey);
+
+        Assert.Equal("启用", cloudEnabled.Name);
+        Assert.Equal("Module:Homogenization:Cloud:启用", cloudEnabled.StorageKey);
+        Assert.Equal("Homogenization_Param_CloudEnabled_DisplayName", cloudEnabled.DisplayNameResourceKey);
+        Assert.Equal("云端上传启用", cloudEnabled.DisplayNameFallback);
+        Assert.Equal("Homogenization_Param_CloudEnabled_Description", cloudEnabled.DescriptionResourceKey);
+    }
+
+    [Fact]
+    public async Task LoadParamViewHandler_WhenHomogenizationRegistered_ShouldExposeDisplayFallbackWithoutChangingIdentity()
+    {
+        var registry = CreateHomogenizationRegistry();
+        var handler = new LoadParamViewHandler(
+            new CountingLocalParameterConfigService([]),
+            registry,
+            [new StubEdgeProcessModule()]);
+
+        var result = await handler.Handle(new LoadParamViewQuery(), CancellationToken.None);
+
+        var mesEnabled = Assert.Single(result.MesParamGroups).Params
+            .Single(x => x.Name == nameof(HomogenizationMesParam.启用));
+        var cloudEnabled = Assert.Single(result.CloudParamGroups).Params
+            .Single(x => x.Name == nameof(HomogenizationCloudParam.启用));
+
+        Assert.Equal("Module:Homogenization:Mes:启用", mesEnabled.Key);
+        Assert.Equal("启用", mesEnabled.Name);
+        Assert.Equal("MES上传启用", mesEnabled.DisplayNameFallback);
+        Assert.Equal("MES上传启用", mesEnabled.DisplayName);
+        Assert.Contains("不调用 MES", mesEnabled.DescriptionFallback, StringComparison.Ordinal);
+
+        Assert.Equal("Module:Homogenization:Cloud:启用", cloudEnabled.Key);
+        Assert.Equal("启用", cloudEnabled.Name);
+        Assert.Equal("云端上传启用", cloudEnabled.DisplayNameFallback);
+        Assert.Equal("云端上传启用", cloudEnabled.DisplayName);
+        Assert.Contains("不访问 Cloud", cloudEnabled.DescriptionFallback, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -159,5 +213,18 @@ public sealed class ModuleParameterBehaviorTests
             return Task.FromResult(systemConfigs);
         }
 
+    }
+
+    private sealed class StubEdgeProcessModule : IEdgeProcessModule
+    {
+        public string ModuleId => "Homogenization";
+
+        public string ProcessType => "Homogenization";
+
+        public string DisplayName => "匀浆";
+
+        public void Configure(IEdgeProcessModuleBuilder builder)
+        {
+        }
     }
 }

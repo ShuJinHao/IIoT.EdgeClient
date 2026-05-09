@@ -82,6 +82,7 @@ public class ParamViewModel : LocalizedCrudPageViewModelBase
         ReplaceItems(MesParamGroups, result.MesParamGroups);
         ReplaceItems(CloudParamGroups, result.CloudParamGroups);
         ReplaceItems(BusinessParamGroups, result.BusinessParamGroups);
+        ApplyParamLocalization();
     }
 
     private async Task<CrudOperationResult> SaveAsync()
@@ -109,6 +110,7 @@ public class ParamViewModel : LocalizedCrudPageViewModelBase
         ReplaceItems(MesParamGroups, result.MesParamGroups);
         ReplaceItems(CloudParamGroups, result.CloudParamGroups);
         ReplaceItems(BusinessParamGroups, result.BusinessParamGroups);
+        ApplyParamLocalization();
     }
 
     private void HandlePermissionStateChanged()
@@ -127,5 +129,23 @@ public class ParamViewModel : LocalizedCrudPageViewModelBase
     {
         OnPropertyChanged(nameof(CanEdit));
         _saveCommand.RaiseCanExecuteChanged();
+    }
+
+    protected override void RefreshLocalization()
+    {
+        base.RefreshLocalization();
+        ApplyParamLocalization();
+    }
+
+    private void ApplyParamLocalization()
+    {
+        foreach (var param in MesParamGroups
+                     .Concat(CloudParamGroups)
+                     .Concat(BusinessParamGroups)
+                     .SelectMany(static group => group.Params))
+        {
+            param.DisplayName = GetText(param.DisplayNameResourceKey, param.DisplayNameFallback);
+            param.Description = GetText(param.DescriptionResourceKey, param.DescriptionFallback);
+        }
     }
 }

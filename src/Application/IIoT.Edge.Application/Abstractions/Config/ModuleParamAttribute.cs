@@ -17,4 +17,12 @@ public sealed class ModuleParamAttribute(ParamValueKind valueKind) : Attribute
     public string? MaxValue { get; init; }
 
     public ModuleParamRole Role { get; init; } = ModuleParamRole.None;
+
+    public string? DisplayNameResourceKey { get; init; }
+
+    public string? DisplayNameFallback { get; init; }
+
+    public string? DescriptionResourceKey { get; init; }
+
+    public string? DescriptionFallback { get; init; }
 }

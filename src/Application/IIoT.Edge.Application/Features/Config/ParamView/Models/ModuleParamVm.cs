@@ -16,6 +16,36 @@ public class ModuleParamVm : ObservableModelBase
 
     public string Name { get; set; } = string.Empty;
 
+    public string DisplayNameResourceKey { get; set; } = string.Empty;
+
+    public string DisplayNameFallback { get; set; } = string.Empty;
+
+    public string DescriptionResourceKey { get; set; } = string.Empty;
+
+    public string DescriptionFallback { get; set; } = string.Empty;
+
+    private string _displayName = string.Empty;
+    public string DisplayName
+    {
+        get => _displayName;
+        set
+        {
+            _displayName = value;
+            OnPropertyChanged();
+        }
+    }
+
+    private string _description = string.Empty;
+    public string Description
+    {
+        get => _description;
+        set
+        {
+            _description = value;
+            OnPropertyChanged();
+        }
+    }
+
     public ParamValueKind ValueKind { get; set; }
 
     public string DefaultValue { get; set; } = string.Empty;
