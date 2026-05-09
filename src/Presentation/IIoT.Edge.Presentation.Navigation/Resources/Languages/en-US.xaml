@@ -97,6 +97,7 @@
     <sys:String x:Key="Navigation_Column_TaskName">Task Name</sys:String>
     <sys:String x:Key="Navigation_Column_TaskType">Task Type</sys:String>
     <sys:String x:Key="Navigation_Column_TaskBindingSource">Source</sys:String>
+    <sys:String x:Key="Navigation_Column_TaskAvailability">Status</sys:String>
     <sys:String x:Key="Navigation_Column_RequiredSignals">Required Signals</sys:String>
     <sys:String x:Key="Navigation_Column_TaskKey">Task Key</sys:String>
     <sys:String x:Key="Navigation_Column_Address">Address</sys:String>

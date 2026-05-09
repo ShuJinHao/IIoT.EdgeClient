@@ -1,4 +1,4 @@
-﻿using IIoT.Edge.Application.Modules.Hardware;
+using IIoT.Edge.Application.Modules.Hardware;
 using System.Linq.Expressions;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
@@ -305,9 +305,9 @@ public sealed class HomogenizationRuntimeBehaviorTests
         });
 
         var services = new ServiceCollection();
-                services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.Interaction>>(new HomogenizationInteractionSignalProfile());
-        services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.SingleRead>>(new HomogenizationSingleReadSignalProfile());
-        services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.ContinuousRead>>(new HomogenizationContinuousReadSignalProfile());
+                services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.Interaction>>(HomogenizationSignalTestProfile.InteractionProfileInstance);
+        services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.SingleRead>>(HomogenizationSignalTestProfile.SingleReadProfileInstance);
+        services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.ContinuousRead>>(HomogenizationSignalTestProfile.ContinuousReadProfileInstance);
         services.AddSingleton<ILogService>(logger);
         services.AddSingleton<IDeviceService>(deviceService);
         services.AddSingleton<IMesUploadDiagnosticsStore>(diagnostics);
@@ -462,9 +462,9 @@ public sealed class HomogenizationRuntimeBehaviorTests
         });
 
         var services = new ServiceCollection();
-                services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.Interaction>>(new HomogenizationInteractionSignalProfile());
-        services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.SingleRead>>(new HomogenizationSingleReadSignalProfile());
-        services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.ContinuousRead>>(new HomogenizationContinuousReadSignalProfile());
+                services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.Interaction>>(HomogenizationSignalTestProfile.InteractionProfileInstance);
+        services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.SingleRead>>(HomogenizationSignalTestProfile.SingleReadProfileInstance);
+        services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.ContinuousRead>>(HomogenizationSignalTestProfile.ContinuousReadProfileInstance);
         services.AddSingleton<ILogService>(logger);
         services.AddSingleton<IDeviceService>(deviceService);
         services.AddSingleton<IMesUploadDiagnosticsStore>(diagnostics);
@@ -1001,6 +1001,3 @@ public sealed class HomogenizationRuntimeBehaviorTests
             => throw new NotSupportedException();
     }
 }
-
-
-

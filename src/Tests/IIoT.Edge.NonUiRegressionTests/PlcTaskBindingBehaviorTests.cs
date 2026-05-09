@@ -37,7 +37,7 @@ public sealed class PlcTaskBindingBehaviorTests
     {
         var service = CreateService(defaultEnableAllTasks: true);
 
-        var enabledKeys = await service.Service.GetEnabledTaskKeysAsync(1, TestCandidates);
+        var enabledKeys = await service.Service.GetEnabledTaskKeysAsync(1, TestCandidates, AllTestMappings);
 
         Assert.Equal(["Task.A", "Task.B"], enabledKeys.OrderBy(static x => x, StringComparer.OrdinalIgnoreCase));
     }
@@ -47,7 +47,7 @@ public sealed class PlcTaskBindingBehaviorTests
     {
         var service = CreateService(defaultEnableAllTasks: null, environmentName: "Production");
 
-        var enabledKeys = await service.Service.GetEnabledTaskKeysAsync(1, TestCandidates);
+        var enabledKeys = await service.Service.GetEnabledTaskKeysAsync(1, TestCandidates, AllTestMappings);
 
         Assert.Equal(["Task.A", "Task.B"], enabledKeys.OrderBy(static x => x, StringComparer.OrdinalIgnoreCase));
     }
@@ -57,7 +57,7 @@ public sealed class PlcTaskBindingBehaviorTests
     {
         var service = CreateService(defaultEnableAllTasks: null, environmentName: "Development");
 
-        var enabledKeys = await service.Service.GetEnabledTaskKeysAsync(1, TestCandidates);
+        var enabledKeys = await service.Service.GetEnabledTaskKeysAsync(1, TestCandidates, AllTestMappings);
 
         Assert.Empty(enabledKeys);
     }
@@ -74,7 +74,7 @@ public sealed class PlcTaskBindingBehaviorTests
             defaultEnableAllTasks: configuredDefault,
             environmentName: environmentName);
 
-        var enabledKeys = await service.Service.GetEnabledTaskKeysAsync(1, TestCandidates);
+        var enabledKeys = await service.Service.GetEnabledTaskKeysAsync(1, TestCandidates, AllTestMappings);
 
         Assert.Equal(expectedEnabledCount, enabledKeys.Count);
     }
@@ -85,9 +85,22 @@ public sealed class PlcTaskBindingBehaviorTests
         var harness = CreateService(defaultEnableAllTasks: true);
         harness.Bindings.Add(PlcTaskBindingEntity.Create(1, "Task.A", enabled: false, DateTimeOffset.UtcNow));
 
-        var enabledKeys = await harness.Service.GetEnabledTaskKeysAsync(1, TestCandidates);
+        var enabledKeys = await harness.Service.GetEnabledTaskKeysAsync(1, TestCandidates, AllTestMappings);
 
         Assert.Equal(["Task.B"], enabledKeys.OrderBy(static x => x, StringComparer.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task GetEnabledTaskKeys_WhenDefaultEnabled_ShouldOnlyEnableRunnableTasks()
+    {
+        var service = CreateService(defaultEnableAllTasks: true);
+        var mappings = AllTestMappings
+            .Where(static mapping => !string.Equals(mapping.SignalKey, "Signal.Business", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        var enabledKeys = await service.Service.GetEnabledTaskKeysAsync(1, TestCandidates, mappings);
+
+        Assert.Equal(["Task.A"], enabledKeys.OrderBy(static x => x, StringComparer.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -107,7 +120,7 @@ public sealed class PlcTaskBindingBehaviorTests
         Assert.False(result.IsValid);
         var issue = Assert.Single(result.Issues);
         Assert.Equal("Task.A", issue.TaskKey);
-        Assert.Equal("Signal.Shared", issue.RequiredSignal.SignalKey);
+        Assert.Equal("Signal.Shared", issue.RequiredSignal!.SignalKey);
         Assert.Equal("Write", issue.RequiredSignal.Direction);
     }
 
@@ -135,12 +148,33 @@ public sealed class PlcTaskBindingBehaviorTests
     }
 
     [Fact]
+    public async Task SaveDeviceBindingsAsync_WhenEnabledTaskMissingIo_ShouldFail()
+    {
+        var harness = CreateService(defaultEnableAllTasks: false, seedIoMappings: false);
+        var device = NetworkDeviceEntity.Create("PLC-A", DeviceType.PLC, "127.0.0.1", 102);
+        device.AssignModule("TestModule", PlcType.S7.ToString());
+        harness.NetworkDevices.Add(device);
+        AddTestIoMappings(harness.IoMappings, device.Id, includeBusinessSignal: false);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => harness.Service.SaveDeviceBindingsAsync(
+            device.Id,
+            "TestModule",
+            new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Task.A"] = false,
+                ["Task.B"] = true
+            }));
+
+        Assert.Contains("Signal.Business/Read", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void HomogenizationStationRuntimeFactory_WhenOnlyHeartbeatEnabled_ShouldCreateOnlyHeartbeatTask()
     {
         var services = new ServiceCollection();
-        services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.Interaction>>(new HomogenizationInteractionSignalProfile());
-        services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.SingleRead>>(new HomogenizationSingleReadSignalProfile());
-        services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.ContinuousRead>>(new HomogenizationContinuousReadSignalProfile());
+        services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.Interaction>>(HomogenizationSignalTestProfile.InteractionProfileInstance);
+        services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.SingleRead>>(HomogenizationSignalTestProfile.SingleReadProfileInstance);
+        services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.ContinuousRead>>(HomogenizationSignalTestProfile.ContinuousReadProfileInstance);
         services.AddSingleton<ILogService, FakeLogService>();
         services.AddSingleton<IProductionTimeProvider, FakeProductionTimeProvider>();
         services.AddSingleton(Options.Create(new HomogenizationModuleOptions()));
@@ -226,9 +260,17 @@ public sealed class PlcTaskBindingBehaviorTests
             [new TaskRequiredSignal("Signal.Business", "Read")])
     ];
 
+    private static readonly IReadOnlyCollection<ModuleIoSnapshot> AllTestMappings =
+    [
+        new("Signal.Shared", "D100", 1, "Int16", "Read", 1, "信号交互", "共享信号", "读点"),
+        new("Signal.Shared", "D200", 1, "Int16", "Write", 2, "信号交互", "共享信号", "写点"),
+        new("Signal.Business", "D300", 1, "Int16", "Read", 3, "单点读数据", "业务信号", "读点")
+    ];
+
     private static BindingServiceHarness CreateService(
         bool? defaultEnableAllTasks,
-        string environmentName = "Production")
+        string environmentName = "Production",
+        bool seedIoMappings = true)
     {
         var settings = new Dictionary<string, string?>();
         if (defaultEnableAllTasks.HasValue)
@@ -241,17 +283,66 @@ public sealed class PlcTaskBindingBehaviorTests
             .Build();
         var runtimeRegistry = new FakeStationRuntimeRegistry(new FakeStationRuntimeFactory());
         var networkDevices = new InMemoryRepository<NetworkDeviceEntity>();
+        var ioMappings = new InMemoryRepository<IoMappingEntity>();
         var bindings = new InMemoryRepository<PlcTaskBindingEntity>();
         var logger = new FakeLogService();
+        if (seedIoMappings)
+        {
+            AddTestIoMappings(ioMappings, networkDeviceId: 1);
+        }
+
         var service = new PlcTaskBindingService(
             configuration,
             new FakeHostEnvironment(environmentName),
             runtimeRegistry,
             networkDevices,
+            ioMappings,
             bindings,
             logger);
 
-        return new BindingServiceHarness(service, networkDevices, bindings, logger);
+        return new BindingServiceHarness(service, networkDevices, ioMappings, bindings, logger);
+    }
+
+    private static void AddTestIoMappings(
+        InMemoryRepository<IoMappingEntity> ioMappings,
+        int networkDeviceId,
+        bool includeBusinessSignal = true)
+    {
+        ioMappings.Add(IoMappingEntity.Create(
+            networkDeviceId,
+            "Signal.Shared",
+            "D100",
+            1,
+            "Int16",
+            "Read",
+            "信号交互",
+            "共享信号",
+            "读点"));
+        ioMappings.Add(IoMappingEntity.Create(
+            networkDeviceId,
+            "Signal.Shared",
+            "D200",
+            1,
+            "Int16",
+            "Write",
+            "信号交互",
+            "共享信号",
+            "写点"));
+        if (!includeBusinessSignal)
+        {
+            return;
+        }
+
+        ioMappings.Add(IoMappingEntity.Create(
+            networkDeviceId,
+            "Signal.Business",
+            "D300",
+            1,
+            "Int16",
+            "Read",
+            "单点读数据",
+            "业务信号",
+            "读点"));
     }
 
     private static NetworkDeviceEntity CreateLifecyclePlc(string deviceName, int port)
@@ -264,6 +355,7 @@ public sealed class PlcTaskBindingBehaviorTests
     private sealed record BindingServiceHarness(
         IPlcTaskBindingService Service,
         InMemoryRepository<NetworkDeviceEntity> NetworkDevices,
+        InMemoryRepository<IoMappingEntity> IoMappings,
         InMemoryRepository<PlcTaskBindingEntity> Bindings,
         FakeLogService Logger);
 

@@ -15,7 +15,11 @@ public sealed record PlcTaskBindingItemDto(
     bool Enabled,
     bool HasSavedBinding,
     bool IsHeartbeatLike,
-    IReadOnlyList<TaskRequiredSignal> RequiredSignals);
+    IReadOnlyList<TaskRequiredSignal> RequiredSignals,
+    bool CanRun,
+    string UnavailableReason,
+    IReadOnlyList<TaskRequiredSignal> MissingRequiredSignals,
+    bool IsSupportedByCurrentPlc);
 
 public sealed record PlcTaskBindingValidationResult(
     bool IsValid,
@@ -28,7 +32,15 @@ public sealed record PlcTaskBindingValidationResult(
         => new(false, issues);
 }
 
+public enum PlcTaskBindingValidationIssueType
+{
+    MissingRequiredSignal,
+    UnsupportedDeviceModel
+}
+
 public sealed record PlcTaskBindingValidationIssue(
     string TaskKey,
     string TaskDisplayName,
-    TaskRequiredSignal RequiredSignal);
+    TaskRequiredSignal? RequiredSignal,
+    PlcTaskBindingValidationIssueType IssueType,
+    string Message);

@@ -1,4 +1,4 @@
-﻿using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
@@ -514,9 +514,9 @@ public sealed class HomogenizationBusinessChainBehaviorTests
             buffer.UpdateReadBuffer(readValues);
 
             var services = new ServiceCollection();
-                    services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.Interaction>>(new HomogenizationInteractionSignalProfile());
-        services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.SingleRead>>(new HomogenizationSingleReadSignalProfile());
-        services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.ContinuousRead>>(new HomogenizationContinuousReadSignalProfile());
+                    services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.Interaction>>(HomogenizationSignalTestProfile.InteractionProfileInstance);
+        services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.SingleRead>>(HomogenizationSignalTestProfile.SingleReadProfileInstance);
+        services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.ContinuousRead>>(HomogenizationSignalTestProfile.ContinuousReadProfileInstance);
             services.AddSingleton<ILogService>(new FakeLogService());
             services.AddSingleton<IDeviceService>(deviceService);
             services.AddSingleton<IMesUploadDiagnosticsStore>(diagnostics);
@@ -787,6 +787,3 @@ public sealed class HomogenizationBusinessChainBehaviorTests
             => ValueTask.FromResult(Records.Count > 0);
     }
 }
-
-
-

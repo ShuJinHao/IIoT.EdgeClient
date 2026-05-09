@@ -21,7 +21,23 @@ public sealed record TaskCandidate(
     string Key,
     string DisplayName,
     IReadOnlyList<TaskRequiredSignal> RequiredSignals,
-    bool IsHeartbeatLike = false);
+    bool IsHeartbeatLike = false,
+    IReadOnlyList<string>? SupportedDeviceModels = null)
+{
+    public bool SupportsDeviceModel(string? deviceModel)
+    {
+        if (SupportedDeviceModels is null || SupportedDeviceModels.Count == 0)
+        {
+            return true;
+        }
+
+        return !string.IsNullOrWhiteSpace(deviceModel)
+            && SupportedDeviceModels.Any(model => string.Equals(
+                model.Trim(),
+                deviceModel.Trim(),
+                StringComparison.OrdinalIgnoreCase));
+    }
+}
 
 public sealed record TaskRequiredSignal(
     string SignalKey,

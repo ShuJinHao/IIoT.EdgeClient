@@ -152,6 +152,18 @@ public sealed class ModuleRuntimeRegistrationTests
             deviceModuleIds: ["Homogenization"],
             environmentName: "Production");
         var device = Assert.Single(await harness.GetNetworkDevicesAsync());
+        await harness.SaveTaskBindingsAsync(
+            device.Id,
+            "Homogenization",
+            new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Homogenization.Heartbeat"] = false,
+                ["Homogenization.Inbound"] = true,
+                ["Homogenization.Outbound"] = false,
+                ["Homogenization.Recipe"] = false,
+                ["Homogenization.EquipmentStatus"] = false,
+                ["Homogenization.Realtime"] = false
+            });
         var mappings = await harness.GetIoMappingsAsync(device.Id);
         var incompleteMappings = mappings
             .Where(static x => !string.Equals(x.SignalKey, "Homogenization.Interaction.Inbound", StringComparison.OrdinalIgnoreCase)
@@ -559,6 +571,15 @@ public sealed class ModuleRuntimeRegistrationTests
 
             await repo.SaveChangesAsync().ConfigureAwait(false);
         }
+
+        public async Task SaveTaskBindingsAsync(
+            int networkDeviceId,
+            string moduleId,
+            IReadOnlyDictionary<string, bool> taskStates)
+            => await _serviceProvider
+                .GetRequiredService<IPlcTaskBindingService>()
+                .SaveDeviceBindingsAsync(networkDeviceId, moduleId, taskStates)
+                .ConfigureAwait(false);
 
         public static async Task<AppLifecycleHarness> CreateAsync(
             string[] enabledModules,

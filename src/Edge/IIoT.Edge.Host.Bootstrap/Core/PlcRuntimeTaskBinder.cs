@@ -77,8 +77,10 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
             var enabledTaskKeys = await _taskBindingService.GetEnabledTaskKeysAsync(
                 device.Id,
                 candidates,
+                signalBindings,
+                device.DeviceModel,
                 cancellationToken).ConfigureAwait(false);
-            var validation = _taskBindingService.ValidateEnabledTasks(candidates, enabledTaskKeys, signalBindings);
+            var validation = _taskBindingService.ValidateEnabledTasks(candidates, enabledTaskKeys, signalBindings, device.DeviceModel);
             if (!validation.IsValid)
             {
                 var message = BuildValidationFailureMessage(device.DeviceName, validation);
@@ -102,7 +104,7 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
         PlcTaskBindingValidationResult validation)
     {
         var missing = validation.Issues
-            .Select(static issue => $"{issue.TaskDisplayName}({issue.TaskKey}) 缺少 {issue.RequiredSignal.SignalKey}/{issue.RequiredSignal.Direction}")
+            .Select(static issue => $"{issue.TaskDisplayName}({issue.TaskKey}) {issue.Message}")
             .Distinct(StringComparer.OrdinalIgnoreCase);
 
         return $"PLC“{deviceName}”任务绑定校验失败：{string.Join("；", missing)}。";

@@ -97,6 +97,7 @@
     <sys:String x:Key="Navigation_Column_TaskName">任务名称</sys:String>
     <sys:String x:Key="Navigation_Column_TaskType">任务类型</sys:String>
     <sys:String x:Key="Navigation_Column_TaskBindingSource">绑定来源</sys:String>
+    <sys:String x:Key="Navigation_Column_TaskAvailability">任务状态</sys:String>
     <sys:String x:Key="Navigation_Column_RequiredSignals">所需信号</sys:String>
     <sys:String x:Key="Navigation_Column_TaskKey">任务 Key</sys:String>
     <sys:String x:Key="Navigation_Column_Address">地址</sys:String>

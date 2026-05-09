@@ -97,6 +97,7 @@
                 <DataGridTextColumn Width="160" Binding="{Binding DisplayName}" Header="{DynamicResource Navigation_Column_TaskName}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_TaskName" IsReadOnly="True" />
                 <DataGridTextColumn Width="140" Binding="{Binding TaskTypeText}" Header="{DynamicResource Navigation_Column_TaskType}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_TaskType" IsReadOnly="True" />
                 <DataGridTextColumn Width="110" Binding="{Binding SourceText}" Header="{DynamicResource Navigation_Column_TaskBindingSource}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_TaskBindingSource" IsReadOnly="True" />
+                <DataGridTextColumn Width="1.5*" Binding="{Binding AvailabilityText}" Header="{DynamicResource Navigation_Column_TaskAvailability}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_TaskAvailability" IsReadOnly="True" />
                 <DataGridTextColumn Width="2.8*" Binding="{Binding RequiredSignalsText}" Header="{DynamicResource Navigation_Column_RequiredSignals}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_RequiredSignals" IsReadOnly="True" />
                 <DataGridTextColumn Width="1.4*" Binding="{Binding Key}" Header="{DynamicResource Navigation_Column_TaskKey}" uiLoc:DataGridColumnLocalization.HeaderResourceKey="Navigation_Column_TaskKey" IsReadOnly="True" />
             </DataGrid.Columns>

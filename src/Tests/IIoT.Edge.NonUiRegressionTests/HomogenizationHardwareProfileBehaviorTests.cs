@@ -1,4 +1,4 @@
-﻿using IIoT.Edge.Application.Modules.Hardware;
+using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Application.Abstractions.Plc.Signals;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
@@ -46,7 +46,9 @@ public sealed class HomogenizationHardwareProfileBehaviorTests
         var provider = new HomogenizationHardwareProfileProvider();
 
         Assert.Equal(
-            HomogenizationSignalTestProfile.Signals.Select(static signal => signal.SignalKey),
+            HomogenizationSignalTestProfile.Signals
+                .Where(static signal => !string.IsNullOrWhiteSpace(signal.DefaultAddress))
+                .Select(static signal => signal.SignalKey),
             provider.GetDefaultIoTemplate().Select(static mapping => mapping.SignalKey));
     }
 
@@ -217,7 +219,7 @@ public sealed class HomogenizationHardwareProfileBehaviorTests
         return new BufferLogicalSignalAccessor<HomogenizationPlcSignals.Interaction>(
             buffer,
             bindings,
-            new HomogenizationInteractionSignalProfile());
+            HomogenizationSignalTestProfile.InteractionProfileInstance);
     }
 
     private static BufferLogicalSignalAccessor<HomogenizationPlcSignals.ContinuousRead> CreateContinuousReadAccessor(IReadOnlyCollection<ModuleIoSnapshot> bindings)
@@ -226,7 +228,7 @@ public sealed class HomogenizationHardwareProfileBehaviorTests
         return new BufferLogicalSignalAccessor<HomogenizationPlcSignals.ContinuousRead>(
             buffer,
             bindings,
-            new HomogenizationContinuousReadSignalProfile());
+            HomogenizationSignalTestProfile.ContinuousReadProfileInstance);
     }
 
     private static string FindRepositoryRoot()
@@ -274,6 +276,3 @@ public sealed class HomogenizationHardwareProfileBehaviorTests
         }
     }
 }
-
-
-

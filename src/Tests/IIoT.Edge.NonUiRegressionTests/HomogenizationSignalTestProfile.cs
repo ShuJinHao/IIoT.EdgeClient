@@ -1,4 +1,7 @@
-﻿using IIoT.Edge.Application.Abstractions.Plc.Signals;
+using IIoT.Edge.Application.Abstractions.Plc.Signals;
+using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Features.Hardware.IoMappings;
+using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
 
 namespace IIoT.Edge.NonUiRegressionTests;
@@ -8,11 +11,19 @@ namespace IIoT.Edge.NonUiRegressionTests;
 /// </summary>
 internal static class HomogenizationSignalTestProfile
 {
-    private static readonly HomogenizationInteractionSignalProfile InteractionProfile = new();
-    private static readonly HomogenizationSingleReadSignalProfile SingleReadProfile = new();
-    private static readonly HomogenizationContinuousReadSignalProfile ContinuousReadProfile = new();
-    private static readonly HomogenizationSingleWriteSignalProfile SingleWriteProfile = new();
-    private static readonly HomogenizationContinuousWriteSignalProfile ContinuousWriteProfile = new();
+    private const string ModuleId = IIoT.Edge.Module.Homogenization.DependencyInjection.ModuleKey;
+
+    private static readonly EnumInteractionSignalProfile<HomogenizationPlcSignals.Interaction> InteractionProfile = new(ModuleId);
+    private static readonly EnumReadSignalProfile<HomogenizationPlcSignals.SingleRead> SingleReadProfile = new(ModuleId, IoMappingOptionCatalog.CategorySingleRead);
+    private static readonly EnumReadSignalProfile<HomogenizationPlcSignals.ContinuousRead> ContinuousReadProfile = new(ModuleId, IoMappingOptionCatalog.CategoryContinuousRead);
+    private static readonly EnumWriteSignalProfile<HomogenizationPlcSignals.SingleWrite> SingleWriteProfile = new(ModuleId, IoMappingOptionCatalog.CategorySingleWrite);
+    private static readonly EnumWriteSignalProfile<HomogenizationPlcSignals.ContinuousWrite> ContinuousWriteProfile = new(ModuleId, IoMappingOptionCatalog.CategoryContinuousWrite);
+
+    public static IModulePlcSignalProfile<HomogenizationPlcSignals.Interaction> InteractionProfileInstance => InteractionProfile;
+
+    public static IModulePlcSignalProfile<HomogenizationPlcSignals.SingleRead> SingleReadProfileInstance => SingleReadProfile;
+
+    public static IModulePlcSignalProfile<HomogenizationPlcSignals.ContinuousRead> ContinuousReadProfileInstance => ContinuousReadProfile;
 
     public static IReadOnlyList<HomogenizationTestSignalDefinition> Signals { get; } =
     [
@@ -84,4 +95,3 @@ internal sealed record HomogenizationTestSignalDefinition(
             signal.BusinessGroup,
             signal.SignalName);
 }
-

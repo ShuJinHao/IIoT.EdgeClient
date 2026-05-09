@@ -64,6 +64,13 @@ public interface IEdgeProcessModuleBuilder
         where TSignalKey : struct, Enum
         where TProfile : class, IModulePlcSignalProfile<TSignalKey>;
 
+    void RegisterStandardPlcSignalProfiles<TInteraction, TSingleRead, TContinuousRead, TSingleWrite, TContinuousWrite>()
+        where TInteraction : struct, Enum
+        where TSingleRead : struct, Enum
+        where TContinuousRead : struct, Enum
+        where TSingleWrite : struct, Enum
+        where TContinuousWrite : struct, Enum;
+
     void RegisterHardwareProfile<TProvider>()
         where TProvider : class, IModuleHardwareProfileProvider;
 

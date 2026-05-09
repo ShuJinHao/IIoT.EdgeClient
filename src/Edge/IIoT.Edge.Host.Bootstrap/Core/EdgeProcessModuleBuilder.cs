@@ -1,6 +1,8 @@
 using IIoT.Edge.Application.Modules.Descriptors;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Features.Hardware.IoMappings;
+using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.UI.Shared.Modularity;
 using IIoT.Edge.UI.Shared.PluginSystem;
 using Microsoft.Extensions.Configuration;
@@ -197,6 +199,25 @@ internal sealed class EdgeProcessModuleBuilder : IEdgeProcessModuleBuilder
             EnsureModuleId(profile.ModuleId, typeof(TProfile).Name);
             return profile;
         });
+    }
+
+    public void RegisterStandardPlcSignalProfiles<TInteraction, TSingleRead, TContinuousRead, TSingleWrite, TContinuousWrite>()
+        where TInteraction : struct, Enum
+        where TSingleRead : struct, Enum
+        where TContinuousRead : struct, Enum
+        where TSingleWrite : struct, Enum
+        where TContinuousWrite : struct, Enum
+    {
+        Services.AddSingleton<IModulePlcSignalProfile<TInteraction>>(
+            _ => new EnumInteractionSignalProfile<TInteraction>(ModuleId));
+        Services.AddSingleton<IModulePlcSignalProfile<TSingleRead>>(
+            _ => new EnumReadSignalProfile<TSingleRead>(ModuleId, IoMappingOptionCatalog.CategorySingleRead));
+        Services.AddSingleton<IModulePlcSignalProfile<TContinuousRead>>(
+            _ => new EnumReadSignalProfile<TContinuousRead>(ModuleId, IoMappingOptionCatalog.CategoryContinuousRead));
+        Services.AddSingleton<IModulePlcSignalProfile<TSingleWrite>>(
+            _ => new EnumWriteSignalProfile<TSingleWrite>(ModuleId, IoMappingOptionCatalog.CategorySingleWrite));
+        Services.AddSingleton<IModulePlcSignalProfile<TContinuousWrite>>(
+            _ => new EnumWriteSignalProfile<TContinuousWrite>(ModuleId, IoMappingOptionCatalog.CategoryContinuousWrite));
     }
 
     public void RegisterHardwareProfile<TProvider>()

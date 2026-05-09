@@ -12,6 +12,8 @@ public interface IPlcTaskBindingService
     Task<IReadOnlySet<string>> GetEnabledTaskKeysAsync(
         int networkDeviceId,
         IReadOnlyCollection<TaskCandidate> candidates,
+        IReadOnlyCollection<ModuleIoSnapshot> signalBindings,
+        string? deviceModel = null,
         CancellationToken cancellationToken = default);
 
     Task SaveDeviceBindingsAsync(
@@ -23,5 +25,6 @@ public interface IPlcTaskBindingService
     PlcTaskBindingValidationResult ValidateEnabledTasks(
         IReadOnlyCollection<TaskCandidate> candidates,
         IReadOnlySet<string> enabledTaskKeys,
-        IReadOnlyCollection<ModuleIoSnapshot> signalBindings);
+        IReadOnlyCollection<ModuleIoSnapshot> signalBindings,
+        string? deviceModel = null);
 }

@@ -202,9 +202,15 @@ public sealed class PlcTaskBindingTaskVm : ObservableModelBase
         OriginalEnabled = dto.Enabled;
         HasSavedBinding = dto.HasSavedBinding;
         IsHeartbeatLike = dto.IsHeartbeatLike;
+        CanRun = dto.CanRun;
+        UnavailableReason = dto.UnavailableReason;
+        IsSupportedByCurrentPlc = dto.IsSupportedByCurrentPlc;
         RequiredSignalsText = string.Join(
             "；",
             dto.RequiredSignals.Select(static x => $"{x.SignalKey}/{FormatDirection(x.Direction)}"));
+        MissingRequiredSignalsText = dto.MissingRequiredSignals.Count == 0
+            ? string.Empty
+            : string.Join("；", dto.MissingRequiredSignals.Select(static x => $"{x.SignalKey}/{FormatDirection(x.Direction)}"));
     }
 
     public string Key { get; }
@@ -221,6 +227,12 @@ public sealed class PlcTaskBindingTaskVm : ObservableModelBase
                 return;
             }
 
+            if (value && !CanRun)
+            {
+                OnPropertyChanged();
+                return;
+            }
+
             _enabled = value;
             OnPropertyChanged();
         }
@@ -232,11 +244,21 @@ public sealed class PlcTaskBindingTaskVm : ObservableModelBase
 
     public bool IsHeartbeatLike { get; }
 
+    public bool CanRun { get; }
+
+    public bool IsSupportedByCurrentPlc { get; }
+
+    public string UnavailableReason { get; }
+
     public string TaskTypeText => IsHeartbeatLike ? "心跳类" : "业务任务";
 
     public string SourceText => HasSavedBinding ? "已保存" : "默认值";
 
     public string RequiredSignalsText { get; }
+
+    public string MissingRequiredSignalsText { get; }
+
+    public string AvailabilityText => CanRun ? "可运行" : UnavailableReason;
 
     private static string FormatDirection(string direction)
         => string.Equals(direction, "Write", StringComparison.OrdinalIgnoreCase)

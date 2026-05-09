@@ -30,8 +30,6 @@ namespace IIoT.Edge.Module.Homogenization.Runtime;
 /// </summary>
 public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
 {
-    private const string Read = "Read";
-    private const string Write = "Write";
     private const string HeartbeatTaskKey = "Homogenization.Heartbeat";
     private const string InboundTaskKey = "Homogenization.Inbound";
     private const string OutboundTaskKey = "Homogenization.Outbound";
@@ -39,82 +37,74 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
     private const string EquipmentStatusTaskKey = "Homogenization.EquipmentStatus";
     private const string RealtimeTaskKey = "Homogenization.Realtime";
 
-    private static readonly TaskRequiredSignal InteractionHeartbeatRead = Required("Homogenization.Interaction.Heartbeat", Read);
-    private static readonly TaskRequiredSignal InteractionHeartbeatWrite = Required("Homogenization.Interaction.Heartbeat", Write);
-    private static readonly TaskRequiredSignal InteractionInboundRead = Required("Homogenization.Interaction.Inbound", Read);
-    private static readonly TaskRequiredSignal InteractionInboundWrite = Required("Homogenization.Interaction.Inbound", Write);
-    private static readonly TaskRequiredSignal InteractionOutboundRead = Required("Homogenization.Interaction.Outbound", Read);
-    private static readonly TaskRequiredSignal InteractionOutboundWrite = Required("Homogenization.Interaction.Outbound", Write);
-    private static readonly TaskRequiredSignal InteractionRecipeRead = Required("Homogenization.Interaction.Recipe", Read);
-    private static readonly TaskRequiredSignal InteractionRecipeWrite = Required("Homogenization.Interaction.Recipe", Write);
-    private static readonly TaskRequiredSignal InteractionEquipmentStatusRead = Required("Homogenization.Interaction.EquipmentStatus", Read);
-    private static readonly TaskRequiredSignal InteractionEquipmentStatusWrite = Required("Homogenization.Interaction.EquipmentStatus", Write);
-    private static readonly TaskRequiredSignal TrayCodeRead = Required("Homogenization.TrayCode", Read);
-    private static readonly TaskRequiredSignal EquipmentStatusValueRead = Required("Homogenization.EquipmentStatusValue", Read);
-    private static readonly IReadOnlyList<TaskRequiredSignal> RealtimeSignals =
+    private static readonly HomogenizationPlcSignals.SingleRead[] RealtimeSignals =
     [
-        Required("Homogenization.RealtimeStirringSpeed", Read),
-        Required("Homogenization.RealtimeStirringCurrent", Read),
-        Required("Homogenization.RealtimeDispersionSpeed", Read),
-        Required("Homogenization.RealtimeDispersionCurrent", Read),
-        Required("Homogenization.RealtimeTemperature", Read),
-        Required("Homogenization.RealtimeVacuum", Read)
+        HomogenizationPlcSignals.SingleRead.实时搅拌转速,
+        HomogenizationPlcSignals.SingleRead.实时搅拌电流,
+        HomogenizationPlcSignals.SingleRead.实时分散转速,
+        HomogenizationPlcSignals.SingleRead.实时分散电流,
+        HomogenizationPlcSignals.SingleRead.实时温度,
+        HomogenizationPlcSignals.SingleRead.实时真空度
     ];
-    private static readonly IReadOnlyList<TaskRequiredSignal> RecipeSignals =
+
+    private static readonly HomogenizationPlcSignals.ContinuousRead[] RecipeSignals =
     [
-        Required("Homogenization.Recipe.StirringSpeed", Read),
-        Required("Homogenization.Recipe.DispersionSpeed", Read),
-        Required("Homogenization.Recipe.Ncm", Read),
-        Required("Homogenization.Recipe.Sp1", Read),
-        Required("Homogenization.Recipe.Nmp", Read),
-        Required("Homogenization.Recipe.GlueSolution", Read),
-        Required("Homogenization.Recipe.Cnt", Read),
-        Required("Homogenization.Recipe.Vacuum", Read),
-        Required("Homogenization.Recipe.Time", Read),
-        Required("Homogenization.Recipe.Temperature", Read),
-        Required("Homogenization.Recipe.StopStep", Read)
+        HomogenizationPlcSignals.ContinuousRead.配方搅拌转速,
+        HomogenizationPlcSignals.ContinuousRead.配方分散转速,
+        HomogenizationPlcSignals.ContinuousRead.配方NCM,
+        HomogenizationPlcSignals.ContinuousRead.配方SP1,
+        HomogenizationPlcSignals.ContinuousRead.配方NMP,
+        HomogenizationPlcSignals.ContinuousRead.配方胶液,
+        HomogenizationPlcSignals.ContinuousRead.配方CNT,
+        HomogenizationPlcSignals.ContinuousRead.配方真空,
+        HomogenizationPlcSignals.ContinuousRead.配方时间,
+        HomogenizationPlcSignals.ContinuousRead.配方温度,
+        HomogenizationPlcSignals.ContinuousRead.配方停机步
     ];
-    private static readonly IReadOnlyList<TaskRequiredSignal> OutboundSignals =
+
+    private static readonly HomogenizationPlcSignals.SingleRead[] OutboundSignals =
     [
-        Required("Homogenization.Outbound.CntActual", Read),
-        Required("Homogenization.Outbound.CntTarget", Read),
-        Required("Homogenization.Outbound.CntTankAWeight", Read),
-        Required("Homogenization.Outbound.CntTankBWeight", Read),
-        Required("Homogenization.Outbound.NmpActual", Read),
-        Required("Homogenization.Outbound.NmpTarget", Read),
-        Required("Homogenization.Outbound.GlueActual", Read),
-        Required("Homogenization.Outbound.SetStirringTime", Read),
-        Required("Homogenization.Outbound.RemainingStirringTime", Read),
-        Required("Homogenization.Outbound.SetDispersionTime", Read),
-        Required("Homogenization.Outbound.RemainingDispersionTime", Read)
+        HomogenizationPlcSignals.SingleRead.出料CNT实际值,
+        HomogenizationPlcSignals.SingleRead.出料CNT目标值,
+        HomogenizationPlcSignals.SingleRead.出料CNTA罐重量,
+        HomogenizationPlcSignals.SingleRead.出料CNTB罐重量,
+        HomogenizationPlcSignals.SingleRead.出料NMP实际值,
+        HomogenizationPlcSignals.SingleRead.出料NMP目标值,
+        HomogenizationPlcSignals.SingleRead.出料胶液实际值,
+        HomogenizationPlcSignals.SingleRead.出料设定搅拌时间,
+        HomogenizationPlcSignals.SingleRead.出料剩余搅拌时间,
+        HomogenizationPlcSignals.SingleRead.出料设定分散时间,
+        HomogenizationPlcSignals.SingleRead.出料剩余分散时间
     ];
+
     private static readonly IReadOnlyCollection<TaskCandidate> TaskCandidates =
     [
-        new(
-            HeartbeatTaskKey,
-            "心跳",
-            [InteractionHeartbeatRead, InteractionHeartbeatWrite],
-            IsHeartbeatLike: true),
-        new(
-            InboundTaskKey,
-            "扫码进站",
-            [InteractionInboundRead, InteractionInboundWrite, TrayCodeRead]),
-        new(
-            OutboundTaskKey,
-            "出料上传",
-            [InteractionOutboundRead, InteractionOutboundWrite, TrayCodeRead, ..RealtimeSignals, ..OutboundSignals, EquipmentStatusValueRead]),
-        new(
-            RecipeTaskKey,
-            "工艺参数上传",
-            [InteractionRecipeRead, InteractionRecipeWrite, ..RecipeSignals]),
-        new(
-            EquipmentStatusTaskKey,
-            "设备状态上传",
-            [InteractionEquipmentStatusRead, InteractionEquipmentStatusWrite, EquipmentStatusValueRead]),
-        new(
-            RealtimeTaskKey,
-            "实时数据上传",
-            RealtimeSignals)
+        PlcTaskCandidateBuilder.Create(HeartbeatTaskKey, "心跳")
+            .HeartbeatLike()
+            .RequiresInteraction(HomogenizationPlcSignals.Interaction.心跳)
+            .Build(),
+        PlcTaskCandidateBuilder.Create(InboundTaskKey, "扫码进站")
+            .RequiresInteraction(HomogenizationPlcSignals.Interaction.扫码进站)
+            .RequiresRead(HomogenizationPlcSignals.ContinuousRead.托盘码)
+            .Build(),
+        PlcTaskCandidateBuilder.Create(OutboundTaskKey, "出料上传")
+            .RequiresInteraction(HomogenizationPlcSignals.Interaction.出料上传)
+            .RequiresRead(HomogenizationPlcSignals.ContinuousRead.托盘码)
+            .RequiresRead(RealtimeSignals)
+            .RequiresRead(OutboundSignals)
+            .RequiresRead(HomogenizationPlcSignals.SingleRead.设备状态值)
+            .Build(),
+        PlcTaskCandidateBuilder.Create(RecipeTaskKey, "工艺参数上传")
+            .RequiresInteraction(HomogenizationPlcSignals.Interaction.工艺参数上传)
+            .RequiresRead(RecipeSignals)
+            .Build(),
+        PlcTaskCandidateBuilder.Create(EquipmentStatusTaskKey, "设备状态上传")
+            .RequiresInteraction(HomogenizationPlcSignals.Interaction.设备状态上传)
+            .RequiresRead(HomogenizationPlcSignals.SingleRead.设备状态值)
+            .Build(),
+        PlcTaskCandidateBuilder.Create(RealtimeTaskKey, "实时数据上传")
+            .RequiresRead(RealtimeSignals)
+            .Build()
     ];
 
     /// <summary>
@@ -267,7 +257,4 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
 
         return tasks;
     }
-
-    private static TaskRequiredSignal Required(string signalKey, string direction)
-        => new(signalKey, direction);
 }

@@ -14,6 +14,7 @@ public sealed class PlcTaskBindingService(
     IHostEnvironment hostEnvironment,
     IStationRuntimeRegistry runtimeRegistry,
     IReadRepository<NetworkDeviceEntity> networkDevices,
+    IRepository<IoMappingEntity> ioMappings,
     IRepository<PlcTaskBindingEntity> bindings,
     ILogService logger) : IPlcTaskBindingService
 {
@@ -42,8 +43,9 @@ public sealed class PlcTaskBindingService(
                 x => x.NetworkDeviceId == device.Id,
                 cancellationToken).ConfigureAwait(false);
             var rowByKey = rows.ToDictionary(x => x.TaskKey, StringComparer.OrdinalIgnoreCase);
+            var signalBindings = await LoadSignalBindingsAsync(device.Id, cancellationToken).ConfigureAwait(false);
             var taskItems = candidates
-                .Select(candidate => CreateItem(candidate, rowByKey))
+                .Select(candidate => CreateItem(candidate, rowByKey, signalBindings, device.DeviceModel))
                 .ToArray();
 
             results.Add(new PlcTaskBindingDeviceDto(
@@ -60,6 +62,8 @@ public sealed class PlcTaskBindingService(
     public async Task<IReadOnlySet<string>> GetEnabledTaskKeysAsync(
         int networkDeviceId,
         IReadOnlyCollection<TaskCandidate> candidates,
+        IReadOnlyCollection<ModuleIoSnapshot> signalBindings,
+        string? deviceModel = null,
         CancellationToken cancellationToken = default)
     {
         if (networkDeviceId <= 0)
@@ -67,12 +71,15 @@ public sealed class PlcTaskBindingService(
             throw new ArgumentException("网络设备 Id 必须大于 0。", nameof(networkDeviceId));
         }
 
+        ArgumentNullException.ThrowIfNull(candidates);
+        ArgumentNullException.ThrowIfNull(signalBindings);
+
         var rows = await bindings.GetListAsync(
             x => x.NetworkDeviceId == networkDeviceId,
             cancellationToken).ConfigureAwait(false);
         var rowByKey = rows.ToDictionary(x => x.TaskKey, StringComparer.OrdinalIgnoreCase);
         var enabledTaskKeys = candidates
-            .Where(candidate => ResolveEnabled(candidate.Key, rowByKey))
+            .Where(candidate => ResolveEnabled(candidate, rowByKey, signalBindings, deviceModel))
             .Select(static candidate => candidate.Key)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -110,9 +117,29 @@ public sealed class PlcTaskBindingService(
         var normalizedStates = taskStates
             .Where(x => candidateByKey.ContainsKey(x.Key))
             .ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase);
+        var signalBindings = await LoadSignalBindingsAsync(networkDeviceId, cancellationToken).ConfigureAwait(false);
+        var resolvedStates = candidates.ToDictionary(
+            static candidate => candidate.Key,
+            candidate => normalizedStates.TryGetValue(candidate.Key, out var submittedEnabled)
+                ? submittedEnabled
+                : EvaluateTaskAvailability(candidate, device.DeviceModel, signalBindings).CanRun && ResolveDefaultEnabled(),
+            StringComparer.OrdinalIgnoreCase);
+        var invalidEnabledTasks = candidates
+            .Select(candidate => new CandidateAvailability(
+                candidate,
+                EvaluateTaskAvailability(candidate, device.DeviceModel, signalBindings)))
+            .Where(x => resolvedStates.TryGetValue(x.Candidate.Key, out var enabled)
+                        && enabled
+                        && !x.Availability.CanRun)
+            .ToArray();
+        if (invalidEnabledTasks.Length > 0)
+        {
+            throw new InvalidOperationException(BuildSaveValidationMessage(device.DeviceName, invalidEnabledTasks));
+        }
+
         var disabledHeartbeatTasks = candidates
             .Where(x => x.IsHeartbeatLike
-                        && normalizedStates.TryGetValue(x.Key, out var enabled)
+                        && resolvedStates.TryGetValue(x.Key, out var enabled)
                         && !enabled)
             .Select(static x => x.DisplayName)
             .ToArray();
@@ -124,9 +151,7 @@ public sealed class PlcTaskBindingService(
         var updatedAt = DateTimeOffset.UtcNow;
         foreach (var candidate in candidates)
         {
-            var enabled = normalizedStates.TryGetValue(candidate.Key, out var submittedEnabled)
-                ? submittedEnabled
-                : ResolveDefaultEnabled();
+            var enabled = resolvedStates[candidate.Key];
             bindings.Add(PlcTaskBindingEntity.Create(networkDeviceId, candidate.Key, enabled, updatedAt));
         }
 
@@ -141,7 +166,8 @@ public sealed class PlcTaskBindingService(
     public PlcTaskBindingValidationResult ValidateEnabledTasks(
         IReadOnlyCollection<TaskCandidate> candidates,
         IReadOnlySet<string> enabledTaskKeys,
-        IReadOnlyCollection<ModuleIoSnapshot> signalBindings)
+        IReadOnlyCollection<ModuleIoSnapshot> signalBindings,
+        string? deviceModel = null)
     {
         ArgumentNullException.ThrowIfNull(candidates);
         ArgumentNullException.ThrowIfNull(enabledTaskKeys);
@@ -154,12 +180,28 @@ public sealed class PlcTaskBindingService(
 
         foreach (var candidate in candidates.Where(candidate => enabledTaskKeys.Contains(candidate.Key)))
         {
+            if (!candidate.SupportsDeviceModel(deviceModel))
+            {
+                issues.Add(new PlcTaskBindingValidationIssue(
+                    candidate.Key,
+                    candidate.DisplayName,
+                    RequiredSignal: null,
+                    PlcTaskBindingValidationIssueType.UnsupportedDeviceModel,
+                    $"任务“{candidate.DisplayName}”不支持当前 PLC 型号“{NormalizeDeviceModel(deviceModel)}”。"));
+                continue;
+            }
+
             foreach (var required in candidate.RequiredSignals)
             {
                 var key = $"{required.SignalKey}\u001f{required.Direction}";
                 if (!mappedSignals.Contains(key))
                 {
-                    issues.Add(new PlcTaskBindingValidationIssue(candidate.Key, candidate.DisplayName, required));
+                    issues.Add(new PlcTaskBindingValidationIssue(
+                        candidate.Key,
+                        candidate.DisplayName,
+                        required,
+                        PlcTaskBindingValidationIssueType.MissingRequiredSignal,
+                        $"任务“{candidate.DisplayName}”缺少 IO 信号：{required.SignalKey}/{required.Direction}。"));
                 }
             }
         }
@@ -171,24 +213,114 @@ public sealed class PlcTaskBindingService(
 
     private PlcTaskBindingItemDto CreateItem(
         TaskCandidate candidate,
-        IReadOnlyDictionary<string, PlcTaskBindingEntity> rowByKey)
+        IReadOnlyDictionary<string, PlcTaskBindingEntity> rowByKey,
+        IReadOnlyCollection<ModuleIoSnapshot> signalBindings,
+        string? deviceModel)
     {
         var hasSavedBinding = rowByKey.ContainsKey(candidate.Key);
+        var availability = EvaluateTaskAvailability(candidate, deviceModel, signalBindings);
         return new PlcTaskBindingItemDto(
             candidate.Key,
             candidate.DisplayName,
-            ResolveEnabled(candidate.Key, rowByKey),
+            ResolveEnabled(candidate, rowByKey, signalBindings, deviceModel),
             hasSavedBinding,
             candidate.IsHeartbeatLike,
-            candidate.RequiredSignals);
+            candidate.RequiredSignals,
+            availability.CanRun,
+            availability.UnavailableReason,
+            availability.MissingRequiredSignals,
+            availability.IsSupportedByCurrentPlc);
     }
 
     private bool ResolveEnabled(
-        string taskKey,
-        IReadOnlyDictionary<string, PlcTaskBindingEntity> rowByKey)
-        => rowByKey.TryGetValue(taskKey, out var row)
+        TaskCandidate candidate,
+        IReadOnlyDictionary<string, PlcTaskBindingEntity> rowByKey,
+        IReadOnlyCollection<ModuleIoSnapshot> signalBindings,
+        string? deviceModel)
+        => rowByKey.TryGetValue(candidate.Key, out var row)
             ? row.Enabled
-            : ResolveDefaultEnabled();
+            : ResolveDefaultEnabled() && EvaluateTaskAvailability(candidate, deviceModel, signalBindings).CanRun;
+
+    private TaskAvailability EvaluateTaskAvailability(
+        TaskCandidate candidate,
+        string? deviceModel,
+        IReadOnlyCollection<ModuleIoSnapshot> signalBindings)
+    {
+        var isSupported = candidate.SupportsDeviceModel(deviceModel);
+        var missingSignals = FindMissingRequiredSignals(candidate, signalBindings);
+
+        if (!isSupported)
+        {
+            return new TaskAvailability(
+                CanRun: false,
+                UnavailableReason: $"当前 PLC 型号“{NormalizeDeviceModel(deviceModel)}”不支持该任务。",
+                MissingRequiredSignals: missingSignals,
+                IsSupportedByCurrentPlc: false);
+        }
+
+        if (missingSignals.Count > 0)
+        {
+            var missingText = string.Join("、", missingSignals.Select(static signal => $"{signal.SignalKey}/{signal.Direction}"));
+            return new TaskAvailability(
+                CanRun: false,
+                UnavailableReason: $"缺少 IO：{missingText}",
+                MissingRequiredSignals: missingSignals,
+                IsSupportedByCurrentPlc: true);
+        }
+
+        return new TaskAvailability(
+            CanRun: true,
+            UnavailableReason: string.Empty,
+            MissingRequiredSignals: [],
+            IsSupportedByCurrentPlc: true);
+    }
+
+    private static IReadOnlyList<TaskRequiredSignal> FindMissingRequiredSignals(
+        TaskCandidate candidate,
+        IReadOnlyCollection<ModuleIoSnapshot> signalBindings)
+    {
+        var mappedSignals = signalBindings
+            .Select(static x => $"{x.SignalKey}\u001f{x.Direction}")
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return candidate.RequiredSignals
+            .Where(required => !mappedSignals.Contains($"{required.SignalKey}\u001f{required.Direction}"))
+            .ToArray();
+    }
+
+    private async Task<IReadOnlyCollection<ModuleIoSnapshot>> LoadSignalBindingsAsync(
+        int networkDeviceId,
+        CancellationToken cancellationToken)
+    {
+        var rows = await ioMappings.GetListAsync(
+            x => x.NetworkDeviceId == networkDeviceId,
+            cancellationToken).ConfigureAwait(false);
+
+        return rows
+            .Select(static row => new ModuleIoSnapshot(
+                row.SignalKey,
+                row.PlcAddress,
+                row.AddressCount,
+                row.DataType,
+                row.Direction,
+                row.SortOrder,
+                row.Category,
+                row.BusinessGroup,
+                row.SignalName))
+            .ToArray();
+    }
+
+    private static string BuildSaveValidationMessage(
+        string deviceName,
+        IReadOnlyCollection<CandidateAvailability> invalidEnabledTasks)
+    {
+        var details = invalidEnabledTasks.Select(x => $"任务“{x.Candidate.DisplayName}”：{x.Availability.UnavailableReason}");
+
+        return $"PLC“{deviceName}”存在不可运行的启用任务，保存失败。{string.Join("；", details)}";
+    }
+
+    private static string NormalizeDeviceModel(string? deviceModel)
+        => string.IsNullOrWhiteSpace(deviceModel) ? "未配置" : deviceModel.Trim();
 
     private bool ResolveDefaultEnabled()
     {
@@ -200,4 +332,14 @@ public sealed class PlcTaskBindingService(
 
         return hostEnvironment.IsProduction();
     }
+
+    private sealed record TaskAvailability(
+        bool CanRun,
+        string UnavailableReason,
+        IReadOnlyList<TaskRequiredSignal> MissingRequiredSignals,
+        bool IsSupportedByCurrentPlc);
+
+    private sealed record CandidateAvailability(
+        TaskCandidate Candidate,
+        TaskAvailability Availability);
 }
