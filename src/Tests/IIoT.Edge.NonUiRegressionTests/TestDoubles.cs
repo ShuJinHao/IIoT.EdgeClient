@@ -1143,6 +1143,7 @@ internal sealed class FakeCloudApiEndpointProvider : ICloudApiEndpointProvider
     }
 
     public string GetClientCode() => "TEST";
+    public string GetBootstrapSecret() => "bootstrap-secret";
     public string GetDeviceInstancePath() => "/api/v1/bootstrap/device-instance";
     public string GetBootstrapRefreshPath() => "/api/v1/bootstrap/edge-refresh";
     public string GetIdentityDeviceLoginPath() => "/api/v1/bootstrap/edge-login";

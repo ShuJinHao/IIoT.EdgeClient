@@ -5,18 +5,19 @@ public class CloudApiConfig
     public string BaseUrl { get; set; } = string.Empty;
     public int TimeoutSecs { get; set; } = 10;
     public string ClientCode { get; set; } = string.Empty;
+    public string BootstrapSecret { get; set; } = string.Empty;
     public CloudApiPaths Paths { get; set; } = new();
 }
 
 public class CloudApiPaths
 {
-    public string DeviceInstance { get; set; } = "/api/v1/bootstrap/device-instance";
-    public string BootstrapRefresh { get; set; } = "/api/v1/bootstrap/edge-refresh";
-    public string IdentityDeviceLogin { get; set; } = "/api/v1/bootstrap/edge-login";
-    public string HumanIdentityRefresh { get; set; } = "/api/v1/human/identity/refresh";
-    public string DeviceLog { get; set; } = "/api/v1/edge/device-logs";
-    public string CapacityHourly { get; set; } = "/api/v1/edge/capacity/hourly";
-    public string CapacitySummary { get; set; } = "/api/v1/edge/capacity/summary";
-    public string CapacitySummaryRange { get; set; } = "/api/v1/edge/capacity/summary/range";
-    public string RecipeByDeviceTemplate { get; set; } = "/api/v1/edge/recipes/device/{deviceId}";
+    public string DeviceInstance { get; set; } = string.Empty;
+    public string BootstrapRefresh { get; set; } = string.Empty;
+    public string IdentityDeviceLogin { get; set; } = string.Empty;
+    public string HumanIdentityRefresh { get; set; } = string.Empty;
+    public string DeviceLog { get; set; } = string.Empty;
+    public string CapacityHourly { get; set; } = string.Empty;
+    public string CapacitySummary { get; set; } = string.Empty;
+    public string CapacitySummaryRange { get; set; } = string.Empty;
+    public string RecipeByDeviceTemplate { get; set; } = string.Empty;
 }

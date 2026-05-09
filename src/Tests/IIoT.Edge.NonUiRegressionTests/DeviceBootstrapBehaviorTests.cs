@@ -21,14 +21,17 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
     }
 
     [Fact]
-    public async Task StartAsync_ShouldBootstrapByClientCodeOnly()
+    public async Task StartAsync_ShouldBootstrapByClientCodeAndBootstrapSecret()
     {
         var deviceId = Guid.NewGuid();
         var processId = Guid.NewGuid();
         var expiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(15);
         var refreshExpiresAtUtc = DateTimeOffset.UtcNow.AddDays(7);
-        var handler = new RecordingHttpMessageHandler(_ =>
+        var handler = new RecordingHttpMessageHandler(request =>
         {
+            Assert.True(request.Headers.TryGetValues("X-IIoT-Bootstrap-Secret", out var secrets));
+            Assert.Equal("secret-LINE-A-01", secrets.Single());
+
             var response = new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = JsonContent.Create(new
@@ -49,7 +52,7 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
 
         var service = CreateDeviceService(
             new HttpClient(handler),
-            new FakeEndpointProvider("LINE-A-01"));
+            new FakeEndpointProvider("LINE-A-01", "secret-LINE-A-01"));
 
         using var cts = new CancellationTokenSource();
 
@@ -81,6 +84,7 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
             if (request.RequestUri!.AbsolutePath == "/api/v1/bootstrap/edge-refresh")
             {
                 refreshRequests++;
+                Assert.False(request.Headers.Contains("X-IIoT-Bootstrap-Secret"));
                 Assert.True(request.Headers.TryGetValues(CloudAuthHeaders.RefreshToken, out var refreshTokens));
                 Assert.Equal("refresh-1", refreshTokens.Single());
 
@@ -355,6 +359,42 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
         Assert.Equal(1, Volatile.Read(ref requestCount));
     }
 
+    [Fact]
+    public async Task StartAsync_WhenCloudUploadDisabled_ShouldNotCallBootstrap()
+    {
+        var requestCount = 0;
+        var handler = new RecordingHttpMessageHandler(_ =>
+        {
+            Interlocked.Increment(ref requestCount);
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        });
+
+        var service = CreateDeviceService(
+            new HttpClient(handler),
+            new FakeEndpointProvider("LINE-OFFLINE-01"),
+            runtimeConfig: new FakeLocalSystemRuntimeConfigService
+            {
+                Current = SystemRuntimeConfigSnapshot.Default with
+                {
+                    CloudUploadEnabled = false
+                }
+            });
+
+        using var cts = new CancellationTokenSource();
+
+        await service.StartAsync(cts.Token);
+        await WaitForAsync(() => service.CurrentUploadGate.Reason == EdgeUploadBlockReason.CloudUploadDisabled);
+        await AssertRequestCountRemainsAsync(
+            () => Volatile.Read(ref requestCount),
+            expected: 0,
+            TimeSpan.FromMilliseconds(300));
+        await service.StopAsync();
+
+        Assert.Equal(NetworkState.Offline, service.CurrentState);
+        Assert.False(service.CanUploadToCloud);
+        Assert.Equal(EdgeUploadBlockReason.CloudUploadDisabled, service.CurrentUploadGate.Reason);
+    }
+
     public void Dispose()
     {
         DeleteCacheFile();
@@ -423,10 +463,13 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
             logService);
     }
 
-    private sealed class FakeEndpointProvider(string clientCode) : ICloudApiEndpointProvider
+    private sealed class FakeEndpointProvider(
+        string clientCode,
+        string bootstrapSecret = "bootstrap-secret") : ICloudApiEndpointProvider
     {
         public string BuildUrl(string relativeOrAbsoluteUrl) => $"https://unit.test{relativeOrAbsoluteUrl}";
         public string GetClientCode() => clientCode;
+        public string GetBootstrapSecret() => bootstrapSecret;
         public string GetDeviceInstancePath() => "/api/v1/bootstrap/device-instance";
         public string GetBootstrapRefreshPath() => "/api/v1/bootstrap/edge-refresh";
         public string GetIdentityDeviceLoginPath() => "/api/v1/bootstrap/edge-login";

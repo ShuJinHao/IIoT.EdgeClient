@@ -1,6 +1,7 @@
 ﻿using IIoT.Edge.Application.Abstractions.DataPipeline.Consumers;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Events;
 using IIoT.Edge.Application.Abstractions.Logging;
@@ -15,6 +16,7 @@ public class CapacityConsumer : ICapacityConsumer
 {
     private readonly ITodayCapacityStore _todayCapacityStore;
     private readonly IDeviceService _deviceService;
+    private readonly ILocalSystemRuntimeConfigService _runtimeConfig;
     private readonly ICapacityBufferStore _capacityBufferStore;
     private readonly IPublisher _publisher;
     private readonly ILogService _logger;
@@ -29,6 +31,7 @@ public class CapacityConsumer : ICapacityConsumer
     public CapacityConsumer(
         ITodayCapacityStore todayCapacityStore,
         IDeviceService deviceService,
+        ILocalSystemRuntimeConfigService runtimeConfig,
         ICapacityBufferStore capacityBufferStore,
         IPublisher publisher,
         ILogService logger,
@@ -36,6 +39,7 @@ public class CapacityConsumer : ICapacityConsumer
     {
         _todayCapacityStore = todayCapacityStore;
         _deviceService = deviceService;
+        _runtimeConfig = runtimeConfig;
         _capacityBufferStore = capacityBufferStore;
         _publisher = publisher;
         _logger = logger;
@@ -59,7 +63,7 @@ public class CapacityConsumer : ICapacityConsumer
                 Snapshot = snapshot
             }, cancellationToken);
 
-            if (!_deviceService.CanUploadToCloud)
+            if (_runtimeConfig.Current.CloudUploadEnabled && !_deviceService.CanUploadToCloud)
             {
                 await _capacityBufferStore.SaveAsync(new CapacityRecord
                 {

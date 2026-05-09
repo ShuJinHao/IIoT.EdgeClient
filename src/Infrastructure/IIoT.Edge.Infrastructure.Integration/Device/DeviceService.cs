@@ -178,6 +178,12 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
         await _identifyGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+            if (!_runtimeConfig.Current.CloudUploadEnabled)
+            {
+                MarkCloudUploadDisabled(DateTimeOffset.UtcNow);
+                return;
+            }
+
             var previousGate = CurrentUploadGate;
             var attemptedAtUtc = DateTimeOffset.UtcNow;
             UpdateUploadGate(
@@ -193,6 +199,41 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
         {
             _identifyGate.Release();
         }
+    }
+
+    private void MarkCloudUploadDisabled(DateTimeOffset occurredAtUtc)
+    {
+        var raiseStateChanged = false;
+        EdgeUploadGateSnapshot? nextGate = null;
+
+        lock (_stateLock)
+        {
+            if (CurrentState != NetworkState.Offline)
+            {
+                CurrentState = NetworkState.Offline;
+                _logger.Info("[设备服务] 云端上传已关闭，状态已切换为离线。");
+                raiseStateChanged = true;
+            }
+
+            nextGate = CurrentUploadGate with
+            {
+                State = EdgeUploadGateState.Blocked,
+                Reason = EdgeUploadBlockReason.CloudUploadDisabled,
+                TokenExpiresAtUtc = CurrentDevice?.UploadAccessTokenExpiresAtUtc
+            };
+        }
+
+        if (raiseStateChanged)
+        {
+            NetworkStateChanged?.Invoke(NetworkState.Offline);
+        }
+
+        UpdateUploadGate(nextGate);
+        _heartbeatStateStore?.MarkNotReady(
+            ExternalSystemKind.Cloud,
+            EdgeUploadBlockReason.CloudUploadDisabled.ToReasonCode(),
+            "云端上传已关闭。",
+            occurredAtUtc.UtcDateTime);
     }
 
     private async Task RefreshOrIdentifyOnceCoreAsync(

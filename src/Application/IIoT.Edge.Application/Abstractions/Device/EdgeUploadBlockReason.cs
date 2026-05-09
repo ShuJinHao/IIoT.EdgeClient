@@ -10,5 +10,6 @@ public enum EdgeUploadBlockReason
     BootstrapTimeout = 5,
     BootstrapNetworkFailure = 6,
     BootstrapPayloadInvalid = 7,
-    UploadTokenRejected = 8
+    UploadTokenRejected = 8,
+    CloudUploadDisabled = 9
 }

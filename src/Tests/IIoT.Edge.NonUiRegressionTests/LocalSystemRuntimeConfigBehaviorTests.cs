@@ -21,6 +21,7 @@ public sealed class LocalSystemRuntimeConfigBehaviorTests
         await service.EnsureInitializedAsync();
 
         Assert.True(service.Current.MesUploadEnabled);
+        Assert.False(service.Current.CloudUploadEnabled);
         Assert.Equal(TimeSpan.FromSeconds(60), service.Current.OnlineHeartbeatInterval);
         Assert.Equal(TimeSpan.FromSeconds(60), service.Current.CloudSyncInterval);
     }
@@ -37,6 +38,20 @@ public sealed class LocalSystemRuntimeConfigBehaviorTests
         await service.EnsureInitializedAsync();
 
         Assert.False(service.Current.MesUploadEnabled);
+    }
+
+    [Fact]
+    public async Task EnsureInitializedAsync_WhenCloudRoleEnabled_ShouldBuildCloudRuntimeSwitch()
+    {
+        var service = new LocalSystemRuntimeConfigService(
+            new MutableLocalParameterConfigService(),
+            new MutableModuleParamRoleProvider { CloudEnabled = true },
+            new FakeProcessIntegrationRegistry([], ["Homogenization"]),
+            new FakeLogService());
+
+        await service.EnsureInitializedAsync();
+
+        Assert.True(service.Current.CloudUploadEnabled);
     }
 
     [Fact]
@@ -93,6 +108,7 @@ public sealed class LocalSystemRuntimeConfigBehaviorTests
     private sealed class MutableModuleParamRoleProvider : IModuleParamRoleProvider
     {
         public bool MesEnabled { get; set; }
+        public bool CloudEnabled { get; set; }
 
         public Task<ModuleParamRoleValue?> GetAsync(
             string moduleId,
@@ -129,7 +145,7 @@ public sealed class LocalSystemRuntimeConfigBehaviorTests
             ModuleParamRole role,
             bool defaultValue = false,
             CancellationToken cancellationToken = default)
-            => Task.FromResult(MesEnabled);
+            => Task.FromResult(role == ModuleParamRole.CloudEnabled ? CloudEnabled : MesEnabled);
 
         public Task<bool> AnyBoolAsync(
             ModuleParamCategory category,
@@ -137,11 +153,20 @@ public sealed class LocalSystemRuntimeConfigBehaviorTests
             IReadOnlyCollection<string>? moduleIds = null,
             bool defaultValue = false,
             CancellationToken cancellationToken = default)
-            => Task.FromResult((moduleIds?.Count ?? 0) > 0 && MesEnabled);
+            => Task.FromResult((moduleIds?.Count ?? 0) > 0
+                && (role == ModuleParamRole.CloudEnabled ? CloudEnabled : MesEnabled));
     }
 
-    private sealed class FakeProcessIntegrationRegistry(IEnumerable<string> mesProcessTypes) : IProcessIntegrationRegistry
+    private sealed class FakeProcessIntegrationRegistry(
+        IEnumerable<string> mesProcessTypes,
+        IEnumerable<string>? cloudProcessTypes = null) : IProcessIntegrationRegistry
     {
+        private readonly Dictionary<string, CloudUploaderRegistration> _cloudUploaders = (cloudProcessTypes ?? [])
+            .ToDictionary(
+                static processType => processType,
+                static processType => new CloudUploaderRegistration(processType, ProcessUploadMode.Batch),
+                StringComparer.OrdinalIgnoreCase);
+
         private readonly Dictionary<string, MesUploaderRegistration> _mesUploaders = mesProcessTypes
             .ToDictionary(
                 static processType => processType,
@@ -154,21 +179,18 @@ public sealed class LocalSystemRuntimeConfigBehaviorTests
         public void RegisterMesUploader(string processType, MesUploadMode uploadMode)
             => throw new NotSupportedException();
 
-        public bool HasCloudUploader(string processType) => false;
+        public bool HasCloudUploader(string processType) => _cloudUploaders.ContainsKey(processType);
 
         public bool HasMesUploader(string processType) => _mesUploaders.ContainsKey(processType);
 
         public bool TryGetCloudUploader(string processType, out CloudUploaderRegistration registration)
-        {
-            registration = default!;
-            return false;
-        }
+            => _cloudUploaders.TryGetValue(processType, out registration!);
 
         public bool TryGetMesUploader(string processType, out MesUploaderRegistration registration)
             => _mesUploaders.TryGetValue(processType, out registration!);
 
         public IReadOnlyDictionary<string, CloudUploaderRegistration> GetCloudUploaders()
-            => new Dictionary<string, CloudUploaderRegistration>();
+            => _cloudUploaders;
 
         public IReadOnlyDictionary<string, MesUploaderRegistration> GetMesUploaders()
             => _mesUploaders;

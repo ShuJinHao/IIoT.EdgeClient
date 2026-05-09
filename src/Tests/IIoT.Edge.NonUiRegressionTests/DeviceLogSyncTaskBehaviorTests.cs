@@ -275,6 +275,67 @@ public sealed class DeviceLogSyncTaskBehaviorTests
         Assert.True(cloudHttp.PostCallCount >= 1);
     }
 
+    [Fact]
+    public async Task StartAsync_WhenCloudUploadDisabled_ShouldNotPersistDeviceLogs()
+    {
+        var bufferStore = new FakeDeviceLogBufferStore();
+        var logger = new FakeLogService();
+        var task = new DeviceLogSyncTask(
+            new FakeCloudHttpClient(),
+            new FakeCloudApiEndpointProvider(),
+            new FakeDeviceService(),
+            new FakeLocalSystemRuntimeConfigService
+            {
+                Current = SystemRuntimeConfigSnapshot.Default with
+                {
+                    CloudUploadEnabled = false,
+                    CloudSyncInterval = TimeSpan.FromMilliseconds(50)
+                }
+            },
+            bufferStore,
+            logger,
+            new FakeCloudDiagnosticsStore());
+
+        using var cts = new CancellationTokenSource();
+        await task.StartAsync(cts.Token);
+        logger.Info("cloud-disabled-log");
+        await task.StopAsync();
+
+        Assert.Empty(bufferStore.Records);
+    }
+
+    [Fact]
+    public async Task RetryBuffer_WhenCloudUploadDisabled_ShouldSkipWithoutPosting()
+    {
+        var cloudHttp = new FakeCloudHttpClient();
+        var bufferStore = new FakeDeviceLogBufferStore();
+        bufferStore.Records.Add(new DeviceLogRecord
+        {
+            Id = 1,
+            Level = "Info",
+            Message = "disabled-buffer",
+            LogTime = DateTime.UtcNow.ToString("O"),
+            CreatedAt = DateTime.UtcNow.ToString("O")
+        });
+        var task = new DeviceLogSyncTask(
+            cloudHttp,
+            new FakeCloudApiEndpointProvider(),
+            new FakeDeviceService(),
+            new FakeLocalSystemRuntimeConfigService
+            {
+                Current = SystemRuntimeConfigSnapshot.Default with { CloudUploadEnabled = false }
+            },
+            bufferStore,
+            new FakeLogService(),
+            new FakeCloudDiagnosticsStore());
+
+        var result = await task.RetryBufferAsync();
+
+        Assert.True(result);
+        Assert.Equal(0, cloudHttp.PostCallCount);
+        Assert.Single(bufferStore.Records);
+    }
+
     private static FakeLocalSystemRuntimeConfigService CreateRuntimeConfig()
         => new()
         {

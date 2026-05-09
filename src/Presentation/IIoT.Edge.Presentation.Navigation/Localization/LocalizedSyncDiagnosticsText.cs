@@ -151,6 +151,7 @@ internal sealed class LocalizedSyncDiagnosticsText(
         EdgeUploadBlockReason.BootstrapNetworkFailure => Text("Navigation_BlockReason_BootstrapNetworkFailure", "bootstrap 网络失败"),
         EdgeUploadBlockReason.BootstrapPayloadInvalid => Text("Navigation_BlockReason_BootstrapPayloadInvalid", "bootstrap 响应无效"),
         EdgeUploadBlockReason.UploadTokenRejected => Text("Navigation_BlockReason_UploadTokenRejected", "上传令牌被拒绝"),
+        EdgeUploadBlockReason.CloudUploadDisabled => Text("Navigation_BlockReason_CloudUploadDisabled", "云端上传已关闭"),
         _ => Text("Navigation_Unknown", "未知")
     };
 

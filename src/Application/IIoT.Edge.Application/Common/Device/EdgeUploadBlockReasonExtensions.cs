@@ -15,6 +15,7 @@ public static class EdgeUploadBlockReasonExtensions
         EdgeUploadBlockReason.BootstrapNetworkFailure => "bootstrap_network_failure",
         EdgeUploadBlockReason.BootstrapPayloadInvalid => "bootstrap_payload_invalid",
         EdgeUploadBlockReason.UploadTokenRejected => "upload_token_rejected",
+        EdgeUploadBlockReason.CloudUploadDisabled => "cloud_upload_disabled",
         _ => "unknown"
     };
 }

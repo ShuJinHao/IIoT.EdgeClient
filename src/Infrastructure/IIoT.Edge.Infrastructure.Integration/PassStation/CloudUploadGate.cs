@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Common.Device;
@@ -6,10 +7,14 @@ namespace IIoT.Edge.Infrastructure.Integration.PassStation;
 
 public sealed class CloudUploadGate : ICloudUploadGate
 {
+    private readonly ILocalSystemRuntimeConfigService _runtimeConfig;
     private readonly IDeviceService _deviceService;
 
-    public CloudUploadGate(IDeviceService deviceService)
+    public CloudUploadGate(
+        ILocalSystemRuntimeConfigService runtimeConfig,
+        IDeviceService deviceService)
     {
+        _runtimeConfig = runtimeConfig;
         _deviceService = deviceService;
     }
 
@@ -17,6 +22,11 @@ public sealed class CloudUploadGate : ICloudUploadGate
 
     public UploadGateSnapshot GetSnapshot()
     {
+        if (!_runtimeConfig.Current.CloudUploadEnabled)
+        {
+            return UploadGateSnapshot.Blocked(System, "cloud_upload_disabled", "云端上传已关闭。");
+        }
+
         if (_deviceService.CanUploadToCloud)
         {
             return UploadGateSnapshot.Ready(System);

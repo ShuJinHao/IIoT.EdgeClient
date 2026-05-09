@@ -12,7 +12,7 @@ public sealed class UploadGateBehaviorTests
     public void CloudUploadGate_WhenDeviceGateIsReady_ShouldAllowUpload()
     {
         var deviceService = CreateOnlineDeviceService();
-        var gate = new CloudUploadGate(deviceService);
+        var gate = new CloudUploadGate(new FakeLocalSystemRuntimeConfigService(), deviceService);
 
         var snapshot = gate.GetSnapshot();
 
@@ -26,12 +26,27 @@ public sealed class UploadGateBehaviorTests
     {
         var deviceService = CreateOnlineDeviceService();
         deviceService.MarkUploadGateBlocked(EdgeUploadBlockReason.UploadTokenRejected, DateTimeOffset.UtcNow);
-        var gate = new CloudUploadGate(deviceService);
+        var gate = new CloudUploadGate(new FakeLocalSystemRuntimeConfigService(), deviceService);
 
         var snapshot = gate.GetSnapshot();
 
         Assert.False(snapshot.CanUpload);
         Assert.Equal("upload_token_rejected", snapshot.ReasonCode);
+    }
+
+    [Fact]
+    public void CloudUploadGate_WhenCloudUploadDisabled_ShouldBlockWithDisabledReason()
+    {
+        var runtimeConfig = new FakeLocalSystemRuntimeConfigService
+        {
+            Current = SystemRuntimeConfigSnapshot.Default with { CloudUploadEnabled = false }
+        };
+        var gate = new CloudUploadGate(runtimeConfig, CreateOnlineDeviceService());
+
+        var snapshot = gate.GetSnapshot();
+
+        Assert.False(snapshot.CanUpload);
+        Assert.Equal("cloud_upload_disabled", snapshot.ReasonCode);
     }
 
     [Fact]

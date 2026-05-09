@@ -5,6 +5,7 @@ namespace IIoT.Edge.Infrastructure.Integration.Http;
 public static class CloudAuthHeaders
 {
     public const string RefreshToken = "X-IIoT-Refresh-Token";
+    public const string BootstrapSecret = "X-IIoT-Bootstrap-Secret";
     public const string RefreshTokenExpiresAt = "X-IIoT-Refresh-Token-Expires-At";
     public const string AccessTokenExpiresAt = "X-IIoT-Access-Token-Expires-At";
 

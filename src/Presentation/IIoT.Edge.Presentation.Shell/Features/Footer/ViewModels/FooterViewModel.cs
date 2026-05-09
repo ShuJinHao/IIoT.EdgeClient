@@ -243,6 +243,7 @@ public class FooterViewModel : ViewModelBase
         EdgeUploadBlockReason.BootstrapNetworkFailure => _languageService.GetString("Shell_BlockReason_BootstrapNetworkFailure", "bootstrap 网络失败"),
         EdgeUploadBlockReason.BootstrapPayloadInvalid => _languageService.GetString("Shell_BlockReason_BootstrapPayloadInvalid", "bootstrap 响应无效"),
         EdgeUploadBlockReason.UploadTokenRejected => _languageService.GetString("Shell_BlockReason_UploadTokenRejected", "上传令牌被拒绝"),
+        EdgeUploadBlockReason.CloudUploadDisabled => _languageService.GetString("Shell_BlockReason_CloudUploadDisabled", "云端上传已关闭"),
         _ => _languageService.GetString("Shell_Footer_Unknown", "未知")
     };
 

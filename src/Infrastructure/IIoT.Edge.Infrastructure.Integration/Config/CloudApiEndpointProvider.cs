@@ -40,42 +40,62 @@ public class CloudApiEndpointProvider : ICloudApiEndpointProvider
         throw new InvalidOperationException("Missing config: CloudApi:ClientCode");
     }
 
+    public string GetBootstrapSecret()
+    {
+        var configured = _cloudApiOptions.CurrentValue.BootstrapSecret?.Trim();
+        if (!string.IsNullOrWhiteSpace(configured))
+            return configured;
+
+        throw new InvalidOperationException("Missing config: CloudApi:BootstrapSecret");
+    }
+
     public string GetDeviceInstancePath()
-        => ResolvePath(_cloudApiOptions.CurrentValue.Paths.DeviceInstance, "/api/v1/bootstrap/device-instance");
+        => RequirePath(_cloudApiOptions.CurrentValue.Paths.DeviceInstance, "CloudApi:Paths:DeviceInstance");
 
     public string GetBootstrapRefreshPath()
-        => ResolvePath(_cloudApiOptions.CurrentValue.Paths.BootstrapRefresh, "/api/v1/bootstrap/edge-refresh");
+        => RequirePath(_cloudApiOptions.CurrentValue.Paths.BootstrapRefresh, "CloudApi:Paths:BootstrapRefresh");
 
     public string GetIdentityDeviceLoginPath()
-        => ResolvePath(_cloudApiOptions.CurrentValue.Paths.IdentityDeviceLogin, "/api/v1/bootstrap/edge-login");
+        => RequirePath(_cloudApiOptions.CurrentValue.Paths.IdentityDeviceLogin, "CloudApi:Paths:IdentityDeviceLogin");
 
     public string GetHumanIdentityRefreshPath()
-        => ResolvePath(_cloudApiOptions.CurrentValue.Paths.HumanIdentityRefresh, "/api/v1/human/identity/refresh");
+        => RequirePath(_cloudApiOptions.CurrentValue.Paths.HumanIdentityRefresh, "CloudApi:Paths:HumanIdentityRefresh");
 
     public string GetDeviceLogPath()
-        => ResolvePath(_cloudApiOptions.CurrentValue.Paths.DeviceLog, "/api/v1/edge/device-logs");
+        => RequirePath(_cloudApiOptions.CurrentValue.Paths.DeviceLog, "CloudApi:Paths:DeviceLog");
 
     public string GetCapacityHourlyPath()
-        => ResolvePath(_cloudApiOptions.CurrentValue.Paths.CapacityHourly, "/api/v1/edge/capacity/hourly");
+        => RequirePath(_cloudApiOptions.CurrentValue.Paths.CapacityHourly, "CloudApi:Paths:CapacityHourly");
 
     public string GetCapacitySummaryPath()
-        => ResolvePath(_cloudApiOptions.CurrentValue.Paths.CapacitySummary, "/api/v1/edge/capacity/summary");
+        => RequirePath(_cloudApiOptions.CurrentValue.Paths.CapacitySummary, "CloudApi:Paths:CapacitySummary");
 
     public string GetCapacitySummaryRangePath()
-        => ResolvePath(_cloudApiOptions.CurrentValue.Paths.CapacitySummaryRange, "/api/v1/edge/capacity/summary/range");
+        => RequirePath(_cloudApiOptions.CurrentValue.Paths.CapacitySummaryRange, "CloudApi:Paths:CapacitySummaryRange");
 
     public string BuildRecipeByDevicePath(Guid deviceId)
     {
-        var template = ResolvePath(
+        var template = RequirePath(
             _cloudApiOptions.CurrentValue.Paths.RecipeByDeviceTemplate,
-            "/api/v1/edge/recipes/device/{deviceId}");
+            "CloudApi:Paths:RecipeByDeviceTemplate");
+        if (!template.Contains("{deviceId}", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Invalid config: CloudApi:Paths:RecipeByDeviceTemplate must contain {deviceId}");
 
         return template.Replace("{deviceId}", deviceId.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string ResolvePath(string? configured, string fallback)
+    private static string RequirePath(string? configured, string key)
     {
         var value = configured?.Trim();
-        return string.IsNullOrWhiteSpace(value) ? fallback : value;
+        if (string.IsNullOrWhiteSpace(value))
+            throw new InvalidOperationException($"Missing config: {key}");
+
+        if (Uri.TryCreate(value, UriKind.Absolute, out _))
+            throw new InvalidOperationException($"Invalid config: {key} must be a relative API path");
+
+        if (!value.StartsWith('/'))
+            throw new InvalidOperationException($"Invalid config: {key} must start with '/'");
+
+        return value;
     }
 }

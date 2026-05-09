@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Abstractions.DataPipeline.SyncTask;
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
@@ -13,6 +14,7 @@ public sealed class CloudRetryTask : ScheduledTaskBase
     private readonly IDeviceService _deviceService;
     private readonly IDeviceLogSyncTask _deviceLogSync;
     private readonly ICapacitySyncTask _capacitySync;
+    private readonly ILocalSystemRuntimeConfigService? _runtimeConfig;
     private readonly ICloudUploadDiagnosticsStore _diagnosticsStore;
     private readonly DataPipelineCapacityGuard _capacityGuard;
     private readonly ICloudFallbackRecoveryService _fallbackRecoveryService;
@@ -32,12 +34,14 @@ public sealed class CloudRetryTask : ScheduledTaskBase
         DataPipelineCapacityGuard capacityGuard,
         ICloudFallbackRecoveryService fallbackRecoveryService,
         ICloudRetryRecordProcessor retryRecordProcessor,
-        ICloudRetryHousekeepingService housekeepingService)
+        ICloudRetryHousekeepingService housekeepingService,
+        ILocalSystemRuntimeConfigService? runtimeConfig = null)
         : base(logger)
     {
         _deviceService = deviceService;
         _deviceLogSync = deviceLogSync;
         _capacitySync = capacitySync;
+        _runtimeConfig = runtimeConfig;
         _diagnosticsStore = diagnosticsStore;
         _capacityGuard = capacityGuard;
         _fallbackRecoveryService = fallbackRecoveryService;
@@ -53,6 +57,13 @@ public sealed class CloudRetryTask : ScheduledTaskBase
 
     protected override async Task ExecuteAsync()
     {
+        if (_runtimeConfig?.Current.CloudUploadEnabled == false)
+        {
+            _diagnosticsStore.SetRuntimeState(CloudRetryRuntimeState.Idle);
+            _wasUnavailable = true;
+            return;
+        }
+
         if (!_deviceService.CanUploadToCloud)
         {
             _diagnosticsStore.SetRuntimeState(CloudRetryRuntimeState.WaitingForRecovery);

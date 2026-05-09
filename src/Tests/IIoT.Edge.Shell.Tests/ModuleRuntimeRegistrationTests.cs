@@ -146,6 +146,77 @@ public sealed class ModuleRuntimeRegistrationTests
     }
 
     [Fact]
+    public async Task AppLifecycleManager_WhenBootstrapSecretIsMissing_ShouldFailStartupValidation()
+    {
+        await using var harness = await AppLifecycleHarness.CreateAsync(
+            enabledModules: ["Homogenization"],
+            deviceModuleIds: ["Homogenization"],
+            bootstrapSecret: null);
+
+        var result = await harness.Manager.StartAsync();
+
+        Assert.False(result.Success);
+        Assert.Contains("CloudApi:BootstrapSecret", result.Message, StringComparison.Ordinal);
+        Assert.Contains(
+            harness.StartupDiagnosticsStore.Current.Issues,
+            issue => string.Equals(issue.Code, "CONFIG_INVALID", StringComparison.OrdinalIgnoreCase)
+                     && issue.Message.Contains("CloudApi:BootstrapSecret", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AppLifecycleManager_WhenCloudApiPathIsMissing_ShouldFailStartupValidation()
+    {
+        await using var harness = await AppLifecycleHarness.CreateAsync(
+            enabledModules: ["Homogenization"],
+            deviceModuleIds: ["Homogenization"],
+            omittedCloudPathKey: "CloudApi:Paths:DeviceInstance");
+
+        var result = await harness.Manager.StartAsync();
+
+        Assert.False(result.Success);
+        Assert.Contains("CloudApi:Paths:DeviceInstance", result.Message, StringComparison.Ordinal);
+        Assert.Contains(
+            harness.StartupDiagnosticsStore.Current.Issues,
+            issue => string.Equals(issue.Code, "CONFIG_INVALID", StringComparison.OrdinalIgnoreCase)
+                     && issue.Message.Contains("CloudApi:Paths:DeviceInstance", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AppLifecycleManager_WhenRecipePathMissingDeviceIdPlaceholder_ShouldFailStartupValidation()
+    {
+        await using var harness = await AppLifecycleHarness.CreateAsync(
+            enabledModules: ["Homogenization"],
+            deviceModuleIds: ["Homogenization"],
+            recipeByDeviceTemplate: "/api/v1/edge/recipes/device");
+
+        var result = await harness.Manager.StartAsync();
+
+        Assert.False(result.Success);
+        Assert.Contains("{deviceId}", result.Message, StringComparison.Ordinal);
+        Assert.Contains(
+            harness.StartupDiagnosticsStore.Current.Issues,
+            issue => string.Equals(issue.Code, "CONFIG_INVALID", StringComparison.OrdinalIgnoreCase)
+                     && issue.Message.Contains("CloudApi:Paths:RecipeByDeviceTemplate", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void CloudApiProductionCode_ShouldNotContainApiRouteDefaults()
+    {
+        var repoRoot = FindRepoRoot();
+        var files = new[]
+        {
+            Path.Combine(repoRoot, "src", "Infrastructure", "IIoT.Edge.Infrastructure.Integration", "Config", "CloudApiConfig.cs"),
+            Path.Combine(repoRoot, "src", "Infrastructure", "IIoT.Edge.Infrastructure.Integration", "Config", "CloudApiEndpointProvider.cs"),
+            Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.Host.Bootstrap", "Core", "StartupDiagnosticsReportBuilder.cs")
+        };
+
+        foreach (var file in files)
+        {
+            Assert.DoesNotContain("/api/v1/", File.ReadAllText(file), StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public async Task AppLifecycleManager_WhenEnabledTaskSignalIsMissing_ShouldMarkRuntimeFaultAndSkipTaskRegistration()
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
@@ -334,17 +405,39 @@ public sealed class ModuleRuntimeRegistrationTests
     private static IConfiguration CreateConfiguration(
         string[]? enabledModules = null,
         string environmentName = "Production",
-        bool developmentSamplesEnabled = false)
+        bool developmentSamplesEnabled = false,
+        string? bootstrapSecret = "bootstrap-secret",
+        string? omittedCloudPathKey = null,
+        string? recipeByDeviceTemplate = null)
     {
         var settings = new Dictionary<string, string?>
         {
             ["CloudApi:BaseUrl"] = "https://cloud.test",
             ["CloudApi:ClientCode"] = "CLIENT-01",
+            ["CloudApi:Paths:DeviceInstance"] = "/api/v1/bootstrap/device-instance",
+            ["CloudApi:Paths:BootstrapRefresh"] = "/api/v1/bootstrap/edge-refresh",
+            ["CloudApi:Paths:IdentityDeviceLogin"] = "/api/v1/bootstrap/edge-login",
+            ["CloudApi:Paths:HumanIdentityRefresh"] = "/api/v1/human/identity/refresh",
+            ["CloudApi:Paths:DeviceLog"] = "/api/v1/edge/device-logs",
+            ["CloudApi:Paths:CapacityHourly"] = "/api/v1/edge/capacity/hourly",
+            ["CloudApi:Paths:CapacitySummary"] = "/api/v1/edge/capacity/summary",
+            ["CloudApi:Paths:CapacitySummaryRange"] = "/api/v1/edge/capacity/summary/range",
+            ["CloudApi:Paths:RecipeByDeviceTemplate"] = recipeByDeviceTemplate ?? "/api/v1/edge/recipes/device/{deviceId}",
             ["Shell:Environment"] = environmentName,
             ["DevelopmentSamples:Enabled"] = developmentSamplesEnabled.ToString(),
             ["DevelopmentSamples:SampleBarcode"] = "ST-DEV-0001",
             ["DevelopmentSamples:SampleLayerCount"] = "12"
         };
+
+        if (bootstrapSecret is not null)
+        {
+            settings["CloudApi:BootstrapSecret"] = bootstrapSecret;
+        }
+
+        if (!string.IsNullOrWhiteSpace(omittedCloudPathKey))
+        {
+            settings.Remove(omittedCloudPathKey);
+        }
 
         enabledModules ??= [];
         for (var i = 0; i < enabledModules.Length; i++)
@@ -586,7 +679,10 @@ public sealed class ModuleRuntimeRegistrationTests
             string[] enabledModules,
             string[] deviceModuleIds,
             string environmentName = "Production",
-            bool developmentSamplesEnabled = false)
+            bool developmentSamplesEnabled = false,
+            string? bootstrapSecret = "bootstrap-secret",
+            string? omittedCloudPathKey = null,
+            string? recipeByDeviceTemplate = null)
         {
             var tempDirectory = Path.Combine(Path.GetTempPath(), "edge-shell-tests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(tempDirectory);
@@ -594,7 +690,10 @@ public sealed class ModuleRuntimeRegistrationTests
             var configuration = CreateConfiguration(
                 enabledModules,
                 environmentName,
-                developmentSamplesEnabled);
+                developmentSamplesEnabled,
+                bootstrapSecret,
+                omittedCloudPathKey,
+                recipeByDeviceTemplate);
             var runtimePaths = CreateRuntimePaths(tempDirectory, configuration);
 
             var services = new ServiceCollection();

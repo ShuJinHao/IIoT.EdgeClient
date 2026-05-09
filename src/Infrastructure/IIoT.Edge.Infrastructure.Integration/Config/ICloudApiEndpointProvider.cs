@@ -6,6 +6,7 @@ public interface ICloudApiEndpointProvider : ICloudApiPathProvider
 {
     string BuildUrl(string relativeOrAbsoluteUrl);
     string GetClientCode();
+    string GetBootstrapSecret();
     string GetDeviceInstancePath();
     string GetBootstrapRefreshPath();
     string GetIdentityDeviceLoginPath();

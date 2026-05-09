@@ -32,11 +32,15 @@ public sealed class CloudDeviceBootstrapClient : ICloudDeviceBootstrapClient
         try
         {
             clientCode = _endpointProvider.GetClientCode();
+            var bootstrapSecret = _endpointProvider.GetBootstrapSecret();
             var deviceInstancePath = _endpointProvider.GetDeviceInstancePath();
             var url = _endpointProvider.BuildUrl(
                 $"{deviceInstancePath}?clientCode={Uri.EscapeDataString(clientCode)}");
 
-            using var response = await CreateHttpClient().GetAsync(url, ct).ConfigureAwait(false);
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.TryAddWithoutValidation(CloudAuthHeaders.BootstrapSecret, bootstrapSecret);
+
+            using var response = await CreateHttpClient().SendAsync(request, ct).ConfigureAwait(false);
             return await ReadBootstrapResponseAsync(response, clientCode, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)

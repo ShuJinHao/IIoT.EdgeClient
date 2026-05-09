@@ -73,9 +73,22 @@ public sealed class LocalSystemRuntimeConfigService(
                     defaultValue: false,
                     cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
+            var cloudProcessTypes = _processIntegrationRegistry
+                .GetCloudUploaders()
+                .Keys
+                .ToArray();
+            var cloudEnabled = await _moduleParamRoleProvider
+                .AnyBoolAsync(
+                    ModuleParamCategory.Cloud,
+                    ModuleParamRole.CloudEnabled,
+                    cloudProcessTypes,
+                    defaultValue: false,
+                    cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
 
             Current = new SystemRuntimeConfigSnapshot(
                 mesEnabled,
+                cloudEnabled,
                 DefaultInterval,
                 DefaultInterval);
         }

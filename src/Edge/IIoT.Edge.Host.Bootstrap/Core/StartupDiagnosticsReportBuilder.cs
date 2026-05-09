@@ -31,6 +31,7 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
     private readonly ICellDataRegistry _cellDataRegistry;
     private readonly IStationRuntimeRegistry _runtimeRegistry;
     private readonly IProcessIntegrationRegistry _integrationRegistry;
+    private readonly ILocalSystemRuntimeConfigService? _runtimeConfigService;
     private readonly IStartupPluginLifecycleSnapshotBuilder _pluginLifecycleSnapshotBuilder;
     private readonly Dictionary<string, IEdgeProcessModule> _modulesById;
     private readonly Dictionary<string, ModulePluginDescriptor> _discoveredModulesById;
@@ -53,7 +54,8 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
         IReadOnlyCollection<ModuleCatalogIssue> moduleCatalogIssues,
         IReadOnlyCollection<string> configuredEnabledModuleIds,
         IEnumerable<IEdgeProcessModule> modules,
-        IEnumerable<IModuleHardwareProfileProvider> hardwareProfiles)
+        IEnumerable<IModuleHardwareProfileProvider> hardwareProfiles,
+        ILocalSystemRuntimeConfigService? runtimeConfigService = null)
     {
         _configuration = configuration;
         _runtimePaths = runtimePaths;
@@ -63,6 +65,7 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
         _cellDataRegistry = cellDataRegistry;
         _runtimeRegistry = runtimeRegistry;
         _integrationRegistry = integrationRegistry;
+        _runtimeConfigService = runtimeConfigService;
         _pluginLifecycleSnapshotBuilder = pluginLifecycleSnapshotBuilder;
         _modulesById = modules.ToDictionary(x => x.ModuleId, StringComparer.OrdinalIgnoreCase);
         _discoveredModulesById = discoveredModules.ToDictionary(x => x.ModuleId, StringComparer.OrdinalIgnoreCase);
@@ -76,6 +79,11 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
 
     public async Task<StartupDiagnosticsReport> BuildAsync(CancellationToken cancellationToken = default)
     {
+        if (_runtimeConfigService is not null)
+        {
+            await _runtimeConfigService.EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+        }
+
         var issues = new List<StartupDiagnosticIssue>();
         issues.AddRange(_moduleCatalogIssues.Select(static issue =>
             new StartupDiagnosticIssue(
@@ -83,7 +91,7 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
                 issue.Message,
                 issue.ModuleId)));
 
-        ValidateAppSettings(issues);
+        ValidateAppSettings(issues, _runtimeConfigService?.Current.CloudUploadEnabled ?? true);
         ValidateModuleConfiguration(issues);
 
         var plcDevices = await _networkDevices.GetListAsync(
@@ -136,8 +144,13 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
             }));
     }
 
-    private void ValidateAppSettings(List<StartupDiagnosticIssue> issues)
+    private void ValidateAppSettings(List<StartupDiagnosticIssue> issues, bool cloudUploadEnabled)
     {
+        if (!cloudUploadEnabled)
+        {
+            return;
+        }
+
         var baseUrl = _configuration["CloudApi:BaseUrl"]?.Trim();
         if (string.IsNullOrWhiteSpace(baseUrl))
         {
@@ -152,6 +165,26 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
         if (string.IsNullOrWhiteSpace(clientCode))
         {
             issues.Add(CreateIssue("CONFIG_INVALID", "CloudApi:ClientCode 未配置。"));
+        }
+
+        var bootstrapSecret = _configuration["CloudApi:BootstrapSecret"]?.Trim();
+        if (string.IsNullOrWhiteSpace(bootstrapSecret))
+        {
+            issues.Add(CreateIssue("CONFIG_INVALID", "CloudApi:BootstrapSecret 未配置。"));
+        }
+
+        foreach (var key in CloudApiPathKeys)
+        {
+            ValidateRequiredCloudPath(issues, key);
+        }
+
+        var recipePath = _configuration["CloudApi:Paths:RecipeByDeviceTemplate"]?.Trim();
+        if (!string.IsNullOrWhiteSpace(recipePath)
+            && !recipePath.Contains("{deviceId}", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add(CreateIssue(
+                "CONFIG_INVALID",
+                "CloudApi:Paths:RecipeByDeviceTemplate 必须包含 {deviceId} 占位符。"));
         }
 
         if (!TimeSpan.TryParse(_shiftConfig.DayStart, out var dayStart))
@@ -178,6 +211,42 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
             issues.Add(CreateIssue(
                 "MACHINE_PROFILE_MISSING",
                 $"已请求机型配置“{configurationProfile.MachineProfile}”，但文件“{configurationProfile.MachineProfileFileName}”未加载。"));
+        }
+    }
+
+    private static readonly string[] CloudApiPathKeys =
+    [
+        "CloudApi:Paths:DeviceInstance",
+        "CloudApi:Paths:BootstrapRefresh",
+        "CloudApi:Paths:IdentityDeviceLogin",
+        "CloudApi:Paths:HumanIdentityRefresh",
+        "CloudApi:Paths:DeviceLog",
+        "CloudApi:Paths:CapacityHourly",
+        "CloudApi:Paths:CapacitySummary",
+        "CloudApi:Paths:CapacitySummaryRange",
+        "CloudApi:Paths:RecipeByDeviceTemplate"
+    ];
+
+    private void ValidateRequiredCloudPath(
+        List<StartupDiagnosticIssue> issues,
+        string key)
+    {
+        var configured = _configuration[key]?.Trim();
+        if (string.IsNullOrWhiteSpace(configured))
+        {
+            issues.Add(CreateIssue("CONFIG_INVALID", $"{key} 未配置。"));
+            return;
+        }
+
+        if (Uri.TryCreate(configured, UriKind.Absolute, out _))
+        {
+            issues.Add(CreateIssue("CONFIG_INVALID", $"{key} 只能填写相对 API 路径，不能填写完整地址。"));
+            return;
+        }
+
+        if (!configured.StartsWith('/'))
+        {
+            issues.Add(CreateIssue("CONFIG_INVALID", $"{key} 必须以 / 开头。"));
         }
     }
 

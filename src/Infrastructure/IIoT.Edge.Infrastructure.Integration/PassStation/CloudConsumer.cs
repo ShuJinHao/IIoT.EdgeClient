@@ -54,6 +54,13 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
         }
 
         var gate = _uploadGate.GetSnapshot();
+        if (!gate.CanUpload && string.Equals(gate.ReasonCode, "cloud_upload_disabled", StringComparison.OrdinalIgnoreCase))
+        {
+            var skippedResult = CloudCallResult.Success();
+            _diagnosticsStore.RecordResult(records[0].CellData.ProcessType, skippedResult);
+            return skippedResult;
+        }
+
         if (!gate.CanUpload)
         {
             var blockedResult = CloudCallResult.Failure(
