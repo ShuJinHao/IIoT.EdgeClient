@@ -15,7 +15,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using HomogenizationCloudUploadChannel = IIoT.Edge.Application.Modules.Cloud.ICloudUploadChannel<
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
-    object>;
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationProcessRecordsCloudPayload>;
 using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesScenarioChannel<
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
     string,
@@ -130,6 +130,7 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
         Assert.Equal(500, provider.GetRequiredService<IOptions<HomogenizationModuleOptions>>().Value.Presentation.MaxOutboundRecords);
         Assert.Equal("hdc2023", provider.GetRequiredService<IOptions<HomogenizationMesOptions>>().Value.SignToken);
         Assert.Equal(11, provider.GetRequiredService<IOptions<HomogenizationCodeOptions>>().Value.Plc.SignalTrigger);
+        Assert.Equal("ERROR", provider.GetRequiredService<IOptions<HomogenizationCodeOptions>>().Value.Cloud.EquipmentStatusLevels["-1"]);
     }
 
     [Fact]

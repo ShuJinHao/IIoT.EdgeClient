@@ -182,6 +182,24 @@ public sealed class ModuleRuntimeRegistrationTests
     }
 
     [Fact]
+    public async Task AppLifecycleManager_WhenProcessUploadPathIsMissing_ShouldFailStartupValidation()
+    {
+        await using var harness = await AppLifecycleHarness.CreateAsync(
+            enabledModules: ["Homogenization"],
+            deviceModuleIds: ["Homogenization"],
+            omittedCloudPathKey: "CloudApi:Paths:ProcessUpload");
+
+        var result = await harness.Manager.StartAsync();
+
+        Assert.False(result.Success);
+        Assert.Contains("CloudApi:Paths:ProcessUpload", result.Message, StringComparison.Ordinal);
+        Assert.Contains(
+            harness.StartupDiagnosticsStore.Current.Issues,
+            issue => string.Equals(issue.Code, "CONFIG_INVALID", StringComparison.OrdinalIgnoreCase)
+                     && issue.Message.Contains("CloudApi:Paths:ProcessUpload", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task AppLifecycleManager_WhenRecipePathMissingDeviceIdPlaceholder_ShouldFailStartupValidation()
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
@@ -419,6 +437,7 @@ public sealed class ModuleRuntimeRegistrationTests
             ["CloudApi:Paths:IdentityDeviceLogin"] = "/api/v1/bootstrap/edge-login",
             ["CloudApi:Paths:HumanIdentityRefresh"] = "/api/v1/human/identity/refresh",
             ["CloudApi:Paths:DeviceLog"] = "/api/v1/edge/device-logs",
+            ["CloudApi:Paths:ProcessUpload"] = "/api/v1/edge/process-records",
             ["CloudApi:Paths:CapacityHourly"] = "/api/v1/edge/capacity/hourly",
             ["CloudApi:Paths:CapacitySummary"] = "/api/v1/edge/capacity/summary",
             ["CloudApi:Paths:CapacitySummaryRange"] = "/api/v1/edge/capacity/summary/range",

@@ -113,8 +113,8 @@ internal sealed class DiagnosticsSummaryBuilder(
     private string BuildCloudPendingSummary(CloudSyncDiagnosticsSnapshot cloud)
         => FormatText(
             "Navigation_Sync_PendingCloudFormat",
-            "待处理：重试={0}，日志={1}，产能={2}",
-            cloud.PendingRetryCount,
+            "待处理：过站={0}，日志={1}，产能={2}",
+            cloud.PendingPassStationCount,
             cloud.PendingDeviceLogCount,
             cloud.PendingCapacityCount)
         + FormatText(

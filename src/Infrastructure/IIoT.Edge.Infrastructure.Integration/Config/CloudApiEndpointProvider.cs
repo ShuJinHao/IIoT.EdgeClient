@@ -64,6 +64,9 @@ public class CloudApiEndpointProvider : ICloudApiEndpointProvider
     public string GetDeviceLogPath()
         => RequirePath(_cloudApiOptions.CurrentValue.Paths.DeviceLog, "CloudApi:Paths:DeviceLog");
 
+    public string GetProcessUploadPath()
+        => RequirePath(_cloudApiOptions.CurrentValue.Paths.ProcessUpload, "CloudApi:Paths:ProcessUpload");
+
     public string GetCapacityHourlyPath()
         => RequirePath(_cloudApiOptions.CurrentValue.Paths.CapacityHourly, "CloudApi:Paths:CapacityHourly");
 

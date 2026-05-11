@@ -41,8 +41,8 @@ internal sealed class LocalizedSyncDiagnosticsText(
             Format("Navigation_Sync_LastFailureFormat", "最近失败：{0}", FormatTimestamp(snapshot.LastFailureAt)),
             Format(
                 "Navigation_Sync_PendingCloudFormat",
-                "待处理：重试={0}，日志={1}，产能={2}",
-                snapshot.PendingRetryCount,
+                "待处理：过站={0}，日志={1}，产能={2}",
+                snapshot.PendingPassStationCount,
                 snapshot.PendingDeviceLogCount,
                 snapshot.PendingCapacityCount),
             FormatHeartbeatSummary(snapshot.Heartbeat),

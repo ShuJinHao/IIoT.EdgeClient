@@ -235,7 +235,7 @@
     <sys:String x:Key="Navigation_Sync_LastFailureFormat">Last failure: {0}</sys:String>
     <sys:String x:Key="Navigation_Sync_LastFailureWithReasonFormat">Last failure: {0} ({1})</sys:String>
     <sys:String x:Key="Navigation_Sync_FailureReasonFormat">Failure reason: {0}</sys:String>
-    <sys:String x:Key="Navigation_Sync_PendingCloudFormat">Pending: retry={0}, logs={1}, capacity={2}</sys:String>
+    <sys:String x:Key="Navigation_Sync_PendingCloudFormat">Pending: pass-station={0}, logs={1}, capacity={2}</sys:String>
     <sys:String x:Key="Navigation_Sync_PendingMesFormat">Pending: retry={0}</sys:String>
     <sys:String x:Key="Navigation_Sync_DeadLetterSuffixFormat">, dead letters={0}</sys:String>
     <sys:String x:Key="Navigation_Heartbeat_NotConfigured">Heartbeat: not configured</sys:String>

@@ -109,6 +109,7 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
         Assert.Equal(EdgeUploadBlockReason.UploadTokenRejected, snapshot.Cloud.BlockReason);
         Assert.True(snapshot.Cloud.IsPausedWaitingForRecovery);
         Assert.Equal(1, snapshot.Cloud.PendingRetryCount);
+        Assert.Equal(1, snapshot.Cloud.PendingPassStationCount);
         Assert.Equal(1, snapshot.Cloud.PendingDeviceLogCount);
         Assert.Equal(1, snapshot.Cloud.PendingCapacityCount);
         Assert.Equal(MesRetryRuntimeState.Backoff, snapshot.Mes.RuntimeState);
@@ -170,6 +171,7 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
         Assert.Contains("cloud retry count failed", snapshot.Cloud.PersistenceFaultMessage, StringComparison.Ordinal);
         Assert.NotNull(snapshot.Cloud.LastPersistenceFaultAt);
         Assert.Equal(0, snapshot.Cloud.PendingRetryCount);
+        Assert.Equal(0, snapshot.Cloud.PendingPassStationCount);
         Assert.Equal(0, snapshot.Cloud.PendingDeviceLogCount);
         Assert.Equal(0, snapshot.Cloud.PendingCapacityCount);
 
@@ -277,6 +279,7 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
         countRelease.SetResult();
         var snapshot = await snapshotTask;
         Assert.Equal(1, snapshot.Cloud.PendingRetryCount);
+        Assert.Equal(1, snapshot.Cloud.PendingPassStationCount);
         Assert.Equal(1, snapshot.Cloud.PendingDeviceLogCount);
         Assert.Equal(1, snapshot.Cloud.PendingCapacityCount);
         Assert.Equal(1, snapshot.Mes.PendingRetryCount);

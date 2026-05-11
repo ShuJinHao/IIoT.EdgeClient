@@ -221,6 +221,7 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
         "CloudApi:Paths:IdentityDeviceLogin",
         "CloudApi:Paths:HumanIdentityRefresh",
         "CloudApi:Paths:DeviceLog",
+        "CloudApi:Paths:ProcessUpload",
         "CloudApi:Paths:CapacityHourly",
         "CloudApi:Paths:CapacitySummary",
         "CloudApi:Paths:CapacitySummaryRange",

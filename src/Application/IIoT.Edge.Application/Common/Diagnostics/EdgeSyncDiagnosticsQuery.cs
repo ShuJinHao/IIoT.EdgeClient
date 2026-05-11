@@ -105,7 +105,8 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
             PersistenceFaultMessage: cloudPending.PersistenceFaultMessage,
             Heartbeat: GetHeartbeat(ExternalSystemKind.Cloud),
             DeadLetters: cloudDeadLetters,
-            LastProcessDisplayName: ResolveProcessDisplayName(cloudDiagnostics.LastProcessType));
+            LastProcessDisplayName: ResolveProcessDisplayName(cloudDiagnostics.LastProcessType),
+            PendingPassStationCount: cloudPending.PendingRetryCount);
 
         var mes = new MesSyncDiagnosticsSnapshot(
             RuntimeState: mesRuntime.RuntimeState,
