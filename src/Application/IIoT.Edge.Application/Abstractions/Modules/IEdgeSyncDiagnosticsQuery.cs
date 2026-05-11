@@ -40,7 +40,8 @@ public sealed record CloudSyncDiagnosticsSnapshot(
     string? PersistenceFaultMessage,
     ExternalHeartbeatSnapshot? Heartbeat = null,
     DeadLetterDiagnosticsSnapshot? DeadLetters = null,
-    string? LastProcessDisplayName = null);
+    string? LastProcessDisplayName = null,
+    int PendingPassStationCount = 0);
 
 public sealed record MesSyncDiagnosticsSnapshot(
     MesRetryRuntimeState RuntimeState,

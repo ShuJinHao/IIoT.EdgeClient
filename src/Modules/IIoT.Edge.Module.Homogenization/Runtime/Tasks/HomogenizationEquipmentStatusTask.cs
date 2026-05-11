@@ -5,6 +5,7 @@ using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
+using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using Microsoft.Extensions.Options;
 using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesScenarioChannel<
@@ -106,6 +107,7 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
     {
         const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.设备状态上传;
         var snapshot = Codec.CaptureEquipmentStatusSnapshot(CodeOptions.Mes);
+        WriteCloudDeviceStatusLog(snapshot);
         var result = await _mesChannel
             .UploadEquipmentStatusAsync(_deviceService.CurrentDevice, snapshot, cancellationToken)
             .ConfigureAwait(false);
@@ -124,6 +126,29 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
         ModuleContext.LastEquipmentStatusSnapshot = snapshot;
 
         Interaction.ReplyResult(trigger, result);
+    }
+
+    private void WriteCloudDeviceStatusLog(HomogenizationEquipmentStatusSnapshot snapshot)
+    {
+        var level = CodeOptions.Cloud.ResolveEquipmentStatusLevel(snapshot);
+        var extraMessages = snapshot.Messages.Count == 0
+            ? string.Empty
+            : $"，消息={string.Join("；", snapshot.Messages)}";
+        var message =
+            $"设备状态采集：状态码={snapshot.StatusCode}，状态={snapshot.StatusText}，工序={HomogenizationModuleIdentity.ProcessType}，PLC/设备={ModuleContext.DeviceName}，采集时间={snapshot.CapturedAt:yyyy-MM-dd HH:mm:ss}{extraMessages}。";
+
+        switch (level)
+        {
+            case "ERROR":
+                Logger.Error(message);
+                break;
+            case "WARN":
+                Logger.Warn(message);
+                break;
+            default:
+                Logger.Info(message);
+                break;
+        }
     }
 }
 

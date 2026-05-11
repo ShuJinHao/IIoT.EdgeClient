@@ -6,6 +6,7 @@ using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
+using IIoT.Edge.Infrastructure.Integration.DeviceLog;
 using IIoT.Edge.Module.Homogenization;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
@@ -14,6 +15,7 @@ using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using IIoT.Edge.Runtime.Signals;
 using IIoT.Edge.SharedKernel.DataPipeline;
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesScenarioChannel<
@@ -356,6 +358,97 @@ public sealed class HomogenizationBusinessChainBehaviorTests
     }
 
     [Fact]
+    public async Task EquipmentStatus_ShouldWriteCloudDeviceLogWithMappedLevelBeforeMesResult()
+    {
+        await using var normalHarness = HomogenizationRuntimeHarness.Create();
+        normalHarness.Mes.EquipmentStatusResult = MesCallResult.TransportFailure("MES 状态上传失败。");
+        await normalHarness.StartAsync();
+
+        normalHarness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.设备状态值), 1);
+        normalHarness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.设备状态上传), TestCodeOptions.Plc.SignalTrigger);
+        await WaitUntilAsync(() => normalHarness.Context.GetStep(HomogenizationTaskKeys.EquipmentStatus) == 30);
+
+        Assert.Contains(
+            normalHarness.Logger.Entries,
+            entry => entry.Level == "Info"
+                     && entry.Message.Contains("设备状态采集", StringComparison.Ordinal)
+                     && entry.Message.Contains("状态码=1", StringComparison.Ordinal)
+                     && entry.Message.Contains("PLC/设备=PLC-H", StringComparison.Ordinal));
+
+        await using var alarmHarness = HomogenizationRuntimeHarness.Create();
+        await alarmHarness.StartAsync();
+
+        alarmHarness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.设备状态值), unchecked((ushort)-1));
+        alarmHarness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.设备状态上传), TestCodeOptions.Plc.SignalTrigger);
+        await WaitUntilAsync(() => alarmHarness.Context.GetStep(HomogenizationTaskKeys.EquipmentStatus) == 30);
+
+        Assert.Contains(
+            alarmHarness.Logger.Entries,
+            entry => entry.Level == "Error"
+                     && entry.Message.Contains("设备状态采集", StringComparison.Ordinal)
+                     && entry.Message.Contains("状态码=-1", StringComparison.Ordinal)
+                     && entry.Message.Contains("PLC 返回报警状态", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task EquipmentStatusCloudLog_WhenCloudGateBlocked_ShouldBufferAndRetryAfterRecovery()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create();
+        harness.Mes.EquipmentStatusResult = MesCallResult.TransportFailure("MES 状态上传失败。");
+        harness.DeviceService.MarkUploadGateBlocked(EdgeUploadBlockReason.MissingUploadToken, DateTimeOffset.UtcNow);
+
+        var cloudHttp = new FakeCloudHttpClient();
+        var bufferStore = new FakeDeviceLogBufferStore();
+        var logSyncTask = new DeviceLogSyncTask(
+            cloudHttp,
+            new FakeCloudApiEndpointProvider(),
+            harness.DeviceService,
+            new FakeLocalSystemRuntimeConfigService
+            {
+                Current = SystemRuntimeConfigSnapshot.Default with
+                {
+                    CloudSyncInterval = TimeSpan.FromMilliseconds(50)
+                }
+            },
+            bufferStore,
+            harness.Logger,
+            new FakeCloudDiagnosticsStore());
+
+        using var logSyncCancellation = new CancellationTokenSource();
+        await logSyncTask.StartAsync(logSyncCancellation.Token);
+        await harness.StartAsync();
+
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.设备状态值), 1);
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.设备状态上传), TestCodeOptions.Plc.SignalTrigger);
+        await WaitUntilAsync(() => harness.Context.GetStep(HomogenizationTaskKeys.EquipmentStatus) == 30);
+        await logSyncTask.StopAsync();
+
+        Assert.Equal("Failed", harness.Diagnostics.Get(TestCodeOptions.Mes.Channels.EquipmentStatus)!.LastResult);
+        Assert.Equal(0, cloudHttp.PostCallCount);
+        Assert.Contains(
+            bufferStore.Records,
+            record => record.Level == "Info"
+                      && record.Message.Contains("设备状态采集", StringComparison.Ordinal)
+                      && record.Message.Contains("状态码=1", StringComparison.Ordinal));
+
+        cloudHttp.EnqueuePostResult(true);
+        harness.DeviceService.SetOnline(harness.DeviceService.CurrentDevice!);
+
+        var retryResult = await logSyncTask.RetryBufferAsync();
+
+        Assert.True(retryResult);
+        Assert.Equal(1, cloudHttp.PostCallCount);
+        Assert.Empty(bufferStore.Records);
+
+        var json = JsonSerializer.SerializeToElement(cloudHttp.LastPayload);
+        Assert.Equal(harness.DeviceService.CurrentDevice!.DeviceId, json.GetProperty("deviceId").GetGuid());
+        Assert.Contains(
+            json.GetProperty("logs").EnumerateArray(),
+            log => log.GetProperty("level").GetString() == "Info"
+                   && log.GetProperty("message").GetString()!.Contains("设备状态采集", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Realtime_WhenMesFails_ShouldRecordFailureWithoutStoppingRuntime()
     {
         await using var harness = HomogenizationRuntimeHarness.Create();
@@ -436,7 +529,9 @@ public sealed class HomogenizationBusinessChainBehaviorTests
             CapturingDataPipelineService pipeline,
             FakeMesUploadDiagnosticsStore diagnostics,
             FakeHomogenizationModuleParamProvider parameters,
-            FakeProductionTimeProvider productionTime)
+            FakeProductionTimeProvider productionTime,
+            FakeDeviceService deviceService,
+            FakeLogService logger)
         {
             _provider = provider;
             Buffer = buffer;
@@ -449,6 +544,8 @@ public sealed class HomogenizationBusinessChainBehaviorTests
             Diagnostics = diagnostics;
             Parameters = parameters;
             ProductionTime = productionTime;
+            DeviceService = deviceService;
+            Logger = logger;
         }
 
         public PlcBuffer Buffer { get; }
@@ -471,6 +568,10 @@ public sealed class HomogenizationBusinessChainBehaviorTests
 
         public FakeProductionTimeProvider ProductionTime { get; }
 
+        public FakeDeviceService DeviceService { get; }
+
+        public FakeLogService Logger { get; }
+
         public static HomogenizationRuntimeHarness Create(
             CapturingHomogenizationMesChannel? mes = null,
             CapturingDataPipelineService? pipeline = null,
@@ -492,6 +593,7 @@ public sealed class HomogenizationBusinessChainBehaviorTests
             NetworkDeviceId = 7
             };
             var diagnostics = new FakeMesUploadDiagnosticsStore();
+            var logger = new FakeLogService();
             var parameters = new FakeHomogenizationModuleParamProvider
             {
                 DuplicateCheckEnabled = duplicateCheckEnabled
@@ -517,7 +619,7 @@ public sealed class HomogenizationBusinessChainBehaviorTests
                     services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.Interaction>>(HomogenizationSignalTestProfile.InteractionProfileInstance);
         services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.SingleRead>>(HomogenizationSignalTestProfile.SingleReadProfileInstance);
         services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.ContinuousRead>>(HomogenizationSignalTestProfile.ContinuousReadProfileInstance);
-            services.AddSingleton<ILogService>(new FakeLogService());
+            services.AddSingleton<ILogService>(logger);
             services.AddSingleton<IDeviceService>(deviceService);
             services.AddSingleton<IMesUploadDiagnosticsStore>(diagnostics);
             services.AddSingleton<HomogenizationMesScenarioChannel>(mes);
@@ -548,7 +650,9 @@ public sealed class HomogenizationBusinessChainBehaviorTests
                 pipeline,
                 diagnostics,
                 parameters,
-                productionTime);
+                productionTime,
+                deviceService,
+                logger);
         }
 
         public Task StartAsync()

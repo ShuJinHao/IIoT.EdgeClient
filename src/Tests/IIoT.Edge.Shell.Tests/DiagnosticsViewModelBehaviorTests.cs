@@ -71,7 +71,8 @@ public sealed class DiagnosticsViewModelBehaviorTests
                         TestNow.AddMinutes(-1),
                         true,
                         TestNow.AddSeconds(-30),
-                        "cloud retry count failed"),
+                        "cloud retry count failed",
+                        PendingPassStationCount: 3),
                     new MesSyncDiagnosticsSnapshot(
                         MesRetryRuntimeState.Backoff,
                         TestNow.AddMinutes(-3),
@@ -98,6 +99,7 @@ public sealed class DiagnosticsViewModelBehaviorTests
 
             Assert.Equal("上传门禁：存储故障", viewModel.CloudGateSummary);
             Assert.Equal("云端运行：等待恢复", viewModel.CloudRuntimeSummary);
+            Assert.Equal("待处理：过站=3，日志=4，产能=5，死信=0", viewModel.CloudPendingSummary);
             Assert.Equal("MES运行：退避中", viewModel.MesRuntimeSummary);
             Assert.Contains("产能阻塞：是", viewModel.CloudCapacitySummary, StringComparison.Ordinal);
             Assert.Contains("存储故障：是", viewModel.CloudPersistenceSummary, StringComparison.Ordinal);

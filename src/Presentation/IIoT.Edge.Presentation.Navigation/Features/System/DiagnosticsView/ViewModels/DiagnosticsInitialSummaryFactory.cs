@@ -26,7 +26,7 @@ internal sealed class DiagnosticsInitialSummaryFactory(
             CloudGateSummary = FormatText("Navigation_Sync_UploadGateFormat", "上传门禁：{0}", "--"),
             CloudRuntimeSummary = FormatText("Navigation_Diagnostics_CloudRuntimeFormat", "云端运行：{0}", GetText("Navigation_Runtime_Idle", "空闲")),
             CloudResultSummary = FormatText("Navigation_Sync_LastResultFormat", "最近结果：{0}", "--"),
-            CloudPendingSummary = FormatText("Navigation_Sync_PendingCloudFormat", "待处理：重试={0}，日志={1}，产能={2}", 0, 0, 0),
+            CloudPendingSummary = FormatText("Navigation_Sync_PendingCloudFormat", "待处理：过站={0}，日志={1}，产能={2}", 0, 0, 0),
             CloudCapacitySummary = diagnosticsText.FormatCapacityBlockedSummary(false, null, string.Empty, null),
             CloudPersistenceSummary = diagnosticsText.FormatPersistenceFaultSummary(false, null, null),
             CloudLastAttemptSummary = FormatText("Navigation_Sync_LastAttemptFormat", "最近尝试：{0}", "--"),

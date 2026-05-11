@@ -1149,6 +1149,7 @@ internal sealed class FakeCloudApiEndpointProvider : ICloudApiEndpointProvider
     public string GetIdentityDeviceLoginPath() => "/api/v1/bootstrap/edge-login";
     public string GetHumanIdentityRefreshPath() => "/api/v1/human/identity/refresh";
     public string GetDeviceLogPath() => "/api/v1/edge/device-logs";
+    public string GetProcessUploadPath() => "/api/v1/edge/process-records";
     public string BuildRecipeByDevicePath(Guid deviceId) => $"/api/v1/edge/recipes/device/{deviceId}";
     public string GetCapacityHourlyPath() => "/api/v1/edge/capacity/hourly";
     public string GetCapacitySummaryPath() => "/api/v1/edge/capacity/summary";

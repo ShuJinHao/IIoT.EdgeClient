@@ -45,7 +45,7 @@ internal abstract class HomogenizationTaskBase : PlcTaskBase
     protected IProductionTimeProvider ProductionTime { get; }
 
     /// <summary>
-    /// 匀浆 PLC/MES code 配置，包含触发码、复位码、应答码和 MES 通道名称。
+    /// 匀浆 PLC/MES/Cloud code 配置，包含触发码、复位码、应答码、MES 通道和 Cloud 日志映射。
     /// </summary>
     protected HomogenizationCodeOptions CodeOptions { get; }
 

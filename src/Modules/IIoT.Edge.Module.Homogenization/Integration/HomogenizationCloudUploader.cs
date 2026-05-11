@@ -8,35 +8,70 @@ using IIoT.Edge.SharedKernel.DataPipeline;
 namespace IIoT.Edge.Module.Homogenization.Integration;
 
 /// <summary>
-/// 匀浆 Cloud 上传器。云端匀浆过站契约尚未按锁定规则开放，当前显式跳过上传并避免进入 Cloud retry。
+/// 匀浆 Cloud 上传器。插件只负责匀浆工序 payload 映射，HTTP 发送、幂等键和补偿由统一 Cloud 通道处理。
 /// </summary>
-public sealed class HomogenizationCloudUploader : CloudUploadChannelBase<HomogenizationCellData, object>
+public sealed class HomogenizationCloudUploader
+    : CloudUploadChannelBase<HomogenizationCellData, HomogenizationProcessRecordsCloudPayload>
 {
-    /// <summary>
-    /// 占位路径不会被调用；真正上传必须在云端契约单独确认后再启用。
-    /// </summary>
-    private const string UploadPathValue = "/disabled/homogenization-cloud-upload";
+    private const int SchemaVersion = 1;
 
     public HomogenizationCloudUploader(
+        ICloudApiPathProvider cloudApiPathProvider,
         ICloudHttpClient cloudHttp,
         ILogService logger)
-        : base(HomogenizationModuleIdentity.ProcessType, ProcessUploadMode.Batch, UploadPathValue, cloudHttp, logger)
+        : base(
+            HomogenizationModuleIdentity.ProcessType,
+            ProcessUploadMode.Batch,
+            cloudApiPathProvider.GetProcessUploadPath(),
+            cloudHttp,
+            logger)
     {
     }
 
-    protected override Task<CloudCallResult?> CheckBeforeUploadAsync(
-        ProcessCloudUploadContext context,
-        IReadOnlyList<CellCompletedRecord> records,
-        CancellationToken cancellationToken)
-    {
-        Logger.Warn(
-            $"[Cloud] 匀浆云端上传未启用：云端匀浆过站契约尚未单独确认，已跳过 {records.Count} 条记录且不写入云端重试队列。");
-        return Task.FromResult<CloudCallResult?>(CloudCallResult.Success());
-    }
-
-    protected override object BuildPayload(
+    protected override HomogenizationProcessRecordsCloudPayload BuildPayload(
         ProcessCloudUploadContext context,
         IReadOnlyList<HomogenizationCellData> cellData,
         IReadOnlyList<CellCompletedRecord> records)
-        => throw new InvalidOperationException("匀浆云端上传未启用，不应构建云端 payload。");
+        => new(
+            TypeKey: HomogenizationModuleIdentity.ProcessType,
+            ProcessType: HomogenizationModuleIdentity.ProcessType,
+            SchemaVersion: SchemaVersion,
+            DeviceId: context.Device.DeviceId,
+            Records: cellData.Select(data => BuildRecordPayload(context, data)).ToArray());
+
+    private static HomogenizationProcessRecordCloudPayload BuildRecordPayload(
+        ProcessCloudUploadContext context,
+        HomogenizationCellData data)
+        => new(
+            TypeKey: HomogenizationModuleIdentity.ProcessType,
+            ProcessType: HomogenizationModuleIdentity.ProcessType,
+            SchemaVersion: SchemaVersion,
+            DeviceId: context.Device.DeviceId,
+            Barcode: data.TrayCode,
+            CellResult: data.CellResult,
+            CompletedTime: data.CompletedTime,
+            Payload: BuildBusinessPayload(data));
+
+    private static HomogenizationProcessRecordBusinessCloudPayload BuildBusinessPayload(HomogenizationCellData data)
+        => new(
+            PlcName: data.DeviceName,
+            DeviceCode: data.DeviceCode,
+            InboundTime: data.InboundTime,
+            RuntimeStatus: data.RuntimeStatus,
+            RealtimeSnapshot: data.RealtimeSnapshot,
+            RecipeSnapshot: data.RecipeSnapshot,
+            EquipmentStatusSnapshot: data.EquipmentStatusSnapshot,
+            CntActualKg: data.CntActualKg,
+            CntTargetKg: data.CntTargetKg,
+            CntTankAWeightKg: data.CntTankAWeightKg,
+            CntTankBWeightKg: data.CntTankBWeightKg,
+            NmpActualKg: data.NmpActualKg,
+            NmpTargetKg: data.NmpTargetKg,
+            GlueActualKg: data.GlueActualKg,
+            SetStirringTimeMinutes: data.SetStirringTimeMinutes,
+            RemainingStirringTimeMinutes: data.RemainingStirringTimeMinutes,
+            SetDispersionTimeMinutes: data.SetDispersionTimeMinutes,
+            RemainingDispersionTimeMinutes: data.RemainingDispersionTimeMinutes,
+            BatchNumber: data.BatchNumber,
+            MainBatchPlan: data.MainBatchPlan);
 }

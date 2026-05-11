@@ -12,6 +12,7 @@ public sealed class CloudConsumerBehaviorTests
     public async Task ProcessAsync_WhenCloudUploadDisabled_ShouldSkipUploaderAndReturnSuccess()
     {
         var uploader = new CapturingCloudUploader();
+        var diagnostics = new FakeCloudDiagnosticsStore();
         var consumer = new CloudConsumer(
             CreateOnlineDeviceService(),
             new FixedCloudUploadGate(UploadGateSnapshot.Blocked(
@@ -19,7 +20,7 @@ public sealed class CloudConsumerBehaviorTests
                 "cloud_upload_disabled",
                 "云端上传已关闭。")),
             [uploader],
-            new FakeCloudDiagnosticsStore(),
+            diagnostics,
             new FakeLogService());
 
         var result = await consumer.ProcessAsync(new CellCompletedRecord
@@ -32,6 +33,37 @@ public sealed class CloudConsumerBehaviorTests
 
         Assert.True(result);
         Assert.Equal(0, uploader.CallCount);
+        Assert.Equal(CloudCallOutcome.Success, diagnostics.Snapshot.LastOutcome);
+    }
+
+    [Fact]
+    public async Task ProcessWithResultAsync_WhenCloudGateBlocked_ShouldReturnRetryableFailureWithoutCallingUploader()
+    {
+        var uploader = new CapturingCloudUploader();
+        var diagnostics = new FakeCloudDiagnosticsStore();
+        var consumer = new CloudConsumer(
+            CreateOnlineDeviceService(),
+            new FixedCloudUploadGate(UploadGateSnapshot.Blocked(
+                ExternalSystemKind.Cloud,
+                "missing_upload_token",
+                "缺少上传令牌。")),
+            [uploader],
+            diagnostics,
+            new FakeLogService());
+
+        var result = await consumer.ProcessWithResultAsync(new CellCompletedRecord
+        {
+            CellData = new TestCellData
+            {
+                Barcode = "BAR-CLOUD-BLOCKED"
+            }
+        });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(CloudCallOutcome.SkippedUploadNotReady, result.Outcome);
+        Assert.Equal("missing_upload_token", result.ReasonCode);
+        Assert.Equal(0, uploader.CallCount);
+        Assert.Equal("OtherProcess", diagnostics.Snapshot.LastProcessType);
     }
 
     private static FakeDeviceService CreateOnlineDeviceService()
