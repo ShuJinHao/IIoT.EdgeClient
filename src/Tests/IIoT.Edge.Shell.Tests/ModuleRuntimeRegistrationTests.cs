@@ -27,6 +27,7 @@ using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using IIoT.Edge.SharedKernel.DataPipeline.Recipe;
 using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.SharedKernel.Repository;
+using IIoT.Edge.Runtime.Signals;
 using IIoT.Edge.Shell.Core;
 using IIoT.Edge.Shell.Modules;
 using IIoT.Edge.UI.Shared.PluginSystem;
@@ -48,7 +49,7 @@ public sealed class ModuleRuntimeRegistrationTests
         try
         {
             var discovery = DiscoverTestPlugins(pluginRoot);
-            var activation = ShellModuleCatalog.CreateEnabledModules(CreateConfiguration(), discovery.Modules);
+            var activation = CreateShellModuleCatalog().CreateEnabledModules(CreateConfiguration(), discovery.Modules);
 
             Assert.Empty(discovery.Issues);
             Assert.Empty(activation.Issues);
@@ -87,7 +88,7 @@ public sealed class ModuleRuntimeRegistrationTests
         try
         {
             var discovery = DiscoverTestPlugins(pluginRoot);
-            var activation = ShellModuleCatalog.CreateEnabledModules(
+            var activation = CreateShellModuleCatalog().CreateEnabledModules(
                 CreateConfiguration(["Homogenization"]),
                 discovery.Modules);
 
@@ -108,7 +109,7 @@ public sealed class ModuleRuntimeRegistrationTests
         try
         {
             var discovery = DiscoverTestPlugins(pluginRoot);
-            var activation = ShellModuleCatalog.CreateEnabledModules(
+            var activation = CreateShellModuleCatalog().CreateEnabledModules(
                 CreateConfiguration(["Homogenization", "UnknownModule"]),
                 discovery.Modules);
 
@@ -278,7 +279,7 @@ public sealed class ModuleRuntimeRegistrationTests
         var pluginRoot = CreatePluginRuntimeRoot();
         try
         {
-            var modules = ShellModuleCatalog.CreateAllModulesForValidation(DiscoverTestPlugins(pluginRoot).Modules);
+            var modules = CreateShellModuleCatalog().CreateAllModulesForValidation(DiscoverTestPlugins(pluginRoot).Modules);
             var viewRegistry = new ViewRegistry();
         var cellDataRegistry = new CellDataRegistry(new CellDataTypeRegistry());
             var runtimeRegistry = new StationRuntimeRegistry();
@@ -392,7 +393,7 @@ public sealed class ModuleRuntimeRegistrationTests
         {
             var runtimePaths = CreateRuntimePaths(hostRoot, configuration);
             var discovery = DiscoverTestPlugins(pluginRoot);
-            var activation = ShellModuleCatalog.CreateEnabledModules(configuration, discovery.Modules);
+            var activation = CreateShellModuleCatalog().CreateEnabledModules(configuration, discovery.Modules);
             services.AddEdgeHostBootstrap(
                 viewRegistry,
                 configuration,
@@ -470,7 +471,13 @@ public sealed class ModuleRuntimeRegistrationTests
     }
 
     private static EdgeRuntimePaths CreateRuntimePaths(string baseDirectory, IConfiguration configuration)
-        => ShellRuntimePathResolver.Resolve(baseDirectory, configuration);
+        => new ShellRuntimePathResolver().Resolve(baseDirectory, configuration);
+
+    private static IShellModuleCatalog CreateShellModuleCatalog()
+        => new ShellModuleCatalog(CreateModuleCatalog());
+
+    private static IModuleCatalog CreateModuleCatalog()
+        => new DirectoryModuleCatalog(new ModulePluginLoader(new ModulePluginAssemblyResolver()));
 
     private sealed class TestHostEnvironment(string environmentName) : IHostEnvironment
     {
@@ -485,7 +492,7 @@ public sealed class ModuleRuntimeRegistrationTests
 
     private static ModuleCatalogDiscoveryResult DiscoverTestPlugins(string pluginRoot)
     {
-        return ShellModuleCatalog.DiscoverModules(pluginRoot);
+        return CreateShellModuleCatalog().DiscoverModules(pluginRoot);
     }
 
     private static string CreatePluginRuntimeRoot(string? targetRoot = null)
@@ -493,7 +500,7 @@ public sealed class ModuleRuntimeRegistrationTests
         var pluginRoot = targetRoot ?? Path.Combine(Path.GetTempPath(), "edge-shell-plugin-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(pluginRoot);
 
-        var runtimeModulesRoot = ShellModuleCatalog.GetPluginRootPath(AppContext.BaseDirectory);
+        var runtimeModulesRoot = CreateShellModuleCatalog().GetPluginRootPath(AppContext.BaseDirectory);
         foreach (var moduleId in new[] { "Homogenization" })
         {
             var sourceModuleDirectory = Path.Combine(runtimeModulesRoot, moduleId);
@@ -742,9 +749,10 @@ public sealed class ModuleRuntimeRegistrationTests
             services.AddSingleton<ILogService>(logger);
             services.AddSingleton<IRecipeService>(recipeService);
             services.AddSingleton<IDataPipelineService, SpyDataPipelineService>();
+            services.AddSingleton<IProductionContextSignalBindingStore, ProductionContextSignalBindingStore>();
             services.AddTransient<IPlcTaskBindingService, PlcTaskBindingService>();
             var discovery = DiscoverTestPlugins(pluginRoot);
-            var activation = ShellModuleCatalog.CreateEnabledModules(configuration, discovery.Modules);
+            var activation = CreateShellModuleCatalog().CreateEnabledModules(configuration, discovery.Modules);
             var moduleViewRegistry = new ViewRegistry();
         var cellDataRegistry = new CellDataRegistry(new CellDataTypeRegistry());
             var runtimeRegistry = new StationRuntimeRegistry();
@@ -808,6 +816,7 @@ public sealed class ModuleRuntimeRegistrationTests
                     plcManager,
                     runtimeRegistry,
                     serviceProvider.GetRequiredService<IPlcTaskBindingService>(),
+                    serviceProvider.GetRequiredService<IProductionContextSignalBindingStore>(),
                     logger),
                 new AppRuntimeStateCoordinator(
                     contextStore,

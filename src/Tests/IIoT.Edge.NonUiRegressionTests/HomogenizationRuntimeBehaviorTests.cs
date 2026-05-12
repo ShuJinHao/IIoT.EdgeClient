@@ -314,6 +314,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
         services.AddSingleton<HomogenizationMesScenarioChannel>(mesApi);
         services.AddSingleton<IDataPipelineService>(pipeline);
         services.AddSingleton<IProductionTimeProvider>(new FakeProductionTimeProvider());
+        services.AddSingleton<IProductionContextSignalBindingStore, ProductionContextSignalBindingStore>();
         services.AddSingleton<IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>>(new RuntimeFakeModuleParamProvider());
         services.AddSingleton(new HomogenizationCellDataValidator());
         services.AddSingleton(Options.Create(new HomogenizationModuleOptions()));
@@ -330,7 +331,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
             NetworkDeviceId = 7
         };
 
-        ProductionContextSignalBindings.Set(context, bindings);
+        provider.GetRequiredService<IProductionContextSignalBindingStore>().Set(context, bindings);
 
         var readValues = new ushort[GetBufferSize(bindings, "Read")];
         SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.心跳), 7);
@@ -471,6 +472,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
         services.AddSingleton<HomogenizationMesScenarioChannel>(mesApi);
         services.AddSingleton<IDataPipelineService>(pipeline);
         services.AddSingleton<IProductionTimeProvider>(new FakeProductionTimeProvider());
+        services.AddSingleton<IProductionContextSignalBindingStore, ProductionContextSignalBindingStore>();
         services.AddSingleton<IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>>(new RuntimeFakeModuleParamProvider());
         services.AddSingleton(new HomogenizationCellDataValidator());
         services.AddSingleton(Options.Create(new HomogenizationModuleOptions()));
@@ -486,7 +488,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
             DeviceName = "PLC-H",
             NetworkDeviceId = 8
         };
-        ProductionContextSignalBindings.Set(context, bindings);
+        provider.GetRequiredService<IProductionContextSignalBindingStore>().Set(context, bindings);
 
         var readValues = new ushort[GetBufferSize(bindings, "Read")];
         SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.心跳), 3);

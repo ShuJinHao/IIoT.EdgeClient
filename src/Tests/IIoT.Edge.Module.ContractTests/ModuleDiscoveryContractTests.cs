@@ -38,7 +38,7 @@ public sealed class ModuleDiscoveryContractTests
         var pluginRoot = ContractTestPathHelper.CreatePluginRuntimeRoot("Homogenization");
         try
         {
-            var modules = DirectoryModuleCatalog.CreateAllModules(DiscoverPlugins(pluginRoot).Modules);
+            var modules = CreateModuleCatalog().CreateAllModules(DiscoverPlugins(pluginRoot).Modules);
 
             Assert.Single(modules);
             Assert.Single(modules.Select(x => x.ModuleId).Distinct(StringComparer.OrdinalIgnoreCase));
@@ -70,7 +70,7 @@ public sealed class ModuleDiscoveryContractTests
             Path.Combine(Path.GetDirectoryName(assemblyPath)!, "plugin.json"),
             assemblyPath);
 
-        var ex = Assert.Throws<InvalidOperationException>(() => descriptor.CreateModule());
+        var ex = Assert.Throws<InvalidOperationException>(() => CreateModuleCatalog().CreateAllModules([descriptor]));
 
         Assert.Contains(nameof(IEdgeProcessModule), ex.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("IEdgeStationModule", ex.Message, StringComparison.Ordinal);
@@ -82,7 +82,7 @@ public sealed class ModuleDiscoveryContractTests
         var pluginRoot = ContractTestPathHelper.CreatePluginRuntimeRoot("Homogenization");
         try
         {
-            var modules = DirectoryModuleCatalog.CreateAllModules(DiscoverPlugins(pluginRoot).Modules);
+            var modules = CreateModuleCatalog().CreateAllModules(DiscoverPlugins(pluginRoot).Modules);
             var services = new ServiceCollection();
             var viewRegistry = new ViewRegistry();
         var cellDataRegistry = new CellDataRegistry(new CellDataTypeRegistry());
@@ -191,10 +191,13 @@ public sealed class ModuleDiscoveryContractTests
 
     private static ModuleCatalogDiscoveryResult DiscoverPlugins(string pluginRoot)
     {
-        var discovery = DirectoryModuleCatalog.DiscoverModules(pluginRoot);
+        var discovery = CreateModuleCatalog().DiscoverModules(pluginRoot);
         Assert.Empty(discovery.Issues);
         return discovery;
     }
+
+    private static IModuleCatalog CreateModuleCatalog()
+        => new DirectoryModuleCatalog(new ModulePluginLoader(new ModulePluginAssemblyResolver()));
 
     private sealed class NonModuleEntry
     {

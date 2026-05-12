@@ -34,7 +34,7 @@ public sealed class ShellConfigurationLoaderBehaviorTests
                 }
                 """);
 
-            var result = ShellConfigurationLoader.Load(tempDirectory);
+            var result = new ShellConfigurationLoader().Load(tempDirectory);
 
             Assert.Equal("HomogenizationLine", result.MachineProfile);
             Assert.True(result.IsMachineProfileLoaded);
@@ -66,7 +66,7 @@ public sealed class ShellConfigurationLoaderBehaviorTests
                 }
                 """);
 
-            var result = ShellConfigurationLoader.Load(tempDirectory);
+            var result = new ShellConfigurationLoader().Load(tempDirectory);
 
             Assert.Equal("MissingLine", result.MachineProfile);
             Assert.False(result.IsMachineProfileLoaded);
@@ -110,7 +110,7 @@ public sealed class ShellConfigurationLoaderBehaviorTests
 
             Environment.SetEnvironmentVariable(environmentVariable, "HomogenizationLine");
 
-            var result = ShellConfigurationLoader.Load(tempDirectory);
+            var result = new ShellConfigurationLoader().Load(tempDirectory);
 
             Assert.Equal("HomogenizationLine", result.MachineProfile);
             Assert.True(result.IsMachineProfileLoaded);
@@ -162,7 +162,7 @@ public sealed class ShellConfigurationLoaderBehaviorTests
                 }
                 """);
 
-            var result = ShellConfigurationLoader.Load(tempDirectory);
+            var result = new ShellConfigurationLoader().Load(tempDirectory);
 
             Assert.Equal("25", result.Configuration["Modules:Homogenization:Module:Presentation:MaxOutboundRecords"]);
         }

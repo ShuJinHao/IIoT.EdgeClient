@@ -21,11 +21,12 @@ public sealed class PlcIoScanTaskBehaviorTests
     private static readonly IPlcSignalBlockPlanner SignalBlockPlanner = new DefaultPlcSignalBlockPlanner();
 
     [Fact]
-    public void ProductionContextSignalBindings_ShouldPreserveIoDisplayMetadata()
+    public void ProductionContextSignalBindingStore_ShouldPreserveIoDisplayMetadata()
     {
         var context = new ProductionContext { DeviceName = "PLC-A" };
+        var store = new ProductionContextSignalBindingStore();
 
-        ProductionContextSignalBindings.Set(
+        store.Set(
             context,
             [
                 new(
@@ -40,7 +41,7 @@ public sealed class PlcIoScanTaskBehaviorTests
                     "PLC 触发")
             ]);
 
-        var binding = Assert.Single(ProductionContextSignalBindings.Get(context));
+        var binding = Assert.Single(store.Get(context));
         Assert.Equal("信号交互", binding.Category);
         Assert.Equal("扫码进站", binding.BusinessGroup);
         Assert.Equal("PLC 触发", binding.SignalName);

@@ -23,6 +23,11 @@ public partial class App : WpfApplication
     private const int ShutdownTimeoutSeconds = 8;
 
     private ServiceProvider? _serviceProvider;
+    private readonly ServiceProvider _startupServiceProvider;
+    private readonly ICrashLogWriter _crashLogWriter;
+    private readonly IShellConfigurationLoader _configurationLoader;
+    private readonly IShellRuntimePathResolver _runtimePathResolver;
+    private readonly IShellModuleCatalog _moduleCatalog;
     private readonly CancellationTokenSource _appCts = new();
     private readonly SingleInstanceMutexHandle _instanceLock = new();
     private int _fatalDialogShown;
@@ -30,6 +35,13 @@ public partial class App : WpfApplication
     public App()
     {
         _ = typeof(MaterialDesignThemes.Wpf.BundledTheme).Assembly;
+        _startupServiceProvider = new ServiceCollection()
+            .AddShellStartupServices()
+            .BuildServiceProvider();
+        _crashLogWriter = _startupServiceProvider.GetRequiredService<ICrashLogWriter>();
+        _configurationLoader = _startupServiceProvider.GetRequiredService<IShellConfigurationLoader>();
+        _runtimePathResolver = _startupServiceProvider.GetRequiredService<IShellRuntimePathResolver>();
+        _moduleCatalog = _startupServiceProvider.GetRequiredService<IShellModuleCatalog>();
         RegisterGlobalExceptionHandlers();
     }
 
@@ -37,9 +49,9 @@ public partial class App : WpfApplication
     {
         base.OnStartup(e);
 
-        var configurationResult = ShellConfigurationLoader.Load(AppDomain.CurrentDomain.BaseDirectory);
+        var configurationResult = _configurationLoader.Load(AppDomain.CurrentDomain.BaseDirectory);
         var configuration = configurationResult.Configuration;
-        var runtimePaths = ShellRuntimePathResolver.Resolve(AppDomain.CurrentDomain.BaseDirectory, configuration);
+        var runtimePaths = _runtimePathResolver.Resolve(AppDomain.CurrentDomain.BaseDirectory, configuration);
         ConfigureCrashLogging(runtimePaths);
 
         if (!TryAcquireInstanceLock(configuration))
@@ -91,13 +103,14 @@ public partial class App : WpfApplication
         }
         catch (Exception ex)
         {
-            CrashLogWriter.Write("应用关闭失败。", ex);
+            _crashLogWriter.Write("应用关闭失败。", ex);
             forceKill = true;
         }
         finally
         {
             ReleaseMutex();
             _appCts.Dispose();
+            _startupServiceProvider.Dispose();
             base.OnExit(e);
 
             if (forceKill)
@@ -128,7 +141,7 @@ public partial class App : WpfApplication
 
         if (!shutdownTask.Wait(TimeSpan.FromSeconds(ShutdownTimeoutSeconds)))
         {
-            CrashLogWriter.Write(
+            _crashLogWriter.Write(
                 "应用关闭超时。",
                 details: $"生命周期停机超过 {ShutdownTimeoutSeconds} 秒，已准备强制结束残留进程。");
             return false;
@@ -136,7 +149,7 @@ public partial class App : WpfApplication
 
         if (shutdownTask.IsFaulted)
         {
-            CrashLogWriter.Write(
+            _crashLogWriter.Write(
                 "应用关闭失败。",
                 shutdownTask.Exception?.GetBaseException() ?? new InvalidOperationException("关闭任务失败但未返回异常明细。"));
             return false;
@@ -179,13 +192,13 @@ public partial class App : WpfApplication
 
     private void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
     {
-        CrashLogWriter.Write("后台任务未观察异常", e.Exception);
+        _crashLogWriter.Write("后台任务未观察异常", e.Exception);
         e.SetObserved();
     }
 
     private void HandleFatalException(string source, Exception exception, bool requestShutdown)
     {
-        CrashLogWriter.Write(source, exception);
+        _crashLogWriter.Write(source, exception);
 
         if (Interlocked.Exchange(ref _fatalDialogShown, 1) != 0)
         {
@@ -244,13 +257,14 @@ public partial class App : WpfApplication
     {
         var services = new ServiceCollection();
         var viewRegistry = new ViewRegistry();
-        var pluginRootPath = ShellModuleCatalog.GetPluginRootPath(AppDomain.CurrentDomain.BaseDirectory);
-        var discoveryResult = ShellModuleCatalog.DiscoverModules(pluginRootPath);
-        var activationResult = ShellModuleCatalog.CreateEnabledModules(configuration, discoveryResult.Modules);
+        var pluginRootPath = _moduleCatalog.GetPluginRootPath(AppDomain.CurrentDomain.BaseDirectory);
+        var discoveryResult = _moduleCatalog.DiscoverModules(pluginRootPath);
+        var activationResult = _moduleCatalog.CreateEnabledModules(configuration, discoveryResult.Modules);
         var moduleCatalogIssues = discoveryResult.Issues
             .Concat(activationResult.Issues)
             .ToArray();
 
+        services.AddSingleton(_crashLogWriter);
         services.AddEdgeHostBootstrap(
             viewRegistry,
             configuration,
@@ -265,11 +279,11 @@ public partial class App : WpfApplication
         return services;
     }
 
-    private static void ConfigureCrashLogging(EdgeRuntimePaths runtimePaths)
+    private void ConfigureCrashLogging(EdgeRuntimePaths runtimePaths)
     {
-        CrashLogWriter.ConfigurePaths(
-            () => runtimePaths.PrimaryCrashLogPath,
-            () => runtimePaths.FallbackCrashLogPath);
+        _crashLogWriter.ConfigurePaths(
+            runtimePaths.PrimaryCrashLogPath,
+            runtimePaths.FallbackCrashLogPath);
     }
 
     private static void ShowStartupError(string message)

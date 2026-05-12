@@ -4,16 +4,23 @@ using System.Runtime.Loader;
 
 namespace IIoT.Edge.Host.Bootstrap.Modules;
 
-internal static class ModulePluginAssemblyResolver
+public interface IModulePluginAssemblyResolver
 {
-    private static readonly object Sync = new();
-    private static readonly Dictionary<string, string> AssemblyPaths = new(StringComparer.OrdinalIgnoreCase);
-    private static int _initialized;
+    Assembly LoadAssembly(string assemblyPath, string pluginDirectory);
+}
 
-    public static Assembly LoadAssembly(string assemblyPath, string pluginDirectory)
+public sealed class ModulePluginAssemblyResolver : IModulePluginAssemblyResolver, IDisposable
+{
+    private readonly object _sync = new();
+    private readonly Dictionary<string, string> _assemblyPaths = new(StringComparer.OrdinalIgnoreCase);
+    private int _initialized;
+    private int _disposed;
+
+    public Assembly LoadAssembly(string assemblyPath, string pluginDirectory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(assemblyPath);
         ArgumentException.ThrowIfNullOrWhiteSpace(pluginDirectory);
+        ObjectDisposedException.ThrowIf(_disposed != 0, this);
 
         EnsureInitialized();
         RegisterPluginDirectory(pluginDirectory);
@@ -33,8 +40,10 @@ internal static class ModulePluginAssemblyResolver
         return AssemblyLoadContext.Default.LoadFromAssemblyPath(assemblyPath);
     }
 
-    private static void EnsureInitialized()
+    private void EnsureInitialized()
     {
+        ObjectDisposedException.ThrowIf(_disposed != 0, this);
+
         if (Interlocked.Exchange(ref _initialized, 1) != 0)
         {
             return;
@@ -44,23 +53,30 @@ internal static class ModulePluginAssemblyResolver
         AppDomain.CurrentDomain.AssemblyResolve += ResolveLegacy;
     }
 
-    private static void RegisterPluginDirectory(string pluginDirectory)
+    private void RegisterPluginDirectory(string pluginDirectory)
     {
-        lock (Sync)
+        ObjectDisposedException.ThrowIf(_disposed != 0, this);
+
+        lock (_sync)
         {
             foreach (var dllPath in Directory.EnumerateFiles(pluginDirectory, "*.dll", SearchOption.TopDirectoryOnly))
             {
                 var name = Path.GetFileNameWithoutExtension(dllPath);
                 if (!string.IsNullOrWhiteSpace(name))
                 {
-                    AssemblyPaths[name] = dllPath;
+                    _assemblyPaths[name] = dllPath;
                 }
             }
         }
     }
 
-    private static Assembly? Resolve(AssemblyLoadContext context, AssemblyName assemblyName)
+    private Assembly? Resolve(AssemblyLoadContext context, AssemblyName assemblyName)
     {
+        if (_disposed != 0)
+        {
+            return null;
+        }
+
         var loaded = AppDomain.CurrentDomain.GetAssemblies()
             .FirstOrDefault(x => string.Equals(
                 x.GetName().Name,
@@ -72,14 +88,14 @@ internal static class ModulePluginAssemblyResolver
             return loaded;
         }
 
-        lock (Sync)
+        lock (_sync)
         {
             if (assemblyName.Name is null)
             {
                 return null;
             }
 
-            if (!AssemblyPaths.TryGetValue(assemblyName.Name, out var path))
+            if (!_assemblyPaths.TryGetValue(assemblyName.Name, out var path))
             {
                 return null;
             }
@@ -93,9 +109,28 @@ internal static class ModulePluginAssemblyResolver
         }
     }
 
-    private static Assembly? ResolveLegacy(object? sender, ResolveEventArgs args)
+    private Assembly? ResolveLegacy(object? sender, ResolveEventArgs args)
     {
+        if (_disposed != 0)
+        {
+            return null;
+        }
+
         var requested = new AssemblyName(args.Name);
         return Resolve(AssemblyLoadContext.Default, requested);
+    }
+
+    public void Dispose()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
+            return;
+        }
+
+        if (_initialized != 0)
+        {
+            AssemblyLoadContext.Default.Resolving -= Resolve;
+            AppDomain.CurrentDomain.AssemblyResolve -= ResolveLegacy;
+        }
     }
 }

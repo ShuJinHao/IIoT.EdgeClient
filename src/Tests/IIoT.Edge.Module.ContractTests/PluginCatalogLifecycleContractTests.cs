@@ -16,7 +16,7 @@ public sealed class PluginCatalogLifecycleContractTests
             manifest.Remove("hostApiVersion");
             File.WriteAllText(manifestPath, manifest.ToJsonString(new() { WriteIndented = true }));
 
-            var discovery = DirectoryModuleCatalog.DiscoverModules(pluginRoot);
+            var discovery = CreateModuleCatalog().DiscoverModules(pluginRoot);
 
             Assert.Empty(discovery.Modules);
             var issue = Assert.Single(discovery.Issues);
@@ -39,8 +39,9 @@ public sealed class PluginCatalogLifecycleContractTests
             manifest["maxHostVersion"] = "0.9.0";
             File.WriteAllText(manifestPath, manifest.ToJsonString(new() { WriteIndented = true }));
 
-            var discovery = DirectoryModuleCatalog.DiscoverModules(pluginRoot);
-            var activation = DirectoryModuleCatalog.CreateEnabledModules(
+            var catalog = CreateModuleCatalog();
+            var discovery = catalog.DiscoverModules(pluginRoot);
+            var activation = catalog.CreateEnabledModules(
                 new ConfigurationBuilder()
                     .AddInMemoryCollection(new Dictionary<string, string?>
                     {
@@ -70,8 +71,9 @@ public sealed class PluginCatalogLifecycleContractTests
             manifest["dependencies"] = new JsonArray("MissingProcess");
             File.WriteAllText(manifestPath, manifest.ToJsonString(new() { WriteIndented = true }));
 
-            var discovery = DirectoryModuleCatalog.DiscoverModules(pluginRoot);
-            var activation = DirectoryModuleCatalog.CreateEnabledModules(
+            var catalog = CreateModuleCatalog();
+            var discovery = catalog.DiscoverModules(pluginRoot);
+            var activation = catalog.CreateEnabledModules(
                 new ConfigurationBuilder()
                     .AddInMemoryCollection(new Dictionary<string, string?>
                     {
@@ -94,4 +96,7 @@ public sealed class PluginCatalogLifecycleContractTests
     {
         return ContractTestPathHelper.CreatePluginRuntimeRoot(moduleIds);
     }
+
+    private static IModuleCatalog CreateModuleCatalog()
+        => new DirectoryModuleCatalog(new ModulePluginLoader(new ModulePluginAssemblyResolver()));
 }

@@ -38,18 +38,8 @@ public sealed class SingleInstanceMutexHandleBehaviorTests
     }
 }
 
-public sealed class CrashLogWriterBehaviorTests : IDisposable
+public sealed class CrashLogWriterBehaviorTests
 {
-    public CrashLogWriterBehaviorTests()
-    {
-        CrashLogWriter.ResetTestHooks();
-    }
-
-    public void Dispose()
-    {
-        CrashLogWriter.ResetTestHooks();
-    }
-
     [Fact]
     public void Write_WhenPrimaryPathFails_ShouldFallbackToSecondaryPath()
     {
@@ -59,10 +49,10 @@ public sealed class CrashLogWriterBehaviorTests : IDisposable
             var primaryPath = Path.Combine(tempDir, "primary", "crash.log");
             var fallbackPath = Path.Combine(tempDir, "fallback", "crash.log");
             var diagnosticMessages = new List<string>();
-
-            CrashLogWriter.PrimaryLogPathProvider = () => primaryPath;
-            CrashLogWriter.FallbackLogPathProvider = () => fallbackPath;
-            CrashLogWriter.AppendEntryToPath = (path, entry) =>
+            var writer = new CrashLogWriter(
+                () => primaryPath,
+                () => fallbackPath,
+                (path, entry) =>
             {
                 if (string.Equals(path, primaryPath, StringComparison.Ordinal))
                 {
@@ -71,10 +61,10 @@ public sealed class CrashLogWriterBehaviorTests : IDisposable
 
                 Directory.CreateDirectory(Path.GetDirectoryName(path)!);
                 File.AppendAllText(path, entry, Encoding.UTF8);
-            };
-            CrashLogWriter.DiagnosticSink = diagnosticMessages.Add;
+            },
+                diagnosticMessages.Add);
 
-            CrashLogWriter.Write("fatal-source", new InvalidOperationException("boom"), "details");
+            writer.Write("fatal-source", new InvalidOperationException("boom"), "details");
 
             Assert.Empty(diagnosticMessages);
             var content = File.ReadAllText(fallbackPath);
@@ -98,10 +88,10 @@ public sealed class CrashLogWriterBehaviorTests : IDisposable
             var primaryPath = Path.Combine(tempDir, "primary", "crash.log");
             var fallbackPath = Path.Combine(tempDir, "fallback", "crash.log");
             var diagnosticMessages = new List<string>();
-
-            CrashLogWriter.PrimaryLogPathProvider = () => primaryPath;
-            CrashLogWriter.FallbackLogPathProvider = () => fallbackPath;
-            CrashLogWriter.AppendEntryToPath = (path, _) =>
+            var writer = new CrashLogWriter(
+                () => primaryPath,
+                () => fallbackPath,
+                (path, _) =>
             {
                 if (string.Equals(path, primaryPath, StringComparison.Ordinal))
                 {
@@ -109,10 +99,10 @@ public sealed class CrashLogWriterBehaviorTests : IDisposable
                 }
 
                 throw new IOException("fallback blocked");
-            };
-            CrashLogWriter.DiagnosticSink = diagnosticMessages.Add;
+            },
+                diagnosticMessages.Add);
 
-            CrashLogWriter.Write("fatal-source", new InvalidOperationException("boom"), "details");
+            writer.Write("fatal-source", new InvalidOperationException("boom"), "details");
 
             var message = Assert.Single(diagnosticMessages);
             Assert.Contains("primary_result=failed", message, StringComparison.Ordinal);

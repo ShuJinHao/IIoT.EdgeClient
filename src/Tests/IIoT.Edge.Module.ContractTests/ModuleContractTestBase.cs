@@ -4,6 +4,7 @@ using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Application.Common.Models;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Runtime.Signals;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.DataPipeline;
 
@@ -137,6 +138,7 @@ public abstract class ModuleContractTestBase<TModule>
         services.AddSingleton<ILogService, ContractLogService>();
         services.AddSingleton<IDataPipelineService, ContractDataPipelineService>();
         services.AddSingleton<IProductionTimeProvider, ContractProductionTimeProvider>();
+        services.AddSingleton<IProductionContextSignalBindingStore, ProductionContextSignalBindingStore>();
     }
 
     private sealed class ContractProductionTimeProvider : IProductionTimeProvider

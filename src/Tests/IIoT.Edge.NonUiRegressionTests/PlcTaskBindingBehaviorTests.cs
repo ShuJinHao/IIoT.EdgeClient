@@ -18,6 +18,7 @@ using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using IIoT.Edge.Runtime.Plc;
+using IIoT.Edge.Runtime.Signals;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.Domain;
 using IIoT.Edge.SharedKernel.Enums;
@@ -178,6 +179,7 @@ public sealed class PlcTaskBindingBehaviorTests
         services.AddSingleton<IModulePlcSignalProfile<HomogenizationPlcSignals.ContinuousRead>>(HomogenizationSignalTestProfile.ContinuousReadProfileInstance);
         services.AddSingleton<ILogService, FakeLogService>();
         services.AddSingleton<IProductionTimeProvider, FakeProductionTimeProvider>();
+        services.AddSingleton<IProductionContextSignalBindingStore, ProductionContextSignalBindingStore>();
         services.AddSingleton(Options.Create(new HomogenizationModuleOptions()));
         services.AddSingleton(Options.Create(new HomogenizationCodeOptions()));
         using var provider = services.BuildServiceProvider();

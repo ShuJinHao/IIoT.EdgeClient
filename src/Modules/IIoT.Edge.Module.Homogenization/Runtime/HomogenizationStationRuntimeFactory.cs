@@ -134,20 +134,24 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
 
         var logger = serviceProvider.GetRequiredService<ILogService>();
         var productionTime = serviceProvider.GetRequiredService<IProductionTimeProvider>();
+        var signalBindingStore = serviceProvider.GetRequiredService<IProductionContextSignalBindingStore>();
         var interactionProfile = serviceProvider.GetRequiredService<IModulePlcSignalProfile<HomogenizationPlcSignals.Interaction>>();
         var singleReadProfile = serviceProvider.GetRequiredService<IModulePlcSignalProfile<HomogenizationPlcSignals.SingleRead>>();
         var continuousReadProfile = serviceProvider.GetRequiredService<IModulePlcSignalProfile<HomogenizationPlcSignals.ContinuousRead>>();
         var interactionSignals = BufferLogicalSignalAccessor<HomogenizationPlcSignals.Interaction>.Create(
             buffer,
             homogenizationContext,
+            signalBindingStore,
             interactionProfile);
         var singleReadSignals = BufferLogicalSignalAccessor<HomogenizationPlcSignals.SingleRead>.Create(
             buffer,
             homogenizationContext,
+            signalBindingStore,
             singleReadProfile);
         var continuousReadSignals = BufferLogicalSignalAccessor<HomogenizationPlcSignals.ContinuousRead>.Create(
             buffer,
             homogenizationContext,
+            signalBindingStore,
             continuousReadProfile);
         var validator = serviceProvider.GetService<HomogenizationCellDataValidator>() ?? new HomogenizationCellDataValidator();
         var moduleOptions = serviceProvider.GetRequiredService<IOptions<HomogenizationModuleOptions>>();
