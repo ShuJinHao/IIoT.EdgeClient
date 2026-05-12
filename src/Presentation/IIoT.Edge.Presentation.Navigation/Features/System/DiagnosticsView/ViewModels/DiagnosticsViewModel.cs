@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Threading;
 using System.Windows.Input;
 using System.Windows.Threading;
+using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Presentation.Navigation.Localization;
 using IIoT.Edge.UI.Shared.Localization;
@@ -19,6 +20,10 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
     private readonly IDiagnosticsInitialSummaryFactory _initialSummaryFactory;
     private readonly IDiagnosticsRefreshCoordinator _refreshCoordinator;
     private readonly IDiagnosticsDeadLetterOperator _deadLetterOperator;
+    private readonly IDiagnosticsDeadLetterConfirmationService _deadLetterConfirmationService;
+    private readonly IClientPermissionService _permissionService;
+    private readonly AsyncCommand<DeadLetterRow> _requeueDeadLetterCommand;
+    private readonly AsyncCommand<DeadLetterRow> _deleteDeadLetterCommand;
     private readonly DispatcherTimer _refreshTimer;
 
     public ObservableCollection<ModuleRegistrationRow> ModuleRegistrations { get; } = [];
@@ -31,6 +36,8 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
 
     public ICommand RequeueDeadLetterCommand { get; }
     public ICommand DeleteDeadLetterCommand { get; }
+
+    public bool CanOperateDeadLetters => _permissionService.IsLocalAdmin;
 
     private string _discoveredModulesSummary = string.Empty;
     public string DiscoveredModulesSummary
@@ -294,7 +301,9 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         IDiagnosticsRowsBuilder rowsBuilder,
         IDiagnosticsInitialSummaryFactory initialSummaryFactory,
         IDiagnosticsRefreshCoordinator refreshCoordinator,
-        IDiagnosticsDeadLetterOperator deadLetterOperator)
+        IDiagnosticsDeadLetterOperator deadLetterOperator,
+        IDiagnosticsDeadLetterConfirmationService deadLetterConfirmationService,
+        IClientPermissionService permissionService)
         : base(languageService, CoreViewIds.Diagnostics, "Navigation_Menu_CoreDiagnostics", "系统诊断")
     {
         _diagnosticsStore = diagnosticsStore;
@@ -306,14 +315,19 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         _initialSummaryFactory = initialSummaryFactory;
         _refreshCoordinator = refreshCoordinator;
         _deadLetterOperator = deadLetterOperator;
+        _deadLetterConfirmationService = deadLetterConfirmationService;
+        _permissionService = permissionService;
 
-        RequeueDeadLetterCommand = new AsyncCommand<DeadLetterRow>(RequeueDeadLetterAsync, CanOperateDeadLetter);
-        DeleteDeadLetterCommand = new AsyncCommand<DeadLetterRow>(DeleteDeadLetterAsync, CanOperateDeadLetter);
+        _requeueDeadLetterCommand = new AsyncCommand<DeadLetterRow>(RequeueDeadLetterAsync, CanOperateDeadLetter);
+        _deleteDeadLetterCommand = new AsyncCommand<DeadLetterRow>(DeleteDeadLetterAsync, CanOperateDeadLetter);
+        RequeueDeadLetterCommand = _requeueDeadLetterCommand;
+        DeleteDeadLetterCommand = _deleteDeadLetterCommand;
         _refreshTimer = new DispatcherTimer
         {
             Interval = TimeSpan.FromSeconds(1)
         };
         _refreshTimer.Tick += OnRefreshTimerTick;
+        _permissionService.PermissionStateChanged += HandlePermissionStateChanged;
         ApplyInitialSummaries();
         _refreshTimer.Start();
     }
@@ -403,31 +417,105 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
     }
 
     private bool CanOperateDeadLetter(DeadLetterRow? row)
-        => _deadLetterOperator.CanOperate(row);
+        => CanOperateDeadLetters && _deadLetterOperator.CanOperate(row);
 
     private async Task RequeueDeadLetterAsync(DeadLetterRow row)
     {
-        var result = await _deadLetterOperator.RequeueAsync(row);
-        if (result.IsSuccess)
+        try
         {
-            SetStatus(result.Message);
-            await RefreshAsync();
-            return;
-        }
+            if (!EnsureCanOperateDeadLetters())
+            {
+                return;
+            }
 
-        SetError(result.Message);
+            if (!_deadLetterConfirmationService.ConfirmRequeue(row))
+            {
+                SetStatus(GetText("Navigation_Diagnostics_RequeueCanceled", "已取消死信重新入队。"));
+                return;
+            }
+
+            var result = await _deadLetterOperator.RequeueAsync(row);
+            if (result.IsSuccess)
+            {
+                await RefreshAsync();
+                SetStatus(result.Message);
+                return;
+            }
+
+            SetError(result.Message);
+        }
+        catch (Exception ex)
+        {
+            SetError(FormatText(
+                "Navigation_Diagnostics_RequeueFailedFormat",
+                "死信重新入队失败：{0}",
+                ex.Message));
+        }
     }
 
     private async Task DeleteDeadLetterAsync(DeadLetterRow row)
     {
-        var result = await _deadLetterOperator.DeleteAsync(row);
-        if (result.IsSuccess)
+        try
         {
-            SetStatus(result.Message);
-            await RefreshAsync();
+            if (!EnsureCanOperateDeadLetters())
+            {
+                return;
+            }
+
+            if (!_deadLetterConfirmationService.ConfirmDelete(row))
+            {
+                SetStatus(GetText("Navigation_Diagnostics_DeleteCanceled", "已取消死信删除。"));
+                return;
+            }
+
+            var result = await _deadLetterOperator.DeleteAsync(row);
+            if (result.IsSuccess)
+            {
+                await RefreshAsync();
+                SetStatus(result.Message);
+                return;
+            }
+
+            SetError(result.Message);
+        }
+        catch (Exception ex)
+        {
+            SetError(FormatText(
+                "Navigation_Diagnostics_DeleteFailedFormat",
+                "死信删除失败：{0}",
+                ex.Message));
+        }
+    }
+
+    private bool EnsureCanOperateDeadLetters()
+    {
+        if (CanOperateDeadLetters)
+        {
+            return true;
+        }
+
+        SetError(GetText(
+            "Navigation_Diagnostics_AdminRequired",
+            "当前账号不是本地管理员，不能执行死信运维操作。"));
+        return false;
+    }
+
+    private void HandlePermissionStateChanged()
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+        {
+            RefreshPermissionState();
             return;
         }
 
-        SetError(result.Message);
+        dispatcher.Invoke(RefreshPermissionState);
+    }
+
+    private void RefreshPermissionState()
+    {
+        OnPropertyChanged(nameof(CanOperateDeadLetters));
+        _requeueDeadLetterCommand.RaiseCanExecuteChanged();
+        _deleteDeadLetterCommand.RaiseCanExecuteChanged();
     }
 }

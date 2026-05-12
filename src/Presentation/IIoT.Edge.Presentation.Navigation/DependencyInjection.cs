@@ -43,6 +43,7 @@ public static class DependencyInjection
         services.AddSingleton<IDiagnosticsInitialSummaryFactory, DiagnosticsInitialSummaryFactory>();
         services.AddSingleton<IDiagnosticsRefreshCoordinator, DiagnosticsRefreshCoordinator>();
         services.AddSingleton<IDiagnosticsDeadLetterOperator, DiagnosticsDeadLetterOperator>();
+        services.AddSingleton<IDiagnosticsDeadLetterConfirmationService, DiagnosticsDeadLetterConfirmationService>();
         services.AddSingleton<DiagnosticsViewModel>();
 
         services.AddTransient<ParamViewPage>();

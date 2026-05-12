@@ -60,7 +60,16 @@ public sealed class DeadLetterMaintenanceService : IDeadLetterMaintenanceService
             return DeadLetterOperationResult.Failure($"{stores.DisplayName}死信重新入队失败，原记录已保留：{ex.Message}");
         }
 
-        await stores.DeadLetterStore.DeleteAsync(id).ConfigureAwait(false);
+        try
+        {
+            await stores.DeadLetterStore.DeleteAsync(id).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[{stores.LogPrefix}] 死信 {id} 已写入 retry 队列，但删除死信记录失败，请现场确认：{ex.Message}");
+            return DeadLetterOperationResult.Failure($"{stores.DisplayName}死信已写入 retry 队列，但删除死信记录失败，请现场确认：{ex.Message}");
+        }
+
         _logger.Warn($"[{stores.LogPrefix}] 死信 {id} 已由人工操作重新写入 retry 队列。");
         return DeadLetterOperationResult.Success($"{stores.DisplayName}死信已重新写入 retry 队列。");
     }
@@ -68,7 +77,16 @@ public sealed class DeadLetterMaintenanceService : IDeadLetterMaintenanceService
     public async Task<DeadLetterOperationResult> DeleteAsync(DataPipelineRetryChannel channel, long id)
     {
         var stores = Resolve(channel);
-        await stores.DeadLetterStore.DeleteAsync(id).ConfigureAwait(false);
+        try
+        {
+            await stores.DeadLetterStore.DeleteAsync(id).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[{stores.LogPrefix}] 死信 {id} 删除失败，原记录状态需现场确认：{ex.Message}");
+            return DeadLetterOperationResult.Failure($"{stores.DisplayName}死信删除失败，原记录状态需现场确认：{ex.Message}");
+        }
+
         _logger.Warn($"[{stores.LogPrefix}] 死信 {id} 已由人工操作删除。");
         return DeadLetterOperationResult.Success($"{stores.DisplayName}死信已删除。");
     }

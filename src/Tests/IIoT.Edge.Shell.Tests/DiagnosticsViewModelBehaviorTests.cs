@@ -3,7 +3,9 @@ using IIoT.Edge.Application.Modules.Diagnostics;
 using System.Globalization;
 using System.Windows.Threading;
 using IIoT.Edge.Application.Abstractions.Context;
+using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
 using IIoT.Edge.Presentation.Navigation.Localization;
@@ -235,6 +237,161 @@ public sealed class DiagnosticsViewModelBehaviorTests
             }
         });
 
+    [Fact]
+    public Task RequeueDeadLetterCommand_WhenConfirmationCanceled_ShouldNotCallOperator()
+        => RunOnStaThreadAsync(async () =>
+        {
+            var confirmation = new FakeDeadLetterConfirmationService
+            {
+                RequeueResult = false
+            };
+            var deadLetterOperator = new FakeDiagnosticsDeadLetterOperator();
+            var viewModel = CreateViewModel(
+                new FakeStartupDiagnosticsStore(),
+                new FakeEdgeSyncDiagnosticsQuery(),
+                new TestAppLanguageService(),
+                deadLetterOperator,
+                confirmation);
+
+            viewModel.RequeueDeadLetterCommand.Execute(CreateDeadLetterRow());
+            await WaitUntilAsync(() => confirmation.RequeueCallCount == 1);
+
+            Assert.Equal(0, deadLetterOperator.RequeueCallCount);
+            Assert.Equal("已取消死信重新入队。", viewModel.StatusMessage);
+        });
+
+    [Fact]
+    public Task RequeueDeadLetterCommand_WhenConfirmedAndSuccessful_ShouldCallOperatorAndRefresh()
+        => RunOnStaThreadAsync(async () =>
+        {
+            var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery();
+            var deadLetterOperator = new FakeDiagnosticsDeadLetterOperator
+            {
+                RequeueResult = new DiagnosticsDeadLetterOperationResult(true, "重新入队成功")
+            };
+            var viewModel = CreateViewModel(
+                new FakeStartupDiagnosticsStore(),
+                diagnosticsQuery,
+                new TestAppLanguageService(),
+                deadLetterOperator,
+                new FakeDeadLetterConfirmationService());
+
+            viewModel.RequeueDeadLetterCommand.Execute(CreateDeadLetterRow());
+            await WaitUntilAsync(() => deadLetterOperator.RequeueCallCount == 1 && diagnosticsQuery.TotalCalls >= 1);
+
+            Assert.Equal("重新入队成功", viewModel.StatusMessage);
+            Assert.Equal(1, deadLetterOperator.RequeueCallCount);
+        });
+
+    [Fact]
+    public Task DeleteDeadLetterCommand_WhenConfirmationCanceled_ShouldNotCallOperator()
+        => RunOnStaThreadAsync(async () =>
+        {
+            var confirmation = new FakeDeadLetterConfirmationService
+            {
+                DeleteResult = false
+            };
+            var deadLetterOperator = new FakeDiagnosticsDeadLetterOperator();
+            var viewModel = CreateViewModel(
+                new FakeStartupDiagnosticsStore(),
+                new FakeEdgeSyncDiagnosticsQuery(),
+                new TestAppLanguageService(),
+                deadLetterOperator,
+                confirmation);
+
+            viewModel.DeleteDeadLetterCommand.Execute(CreateDeadLetterRow());
+            await WaitUntilAsync(() => confirmation.DeleteCallCount == 1);
+
+            Assert.Equal(0, deadLetterOperator.DeleteCallCount);
+            Assert.Equal("已取消死信删除。", viewModel.StatusMessage);
+        });
+
+    [Fact]
+    public Task DeadLetterCommands_WhenCurrentUserIsNotLocalAdmin_ShouldNotBeExecutable()
+        => RunOnStaThreadAsync(() =>
+        {
+            var permissionService = new FakeClientPermissionService(isLocalAdmin: false);
+            var viewModel = CreateViewModel(
+                new FakeStartupDiagnosticsStore(),
+                new FakeEdgeSyncDiagnosticsQuery(),
+                new TestAppLanguageService(),
+                deadLetterOperator: new FakeDiagnosticsDeadLetterOperator(),
+                permissionService: permissionService);
+            var row = CreateDeadLetterRow();
+
+            Assert.False(viewModel.CanOperateDeadLetters);
+            Assert.False(viewModel.RequeueDeadLetterCommand.CanExecute(row));
+            Assert.False(viewModel.DeleteDeadLetterCommand.CanExecute(row));
+            return Task.CompletedTask;
+        });
+
+    [Fact]
+    public Task DeadLetterCommandEntry_WhenCurrentUserIsNotLocalAdmin_ShouldNotCallConfirmationOrOperator()
+        => RunOnStaThreadAsync(async () =>
+        {
+            var confirmation = new FakeDeadLetterConfirmationService();
+            var deadLetterOperator = new FakeDiagnosticsDeadLetterOperator();
+            var viewModel = CreateViewModel(
+                new FakeStartupDiagnosticsStore(),
+                new FakeEdgeSyncDiagnosticsQuery(),
+                new TestAppLanguageService(),
+                deadLetterOperator,
+                confirmation,
+                new FakeClientPermissionService(isLocalAdmin: false));
+
+            await InvokeDeadLetterCommandEntryAsync(viewModel, "RequeueDeadLetterAsync");
+
+            Assert.Equal(0, confirmation.RequeueCallCount);
+            Assert.Equal(0, deadLetterOperator.RequeueCallCount);
+            Assert.Equal("当前账号不是本地管理员，不能执行死信运维操作。", viewModel.ErrorMessage);
+        });
+
+    [Fact]
+    public Task DeadLetterCommands_WhenPermissionChangesToLocalAdmin_ShouldBecomeExecutable()
+        => RunOnStaThreadAsync(() =>
+        {
+            var permissionService = new FakeClientPermissionService(isLocalAdmin: false);
+            var viewModel = CreateViewModel(
+                new FakeStartupDiagnosticsStore(),
+                new FakeEdgeSyncDiagnosticsQuery(),
+                new TestAppLanguageService(),
+                deadLetterOperator: new FakeDiagnosticsDeadLetterOperator(),
+                permissionService: permissionService);
+            var row = CreateDeadLetterRow();
+
+            Assert.False(viewModel.RequeueDeadLetterCommand.CanExecute(row));
+            Assert.False(viewModel.DeleteDeadLetterCommand.CanExecute(row));
+
+            permissionService.SetLocalAdmin(true);
+
+            Assert.True(viewModel.CanOperateDeadLetters);
+            Assert.True(viewModel.RequeueDeadLetterCommand.CanExecute(row));
+            Assert.True(viewModel.DeleteDeadLetterCommand.CanExecute(row));
+            return Task.CompletedTask;
+        });
+
+    [Fact]
+    public Task RequeueDeadLetterCommand_WhenOperatorFails_ShouldShowError()
+        => RunOnStaThreadAsync(async () =>
+        {
+            var deadLetterOperator = new FakeDiagnosticsDeadLetterOperator
+            {
+                RequeueResult = new DiagnosticsDeadLetterOperationResult(false, "重新入队失败")
+            };
+            var viewModel = CreateViewModel(
+                new FakeStartupDiagnosticsStore(),
+                new FakeEdgeSyncDiagnosticsQuery(),
+                new TestAppLanguageService(),
+                deadLetterOperator,
+                new FakeDeadLetterConfirmationService());
+
+            viewModel.RequeueDeadLetterCommand.Execute(CreateDeadLetterRow());
+            await WaitUntilAsync(() => deadLetterOperator.RequeueCallCount == 1);
+
+            Assert.Equal("重新入队失败", viewModel.ErrorMessage);
+            Assert.False(viewModel.HasStatus);
+        });
+
     private static Task RunOnStaThreadAsync(Func<Task> testBody)
     {
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -288,7 +445,10 @@ public sealed class DiagnosticsViewModelBehaviorTests
     private static DiagnosticsViewModel CreateViewModel(
         IStartupDiagnosticsStore startupStore,
         IEdgeSyncDiagnosticsQuery diagnosticsQuery,
-        IAppLanguageService languageService)
+        IAppLanguageService languageService,
+        IDiagnosticsDeadLetterOperator? deadLetterOperator = null,
+        IDiagnosticsDeadLetterConfirmationService? deadLetterConfirmationService = null,
+        IClientPermissionService? permissionService = null)
     {
         var diagnosticsText = new LocalizedSyncDiagnosticsText(languageService);
         var displayNameResolver = new DiagnosticsModuleDisplayNameResolver(diagnosticsText);
@@ -301,7 +461,115 @@ public sealed class DiagnosticsViewModelBehaviorTests
             new DiagnosticsRowsBuilder(diagnosticsText, displayNameResolver),
             new DiagnosticsInitialSummaryFactory(languageService, diagnosticsText),
             new DiagnosticsRefreshCoordinator(),
-            new DiagnosticsDeadLetterOperator());
+            deadLetterOperator ?? new DiagnosticsDeadLetterOperator(),
+            deadLetterConfirmationService ?? new FakeDeadLetterConfirmationService(),
+            permissionService ?? new FakeClientPermissionService());
+    }
+
+    private static DeadLetterRow CreateDeadLetterRow()
+        => new(
+            DataPipelineRetryChannel.Cloud,
+            10,
+            "Homogenization",
+            "Cloud",
+            "FallbackPersist",
+            "failed_cloud_records/10",
+            "2026-04-18 10:30:00",
+            "test",
+            "{\"trayCode\":\"TRAY-10\"}");
+
+    private static async Task InvokeDeadLetterCommandEntryAsync(DiagnosticsViewModel viewModel, string methodName)
+    {
+        var method = typeof(DiagnosticsViewModel).GetMethod(
+            methodName,
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
+        Assert.NotNull(method);
+        var task = (Task?)method.Invoke(viewModel, [CreateDeadLetterRow()]);
+        Assert.NotNull(task);
+        await task;
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> predicate)
+    {
+        for (var i = 0; i < 100; i++)
+        {
+            if (predicate())
+            {
+                return;
+            }
+
+            await Task.Delay(20);
+        }
+
+        Assert.True(predicate());
+    }
+
+    private sealed class FakeDeadLetterConfirmationService : IDiagnosticsDeadLetterConfirmationService
+    {
+        public bool RequeueResult { get; set; } = true;
+
+        public bool DeleteResult { get; set; } = true;
+
+        public int RequeueCallCount { get; private set; }
+
+        public int DeleteCallCount { get; private set; }
+
+        public bool ConfirmRequeue(DeadLetterRow row)
+        {
+            RequeueCallCount++;
+            return RequeueResult;
+        }
+
+        public bool ConfirmDelete(DeadLetterRow row)
+        {
+            DeleteCallCount++;
+            return DeleteResult;
+        }
+    }
+
+    private sealed class FakeDiagnosticsDeadLetterOperator : IDiagnosticsDeadLetterOperator
+    {
+        public DiagnosticsDeadLetterOperationResult RequeueResult { get; set; } = new(true, "重新入队成功");
+
+        public DiagnosticsDeadLetterOperationResult DeleteResult { get; set; } = new(true, "删除成功");
+
+        public int RequeueCallCount { get; private set; }
+
+        public int DeleteCallCount { get; private set; }
+
+        public bool CanOperate(DeadLetterRow? row) => row is not null;
+
+        public Task<DiagnosticsDeadLetterOperationResult> RequeueAsync(DeadLetterRow row)
+        {
+            RequeueCallCount++;
+            return Task.FromResult(RequeueResult);
+        }
+
+        public Task<DiagnosticsDeadLetterOperationResult> DeleteAsync(DeadLetterRow row)
+        {
+            DeleteCallCount++;
+            return Task.FromResult(DeleteResult);
+        }
+    }
+
+    private sealed class FakeClientPermissionService(bool isLocalAdmin = true) : IClientPermissionService
+    {
+        public bool CanEditParams => IsLocalAdmin;
+
+        public bool CanEditHardware => IsLocalAdmin;
+
+        public bool IsLocalAdmin { get; private set; } = isLocalAdmin;
+
+        public event Action? PermissionStateChanged;
+
+        public bool HasPermission(string permission) => IsLocalAdmin;
+
+        public void SetLocalAdmin(bool isLocalAdmin)
+        {
+            IsLocalAdmin = isLocalAdmin;
+            PermissionStateChanged?.Invoke();
+        }
     }
 
     private sealed class FakeStartupDiagnosticsStore : IStartupDiagnosticsStore

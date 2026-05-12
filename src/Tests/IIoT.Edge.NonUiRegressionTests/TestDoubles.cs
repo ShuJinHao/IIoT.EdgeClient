@@ -786,6 +786,7 @@ internal sealed class FakeCloudDeadLetterStore : ICloudDeadLetterStore
 {
     public List<DeadLetterRecord> Records { get; } = new();
     public Exception? SaveException { get; set; }
+    public Exception? DeleteException { get; set; }
 
     public Task SaveAsync(DeadLetterRecord record)
     {
@@ -811,6 +812,11 @@ internal sealed class FakeCloudDeadLetterStore : ICloudDeadLetterStore
 
     public Task DeleteAsync(long id)
     {
+        if (DeleteException is not null)
+        {
+            throw DeleteException;
+        }
+
         Records.RemoveAll(x => x.Id == id);
         return Task.CompletedTask;
     }
@@ -820,6 +826,7 @@ internal sealed class FakeMesDeadLetterStore : IMesDeadLetterStore
 {
     public List<DeadLetterRecord> Records { get; } = new();
     public Exception? SaveException { get; set; }
+    public Exception? DeleteException { get; set; }
 
     public Task SaveAsync(DeadLetterRecord record)
     {
@@ -845,6 +852,11 @@ internal sealed class FakeMesDeadLetterStore : IMesDeadLetterStore
 
     public Task DeleteAsync(long id)
     {
+        if (DeleteException is not null)
+        {
+            throw DeleteException;
+        }
+
         Records.RemoveAll(x => x.Id == id);
         return Task.CompletedTask;
     }

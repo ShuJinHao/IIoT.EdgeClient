@@ -74,17 +74,56 @@ public sealed class DeadLetterMaintenanceBehaviorTests
         Assert.Single(mesDeadLetters.Records);
     }
 
+    [Fact]
+    public async Task DeadLetter_DeleteFailure_ShouldReturnFailureAndLogError()
+    {
+        var cloudDeadLetters = new FakeCloudDeadLetterStore
+        {
+            DeleteException = new InvalidOperationException("delete down")
+        };
+        cloudDeadLetters.Records.Add(CreateDeadLetter(50, "Cloud", "failed_cloud_records"));
+        var logger = new FakeLogService();
+        var service = CreateService(cloudDeadLetters: cloudDeadLetters, logger: logger);
+
+        var result = await service.DeleteAsync(DataPipelineRetryChannel.Cloud, 50);
+
+        Assert.False(result.IsSuccess);
+        Assert.Single(cloudDeadLetters.Records);
+        Assert.Contains(logger.Entries, x => x.Level == "Error" && x.Message.Contains("50", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task DeadLetter_RequeueDeleteFailure_ShouldReturnFailureAndKeepSourceRecord()
+    {
+        var cloudDeadLetters = new FakeCloudDeadLetterStore
+        {
+            DeleteException = new InvalidOperationException("delete down")
+        };
+        cloudDeadLetters.Records.Add(CreateDeadLetter(60, "Cloud", "failed_cloud_records"));
+        var cloudRetry = new FakeFailedRecordStore();
+        var logger = new FakeLogService();
+        var service = CreateService(cloudDeadLetters: cloudDeadLetters, cloudRetry: cloudRetry, logger: logger);
+
+        var result = await service.RequeueAsync(DataPipelineRetryChannel.Cloud, 60);
+
+        Assert.False(result.IsSuccess);
+        Assert.Single(cloudDeadLetters.Records);
+        Assert.Single(cloudRetry.PendingRecords);
+        Assert.Contains(logger.Entries, x => x.Level == "Error" && x.Message.Contains("60", StringComparison.Ordinal));
+    }
+
     private static DeadLetterMaintenanceService CreateService(
         FakeCloudDeadLetterStore? cloudDeadLetters = null,
         FakeMesDeadLetterStore? mesDeadLetters = null,
         FakeFailedRecordStore? cloudRetry = null,
-        FakeFailedRecordStore? mesRetry = null)
+        FakeFailedRecordStore? mesRetry = null,
+        FakeLogService? logger = null)
         => new(
             cloudDeadLetters ?? new FakeCloudDeadLetterStore(),
             mesDeadLetters ?? new FakeMesDeadLetterStore(),
             cloudRetry ?? new FakeFailedRecordStore(),
             mesRetry ?? new FakeFailedRecordStore(),
-            new FakeLogService());
+            logger ?? new FakeLogService());
 
     private static DeadLetterRecord CreateDeadLetter(long id, string failedTarget, string sourceTable)
         => new()
