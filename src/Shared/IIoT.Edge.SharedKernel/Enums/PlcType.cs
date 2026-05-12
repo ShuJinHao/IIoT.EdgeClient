@@ -3,5 +3,7 @@
 public enum PlcType
 {
     Mc,
-    S7
+    S7,
+    ModbusTcp,
+    ModbusRtu
 }

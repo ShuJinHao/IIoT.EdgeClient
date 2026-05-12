@@ -370,19 +370,35 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
         List<StartupDiagnosticIssue> issues)
     {
         if (string.IsNullOrWhiteSpace(device.DeviceModel)
-            || !Enum.TryParse<PlcType>(device.DeviceModel, ignoreCase: true, out _))
+            || !Enum.TryParse<PlcType>(device.DeviceModel, ignoreCase: true, out var plcType))
         {
             issues.Add(CreateIssue("DEVICE_MODEL_INVALID", $"PLC“{deviceName}”的 DeviceModel 无效：{device.DeviceModel ?? "<空>"}。", device.ModuleId, deviceName));
+            return;
         }
 
-        if (string.IsNullOrWhiteSpace(device.IpAddress))
+        if (plcType == PlcType.ModbusRtu)
         {
-            issues.Add(CreateIssue("CONFIG_INVALID", $"PLC“{deviceName}”缺少 IpAddress。", device.ModuleId, deviceName));
-        }
+            if (string.IsNullOrWhiteSpace(device.SendCmd1))
+            {
+                issues.Add(CreateIssue("CONFIG_INVALID", $"PLC“{deviceName}”是 Modbus RTU 时，Command1 必须填写串口设备名称。", device.ModuleId, deviceName));
+            }
 
-        if (device.Port1 <= 0 || device.Port1 > 65535)
+            if (device.Port1 is < 1 or > 247)
+            {
+                issues.Add(CreateIssue("CONFIG_INVALID", $"PLC“{deviceName}”是 Modbus RTU 时，Port1 必须填写 1 到 247 之间的从站 ID。", device.ModuleId, deviceName));
+            }
+        }
+        else
         {
-            issues.Add(CreateIssue("CONFIG_INVALID", $"PLC“{deviceName}”的 Port1 无效：{device.Port1}。", device.ModuleId, deviceName));
+            if (string.IsNullOrWhiteSpace(device.IpAddress))
+            {
+                issues.Add(CreateIssue("CONFIG_INVALID", $"PLC“{deviceName}”缺少 IpAddress。", device.ModuleId, deviceName));
+            }
+
+            if (device.Port1 <= 0 || device.Port1 > 65535)
+            {
+                issues.Add(CreateIssue("CONFIG_INVALID", $"PLC“{deviceName}”的 Port1 无效：{device.Port1}。", device.ModuleId, deviceName));
+            }
         }
 
         if (device.ConnectTimeout <= 0)

@@ -18,7 +18,7 @@ public sealed class PlcServiceProxy : IPlcService
         _deviceName = deviceName;
     }
 
-    public void Init(string ip, int port) => _target.Init(ip, port);
+    public void Init(PlcEndpoint endpoint) => _target.Init(endpoint);
 
     public async Task<bool> ConnectAsync()
     {

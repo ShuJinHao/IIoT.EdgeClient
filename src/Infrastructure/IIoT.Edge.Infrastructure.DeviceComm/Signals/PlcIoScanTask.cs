@@ -24,15 +24,18 @@ public sealed class PlcIoScanTask : PlcIoScanTaskBase
         ILogService logger,
         IPlcSignalBlockPlanner signalBlockPlanner,
         PlcConnectionStatusStore? statusStore = null,
-        PlcIoRuntimePolicy? runtimePolicy = null)
+        PlcIoRuntimePolicy? runtimePolicy = null,
+        PlcEndpoint? endpoint = null)
         : base(
             plcService,
             dataStore,
             new PlcIoScanDevice(
                 deviceConfig.Id,
                 deviceConfig.DeviceName,
-                deviceConfig.IpAddress,
-                deviceConfig.Port1),
+                endpoint ?? new TcpPlcEndpoint(
+                    deviceConfig.IpAddress,
+                    deviceConfig.Port1,
+                    deviceConfig.ConnectTimeout)),
             ioMappings.Select(static mapping => new PlcIoScanMapping(
                 mapping.SignalKey,
                 mapping.PlcAddress,

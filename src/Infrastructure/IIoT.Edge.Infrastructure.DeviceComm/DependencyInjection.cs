@@ -5,6 +5,7 @@ using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Infrastructure.DeviceComm.Barcode.Factories;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Factory;
+using IIoT.Edge.Infrastructure.DeviceComm.Plc.Services.Modbus;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -15,6 +16,8 @@ public static class DependencyInjection
     public static IServiceCollection AddDeviceCommInfrastructure(this IServiceCollection services)
     {
         services.AddSingleton<IPlcDataStore, PlcDataStore>();
+        services.AddSingleton<IModbusAddressParser, ModbusAddressParser>();
+        services.AddSingleton<IPlcEndpointResolver, PlcEndpointResolver>();
         services.AddSingleton<IPlcServiceFactory, PlcServiceFactory>();
         services.AddSingleton<PlcRuntimeRegistry>();
         services.AddSingleton<PlcConnectionStatusStore>();

@@ -84,6 +84,30 @@ public sealed class PlcIoScanTaskBehaviorTests
     }
 
     [Fact]
+    public async Task PlcIoScanTask_ConnectAsync_ShouldPassConfiguredTcpEndpoint()
+    {
+        var plcService = new ScriptedPlcService();
+        plcService.ConnectOutcomes.Enqueue(true);
+        var device = CreateDevice(11, "PLC-ENDPOINT");
+        device.UpdateEndpoint("10.1.2.3", 502, null, 4500);
+
+        var interaction = new PlcIoScanTask(
+            plcService,
+            new PlcDataStore(),
+            device,
+            [],
+            new FakeLogService(),
+            SignalBlockPlanner);
+
+        await interaction.ConnectAsync();
+
+        var endpoint = Assert.IsType<TcpPlcEndpoint>(plcService.Endpoint);
+        Assert.Equal("10.1.2.3", endpoint.Host);
+        Assert.Equal(502, endpoint.Port);
+        Assert.Equal(4500, endpoint.ConnectTimeoutMs);
+    }
+
+    [Fact]
     public async Task PlcIoScanTask_WhenReadTimesOut_ShouldDisconnectAndReconnectBeforeRecovering()
     {
         var plcService = new ScriptedPlcService();
@@ -479,7 +503,7 @@ public sealed class PlcIoScanTaskBehaviorTests
     {
         public bool IsConnected => true;
 
-        public void Init(string ip, int port)
+        public void Init(PlcEndpoint endpoint)
         {
         }
 
@@ -532,13 +556,15 @@ public sealed class PlcIoScanTaskBehaviorTests
         public List<(string Address, ushort[] Data)> WriteRequests { get; } = [];
 
         public bool IsConnected { get; private set; }
+        public PlcEndpoint? Endpoint { get; private set; }
         public int ConnectAsyncCallCount { get; private set; }
         public int DisconnectCallCount { get; private set; }
         public int ReadAsyncCallCount { get; private set; }
         public int WriteAsyncCallCount { get; private set; }
 
-        public void Init(string ip, int port)
+        public void Init(PlcEndpoint endpoint)
         {
+            Endpoint = endpoint;
         }
 
         public Task<bool> ConnectAsync()
