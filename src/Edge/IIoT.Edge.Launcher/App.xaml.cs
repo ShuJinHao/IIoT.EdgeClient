@@ -1,26 +1,25 @@
 using IIoT.Edge.Launcher.Services;
-using IIoT.Edge.Launcher.ViewModels;
-using System.IO;
+using Microsoft.Extensions.DependencyInjection;
 using System.Windows;
 
 namespace IIoT.Edge.Launcher;
 
 public partial class App : System.Windows.Application
 {
+    private IServiceProvider? _serviceProvider;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
         try
         {
-            var baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
-            EnsureLauncherAccountsFileExists(baseDirectory);
-            var accountCatalog = new LauncherAccountCatalog(baseDirectory);
-            var profileCatalog = new LauncherProfileCatalog(baseDirectory);
-            var authService = new LocalLauncherAuthService(accountCatalog);
-            var launchService = new ShellLaunchService(new ProcessStarter());
-            var viewModel = new LauncherMainViewModel(profileCatalog, authService, launchService);
-            var mainWindow = new MainWindow(viewModel);
+            _serviceProvider = ConfigureServices(AppDomain.CurrentDomain.BaseDirectory)
+                .BuildServiceProvider();
+            _serviceProvider.GetRequiredService<ILauncherAccountCatalogInitializer>()
+                .EnsureCatalogExists();
+
+            var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
             mainWindow.Show();
         }
         catch (Exception ex)
@@ -34,24 +33,13 @@ public partial class App : System.Windows.Application
         }
     }
 
-    private void EnsureLauncherAccountsFileExists(string baseDirectory)
+    protected override void OnExit(ExitEventArgs e)
     {
-        var accountsPath = LauncherAccountCatalog.GetCatalogPath(baseDirectory);
-        if (File.Exists(accountsPath))
-        {
-            return;
-        }
-
-        var samplePath = LauncherAccountCatalog.GetCatalogPath(
-            baseDirectory,
-            LauncherAccountCatalog.SampleCatalogFileName);
-        if (!File.Exists(samplePath))
-        {
-            throw new FileNotFoundException(
-                $"启动账号文件不存在，且未找到样例文件：{samplePath}",
-                samplePath);
-        }
-
-        File.Copy(samplePath, accountsPath, overwrite: false);
+        (_serviceProvider as IDisposable)?.Dispose();
+        _serviceProvider = null;
+        base.OnExit(e);
     }
+
+    private static IServiceCollection ConfigureServices(string baseDirectory)
+        => new ServiceCollection().AddLauncherServices(baseDirectory);
 }
