@@ -8,7 +8,10 @@
 
   <ItemGroup>
     <PackageReference Include="MCProtocol" />
+    <PackageReference Include="NModbus" />
+    <PackageReference Include="NModbus.Serial" />
     <PackageReference Include="S7netplus" />
+    <PackageReference Include="System.IO.Ports" />
   </ItemGroup>
 
   <ItemGroup>

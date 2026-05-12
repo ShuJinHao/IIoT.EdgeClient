@@ -217,6 +217,7 @@ public sealed class PlcTaskBindingBehaviorTests
             logger,
             statusStore,
             new DefaultPlcSignalBlockPlanner(),
+            new StaticPlcEndpointResolver(),
             []);
         var coordinator = new PlcLifecycleCoordinator(
             networkDevices,
@@ -454,11 +455,21 @@ public sealed class PlcTaskBindingBehaviorTests
         }
     }
 
+    private sealed class StaticPlcEndpointResolver : IPlcEndpointResolver
+    {
+        public Task<PlcEndpoint> ResolveAsync(
+            NetworkDeviceEntity device,
+            PlcType plcType,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult<PlcEndpoint>(
+                new TcpPlcEndpoint(device.IpAddress, device.Port1, device.ConnectTimeout));
+    }
+
     private sealed class ConnectedPlcService : IPlcService
     {
         public bool IsConnected { get; private set; }
 
-        public void Init(string ip, int port)
+        public void Init(PlcEndpoint endpoint)
         {
         }
 

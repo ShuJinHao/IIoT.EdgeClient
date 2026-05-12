@@ -74,7 +74,7 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
     {
         try
         {
-            _plcService.Init(_device.IpAddress, _device.Port);
+            _plcService.Init(_device.Endpoint);
             var connected = await _plcService.ConnectAsync().ConfigureAwait(false);
             if (connected)
             {
@@ -295,7 +295,7 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
 /// <summary>
 /// PLC IO 扫描任务绑定的设备信息。
 /// </summary>
-public sealed record PlcIoScanDevice(int DeviceId, string DeviceName, string IpAddress, int Port);
+public sealed record PlcIoScanDevice(int DeviceId, string DeviceName, PlcEndpoint Endpoint);
 
 /// <summary>
 /// PLC IO 扫描任务使用的数据库映射快照。

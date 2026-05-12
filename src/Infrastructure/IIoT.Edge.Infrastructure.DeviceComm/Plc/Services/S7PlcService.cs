@@ -7,20 +7,20 @@ namespace IIoT.Edge.Infrastructure.DeviceComm.Plc.Services;
 
 public sealed class S7PlcService : IPlcService, IDisposable
 {
-    private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan OperationTimeout = TimeSpan.FromSeconds(3);
 
     private PlcClient? _plc;
-    private string _ip = string.Empty;
+    private TcpPlcEndpoint? _endpoint;
     private int _port;
     private readonly SemaphoreSlim _semaphore = new(1, 1);
 
     public bool IsConnected => _plc?.IsConnected ?? false;
 
-    public void Init(string ip, int port)
+    public void Init(PlcEndpoint endpoint)
     {
-        _ip = ip;
-        _port = port;
+        _endpoint = endpoint as TcpPlcEndpoint
+            ?? throw new ArgumentException("S7 PLC 只支持 TCP 端点。", nameof(endpoint));
+        _port = _endpoint.Port;
     }
 
     public async Task<bool> ConnectAsync()
@@ -33,16 +33,16 @@ public sealed class S7PlcService : IPlcService, IDisposable
         }
 
         ReleasePlc(_plc);
-        _plc = new PlcClient(CpuType.S71200, _ip, 0, 1);
+        _plc = new PlcClient(CpuType.S71200, _endpoint!.Host, 0, 1);
 
-        using var timeoutCts = new CancellationTokenSource(ConnectTimeout);
+        using var timeoutCts = new CancellationTokenSource(_endpoint.ConnectTimeout);
 
         try
         {
             await _plc.OpenAsync(timeoutCts.Token).ConfigureAwait(false);
             if (!_plc.IsConnected)
             {
-                throw new InvalidOperationException($"S7 PLC {_ip}:{_port} reported success but is still disconnected.");
+                throw new InvalidOperationException($"S7 PLC {_endpoint.Host}:{_port} reported success but is still disconnected.");
             }
 
             return true;
@@ -51,7 +51,7 @@ public sealed class S7PlcService : IPlcService, IDisposable
         {
             ReleasePlc(_plc);
             _plc = null;
-            throw new TimeoutException($"Connect to S7 PLC {_ip}:{_port} timed out after {ConnectTimeout.TotalSeconds:0}s.", ex);
+            throw new TimeoutException($"Connect to S7 PLC {_endpoint.Host}:{_port} timed out after {_endpoint.ConnectTimeout.TotalSeconds:0}s.", ex);
         }
         catch
         {
@@ -186,7 +186,7 @@ public sealed class S7PlcService : IPlcService, IDisposable
 
     private void EnsureInitialized()
     {
-        if (string.IsNullOrWhiteSpace(_ip))
+        if (_endpoint is null || string.IsNullOrWhiteSpace(_endpoint.Host))
         {
             throw new InvalidOperationException("S7 PLC endpoint is not initialized.");
         }

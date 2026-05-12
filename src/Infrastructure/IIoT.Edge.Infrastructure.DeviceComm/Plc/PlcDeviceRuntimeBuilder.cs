@@ -23,6 +23,7 @@ public sealed class PlcDeviceRuntimeBuilder
     private readonly ILogService _logger;
     private readonly PlcConnectionStatusStore _statusStore;
     private readonly IPlcSignalBlockPlanner _signalBlockPlanner;
+    private readonly IPlcEndpointResolver _endpointResolver;
     private readonly IReadOnlyDictionary<string, IModuleHardwareProfileProvider> _hardwareProfiles;
 
     public PlcDeviceRuntimeBuilder(
@@ -33,6 +34,7 @@ public sealed class PlcDeviceRuntimeBuilder
         ILogService logger,
         PlcConnectionStatusStore statusStore,
         IPlcSignalBlockPlanner signalBlockPlanner,
+        IPlcEndpointResolver endpointResolver,
         IEnumerable<IModuleHardwareProfileProvider> hardwareProfiles)
     {
         _ioMappings = ioMappings;
@@ -42,6 +44,7 @@ public sealed class PlcDeviceRuntimeBuilder
         _logger = logger;
         _statusStore = statusStore;
         _signalBlockPlanner = signalBlockPlanner;
+        _endpointResolver = endpointResolver;
         _hardwareProfiles = hardwareProfiles.ToDictionary(x => x.ModuleId, StringComparer.OrdinalIgnoreCase);
     }
 
@@ -69,6 +72,7 @@ public sealed class PlcDeviceRuntimeBuilder
 
         _statusStore.EnsureTracked(device.Id, device.DeviceName);
         var plcService = _plcServiceFactory.Create(plcType, device.DeviceName);
+        var endpoint = await _endpointResolver.ResolveAsync(device, plcType, ct).ConfigureAwait(false);
         var deviceCts = new CancellationTokenSource();
         var runtimePolicy = ResolveRuntimePolicy(device.ModuleId);
 
@@ -80,7 +84,8 @@ public sealed class PlcDeviceRuntimeBuilder
             _logger,
             _signalBlockPlanner,
             _statusStore,
-            runtimePolicy);
+            runtimePolicy,
+            endpoint);
         await ioScanTask.ConnectAsync().ConfigureAwait(false);
 
         var tasks = new List<IPlcTask> { ioScanTask };

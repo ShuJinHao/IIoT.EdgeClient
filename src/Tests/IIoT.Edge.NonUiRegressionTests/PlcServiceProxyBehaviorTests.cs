@@ -6,6 +6,18 @@ namespace IIoT.Edge.NonUiRegressionTests;
 public sealed class PlcServiceProxyBehaviorTests
 {
     [Fact]
+    public void Init_ShouldForwardEndpointToTarget()
+    {
+        var target = new FakePlcService();
+        var endpoint = new TcpPlcEndpoint("127.0.0.1", 502);
+        var proxy = new PlcServiceProxy(target, new FakeLogService(), "PLC-A");
+
+        proxy.Init(endpoint);
+
+        Assert.Same(endpoint, target.Endpoint);
+    }
+
+    [Fact]
     public async Task ConnectAsync_WhenConnectionFails_ShouldLogReadableWarning()
     {
         var logger = new FakeLogService();
@@ -85,10 +97,13 @@ public sealed class PlcServiceProxyBehaviorTests
 
         public Func<string, object, Task>? WriteAsyncHandler { get; init; }
 
+        public PlcEndpoint? Endpoint { get; private set; }
+
         public bool IsConnected => false;
 
-        public void Init(string ip, int port)
+        public void Init(PlcEndpoint endpoint)
         {
+            Endpoint = endpoint;
         }
 
         public Task<bool> ConnectAsync()

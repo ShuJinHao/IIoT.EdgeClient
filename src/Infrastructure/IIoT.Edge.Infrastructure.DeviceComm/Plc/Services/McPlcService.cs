@@ -6,21 +6,21 @@ namespace IIoT.Edge.Infrastructure.DeviceComm.Plc.Services;
 
 public sealed class McPlcService : IPlcService, IDisposable
 {
-    private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan OperationTimeout = TimeSpan.FromSeconds(3);
 
     private McProtocolTcp? _mcProtocol;
-    private string _ip = string.Empty;
+    private TcpPlcEndpoint? _endpoint;
     private int _port;
     private readonly McFrame _frameType = McFrame.MC3E;
     private readonly SemaphoreSlim _semaphore = new(1, 1);
 
     public bool IsConnected => _mcProtocol?.Connected ?? false;
 
-    public void Init(string ip, int port)
+    public void Init(PlcEndpoint endpoint)
     {
-        _ip = ip;
-        _port = port;
+        _endpoint = endpoint as TcpPlcEndpoint
+            ?? throw new ArgumentException("MC PLC 只支持 TCP 端点。", nameof(endpoint));
+        _port = _endpoint.Port;
     }
 
     public async Task<bool> ConnectAsync()
@@ -33,14 +33,14 @@ public sealed class McPlcService : IPlcService, IDisposable
         }
 
         _mcProtocol?.Dispose();
-        _mcProtocol = new McProtocolTcp(_ip, _port, _frameType);
+        _mcProtocol = new McProtocolTcp(_endpoint!.Host, _port, _frameType);
 
         try
         {
-            await _mcProtocol.Open().WaitAsync(ConnectTimeout).ConfigureAwait(false);
+            await _mcProtocol.Open().WaitAsync(_endpoint.ConnectTimeout).ConfigureAwait(false);
             if (!_mcProtocol.Connected)
             {
-                throw new InvalidOperationException($"MC PLC {_ip}:{_port} reported success but is still disconnected.");
+                throw new InvalidOperationException($"MC PLC {_endpoint.Host}:{_port} reported success but is still disconnected.");
             }
 
             return true;
@@ -49,7 +49,7 @@ public sealed class McPlcService : IPlcService, IDisposable
         {
             _mcProtocol.Dispose();
             _mcProtocol = null;
-            throw new TimeoutException($"Connect to MC PLC {_ip}:{_port} timed out after {ConnectTimeout.TotalSeconds:0}s.", ex);
+            throw new TimeoutException($"Connect to MC PLC {_endpoint.Host}:{_port} timed out after {_endpoint.ConnectTimeout.TotalSeconds:0}s.", ex);
         }
         catch
         {
@@ -137,7 +137,7 @@ public sealed class McPlcService : IPlcService, IDisposable
 
     private void EnsureInitialized()
     {
-        if (string.IsNullOrWhiteSpace(_ip))
+        if (_endpoint is null || string.IsNullOrWhiteSpace(_endpoint.Host))
         {
             throw new InvalidOperationException("MC PLC endpoint is not initialized.");
         }
