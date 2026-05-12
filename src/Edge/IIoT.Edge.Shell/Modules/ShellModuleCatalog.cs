@@ -5,32 +5,57 @@ using System.IO;
 
 namespace IIoT.Edge.Shell.Modules;
 
-public static class ShellModuleCatalog
+public interface IShellModuleCatalog
+{
+    string GetPluginRootPath(string baseDirectory);
+
+    ModuleCatalogDiscoveryResult DiscoverModules(string pluginRootPath);
+
+    ModuleCatalogActivationResult CreateEnabledModules(
+        IConfiguration configuration,
+        IReadOnlyList<ModulePluginDescriptor> discoveredModules);
+
+    IReadOnlyList<IEdgeProcessModule> CreateAllModulesForValidation();
+
+    IReadOnlyList<IEdgeProcessModule> CreateAllModulesForValidation(
+        IReadOnlyList<ModulePluginDescriptor> discoveredModules);
+
+    bool IsDiscoveredModule(string moduleId, IReadOnlyList<ModulePluginDescriptor> discoveredModules);
+}
+
+public sealed class ShellModuleCatalog : IShellModuleCatalog
 {
     public const string PluginDirectoryName = "Modules";
 
-    public static string GetPluginRootPath(string baseDirectory)
+    private readonly IModuleCatalog _moduleCatalog;
+
+    public ShellModuleCatalog(IModuleCatalog moduleCatalog)
+    {
+        _moduleCatalog = moduleCatalog ?? throw new ArgumentNullException(nameof(moduleCatalog));
+    }
+
+    public string GetPluginRootPath(string baseDirectory)
         => Path.Combine(baseDirectory, PluginDirectoryName);
 
-    public static ModuleCatalogDiscoveryResult DiscoverModules(string pluginRootPath)
-        => DirectoryModuleCatalog.DiscoverModules(pluginRootPath);
+    public ModuleCatalogDiscoveryResult DiscoverModules(string pluginRootPath)
+        => _moduleCatalog.DiscoverModules(pluginRootPath);
 
-    public static ModuleCatalogActivationResult CreateEnabledModules(
+    public ModuleCatalogActivationResult CreateEnabledModules(
         IConfiguration configuration,
         IReadOnlyList<ModulePluginDescriptor> discoveredModules)
-        => DirectoryModuleCatalog.CreateEnabledModules(
+        => _moduleCatalog.CreateEnabledModules(
             configuration,
             ShellModuleOptions.SectionName,
             discoveredModules);
 
-    public static IReadOnlyList<IEdgeProcessModule> CreateAllModulesForValidation()
-        => DirectoryModuleCatalog.CreateAllModules(
+    public IReadOnlyList<IEdgeProcessModule> CreateAllModulesForValidation()
+        => _moduleCatalog.CreateAllModules(
             DiscoverModules(GetPluginRootPath(AppContext.BaseDirectory)).Modules);
 
-    public static IReadOnlyList<IEdgeProcessModule> CreateAllModulesForValidation(
+    public IReadOnlyList<IEdgeProcessModule> CreateAllModulesForValidation(
         IReadOnlyList<ModulePluginDescriptor> discoveredModules)
-        => DirectoryModuleCatalog.CreateAllModules(discoveredModules);
+        => _moduleCatalog.CreateAllModules(discoveredModules);
 
-    public static bool IsDiscoveredModule(string moduleId, IReadOnlyList<ModulePluginDescriptor> discoveredModules)
-        => DirectoryModuleCatalog.IsDiscoveredModule(moduleId, discoveredModules);
+    public bool IsDiscoveredModule(string moduleId, IReadOnlyList<ModulePluginDescriptor> discoveredModules)
+        => _moduleCatalog.IsDiscoveredModule(moduleId, discoveredModules);
 }

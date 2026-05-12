@@ -10,9 +10,14 @@ public sealed record ShellConfigurationLoadResult(
     string? MachineProfileFileName,
     bool IsMachineProfileLoaded);
 
-public static class ShellConfigurationLoader
+public interface IShellConfigurationLoader
 {
-    public static ShellConfigurationLoadResult Load(string baseDirectory)
+    ShellConfigurationLoadResult Load(string baseDirectory);
+}
+
+public sealed class ShellConfigurationLoader : IShellConfigurationLoader
+{
+    public ShellConfigurationLoadResult Load(string baseDirectory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
 
@@ -69,12 +74,12 @@ public static class ShellConfigurationLoader
             machineProfileLoaded);
     }
 
-    private static string GetEnvironmentName()
+    private string GetEnvironmentName()
         => Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
             ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
             ?? "Production";
 
-    private static IReadOnlyList<string> FindPluginDefaultConfigurationFiles(string baseDirectory)
+    private IReadOnlyList<string> FindPluginDefaultConfigurationFiles(string baseDirectory)
     {
         var pluginRoot = Path.Combine(baseDirectory, "Modules");
         if (!Directory.Exists(pluginRoot))

@@ -607,7 +607,8 @@ public sealed class HomogenizationBusinessChainBehaviorTests
                 ProcessId = Guid.NewGuid()
             });
 
-            ProductionContextSignalBindings.Set(context, bindings);
+            var signalBindingStore = new ProductionContextSignalBindingStore();
+            signalBindingStore.Set(context, bindings);
             SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.心跳), 1);
             SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.扫码进站), TestCodeOptions.Plc.SignalReset);
             SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.出料上传), TestCodeOptions.Plc.SignalReset);
@@ -625,6 +626,7 @@ public sealed class HomogenizationBusinessChainBehaviorTests
             services.AddSingleton<HomogenizationMesScenarioChannel>(mes);
             services.AddSingleton<IDataPipelineService>(pipeline);
             services.AddSingleton<IProductionTimeProvider>(productionTime);
+            services.AddSingleton<IProductionContextSignalBindingStore>(signalBindingStore);
             services.AddSingleton<IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>>(parameters);
             services.AddSingleton(new HomogenizationCellDataValidator());
             services.AddSingleton(Options.Create(new HomogenizationModuleOptions

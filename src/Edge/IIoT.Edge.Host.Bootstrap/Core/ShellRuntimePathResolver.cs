@@ -4,9 +4,14 @@ using System.IO;
 
 namespace IIoT.Edge.Shell.Core;
 
-public static class ShellRuntimePathResolver
+public interface IShellRuntimePathResolver
 {
-    public static EdgeRuntimePaths Resolve(string baseDirectory, IConfiguration configuration)
+    EdgeRuntimePaths Resolve(string baseDirectory, IConfiguration configuration);
+}
+
+public sealed class ShellRuntimePathResolver : IShellRuntimePathResolver
+{
+    public EdgeRuntimePaths Resolve(string baseDirectory, IConfiguration configuration)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
         ArgumentNullException.ThrowIfNull(configuration);
@@ -43,7 +48,7 @@ public static class ShellRuntimePathResolver
                 "crash.fallback.log"));
     }
 
-    private static string ResolvePath(string baseDirectory, string path)
+    private string ResolvePath(string baseDirectory, string path)
     {
         var expanded = Environment.ExpandEnvironmentVariables(path);
         return Path.GetFullPath(
@@ -52,7 +57,7 @@ public static class ShellRuntimePathResolver
                 : Path.Combine(baseDirectory, expanded));
     }
 
-    private static string SanitizePathSegment(string value)
+    private string SanitizePathSegment(string value)
     {
         var invalidChars = Path.GetInvalidFileNameChars();
         var sanitized = new string(value

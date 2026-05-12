@@ -32,6 +32,7 @@ using IIoT.Edge.Shell.Core;
 using IIoT.Edge.UI.Shared.Modularity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using System.IO;
@@ -88,6 +89,10 @@ public static class DependencyInjection
         services.AddSingleton<IReadOnlyCollection<ModulePluginDescriptor>>(discoveredModuleList);
         services.AddSingleton<IReadOnlyCollection<ModuleCatalogIssue>>(moduleCatalogIssueList);
         services.AddSingleton<IReadOnlyCollection<string>>(configuredEnabledModuleList);
+        services.TryAddSingleton<ICrashLogWriter, CrashLogWriter>();
+        services.TryAddSingleton<IModulePluginAssemblyResolver, ModulePluginAssemblyResolver>();
+        services.TryAddSingleton<IModulePluginLoader, ModulePluginLoader>();
+        services.TryAddSingleton<IModuleCatalog, DirectoryModuleCatalog>();
         services.AddSingleton<IDevelopmentSampleInitializer, DevelopmentSampleInitializer>();
         services.AddSingleton<IStartupDiagnosticsStore, StartupDiagnosticsStore>();
         services.AddSingleton<ICloudUploadDiagnosticsStore, CloudUploadDiagnosticsStore>();

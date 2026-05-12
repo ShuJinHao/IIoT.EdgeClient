@@ -4,38 +4,74 @@ using System.Text;
 
 namespace IIoT.Edge.Shell.Core;
 
-public static class CrashLogWriter
+public interface ICrashLogWriter
 {
-    private static readonly object Sync = new();
+    string LogPath { get; }
+
+    string FallbackLogPath { get; }
+
+    void ConfigurePaths(string primaryLogPath, string fallbackLogPath);
+
+    void Write(string source, Exception? exception = null, string? details = null);
+}
+
+public sealed class CrashLogWriter : ICrashLogWriter
+{
     private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
+    private readonly object _sync = new();
+    private readonly Func<string> _defaultPrimaryLogPathProvider;
+    private readonly Func<string> _defaultFallbackLogPathProvider;
+    private readonly Action<string, string> _appendEntryToPath;
+    private readonly Action<string> _diagnosticSink;
+    private string? _primaryLogPath;
+    private string? _fallbackLogPath;
 
-    internal static Func<string> PrimaryLogPathProvider { get; set; }
-        = () => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "crash.log");
-
-    internal static Func<string> FallbackLogPathProvider { get; set; }
-        = () => Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "IIoT.Edge",
-            "diagnostics",
-            "crash.fallback.log");
-
-    internal static Action<string, string> AppendEntryToPath { get; set; } = AppendEntryToPathCore;
-
-    internal static Action<string> DiagnosticSink { get; set; } = WriteToDiagnosticSinkCore;
-
-    public static string LogPath => PrimaryLogPathProvider();
-
-    internal static string FallbackLogPath => FallbackLogPathProvider();
-
-    public static void ConfigurePaths(Func<string> primaryLogPathProvider, Func<string> fallbackLogPathProvider)
+    public CrashLogWriter()
+        : this(
+            () => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "crash.log"),
+            () => Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "IIoT.Edge",
+                "diagnostics",
+                "crash.fallback.log"),
+            AppendEntryToPathCore,
+            WriteToDiagnosticSinkCore)
     {
-        PrimaryLogPathProvider = primaryLogPathProvider ?? throw new ArgumentNullException(nameof(primaryLogPathProvider));
-        FallbackLogPathProvider = fallbackLogPathProvider ?? throw new ArgumentNullException(nameof(fallbackLogPathProvider));
     }
 
-    public static void Write(string source, Exception? exception = null, string? details = null)
+    internal CrashLogWriter(
+        Func<string> defaultPrimaryLogPathProvider,
+        Func<string> defaultFallbackLogPathProvider,
+        Action<string, string> appendEntryToPath,
+        Action<string> diagnosticSink)
     {
-        lock (Sync)
+        _defaultPrimaryLogPathProvider = defaultPrimaryLogPathProvider
+            ?? throw new ArgumentNullException(nameof(defaultPrimaryLogPathProvider));
+        _defaultFallbackLogPathProvider = defaultFallbackLogPathProvider
+            ?? throw new ArgumentNullException(nameof(defaultFallbackLogPathProvider));
+        _appendEntryToPath = appendEntryToPath ?? throw new ArgumentNullException(nameof(appendEntryToPath));
+        _diagnosticSink = diagnosticSink ?? throw new ArgumentNullException(nameof(diagnosticSink));
+    }
+
+    public string LogPath => _primaryLogPath ?? _defaultPrimaryLogPathProvider();
+
+    public string FallbackLogPath => _fallbackLogPath ?? _defaultFallbackLogPathProvider();
+
+    public void ConfigurePaths(string primaryLogPath, string fallbackLogPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(primaryLogPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(fallbackLogPath);
+
+        lock (_sync)
+        {
+            _primaryLogPath = primaryLogPath;
+            _fallbackLogPath = fallbackLogPath;
+        }
+    }
+
+    public void Write(string source, Exception? exception = null, string? details = null)
+    {
+        lock (_sync)
         {
             var primaryPath = LogPath;
             var entry = BuildEntry(source, exception, details);
@@ -61,7 +97,7 @@ public static class CrashLogWriter
 
             try
             {
-                DiagnosticSink(BuildDiagnosticMessage(
+                _diagnosticSink(BuildDiagnosticMessage(
                     source,
                     exception,
                     details,
@@ -76,23 +112,11 @@ public static class CrashLogWriter
         }
     }
 
-    internal static void ResetTestHooks()
-    {
-        PrimaryLogPathProvider = () => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "crash.log");
-        FallbackLogPathProvider = () => Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "IIoT.Edge",
-            "diagnostics",
-            "crash.fallback.log");
-        AppendEntryToPath = AppendEntryToPathCore;
-        DiagnosticSink = WriteToDiagnosticSinkCore;
-    }
-
-    private static bool TryWrite(string path, string entry, out Exception? error)
+    private bool TryWrite(string path, string entry, out Exception? error)
     {
         try
         {
-            AppendEntryToPath(path, entry);
+            _appendEntryToPath(path, entry);
             error = null;
             return true;
         }

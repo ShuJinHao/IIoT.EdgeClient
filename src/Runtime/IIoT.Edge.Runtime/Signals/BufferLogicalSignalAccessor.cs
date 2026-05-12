@@ -34,10 +34,12 @@ public sealed class BufferLogicalSignalAccessor<TSignalKey> : ILogicalSignalAcce
     public static BufferLogicalSignalAccessor<TSignalKey> Create(
         IPlcBuffer buffer,
         ProductionContext context,
+        IProductionContextSignalBindingStore signalBindingStore,
         IModulePlcSignalProfile<TSignalKey> profile)
     {
         ArgumentNullException.ThrowIfNull(context);
-        var bindings = ProductionContextSignalBindings.Get(context);
+        ArgumentNullException.ThrowIfNull(signalBindingStore);
+        var bindings = signalBindingStore.Get(context);
         return new BufferLogicalSignalAccessor<TSignalKey>(
             buffer,
             bindings.Count > 0 ? bindings : ToFallbackBindings(profile),

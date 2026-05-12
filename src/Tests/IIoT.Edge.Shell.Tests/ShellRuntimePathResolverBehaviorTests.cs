@@ -21,7 +21,7 @@ public sealed class ShellRuntimePathResolverBehaviorTests
                 })
                 .Build();
 
-            var result = ShellRuntimePathResolver.Resolve(baseDirectory, configuration);
+            var result = new ShellRuntimePathResolver().Resolve(baseDirectory, configuration);
 
             Assert.Equal("HomogenizationLine", result.ProfileName);
             Assert.Equal(Path.Combine(baseDirectory, "data", "profiles", "HomogenizationLine"), result.RuntimeDataRoot);
@@ -51,7 +51,7 @@ public sealed class ShellRuntimePathResolverBehaviorTests
                 })
                 .Build();
 
-            var result = ShellRuntimePathResolver.Resolve(baseDirectory, configuration);
+            var result = new ShellRuntimePathResolver().Resolve(baseDirectory, configuration);
 
             Assert.Equal(
                 Path.Combine(baseDirectory, "profiles", "homogenization"),
@@ -84,7 +84,7 @@ public sealed class ShellRuntimePathResolverBehaviorTests
             .AddJsonFile(machineProfilePath, optional: false)
             .Build();
 
-        var result = ShellRuntimePathResolver.Resolve(shellOutputDirectory, configuration);
+        var result = new ShellRuntimePathResolver().Resolve(shellOutputDirectory, configuration);
 
         Assert.DoesNotContain("%LocalAppData%", profileText, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(expectedRuntimeRoot, result.RuntimeDataRoot);

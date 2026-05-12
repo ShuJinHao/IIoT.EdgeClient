@@ -5,14 +5,35 @@ using IIoT.Edge.Application.Abstractions.Modules;
 
 namespace IIoT.Edge.Host.Bootstrap.Modules;
 
-public static class DirectoryModuleCatalog
+public interface IModuleCatalog
+{
+    ModuleCatalogDiscoveryResult DiscoverModules(string pluginRootPath);
+
+    ModuleCatalogActivationResult CreateEnabledModules(
+        IConfiguration configuration,
+        string sectionName,
+        IReadOnlyList<ModulePluginDescriptor> discoveredModules);
+
+    IReadOnlyList<IEdgeProcessModule> CreateAllModules(IReadOnlyList<ModulePluginDescriptor> discoveredModules);
+
+    bool IsDiscoveredModule(string moduleId, IReadOnlyList<ModulePluginDescriptor> discoveredModules);
+}
+
+public sealed class DirectoryModuleCatalog : IModuleCatalog
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true
     };
 
-    public static ModuleCatalogDiscoveryResult DiscoverModules(string pluginRootPath)
+    private readonly IModulePluginLoader _modulePluginLoader;
+
+    public DirectoryModuleCatalog(IModulePluginLoader modulePluginLoader)
+    {
+        _modulePluginLoader = modulePluginLoader ?? throw new ArgumentNullException(nameof(modulePluginLoader));
+    }
+
+    public ModuleCatalogDiscoveryResult DiscoverModules(string pluginRootPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(pluginRootPath);
 
@@ -66,7 +87,7 @@ public static class DirectoryModuleCatalog
         return new ModuleCatalogDiscoveryResult(validDescriptors, issues);
     }
 
-    public static ModuleCatalogActivationResult CreateEnabledModules(
+    public ModuleCatalogActivationResult CreateEnabledModules(
         IConfiguration configuration,
         string sectionName,
         IReadOnlyList<ModulePluginDescriptor> discoveredModules)
@@ -146,7 +167,7 @@ public static class DirectoryModuleCatalog
 
                 try
                 {
-                    modules.Add(descriptor.CreateModule());
+                    modules.Add(_modulePluginLoader.CreateModule(descriptor));
                     activatedModuleIds.Add(descriptor.ModuleId);
                     pendingDescriptors.Remove(descriptor.ModuleId);
                     progressMade = true;
@@ -197,13 +218,13 @@ public static class DirectoryModuleCatalog
         return new ModuleCatalogActivationResult(modules, configuredEnabledModuleIds, issues);
     }
 
-    public static IReadOnlyList<IEdgeProcessModule> CreateAllModules(IReadOnlyList<ModulePluginDescriptor> discoveredModules)
+    public IReadOnlyList<IEdgeProcessModule> CreateAllModules(IReadOnlyList<ModulePluginDescriptor> discoveredModules)
     {
         ArgumentNullException.ThrowIfNull(discoveredModules);
-        return discoveredModules.Select(static x => x.CreateModule()).ToArray();
+        return discoveredModules.Select(_modulePluginLoader.CreateModule).ToArray();
     }
 
-    public static bool IsDiscoveredModule(
+    public bool IsDiscoveredModule(
         string moduleId,
         IReadOnlyList<ModulePluginDescriptor> discoveredModules)
     {
@@ -212,7 +233,7 @@ public static class DirectoryModuleCatalog
             && discoveredModules.Any(x => string.Equals(x.ModuleId, moduleId, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static IReadOnlyList<string> ResolveEnabledModuleIds(
+    private IReadOnlyList<string> ResolveEnabledModuleIds(
         IConfiguration configuration,
         string sectionName,
         IReadOnlyList<ModulePluginDescriptor> discoveredModules,
@@ -252,7 +273,7 @@ public static class DirectoryModuleCatalog
         return result;
     }
 
-    private static ModulePluginDescriptor LoadDescriptor(string pluginDirectory, string manifestPath)
+    private ModulePluginDescriptor LoadDescriptor(string pluginDirectory, string manifestPath)
     {
         var manifest = JsonSerializer.Deserialize<ModulePluginManifest>(
             File.ReadAllText(manifestPath),
@@ -289,7 +310,7 @@ public static class DirectoryModuleCatalog
             entryAssemblyPath);
     }
 
-    private static void ValidateManifest(ModulePluginManifest manifest, string manifestPath)
+    private void ValidateManifest(ModulePluginManifest manifest, string manifestPath)
     {
         if (string.IsNullOrWhiteSpace(manifest.ModuleId))
         {
@@ -344,7 +365,7 @@ public static class DirectoryModuleCatalog
         }
     }
 
-    private static bool IsHostCompatible(ModulePluginDescriptor descriptor, out string message)
+    private bool IsHostCompatible(ModulePluginDescriptor descriptor, out string message)
     {
         if (!string.Equals(
                 descriptor.HostApiVersion,
@@ -371,7 +392,7 @@ public static class DirectoryModuleCatalog
         return true;
     }
 
-    private static IReadOnlyList<ModuleCatalogIssue> ValidateUniqueDescriptors(IReadOnlyList<ModulePluginDescriptor> descriptors)
+    private IReadOnlyList<ModuleCatalogIssue> ValidateUniqueDescriptors(IReadOnlyList<ModulePluginDescriptor> descriptors)
     {
         var issues = new List<ModuleCatalogIssue>();
         var moduleIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

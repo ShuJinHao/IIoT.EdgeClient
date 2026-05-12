@@ -23,6 +23,7 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
     private readonly IPlcConnectionManager _plcConnectionManager;
     private readonly IStationRuntimeRegistry _runtimeRegistry;
     private readonly IPlcTaskBindingService _taskBindingService;
+    private readonly IProductionContextSignalBindingStore _signalBindingStore;
     private readonly ILogService _logger;
 
     public PlcRuntimeTaskBinder(
@@ -32,6 +33,7 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
         IPlcConnectionManager plcConnectionManager,
         IStationRuntimeRegistry runtimeRegistry,
         IPlcTaskBindingService taskBindingService,
+        IProductionContextSignalBindingStore signalBindingStore,
         ILogService logger)
     {
         _serviceProvider = serviceProvider;
@@ -40,6 +42,7 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
         _plcConnectionManager = plcConnectionManager;
         _runtimeRegistry = runtimeRegistry;
         _taskBindingService = taskBindingService;
+        _signalBindingStore = signalBindingStore;
         _logger = logger;
     }
 
@@ -93,7 +96,7 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
                 device.DeviceName,
                 (buffer, context) =>
                 {
-                    ProductionContextSignalBindings.Set(context, signalBindings);
+                    _signalBindingStore.Set(context, signalBindings);
                     return factory.CreateTasks(_serviceProvider, buffer, context, enabledTaskKeys);
                 });
         }

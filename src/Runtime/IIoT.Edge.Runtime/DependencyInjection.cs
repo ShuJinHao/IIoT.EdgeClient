@@ -12,6 +12,7 @@ using IIoT.Edge.Runtime.DataPipeline.Consumers;
 using IIoT.Edge.Runtime.DataPipeline.Services;
 using IIoT.Edge.Runtime.DataPipeline.Tasks;
 using IIoT.Edge.Runtime.Plc;
+using IIoT.Edge.Runtime.Signals;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -26,6 +27,7 @@ public static class DependencyInjection
         services.TryAddSingleton<ICellDataJsonSerializer, CellDataJsonSerializer>();
         services.TryAddSingleton<IProductionContextCorruptFileQuarantine, ProductionContextCorruptFileQuarantine>();
         services.TryAddSingleton<IProductionContextRuntimeStateCopier, ProductionContextRuntimeStateCopier>();
+        services.TryAddSingleton<IProductionContextSignalBindingStore, ProductionContextSignalBindingStore>();
         services.AddSingleton(sp =>
             new ProductionContextStore(
                 sp.GetRequiredService<ILogService>(),
