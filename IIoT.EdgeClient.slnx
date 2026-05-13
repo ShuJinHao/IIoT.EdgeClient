@@ -8,7 +8,9 @@
   </Folder>
   <Folder Name="/src/Edge/">
     <Project Path="src/Edge/IIoT.Edge.AvaloniaShell/IIoT.Edge.AvaloniaShell.csproj" />
+    <Project Path="src/Edge/IIoT.Edge.Host.Bootstrap.Avalonia/IIoT.Edge.Host.Bootstrap.Avalonia.csproj" />
     <Project Path="src/Edge/IIoT.Edge.Host.Bootstrap/IIoT.Edge.Host.Bootstrap.csproj" />
+    <Project Path="src/Edge/IIoT.Edge.Host.Bootstrap.Core/IIoT.Edge.Host.Bootstrap.Core.csproj" />
     <Project Path="src/Edge/IIoT.Edge.Launcher/IIoT.Edge.Launcher.csproj" />
     <Project Path="src/Edge/IIoT.Edge.Shell/IIoT.Edge.Shell.csproj" Id="18446b65-38e5-4acb-a229-ba0f9d8a83cf" />
   </Folder>
@@ -19,8 +21,11 @@
     <Project Path="src/Infrastructure/IIoT.Edge.Infrastructure.DeviceComm/IIoT.Edge.Infrastructure.DeviceComm.csproj" Id="78ef5b00-1ea0-475d-9e2f-8318f8ea0819" />
   </Folder>
   <Folder Name="/src/Presentation/">
+    <Project Path="src/Presentation/IIoT.Edge.Presentation.Navigation.Avalonia/IIoT.Edge.Presentation.Navigation.Avalonia.csproj" />
     <Project Path="src/Presentation/IIoT.Edge.Presentation.Shell/IIoT.Edge.Presentation.Shell.csproj" />
+    <Project Path="src/Presentation/IIoT.Edge.Presentation.Panels.Avalonia/IIoT.Edge.Presentation.Panels.Avalonia.csproj" />
     <Project Path="src/Presentation/IIoT.Edge.Presentation.Navigation/IIoT.Edge.Presentation.Navigation.csproj" />
+    <Project Path="src/Presentation/IIoT.Edge.Presentation.Shell.Avalonia/IIoT.Edge.Presentation.Shell.Avalonia.csproj" />
     <Project Path="src/Presentation/IIoT.Edge.Presentation.Panels/IIoT.Edge.Presentation.Panels.csproj" />
   </Folder>
   <Folder Name="/src/Modules/">

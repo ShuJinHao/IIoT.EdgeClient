@@ -1,13 +1,12 @@
-using Avalonia.Controls;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Core;
 using Dock.Model.Mvvm;
 using Dock.Model.Mvvm.Controls;
+using IIoT.Edge.Presentation.Shell.Avalonia.ViewModels;
 using IIoT.Edge.UI.Avalonia.Docking;
 using IIoT.Edge.UI.Avalonia.Localization;
 using IIoT.Edge.UI.Avalonia.Modularity;
-using IIoT.Edge.UI.Avalonia.Services;
 
 namespace IIoT.Edge.AvaloniaShell.ViewModels;
 
@@ -17,7 +16,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private readonly IAvaloniaLanguageService _languageService;
     private readonly IAvaloniaViewRegistry _viewRegistry;
     private readonly IAvaloniaNavigationService _navigationService;
-    private readonly IAvaloniaDialogService _dialogService;
     private readonly Dictionary<string, string> _dockTitleKeys = new(StringComparer.OrdinalIgnoreCase);
 
     public MainWindowViewModel(
@@ -25,14 +23,18 @@ public sealed partial class MainWindowViewModel : ObservableObject
         IAvaloniaLanguageService languageService,
         IAvaloniaViewRegistry viewRegistry,
         IAvaloniaNavigationService navigationService,
-        IAvaloniaDialogService dialogService)
+        HeaderViewModel headerViewModel,
+        FooterViewModel footerViewModel,
+        LoginViewModel loginViewModel)
     {
         _services = services;
         _languageService = languageService;
         _viewRegistry = viewRegistry;
         _navigationService = navigationService;
-        _dialogService = dialogService;
-        _dialogService.DialogRequested += HandleDialogRequested;
+        HeaderViewModel = headerViewModel;
+        FooterViewModel = footerViewModel;
+        LoginViewModel = loginViewModel;
+        LoginViewModel.LoginSucceeded += () => IsDialogOpen = false;
 
         DockFactory = new Factory();
         DockLayout = CreateDockLayout();
@@ -42,8 +44,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         CultureName = _languageService.CultureName;
         LanguageToggleText = _languageService.ToggleLabel;
-        DialogTitle = _languageService.GetText("Shell_Dialog_Title");
-        DialogMessage = _languageService.GetText("Shell_Dialog_Message");
     }
 
     public Factory DockFactory { get; }
@@ -51,6 +51,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public RootDock DockLayout { get; }
 
     public IReadOnlyList<ShellMenuItemViewModel> MenuItems { get; }
+
+    public HeaderViewModel HeaderViewModel { get; }
+
+    public FooterViewModel FooterViewModel { get; }
+
+    public LoginViewModel LoginViewModel { get; }
 
     [ObservableProperty]
     private string cultureName;
@@ -61,38 +67,22 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private bool isDialogOpen;
 
-    [ObservableProperty]
-    private string dialogTitle;
-
-    [ObservableProperty]
-    private string dialogMessage;
-
     [RelayCommand]
     private void ToggleLanguage()
     {
         _languageService.Toggle();
         CultureName = _languageService.CultureName;
         LanguageToggleText = _languageService.ToggleLabel;
-        DialogTitle = _languageService.GetText("Shell_Dialog_Title");
-        DialogMessage = _languageService.GetText("Shell_Dialog_Message");
         LocalizedDataGrid.RefreshHeaders();
         RefreshDockTitles();
         RefreshMenuTitles();
     }
 
     [RelayCommand]
-    private Task OpenDialogAsync()
-    {
-        return _dialogService.ShowInfoAsync(
-            _languageService.GetText("Shell_Dialog_Title"),
-            _languageService.GetText("Shell_Dialog_Message"));
-    }
+    private void OpenLogin() => IsDialogOpen = true;
 
     [RelayCommand]
-    private void CloseDialog()
-    {
-        IsDialogOpen = false;
-    }
+    private void CloseDialog() => IsDialogOpen = false;
 
     private RootDock CreateDockLayout()
     {
@@ -238,12 +228,5 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 RefreshTitle(child, id, titleKey);
             }
         }
-    }
-
-    private void HandleDialogRequested(object? sender, AvaloniaDialogRequest request)
-    {
-        DialogTitle = request.Title;
-        DialogMessage = request.Message;
-        IsDialogOpen = true;
     }
 }

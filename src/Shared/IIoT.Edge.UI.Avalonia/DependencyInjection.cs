@@ -12,6 +12,8 @@ public static class DependencyInjection
         services.AddSingleton<IAvaloniaNavigationService, AvaloniaNavigationService>();
         services.AddSingleton<IAvaloniaDispatcherService, AvaloniaDispatcherService>();
         services.AddSingleton<IAvaloniaDialogService, AvaloniaDialogService>();
+        services.AddSingleton<IAvaloniaTimerFactory, AvaloniaTimerFactory>();
+        services.AddSingleton<IAvaloniaWindowService, AvaloniaWindowService>();
         return services;
     }
 }

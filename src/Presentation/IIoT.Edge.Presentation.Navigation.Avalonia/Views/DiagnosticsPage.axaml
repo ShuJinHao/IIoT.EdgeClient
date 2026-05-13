@@ -1,0 +1,18 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Navigation.Avalonia.Views.DiagnosticsPage"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:loc="clr-namespace:IIoT.Edge.UI.Avalonia.Localization;assembly=IIoT.Edge.UI.Avalonia">
+  <Border Background="#0F172A" Padding="18">
+    <StackPanel Spacing="12">
+      <TextBlock FontSize="20" FontWeight="SemiBold" Foreground="#F8FAFC" Text="{DynamicResource Navigation_Menu_CoreDiagnostics}" />
+      <DataGrid ItemsSource="{Binding Rows}" AutoGenerateColumns="False" IsReadOnly="True">
+        <DataGrid.Columns>
+          <DataGridTextColumn Width="180" Binding="{Binding DeviceName}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_DeviceName" />
+          <DataGridTextColumn Width="140" Binding="{Binding Status}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Status" />
+          <DataGridTextColumn Width="*" Binding="{Binding Message}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Message" />
+        </DataGrid.Columns>
+      </DataGrid>
+    </StackPanel>
+  </Border>
+</UserControl>

@@ -1,0 +1,26 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Shell.Avalonia.Views.HeaderView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia">
+  <Border Background="#111827" BorderBrush="#243244" BorderThickness="0,0,0,1" Padding="14,0">
+    <Grid ColumnDefinitions="*,Auto" Height="46">
+      <StackPanel VerticalAlignment="Center" Spacing="2">
+        <TextBlock FontSize="17" FontWeight="SemiBold" Foreground="#F8FAFC" Text="{DynamicResource Shell_Header_Process}" />
+        <TextBlock FontSize="12" Foreground="#94A3B8" Text="{DynamicResource Shell_Header_Device}" />
+      </StackPanel>
+      <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
+        <TextBlock VerticalAlignment="Center" Foreground="#CBD5E1" Text="{Binding CurrentUser}" />
+        <Button Width="34" Height="30" Command="{Binding MinimizeCommand}">
+          <icons:MaterialIcon Kind="WindowMinimize" />
+        </Button>
+        <Button Width="34" Height="30" Command="{Binding ToggleMaximizeCommand}">
+          <icons:MaterialIcon Kind="{Binding MaxRestoreIcon}" />
+        </Button>
+        <Button Width="34" Height="30" Command="{Binding CloseCommand}">
+          <icons:MaterialIcon Kind="Close" />
+        </Button>
+      </StackPanel>
+    </Grid>
+  </Border>
+</UserControl>

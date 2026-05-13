@@ -16,6 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\IIoT.Edge.Host.Bootstrap.Core\IIoT.Edge.Host.Bootstrap.Core.csproj" />
     <ProjectReference Include="..\\..\\Application\\IIoT.Edge.Application\\IIoT.Edge.Application.csproj" />
     <ProjectReference Include="..\\..\\Infrastructure\\IIoT.Edge.Infrastructure.DeviceComm\\IIoT.Edge.Infrastructure.DeviceComm.csproj" />
     <ProjectReference Include="..\\..\\Infrastructure\\IIoT.Edge.Infrastructure.Integration\\IIoT.Edge.Infrastructure.Integration.csproj" />

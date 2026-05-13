@@ -4,29 +4,18 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <IsPackable>false</IsPackable>
-    <IsTestProject>true</IsTestProject>
-    <UseAppHost>true</UseAppHost>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Avalonia.Headless.XUnit" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" />
-    <PackageReference Include="xunit.v3" />
-    <PackageReference Include="xunit.runner.visualstudio">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Edge\IIoT.Edge.AvaloniaShell\IIoT.Edge.AvaloniaShell.csproj" />
-    <ProjectReference Include="..\..\Edge\IIoT.Edge.Host.Bootstrap.Avalonia\IIoT.Edge.Host.Bootstrap.Avalonia.csproj" />
+    <ProjectReference Include="..\IIoT.Edge.Host.Bootstrap.Core\IIoT.Edge.Host.Bootstrap.Core.csproj" />
     <ProjectReference Include="..\..\Presentation\IIoT.Edge.Presentation.Navigation.Avalonia\IIoT.Edge.Presentation.Navigation.Avalonia.csproj" />
     <ProjectReference Include="..\..\Presentation\IIoT.Edge.Presentation.Panels.Avalonia\IIoT.Edge.Presentation.Panels.Avalonia.csproj" />
     <ProjectReference Include="..\..\Presentation\IIoT.Edge.Presentation.Shell.Avalonia\IIoT.Edge.Presentation.Shell.Avalonia.csproj" />
-    <ProjectReference Include="..\..\Shared\IIoT.Edge.SharedKernel\IIoT.Edge.SharedKernel.csproj" />
     <ProjectReference Include="..\..\Shared\IIoT.Edge.UI.Avalonia\IIoT.Edge.UI.Avalonia.csproj" />
   </ItemGroup>
 

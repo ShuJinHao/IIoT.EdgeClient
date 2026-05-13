@@ -1,0 +1,18 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Panels.Avalonia.Views.EquipmentView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:loc="clr-namespace:IIoT.Edge.UI.Avalonia.Localization;assembly=IIoT.Edge.UI.Avalonia">
+  <Border Background="#151E2B" Padding="12">
+    <StackPanel Spacing="10">
+      <TextBlock FontSize="16" FontWeight="SemiBold" Foreground="#F8FAFC" Text="{DynamicResource Shell_EquipmentInfo}" />
+      <DataGrid ItemsSource="{Binding Items}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="None">
+        <DataGrid.Columns>
+          <DataGridTextColumn Width="*" Binding="{Binding Name}" loc:LocalizedDataGrid.HeaderResourceKey="Shell_Column_Name" />
+          <DataGridTextColumn Width="90" Binding="{Binding State}" loc:LocalizedDataGrid.HeaderResourceKey="Shell_Column_Status" />
+          <DataGridTextColumn Width="130" Binding="{Binding LastValue}" loc:LocalizedDataGrid.HeaderResourceKey="Shell_Column_Value" />
+        </DataGrid.Columns>
+      </DataGrid>
+    </StackPanel>
+  </Border>
+</UserControl>

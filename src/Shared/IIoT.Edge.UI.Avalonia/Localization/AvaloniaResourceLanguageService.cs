@@ -17,6 +17,14 @@ public sealed class AvaloniaResourceLanguageService : IAvaloniaLanguageService
         CultureName = defaultCulture;
     }
 
+    public AvaloniaResourceLanguageService(
+        IEnumerable<IAvaloniaResourceContributor> contributors,
+        string defaultCulture = "zh-CN",
+        string toggleResourceKey = "Shell_Action_Language")
+        : this(Merge(contributors), defaultCulture, toggleResourceKey)
+    {
+    }
+
     public string CultureName { get; private set; }
 
     public string ToggleLabel => GetText(_toggleResourceKey);
@@ -47,5 +55,31 @@ public sealed class AvaloniaResourceLanguageService : IAvaloniaLanguageService
     public void Toggle()
     {
         Apply(CultureName.Equals("zh-CN", StringComparison.OrdinalIgnoreCase) ? "en-US" : "zh-CN");
+    }
+
+    private static IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> Merge(
+        IEnumerable<IAvaloniaResourceContributor> contributors)
+    {
+        var merged = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var contributor in contributors)
+        {
+            var cultureResources = contributor.GetResources();
+            if (!merged.TryGetValue(contributor.CultureName, out var target))
+            {
+                target = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                merged[contributor.CultureName] = target;
+            }
+
+            foreach (var pair in cultureResources)
+            {
+                target[pair.Key] = pair.Value;
+            }
+        }
+
+        return merged.ToDictionary(
+            pair => pair.Key,
+            pair => (IReadOnlyDictionary<string, string>)pair.Value,
+            StringComparer.OrdinalIgnoreCase);
     }
 }

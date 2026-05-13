@@ -30,6 +30,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Application\IIoT.Edge.Application\IIoT.Edge.Application.csproj" />
+    <ProjectReference Include="..\IIoT.Edge.Host.Bootstrap.Avalonia\IIoT.Edge.Host.Bootstrap.Avalonia.csproj" />
+    <ProjectReference Include="..\..\Presentation\IIoT.Edge.Presentation.Shell.Avalonia\IIoT.Edge.Presentation.Shell.Avalonia.csproj" />
     <ProjectReference Include="..\..\Shared\IIoT.Edge.SharedKernel\IIoT.Edge.SharedKernel.csproj" />
     <ProjectReference Include="..\..\Shared\IIoT.Edge.UI.Avalonia\IIoT.Edge.UI.Avalonia.csproj" />
   </ItemGroup>

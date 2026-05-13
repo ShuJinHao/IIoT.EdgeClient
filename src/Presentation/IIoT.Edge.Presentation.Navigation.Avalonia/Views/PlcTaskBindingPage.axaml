@@ -1,0 +1,18 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Navigation.Avalonia.Views.PlcTaskBindingPage"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:loc="clr-namespace:IIoT.Edge.UI.Avalonia.Localization;assembly=IIoT.Edge.UI.Avalonia">
+  <Border Background="#0F172A" Padding="18">
+    <StackPanel Spacing="12">
+      <TextBlock FontSize="20" FontWeight="SemiBold" Foreground="#F8FAFC" Text="{DynamicResource Navigation_Menu_PlcTaskBinding}" />
+      <DataGrid ItemsSource="{Binding Bindings}" AutoGenerateColumns="False" IsReadOnly="True">
+        <DataGrid.Columns>
+          <DataGridTextColumn Width="180" Binding="{Binding TaskKey}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_TaskKey" />
+          <DataGridTextColumn Width="*" Binding="{Binding Signal}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Signal" />
+          <DataGridTextColumn Width="180" Binding="{Binding Binding}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Binding" />
+        </DataGrid.Columns>
+      </DataGrid>
+    </StackPanel>
+  </Border>
+</UserControl>

@@ -1,12 +1,14 @@
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
-using IIoT.Edge.AvaloniaShell.Localization;
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.AvaloniaShell.ViewModels;
-using IIoT.Edge.UI.Avalonia;
+using IIoT.Edge.Host.Bootstrap.Avalonia;
+using IIoT.Edge.Presentation.Navigation.Avalonia;
+using IIoT.Edge.Presentation.Shell.Avalonia.ViewModels;
 using IIoT.Edge.UI.Avalonia.Localization;
 using IIoT.Edge.UI.Avalonia.Modularity;
 using IIoT.Edge.UI.Avalonia.Services;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -15,23 +17,63 @@ namespace IIoT.Edge.AvaloniaShell.Tests;
 public sealed class AvaloniaShellBehaviorTests
 {
     [AvaloniaFact]
-    public void Language_service_updates_application_resources_and_toggle_label()
+    public void Bootstrap_registers_real_shell_menu_and_resource_contributors()
     {
-        var service = new AvaloniaResourceLanguageService(ShellLanguageResources.Create());
+        using var provider = BuildProvider();
 
-        service.Apply("zh-CN");
+        provider.GetRequiredService<IAvaloniaLanguageService>().Apply("zh-CN");
+        var registry = provider.GetRequiredService<IAvaloniaViewRegistry>();
+        var menus = registry.GetAllMenus();
+        var ids = StandardAvaloniaModuleViewIds.Create("Homogenization");
 
-        Assert.Equal("生产监控", service.GetText("Shell_Tab_Monitor"));
-        Assert.Equal("EN", service.ToggleLabel);
-        object? zhValue = null;
-        var found = global::Avalonia.Application.Current?.TryFindResource("Shell_Tab_Monitor", out zhValue) == true;
-        Assert.True(found);
-        Assert.Equal("生产监控", zhValue);
+        Assert.Contains(menus, item => item.ViewId == ids.Monitor);
+        Assert.Contains(menus, item => item.ViewId == ids.DataView);
+        Assert.Contains(menus, item => item.ViewId == ids.CapacityView);
+        Assert.Contains(menus, item => item.ViewId == ids.PlcTaskBindingView);
+        Assert.Contains(menus, item => item.ViewId == CoreAvaloniaViewIds.Diagnostics);
+        Assert.Equal("监控", provider.GetRequiredService<IAvaloniaLanguageService>().GetText("Navigation_Menu_Monitor"));
+    }
 
-        service.Toggle();
+    [AvaloniaFact]
+    public void Main_window_view_model_builds_dock_layout_from_registry()
+    {
+        using var provider = BuildProvider();
+        provider.GetRequiredService<IAvaloniaLanguageService>().Apply("zh-CN");
 
-        Assert.Equal("Monitor", service.GetText("Shell_Tab_Monitor"));
-        Assert.Equal("中", service.ToggleLabel);
+        var viewModel = provider.GetRequiredService<MainWindowViewModel>();
+        var ids = StandardAvaloniaModuleViewIds.Create("Homogenization");
+
+        Assert.NotNull(viewModel.DockLayout);
+        Assert.True(viewModel.MenuItems.Count >= 5);
+        Assert.Contains(viewModel.MenuItems, item => item.ViewId == ids.Monitor && item.Title == "监控");
+
+        viewModel.ToggleLanguageCommand.Execute(null);
+
+        Assert.Equal("en-US", viewModel.CultureName);
+        Assert.Contains(viewModel.MenuItems, item => item.ViewId == ids.Monitor && item.Title == "Monitor");
+    }
+
+    [AvaloniaFact]
+    public void Navigation_service_creates_first_batch_pages()
+    {
+        using var provider = BuildProvider();
+        var navigation = provider.GetRequiredService<IAvaloniaNavigationService>();
+        var ids = StandardAvaloniaModuleViewIds.Create("Homogenization");
+
+        foreach (var viewId in new[]
+                 {
+                     ids.Monitor,
+                     ids.DataView,
+                     ids.CapacityView,
+                     ids.PlcTaskBindingView,
+                     CoreAvaloniaViewIds.Diagnostics
+                 })
+        {
+            navigation.NavigateTo(viewId);
+
+            Assert.NotNull(navigation.CurrentView);
+            Assert.NotNull(navigation.CurrentViewModel);
+        }
     }
 
     [AvaloniaFact]
@@ -47,9 +89,10 @@ public sealed class AvaloniaShellBehaviorTests
     }
 
     [AvaloniaFact]
-    public async Task Dialog_and_dispatcher_services_raise_expected_actions()
+    public async Task Dialog_dispatcher_timer_and_window_services_are_available()
     {
-        var dialogService = new AvaloniaDialogService();
+        using var provider = BuildProvider();
+        var dialogService = provider.GetRequiredService<IAvaloniaDialogService>();
         AvaloniaDialogRequest? request = null;
         dialogService.DialogRequested += (_, value) => request = value;
 
@@ -58,56 +101,60 @@ public sealed class AvaloniaShellBehaviorTests
         Assert.Equal("标题", request?.Title);
         Assert.Equal("内容", request?.Message);
 
-        var dispatcher = new AvaloniaDispatcherService();
+        var dispatcher = provider.GetRequiredService<IAvaloniaDispatcherService>();
         var invoked = false;
         await dispatcher.InvokeAsync(() => invoked = true);
-
         Assert.True(invoked);
+
+        Assert.NotNull(provider.GetRequiredService<IAvaloniaTimerFactory>().Create(TimeSpan.FromSeconds(1)));
+        Assert.NotNull(provider.GetRequiredService<IAvaloniaWindowService>());
+        Assert.NotNull(provider.GetRequiredService<HeaderViewModel>());
+        Assert.NotNull(provider.GetRequiredService<FooterViewModel>());
+        Assert.NotNull(provider.GetRequiredService<LoginViewModel>());
     }
 
-    [AvaloniaFact]
-    public void Navigation_registry_creates_registered_view_and_view_model()
-    {
-        var services = new ServiceCollection();
-        services.AddAvaloniaUiShared();
-        services.AddSingleton<TestViewModel>();
-        var provider = services.BuildServiceProvider();
-        var registry = provider.GetRequiredService<IAvaloniaViewRegistry>();
-        registry.RegisterRoute("test", typeof(TestView), typeof(TestViewModel), sp => sp.GetRequiredService<TestViewModel>());
-        var navigation = provider.GetRequiredService<IAvaloniaNavigationService>();
-
-        navigation.NavigateTo("test");
-
-        Assert.IsType<TestView>(navigation.CurrentView);
-        Assert.IsType<TestViewModel>(navigation.CurrentViewModel);
-    }
-
-    [AvaloniaFact]
-    public void Shell_registration_builds_dock_layout_and_menu_items()
+    private static ServiceProvider BuildProvider()
     {
         var services = new ServiceCollection()
-            .AddAvaloniaShell()
+            .AddEdgeHostAvaloniaBootstrap(CreateOptions())
+            .AddSingleton<MainWindowViewModel>()
             .BuildServiceProvider();
-        ShellAvaloniaRegistration.RegisterShellViews(services);
-        services.GetRequiredService<IAvaloniaLanguageService>().Apply("zh-CN");
 
-        var viewModel = services.GetRequiredService<MainWindowViewModel>();
-
-        Assert.NotNull(viewModel.DockLayout);
-        Assert.Equal(2, viewModel.MenuItems.Count);
-        Assert.Contains(viewModel.MenuItems, item => item.ViewId == "monitor" && item.Title == "生产监控");
-
-        viewModel.ToggleLanguageCommand.Execute(null);
-
-        Assert.Equal("en-US", viewModel.CultureName);
-        Assert.Contains(viewModel.MenuItems, item => item.ViewId == "monitor" && item.Title == "Monitor");
+        IIoT.Edge.Host.Bootstrap.Avalonia.DependencyInjection.RegisterAvaloniaViews(services);
+        return services;
     }
 
-    private sealed class TestView : UserControl
+    private static AvaloniaHostBootstrapOptions CreateOptions()
     {
-    }
+        var root = Path.Combine(Path.GetTempPath(), "iiot-edge-avalonia-tests", Guid.NewGuid().ToString("N"));
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Shell:Environment"] = "AvaloniaShellTests",
+                ["LocalAdmin:PasswordHash"] = string.Empty,
+                ["CloudApi:BaseUrl"] = "http://127.0.0.1",
+                ["MesApi:BaseUrl"] = "http://127.0.0.1"
+            })
+            .Build();
 
-    private sealed class TestViewModel
-    {
+        var runtimePaths = new EdgeRuntimePaths(
+            BaseDirectory: root,
+            ProfileName: "AvaloniaShellTests",
+            RuntimeDataRoot: root,
+            DatabaseDirectory: Path.Combine(root, "db"),
+            ContextDirectory: Path.Combine(root, "context"),
+            RecipeDirectory: Path.Combine(root, "recipe"),
+            ExcelDirectory: Path.Combine(root, "excel"),
+            DiagnosticsDirectory: Path.Combine(root, "diagnostics"),
+            LogDirectory: Path.Combine(root, "diagnostics", "logs"),
+            DeviceCacheFilePath: Path.Combine(root, "device_cache.json"),
+            PrimaryCrashLogPath: Path.Combine(root, "diagnostics", "crash.log"),
+            FallbackCrashLogPath: Path.Combine(root, "diagnostics", "crash.fallback.log"));
+
+        return new AvaloniaHostBootstrapOptions(
+            configuration,
+            runtimePaths,
+            "AvaloniaShellTests",
+            ["Homogenization"]);
     }
 }

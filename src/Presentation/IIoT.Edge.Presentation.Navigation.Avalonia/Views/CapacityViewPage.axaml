@@ -1,0 +1,23 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Navigation.Avalonia.Views.CapacityViewPage"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:loc="clr-namespace:IIoT.Edge.UI.Avalonia.Localization;assembly=IIoT.Edge.UI.Avalonia">
+  <Border Background="#0F172A" Padding="18">
+    <DockPanel>
+      <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="0,0,0,12">
+        <TextBlock FontSize="20" FontWeight="SemiBold" Foreground="#F8FAFC" Text="{DynamicResource Navigation_Menu_Capacity}" />
+        <Button Command="{Binding QueryCommand}" Content="{DynamicResource Navigation_Button_Query}" />
+      </StackPanel>
+      <DataGrid ItemsSource="{Binding Records}" AutoGenerateColumns="False" IsReadOnly="True">
+        <DataGrid.Columns>
+          <DataGridTextColumn Width="*" Binding="{Binding Date}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Time" />
+          <DataGridTextColumn Width="110" Binding="{Binding Total}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Total" />
+          <DataGridTextColumn Width="110" Binding="{Binding Ok}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Ok" />
+          <DataGridTextColumn Width="110" Binding="{Binding Ng}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Ng" />
+          <DataGridTextColumn Width="120" Binding="{Binding Yield}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Yield" />
+        </DataGrid.Columns>
+      </DataGrid>
+    </DockPanel>
+  </Border>
+</UserControl>
