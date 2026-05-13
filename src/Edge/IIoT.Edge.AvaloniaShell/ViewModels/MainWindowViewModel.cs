@@ -7,6 +7,7 @@ using IIoT.Edge.Presentation.Shell.Avalonia.ViewModels;
 using IIoT.Edge.UI.Avalonia.Docking;
 using IIoT.Edge.UI.Avalonia.Localization;
 using IIoT.Edge.UI.Avalonia.Modularity;
+using IIoT.Edge.UI.Avalonia.Services;
 
 namespace IIoT.Edge.AvaloniaShell.ViewModels;
 
@@ -16,6 +17,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private readonly IAvaloniaLanguageService _languageService;
     private readonly IAvaloniaViewRegistry _viewRegistry;
     private readonly IAvaloniaNavigationService _navigationService;
+    private readonly IAvaloniaDialogService _dialogService;
     private readonly Dictionary<string, string> _dockTitleKeys = new(StringComparer.OrdinalIgnoreCase);
 
     public MainWindowViewModel(
@@ -23,6 +25,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         IAvaloniaLanguageService languageService,
         IAvaloniaViewRegistry viewRegistry,
         IAvaloniaNavigationService navigationService,
+        IAvaloniaDialogService dialogService,
         HeaderViewModel headerViewModel,
         FooterViewModel footerViewModel,
         LoginViewModel loginViewModel)
@@ -31,10 +34,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
         _languageService = languageService;
         _viewRegistry = viewRegistry;
         _navigationService = navigationService;
+        _dialogService = dialogService;
         HeaderViewModel = headerViewModel;
         FooterViewModel = footerViewModel;
         LoginViewModel = loginViewModel;
         LoginViewModel.LoginSucceeded += () => IsDialogOpen = false;
+        _dialogService.DialogRequested += OnDialogRequested;
 
         DockFactory = new Factory();
         DockLayout = CreateDockLayout();
@@ -67,6 +72,23 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private bool isDialogOpen;
 
+    [ObservableProperty]
+    private bool isSystemDialogOpen;
+
+    [ObservableProperty]
+    private AvaloniaDialogRequest? systemDialogRequest;
+
+    public bool IsSystemDialogConfirm => SystemDialogRequest?.Kind == AvaloniaDialogRequestKind.Confirm;
+
+    public string SystemDialogPrimaryActionText
+        => _languageService.GetText(IsSystemDialogConfirm ? "Shell_Action_Confirm" : "Shell_Action_Ok");
+
+    partial void OnSystemDialogRequestChanged(AvaloniaDialogRequest? value)
+    {
+        OnPropertyChanged(nameof(IsSystemDialogConfirm));
+        OnPropertyChanged(nameof(SystemDialogPrimaryActionText));
+    }
+
     [RelayCommand]
     private void ToggleLanguage()
     {
@@ -76,6 +98,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         LocalizedDataGrid.RefreshHeaders();
         RefreshDockTitles();
         RefreshMenuTitles();
+        OnPropertyChanged(nameof(SystemDialogPrimaryActionText));
     }
 
     [RelayCommand]
@@ -83,6 +106,30 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     [RelayCommand]
     private void CloseDialog() => IsDialogOpen = false;
+
+    [RelayCommand]
+    private void CompleteSystemDialog()
+    {
+        var request = SystemDialogRequest;
+        IsSystemDialogOpen = false;
+        SystemDialogRequest = null;
+        request?.Complete(true);
+    }
+
+    [RelayCommand]
+    private void CancelSystemDialog()
+    {
+        var request = SystemDialogRequest;
+        IsSystemDialogOpen = false;
+        SystemDialogRequest = null;
+        request?.Complete(false);
+    }
+
+    private void OnDialogRequested(object? sender, AvaloniaDialogRequest request)
+    {
+        SystemDialogRequest = request;
+        IsSystemDialogOpen = true;
+    }
 
     private RootDock CreateDockLayout()
     {

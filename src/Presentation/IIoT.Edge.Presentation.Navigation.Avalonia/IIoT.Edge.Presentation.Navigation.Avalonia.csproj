@@ -11,6 +11,7 @@
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Controls.DataGrid" />
     <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="DialogHost.Avalonia" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
   </ItemGroup>
 

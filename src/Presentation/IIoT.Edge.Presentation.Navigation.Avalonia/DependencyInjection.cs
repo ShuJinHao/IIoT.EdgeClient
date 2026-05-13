@@ -1,3 +1,4 @@
+using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Hardware.IOView;
 using IIoT.Edge.Presentation.Navigation.Avalonia.Localization;
 using IIoT.Edge.UI.Avalonia.Localization;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,6 +11,7 @@ public static class DependencyInjection
     {
         services.AddSingleton<IAvaloniaResourceContributor, NavigationAvaloniaZhCnResources>();
         services.AddSingleton<IAvaloniaResourceContributor, NavigationAvaloniaEnUsResources>();
+        services.AddSingleton<IIoViewSafeInteractionPort, NoopIoViewSafeInteractionPort>();
         return services;
     }
 }

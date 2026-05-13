@@ -4,6 +4,8 @@ using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.AvaloniaShell.ViewModels;
 using IIoT.Edge.Host.Bootstrap.Avalonia;
 using IIoT.Edge.Presentation.Navigation.Avalonia;
+using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Hardware.HardwareConfig.ViewModels;
+using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Hardware.IOView;
 using IIoT.Edge.Presentation.Shell.Avalonia.ViewModels;
 using IIoT.Edge.UI.Avalonia.Localization;
 using IIoT.Edge.UI.Avalonia.Modularity;
@@ -29,6 +31,8 @@ public sealed class AvaloniaShellBehaviorTests
         Assert.Contains(menus, item => item.ViewId == ids.Monitor);
         Assert.Contains(menus, item => item.ViewId == ids.DataView);
         Assert.Contains(menus, item => item.ViewId == ids.CapacityView);
+        Assert.Contains(menus, item => item.ViewId == ids.HardwareConfigView);
+        Assert.Contains(menus, item => item.ViewId == ids.IoView);
         Assert.Contains(menus, item => item.ViewId == ids.PlcTaskBindingView);
         Assert.Contains(menus, item => item.ViewId == CoreAvaloniaViewIds.Diagnostics);
         Assert.Equal("监控", provider.GetRequiredService<IAvaloniaLanguageService>().GetText("Navigation_Menu_Monitor"));
@@ -44,7 +48,7 @@ public sealed class AvaloniaShellBehaviorTests
         var ids = StandardAvaloniaModuleViewIds.Create("Homogenization");
 
         Assert.NotNull(viewModel.DockLayout);
-        Assert.True(viewModel.MenuItems.Count >= 5);
+        Assert.True(viewModel.MenuItems.Count >= 7);
         Assert.Contains(viewModel.MenuItems, item => item.ViewId == ids.Monitor && item.Title == "监控");
 
         viewModel.ToggleLanguageCommand.Execute(null);
@@ -65,6 +69,8 @@ public sealed class AvaloniaShellBehaviorTests
                      ids.Monitor,
                      ids.DataView,
                      ids.CapacityView,
+                     ids.HardwareConfigView,
+                     ids.IoView,
                      ids.PlcTaskBindingView,
                      CoreAvaloniaViewIds.Diagnostics
                  })
@@ -79,35 +85,133 @@ public sealed class AvaloniaShellBehaviorTests
     [AvaloniaFact]
     public void Localized_datagrid_refreshes_column_header_from_resource()
     {
-        global::Avalonia.Application.Current!.Resources["Test_Header"] = "测试列";
+        global::Avalonia.Application.Current!.Resources["Test_Header"] = "Initial";
         var column = new DataGridTextColumn();
 
         LocalizedDataGrid.SetHeaderResourceKey(column, "Test_Header");
         LocalizedDataGrid.RefreshHeaders();
 
-        Assert.Equal("测试列", column.Header);
+        Assert.Equal("Initial", column.Header);
+
+        global::Avalonia.Application.Current!.Resources["Test_Header"] = "Updated";
+        LocalizedDataGrid.RefreshHeaders();
+
+        Assert.Equal("Updated", column.Header);
     }
 
     [AvaloniaFact]
-    public async Task Dialog_dispatcher_timer_and_window_services_are_available()
+    public void Hardware_config_page_uses_fake_data_and_confirmation_flow()
+    {
+        using var provider = BuildProvider();
+        provider.GetRequiredService<IAvaloniaLanguageService>().Apply("zh-CN");
+        var navigation = provider.GetRequiredService<IAvaloniaNavigationService>();
+        var ids = StandardAvaloniaModuleViewIds.Create("Homogenization");
+
+        navigation.NavigateTo(ids.HardwareConfigView);
+
+        var viewModel = Assert.IsType<HardwareConfigViewModel>(navigation.CurrentViewModel);
+        var originalNetworkCount = viewModel.NetworkDevices.Count;
+        viewModel.AddNetworkDeviceCommand.Execute(null);
+        Assert.Equal(originalNetworkCount + 1, viewModel.NetworkDevices.Count);
+
+        viewModel.OpenAddDataPointMappingDialogCommand.Execute(null);
+        Assert.True(viewModel.IsDialogOpen);
+        viewModel.ConfirmDialogCommand.Execute(null);
+        Assert.False(viewModel.IsDialogOpen);
+        Assert.Contains(viewModel.FilteredIoMappings, item => item.SignalName == "新信号" && item.BusinessGroup == "数据点");
+
+        viewModel.SaveCommand.Execute(null);
+        Assert.True(viewModel.IsDialogOpen);
+        Assert.Equal("保存硬件配置", viewModel.DialogTitle);
+        Assert.Equal("保存确认待执行", viewModel.PendingOperationText);
+        viewModel.ConfirmDialogCommand.Execute(null);
+        Assert.False(viewModel.IsDialogOpen);
+    }
+
+    [AvaloniaFact]
+    public async Task Io_view_uses_fake_services_without_accessing_real_plc()
+    {
+        using var provider = BuildProvider();
+        provider.GetRequiredService<IAvaloniaLanguageService>().Apply("zh-CN");
+        var navigation = provider.GetRequiredService<IAvaloniaNavigationService>();
+        var ids = StandardAvaloniaModuleViewIds.Create("Homogenization");
+
+        navigation.NavigateTo(ids.IoView);
+
+        var viewModel = Assert.IsType<IoViewViewModel>(navigation.CurrentViewModel);
+        Assert.NotNull(viewModel.SelectedDevice);
+        Assert.True(viewModel.HasInteractionRows);
+        Assert.True(viewModel.HasDataSections);
+
+        await viewModel.ManualReadCommand.ExecuteAsync(null);
+        Assert.Contains("未连接真实 PLC", viewModel.FeedbackMessage);
+
+        var row = viewModel.InteractionRows.First();
+        Assert.NotNull(row.WriteCommand);
+        await row.WriteCommand.ExecuteAsync(null);
+        Assert.Contains("未连接真实 PLC", viewModel.FeedbackMessage);
+    }
+
+    [AvaloniaFact]
+    public async Task Dialog_service_raises_info_request_and_completes_confirm_request()
     {
         using var provider = BuildProvider();
         var dialogService = provider.GetRequiredService<IAvaloniaDialogService>();
-        AvaloniaDialogRequest? request = null;
-        dialogService.DialogRequested += (_, value) => request = value;
+        var requests = new List<AvaloniaDialogRequest>();
+        dialogService.DialogRequested += (_, value) =>
+        {
+            requests.Add(value);
+            if (value.Kind == AvaloniaDialogRequestKind.Confirm)
+            {
+                value.Complete(true);
+            }
+        };
 
-        await dialogService.ShowInfoAsync("标题", "内容");
+        await dialogService.ShowInfoAsync("Info", "Message");
+        var confirmed = await dialogService.ConfirmAsync("Confirm", "Continue?");
 
-        Assert.Equal("标题", request?.Title);
-        Assert.Equal("内容", request?.Message);
+        Assert.Equal(2, requests.Count);
+        Assert.Equal(AvaloniaDialogRequestKind.Info, requests[0].Kind);
+        Assert.Equal("Info", requests[0].Title);
+        Assert.Equal("Message", requests[0].Message);
+        Assert.True(requests[0].IsCompleted);
+        Assert.Equal(AvaloniaDialogRequestKind.Confirm, requests[1].Kind);
+        Assert.Equal("Confirm", requests[1].Title);
+        Assert.Equal("Continue?", requests[1].Message);
+        Assert.True(requests[1].IsCompleted);
+        Assert.True(confirmed);
+    }
 
+    [AvaloniaFact]
+    public async Task Confirm_dialog_defaults_to_false_when_no_host_handles_request()
+    {
+        using var provider = BuildProvider();
+        var dialogService = provider.GetRequiredService<IAvaloniaDialogService>();
+
+        var confirmed = await dialogService.ConfirmAsync("Confirm", "Continue?");
+
+        Assert.False(confirmed);
+    }
+
+    [AvaloniaFact]
+    public async Task Dispatcher_timer_and_window_services_are_available()
+    {
+        using var provider = BuildProvider();
         var dispatcher = provider.GetRequiredService<IAvaloniaDispatcherService>();
         var invoked = false;
         await dispatcher.InvokeAsync(() => invoked = true);
         Assert.True(invoked);
 
-        Assert.NotNull(provider.GetRequiredService<IAvaloniaTimerFactory>().Create(TimeSpan.FromSeconds(1)));
-        Assert.NotNull(provider.GetRequiredService<IAvaloniaWindowService>());
+        var timer = provider.GetRequiredService<IAvaloniaTimerFactory>().Create(TimeSpan.FromSeconds(1));
+        Assert.Equal(TimeSpan.FromSeconds(1), timer.Interval);
+        Assert.False(timer.IsEnabled);
+        timer.Start();
+        Assert.True(timer.IsEnabled);
+        timer.Stop();
+        Assert.False(timer.IsEnabled);
+
+        var windowService = provider.GetRequiredService<IAvaloniaWindowService>();
+        Assert.Equal("WindowMaximize", windowService.MaxRestoreIcon);
         Assert.NotNull(provider.GetRequiredService<HeaderViewModel>());
         Assert.NotNull(provider.GetRequiredService<FooterViewModel>());
         Assert.NotNull(provider.GetRequiredService<LoginViewModel>());

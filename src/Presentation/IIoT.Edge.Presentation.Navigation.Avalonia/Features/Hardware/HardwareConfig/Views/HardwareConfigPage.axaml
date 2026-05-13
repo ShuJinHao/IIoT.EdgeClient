@@ -1,0 +1,63 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Navigation.Avalonia.Features.Hardware.HardwareConfig.Views.HardwareConfigPage"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:dialogHost="clr-namespace:DialogHostAvalonia;assembly=DialogHost.Avalonia"
+    xmlns:views="clr-namespace:IIoT.Edge.Presentation.Navigation.Avalonia.Features.Hardware.HardwareConfig.Views">
+  <Border Background="#0F172A" Padding="18">
+    <DockPanel>
+      <Grid DockPanel.Dock="Top" Margin="0,0,0,12" ColumnDefinitions="*,Auto">
+        <TextBlock VerticalAlignment="Center"
+                   FontSize="20"
+                   FontWeight="SemiBold"
+                   Foreground="#F8FAFC"
+                   Text="{Binding ViewTitle}" />
+        <Button Grid.Column="1"
+                MinWidth="92"
+                Command="{Binding SaveCommand}"
+                Content="{DynamicResource Navigation_Button_Save}" />
+      </Grid>
+
+      <dialogHost:DialogHost IsOpen="{Binding IsDialogOpen}" CloseOnClickAway="False">
+        <dialogHost:DialogHost.DialogContent>
+          <Border Width="460"
+                  Padding="20"
+                  Background="#111827"
+                  BorderBrush="#334155"
+                  BorderThickness="1"
+                  CornerRadius="6">
+            <StackPanel Spacing="14">
+              <TextBlock FontSize="16"
+                         FontWeight="SemiBold"
+                         Foreground="#F8FAFC"
+                         Text="{Binding DialogTitle}" />
+              <TextBlock Foreground="#CBD5E1"
+                         Text="{Binding DialogMessage}"
+                         TextWrapping="Wrap" />
+              <TextBlock Foreground="#94A3B8"
+                         FontSize="12"
+                         Text="{Binding PendingOperationText}"
+                         TextWrapping="Wrap" />
+              <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="8">
+                <Button Command="{Binding CloseDialogCommand}" Content="{DynamicResource Navigation_Button_Cancel}" />
+                <Button Command="{Binding ConfirmDialogCommand}" Content="{DynamicResource Navigation_Button_Confirm}" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+        </dialogHost:DialogHost.DialogContent>
+
+        <TabControl SelectedIndex="{Binding SelectedTabIndex}">
+          <TabItem Header="{DynamicResource Navigation_Tab_NetworkDevice}">
+            <views:NetworkDevicePage />
+          </TabItem>
+          <TabItem Header="{DynamicResource Navigation_Tab_SerialDevice}">
+            <views:SerialDevicePage />
+          </TabItem>
+          <TabItem Header="{DynamicResource Navigation_Tab_IoMapping}">
+            <views:IoMappingPage />
+          </TabItem>
+        </TabControl>
+      </dialogHost:DialogHost>
+    </DockPanel>
+  </Border>
+</UserControl>

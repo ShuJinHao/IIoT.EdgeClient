@@ -1,4 +1,7 @@
 using Avalonia.Controls;
+using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Hardware.HardwareConfig.ViewModels;
+using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Hardware.HardwareConfig.Views;
+using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Hardware.IOView;
 using IIoT.Edge.Presentation.Navigation.Avalonia.ViewModels;
 using IIoT.Edge.Presentation.Navigation.Avalonia.Views;
 using IIoT.Edge.UI.Avalonia.Modularity;
@@ -54,6 +57,8 @@ public static class NavigationAvaloniaPresentationRegistration
         RegisterDocument<MonitorViewPage, MonitorViewModel>(registry, ids.Monitor, "Navigation_Menu_Monitor", 4, "实时监控");
         RegisterDocument<DataViewPage, DataViewModel>(registry, ids.DataView, "Navigation_Menu_Data", 1, "生产数据");
         RegisterDocument<CapacityViewPage, CapacityViewModel>(registry, ids.CapacityView, "Navigation_Menu_Capacity", 2, "产能");
+        RegisterDocument<HardwareConfigPage, HardwareConfigViewModel>(registry, ids.HardwareConfigView, "Navigation_Menu_HardwareConfig", 3, "硬件配置");
+        RegisterDocument<IOViewPage, IoViewViewModel>(registry, ids.IoView, "Navigation_Menu_Io", 5, "IO 交互");
         RegisterDocument<PlcTaskBindingPage, PlcTaskBindingViewModel>(registry, ids.PlcTaskBindingView, "Navigation_Menu_PlcTaskBinding", 8, "PLC 任务绑定");
     }
 
