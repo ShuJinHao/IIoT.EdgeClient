@@ -22,7 +22,7 @@ public sealed class HomogenizationCloudUploader
         ICloudHttpClient cloudHttp,
         ILogService logger)
         : base(
-            DependencyInjection.ModuleKey,
+            HomogenizationModuleBase.ModuleKey,
             ProcessUploadMode.Batch,
             UploadPathValue,
             cloudHttp,

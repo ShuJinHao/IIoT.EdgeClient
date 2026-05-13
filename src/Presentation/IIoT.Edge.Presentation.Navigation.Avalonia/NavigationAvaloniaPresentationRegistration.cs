@@ -57,7 +57,6 @@ public static class NavigationAvaloniaPresentationRegistration
     {
         var ids = StandardAvaloniaModuleViewIds.Create(moduleId);
         RegisterDocument<MonitorViewPage, MonitorViewModel>(registry, ids.Monitor, "Navigation_Menu_Monitor", 4, "实时监控");
-        RegisterDocument<DataViewPage, DataViewModel>(registry, ids.DataView, "Navigation_Menu_Data", 1, "生产数据");
         RegisterDocument<CapacityViewPage, CapacityViewModel>(registry, ids.CapacityView, "Navigation_Menu_Capacity", 2, "产能");
         RegisterDocument<IOViewPage, IoViewViewModel>(registry, ids.IoView, "Navigation_Menu_Io", 3, "IO 交互");
         RegisterDocument<RecipeViewPage, RecipeViewModel>(registry, ids.RecipeView, "Navigation_Menu_Recipe", 5, "产品配方");

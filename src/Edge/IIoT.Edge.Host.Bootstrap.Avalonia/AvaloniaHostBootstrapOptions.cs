@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Config;
 using Microsoft.Extensions.Configuration;
 
@@ -7,4 +8,5 @@ public sealed record AvaloniaHostBootstrapOptions(
     IConfiguration Configuration,
     EdgeRuntimePaths RuntimePaths,
     string EnvironmentName,
-    IReadOnlyCollection<string> ModuleIds);
+    IReadOnlyCollection<string> ModuleIds,
+    IReadOnlyCollection<IEdgeProcessModule>? Modules = null);

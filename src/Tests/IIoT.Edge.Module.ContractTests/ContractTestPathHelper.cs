@@ -92,6 +92,16 @@ internal static class ContractTestPathHelper
         };
     }
 
+    public static string GetModuleCoreSourceDirectory(string moduleId)
+    {
+        var repoRoot = FindRepoRoot();
+        return moduleId switch
+        {
+            "Homogenization" => Path.Combine(repoRoot, "src", "Modules", "IIoT.Edge.Module.Homogenization.Core"),
+            _ => throw new InvalidOperationException($"Unsupported module id '{moduleId}'.")
+        };
+    }
+
     public static string GetModuleRuntimeDirectory(string moduleId)
     {
         var runtimeDirectory = Path.Combine(GetModuleSourceDirectory(moduleId), "bin", "Debug", "net10.0-windows");

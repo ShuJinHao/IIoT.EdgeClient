@@ -74,6 +74,7 @@ public partial class App : Avalonia.Application
             configuration,
             runtimePaths,
             "AvaloniaMigration",
-            ["Homogenization"]);
+            ["Homogenization"],
+            [new IIoT.Edge.Module.Homogenization.Avalonia.DependencyInjection()]);
     }
 }

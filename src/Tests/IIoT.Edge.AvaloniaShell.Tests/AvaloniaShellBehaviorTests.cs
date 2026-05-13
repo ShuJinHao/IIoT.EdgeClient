@@ -2,13 +2,20 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Recipe;
 using IIoT.Edge.Application.Common.Crud;
+using IIoT.Edge.Application.Context;
 using IIoT.Edge.Application.Features.Config.ParamView;
 using IIoT.Edge.Application.Features.Config.ParamView.Models;
 using IIoT.Edge.Application.Features.Formula.RecipeView;
 using IIoT.Edge.AvaloniaShell.ViewModels;
 using IIoT.Edge.Host.Bootstrap.Avalonia;
+using IIoT.Edge.Module.Homogenization.Avalonia.Localization;
+using IIoT.Edge.Module.Homogenization.Avalonia.Presentation;
+using IIoT.Edge.Module.Homogenization.Config;
+using IIoT.Edge.Module.Homogenization.Payload;
+using IIoT.Edge.Module.Homogenization.Runtime;
 using IIoT.Edge.Presentation.Navigation.Avalonia;
 using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Config.ParamView;
 using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Formula.RecipeView;
@@ -16,11 +23,13 @@ using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Hardware.HardwareConfi
 using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Hardware.IOView;
 using IIoT.Edge.Presentation.Shell.Avalonia.ViewModels;
 using IIoT.Edge.SharedKernel.DataPipeline.Recipe;
+using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.UI.Avalonia.Localization;
 using IIoT.Edge.UI.Avalonia.Modularity;
 using IIoT.Edge.UI.Avalonia.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace IIoT.Edge.AvaloniaShell.Tests;
@@ -47,6 +56,7 @@ public sealed class AvaloniaShellBehaviorTests
         Assert.Contains(menus, item => item.ViewId == ids.PlcTaskBindingView);
         Assert.Contains(menus, item => item.ViewId == CoreAvaloniaViewIds.Diagnostics);
         Assert.NotEqual("Navigation_Menu_Monitor", provider.GetRequiredService<IAvaloniaLanguageService>().GetText("Navigation_Menu_Monitor"));
+        Assert.Equal("匀浆出料数据", provider.GetRequiredService<IAvaloniaLanguageService>().GetText("Homogenization_Title_Data"));
     }
 
     [AvaloniaFact]
@@ -273,6 +283,47 @@ public sealed class AvaloniaShellBehaviorTests
     }
 
     [AvaloniaFact]
+    public async Task Homogenization_plugin_data_view_reads_context_and_controls_timer()
+    {
+        var context = new HomogenizationContext();
+        context.RecordOutbound(new HomogenizationCellData
+        {
+            TrayCode = "T-001",
+            InboundTime = new DateTime(2026, 5, 13, 8, 0, 0),
+            CompletedTime = new DateTime(2026, 5, 13, 8, 5, 0),
+            RuntimeStatus = "出料待上传",
+            CntActualKg = 1.2d,
+            NmpActualKg = 3.4d
+        });
+
+        var languageService = new AvaloniaResourceLanguageService(
+            [
+                new HomogenizationAvaloniaZhCnResources(),
+                new HomogenizationAvaloniaEnUsResources()
+            ]);
+        languageService.Apply("zh-CN");
+        var timerFactory = new FakeAvaloniaTimerFactory();
+        var viewModel = new HomogenizationDataViewModel(
+            new FakeProductionContextStore([context]),
+            languageService,
+            new ImmediateAvaloniaDispatcherService(),
+            timerFactory,
+            Options.Create(new HomogenizationModuleOptions()));
+
+        await viewModel.OnActivatedAsync();
+
+        Assert.True(timerFactory.LastTimer?.IsEnabled);
+        var row = Assert.Single(viewModel.Records);
+        Assert.Equal("T-001", row.TrayCode);
+        Assert.Equal("1.2", row.CntActual);
+        Assert.Equal("共 1 条出料记录。", viewModel.StatusText);
+
+        await viewModel.OnDeactivatedAsync();
+
+        Assert.False(timerFactory.LastTimer?.IsEnabled);
+    }
+
+    [AvaloniaFact]
     public async Task Confirm_dialog_defaults_to_false_when_no_host_handles_request()
     {
         using var provider = BuildProvider();
@@ -349,7 +400,78 @@ public sealed class AvaloniaShellBehaviorTests
             configuration,
             runtimePaths,
             "AvaloniaShellTests",
-            ["Homogenization"]);
+            ["Homogenization"],
+            [new IIoT.Edge.Module.Homogenization.Avalonia.DependencyInjection()]);
+    }
+
+    private sealed class FakeProductionContextStore : IProductionContextStore
+    {
+        private readonly IReadOnlyCollection<ProductionContext> _contexts;
+
+        public FakeProductionContextStore(IReadOnlyCollection<ProductionContext> contexts)
+        {
+            _contexts = contexts;
+        }
+
+        public ProductionContext GetOrCreate(string deviceName)
+            => _contexts.FirstOrDefault() ?? new ProductionContext { DeviceName = deviceName };
+
+        public ProductionContext GetOrCreate(string deviceName, string? moduleId)
+            => GetOrCreate(deviceName);
+
+        public IReadOnlyCollection<ProductionContext> GetAll()
+            => _contexts;
+
+        public ProductionContextPersistenceDiagnostics GetPersistenceDiagnostics()
+            => new(0, null);
+
+        public void LoadFromFile()
+        {
+        }
+
+        public void SaveToFile()
+        {
+        }
+
+        public Task StartAutoSaveAsync(CancellationToken ct, int intervalSeconds = 30)
+            => Task.CompletedTask;
+    }
+
+    private sealed class FakeAvaloniaTimerFactory : IAvaloniaTimerFactory
+    {
+        public FakeAvaloniaTimer? LastTimer { get; private set; }
+
+        public IAvaloniaTimer Create(TimeSpan interval)
+        {
+            LastTimer = new FakeAvaloniaTimer { Interval = interval };
+            return LastTimer;
+        }
+    }
+
+    private sealed class FakeAvaloniaTimer : IAvaloniaTimer
+    {
+        public event EventHandler? Tick;
+
+        public TimeSpan Interval { get; set; }
+
+        public bool IsEnabled { get; private set; }
+
+        public void Start() => IsEnabled = true;
+
+        public void Stop() => IsEnabled = false;
+
+        public void RaiseTick() => Tick?.Invoke(this, EventArgs.Empty);
+    }
+
+    private sealed class ImmediateAvaloniaDispatcherService : IAvaloniaDispatcherService
+    {
+        public void Post(Action action) => action();
+
+        public Task InvokeAsync(Action action)
+        {
+            action();
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class FakeRecipeViewCrudService : IRecipeViewCrudService

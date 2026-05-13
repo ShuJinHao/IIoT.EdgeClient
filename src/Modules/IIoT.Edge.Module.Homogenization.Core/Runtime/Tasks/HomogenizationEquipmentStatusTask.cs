@@ -135,7 +135,7 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
             ? string.Empty
             : $"，消息={string.Join("；", snapshot.Messages)}";
         var message =
-            $"设备状态采集：状态码={snapshot.StatusCode}，状态={snapshot.StatusText}，工序={DependencyInjection.ModuleKey}，PLC/设备={ModuleContext.DeviceName}，采集时间={snapshot.CapturedAt:yyyy-MM-dd HH:mm:ss}{extraMessages}。";
+            $"设备状态采集：状态码={snapshot.StatusCode}，状态={snapshot.StatusText}，工序={HomogenizationModuleBase.ModuleKey}，PLC/设备={ModuleContext.DeviceName}，采集时间={snapshot.CapturedAt:yyyy-MM-dd HH:mm:ss}{extraMessages}。";
 
         switch (level)
         {

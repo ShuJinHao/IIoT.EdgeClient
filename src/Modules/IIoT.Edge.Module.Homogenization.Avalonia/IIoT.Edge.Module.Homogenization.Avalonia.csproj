@@ -1,30 +1,28 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <CodePage>65001</CodePage>
-    <UseWPF>true</UseWPF>
+    <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
     <IsPackable>true</IsPackable>
-    <PackageId>IIoT.Edge.Module.Homogenization</PackageId>
+    <PackageId>IIoT.Edge.Module.Homogenization.Avalonia</PackageId>
     <IsEdgePluginModule>true</IsEdgePluginModule>
     <PluginModuleId>Homogenization</PluginModuleId>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Controls.DataGrid" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Presentation\IIoT.Edge.Presentation.Navigation\IIoT.Edge.Presentation.Navigation.csproj" />
-    <ProjectReference Include="..\..\Shared\IIoT.Edge.UI.Shared\IIoT.Edge.UI.Shared.csproj" />
-    <ProjectReference Include="..\..\Application\IIoT.Edge.Application\IIoT.Edge.Application.csproj" />
     <ProjectReference Include="..\IIoT.Edge.Module.Homogenization.Core\IIoT.Edge.Module.Homogenization.Core.csproj" />
+    <ProjectReference Include="..\..\Shared\IIoT.Edge.UI.Avalonia\IIoT.Edge.UI.Avalonia.csproj" />
+    <ProjectReference Include="..\..\Application\IIoT.Edge.Application\IIoT.Edge.Application.csproj" />
   </ItemGroup>
 
   <ItemGroup>

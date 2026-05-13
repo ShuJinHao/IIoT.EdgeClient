@@ -150,30 +150,37 @@ public sealed class ModuleDiscoveryContractTests
             repoRoot,
             "src",
             "Modules",
-            "IIoT.Edge.Module.Homogenization",
+            "IIoT.Edge.Module.Homogenization.Core",
             "Runtime",
             "HomogenizationStationRuntimeFactory.cs")));
         Assert.False(File.Exists(Path.Combine(
             repoRoot,
             "src",
             "Modules",
-            "IIoT.Edge.Module.Homogenization",
+            "IIoT.Edge.Module.Homogenization.Core",
             "Runtime",
             "HomogenizationDevelopmentSampleContributor.cs")));
         Assert.True(File.Exists(Path.Combine(
             repoRoot,
             "src",
             "Modules",
-            "IIoT.Edge.Module.Homogenization",
+            "IIoT.Edge.Module.Homogenization.Core",
             "Samples",
             "HomogenizationDevelopmentSampleContributor.cs")));
         Assert.False(File.Exists(Path.Combine(
             repoRoot,
             "src",
             "Modules",
-            "IIoT.Edge.Module.Homogenization",
+            "IIoT.Edge.Module.Homogenization.Core",
             "Config",
             "HomogenizationDevelopmentSampleContributor.cs")));
+        Assert.True(File.Exists(Path.Combine(
+            repoRoot,
+            "src",
+            "Modules",
+            "IIoT.Edge.Module.Homogenization",
+            "Presentation",
+            "HomogenizationNavigationRegistration.cs")));
     }
 
     [Fact]

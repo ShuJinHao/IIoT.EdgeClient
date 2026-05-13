@@ -1,4 +1,4 @@
-﻿using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
@@ -110,7 +110,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
     /// <summary>
     /// 工厂归属的匀浆模块标识。
     /// </summary>
-    public string ModuleId => DependencyInjection.ModuleKey;
+    public string ModuleId => HomogenizationModuleBase.ModuleKey;
 
     public IReadOnlyCollection<TaskCandidate> GetTaskCandidates()
         => TaskCandidates;

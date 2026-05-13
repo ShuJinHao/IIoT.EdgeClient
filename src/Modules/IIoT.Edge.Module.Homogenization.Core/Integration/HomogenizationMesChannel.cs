@@ -33,7 +33,7 @@ public sealed class HomogenizationMesChannel
         IProductionTimeProvider productionTime,
         IOptions<HomogenizationMesOptions> mesOptions,
         IOptions<HomogenizationCodeOptions> codeOptions)
-        : base(DependencyInjection.ModuleKey, logger, requestExecutor, moduleParamRoleProvider, productionTime)
+        : base(HomogenizationModuleBase.ModuleKey, logger, requestExecutor, moduleParamRoleProvider, productionTime)
     {
         _mesOptions = mesOptions.Value;
         _mesCodes = codeOptions.Value.Mes;

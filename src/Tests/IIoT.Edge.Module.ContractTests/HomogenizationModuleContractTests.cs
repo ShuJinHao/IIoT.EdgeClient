@@ -118,7 +118,7 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
         var configuration = new ConfigurationBuilder()
             .AddJsonFile(
                 Path.Combine(
-                    ContractTestPathHelper.GetModuleSourceDirectory("Homogenization"),
+                    ContractTestPathHelper.GetModuleCoreSourceDirectory("Homogenization"),
                     "Config",
                     "homogenization.module.json"),
                 optional: false,
