@@ -2,6 +2,7 @@ using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Features.Config.ModuleParameters;
 using IIoT.Edge.Host.Bootstrap.Core;
+using IIoT.Edge.Host.Bootstrap.Core.Plugins;
 using IIoT.Edge.Presentation.Navigation.Avalonia;
 using IIoT.Edge.Presentation.Panels.Avalonia;
 using IIoT.Edge.Presentation.Shell.Avalonia;
@@ -26,6 +27,8 @@ public static class DependencyInjection
         var runtimeRegistry = new StationRuntimeRegistry();
         var integrationRegistry = new ProcessIntegrationRegistry();
         var moduleParamRegistry = new ModuleParamRegistry();
+        var moduleCatalog = new JsonEdgeProcessModuleCatalog(new EdgeProcessModuleCatalogOptions(
+            options.PluginDirectories ?? [options.RuntimePaths.BaseDirectory]));
 
         services.TryAddSingleton<IAvaloniaViewRegistry>(viewRegistry);
         services.TryAddSingleton<ICellDataTypeRegistry>(cellDataTypeRegistry);
@@ -33,6 +36,7 @@ public static class DependencyInjection
         services.TryAddSingleton<IStationRuntimeRegistry>(runtimeRegistry);
         services.TryAddSingleton<IProcessIntegrationRegistry>(integrationRegistry);
         services.TryAddSingleton<IModuleParamRegistry>(moduleParamRegistry);
+        services.TryAddSingleton<IEdgeProcessModuleCatalog>(moduleCatalog);
 
         services.AddEdgeHostCoreServices(new EdgeHostCoreOptions(
             options.Configuration,
@@ -74,7 +78,7 @@ public static class DependencyInjection
         IProcessIntegrationRegistry integrationRegistry,
         IModuleParamRegistry moduleParamRegistry)
     {
-        var modules = options.Modules?.ToArray() ?? [];
+        var modules = ResolveModules(services, options);
         if (modules.Length == 0)
         {
             return;
@@ -100,6 +104,22 @@ public static class DependencyInjection
         }
 
         ValidateModuleRegistrations(modules, cellDataRegistry, runtimeRegistry, integrationRegistry);
+    }
+
+    private static IEdgeProcessModule[] ResolveModules(
+        IServiceCollection services,
+        AvaloniaHostBootstrapOptions options)
+    {
+        if (options.Modules is not null)
+        {
+            return options.Modules.ToArray();
+        }
+
+        var catalog = services
+            .FirstOrDefault(descriptor => descriptor.ServiceType == typeof(IEdgeProcessModuleCatalog))
+            ?.ImplementationInstance as IEdgeProcessModuleCatalog;
+
+        return catalog?.LoadModules().ToArray() ?? [];
     }
 
     private static void ValidateModuleIdentity(IEnumerable<IEdgeProcessModule> modules)

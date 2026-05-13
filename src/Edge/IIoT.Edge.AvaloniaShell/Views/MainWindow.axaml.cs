@@ -1,9 +1,9 @@
+using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
-using SukiUI.Controls;
 
 namespace IIoT.Edge.AvaloniaShell.Views;
 
-public partial class MainWindow : SukiWindow
+public partial class MainWindow : Window
 {
     public MainWindow()
     {

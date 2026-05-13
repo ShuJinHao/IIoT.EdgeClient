@@ -1,0 +1,12 @@
+[
+  {
+    "ProfileId": "HomogenizationLineAvalonia",
+    "DisplayName": "匀浆 Avalonia",
+    "Description": "使用匀浆工序的 profile 启动 Avalonia 迁移客户端。",
+    "ImagePath": "Assets/Profiles/homogenization.png",
+    "IconKind": "BeakerOutline",
+    "AccentColor": "#2563EB",
+    "MachineProfile": "HomogenizationLine",
+    "ExecutablePath": "..\\avalonia-shell\\IIoT.Edge.AvaloniaShell.exe"
+  }
+]

@@ -1,0 +1,145 @@
+<Window
+    x:Class="IIoT.Edge.Launcher.Avalonia.Views.MainWindow"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:models="clr-namespace:IIoT.Edge.Launcher.Models;assembly=IIoT.Edge.Launcher.Core"
+    Width="1180"
+    Height="760"
+    MinWidth="960"
+    MinHeight="640"
+    Title="IIoT Edge Launcher"
+    Background="#0F172A">
+
+  <Window.DataTemplates>
+    <DataTemplate DataType="{x:Type models:LauncherProfileDefinition}">
+      <Border Margin="0,0,0,12"
+              Padding="18"
+              Background="#111827"
+              BorderBrush="#334155"
+              BorderThickness="1"
+              CornerRadius="8">
+        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto">
+          <TextBlock FontSize="18"
+                     FontWeight="SemiBold"
+                     Foreground="#F8FAFC"
+                     Text="{Binding DisplayName}" />
+          <TextBlock Grid.Row="1"
+                     Margin="0,8,24,0"
+                     Foreground="#CBD5E1"
+                     Text="{Binding Description}"
+                     TextWrapping="Wrap" />
+          <TextBlock Grid.Row="2"
+                     Margin="0,12,0,0"
+                     Foreground="#93C5FD"
+                     Text="{Binding MachineProfile}" />
+          <Button Grid.Column="1"
+                  Grid.RowSpan="3"
+                  MinWidth="104"
+                  VerticalAlignment="Center"
+                  Click="LaunchProfileButton_Click"
+                  Content="启动" />
+        </Grid>
+      </Border>
+    </DataTemplate>
+  </Window.DataTemplates>
+
+  <Grid RowDefinitions="48,*">
+    <Border Grid.Row="0"
+            Background="#0B1120"
+            BorderBrush="#1E293B"
+            BorderThickness="0,0,0,1"
+            PointerPressed="TitleBar_PointerPressed">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Margin="18,0,0,0"
+                   VerticalAlignment="Center"
+                   FontSize="14"
+                   FontWeight="SemiBold"
+                   Foreground="#F8FAFC"
+                   Text="IIoT Edge Launcher" />
+        <StackPanel Grid.Column="1" Orientation="Horizontal">
+          <Button Width="38" Height="32" Click="MinimizeWindowButton_Click" Content="-" />
+          <Button Width="38" Height="32" Click="ToggleWindowStateButton_Click" Content="□" />
+          <Button Width="38" Height="32" Click="CloseWindowButton_Click" Content="X" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <Grid Grid.Row="1" Margin="28" ColumnDefinitions="420,28,*">
+      <Border x:Name="LoginPanel"
+              Grid.Column="0"
+              Padding="28"
+              Background="#111827"
+              BorderBrush="#334155"
+              BorderThickness="1"
+              CornerRadius="8">
+        <Grid RowDefinitions="Auto,*,Auto">
+          <StackPanel Spacing="12">
+            <TextBlock FontSize="26"
+                       FontWeight="SemiBold"
+                       Foreground="#F8FAFC"
+                       Text="本地登录" />
+            <TextBlock Foreground="#CBD5E1"
+                       Text="登录后选择要启动的工序客户端。Launcher 只负责本地账号校验和 profile 启动。"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+
+          <StackPanel Grid.Row="1" VerticalAlignment="Center" Spacing="12">
+            <TextBox x:Name="UserNameInput" PlaceholderText="账号" />
+            <TextBox x:Name="PasswordInput" PlaceholderText="密码" PasswordChar="*" />
+            <TextBlock Foreground="#FCA5A5"
+                       Text="{Binding ErrorMessage}"
+                       TextWrapping="Wrap" />
+            <TextBlock Foreground="#CBD5E1"
+                       Text="{Binding StatusMessage}"
+                       TextWrapping="Wrap" />
+            <Button Click="LoginButton_Click"
+                    Content="登录并进入工序选择" />
+            <Button Click="ChangePasswordButton_Click"
+                    Content="修改本地密码" />
+          </StackPanel>
+
+          <TextBlock Grid.Row="2"
+                     Foreground="#64748B"
+                     Text="{Binding AppVersionText}" />
+        </Grid>
+      </Border>
+
+      <Border x:Name="ProfilePanel"
+              Grid.Column="2"
+              Padding="28"
+              Background="#0B1120"
+              BorderBrush="#334155"
+              BorderThickness="1"
+              CornerRadius="8"
+              IsVisible="False">
+        <Grid RowDefinitions="Auto,Auto,*">
+          <Grid ColumnDefinitions="*,Auto">
+            <StackPanel>
+              <TextBlock FontSize="26"
+                         FontWeight="SemiBold"
+                         Foreground="#F8FAFC"
+                         Text="{Binding WelcomeText}" />
+              <TextBlock Margin="0,8,0,0"
+                         Foreground="#CBD5E1"
+                         Text="{Binding StatusMessage}"
+                         TextWrapping="Wrap" />
+            </StackPanel>
+            <TextBlock Grid.Column="1"
+                       VerticalAlignment="Top"
+                       Foreground="#93C5FD"
+                       Text="{Binding ProfileSummaryText}" />
+          </Grid>
+
+          <TextBox Grid.Row="1"
+                   Margin="0,22,0,16"
+                   PlaceholderText="搜索工序、profile 或 MachineProfile"
+                   Text="{Binding ProfileSearchText}" />
+
+          <ScrollViewer Grid.Row="2">
+            <ItemsControl ItemsSource="{Binding Profiles}" />
+          </ScrollViewer>
+        </Grid>
+      </Border>
+    </Grid>
+  </Grid>
+</Window>

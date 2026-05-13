@@ -1,4 +1,4 @@
-<suki:SukiWindow
+<Window
     x:Class="IIoT.Edge.AvaloniaShell.Views.MainWindow"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -6,22 +6,18 @@
     xmlns:dock="clr-namespace:Dock.Avalonia.Controls;assembly=Dock.Avalonia"
     xmlns:docking="clr-namespace:IIoT.Edge.UI.Avalonia.Docking;assembly=IIoT.Edge.UI.Avalonia"
     xmlns:shellViews="clr-namespace:IIoT.Edge.Presentation.Shell.Avalonia.Views;assembly=IIoT.Edge.Presentation.Shell.Avalonia"
-    xmlns:suki="clr-namespace:SukiUI.Controls;assembly=SukiUI"
     Width="1360"
     Height="860"
     MinWidth="1100"
     MinHeight="720"
     Title="{DynamicResource Shell_App_Title}"
-    Background="#0F172A"
-    CanFullScreen="True"
-    RootCornerRadius="8"
-    ShowTitlebarBackground="True">
+    Background="#0F172A">
 
-  <suki:SukiWindow.DataTemplates>
+  <Window.DataTemplates>
     <DataTemplate DataType="{x:Type docking:AvaloniaDockable}">
       <ContentControl Content="{Binding Content}" />
     </DataTemplate>
-  </suki:SukiWindow.DataTemplates>
+  </Window.DataTemplates>
 
   <dialogHost:DialogHost IsOpen="{Binding IsSystemDialogOpen}" CloseOnClickAway="False">
     <dialogHost:DialogHost.DialogContent>
@@ -95,4 +91,4 @@
       </Grid>
     </dialogHost:DialogHost>
   </dialogHost:DialogHost>
-</suki:SukiWindow>
+</Window>

@@ -2,26 +2,27 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <UseWPF>true</UseWPF>
+    <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
     <BaseOutputPath>..\..\..\..\publish\</BaseOutputPath>
-    <OutputPath>..\..\..\..\publish\$(Configuration)\launcher\</OutputPath>
+    <OutputPath>..\..\..\..\publish\$(Configuration)\avalonia-launcher\</OutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <RepoRoot>$(MSBuildThisFileDirectory)..\..\..\</RepoRoot>
-    <SyncEdgeRuntimeScript>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\..\scripts\SyncEdgeLocalRuntime.ps1'))</SyncEdgeRuntimeScript>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Fonts.Inter" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\IIoT.Edge.Shell\IIoT.Edge.Shell.csproj"
-                      ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\IIoT.Edge.Launcher.Core\IIoT.Edge.Launcher.Core.csproj" />
-    <ProjectReference Include="..\..\Shared\IIoT.Edge.UI.Shared\IIoT.Edge.UI.Shared.csproj" />
+    <ProjectReference Include="..\IIoT.Edge.AvaloniaShell\IIoT.Edge.AvaloniaShell.csproj"
+                      ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>
@@ -37,17 +38,10 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       <CopyToPublishDirectory>Always</CopyToPublishDirectory>
     </None>
-    <None Update="Assets\Profiles\*.png">
+    <None Include="..\IIoT.Edge.Launcher\Assets\Profiles\homogenization.png" Link="Assets\Profiles\homogenization.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </None>
   </ItemGroup>
-
-  <Target Name="SyncLauncherLocalRuntimeLayout"
-          AfterTargets="Build"
-          Condition="'$(DesignTimeBuild)' != 'true' and '$(SkipEdgeRuntimeLayoutSync)' != 'true'">
-    <Exec Command="powershell -ExecutionPolicy Bypass -File &quot;$(SyncEdgeRuntimeScript)&quot; -Configuration &quot;$(Configuration)&quot; -LayoutRoot &quot;$(TargetDir)..\.&quot; -LauncherRuntimeRoot &quot;$(TargetDir).&quot; -ShellRuntimeRoot &quot;$(TargetDir)..\shell\.&quot;"
-          WorkingDirectory="$(RepoRoot)" />
-  </Target>
 
 </Project>

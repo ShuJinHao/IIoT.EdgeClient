@@ -11,6 +11,8 @@
     <Project Path="src/Edge/IIoT.Edge.Host.Bootstrap.Avalonia/IIoT.Edge.Host.Bootstrap.Avalonia.csproj" />
     <Project Path="src/Edge/IIoT.Edge.Host.Bootstrap/IIoT.Edge.Host.Bootstrap.csproj" />
     <Project Path="src/Edge/IIoT.Edge.Host.Bootstrap.Core/IIoT.Edge.Host.Bootstrap.Core.csproj" />
+    <Project Path="src/Edge/IIoT.Edge.Launcher.Avalonia/IIoT.Edge.Launcher.Avalonia.csproj" />
+    <Project Path="src/Edge/IIoT.Edge.Launcher.Core/IIoT.Edge.Launcher.Core.csproj" />
     <Project Path="src/Edge/IIoT.Edge.Launcher/IIoT.Edge.Launcher.csproj" />
     <Project Path="src/Edge/IIoT.Edge.Shell/IIoT.Edge.Shell.csproj" Id="18446b65-38e5-4acb-a229-ba0f9d8a83cf" />
   </Folder>

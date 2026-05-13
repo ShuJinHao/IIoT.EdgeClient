@@ -3,6 +3,7 @@ using Avalonia.Headless.XUnit;
 using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Context;
+using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Recipe;
 using IIoT.Edge.Application.Common.Crud;
 using IIoT.Edge.Application.Context;
@@ -57,6 +58,17 @@ public sealed class AvaloniaShellBehaviorTests
         Assert.Contains(menus, item => item.ViewId == CoreAvaloniaViewIds.Diagnostics);
         Assert.NotEqual("Navigation_Menu_Monitor", provider.GetRequiredService<IAvaloniaLanguageService>().GetText("Navigation_Menu_Monitor"));
         Assert.Equal("匀浆出料数据", provider.GetRequiredService<IAvaloniaLanguageService>().GetText("Homogenization_Title_Data"));
+    }
+
+    [AvaloniaFact]
+    public void Bootstrap_loads_homogenization_plugin_from_catalog()
+    {
+        using var provider = BuildProvider();
+
+        var module = Assert.Single(provider.GetServices<IEdgeProcessModule>());
+
+        Assert.Equal("Homogenization", module.ModuleId);
+        Assert.Equal("Homogenization", module.ProcessType);
     }
 
     [AvaloniaFact]
@@ -401,7 +413,7 @@ public sealed class AvaloniaShellBehaviorTests
             runtimePaths,
             "AvaloniaShellTests",
             ["Homogenization"],
-            [new IIoT.Edge.Module.Homogenization.Avalonia.DependencyInjection()]);
+            PluginDirectories: [AppContext.BaseDirectory]);
     }
 
     private sealed class FakeProductionContextStore : IProductionContextStore

@@ -9,4 +9,5 @@ public sealed record AvaloniaHostBootstrapOptions(
     EdgeRuntimePaths RuntimePaths,
     string EnvironmentName,
     IReadOnlyCollection<string> ModuleIds,
-    IReadOnlyCollection<IEdgeProcessModule>? Modules = null);
+    IReadOnlyCollection<IEdgeProcessModule>? Modules = null,
+    IReadOnlyCollection<string>? PluginDirectories = null);
