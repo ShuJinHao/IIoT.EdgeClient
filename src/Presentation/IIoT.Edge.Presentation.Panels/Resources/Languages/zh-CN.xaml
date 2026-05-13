@@ -1,0 +1,37 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+    <sys:String x:Key="Panels_Title_Equipment">设备运行</sys:String>
+    <sys:String x:Key="Panels_Title_SystemLog">系统日志</sys:String>
+    <sys:String x:Key="Panels_Tab_HardwareStatus">硬件状态</sys:String>
+    <sys:String x:Key="Panels_Tab_RecipeInfo">配方信息</sys:String>
+    <sys:String x:Key="Panels_Tab_RealtimeData">实时数据</sys:String>
+    <sys:String x:Key="Panels_Column_Status">状态</sys:String>
+    <sys:String x:Key="Panels_Column_Connection">连接</sys:String>
+    <sys:String x:Key="Panels_Column_Name">名称</sys:String>
+    <sys:String x:Key="Panels_Column_AddressPort">地址/端口</sys:String>
+    <sys:String x:Key="Panels_Column_Type">类型</sys:String>
+    <sys:String x:Key="Panels_Column_ParamName">参数名</sys:String>
+    <sys:String x:Key="Panels_Column_CurrentValue">当前值</sys:String>
+    <sys:String x:Key="Panels_Column_Min">最小值</sys:String>
+    <sys:String x:Key="Panels_Column_Max">最大值</sys:String>
+    <sys:String x:Key="Panels_Column_Unit">单位</sys:String>
+    <sys:String x:Key="Panels_Column_WarnLow">预警下限</sys:String>
+    <sys:String x:Key="Panels_Column_WarnHigh">预警上限</sys:String>
+    <sys:String x:Key="Panels_Label_Recipe">配方：</sys:String>
+    <sys:String x:Key="Panels_Label_Version">版本：</sys:String>
+    <sys:String x:Key="Panels_Label_Process">工序：</sys:String>
+    <sys:String x:Key="Panels_Label_Status">状态：</sys:String>
+    <sys:String x:Key="Panels_Status_Inactive">未激活</sys:String>
+    <sys:String x:Key="Panels_Status_Active">已激活</sys:String>
+    <sys:String x:Key="Panels_Status_Connected">已连接</sys:String>
+    <sys:String x:Key="Panels_Status_Disconnected">未连接</sys:String>
+    <sys:String x:Key="Panels_Label_TodayOutput">今日产量</sys:String>
+    <sys:String x:Key="Panels_Label_TodayYield">今日良率</sys:String>
+    <sys:String x:Key="Panels_Label_NgCount">NG数量</sys:String>
+    <sys:String x:Key="Panels_Label_CurrentBatch">当前批次：</sys:String>
+    <sys:String x:Key="Panels_Unit_Count"> 个</sys:String>
+    <sys:String x:Key="Panels_Tooltip_ClearLog">清空日志</sys:String>
+    <sys:String x:Key="Panels_Button_Clear">清空</sys:String>
+</ResourceDictionary>

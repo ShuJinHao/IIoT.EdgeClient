@@ -1,0 +1,104 @@
+using Microsoft.Extensions.Options;
+
+namespace IIoT.Edge.Infrastructure.Integration.Config;
+
+/// <summary>
+/// Resolves cloud API absolute URLs and client code from current config.
+/// BaseUrl and ClientCode are read from IOptionsMonitor for runtime updates.
+/// </summary>
+public class CloudApiEndpointProvider : ICloudApiEndpointProvider
+{
+    private readonly IOptionsMonitor<CloudApiConfig> _cloudApiOptions;
+
+    public CloudApiEndpointProvider(
+        IOptionsMonitor<CloudApiConfig> cloudApiOptions)
+    {
+        _cloudApiOptions = cloudApiOptions;
+    }
+
+    public string BuildUrl(string relativeOrAbsoluteUrl)
+    {
+        if (Uri.TryCreate(relativeOrAbsoluteUrl, UriKind.Absolute, out var absoluteUri))
+            return absoluteUri.ToString();
+
+        var baseUrl = _cloudApiOptions.CurrentValue.BaseUrl?.Trim();
+        if (string.IsNullOrWhiteSpace(baseUrl))
+            throw new InvalidOperationException("Missing config: CloudApi:BaseUrl");
+
+        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri))
+            throw new InvalidOperationException($"Invalid config: CloudApi:BaseUrl = '{baseUrl}'");
+
+        return new Uri(baseUri, relativeOrAbsoluteUrl).ToString();
+    }
+
+    public string GetClientCode()
+    {
+        var configured = _cloudApiOptions.CurrentValue.ClientCode?.Trim();
+        if (!string.IsNullOrWhiteSpace(configured))
+            return configured;
+
+        throw new InvalidOperationException("Missing config: CloudApi:ClientCode");
+    }
+
+    public string GetBootstrapSecret()
+    {
+        var configured = _cloudApiOptions.CurrentValue.BootstrapSecret?.Trim();
+        if (!string.IsNullOrWhiteSpace(configured))
+            return configured;
+
+        throw new InvalidOperationException("Missing config: CloudApi:BootstrapSecret");
+    }
+
+    public string GetDeviceInstancePath()
+        => RequirePath(_cloudApiOptions.CurrentValue.Paths.DeviceInstance, "CloudApi:Paths:DeviceInstance");
+
+    public string GetBootstrapRefreshPath()
+        => RequirePath(_cloudApiOptions.CurrentValue.Paths.BootstrapRefresh, "CloudApi:Paths:BootstrapRefresh");
+
+    public string GetIdentityDeviceLoginPath()
+        => RequirePath(_cloudApiOptions.CurrentValue.Paths.IdentityDeviceLogin, "CloudApi:Paths:IdentityDeviceLogin");
+
+    public string GetHumanIdentityRefreshPath()
+        => RequirePath(_cloudApiOptions.CurrentValue.Paths.HumanIdentityRefresh, "CloudApi:Paths:HumanIdentityRefresh");
+
+    public string GetDeviceLogPath()
+        => RequirePath(_cloudApiOptions.CurrentValue.Paths.DeviceLog, "CloudApi:Paths:DeviceLog");
+
+    public string GetProcessUploadPath()
+        => RequirePath(_cloudApiOptions.CurrentValue.Paths.ProcessUpload, "CloudApi:Paths:ProcessUpload");
+
+    public string GetCapacityHourlyPath()
+        => RequirePath(_cloudApiOptions.CurrentValue.Paths.CapacityHourly, "CloudApi:Paths:CapacityHourly");
+
+    public string GetCapacitySummaryPath()
+        => RequirePath(_cloudApiOptions.CurrentValue.Paths.CapacitySummary, "CloudApi:Paths:CapacitySummary");
+
+    public string GetCapacitySummaryRangePath()
+        => RequirePath(_cloudApiOptions.CurrentValue.Paths.CapacitySummaryRange, "CloudApi:Paths:CapacitySummaryRange");
+
+    public string BuildRecipeByDevicePath(Guid deviceId)
+    {
+        var template = RequirePath(
+            _cloudApiOptions.CurrentValue.Paths.RecipeByDeviceTemplate,
+            "CloudApi:Paths:RecipeByDeviceTemplate");
+        if (!template.Contains("{deviceId}", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Invalid config: CloudApi:Paths:RecipeByDeviceTemplate must contain {deviceId}");
+
+        return template.Replace("{deviceId}", deviceId.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string RequirePath(string? configured, string key)
+    {
+        var value = configured?.Trim();
+        if (string.IsNullOrWhiteSpace(value))
+            throw new InvalidOperationException($"Missing config: {key}");
+
+        if (Uri.TryCreate(value, UriKind.Absolute, out _))
+            throw new InvalidOperationException($"Invalid config: {key} must be a relative API path");
+
+        if (!value.StartsWith('/'))
+            throw new InvalidOperationException($"Invalid config: {key} must start with '/'");
+
+        return value;
+    }
+}

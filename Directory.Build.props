@@ -1,0 +1,12 @@
+<Project>
+  <PropertyGroup>
+    <!-- Work around local .NET workload resolver issues that break restore/build
+         for plain EdgeClient projects even though they do not consume Android/iOS workloads. -->
+    <MSBuildEnableWorkloadResolver>false</MSBuildEnableWorkloadResolver>
+
+    <!-- Stabilize restore/build graph in this environment: parallel graph walk can fail with
+         "failed but 0 errors". Prefer deterministic serial execution for local development. -->
+    <BuildInParallel>false</BuildInParallel>
+    <RestoreDisableParallel>true</RestoreDisableParallel>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,26 @@
+# Generated artifacts
+.artifacts/
+.claude/
+.codex-temp/
+.dotnet/
+.vs/
+%EDGE_SHARED_NUGET_FEED%/
+IIoT.EdgeClient.DevTools.slnx
+
+# Build outputs
+bin/
+obj/
+publish/
+dist/
+node_modules/
+
+# Local logs and diagnostics
+*.log
+*.trx
+*.tmp
+*.cache
+*_wpftmp.csproj
+*.csproj.user
+
+# Local launcher secrets
+src/Edge/IIoT.Edge.Launcher/launcher.accounts.json

@@ -1,0 +1,29 @@
+﻿<UserControl
+    x:Class="IIoT.Edge.UI.Shared.Views.PlaceholderView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+    Background="Transparent">
+    <Grid>
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+            <materialDesign:PackIcon
+                Width="48"
+                Height="48"
+                HorizontalAlignment="Center"
+                Foreground="#3F3F46"
+                Kind="TimerSandEmpty" />
+            <TextBlock
+                Margin="0,16,0,4"
+                HorizontalAlignment="Center"
+                FontSize="18"
+                FontWeight="SemiBold"
+                Foreground="#52525B"
+                Text="{Binding PageTitle}" />
+            <TextBlock
+                HorizontalAlignment="Center"
+                FontSize="13"
+                Foreground="#3F3F46"
+                Text="功能开发中..." />
+        </StackPanel>
+    </Grid>
+</UserControl>

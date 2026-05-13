@@ -1,0 +1,122 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Shell.Features.Footer.FooterView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+    Height="30"
+    Background="Transparent">
+
+    <Border
+        Background="#18181B"
+        BorderBrush="#27272A"
+        BorderThickness="0,1,0,0">
+        <Grid Margin="16,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="16" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="16" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel
+                Grid.Column="0"
+                VerticalAlignment="Center"
+                Orientation="Horizontal">
+                <materialDesign:PackIcon
+                    Width="13"
+                    Height="13"
+                    VerticalAlignment="Center"
+                    Foreground="#52525B"
+                    Kind="ServerOutline" />
+                <TextBlock
+                    Margin="6,0,0,0"
+                    VerticalAlignment="Center"
+                    FontSize="11"
+                    Foreground="#52525B">
+                    <Run Text="{DynamicResource Shell_Footer_DevicePrefix}" />
+                    <Run Foreground="#A1A1AA" Text="{Binding DeviceName, Mode=OneWay}" />
+                </TextBlock>
+            </StackPanel>
+
+            <StackPanel
+                Grid.Column="2"
+                VerticalAlignment="Center"
+                Orientation="Horizontal">
+                <Ellipse
+                    Width="8"
+                    Height="8"
+                    VerticalAlignment="Center"
+                    Fill="{Binding CloudStatusColor, Mode=OneWay}" />
+                <TextBlock
+                    Margin="5,0,0,0"
+                    VerticalAlignment="Center"
+                    FontSize="11"
+                    Foreground="#52525B">
+                    <Run Foreground="#A1A1AA" Text="{Binding CloudStatus, Mode=OneWay}" />
+                </TextBlock>
+            </StackPanel>
+
+            <StackPanel
+                Grid.Column="4"
+                VerticalAlignment="Center"
+                Orientation="Horizontal">
+                <Ellipse
+                    Width="8"
+                    Height="8"
+                    VerticalAlignment="Center"
+                    Fill="{Binding MesStatusColor, Mode=OneWay}" />
+                <TextBlock
+                    Margin="5,0,0,0"
+                    VerticalAlignment="Center"
+                    FontSize="11"
+                    Foreground="#52525B">
+                    <Run Foreground="#A1A1AA" Text="{Binding MesStatus, Mode=OneWay}" />
+                </TextBlock>
+            </StackPanel>
+
+            <StackPanel
+                Grid.Column="6"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Orientation="Horizontal">
+                <materialDesign:PackIcon
+                    Width="13"
+                    Height="13"
+                    VerticalAlignment="Center"
+                    Foreground="#52525B"
+                    Kind="TimerOutline" />
+                <TextBlock
+                    Margin="6,0,0,0"
+                    VerticalAlignment="Center"
+                    FontSize="11"
+                    Foreground="#52525B">
+                    <Run Text="{DynamicResource Shell_Footer_RuntimePrefix}" />
+                    <Run Foreground="#A1A1AA" Text="{Binding UpTime, Mode=OneWay}" />
+                </TextBlock>
+            </StackPanel>
+
+            <StackPanel
+                Grid.Column="8"
+                VerticalAlignment="Center"
+                Orientation="Horizontal">
+                <materialDesign:PackIcon
+                    Width="13"
+                    Height="13"
+                    VerticalAlignment="Center"
+                    Foreground="#52525B"
+                    Kind="ClockOutline" />
+                <TextBlock
+                    Margin="6,0,0,0"
+                    VerticalAlignment="Center"
+                    FontSize="11"
+                    Foreground="#A1A1AA"
+                    Text="{Binding CurrentTime, Mode=OneWay}" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

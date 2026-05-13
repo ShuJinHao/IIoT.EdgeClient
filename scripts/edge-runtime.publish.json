@@ -1,0 +1,13 @@
+{
+  "launcherDirectory": "launcher",
+  "runtimes": [
+    {
+      "runtimeId": "homogenization",
+      "profileId": "HomogenizationLine",
+      "machineProfile": "HomogenizationLine",
+      "outputDirectory": "homogenization",
+      "machineConfig": "src/Edge/IIoT.Edge.Shell/appsettings.machine.HomogenizationLine.json",
+      "moduleIds": [ "Homogenization" ]
+    }
+  ]
+}

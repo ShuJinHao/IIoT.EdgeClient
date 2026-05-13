@@ -1,0 +1,48 @@
+<UserControl
+    x:Class="IIoT.Edge.AvaloniaPoc.Views.IoView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:loc="clr-namespace:IIoT.Edge.AvaloniaPoc.Localization">
+
+  <Border Margin="14" Padding="12" Background="#111827" BorderBrush="#263244" BorderThickness="1" CornerRadius="8">
+    <Grid RowDefinitions="Auto,*" RowSpacing="12">
+      <TextBlock FontSize="18" FontWeight="SemiBold" Foreground="#F8FAFC" Text="{DynamicResource Poc_IO_Title}" />
+      <DataGrid
+          Grid.Row="1"
+          AutoGenerateColumns="False"
+          Background="#0F172A"
+          BorderBrush="#263244"
+          CanUserReorderColumns="True"
+          CanUserResizeColumns="True"
+          GridLinesVisibility="Horizontal"
+          ItemsSource="{Binding Rows}">
+        <DataGrid.Columns>
+          <DataGridTemplateColumn Width="2*" loc:LocalizedDataGrid.HeaderResourceKey="Poc_Column_Signal">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate>
+                <StackPanel Spacing="4">
+                  <TextBlock FontWeight="SemiBold" Foreground="#E2E8F0" Text="{Binding Signal}" />
+                  <TextBlock FontSize="12" Foreground="#94A3B8" Text="{Binding StatusKind}" />
+                </StackPanel>
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
+
+          <DataGridTextColumn Width="*" Binding="{Binding Address}" loc:LocalizedDataGrid.HeaderResourceKey="Poc_Column_Address" />
+          <DataGridTextColumn Width="*" Binding="{Binding CurrentReply}" loc:LocalizedDataGrid.HeaderResourceKey="Poc_Column_CurrentReply" />
+
+          <DataGridTemplateColumn Width="140" loc:LocalizedDataGrid.HeaderResourceKey="Poc_Column_Write">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate>
+                <Button
+                    Command="{Binding DataContext.WriteCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                    CommandParameter="{Binding}"
+                    Content="{DynamicResource Poc_Button_Write}" />
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
+        </DataGrid.Columns>
+      </DataGrid>
+    </Grid>
+  </Border>
+</UserControl>

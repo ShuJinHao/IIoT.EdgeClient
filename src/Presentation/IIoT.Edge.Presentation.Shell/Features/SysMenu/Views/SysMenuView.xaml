@@ -1,0 +1,147 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Shell.Features.SysMenu.SysMenuView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+    x:Name="Root"
+    Background="Transparent">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <ListBox
+            Grid.Row="0"
+            Background="Transparent"
+            BorderThickness="0"
+            ItemsSource="{Binding DataContext.MenuItems, RelativeSource={RelativeSource AncestorType=UserControl}}"
+            SelectionMode="Single">
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem">
+                    <Setter Property="Background" Value="Transparent" />
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    <Setter Property="Padding" Value="0" />
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ListBoxItem">
+                                <ContentPresenter />
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </ListBox.ItemContainerStyle>
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <Border
+                        Margin="4,2"
+                        CornerRadius="6"
+                        Cursor="Hand">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Background" Value="Transparent" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                        <Setter Property="Background" Value="#27272A" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsAccessible}" Value="False">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+
+                        <Button
+                            Height="48"
+                            Padding="16,0"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Left"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Click="MenuItem_Click"
+                            IsEnabled="{Binding IsAccessible}"
+                            Tag="{Binding ViewId}">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon
+                                    Width="18"
+                                    Height="18"
+                                    VerticalAlignment="Center"
+                                    Kind="{Binding Icon}">
+                                    <materialDesign:PackIcon.Style>
+                                        <Style TargetType="materialDesign:PackIcon">
+                                            <Setter Property="Foreground" Value="#A1A1AA" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                    <Setter Property="Foreground" Value="#5EEAD4" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsAccessible}" Value="False">
+                                                    <Setter Property="Foreground" Value="#3F3F46" />
+                                                    <Setter Property="Opacity" Value="0.4" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </materialDesign:PackIcon.Style>
+                                </materialDesign:PackIcon>
+
+                                <TextBlock
+                                    Margin="12,0,0,0"
+                                    VerticalAlignment="Center"
+                                    FontSize="13"
+                                    Text="{Binding Title}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="#A1A1AA" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                    <Setter Property="Foreground" Value="#5EEAD4" />
+                                                    <Setter Property="FontWeight" Value="SemiBold" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsAccessible}" Value="False">
+                                                    <Setter Property="Foreground" Value="#3F3F46" />
+                                                    <Setter Property="Opacity" Value="0.4" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
+                        </Button>
+                    </Border>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <Border
+            Grid.Row="1"
+            Padding="8,8"
+            BorderBrush="{DynamicResource MaterialDesignDivider}"
+            BorderThickness="0,1,0,0">
+            <Button
+                Height="48"
+                Margin="4,0"
+                Padding="16,0"
+                HorizontalAlignment="Stretch"
+                HorizontalContentAlignment="Left"
+                Background="Transparent"
+                BorderThickness="0"
+                Click="LoginBtn_Click"
+                Cursor="Hand">
+                <StackPanel Orientation="Horizontal">
+                    <materialDesign:PackIcon
+                        Width="18"
+                        Height="18"
+                        VerticalAlignment="Center"
+                        Foreground="#A1A1AA"
+                        Kind="LoginVariant" />
+                    <TextBlock
+                        Margin="12,0,0,0"
+                        VerticalAlignment="Center"
+                        FontSize="13"
+                        Foreground="#A1A1AA"
+                        Text="{Binding DataContext.LoginButtonText, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                </StackPanel>
+            </Button>
+        </Border>
+    </Grid>
+</UserControl>

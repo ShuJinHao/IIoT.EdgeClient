@@ -1,0 +1,79 @@
+name: edge-runtime-package
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+env:
+  DOTNET_NOLOGO: true
+
+jobs:
+  validate-runtime:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Build launcher
+        shell: pwsh
+        run: dotnet build src/Edge/IIoT.Edge.Launcher/IIoT.Edge.Launcher.csproj -p:BuildInParallel=false --disable-build-servers
+
+      - name: Build shell
+        shell: pwsh
+        run: dotnet build src/Edge/IIoT.Edge.Shell/IIoT.Edge.Shell.csproj -p:BuildInParallel=false --disable-build-servers
+
+      - name: Run launcher tests
+        shell: pwsh
+        run: dotnet test src/Tests/IIoT.Edge.Launcher.Tests/IIoT.Edge.Launcher.Tests.csproj -p:BuildInParallel=false --disable-build-servers
+
+      - name: Run module contract tests
+        shell: pwsh
+        run: dotnet test src/Tests/IIoT.Edge.Module.ContractTests/IIoT.Edge.Module.ContractTests.csproj -p:BuildInParallel=false --disable-build-servers
+
+      - name: Run shell tests
+        shell: pwsh
+        run: dotnet test src/Tests/IIoT.Edge.Shell.Tests/IIoT.Edge.Shell.Tests.csproj -p:BuildInParallel=false --disable-build-servers
+
+      - name: Run non-UI regression tests
+        shell: pwsh
+        run: dotnet test src/Tests/IIoT.Edge.NonUiRegressionTests/IIoT.Edge.NonUiRegressionTests.csproj -p:BuildInParallel=false --disable-build-servers
+
+  package-runtime:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    needs: validate-runtime
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Run runtime publish smoke test
+        shell: pwsh
+        run: ./scripts/TestEdgeRuntimePublish.ps1 -Configuration Release
+
+      - name: Publish runtime directory
+        shell: pwsh
+        run: ./scripts/PublishEdgeRuntime.ps1 -Configuration Release -OutputRoot publish/edge-runtime -CleanOutput
+
+      - name: Upload runtime artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: edge-runtime-package
+          path: publish/edge-runtime/**

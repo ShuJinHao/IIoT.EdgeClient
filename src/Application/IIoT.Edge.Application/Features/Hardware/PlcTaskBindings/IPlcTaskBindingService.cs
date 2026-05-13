@@ -1,0 +1,30 @@
+using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Modules.Hardware;
+
+namespace IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
+
+public interface IPlcTaskBindingService
+{
+    Task<IReadOnlyList<PlcTaskBindingDeviceDto>> GetModuleDeviceBindingsAsync(
+        string moduleId,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlySet<string>> GetEnabledTaskKeysAsync(
+        int networkDeviceId,
+        IReadOnlyCollection<TaskCandidate> candidates,
+        IReadOnlyCollection<ModuleIoSnapshot> signalBindings,
+        string? deviceModel = null,
+        CancellationToken cancellationToken = default);
+
+    Task SaveDeviceBindingsAsync(
+        int networkDeviceId,
+        string moduleId,
+        IReadOnlyDictionary<string, bool> taskStates,
+        CancellationToken cancellationToken = default);
+
+    PlcTaskBindingValidationResult ValidateEnabledTasks(
+        IReadOnlyCollection<TaskCandidate> candidates,
+        IReadOnlySet<string> enabledTaskKeys,
+        IReadOnlyCollection<ModuleIoSnapshot> signalBindings,
+        string? deviceModel = null);
+}
