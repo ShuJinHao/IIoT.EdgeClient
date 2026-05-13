@@ -16,7 +16,7 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
     private readonly ICloudDeviceBootstrapClient _bootstrapClient;
     private readonly IDeviceUploadGatePolicy _uploadGatePolicy;
     private readonly IDeviceBootstrapEventLogger _bootstrapEventLogger;
-    private readonly IDeviceSessionCacheStore _cacheStore;
+    private readonly IDeviceSessionCacheCoordinator _cacheCoordinator;
     private readonly ILocalSystemRuntimeConfigService _runtimeConfig;
     private readonly ILogService _logger;
     private readonly IExternalHeartbeatStateStore? _heartbeatStateStore;
@@ -48,7 +48,7 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
         ICloudDeviceBootstrapClient bootstrapClient,
         IDeviceUploadGatePolicy uploadGatePolicy,
         IDeviceBootstrapEventLogger bootstrapEventLogger,
-        IDeviceSessionCacheStore cacheStore,
+        IDeviceSessionCacheCoordinator cacheCoordinator,
         ILocalSystemRuntimeConfigService runtimeConfig,
         ILogService logger,
         IExternalHeartbeatStateStore? heartbeatStateStore = null)
@@ -56,7 +56,7 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
         _bootstrapClient = bootstrapClient;
         _uploadGatePolicy = uploadGatePolicy;
         _bootstrapEventLogger = bootstrapEventLogger;
-        _cacheStore = cacheStore;
+        _cacheCoordinator = cacheCoordinator;
         _runtimeConfig = runtimeConfig;
         _logger = logger;
         _heartbeatStateStore = heartbeatStateStore;
@@ -274,7 +274,7 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
         if (result.Kind != CloudDeviceBootstrapResultKind.Success || result.Session is null)
         {
             _bootstrapEventLogger.LogBootstrapFailure(result);
-            GoOffline(result.ClientCode, null, ResolveBootstrapFailureReason(result.Kind), attemptedAtUtc);
+            GoOffline(result.ClientCode, null, _uploadGatePolicy.ResolveBootstrapFailureReason(result.Kind), attemptedAtUtc);
             return;
         }
 
@@ -431,23 +431,14 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
 
     private bool TryLoadCachedDevice(string clientCode)
     {
-        try
+        var cached = _cacheCoordinator.TryLoad(clientCode);
+        if (cached is null)
         {
-            var cached = _cacheStore.TryLoad(clientCode);
-            if (cached is null)
-            {
-                return false;
-            }
-
-            CurrentDevice = cached;
-            _logger.Info($"[设备服务] 已加载本地缓存：{cached.DeviceName}");
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _logger.Warn($"[设备服务] 加载本地缓存失败：{ex.Message}");
             return false;
         }
+
+        CurrentDevice = cached;
+        return true;
     }
 
     private bool SetCurrentDevice(DeviceSession session, bool persistToCache)
@@ -462,14 +453,7 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
 
         if (persistToCache)
         {
-            try
-            {
-                _cacheStore.Save(session);
-            }
-            catch (Exception ex)
-            {
-                _logger.Warn($"[设备服务] 保存本地缓存失败：{ex.Message}");
-            }
+            _cacheCoordinator.Save(session);
         }
 
         if (deviceChanged)
@@ -511,14 +495,5 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
             {
                 LastBootstrapAttemptedAtUtc = attemptedAtUtc
             });
-
-    private static EdgeUploadBlockReason ResolveBootstrapFailureReason(CloudDeviceBootstrapResultKind kind)
-        => kind switch
-        {
-            CloudDeviceBootstrapResultKind.HttpFailure => EdgeUploadBlockReason.BootstrapHttpFailure,
-            CloudDeviceBootstrapResultKind.Timeout => EdgeUploadBlockReason.BootstrapTimeout,
-            CloudDeviceBootstrapResultKind.NetworkFailure => EdgeUploadBlockReason.BootstrapNetworkFailure,
-            _ => EdgeUploadBlockReason.BootstrapPayloadInvalid
-        };
 
 }
