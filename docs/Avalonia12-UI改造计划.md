@@ -21,7 +21,7 @@
   - `SkiaSharp.NativeAssets.Linux/3.119.4-preview.1.1`
   - `SkiaSharp.NativeAssets.macOS/3.119.4-preview.1.1`
   - `SkiaSharp.NativeAssets.WebAssembly/3.119.4-preview.1.1`
-- 结论：SukiUI 顶层包是稳定版；用户已批准 `SkiaSharp` preview 传递依赖例外，因此 PoC 可以采用 SukiUI。若后续解析出非 `SkiaSharp` preview/prerelease 包，立即暂停 SukiUI 并回退到 Fluent/Material 路线。
+- 结论：SukiUI 顶层包是稳定版；用户已批准 `SkiaSharp` preview 传递依赖例外，因此 Shell 可以采用 SukiUI。若后续解析出非 `SkiaSharp` preview/prerelease 包，立即暂停 SukiUI 并回退到 Fluent/Material 路线。
 
 ### Avalonia 12
 
@@ -41,7 +41,7 @@
 - 方向 A：继续 Avalonia 12 最新稳定版，明确允许 Avalonia/SukiUI 当前带出的 `SkiaSharp *.preview.*` 传递依赖。
 - 方向 B：严格禁止任何 preview/prerelease 依赖，先使用 `Avalonia 11.3.15`，等 Avalonia 12 依赖图稳定后再升级。
 
-方向 A 已获得用户确认，只能在旁路副本中继续写 Avalonia 12 + SukiUI PoC 代码。
+方向 A 已获得用户确认，只能在旁路副本中继续写 Avalonia 12 + SukiUI Shell 代码。
 
 ### 二次审核补充判断
 
@@ -62,7 +62,7 @@
 ### 方向 A：Avalonia 12
 
 - 主框架：`Avalonia` / `Avalonia.Desktop` 最新稳定版。
-- 主题：PoC 优先采用 `SukiUI`，前提是顶层包稳定且完整依赖图中只有已批准的 `SkiaSharp` preview 传递依赖。
+- 主题：Shell 优先采用 `SukiUI`，前提是顶层包稳定且完整依赖图中只有已批准的 `SkiaSharp` preview 传递依赖。
 - 保守回退路线：`Avalonia.Themes.Fluent` + 自定义工业暗色主题，或 Material.Avalonia 稳定线。
 - Dock：`Dock.Avalonia` / `Dock.Model.Mvvm`。
 - DataGrid：`Avalonia.Controls.DataGrid`。
@@ -102,7 +102,7 @@
 - 确认本次只影响 EdgeClient。
 - 记录依赖门槛验证结果。
 
-## Phase 1 - PoC 依赖门槛
+## Phase 1 - Shell 依赖门槛
 
 - 创建最小 Avalonia 项目。
 - restore 后检查 `project.assets.json`。
@@ -110,11 +110,11 @@
 - 如存在 preview 依赖，必须先决策是否允许继续。
 - 记录实际采用的 NuGet 版本。
 
-## Phase 2 - Avalonia PoC
+## Phase 2 - Avalonia Shell
 
-PoC 只验证 UI 技术可行性，不连接真实 PLC，不触发真实 Cloud/MES 上传。
+Shell 只验证 UI 技术可行性，不连接真实 PLC，不触发真实 Cloud/MES 上传。
 
-PoC 必须包含：
+Shell 必须包含：
 
 - `MainWindow` 骨架。
 - Dock 布局：主页面区域、设备面板、日志面板。
@@ -156,7 +156,7 @@ PoC 必须包含：
 ## Phase 6 - Launcher 单独决策
 
 - `IIoT.Edge.Launcher` XAML 较大，默认不纳入首轮生产切换。
-- PoC 和主 Shell 通过后，再决定是否同步迁移 Launcher。
+- Shell 和主 Shell 通过后，再决定是否同步迁移 Launcher。
 
 ## Phase 7 - 切换与清理
 
@@ -171,7 +171,7 @@ PoC 必须包含：
 ## 测试计划
 
 - `dotnet restore` 后检查完整依赖图。
-- `dotnet build` PoC。
+- `dotnet build` Shell。
 - Headless 测试覆盖本地化、Dialog、Dispatcher、DataGrid 列头资源绑定、导航注册解析。
 - 现有 Edge 非 UI 回归测试继续运行。
 - Shell 注册测试继续运行。
@@ -182,7 +182,7 @@ PoC 必须包含：
 
 - 出现未批准的 preview/prerelease 依赖。
 - 出现未处理的 `NU190x` 或漏洞告警。
-- PoC 引用了现有 WPF UI 项目。
+- Shell 引用了现有 WPF UI 项目。
 - `DataGridTemplateColumn` 代表场景无法稳定实现。
 - 动态语言切换必须依赖全局静态扫描窗口。
 - 改动触碰 Cloud/MES/数据库/PLC 业务链路。
@@ -191,7 +191,7 @@ PoC 必须包含：
 
 - 已允许 Avalonia 12/SukiUI 当前稳定包带出的 preview `SkiaSharp` 传递依赖。
 - Avalonia 11.3.15 作为依赖红线无法接受时的回退路线保留，不作为当前主线。
-- SukiUI 可进入 PoC；若后续出现未批准 preview/prerelease 依赖，立即回退到 Fluent/Material 路线。
+- SukiUI 可进入 Shell；若后续出现未批准 preview/prerelease 依赖，立即回退到 Fluent/Material 路线。
 
 ## 参考来源
 

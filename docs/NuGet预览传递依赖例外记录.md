@@ -4,7 +4,7 @@
 
 - 项目：`IIoT.EdgeClient`
 - 决策时间：2026-05-13
-- 例外类型：仅允许旁路副本 `..\IIoT.EdgeClient.AvaloniaMigration` 的 Avalonia 12 UI PoC 和后续 Avalonia 12 UI 主线中，由 Avalonia/SukiUI 当前稳定包传递带出的 `SkiaSharp 3.119.x-preview.1.1` 及对应 `SkiaSharp.NativeAssets.* 3.119.x-preview.1.1`。
+- 例外类型：仅允许旁路副本 `..\IIoT.EdgeClient.AvaloniaMigration` 的 Avalonia 12 UI Shell 和后续 Avalonia 12 UI 主线中，由 Avalonia/SukiUI 当前稳定包传递带出的 `SkiaSharp 3.119.x-preview.1.1` 及对应 `SkiaSharp.NativeAssets.* 3.119.x-preview.1.1`。
 - 原 `IIoT.EdgeClient` WPF 主线仓库不承载 Avalonia 包引用。
 - 不允许把本例外扩展到其他 preview、prerelease、alpha、beta、rc、nightly 包。
 - 不允许直接新增顶层 preview 包引用。
@@ -43,7 +43,7 @@
 ## 验证命令
 
 ```powershell
-dotnet restore IIoT.EdgeClient.AvaloniaMigration/src/Edge/IIoT.Edge.AvaloniaPoc/IIoT.Edge.AvaloniaPoc.csproj
+dotnet restore IIoT.EdgeClient.AvaloniaMigration/src/Edge/IIoT.Edge.AvaloniaShell/IIoT.Edge.AvaloniaShell.csproj
 ```
 
-检查 `IIoT.EdgeClient.AvaloniaMigration/src/Edge/IIoT.Edge.AvaloniaPoc/obj/project.assets.json`，只允许出现本文列出的 `SkiaSharp` preview 传递依赖。
+检查 `IIoT.EdgeClient.AvaloniaMigration/src/Edge/IIoT.Edge.AvaloniaShell/obj/project.assets.json`，只允许出现本文列出的 `SkiaSharp` preview 传递依赖。
