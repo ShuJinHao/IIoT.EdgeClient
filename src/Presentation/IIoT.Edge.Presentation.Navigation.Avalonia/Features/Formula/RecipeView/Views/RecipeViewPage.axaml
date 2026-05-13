@@ -1,0 +1,62 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Navigation.Avalonia.Features.Formula.RecipeView.RecipeViewPage"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:loc="clr-namespace:IIoT.Edge.UI.Avalonia.Localization;assembly=IIoT.Edge.UI.Avalonia">
+  <Border Background="#0F172A" Padding="18">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+      <StackPanel Spacing="14">
+        <Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto">
+          <StackPanel Spacing="4">
+            <TextBlock FontSize="20" FontWeight="SemiBold" Foreground="#F8FAFC" Text="{Binding ViewTitle}" />
+            <TextBlock Foreground="#CBD5E1" Text="{Binding FeedbackMessage}" />
+          </StackPanel>
+          <Button Grid.Column="1" Margin="0,0,8,0" Command="{Binding SyncCloudCommand}" Content="{DynamicResource Navigation_Button_SyncCloud}" />
+          <Button Grid.Column="2" Command="{Binding SwitchSourceCommand}" Content="{DynamicResource Navigation_Button_SwitchSource}" />
+        </Grid>
+
+        <Border Padding="12" BorderBrush="#334155" BorderThickness="1" CornerRadius="8">
+          <Grid ColumnDefinitions="*,*,*,*" RowDefinitions="Auto,Auto">
+            <TextBlock Grid.Column="0" Foreground="#94A3B8" Text="{DynamicResource Navigation_Label_Source}" />
+            <TextBlock Grid.Column="1" Foreground="#94A3B8" Text="{DynamicResource Navigation_Label_Version}" />
+            <TextBlock Grid.Column="2" Foreground="#94A3B8" Text="{DynamicResource Navigation_Label_Process}" />
+            <TextBlock Grid.Column="3" Foreground="#94A3B8" Text="{DynamicResource Navigation_Label_Update}" />
+            <TextBlock Grid.Row="1" Grid.Column="0" Foreground="#F8FAFC" FontWeight="SemiBold" Text="{Binding SourceLabel}" />
+            <TextBlock Grid.Row="1" Grid.Column="1" Foreground="#F8FAFC" FontWeight="SemiBold" Text="{Binding RecipeVersion}" />
+            <TextBlock Grid.Row="1" Grid.Column="2" Foreground="#F8FAFC" FontWeight="SemiBold" Text="{Binding ProcessName}" />
+            <TextBlock Grid.Row="1" Grid.Column="3" Foreground="#F8FAFC" FontWeight="SemiBold" Text="{Binding UpdatedAt}" />
+          </Grid>
+        </Border>
+
+        <DataGrid ItemsSource="{Binding Params}" AutoGenerateColumns="False" IsReadOnly="True" MinHeight="260">
+          <DataGrid.Columns>
+            <DataGridTextColumn Width="2*" Binding="{Binding Name}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_ParamName" />
+            <DataGridTextColumn Width="*" Binding="{Binding Min}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_LowerLimit" />
+            <DataGridTextColumn Width="*" Binding="{Binding Max}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_UpperLimit" />
+            <DataGridTextColumn Width="*" Binding="{Binding Unit}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Unit" />
+            <DataGridTemplateColumn Width="90" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Action">
+              <DataGridTemplateColumn.CellTemplate>
+                <DataTemplate>
+                  <Button Command="{Binding DeleteCommand}" Content="{DynamicResource Navigation_Button_Delete}" />
+                </DataTemplate>
+              </DataGridTemplateColumn.CellTemplate>
+            </DataGridTemplateColumn>
+          </DataGrid.Columns>
+        </DataGrid>
+
+        <Border Padding="12" BorderBrush="#334155" BorderThickness="1" CornerRadius="8">
+          <StackPanel Spacing="10">
+            <TextBlock FontSize="15" FontWeight="SemiBold" Foreground="#F8FAFC" Text="{DynamicResource Navigation_Label_EmergencyEdit}" />
+            <Grid ColumnDefinitions="2*,*,*,*,Auto" RowDefinitions="Auto">
+              <TextBox Grid.Column="0" Margin="0,0,8,0" PlaceholderText="{DynamicResource Navigation_Hint_ParamName}" Text="{Binding EditKey}" />
+              <TextBox Grid.Column="1" Margin="0,0,8,0" PlaceholderText="{DynamicResource Navigation_Hint_LowerLimit}" Text="{Binding EditMin}" />
+              <TextBox Grid.Column="2" Margin="0,0,8,0" PlaceholderText="{DynamicResource Navigation_Hint_UpperLimit}" Text="{Binding EditMax}" />
+              <TextBox Grid.Column="3" Margin="0,0,8,0" PlaceholderText="{DynamicResource Navigation_Hint_Unit}" Text="{Binding EditUnit}" />
+              <Button Grid.Column="4" Command="{Binding SaveLocalParamCommand}" Content="{DynamicResource Navigation_Button_Save}" />
+            </Grid>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+  </Border>
+</UserControl>

@@ -8,9 +8,11 @@ public static class CoreAvaloniaViewIds
 public sealed record StandardAvaloniaModuleViewIds(
     string DataView,
     string CapacityView,
-    string HardwareConfigView,
     string Monitor,
     string IoView,
+    string RecipeView,
+    string ParamView,
+    string HardwareConfigView,
     string PlcTaskBindingView)
 {
     public static StandardAvaloniaModuleViewIds Create(string moduleKey)
@@ -20,9 +22,11 @@ public sealed record StandardAvaloniaModuleViewIds(
         return new StandardAvaloniaModuleViewIds(
             $"{prefix}.DataView",
             $"{prefix}.CapacityView",
-            $"{prefix}.HardwareConfigView",
             $"{prefix}.Monitor",
             $"{prefix}.IOView",
+            $"{prefix}.RecipeView",
+            $"{prefix}.ParamView",
+            $"{prefix}.HardwareConfigView",
             $"{prefix}.PlcTaskBindingView");
     }
 }

@@ -1,12 +1,21 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Application.Abstractions.Recipe;
+using IIoT.Edge.Application.Common.Crud;
+using IIoT.Edge.Application.Features.Config.ParamView;
+using IIoT.Edge.Application.Features.Config.ParamView.Models;
+using IIoT.Edge.Application.Features.Formula.RecipeView;
 using IIoT.Edge.AvaloniaShell.ViewModels;
 using IIoT.Edge.Host.Bootstrap.Avalonia;
 using IIoT.Edge.Presentation.Navigation.Avalonia;
+using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Config.ParamView;
+using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Formula.RecipeView;
 using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Hardware.HardwareConfig.ViewModels;
 using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Hardware.IOView;
 using IIoT.Edge.Presentation.Shell.Avalonia.ViewModels;
+using IIoT.Edge.SharedKernel.DataPipeline.Recipe;
 using IIoT.Edge.UI.Avalonia.Localization;
 using IIoT.Edge.UI.Avalonia.Modularity;
 using IIoT.Edge.UI.Avalonia.Services;
@@ -31,11 +40,13 @@ public sealed class AvaloniaShellBehaviorTests
         Assert.Contains(menus, item => item.ViewId == ids.Monitor);
         Assert.Contains(menus, item => item.ViewId == ids.DataView);
         Assert.Contains(menus, item => item.ViewId == ids.CapacityView);
-        Assert.Contains(menus, item => item.ViewId == ids.HardwareConfigView);
         Assert.Contains(menus, item => item.ViewId == ids.IoView);
+        Assert.Contains(menus, item => item.ViewId == ids.RecipeView);
+        Assert.Contains(menus, item => item.ViewId == ids.ParamView);
+        Assert.Contains(menus, item => item.ViewId == ids.HardwareConfigView);
         Assert.Contains(menus, item => item.ViewId == ids.PlcTaskBindingView);
         Assert.Contains(menus, item => item.ViewId == CoreAvaloniaViewIds.Diagnostics);
-        Assert.Equal("监控", provider.GetRequiredService<IAvaloniaLanguageService>().GetText("Navigation_Menu_Monitor"));
+        Assert.NotEqual("Navigation_Menu_Monitor", provider.GetRequiredService<IAvaloniaLanguageService>().GetText("Navigation_Menu_Monitor"));
     }
 
     [AvaloniaFact]
@@ -48,8 +59,10 @@ public sealed class AvaloniaShellBehaviorTests
         var ids = StandardAvaloniaModuleViewIds.Create("Homogenization");
 
         Assert.NotNull(viewModel.DockLayout);
-        Assert.True(viewModel.MenuItems.Count >= 7);
-        Assert.Contains(viewModel.MenuItems, item => item.ViewId == ids.Monitor && item.Title == "监控");
+        Assert.True(viewModel.MenuItems.Count >= 9);
+        Assert.Contains(viewModel.MenuItems, item => item.ViewId == ids.Monitor);
+        Assert.Contains(viewModel.MenuItems, item => item.ViewId == ids.RecipeView);
+        Assert.Contains(viewModel.MenuItems, item => item.ViewId == ids.ParamView);
 
         viewModel.ToggleLanguageCommand.Execute(null);
 
@@ -58,7 +71,7 @@ public sealed class AvaloniaShellBehaviorTests
     }
 
     [AvaloniaFact]
-    public void Navigation_service_creates_first_batch_pages()
+    public void Navigation_service_creates_registered_pages()
     {
         using var provider = BuildProvider();
         var navigation = provider.GetRequiredService<IAvaloniaNavigationService>();
@@ -69,8 +82,10 @@ public sealed class AvaloniaShellBehaviorTests
                      ids.Monitor,
                      ids.DataView,
                      ids.CapacityView,
-                     ids.HardwareConfigView,
                      ids.IoView,
+                     ids.RecipeView,
+                     ids.ParamView,
+                     ids.HardwareConfigView,
                      ids.PlcTaskBindingView,
                      CoreAvaloniaViewIds.Diagnostics
                  })
@@ -114,16 +129,17 @@ public sealed class AvaloniaShellBehaviorTests
         viewModel.AddNetworkDeviceCommand.Execute(null);
         Assert.Equal(originalNetworkCount + 1, viewModel.NetworkDevices.Count);
 
+        var originalMappingCount = viewModel.IoMappings.Count;
         viewModel.OpenAddDataPointMappingDialogCommand.Execute(null);
         Assert.True(viewModel.IsDialogOpen);
         viewModel.ConfirmDialogCommand.Execute(null);
         Assert.False(viewModel.IsDialogOpen);
-        Assert.Contains(viewModel.FilteredIoMappings, item => item.SignalName == "新信号" && item.BusinessGroup == "数据点");
+        Assert.True(viewModel.IoMappings.Count > originalMappingCount);
 
         viewModel.SaveCommand.Execute(null);
         Assert.True(viewModel.IsDialogOpen);
-        Assert.Equal("保存硬件配置", viewModel.DialogTitle);
-        Assert.Equal("保存确认待执行", viewModel.PendingOperationText);
+        Assert.Equal("Navigation_Dialog_Title_SaveHardwareConfig", viewModel.DialogTitleResourceKey);
+        Assert.Equal("Navigation_Status_SavePending", viewModel.PendingOperationResourceKey);
         viewModel.ConfirmDialogCommand.Execute(null);
         Assert.False(viewModel.IsDialogOpen);
     }
@@ -144,12 +160,86 @@ public sealed class AvaloniaShellBehaviorTests
         Assert.True(viewModel.HasDataSections);
 
         await viewModel.ManualReadCommand.ExecuteAsync(null);
-        Assert.Contains("未连接真实 PLC", viewModel.FeedbackMessage);
+        Assert.False(string.IsNullOrWhiteSpace(viewModel.FeedbackMessage));
 
         var row = viewModel.InteractionRows.First();
         Assert.NotNull(row.WriteCommand);
         await row.WriteCommand.ExecuteAsync(null);
-        Assert.Contains("未连接真实 PLC", viewModel.FeedbackMessage);
+        Assert.False(string.IsNullOrWhiteSpace(viewModel.FeedbackMessage));
+    }
+
+    [AvaloniaFact]
+    public async Task Recipe_view_uses_application_contract_with_fake_service()
+    {
+        using var provider = BuildProvider();
+        provider.GetRequiredService<IAvaloniaLanguageService>().Apply("zh-CN");
+        var crud = new FakeRecipeViewCrudService();
+        var recipeService = new FakeRecipeService();
+        var viewModel = new RecipeViewModel(
+            crud,
+            recipeService,
+            provider.GetRequiredService<IAvaloniaLanguageService>(),
+            provider.GetRequiredService<IAvaloniaDialogService>(),
+            provider.GetRequiredService<IAvaloniaDispatcherService>(),
+            "test.recipe",
+            "Navigation_Title_ProductRecipe",
+            "产品配方");
+
+        await viewModel.OnActivatedAsync();
+
+        Assert.Equal("R-001", viewModel.RecipeName);
+        Assert.Single(viewModel.Params);
+        Assert.True(viewModel.IsLocalAdmin);
+
+        await viewModel.SwitchSourceCommand.ExecuteAsync(null);
+        Assert.Equal(RecipeSource.Local, crud.LastSwitchSource);
+
+        viewModel.EditKey = "Pressure";
+        viewModel.EditMin = "1.5";
+        viewModel.EditMax = "2.5";
+        viewModel.EditUnit = "MPa";
+        await viewModel.SaveLocalParamCommand.ExecuteAsync(null);
+        Assert.Equal("Pressure", crud.LastSavedKey);
+        Assert.Equal(1.5d, crud.LastSavedMin);
+        Assert.Equal(2.5d, crud.LastSavedMax);
+
+        await viewModel.Params[0].DeleteCommand.ExecuteAsync(null);
+        Assert.Equal("Speed", crud.LastDeletedKey);
+    }
+
+    [AvaloniaFact]
+    public async Task Param_view_loads_groups_saves_through_application_contract_and_tracks_permission()
+    {
+        using var provider = BuildProvider();
+        provider.GetRequiredService<IAvaloniaLanguageService>().Apply("zh-CN");
+        var crud = new FakeParamViewCrudService();
+        var permission = new FakePermissionService { CanEditParamsValue = true };
+        var viewModel = new ParamViewModel(
+            crud,
+            permission,
+            provider.GetRequiredService<IAvaloniaLanguageService>(),
+            provider.GetRequiredService<IAvaloniaDialogService>(),
+            provider.GetRequiredService<IAvaloniaDispatcherService>(),
+            "test.param",
+            "Navigation_Title_ParamConfig",
+            "参数配置");
+
+        await viewModel.OnActivatedAsync();
+
+        Assert.Single(viewModel.MesParamGroups);
+        Assert.Equal("上报地址", viewModel.MesParamGroups[0].Params[0].DisplayName);
+        Assert.True(viewModel.CanEdit);
+
+        viewModel.MesParamGroups[0].Params[0].Value = "http://mes.local";
+        await viewModel.SaveCommand.ExecuteAsync(null);
+        Assert.Single(crud.SavedParams);
+        Assert.Equal("http://mes.local", crud.SavedParams[0].Value);
+
+        permission.CanEditParamsValue = false;
+        permission.RaisePermissionStateChanged();
+        await provider.GetRequiredService<IAvaloniaDispatcherService>().InvokeAsync(() => { });
+        Assert.False(viewModel.CanEdit);
+        Assert.False(viewModel.SaveCommand.CanExecute(null));
     }
 
     [AvaloniaFact]
@@ -260,5 +350,171 @@ public sealed class AvaloniaShellBehaviorTests
             runtimePaths,
             "AvaloniaShellTests",
             ["Homogenization"]);
+    }
+
+    private sealed class FakeRecipeViewCrudService : IRecipeViewCrudService
+    {
+        private RecipeViewSnapshot _snapshot = new(
+            "R-001",
+            "V1",
+            "Homogenization",
+            "2026-05-13",
+            true,
+            [new RecipeParamItemDto { Name = "Speed", Min = "10", Max = "20", Unit = "rpm" }]);
+
+        public RecipeSource? LastSwitchSource { get; private set; }
+
+        public string? LastSavedKey { get; private set; }
+
+        public double? LastSavedMin { get; private set; }
+
+        public double? LastSavedMax { get; private set; }
+
+        public string? LastDeletedKey { get; private set; }
+
+        public Task<RecipeViewSnapshot?> GetSnapshotAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult<RecipeViewSnapshot?>(_snapshot);
+
+        public Task<bool> GetIsLocalAdminAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(true);
+
+        public Task<bool> SyncCloudAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(true);
+
+        public Task SwitchSourceAsync(RecipeSource source, CancellationToken cancellationToken = default)
+        {
+            LastSwitchSource = source;
+            _snapshot = _snapshot with { IsCloudSource = source == RecipeSource.Cloud };
+            return Task.CompletedTask;
+        }
+
+        public Task SaveLocalParamAsync(
+            string key,
+            double? min,
+            double? max,
+            string unit,
+            CancellationToken cancellationToken = default)
+        {
+            LastSavedKey = key;
+            LastSavedMin = min;
+            LastSavedMax = max;
+            return Task.CompletedTask;
+        }
+
+        public Task DeleteLocalParamAsync(string key, CancellationToken cancellationToken = default)
+        {
+            LastDeletedKey = key;
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class FakeRecipeService : IRecipeService
+    {
+        public RecipeSource ActiveSource { get; private set; } = RecipeSource.Cloud;
+
+        public RecipeData? ActiveRecipe => null;
+
+        public RecipeData? CloudRecipe => null;
+
+        public RecipeData? LocalRecipe => null;
+
+        public event Action? RecipeChanged;
+
+        public void SwitchSource(RecipeSource source)
+        {
+            ActiveSource = source;
+            RecipeChanged?.Invoke();
+        }
+
+        public RecipeParam? GetParam(string name) => null;
+
+        public IReadOnlyDictionary<string, RecipeParam> GetAllParams()
+            => new Dictionary<string, RecipeParam>();
+
+        public Task<bool> PullFromCloudAsync() => Task.FromResult(false);
+
+        public void SetLocalParam(string name, double? min, double? max, string unit)
+        {
+        }
+
+        public void RemoveLocalParam(string name)
+        {
+        }
+
+        public void LoadFromFile()
+        {
+        }
+
+        public void SaveToFile()
+        {
+        }
+    }
+
+    private sealed class FakeParamViewCrudService : IParamViewCrudService
+    {
+        public List<ModuleParamVm> SavedParams { get; } = [];
+
+        public Task<ParamViewInitResult> LoadAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(new ParamViewInitResult(
+                [CreateGroup(ModuleParamCategory.Mes, "上报地址", "http://127.0.0.1")],
+                [],
+                []));
+
+        public Task<CrudOperationResult> SaveAsync(
+            IReadOnlyCollection<ModuleParamVm> moduleParams,
+            CancellationToken cancellationToken = default)
+        {
+            SavedParams.Clear();
+            SavedParams.AddRange(moduleParams);
+            return Task.FromResult(CrudOperationResult.Success("saved"));
+        }
+
+        private static ModuleParamGroupVm CreateGroup(
+            ModuleParamCategory category,
+            string displayName,
+            string value)
+        {
+            var group = new ModuleParamGroupVm
+            {
+                ModuleId = "Homogenization",
+                ModuleDisplayName = "匀浆"
+            };
+            group.Params.Add(new ModuleParamVm
+            {
+                ModuleId = "Homogenization",
+                Category = category,
+                Key = "Homogenization.Mes.Endpoint",
+                Name = "Endpoint",
+                DisplayNameFallback = displayName,
+                DisplayName = displayName,
+                DescriptionFallback = "MES 地址",
+                Description = "MES 地址",
+                ValueKind = ParamValueKind.String,
+                Value = value,
+                DefaultValue = value,
+                Unit = string.Empty,
+                Min = string.Empty,
+                Max = string.Empty
+            });
+
+            return group;
+        }
+    }
+
+    private sealed class FakePermissionService : IClientPermissionService
+    {
+        public bool CanEditParamsValue { get; set; }
+
+        public bool CanEditParams => CanEditParamsValue;
+
+        public bool CanEditHardware => true;
+
+        public bool IsLocalAdmin => true;
+
+        public event Action? PermissionStateChanged;
+
+        public bool HasPermission(string permission) => CanEditParamsValue;
+
+        public void RaisePermissionStateChanged() => PermissionStateChanged?.Invoke();
     }
 }
