@@ -10,6 +10,8 @@ public interface IDeviceUploadGatePolicy
     bool TryResolveTokenBlockReason(DeviceSession? session, out EdgeUploadBlockReason reason);
 
     EdgeUploadBlockReason ResolveBlockReason(DeviceSession? session, EdgeUploadBlockReason explicitReason);
+
+    EdgeUploadBlockReason ResolveBootstrapFailureReason(CloudDeviceBootstrapResultKind kind);
 }
 
 public sealed class DeviceUploadGatePolicy : IDeviceUploadGatePolicy
@@ -63,6 +65,15 @@ public sealed class DeviceUploadGatePolicy : IDeviceUploadGatePolicy
             ? ResolveFallbackTokenReason(session)
             : explicitReason;
     }
+
+    public EdgeUploadBlockReason ResolveBootstrapFailureReason(CloudDeviceBootstrapResultKind kind)
+        => kind switch
+        {
+            CloudDeviceBootstrapResultKind.HttpFailure => EdgeUploadBlockReason.BootstrapHttpFailure,
+            CloudDeviceBootstrapResultKind.Timeout => EdgeUploadBlockReason.BootstrapTimeout,
+            CloudDeviceBootstrapResultKind.NetworkFailure => EdgeUploadBlockReason.BootstrapNetworkFailure,
+            _ => EdgeUploadBlockReason.BootstrapPayloadInvalid
+        };
 
     private EdgeUploadBlockReason ResolveFallbackTokenReason(DeviceSession session)
         => TryResolveTokenBlockReason(session, out var tokenReason)

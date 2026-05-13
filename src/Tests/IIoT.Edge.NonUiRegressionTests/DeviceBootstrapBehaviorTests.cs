@@ -458,7 +458,9 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
                 endpointProvider),
             new DeviceUploadGatePolicy(),
             new DeviceBootstrapEventLogger(logService),
-            new DeviceSessionFileCacheStore(),
+            new DeviceSessionCacheCoordinator(
+                new DeviceSessionFileCacheStore(),
+                logService),
             runtimeConfig ?? CreateRuntimeConfig(),
             logService);
     }

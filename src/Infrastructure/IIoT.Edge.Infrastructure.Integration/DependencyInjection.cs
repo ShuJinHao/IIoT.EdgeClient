@@ -53,6 +53,7 @@ public static class DependencyInjection
         var deviceSessionCacheStore = new DeviceSessionFileCacheStore(runtimePaths.DeviceCacheFilePath);
         services.AddSingleton<IDeviceSessionCacheStore>(deviceSessionCacheStore);
         services.AddSingleton(deviceSessionCacheStore);
+        services.AddSingleton<IDeviceSessionCacheCoordinator, DeviceSessionCacheCoordinator>();
 
         services.AddSingleton(new LocalAdminConfig
         {
