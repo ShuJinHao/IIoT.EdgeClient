@@ -113,9 +113,11 @@ public sealed class AvaloniaPublishLayoutPreflightTests
         Assert.Contains("fieldEvidenceGuideRelativePath", script, StringComparison.Ordinal);
         Assert.Contains("StartAvaloniaTrialRun.ps1", script, StringComparison.Ordinal);
         Assert.Contains("ReviewAvaloniaTrialEvidence.ps1", script, StringComparison.Ordinal);
+        Assert.Contains("ImportAvaloniaFieldEvidence.ps1", script, StringComparison.Ordinal);
         Assert.Contains("NewAvaloniaDefaultEntryDecisionPackage.ps1", script, StringComparison.Ordinal);
         Assert.Contains("TestAvaloniaDefaultEntryReadiness.ps1", script, StringComparison.Ordinal);
         Assert.Contains("SwitchAvaloniaDefaultEntry.ps1", script, StringComparison.Ordinal);
+        Assert.Contains("Avalonia12-现场证据导入预审说明.md", script, StringComparison.Ordinal);
         Assert.Contains("SkiaSharp", script, StringComparison.Ordinal);
         Assert.DoesNotContain("PublishEdgeRuntime.ps1", script, StringComparison.Ordinal);
         Assert.DoesNotContain("PublishEdgeBundle.ps1", script, StringComparison.Ordinal);

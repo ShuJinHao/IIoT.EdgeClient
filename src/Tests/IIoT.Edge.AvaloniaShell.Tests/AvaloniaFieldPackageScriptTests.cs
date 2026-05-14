@@ -32,6 +32,8 @@ public sealed class AvaloniaFieldPackageScriptTests
         Assert.Contains("NewAvaloniaDefaultEntryDecisionPackage.ps1", script, StringComparison.Ordinal);
         Assert.Contains("TestAvaloniaDefaultEntryReadiness.ps1", script, StringComparison.Ordinal);
         Assert.Contains("SwitchAvaloniaDefaultEntry.ps1", script, StringComparison.Ordinal);
+        Assert.Contains("ImportAvaloniaFieldEvidence.ps1", script, StringComparison.Ordinal);
+        Assert.Contains("Avalonia12-现场证据导入预审说明.md", script, StringComparison.Ordinal);
         Assert.Contains("Join-UnicodeName", script, StringComparison.Ordinal);
         Assert.Contains("SkiaSharp", script, StringComparison.Ordinal);
         Assert.DoesNotContain("IIoT.Edge.Shell.csproj", script, StringComparison.Ordinal);
@@ -155,6 +157,32 @@ public sealed class AvaloniaFieldPackageScriptTests
         Assert.DoesNotContain("Set-Content -LiteralPath $launcherProfilesPath", switchScript, StringComparison.Ordinal);
         Assert.DoesNotContain("ReadDataAsync", switchScript, StringComparison.Ordinal);
         Assert.DoesNotContain("WriteDataAsync", switchScript, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Field_evidence_import_script_is_read_only_and_chains_review_precheck_bundle()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var scriptPath = Path.Combine(repoRoot, "scripts", "ImportAvaloniaFieldEvidence.ps1");
+
+        Assert.True(File.Exists(scriptPath), $"Missing script: {scriptPath}");
+
+        var script = File.ReadAllText(scriptPath);
+        Assert.Contains("evidence-import-summary.json", script, StringComparison.Ordinal);
+        Assert.Contains("evidence-file-inventory.json", script, StringComparison.Ordinal);
+        Assert.Contains("field-evidence-review-bundle", script, StringComparison.Ordinal);
+        Assert.Contains("ReviewAvaloniaTrialEvidence.ps1", script, StringComparison.Ordinal);
+        Assert.Contains("NewAvaloniaDefaultEntryDecisionPackage.ps1", script, StringComparison.Ordinal);
+        Assert.Contains("TestAvaloniaDefaultEntryReadiness.ps1", script, StringComparison.Ordinal);
+        Assert.Contains("SwitchAvaloniaDefaultEntry.ps1", script, StringComparison.Ordinal);
+        Assert.Contains("RequireCompletedAcceptance", script, StringComparison.Ordinal);
+        Assert.Contains("RequireScreenshots", script, StringComparison.Ordinal);
+        Assert.Contains("Get-FileHash", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("Remove-Item", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("DELETE FROM", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("DROP TABLE", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ReadDataAsync", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("WriteDataAsync", script, StringComparison.Ordinal);
     }
 
     [Fact]

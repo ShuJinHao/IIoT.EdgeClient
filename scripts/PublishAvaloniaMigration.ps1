@@ -27,6 +27,7 @@ $ErrorActionPreference = 'Stop'
 # Avalonia12-切默认入口决策包模板.md
 # Avalonia12-默认入口切换评审说明.md
 # Avalonia12-默认入口切换预演报告模板.md
+# Avalonia12-现场证据导入预审说明.md
 
 function Join-UnicodeName {
     param(
@@ -421,7 +422,13 @@ function Test-AvaloniaReleaseLayout {
         [string]$DefaultEntryPreviewTemplateName,
 
         [Parameter(Mandatory = $true)]
+        [string]$FieldEvidenceImportGuideName,
+
+        [Parameter(Mandatory = $true)]
         [string]$TrialRunScriptName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$FieldEvidenceImportScriptName,
 
         [Parameter(Mandatory = $true)]
         [string]$TrialEvidenceReviewScriptName,
@@ -500,7 +507,9 @@ function Test-AvaloniaReleaseLayout {
     Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'docs') -RelativePath $FieldEvidenceGuideName
     Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'docs') -RelativePath $DefaultEntryReadinessGuideName
     Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'docs') -RelativePath $DefaultEntryPreviewTemplateName
+    Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'docs') -RelativePath $FieldEvidenceImportGuideName
     Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'scripts') -RelativePath $TrialRunScriptName
+    Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'scripts') -RelativePath $FieldEvidenceImportScriptName
     Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'scripts') -RelativePath $TrialEvidenceReviewScriptName
     Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'scripts') -RelativePath $DefaultEntryDecisionScriptName
     Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'scripts') -RelativePath $DefaultEntryReadinessScriptName
@@ -518,7 +527,9 @@ $defaultEntryDecisionTemplateName = 'Avalonia12-' + (Join-UnicodeName -CodePoint
 $fieldEvidenceGuideName = 'Avalonia12-现场证据回收操作说明.md'
 $defaultEntryReadinessGuideName = 'Avalonia12-默认入口切换评审说明.md'
 $defaultEntryPreviewTemplateName = 'Avalonia12-默认入口切换预演报告模板.md'
+$fieldEvidenceImportGuideName = 'Avalonia12-现场证据导入预审说明.md'
 $trialRunScriptName = 'StartAvaloniaTrialRun.ps1'
+$fieldEvidenceImportScriptName = 'ImportAvaloniaFieldEvidence.ps1'
 $trialEvidenceReviewScriptName = 'ReviewAvaloniaTrialEvidence.ps1'
 $defaultEntryDecisionScriptName = 'NewAvaloniaDefaultEntryDecisionPackage.ps1'
 $defaultEntryReadinessScriptName = 'TestAvaloniaDefaultEntryReadiness.ps1'
@@ -534,7 +545,9 @@ $defaultEntryDecisionTemplateRelativePath = Join-Path 'docs' $defaultEntryDecisi
 $fieldEvidenceGuideRelativePath = Join-Path 'docs' $fieldEvidenceGuideName
 $defaultEntryReadinessGuideRelativePath = Join-Path 'docs' $defaultEntryReadinessGuideName
 $defaultEntryPreviewTemplateRelativePath = Join-Path 'docs' $defaultEntryPreviewTemplateName
+$fieldEvidenceImportGuideRelativePath = Join-Path 'docs' $fieldEvidenceImportGuideName
 $trialRunScriptRelativePath = Join-Path 'scripts' $trialRunScriptName
+$fieldEvidenceImportScriptRelativePath = Join-Path 'scripts' $fieldEvidenceImportScriptName
 $trialEvidenceReviewScriptRelativePath = Join-Path 'scripts' $trialEvidenceReviewScriptName
 $defaultEntryDecisionScriptRelativePath = Join-Path 'scripts' $defaultEntryDecisionScriptName
 $defaultEntryReadinessScriptRelativePath = Join-Path 'scripts' $defaultEntryReadinessScriptName
@@ -679,8 +692,10 @@ try {
     Copy-Item -Path (Join-Path $repoRoot $fieldEvidenceGuideRelativePath) -Destination (Join-Path $docsRoot $fieldEvidenceGuideName) -Force
     Copy-Item -Path (Join-Path $repoRoot $defaultEntryReadinessGuideRelativePath) -Destination (Join-Path $docsRoot $defaultEntryReadinessGuideName) -Force
     Copy-Item -Path (Join-Path $repoRoot $defaultEntryPreviewTemplateRelativePath) -Destination (Join-Path $docsRoot $defaultEntryPreviewTemplateName) -Force
+    Copy-Item -Path (Join-Path $repoRoot $fieldEvidenceImportGuideRelativePath) -Destination (Join-Path $docsRoot $fieldEvidenceImportGuideName) -Force
     New-Item -Path $scriptsRoot -ItemType Directory -Force | Out-Null
     Copy-Item -Path (Join-Path $repoRoot $trialRunScriptRelativePath) -Destination (Join-Path $scriptsRoot $trialRunScriptName) -Force
+    Copy-Item -Path (Join-Path $repoRoot $fieldEvidenceImportScriptRelativePath) -Destination (Join-Path $scriptsRoot $fieldEvidenceImportScriptName) -Force
     Copy-Item -Path (Join-Path $repoRoot $trialEvidenceReviewScriptRelativePath) -Destination (Join-Path $scriptsRoot $trialEvidenceReviewScriptName) -Force
     Copy-Item -Path (Join-Path $repoRoot $defaultEntryDecisionScriptRelativePath) -Destination (Join-Path $scriptsRoot $defaultEntryDecisionScriptName) -Force
     Copy-Item -Path (Join-Path $repoRoot $defaultEntryReadinessScriptRelativePath) -Destination (Join-Path $scriptsRoot $defaultEntryReadinessScriptName) -Force
@@ -705,7 +720,9 @@ try {
         -FieldEvidenceGuideName $fieldEvidenceGuideName `
         -DefaultEntryReadinessGuideName $defaultEntryReadinessGuideName `
         -DefaultEntryPreviewTemplateName $defaultEntryPreviewTemplateName `
+        -FieldEvidenceImportGuideName $fieldEvidenceImportGuideName `
         -TrialRunScriptName $trialRunScriptName `
+        -FieldEvidenceImportScriptName $fieldEvidenceImportScriptName `
         -TrialEvidenceReviewScriptName $trialEvidenceReviewScriptName `
         -DefaultEntryDecisionScriptName $defaultEntryDecisionScriptName `
         -DefaultEntryReadinessScriptName $defaultEntryReadinessScriptName `

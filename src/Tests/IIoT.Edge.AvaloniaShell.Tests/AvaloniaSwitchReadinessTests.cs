@@ -46,6 +46,7 @@ public sealed class AvaloniaSwitchReadinessTests
         var issueRecovery = File.ReadAllText(Path.Combine(root, "docs", "Avalonia12-试运行问题回收清单.md"));
         var decisionTemplate = File.ReadAllText(Path.Combine(root, "docs", "Avalonia12-切默认入口决策包模板.md"));
         var evidenceGuide = File.ReadAllText(Path.Combine(root, "docs", "Avalonia12-现场证据回收操作说明.md"));
+        var importGuide = File.ReadAllText(Path.Combine(root, "docs", "Avalonia12-现场证据导入预审说明.md"));
         Assert.Contains("UI-only", trialManual, StringComparison.Ordinal);
         Assert.Contains("--start-runtime", trialManual, StringComparison.Ordinal);
         Assert.Contains("回退 WPF", trialManual, StringComparison.Ordinal);
@@ -59,6 +60,9 @@ public sealed class AvaloniaSwitchReadinessTests
         Assert.Contains("01-diagnostics-summary.png", evidenceGuide, StringComparison.Ordinal);
         Assert.Contains("ReviewAvaloniaTrialEvidence.ps1", evidenceGuide, StringComparison.Ordinal);
         Assert.Contains("NewAvaloniaDefaultEntryDecisionPackage.ps1", evidenceGuide, StringComparison.Ordinal);
+        Assert.Contains("ImportAvaloniaFieldEvidence.ps1", importGuide, StringComparison.Ordinal);
+        Assert.Contains("证据不足时不得关闭 P1", importGuide, StringComparison.Ordinal);
+        Assert.Contains("field-evidence-review-bundle", importGuide, StringComparison.Ordinal);
 
         var readinessGuide = File.ReadAllText(Path.Combine(root, "docs", "Avalonia12-默认入口切换评审说明.md"));
         var previewTemplate = File.ReadAllText(Path.Combine(root, "docs", "Avalonia12-默认入口切换预演报告模板.md"));
@@ -79,6 +83,7 @@ public sealed class AvaloniaSwitchReadinessTests
         var script = File.ReadAllText(scriptPath);
         Assert.Contains("PublishAvaloniaMigration.ps1", script, StringComparison.Ordinal);
         Assert.Contains("CollectAvaloniaFieldEvidence.ps1", script, StringComparison.Ordinal);
+        Assert.Contains("ImportAvaloniaFieldEvidence.ps1", script, StringComparison.Ordinal);
         Assert.Contains("--include-transitive", script, StringComparison.Ordinal);
         Assert.Contains("--vulnerable", script, StringComparison.Ordinal);
         Assert.Contains("SkiaSharp.NativeAssets.Win32", script, StringComparison.Ordinal);
