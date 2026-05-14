@@ -362,7 +362,7 @@ public sealed class ProductionViewModelBehaviorTests
 
         await viewModel.OnActivatedAsync();
 
-        Assert.Equal(11, viewModel.FieldAcceptanceRows.Count);
+        Assert.Equal(12, viewModel.FieldAcceptanceRows.Count);
         Assert.Contains(viewModel.FieldAcceptanceRows, row =>
             row.Scope == "运行模式" &&
             row.Status == "--start-runtime" &&
@@ -391,6 +391,9 @@ public sealed class ProductionViewModelBehaviorTests
         Assert.Contains(viewModel.FieldAcceptanceRows, row =>
             row.Scope == "P1 关闭证据要求" &&
             row.Message.Contains("WPF 回退截图", StringComparison.Ordinal));
+        Assert.Contains(viewModel.FieldAcceptanceRows, row =>
+            row.Scope == "默认入口切换门禁" &&
+            row.Message.Contains("不提供切换按钮", StringComparison.Ordinal));
     }
 
     [Fact]

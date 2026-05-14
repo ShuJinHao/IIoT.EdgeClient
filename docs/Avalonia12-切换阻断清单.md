@@ -12,6 +12,7 @@
 | I/O 页面直接调用 PLC 读写接口 | 不得出现直接 `ReadDataAsync` / `WriteDataAsync` 调用 |
 | Diagnostics 或脚本开放 Cloud/MES 清理、重试、删除 | 只能只读展示，不能提供操作入口 |
 | 现场证据包缺失 | 必须包含 Launcher profile、Diagnostics 摘要、日志、截图占位说明和联调清单 |
+| 未通过默认入口评审门禁 | `TestAvaloniaDefaultEntryReadiness.ps1` 必须输出 `ApprovedForDefaultEntrySwitch`，且真实切换必须另起独立批次 |
 
 ## P1：阻断现场试运行
 
@@ -36,4 +37,4 @@
 
 ## 当前判定
 
-截至第十四批完成后，候选包发布、证据采集预检、依赖/漏洞扫描、WPF 回退构建和既有回归已通过自动化验证；P0 技术门禁具备进入 FullGate 复验条件。P1 中的多屏、高 DPI、触摸、真实 `--start-runtime` 和 PLC 侧状态仍需现场证据关闭。没有完整现场证据和问题回收结论前，不允许把 Avalonia Launcher 或 Avalonia Shell 切为生产默认入口。
+截至第十七批开始，候选包 FullGate 已通过自动化验证；P1 中的多屏、高 DPI、触摸、真实 `--start-runtime` 和 PLC 侧状态仍需现场证据关闭。没有完整现场证据、人工签字和默认入口评审门禁通过前，不允许把 Avalonia Launcher 或 Avalonia Shell 切为生产默认入口。

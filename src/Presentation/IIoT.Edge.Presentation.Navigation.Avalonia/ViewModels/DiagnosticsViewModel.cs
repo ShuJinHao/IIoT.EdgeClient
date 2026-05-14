@@ -318,6 +318,10 @@ public sealed partial class DiagnosticsViewModel : NavigationPageViewModelBase
                 "P1 关闭证据要求",
                 "现场证据",
                 "需要已填写验收记录、Diagnostics 摘要截图、I/O 写入闸门截图、PLC 写入轨迹截图和 WPF 回退截图；本页只提示要求，不关闭问题。"),
+            new DiagnosticsFieldAcceptanceSummaryRow(
+                "默认入口切换门禁",
+                "只读提示",
+                "默认入口切换必须先通过 TestAvaloniaDefaultEntryReadiness.ps1，并由独立批次执行；本页不提供切换按钮。"),
             new DiagnosticsFieldAcceptanceSummaryRow("I/O 写入申请", latestIoStatus, latestIoMessage),
             new DiagnosticsFieldAcceptanceSummaryRow("PLC 块写入轨迹", latestTraceStatus, latestTraceMessage),
             new DiagnosticsFieldAcceptanceSummaryRow("Cloud 状态", cloudStatus, cloudMessage),

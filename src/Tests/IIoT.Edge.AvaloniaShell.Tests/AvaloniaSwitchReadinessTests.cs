@@ -55,9 +55,18 @@ public sealed class AvaloniaSwitchReadinessTests
         Assert.Contains("可由证据关闭", issueRecovery, StringComparison.Ordinal);
         Assert.Contains("ReadyForDefaultEntryReview", issueRecovery, StringComparison.Ordinal);
         Assert.Contains("是否允许进入切默认入口评审", decisionTemplate, StringComparison.Ordinal);
+        Assert.Contains("回退负责人", decisionTemplate, StringComparison.Ordinal);
         Assert.Contains("01-diagnostics-summary.png", evidenceGuide, StringComparison.Ordinal);
         Assert.Contains("ReviewAvaloniaTrialEvidence.ps1", evidenceGuide, StringComparison.Ordinal);
         Assert.Contains("NewAvaloniaDefaultEntryDecisionPackage.ps1", evidenceGuide, StringComparison.Ordinal);
+
+        var readinessGuide = File.ReadAllText(Path.Combine(root, "docs", "Avalonia12-默认入口切换评审说明.md"));
+        var previewTemplate = File.ReadAllText(Path.Combine(root, "docs", "Avalonia12-默认入口切换预演报告模板.md"));
+        Assert.Contains("TestAvaloniaDefaultEntryReadiness.ps1", readinessGuide, StringComparison.Ordinal);
+        Assert.Contains("SwitchAvaloniaDefaultEntry.ps1", readinessGuide, StringComparison.Ordinal);
+        Assert.Contains("不修改 Launcher profile", readinessGuide, StringComparison.Ordinal);
+        Assert.Contains("IIoT.Edge.Launcher.exe", previewTemplate, StringComparison.Ordinal);
+        Assert.Contains("IIoT.Edge.Launcher.Avalonia.exe", previewTemplate, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -101,6 +101,7 @@ function Write-DecisionMarkdown {
         '| 决策人 |  |',
         '| 决策时间 |  |',
         '| 回退负责人 |  |',
+        '| 允许切换结论 |  |',
         '',
         '## 候选包信息',
         '',
@@ -200,6 +201,7 @@ $decisionPackage = [PSCustomObject]@{
         allowedToSwitchDefaultEntry = $null
         approver = $null
         decidedAt = $null
+        rollbackOwner = $null
         notes = '等待人工签字。'
     }
     inputs = [PSCustomObject]@{

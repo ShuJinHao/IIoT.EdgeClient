@@ -30,6 +30,8 @@ public sealed class AvaloniaFieldPackageScriptTests
         Assert.Contains("StartAvaloniaTrialRun.ps1", script, StringComparison.Ordinal);
         Assert.Contains("ReviewAvaloniaTrialEvidence.ps1", script, StringComparison.Ordinal);
         Assert.Contains("NewAvaloniaDefaultEntryDecisionPackage.ps1", script, StringComparison.Ordinal);
+        Assert.Contains("TestAvaloniaDefaultEntryReadiness.ps1", script, StringComparison.Ordinal);
+        Assert.Contains("SwitchAvaloniaDefaultEntry.ps1", script, StringComparison.Ordinal);
         Assert.Contains("Join-UnicodeName", script, StringComparison.Ordinal);
         Assert.Contains("SkiaSharp", script, StringComparison.Ordinal);
         Assert.DoesNotContain("IIoT.Edge.Shell.csproj", script, StringComparison.Ordinal);
@@ -115,11 +117,44 @@ public sealed class AvaloniaFieldPackageScriptTests
         Assert.Contains("不允许进入切默认入口评审", script, StringComparison.Ordinal);
         Assert.Contains("等待人工签字", script, StringComparison.Ordinal);
         Assert.Contains("allowedToSwitchDefaultEntry = $null", script, StringComparison.Ordinal);
+        Assert.Contains("rollbackOwner = $null", script, StringComparison.Ordinal);
         Assert.DoesNotContain("Remove-Item", script, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("DELETE FROM", script, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("DROP TABLE", script, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("ReadDataAsync", script, StringComparison.Ordinal);
         Assert.DoesNotContain("WriteDataAsync", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Default_entry_readiness_and_switch_scripts_are_gate_only_and_dry_run()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var readinessScriptPath = Path.Combine(repoRoot, "scripts", "TestAvaloniaDefaultEntryReadiness.ps1");
+        var switchScriptPath = Path.Combine(repoRoot, "scripts", "SwitchAvaloniaDefaultEntry.ps1");
+
+        Assert.True(File.Exists(readinessScriptPath), $"Missing script: {readinessScriptPath}");
+        Assert.True(File.Exists(switchScriptPath), $"Missing script: {switchScriptPath}");
+
+        var readinessScript = File.ReadAllText(readinessScriptPath);
+        Assert.Contains("ApprovedForDefaultEntrySwitch", readinessScript, StringComparison.Ordinal);
+        Assert.Contains("DefaultEntrySwitchRejected", readinessScript, StringComparison.Ordinal);
+        Assert.Contains("allowedToSwitchDefaultEntry", readinessScript, StringComparison.Ordinal);
+        Assert.Contains("rollbackOwner", readinessScript, StringComparison.Ordinal);
+        Assert.DoesNotContain("Remove-Item", readinessScript, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("DELETE FROM", readinessScript, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ReadDataAsync", readinessScript, StringComparison.Ordinal);
+        Assert.DoesNotContain("WriteDataAsync", readinessScript, StringComparison.Ordinal);
+
+        var switchScript = File.ReadAllText(switchScriptPath);
+        Assert.Contains("default-entry-switch-preview.json", switchScript, StringComparison.Ordinal);
+        Assert.Contains("ApprovedForDefaultEntrySwitch", switchScript, StringComparison.Ordinal);
+        Assert.Contains("wouldModifyFiles = $false", switchScript, StringComparison.Ordinal);
+        Assert.Contains("IIoT.Edge.Launcher.exe", switchScript, StringComparison.Ordinal);
+        Assert.Contains("IIoT.Edge.Launcher.Avalonia.exe", switchScript, StringComparison.Ordinal);
+        Assert.DoesNotContain("Remove-Item", switchScript, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Set-Content -LiteralPath $launcherProfilesPath", switchScript, StringComparison.Ordinal);
+        Assert.DoesNotContain("ReadDataAsync", switchScript, StringComparison.Ordinal);
+        Assert.DoesNotContain("WriteDataAsync", switchScript, StringComparison.Ordinal);
     }
 
     [Fact]
