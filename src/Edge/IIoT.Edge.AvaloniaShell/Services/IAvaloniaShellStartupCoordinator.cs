@@ -10,4 +10,3 @@ public interface IAvaloniaShellStartupCoordinator
 
     Task<bool> StopAsync(TimeSpan timeout, CancellationToken cancellationToken = default);
 }
-
