@@ -16,8 +16,8 @@
 
 | 状态 | 问题 | 证据 | 影响 | 处理人 | 复验命令/证据 |
 | --- | --- | --- | --- | --- | --- |
-| 待现场确认 | 多屏、高 DPI、触摸仍需现场人工确认 | 现场试运行验收记录 | 影响现场试运行结论 | 现场负责人 | 补充窗口拖拽、DataGrid 滚动和触摸点击截图 |
-| 待现场确认 | 真实 `--start-runtime` 和 PLC 侧状态仍需现场证据 | 现场证据包 | 影响是否允许进入切默认入口评审 | 现场负责人 | 补充 Diagnostics 摘要、I/O 写入申请和 PLC 块写入轨迹 |
+| 可由证据关闭 | 多屏、高 DPI、触摸仍需现场人工确认 | 现场试运行验收记录 | 影响现场试运行结论 | 现场负责人 | 关闭条件：验收记录标记“验收记录状态：已完成”，并补充窗口拖拽、DataGrid 滚动和触摸点击记录或截图 |
+| 可由证据关闭 | 真实 `--start-runtime` 和 PLC 侧状态仍需现场证据 | 现场证据包 | 影响是否允许进入切默认入口评审 | 现场负责人 | 关闭条件：补齐 `diagnostics-summary`、`io-write-gate`、`plc-write-trace`、`wpf-fallback` 四类截图，并通过 `ReviewAvaloniaTrialEvidence.ps1 -RequireCompletedAcceptance -RequireScreenshots` |
 
 ## P2 问题
 
@@ -28,4 +28,4 @@
 
 ## 当前结论
 
-截至第十五批开始，自动化候选门禁可验证 P0 技术项；P1 仍依赖现场证据包和验收记录关闭。未形成完整现场证据前，不允许把 Avalonia 切成生产默认入口。
+截至第十六批开始，自动化候选门禁可验证 P0 技术项；两个 P1 项已改为“可由证据关闭”。未形成已填写验收记录、关键截图和 `ReadyForDefaultEntryReview` 复审结果前，不允许把 Avalonia 切成生产默认入口。

@@ -314,6 +314,10 @@ public sealed partial class DiagnosticsViewModel : NavigationPageViewModelBase
                 "试运行审查资料",
                 "发布包 docs",
                 "试运行问题回收清单、切默认入口决策包模板和证据审查脚本随发布包一起交付；本页不提供切换默认入口操作。"),
+            new DiagnosticsFieldAcceptanceSummaryRow(
+                "P1 关闭证据要求",
+                "现场证据",
+                "需要已填写验收记录、Diagnostics 摘要截图、I/O 写入闸门截图、PLC 写入轨迹截图和 WPF 回退截图；本页只提示要求，不关闭问题。"),
             new DiagnosticsFieldAcceptanceSummaryRow("I/O 写入申请", latestIoStatus, latestIoMessage),
             new DiagnosticsFieldAcceptanceSummaryRow("PLC 块写入轨迹", latestTraceStatus, latestTraceMessage),
             new DiagnosticsFieldAcceptanceSummaryRow("Cloud 状态", cloudStatus, cloudMessage),

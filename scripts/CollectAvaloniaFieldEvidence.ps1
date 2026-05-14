@@ -41,6 +41,7 @@ $script:TrialManualPath = Join-Path $script:RepoRoot 'docs\Avalonia12-现场试�
 $script:TrialAcceptanceTemplatePath = Join-Path $script:RepoRoot 'docs\Avalonia12-现场试运行验收记录模板.md'
 $script:TrialIssueRecoveryPath = Join-Path $script:RepoRoot 'docs\Avalonia12-试运行问题回收清单.md'
 $script:DefaultEntryDecisionTemplatePath = Join-Path $script:RepoRoot 'docs\Avalonia12-切默认入口决策包模板.md'
+$script:FieldEvidenceReviewGuidePath = Join-Path $script:RepoRoot 'docs\Avalonia12-现场证据回收操作说明.md'
 
 if (-not [string]::IsNullOrWhiteSpace($AvaloniaShellDirectory) -and -not $PSBoundParameters.ContainsKey('RuntimeRoot')) {
     $RuntimeRoot = $AvaloniaShellDirectory
@@ -385,23 +386,20 @@ function Write-ScreenshotPlaceholder {
     )
 
     Write-TextFile -Path $Path -Lines @(
-        '# PLC 写入轨迹截图占位说明',
+        '# 现场证据关键截图占位说明',
         '',
-        '现场证据包至少应补齐以下截图：',
+        '现场证据包至少应补齐以下截图。文件名可以追加时间戳，但必须保留英文 token，供复审脚本识别：',
         '',
-        '1. Diagnostics 页的“PLC 写入轨迹”页签，能看到尝试、成功或失败记录。',
-        '2. Diagnostics 页的“I/O 写入闸门”页签，能看到写入申请被接受或拒绝的原因。',
-        '3. I/O 交互页目标信号行，能看到“已进入运行时缓冲，等待扫描任务按块写入”或后续轨迹结果。',
-        '4. Equipment 面板的“最近 PLC 块写入”状态。',
-        '5. 现场 PLC 侧状态截图或运维确认记录。',
+        '- `01-diagnostics-summary.png`：Diagnostics 现场联调摘要。',
+        '- `02-io-write-gate.png`：I/O 写入闸门申请结果。',
+        '- `03-plc-write-trace.png`：PLC 写入轨迹尝试、成功或失败记录。',
+        '- `04-wpf-fallback.png`：WPF Launcher/WPF Shell 回退验证。',
         '',
-        '建议命名：',
+        '完成截图和验收记录后，执行：',
         '',
-        '- `01-diagnostics-plc-write-trace.png`',
-        '- `02-diagnostics-io-write-gate.png`',
-        '- `03-io-row-buffer-result.png`',
-        '- `04-equipment-last-block-write.png`',
-        '- `05-plc-side-status.png`',
+        '```powershell',
+        'powershell -ExecutionPolicy Bypass -File .\scripts\ReviewAvaloniaTrialEvidence.ps1 -EvidencePath <证据包目录> -RequireCompletedAcceptance -RequireScreenshots',
+        '```',
         '',
         '脚本不会自动触发 PLC 写入、不会清理现场运行数据，也不会判断 PLC 物理侧最终状态。'
     )
@@ -439,10 +437,11 @@ function Write-PackageReadme {
         '- `diagnostics/`：运行目录 `diagnostics` 顶层文本诊断文件副本。',
         '- `launcher/launcher.profiles.json`：现场使用的 Launcher profile。',
         '- `launcher/launcher-profile-summary.md`：UI-only 与 `--start-runtime` profile 摘要。',
-        '- `screenshots/截图占位说明.md`：PLC 写入轨迹截图占位说明。',
+        '- `screenshots/截图占位说明.md`：Diagnostics 摘要、I/O 写入闸门、PLC 写入轨迹和 WPF 回退截图占位说明。',
         '- `docs/Avalonia12-现场联调检查清单.md`：现场联调清单副本。',
         '- `docs/Avalonia12-现场试运行手册.md`：现场试运行操作手册副本。',
         '- `docs/Avalonia12-现场试运行验收记录模板.md`：现场验收记录模板副本。',
+        '- `docs/Avalonia12-现场证据回收操作说明.md`：截图命名、验收记录填写、证据复审和决策包生成说明。',
         '- `docs/Avalonia12-试运行问题回收清单.md`：P0/P1/P2 问题回收清单副本。',
         '- `docs/Avalonia12-切默认入口决策包模板.md`：切默认入口评审模板副本。',
         '- `docs/Avalonia12-切换前差异矩阵.md`：WPF 与 Avalonia 切换差异副本。',
@@ -600,6 +599,10 @@ if (Test-Path -LiteralPath $script:TrialIssueRecoveryPath -PathType Leaf) {
 
 if (Test-Path -LiteralPath $script:DefaultEntryDecisionTemplatePath -PathType Leaf) {
     Copy-Item -LiteralPath $script:DefaultEntryDecisionTemplatePath -Destination (Join-Path $docsRoot 'Avalonia12-切默认入口决策包模板.md') -Force
+}
+
+if (Test-Path -LiteralPath $script:FieldEvidenceReviewGuidePath -PathType Leaf) {
+    Copy-Item -LiteralPath $script:FieldEvidenceReviewGuidePath -Destination (Join-Path $docsRoot 'Avalonia12-现场证据回收操作说明.md') -Force
 }
 
 if (Test-Path -LiteralPath $releaseManifestSource -PathType Leaf) {

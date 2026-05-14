@@ -26,8 +26,10 @@ public sealed class AvaloniaFieldPackageScriptTests
         Assert.Contains("trialAcceptanceTemplateRelativePath", script, StringComparison.Ordinal);
         Assert.Contains("trialIssueRecoveryRelativePath", script, StringComparison.Ordinal);
         Assert.Contains("defaultEntryDecisionTemplateRelativePath", script, StringComparison.Ordinal);
+        Assert.Contains("fieldEvidenceGuideRelativePath", script, StringComparison.Ordinal);
         Assert.Contains("StartAvaloniaTrialRun.ps1", script, StringComparison.Ordinal);
         Assert.Contains("ReviewAvaloniaTrialEvidence.ps1", script, StringComparison.Ordinal);
+        Assert.Contains("NewAvaloniaDefaultEntryDecisionPackage.ps1", script, StringComparison.Ordinal);
         Assert.Contains("Join-UnicodeName", script, StringComparison.Ordinal);
         Assert.Contains("SkiaSharp", script, StringComparison.Ordinal);
         Assert.DoesNotContain("IIoT.Edge.Shell.csproj", script, StringComparison.Ordinal);
@@ -52,6 +54,11 @@ public sealed class AvaloniaFieldPackageScriptTests
         Assert.Contains("Avalonia12-现场试运行验收记录模板.md", script, StringComparison.Ordinal);
         Assert.Contains("Avalonia12-试运行问题回收清单.md", script, StringComparison.Ordinal);
         Assert.Contains("Avalonia12-切默认入口决策包模板.md", script, StringComparison.Ordinal);
+        Assert.Contains("Avalonia12-现场证据回收操作说明.md", script, StringComparison.Ordinal);
+        Assert.Contains("01-diagnostics-summary.png", script, StringComparison.Ordinal);
+        Assert.Contains("02-io-write-gate.png", script, StringComparison.Ordinal);
+        Assert.Contains("03-plc-write-trace.png", script, StringComparison.Ordinal);
+        Assert.Contains("04-wpf-fallback.png", script, StringComparison.Ordinal);
         Assert.Contains("release-manifest.json", script, StringComparison.Ordinal);
         Assert.Contains("candidate-validation-summary.json", script, StringComparison.Ordinal);
         Assert.Contains("diagnostics", script, StringComparison.OrdinalIgnoreCase);
@@ -78,6 +85,36 @@ public sealed class AvaloniaFieldPackageScriptTests
         Assert.Contains("截图占位说明", script, StringComparison.Ordinal);
         Assert.Contains("P0Blocked", script, StringComparison.Ordinal);
         Assert.Contains("P1Pending", script, StringComparison.Ordinal);
+        Assert.Contains("ReadyForDefaultEntryReview", script, StringComparison.Ordinal);
+        Assert.Contains("RequireCompletedAcceptance", script, StringComparison.Ordinal);
+        Assert.Contains("RequireScreenshots", script, StringComparison.Ordinal);
+        Assert.Contains("p1Evidence", script, StringComparison.Ordinal);
+        Assert.Contains("diagnostics-summary", script, StringComparison.Ordinal);
+        Assert.Contains("io-write-gate", script, StringComparison.Ordinal);
+        Assert.Contains("plc-write-trace", script, StringComparison.Ordinal);
+        Assert.Contains("wpf-fallback", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("Remove-Item", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("DELETE FROM", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("DROP TABLE", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ReadDataAsync", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("WriteDataAsync", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Default_entry_decision_package_script_is_read_only_and_keeps_human_decision_blank()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var scriptPath = Path.Combine(repoRoot, "scripts", "NewAvaloniaDefaultEntryDecisionPackage.ps1");
+
+        Assert.True(File.Exists(scriptPath), $"Missing script: {scriptPath}");
+
+        var script = File.ReadAllText(scriptPath);
+        Assert.Contains("default-entry-decision-package.json", script, StringComparison.Ordinal);
+        Assert.Contains("default-entry-decision-package.md", script, StringComparison.Ordinal);
+        Assert.Contains("ReadyForDefaultEntryReview", script, StringComparison.Ordinal);
+        Assert.Contains("不允许进入切默认入口评审", script, StringComparison.Ordinal);
+        Assert.Contains("等待人工签字", script, StringComparison.Ordinal);
+        Assert.Contains("allowedToSwitchDefaultEntry = $null", script, StringComparison.Ordinal);
         Assert.DoesNotContain("Remove-Item", script, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("DELETE FROM", script, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("DROP TABLE", script, StringComparison.OrdinalIgnoreCase);

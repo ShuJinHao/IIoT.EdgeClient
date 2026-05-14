@@ -45,13 +45,19 @@ public sealed class AvaloniaSwitchReadinessTests
         var acceptanceTemplate = File.ReadAllText(Path.Combine(root, "docs", "Avalonia12-现场试运行验收记录模板.md"));
         var issueRecovery = File.ReadAllText(Path.Combine(root, "docs", "Avalonia12-试运行问题回收清单.md"));
         var decisionTemplate = File.ReadAllText(Path.Combine(root, "docs", "Avalonia12-切默认入口决策包模板.md"));
+        var evidenceGuide = File.ReadAllText(Path.Combine(root, "docs", "Avalonia12-现场证据回收操作说明.md"));
         Assert.Contains("UI-only", trialManual, StringComparison.Ordinal);
         Assert.Contains("--start-runtime", trialManual, StringComparison.Ordinal);
         Assert.Contains("回退 WPF", trialManual, StringComparison.Ordinal);
         Assert.Contains("P0 阻断项", acceptanceTemplate, StringComparison.Ordinal);
         Assert.Contains("WPF Shell 回退", acceptanceTemplate, StringComparison.Ordinal);
         Assert.Contains("P1 问题", issueRecovery, StringComparison.Ordinal);
+        Assert.Contains("可由证据关闭", issueRecovery, StringComparison.Ordinal);
+        Assert.Contains("ReadyForDefaultEntryReview", issueRecovery, StringComparison.Ordinal);
         Assert.Contains("是否允许进入切默认入口评审", decisionTemplate, StringComparison.Ordinal);
+        Assert.Contains("01-diagnostics-summary.png", evidenceGuide, StringComparison.Ordinal);
+        Assert.Contains("ReviewAvaloniaTrialEvidence.ps1", evidenceGuide, StringComparison.Ordinal);
+        Assert.Contains("NewAvaloniaDefaultEntryDecisionPackage.ps1", evidenceGuide, StringComparison.Ordinal);
     }
 
     [Fact]

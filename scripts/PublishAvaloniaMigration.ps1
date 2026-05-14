@@ -398,23 +398,29 @@ function Test-AvaloniaReleaseLayout {
         [string]$SwitchBlockerName,
 
         [Parameter(Mandatory = $true)]
-    [string]$TrialManualName,
+        [string]$TrialManualName,
 
-    [Parameter(Mandatory = $true)]
-    [string]$TrialAcceptanceTemplateName,
+        [Parameter(Mandatory = $true)]
+        [string]$TrialAcceptanceTemplateName,
 
-    [Parameter(Mandatory = $true)]
-    [string]$TrialIssueRecoveryName,
+        [Parameter(Mandatory = $true)]
+        [string]$TrialIssueRecoveryName,
 
-    [Parameter(Mandatory = $true)]
-    [string]$DefaultEntryDecisionTemplateName,
+        [Parameter(Mandatory = $true)]
+        [string]$DefaultEntryDecisionTemplateName,
 
-    [Parameter(Mandatory = $true)]
-    [string]$TrialRunScriptName,
+        [Parameter(Mandatory = $true)]
+        [string]$FieldEvidenceGuideName,
 
-    [Parameter(Mandatory = $true)]
-    [string]$TrialEvidenceReviewScriptName
-)
+        [Parameter(Mandatory = $true)]
+        [string]$TrialRunScriptName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$TrialEvidenceReviewScriptName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$DefaultEntryDecisionScriptName
+    )
 
     Assert-AvaloniaRequiredFile -Root $LauncherRoot -RelativePath 'IIoT.Edge.Launcher.Avalonia.exe'
     Assert-AvaloniaRequiredFile -Root $LauncherRoot -RelativePath 'launcher.profiles.json'
@@ -477,8 +483,10 @@ function Test-AvaloniaReleaseLayout {
     Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'docs') -RelativePath $TrialAcceptanceTemplateName
     Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'docs') -RelativePath $TrialIssueRecoveryName
     Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'docs') -RelativePath $DefaultEntryDecisionTemplateName
+    Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'docs') -RelativePath $FieldEvidenceGuideName
     Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'scripts') -RelativePath $TrialRunScriptName
     Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'scripts') -RelativePath $TrialEvidenceReviewScriptName
+    Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'scripts') -RelativePath $DefaultEntryDecisionScriptName
 }
 
 $fieldChecklistName = 'Avalonia12-' + (Join-UnicodeName -CodePoints @(0x73B0, 0x573A, 0x8054, 0x8C03, 0x68C0, 0x67E5, 0x6E05, 0x5355)) + '.md'
@@ -489,8 +497,10 @@ $trialManualName = 'Avalonia12-' + (Join-UnicodeName -CodePoints @(0x73B0, 0x573
 $trialAcceptanceTemplateName = 'Avalonia12-' + (Join-UnicodeName -CodePoints @(0x73B0, 0x573A, 0x8BD5, 0x8FD0, 0x884C, 0x9A8C, 0x6536, 0x8BB0, 0x5F55, 0x6A21, 0x677F)) + '.md'
 $trialIssueRecoveryName = 'Avalonia12-' + (Join-UnicodeName -CodePoints @(0x8BD5, 0x8FD0, 0x884C, 0x95EE, 0x9898, 0x56DE, 0x6536, 0x6E05, 0x5355)) + '.md'
 $defaultEntryDecisionTemplateName = 'Avalonia12-' + (Join-UnicodeName -CodePoints @(0x5207, 0x9ED8, 0x8BA4, 0x5165, 0x53E3, 0x51B3, 0x7B56, 0x5305, 0x6A21, 0x677F)) + '.md'
+$fieldEvidenceGuideName = 'Avalonia12-现场证据回收操作说明.md'
 $trialRunScriptName = 'StartAvaloniaTrialRun.ps1'
 $trialEvidenceReviewScriptName = 'ReviewAvaloniaTrialEvidence.ps1'
+$defaultEntryDecisionScriptName = 'NewAvaloniaDefaultEntryDecisionPackage.ps1'
 $fieldChecklistRelativePath = Join-Path 'docs' $fieldChecklistName
 $nugetExceptionRelativePath = Join-Path 'docs' $nugetExceptionName
 $switchMatrixRelativePath = Join-Path 'docs' $switchMatrixName
@@ -499,8 +509,10 @@ $trialManualRelativePath = Join-Path 'docs' $trialManualName
 $trialAcceptanceTemplateRelativePath = Join-Path 'docs' $trialAcceptanceTemplateName
 $trialIssueRecoveryRelativePath = Join-Path 'docs' $trialIssueRecoveryName
 $defaultEntryDecisionTemplateRelativePath = Join-Path 'docs' $defaultEntryDecisionTemplateName
+$fieldEvidenceGuideRelativePath = Join-Path 'docs' $fieldEvidenceGuideName
 $trialRunScriptRelativePath = Join-Path 'scripts' $trialRunScriptName
 $trialEvidenceReviewScriptRelativePath = Join-Path 'scripts' $trialEvidenceReviewScriptName
+$defaultEntryDecisionScriptRelativePath = Join-Path 'scripts' $defaultEntryDecisionScriptName
 
 $repoRoot = if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
     [System.IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
@@ -638,9 +650,11 @@ try {
     Copy-Item -Path (Join-Path $repoRoot $trialAcceptanceTemplateRelativePath) -Destination (Join-Path $docsRoot $trialAcceptanceTemplateName) -Force
     Copy-Item -Path (Join-Path $repoRoot $trialIssueRecoveryRelativePath) -Destination (Join-Path $docsRoot $trialIssueRecoveryName) -Force
     Copy-Item -Path (Join-Path $repoRoot $defaultEntryDecisionTemplateRelativePath) -Destination (Join-Path $docsRoot $defaultEntryDecisionTemplateName) -Force
+    Copy-Item -Path (Join-Path $repoRoot $fieldEvidenceGuideRelativePath) -Destination (Join-Path $docsRoot $fieldEvidenceGuideName) -Force
     New-Item -Path $scriptsRoot -ItemType Directory -Force | Out-Null
     Copy-Item -Path (Join-Path $repoRoot $trialRunScriptRelativePath) -Destination (Join-Path $scriptsRoot $trialRunScriptName) -Force
     Copy-Item -Path (Join-Path $repoRoot $trialEvidenceReviewScriptRelativePath) -Destination (Join-Path $scriptsRoot $trialEvidenceReviewScriptName) -Force
+    Copy-Item -Path (Join-Path $repoRoot $defaultEntryDecisionScriptRelativePath) -Destination (Join-Path $scriptsRoot $defaultEntryDecisionScriptName) -Force
 
     $validationCommands.Add([PSCustomObject]@{
         name = 'validate Avalonia release layout'
@@ -658,8 +672,10 @@ try {
         -TrialAcceptanceTemplateName $trialAcceptanceTemplateName `
         -TrialIssueRecoveryName $trialIssueRecoveryName `
         -DefaultEntryDecisionTemplateName $defaultEntryDecisionTemplateName `
+        -FieldEvidenceGuideName $fieldEvidenceGuideName `
         -TrialRunScriptName $trialRunScriptName `
-        -TrialEvidenceReviewScriptName $trialEvidenceReviewScriptName
+        -TrialEvidenceReviewScriptName $trialEvidenceReviewScriptName `
+        -DefaultEntryDecisionScriptName $defaultEntryDecisionScriptName
 
     $validationCommands.Add([PSCustomObject]@{
         name = 'validate SkiaSharp preview exception'
