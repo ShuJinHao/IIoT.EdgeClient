@@ -7,7 +7,11 @@
     <Grid ColumnDefinitions="*,Auto" Height="46">
       <StackPanel VerticalAlignment="Center" Spacing="2">
         <TextBlock FontSize="17" FontWeight="SemiBold" Foreground="#F8FAFC" Text="{DynamicResource Shell_Header_Process}" />
-        <TextBlock FontSize="12" Foreground="#94A3B8" Text="{DynamicResource Shell_Header_Device}" />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <TextBlock FontSize="12" Foreground="#94A3B8" Text="{Binding RuntimeStatusText}" />
+          <TextBlock FontSize="12" Foreground="#64748B" Text="|" />
+          <TextBlock FontSize="12" Foreground="#94A3B8" Text="{Binding RuntimeDetailText}" />
+        </StackPanel>
       </StackPanel>
       <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
         <TextBlock VerticalAlignment="Center" Foreground="#CBD5E1" Text="{Binding CurrentUser}" />

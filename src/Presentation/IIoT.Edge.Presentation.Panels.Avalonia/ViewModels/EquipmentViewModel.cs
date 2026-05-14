@@ -76,22 +76,27 @@ public sealed partial class EquipmentViewModel : AvaloniaViewModelBase
         var rows = new List<EquipmentStatusRow>
         {
             new(
+                "运行链路",
                 string.IsNullOrWhiteSpace(device?.DeviceName) ? diagnostics.DeviceName : device.DeviceName,
                 FormatDeviceState(device),
                 $"ClientCode={device?.ClientCode ?? "--"}；DeviceId={device?.DeviceId.ToString() ?? "--"}"),
             new(
+                "Cloud",
                 "云端上传闸门",
                 gate.State.ToString(),
                 $"原因={gate.Reason}；最近成功={FormatTime(gate.LastBootstrapSucceededAtUtc)}"),
             new(
+                "Cloud",
                 "云端同步",
                 diagnostics.Cloud.RuntimeState.ToString(),
                 $"待补传={diagnostics.Cloud.PendingRetryCount + diagnostics.Cloud.PendingPassStationCount + diagnostics.Cloud.PendingDeviceLogCount + diagnostics.Cloud.PendingCapacityCount}；死信={diagnostics.Cloud.DeadLetters?.TotalCount ?? 0}"),
             new(
+                "MES",
                 "MES 同步",
                 diagnostics.Mes.RuntimeState.ToString(),
                 $"待补传={diagnostics.Mes.PendingRetryCount}；死信={diagnostics.Mes.DeadLetters?.TotalCount ?? 0}"),
             new(
+                "运行链路",
                 "生产上下文",
                 diagnostics.ContextPersistence.CorruptFileCount == 0 ? "正常" : "异常",
                 $"今日产出={capacity.TodayOutput}；NG={capacity.NgCount}；良率={capacity.TodayYield}")
@@ -100,6 +105,7 @@ public sealed partial class EquipmentViewModel : AvaloniaViewModelBase
         rows.AddRange(hardware
             .OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
             .Select(item => new EquipmentStatusRow(
+                "PLC",
                 item.Name,
                 item.IsConnected ? "已连接" : "未连接",
                 $"{item.DeviceType}；{item.Address}")));
@@ -131,12 +137,15 @@ public sealed partial class EquipmentViewModel : AvaloniaViewModelBase
 
 public sealed partial class EquipmentStatusRow : ObservableObject
 {
-    public EquipmentStatusRow(string name, string state, string lastValue)
+    public EquipmentStatusRow(string group, string name, string state, string lastValue)
     {
+        Group = group;
         Name = name;
         State = state;
         LastValue = lastValue;
     }
+
+    public string Group { get; }
 
     public string Name { get; }
 

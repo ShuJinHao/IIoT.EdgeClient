@@ -21,6 +21,15 @@
 
         <Button HorizontalAlignment="Left" Command="{Binding ManualReadCommand}" Content="{DynamicResource Navigation_Io_ManualRead}" />
 
+        <Border Padding="10" Background="#111827" BorderBrush="#334155" BorderThickness="1" CornerRadius="8">
+          <Grid ColumnDefinitions="Auto,*,Auto,*" RowDefinitions="Auto">
+            <TextBlock Grid.Column="0" Foreground="#94A3B8" Text="{DynamicResource Navigation_Io_SnapshotSource}" />
+            <TextBlock Grid.Column="1" Margin="6,0,18,0" Foreground="#E2E8F0" Text="{Binding SnapshotSourceText}" />
+            <TextBlock Grid.Column="2" Foreground="#94A3B8" Text="{DynamicResource Navigation_Io_SnapshotRefreshTime}" />
+            <TextBlock Grid.Column="3" Margin="6,0,0,0" Foreground="#E2E8F0" Text="{Binding SnapshotRefreshText}" />
+          </Grid>
+        </Border>
+
         <Border Padding="12" BorderBrush="#334155" BorderThickness="1" CornerRadius="8" IsVisible="{Binding HasInteractionRows}">
           <StackPanel Spacing="10">
             <TextBlock FontSize="15" FontWeight="SemiBold" Foreground="#F8FAFC" Text="{DynamicResource Navigation_Title_IoInteractionGroup}" />

@@ -189,11 +189,13 @@ public sealed class AvaloniaShellBehaviorTests
         var crud = new FakeHardwareConfigCrudService();
         var plcManager = new FakePlcConnectionManager();
         var plcDataStore = new FakePlcDataStore();
+        var runtimeState = new AvaloniaRuntimeState();
         var viewModel = new IoViewViewModel(
             crud,
             plcManager,
             plcDataStore,
-            provider.GetRequiredService<IAvaloniaLanguageService>());
+            provider.GetRequiredService<IAvaloniaLanguageService>(),
+            runtimeState);
 
         await viewModel.OnActivatedAsync();
 
@@ -203,6 +205,13 @@ public sealed class AvaloniaShellBehaviorTests
 
         await viewModel.ManualReadCommand.ExecuteAsync(null);
         Assert.Contains("未启动", viewModel.FeedbackMessage);
+        Assert.Equal("未启动", viewModel.SnapshotSourceText);
+
+        runtimeState.SetStatus(AvaloniaRuntimeStatus.Running, "测试运行链路已启动。");
+
+        await viewModel.ManualReadCommand.ExecuteAsync(null);
+        Assert.Contains("暂无运行时快照", viewModel.FeedbackMessage);
+        Assert.Equal("无快照", viewModel.SnapshotSourceText);
 
         plcDataStore.Buffer = new FakePlcBuffer(new Dictionary<string, ushort[]>
         {
@@ -218,6 +227,8 @@ public sealed class AvaloniaShellBehaviorTests
 
         await viewModel.ManualReadCommand.ExecuteAsync(null);
         Assert.True(viewModel.IsConnected);
+        Assert.Contains("运行时快照", viewModel.SnapshotSourceText, StringComparison.Ordinal);
+        Assert.NotEqual("--", viewModel.SnapshotRefreshText);
         Assert.Equal("7", viewModel.InteractionRows[0].PlcValueText);
 
         var row = viewModel.InteractionRows.First();
@@ -401,8 +412,13 @@ public sealed class AvaloniaShellBehaviorTests
 
         var windowService = provider.GetRequiredService<IAvaloniaWindowService>();
         Assert.Equal("WindowMaximize", windowService.MaxRestoreIcon);
-        Assert.NotNull(provider.GetRequiredService<HeaderViewModel>());
-        Assert.NotNull(provider.GetRequiredService<FooterViewModel>());
+        var runtimeState = provider.GetRequiredService<IAvaloniaRuntimeState>();
+        var header = provider.GetRequiredService<HeaderViewModel>();
+        var footer = provider.GetRequiredService<FooterViewModel>();
+        runtimeState.SetStatus(AvaloniaRuntimeStatus.Running, "运行链路已启动。", "模块数：1；PLC 设备数：1；阻断问题数：0；运行目录：test");
+        Assert.Equal("运行中", header.RuntimeStatusText);
+        Assert.Equal("运行中", footer.RuntimeStatusText);
+        Assert.Contains("模块数：1", footer.DiagnosticsSummary, StringComparison.Ordinal);
         Assert.NotNull(provider.GetRequiredService<LoginViewModel>());
     }
 

@@ -6,6 +6,7 @@ using IIoT.Edge.Application.Features.Hardware.HardwareConfigView;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Models;
 using IIoT.Edge.Presentation.Navigation.Avalonia.ViewModels;
 using IIoT.Edge.UI.Avalonia.Localization;
+using IIoT.Edge.UI.Avalonia.Services;
 
 namespace IIoT.Edge.Presentation.Navigation.Avalonia.Features.Hardware.IOView;
 
@@ -15,17 +16,21 @@ public sealed class IoViewViewModel : NavigationPageViewModelBase
     private readonly IPlcConnectionManager _plcConnectionManager;
     private readonly IPlcDataStore _plcDataStore;
     private readonly IAvaloniaLanguageService _languageService;
+    private readonly IAvaloniaRuntimeState _runtimeState;
     private readonly AsyncRelayCommand _refreshDevicesCommand;
     private readonly AsyncRelayCommand _manualReadCommand;
     private IoNetworkDeviceModel? _selectedDevice;
     private bool _isConnected;
     private string _feedbackMessage = string.Empty;
+    private string _snapshotSourceText = "未启动";
+    private string _snapshotRefreshText = "--";
 
     public IoViewViewModel(
         IHardwareConfigCrudService hardwareConfigService,
         IPlcConnectionManager plcConnectionManager,
         IPlcDataStore plcDataStore,
         IAvaloniaLanguageService languageService,
+        IAvaloniaRuntimeState? runtimeState = null,
         string viewId = "Hardware.IOView",
         string titleResourceKey = "Navigation_Title_IoInteract",
         string titleFallback = "I/O 交互")
@@ -35,6 +40,7 @@ public sealed class IoViewViewModel : NavigationPageViewModelBase
         _plcConnectionManager = plcConnectionManager;
         _plcDataStore = plcDataStore;
         _languageService = languageService;
+        _runtimeState = runtimeState ?? new AvaloniaRuntimeState();
         _refreshDevicesCommand = new AsyncRelayCommand(LoadDevicesAsync);
         _manualReadCommand = new AsyncRelayCommand(ManualReadSelectedDataAsync, () => SelectedDevice is not null);
     }
@@ -81,6 +87,18 @@ public sealed class IoViewViewModel : NavigationPageViewModelBase
     {
         get => _feedbackMessage;
         private set => SetProperty(ref _feedbackMessage, value);
+    }
+
+    public string SnapshotSourceText
+    {
+        get => _snapshotSourceText;
+        private set => SetProperty(ref _snapshotSourceText, value);
+    }
+
+    public string SnapshotRefreshText
+    {
+        get => _snapshotRefreshText;
+        private set => SetProperty(ref _snapshotRefreshText, value);
     }
 
     public IAsyncRelayCommand RefreshDevicesCommand => _refreshDevicesCommand;
@@ -136,6 +154,8 @@ public sealed class IoViewViewModel : NavigationPageViewModelBase
     {
         ClearMappings();
         IsConnected = false;
+        SnapshotSourceText = Text("Navigation_Io_Source_NotStarted", "未启动");
+        SnapshotRefreshText = "--";
 
         if (SelectedDevice is null)
         {
@@ -150,7 +170,7 @@ public sealed class IoViewViewModel : NavigationPageViewModelBase
             RefreshConnectionState();
             NotifySignalCollectionsChanged();
             FeedbackMessage = InteractionRows.Count + DataSections.Count + ArraySections.Count == 0
-                ? Text("Navigation_Io_NoSignals", "当前设备没有可显示的 I/O 点位。")
+                ? Text("Navigation_Io_DeviceNotBound", "当前设备未绑定运行时任务或 I/O 映射。")
                 : Text("Navigation_Io_ConfigLoaded", "已按真实硬件配置加载 I/O 映射，手动读取仅使用运行时快照。");
         }
         catch (Exception ex)
@@ -252,16 +272,38 @@ public sealed class IoViewViewModel : NavigationPageViewModelBase
             return;
         }
 
+        if (!_runtimeState.IsRuntimeStarted)
+        {
+            FeedbackMessage = Text("Navigation_Io_RuntimeNotStarted", "运行链路未启动，无法读取运行时快照。");
+            SnapshotSourceText = Text("Navigation_Io_Source_NotStarted", "未启动");
+            SnapshotRefreshText = "--";
+            IsConnected = false;
+            return;
+        }
+
+        if (InteractionRows.Count + DataSections.Count + ArraySections.Count == 0)
+        {
+            FeedbackMessage = Text("Navigation_Io_DeviceNotBound", "当前设备未绑定运行时任务或 I/O 映射。");
+            SnapshotSourceText = Text("Navigation_Io_Source_Unbound", "设备未绑定");
+            SnapshotRefreshText = "--";
+            RefreshConnectionState();
+            return;
+        }
+
         var buffer = _plcDataStore.GetBuffer(SelectedDevice.Id);
         if (buffer is null)
         {
-            FeedbackMessage = Text("Navigation_Io_RuntimeNotStarted", "当前 I/O 生命周期未启动，无法读取运行时快照。");
-            IsConnected = false;
+            FeedbackMessage = Text("Navigation_Io_NoRuntimeSnapshot", "运行链路已启动，但当前设备暂无运行时快照。");
+            SnapshotSourceText = Text("Navigation_Io_Source_NoSnapshot", "无快照");
+            SnapshotRefreshText = "--";
+            RefreshConnectionState();
             return;
         }
 
         ApplySnapshot(buffer);
         RefreshConnectionState();
+        SnapshotSourceText = Format("Navigation_Io_Source_RuntimeSnapshot", "运行时快照 / {0}", SelectedDevice.DeviceName);
+        SnapshotRefreshText = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
         FeedbackMessage = Text("Navigation_Io_ManualReadSnapshotUpdated", "已从运行时快照刷新页面值，未访问真实 PLC。");
         await Task.CompletedTask;
     }

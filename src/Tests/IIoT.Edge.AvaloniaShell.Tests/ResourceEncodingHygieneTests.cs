@@ -30,6 +30,8 @@ public sealed class ResourceEncodingHygieneTests
         Assert.Contains("[\"Navigation_Menu_CoreDiagnostics\"] = \"系统诊断\"", resourceText);
         Assert.Contains("[\"Navigation_Button_AddInteraction\"] = \"新增交互点\"", resourceText);
         Assert.Contains("[\"Navigation_Io_NoSignals\"] = \"当前设备没有可显示的 I/O 点位。\"", resourceText);
+        Assert.Contains("[\"Navigation_Io_RuntimeNotStarted\"] = \"运行链路未启动，无法读取运行时快照。\"", resourceText);
+        Assert.DoesNotContain("Demo", resourceText, StringComparison.OrdinalIgnoreCase);
         Assert.False(ContainsMojibake(resourceText));
     }
 

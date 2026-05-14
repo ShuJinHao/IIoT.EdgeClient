@@ -1,8 +1,8 @@
 [
   {
     "ProfileId": "HomogenizationLineAvalonia",
-    "DisplayName": "匀浆 Avalonia",
-    "Description": "使用匀浆工序的 profile 启动 Avalonia 迁移客户端。",
+    "DisplayName": "匀浆 Avalonia 迁移验证 UI-only",
+    "Description": "以 UI-only 模式启动 Avalonia 迁移客户端，不启动真实运行链路。",
     "ImagePath": "Assets/Profiles/homogenization.png",
     "IconKind": "BeakerOutline",
     "AccentColor": "#2563EB",

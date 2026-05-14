@@ -15,6 +15,7 @@ public sealed partial class LogViewModel : AvaloniaViewModelBase
     private readonly EdgeRuntimePaths _runtimePaths;
     private readonly IStartupDiagnosticsStore _diagnosticsStore;
     private readonly IAvaloniaDispatcherService _dispatcherService;
+    private LogFileOption? _selectedLogFile;
 
     public LogViewModel(
         ILogService logService,
@@ -34,6 +35,20 @@ public sealed partial class LogViewModel : AvaloniaViewModelBase
 
     public ObservableCollection<LogEntry> Entries { get; } = [];
 
+    public ObservableCollection<LogFileOption> LogFiles { get; } = [];
+
+    public LogFileOption? SelectedLogFile
+    {
+        get => _selectedLogFile;
+        set
+        {
+            if (SetProperty(ref _selectedLogFile, value))
+            {
+                LoadInitialEntries();
+            }
+        }
+    }
+
     [RelayCommand]
     private void Clear() => Entries.Clear();
 
@@ -42,6 +57,7 @@ public sealed partial class LogViewModel : AvaloniaViewModelBase
 
     private void LoadInitialEntries()
     {
+        RefreshLogFiles();
         Entries.Clear();
         foreach (var entry in ReadRuntimeLogEntries().Take(MaxEntries))
         {
@@ -56,6 +72,11 @@ public sealed partial class LogViewModel : AvaloniaViewModelBase
 
     private IEnumerable<LogEntry> ReadRuntimeLogEntries()
     {
+        if (SelectedLogFile is not null)
+        {
+            return ReadFileTail(SelectedLogFile.Path).Reverse();
+        }
+
         if (!Directory.Exists(_runtimePaths.LogDirectory))
         {
             return [];
@@ -66,6 +87,41 @@ public sealed partial class LogViewModel : AvaloniaViewModelBase
             .Take(3)
             .SelectMany(ReadFileTail)
             .Reverse();
+    }
+
+    private void RefreshLogFiles()
+    {
+        var selectedPath = SelectedLogFile?.Path;
+        var files = Directory.Exists(_runtimePaths.LogDirectory)
+            ? Directory.EnumerateFiles(_runtimePaths.LogDirectory, "*.log", SearchOption.TopDirectoryOnly)
+                .OrderByDescending(File.GetLastWriteTimeUtc)
+                .Select(path => new LogFileOption(
+                    Path.GetFileName(path),
+                    path,
+                    File.GetLastWriteTime(path).ToString("yyyy-MM-dd HH:mm:ss")))
+                .ToArray()
+            : [];
+
+        LogFiles.Clear();
+        foreach (var file in files)
+        {
+            LogFiles.Add(file);
+        }
+
+        if (LogFiles.Count == 0)
+        {
+            _selectedLogFile = null;
+            OnPropertyChanged(nameof(SelectedLogFile));
+            return;
+        }
+
+        var selected = LogFiles.FirstOrDefault(file => string.Equals(file.Path, selectedPath, StringComparison.OrdinalIgnoreCase))
+            ?? LogFiles.First();
+        if (!ReferenceEquals(_selectedLogFile, selected))
+        {
+            _selectedLogFile = selected;
+            OnPropertyChanged(nameof(SelectedLogFile));
+        }
     }
 
     private static IEnumerable<LogEntry> ReadFileTail(string path)
@@ -124,4 +180,9 @@ public sealed partial class LogViewModel : AvaloniaViewModelBase
             }
         });
     }
+}
+
+public sealed record LogFileOption(string FileName, string Path, string UpdatedAt)
+{
+    public string DisplayText => $"{FileName}（{UpdatedAt}）";
 }

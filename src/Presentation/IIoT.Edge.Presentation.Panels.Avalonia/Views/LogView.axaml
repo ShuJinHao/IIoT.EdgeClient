@@ -4,7 +4,19 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <Border Background="#151E2B" Padding="12">
     <DockPanel>
-      <Button DockPanel.Dock="Top" HorizontalAlignment="Right" Command="{Binding ClearCommand}" Content="{DynamicResource Shell_Action_Clear}" />
+      <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,8">
+        <ComboBox ItemsSource="{Binding LogFiles}"
+                  SelectedItem="{Binding SelectedLogFile}"
+                  MaxWidth="360">
+          <ComboBox.ItemTemplate>
+            <DataTemplate>
+              <TextBlock Text="{Binding DisplayText}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <Button Grid.Column="1" Margin="8,0,0,0" Command="{Binding RefreshCommand}" Content="{DynamicResource Shell_Action_Refresh}" />
+        <Button Grid.Column="2" Margin="8,0,0,0" Command="{Binding ClearCommand}" Content="{DynamicResource Shell_Action_Clear}" />
+      </Grid>
       <ListBox ItemsSource="{Binding Entries}" Margin="0,8,0,0">
         <ListBox.ItemTemplate>
           <DataTemplate>

@@ -54,7 +54,11 @@ public partial class App : Avalonia.Application
             var startupResult = await _startupCoordinator.StartAsync(desktop.Args, _appCts.Token);
             if (!startupResult.Success)
             {
-                await ShowStartupErrorAsync(mainWindow, startupResult.Message ?? "AvaloniaShell 启动失败。");
+                await ShowStartupErrorAsync(
+                    mainWindow,
+                    startupResult.Message ?? "AvaloniaShell 启动失败。",
+                    startupResult.DiagnosticsSummary,
+                    startupResult.DiagnosticsLogPath);
                 desktop.Shutdown(-1);
             }
 
@@ -89,9 +93,13 @@ public partial class App : Avalonia.Application
         }
     }
 
-    private static async Task ShowStartupErrorAsync(MainWindow owner, string message)
+    private static async Task ShowStartupErrorAsync(
+        MainWindow owner,
+        string message,
+        string? diagnosticsSummary,
+        string? diagnosticsLogPath)
     {
-        var dialog = new StartupErrorWindow(message);
+        var dialog = new StartupErrorWindow(message, diagnosticsSummary, diagnosticsLogPath);
         await dialog.ShowDialog(owner);
     }
 

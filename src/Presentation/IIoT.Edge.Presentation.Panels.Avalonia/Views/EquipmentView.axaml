@@ -8,6 +8,7 @@
       <TextBlock FontSize="16" FontWeight="SemiBold" Foreground="#F8FAFC" Text="{DynamicResource Shell_EquipmentInfo}" />
       <DataGrid ItemsSource="{Binding Items}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="None">
         <DataGrid.Columns>
+          <DataGridTextColumn Width="84" Binding="{Binding Group}" loc:LocalizedDataGrid.HeaderResourceKey="Shell_Column_Group" />
           <DataGridTextColumn Width="*" Binding="{Binding Name}" loc:LocalizedDataGrid.HeaderResourceKey="Shell_Column_Name" />
           <DataGridTextColumn Width="90" Binding="{Binding State}" loc:LocalizedDataGrid.HeaderResourceKey="Shell_Column_Status" />
           <DataGridTextColumn Width="130" Binding="{Binding LastValue}" loc:LocalizedDataGrid.HeaderResourceKey="Shell_Column_Value" />
