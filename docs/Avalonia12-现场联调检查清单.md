@@ -21,6 +21,7 @@
 10. 等待至少一个扫描周期，刷新 I/O 页或诊断页，查看“PLC 写入轨迹”是否出现尝试、成功或失败记录。
 11. 打开 Equipment 面板，确认“最近块写入”展示设备、地址、字数、状态和时间。
 12. 保存以下证据：I/O 页面截图、Diagnostics 的 I/O 写入闸门和 PLC 写入轨迹截图、运行目录下日志文件、现场 PLC 侧状态截图。
+13. 如需统一回收证据，执行 `scripts\CollectAvaloniaFieldEvidence.ps1 -CreateZip`，并把截图放入生成包的 `screenshots` 目录。
 
 ## 禁止操作
 
@@ -34,3 +35,4 @@
 - UI-only 启动失败：回退 WPF Launcher/WPF Shell，保留 Avalonia 日志和截图。
 - `--start-runtime` 启动失败：不继续 I/O 写入申请，保存启动失败详情和诊断日志。
 - I/O 写入轨迹失败：不自动重试、不清理缓冲，交由现场人工结合 PLC 侧状态判断。
+- 证据采集脚本只复制日志、Diagnostics 摘要、Launcher profile 和联调文档，不读取或修改业务数据库。

@@ -16,6 +16,16 @@
       </Grid>
 
       <TabControl>
+        <TabItem Header="{DynamicResource Navigation_Diagnostics_Tab_FieldSummary}">
+          <DataGrid x:Name="FieldAcceptanceSummaryGrid" ItemsSource="{Binding FieldAcceptanceRows}" AutoGenerateColumns="False" IsReadOnly="True" MinHeight="340">
+            <DataGrid.Columns>
+              <DataGridTextColumn Width="180" Binding="{Binding Scope}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_SummaryItem" />
+              <DataGridTextColumn Width="150" Binding="{Binding Status}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Status" />
+              <DataGridTextColumn Width="*" Binding="{Binding Message}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Message" />
+            </DataGrid.Columns>
+          </DataGrid>
+        </TabItem>
+
         <TabItem Header="运行时注册">
           <DataGrid ItemsSource="{Binding RuntimeRegistrations}" AutoGenerateColumns="False" IsReadOnly="True" MinHeight="340">
             <DataGrid.Columns>

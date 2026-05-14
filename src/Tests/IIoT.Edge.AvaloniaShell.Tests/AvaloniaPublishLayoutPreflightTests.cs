@@ -92,6 +92,26 @@ public sealed class AvaloniaPublishLayoutPreflightTests
     }
 
     [Fact]
+    public void PublishAvaloniaMigrationScript_ShouldStayAvaloniaOnlyAndGenerateReleaseManifest()
+    {
+        var root = FindRepositoryRoot();
+        var scriptPath = Path.Combine(root, "scripts", "PublishAvaloniaMigration.ps1");
+        var script = File.ReadAllText(scriptPath);
+
+        Assert.Contains("IIoT.Edge.Launcher.Avalonia", script, StringComparison.Ordinal);
+        Assert.Contains("IIoT.Edge.AvaloniaShell", script, StringComparison.Ordinal);
+        Assert.Contains("IIoT.Edge.Module.Homogenization.Avalonia", script, StringComparison.Ordinal);
+        Assert.Contains("release-manifest.json", script, StringComparison.Ordinal);
+        Assert.Contains("Avalonia12-现场联调检查清单.md", script, StringComparison.Ordinal);
+        Assert.Contains("NuGet预览传递依赖例外记录.md", script, StringComparison.Ordinal);
+        Assert.Contains("SkiaSharp", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("PublishEdgeRuntime.ps1", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("PublishEdgeBundle.ps1", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("src\\Edge\\IIoT.Edge.Launcher\\IIoT.Edge.Launcher.csproj", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("src\\Edge\\IIoT.Edge.Shell\\IIoT.Edge.Shell.csproj", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void AvaloniaShellBuildOutput_ShouldContainHomogenizationPluginModuleLayout()
     {
         var root = FindRepositoryRoot();

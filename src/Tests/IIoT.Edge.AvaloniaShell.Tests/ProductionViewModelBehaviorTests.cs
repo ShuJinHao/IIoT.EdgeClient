@@ -220,6 +220,8 @@ public sealed class ProductionViewModelBehaviorTests
         Assert.Equal(3, viewModel.PersistenceRows.Count);
         Assert.Single(viewModel.PluginStates);
         Assert.Single(viewModel.Issues);
+        Assert.Contains(viewModel.FieldAcceptanceRows, row => row.Scope == "Cloud 状态");
+        Assert.Contains(viewModel.FieldAcceptanceRows, row => row.Scope == "MES 状态");
         Assert.Contains("运行时注册 1 个", viewModel.FeedbackMessage, StringComparison.Ordinal);
         Assert.Contains("运行目录：runtime-data", viewModel.ConfigurationProfileText, StringComparison.Ordinal);
     }
@@ -311,6 +313,92 @@ public sealed class ProductionViewModelBehaviorTests
         Assert.Equal("D100", latest.StartAddress);
         Assert.Equal("2", latest.WordCount);
         Assert.Contains("Start.Reply", latest.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Diagnostics_view_model_builds_field_acceptance_summary_for_site_handoff()
+    {
+        var auditStore = new IoViewWriteGateAuditStore();
+        auditStore.Record(new IoViewWriteGateAuditEntry(
+            new DateTimeOffset(2026, 5, 14, 11, 0, 0, TimeSpan.Zero),
+            "PLC-A",
+            "Start",
+            IoViewWriteResultKind.AcceptedToRuntimeBuffer,
+            "已进入运行时缓冲，等待扫描任务按块写入。",
+            12));
+
+        var traceStore = new FakePlcIoWriteTraceStore();
+        traceStore.Record(new PlcIoWriteTraceEntry(
+            new DateTimeOffset(2026, 5, 14, 11, 0, 2, TimeSpan.Zero),
+            PlcIoWriteTraceKind.Success,
+            1,
+            "PLC-A",
+            "D100",
+            2,
+            ["Start.Reply"],
+            null));
+
+        var runtimeState = new AvaloniaRuntimeState();
+        runtimeState.SetStatus(
+            AvaloniaRuntimeStatus.Running,
+            "运行链路已启动，允许现场只读联调和受控缓冲写入。",
+            "模块数：1；PLC 设备数：1",
+            "C:\\runtime\\diagnostics\\logs");
+
+        var services = new ServiceCollection();
+        services.AddSingleton<IAvaloniaRuntimeState>(runtimeState);
+        services.AddSingleton<IStartupDiagnosticsStore>(new FakeStartupDiagnosticsStore(CreateStartupDiagnosticsReport()));
+        services.AddSingleton<IEdgeSyncDiagnosticsQuery>(new FakeEdgeSyncDiagnosticsQuery());
+        services.AddSingleton<IIoViewWriteGateAuditStore>(auditStore);
+        services.AddSingleton<IPlcIoWriteTraceStore>(traceStore);
+        var provider = services.BuildServiceProvider();
+
+        var viewModel = new DiagnosticsViewModel(
+            provider,
+            CreateLanguageService(),
+            "Core.Diagnostics",
+            "Navigation_Menu_CoreDiagnostics",
+            "系统诊断");
+
+        await viewModel.OnActivatedAsync();
+
+        Assert.Equal(6, viewModel.FieldAcceptanceRows.Count);
+        Assert.Contains(viewModel.FieldAcceptanceRows, row =>
+            row.Scope == "运行模式" &&
+            row.Status == "--start-runtime" &&
+            row.Message.Contains("允许现场只读联调", StringComparison.Ordinal));
+        Assert.Contains(viewModel.FieldAcceptanceRows, row =>
+            row.Scope == "I/O 写入申请" &&
+            row.Message.Contains("等待扫描任务按块写入", StringComparison.Ordinal));
+        Assert.Contains(viewModel.FieldAcceptanceRows, row =>
+            row.Scope == "PLC 块写入轨迹" &&
+            row.Status == "成功" &&
+            row.Message.Contains("Start.Reply", StringComparison.Ordinal));
+        Assert.Contains(viewModel.FieldAcceptanceRows, row => row.Scope == "Cloud 状态" && row.Status == "已就绪");
+        Assert.Contains(viewModel.FieldAcceptanceRows, row => row.Scope == "MES 状态" && row.Status == "空闲");
+    }
+
+    [Fact]
+    public async Task Diagnostics_view_model_marks_field_acceptance_summary_as_ui_only_without_runtime_argument()
+    {
+        var runtimeState = new AvaloniaRuntimeState();
+        var services = new ServiceCollection();
+        services.AddSingleton<IAvaloniaRuntimeState>(runtimeState);
+        var provider = services.BuildServiceProvider();
+
+        var viewModel = new DiagnosticsViewModel(
+            provider,
+            CreateLanguageService(),
+            "Core.Diagnostics",
+            "Navigation_Menu_CoreDiagnostics",
+            "系统诊断");
+
+        await viewModel.OnActivatedAsync();
+
+        var runtimeRow = Assert.Single(viewModel.FieldAcceptanceRows, row => row.Scope == "运行模式");
+        Assert.Equal("UI-only", runtimeRow.Status);
+        Assert.Contains("--start-runtime", runtimeRow.Message, StringComparison.Ordinal);
+        Assert.Contains("运行链路未启动", runtimeRow.Message, StringComparison.Ordinal);
     }
 
     private static IAvaloniaLanguageService CreateLanguageService()

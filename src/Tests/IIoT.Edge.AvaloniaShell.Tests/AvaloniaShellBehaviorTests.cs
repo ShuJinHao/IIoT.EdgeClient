@@ -29,6 +29,7 @@ using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Config.ParamView;
 using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Formula.RecipeView;
 using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Hardware.HardwareConfig.ViewModels;
 using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Hardware.IOView;
+using IIoT.Edge.Presentation.Navigation.Avalonia.Views;
 using IIoT.Edge.Presentation.Shell.Avalonia.ViewModels;
 using IIoT.Edge.SharedKernel.DataPipeline.Recipe;
 using IIoT.Edge.SharedKernel.Context;
@@ -125,6 +126,19 @@ public sealed class AvaloniaShellBehaviorTests
             Assert.NotNull(navigation.CurrentView);
             Assert.NotNull(navigation.CurrentViewModel);
         }
+    }
+
+    [AvaloniaFact]
+    public void Diagnostics_page_exposes_field_acceptance_summary_as_readonly_grid()
+    {
+        var page = new DiagnosticsPage();
+
+        var grid = page.FindControl<DataGrid>("FieldAcceptanceSummaryGrid");
+
+        Assert.NotNull(grid);
+        Assert.True(grid!.IsReadOnly);
+        Assert.False(grid.AutoGenerateColumns);
+        Assert.Equal(3, grid.Columns.Count);
     }
 
     [AvaloniaFact]

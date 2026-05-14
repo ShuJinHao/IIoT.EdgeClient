@@ -30,6 +30,7 @@ public sealed class NavigationAvaloniaZhCnResources : IAvaloniaResourceContribut
             ["Navigation_Tab_MesParams"] = "MES 参数",
             ["Navigation_Tab_CloudParams"] = "云端参数",
             ["Navigation_Tab_PluginBusinessParams"] = "插件业务参数",
+            ["Navigation_Diagnostics_Tab_FieldSummary"] = "现场联调摘要",
             ["Navigation_Diagnostics_Tab_IoWriteGate"] = "I/O 写入闸门",
             ["Navigation_Diagnostics_Tab_PlcWriteTrace"] = "PLC 写入轨迹",
 
@@ -76,6 +77,7 @@ public sealed class NavigationAvaloniaZhCnResources : IAvaloniaResourceContribut
             ["Navigation_Column_DataType"] = "数据类型",
             ["Navigation_Column_Direction"] = "方向",
             ["Navigation_Column_Editable"] = "可编辑",
+            ["Navigation_Column_SummaryItem"] = "项目",
             ["Navigation_Column_Status"] = "状态",
             ["Navigation_Column_Message"] = "信息",
             ["Navigation_Column_TaskKey"] = "任务 Key",
@@ -221,6 +223,7 @@ public sealed class NavigationAvaloniaEnUsResources : IAvaloniaResourceContribut
             ["Navigation_Tab_MesParams"] = "MES Parameters",
             ["Navigation_Tab_CloudParams"] = "Cloud Parameters",
             ["Navigation_Tab_PluginBusinessParams"] = "Plugin Business Parameters",
+            ["Navigation_Diagnostics_Tab_FieldSummary"] = "Field Acceptance Summary",
             ["Navigation_Diagnostics_Tab_IoWriteGate"] = "I/O Write Gate",
             ["Navigation_Diagnostics_Tab_PlcWriteTrace"] = "PLC Write Trace",
 
@@ -267,6 +270,7 @@ public sealed class NavigationAvaloniaEnUsResources : IAvaloniaResourceContribut
             ["Navigation_Column_DataType"] = "Data Type",
             ["Navigation_Column_Direction"] = "Direction",
             ["Navigation_Column_Editable"] = "Editable",
+            ["Navigation_Column_SummaryItem"] = "Item",
             ["Navigation_Column_Status"] = "Status",
             ["Navigation_Column_Message"] = "Message",
             ["Navigation_Column_TaskKey"] = "Task Key",
