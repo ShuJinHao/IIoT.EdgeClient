@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string]$Configuration = 'Release',
 
@@ -12,7 +12,9 @@ param(
 
     [switch]$SkipPublish,
 
-    [switch]$RunRegressionTests
+    [switch]$RunRegressionTests,
+
+    [switch]$VerifyWpfFallback
 )
 
 $ErrorActionPreference = 'Stop'
@@ -182,8 +184,10 @@ function Assert-CandidateNoSourceMatches {
 function Assert-CandidateScriptSafety {
     param([Parameter(Mandatory = $true)][string]$Root)
 
-    $evidenceScript = Join-Path $Root 'scripts\CollectAvaloniaFieldEvidence.ps1'
-    $content = Get-Content -LiteralPath $evidenceScript -Raw -Encoding UTF8
+    $scriptPaths = @(
+        (Join-Path $Root 'scripts\CollectAvaloniaFieldEvidence.ps1'),
+        (Join-Path $Root 'scripts\StartAvaloniaTrialRun.ps1')
+    )
     $forbiddenPatterns = @(
         ('Remove' + '-Item'),
         ('DELETE' + ' FROM'),
@@ -195,9 +199,12 @@ function Assert-CandidateScriptSafety {
         ('Retry' + 'DeadLetter')
     )
 
-    foreach ($pattern in $forbiddenPatterns) {
-        if ($content.IndexOf($pattern, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
-            throw "Evidence script contains forbidden operation '$pattern': $evidenceScript"
+    foreach ($scriptPath in $scriptPaths) {
+        $content = Get-Content -LiteralPath $scriptPath -Raw -Encoding UTF8
+        foreach ($pattern in $forbiddenPatterns) {
+            if ($content.IndexOf($pattern, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                throw "Script contains forbidden operation '$pattern': $scriptPath"
+            }
         }
     }
 }
@@ -211,6 +218,8 @@ $fieldChecklistName = 'Avalonia12-' + (Join-CandidateUnicodeName -CodePoints @(0
 $nugetExceptionName = 'NuGet' + (Join-CandidateUnicodeName -CodePoints @(0x9884, 0x89C8, 0x4F20, 0x9012, 0x4F9D, 0x8D56, 0x4F8B, 0x5916, 0x8BB0, 0x5F55)) + '.md'
 $switchMatrixName = 'Avalonia12-' + (Join-CandidateUnicodeName -CodePoints @(0x5207, 0x6362, 0x524D, 0x5DEE, 0x5F02, 0x77E9, 0x9635)) + '.md'
 $switchBlockerName = 'Avalonia12-' + (Join-CandidateUnicodeName -CodePoints @(0x5207, 0x6362, 0x963B, 0x65AD, 0x6E05, 0x5355)) + '.md'
+$trialManualName = 'Avalonia12-' + (Join-CandidateUnicodeName -CodePoints @(0x73B0, 0x573A, 0x8BD5, 0x8FD0, 0x884C, 0x624B, 0x518C)) + '.md'
+$trialAcceptanceTemplateName = 'Avalonia12-' + (Join-CandidateUnicodeName -CodePoints @(0x73B0, 0x573A, 0x8BD5, 0x8FD0, 0x884C, 0x9A8C, 0x6536, 0x8BB0, 0x5F55, 0x6A21, 0x677F)) + '.md'
 $publishScript = Join-Path $repoRoot 'scripts\PublishAvaloniaMigration.ps1'
 $evidenceScript = Join-Path $repoRoot 'scripts\CollectAvaloniaFieldEvidence.ps1'
 $releaseRoot = Join-Path (Resolve-CandidateFullPath -BasePath $repoRoot -PathValue $OutputRoot) $Configuration
@@ -219,6 +228,8 @@ $shellRoot = Join-Path $releaseRoot 'avalonia-shell'
 $manifestPath = Join-Path $releaseRoot 'release-manifest.json'
 $launcherProject = Join-Path $repoRoot 'src\Edge\IIoT.Edge.Launcher.Avalonia\IIoT.Edge.Launcher.Avalonia.csproj'
 $shellProject = Join-Path $repoRoot 'src\Edge\IIoT.Edge.AvaloniaShell\IIoT.Edge.AvaloniaShell.csproj'
+$wpfLauncherProject = Join-Path $repoRoot 'src\Edge\IIoT.Edge.Launcher\IIoT.Edge.Launcher.csproj'
+$wpfShellProject = Join-Path $repoRoot 'src\Edge\IIoT.Edge.Shell\IIoT.Edge.Shell.csproj'
 $results = [System.Collections.Generic.List[object]]::new()
 
 if (-not $SkipPublish) {
@@ -239,6 +250,9 @@ Assert-CandidateRequiredFile -Root (Join-Path $releaseRoot 'docs') -RelativePath
 Assert-CandidateRequiredFile -Root (Join-Path $releaseRoot 'docs') -RelativePath $nugetExceptionName
 Assert-CandidateRequiredFile -Root (Join-Path $releaseRoot 'docs') -RelativePath $switchMatrixName
 Assert-CandidateRequiredFile -Root (Join-Path $releaseRoot 'docs') -RelativePath $switchBlockerName
+Assert-CandidateRequiredFile -Root (Join-Path $releaseRoot 'docs') -RelativePath $trialManualName
+Assert-CandidateRequiredFile -Root (Join-Path $releaseRoot 'docs') -RelativePath $trialAcceptanceTemplateName
+Assert-CandidateRequiredFile -Root (Join-Path $releaseRoot 'scripts') -RelativePath 'StartAvaloniaTrialRun.ps1'
 
 $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
 if ($manifest.releaseKind -ne 'AvaloniaMigration') {
@@ -296,6 +310,34 @@ Assert-CandidateNoSourceMatches `
 
 Assert-CandidateScriptSafety -Root $repoRoot
 
+$wpfFallback = [PSCustomObject]@{
+    verified = $false
+    launcherProject = $wpfLauncherProject
+    shellProject = $wpfShellProject
+    fallbackInstruction = '保留 WPF Launcher/WPF Shell 作为生产回退入口；Avalonia 试运行失败时保存证据后启动 WPF 入口。'
+}
+
+if ($VerifyWpfFallback) {
+    Invoke-CandidateCommand `
+        -Name 'build WPF Shell fallback' `
+        -Executable 'dotnet' `
+        -Arguments @('build', $wpfShellProject, '-m:1', '/p:UseSharedCompilation=false') `
+        -Results $results
+
+    Invoke-CandidateCommand `
+        -Name 'build WPF Launcher fallback' `
+        -Executable 'dotnet' `
+        -Arguments @('build', $wpfLauncherProject, '-m:1', '/p:UseSharedCompilation=false') `
+        -Results $results
+
+    $wpfFallback = [PSCustomObject]@{
+        verified = $true
+        launcherProject = $wpfLauncherProject
+        shellProject = $wpfShellProject
+        fallbackInstruction = 'WPF Launcher/WPF Shell 已在候选验收中构建通过；现场试运行失败时不切 Avalonia 默认入口，直接回退 WPF。'
+    }
+}
+
 if ($RunRegressionTests) {
     foreach ($testProject in @(
         'src\Tests\IIoT.Edge.AvaloniaShell.Tests\IIoT.Edge.AvaloniaShell.Tests.csproj',
@@ -317,8 +359,10 @@ $summary = [PSCustomObject]@{
     releaseRoot = $releaseRoot
     manifest = $manifestPath
     previewPackages = $previewPackages
+    wpfFallback = $wpfFallback
     commands = @($results)
     regressionTestsRequested = [bool]$RunRegressionTests
+    wpfFallbackVerificationRequested = [bool]$VerifyWpfFallback
 }
 
 $summaryPath = Join-Path $releaseRoot 'candidate-validation-summary.json'

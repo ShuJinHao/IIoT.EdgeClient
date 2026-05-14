@@ -40,6 +40,14 @@ public sealed class AvaloniaSwitchReadinessTests
         Assert.Contains("Cloud/MES 清理、重试、删除", blockers, StringComparison.Ordinal);
         Assert.Contains("ReadDataAsync", blockers, StringComparison.Ordinal);
         Assert.Contains("WriteDataAsync", blockers, StringComparison.Ordinal);
+
+        var trialManual = File.ReadAllText(Path.Combine(root, "docs", "Avalonia12-现场试运行手册.md"));
+        var acceptanceTemplate = File.ReadAllText(Path.Combine(root, "docs", "Avalonia12-现场试运行验收记录模板.md"));
+        Assert.Contains("UI-only", trialManual, StringComparison.Ordinal);
+        Assert.Contains("--start-runtime", trialManual, StringComparison.Ordinal);
+        Assert.Contains("回退 WPF", trialManual, StringComparison.Ordinal);
+        Assert.Contains("P0 阻断项", acceptanceTemplate, StringComparison.Ordinal);
+        Assert.Contains("WPF Shell 回退", acceptanceTemplate, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -57,9 +65,29 @@ public sealed class AvaloniaSwitchReadinessTests
         Assert.Contains("SkiaSharp.NativeAssets.Win32", script, StringComparison.Ordinal);
         Assert.Contains("System\\.Windows|UseWPF|IIoT\\.Edge\\.UI\\.Shared|SukiUI", script, StringComparison.Ordinal);
         Assert.Contains("ReadDataAsync|WriteDataAsync", script, StringComparison.Ordinal);
+        Assert.Contains("VerifyWpfFallback", script, StringComparison.Ordinal);
+        Assert.Contains("IIoT.Edge.Launcher.csproj", script, StringComparison.Ordinal);
+        Assert.Contains("IIoT.Edge.Shell.csproj", script, StringComparison.Ordinal);
+        Assert.Contains("wpfFallback", script, StringComparison.Ordinal);
         Assert.Contains("candidate-validation-summary.json", script, StringComparison.Ordinal);
-        Assert.DoesNotContain("IIoT.Edge.Shell.csproj', 'publish", script, StringComparison.Ordinal);
-        Assert.DoesNotContain("src\\Edge\\IIoT.Edge.Launcher\\IIoT.Edge.Launcher.csproj", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Trial_run_script_defaults_to_ui_only_and_requires_explicit_runtime_switch()
+    {
+        var root = FindRepositoryRoot();
+        var scriptPath = Path.Combine(root, "scripts", "StartAvaloniaTrialRun.ps1");
+        Assert.True(File.Exists(scriptPath), $"Missing script: {scriptPath}");
+
+        var script = File.ReadAllText(scriptPath);
+        Assert.Contains("[switch]$StartRuntime", script, StringComparison.Ordinal);
+        Assert.Contains("$arguments += '--start-runtime'", script, StringComparison.Ordinal);
+        Assert.Contains("运行联调必须直接启动 AvaloniaShell", script, StringComparison.Ordinal);
+        Assert.Contains("trial-run-logs", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("DELETE FROM", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("DROP TABLE", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ReadDataAsync", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("WriteDataAsync", script, StringComparison.Ordinal);
     }
 
     private static string FindRepositoryRoot()
@@ -78,4 +106,3 @@ public sealed class AvaloniaSwitchReadinessTests
         throw new InvalidOperationException("Repository root was not found.");
     }
 }
-

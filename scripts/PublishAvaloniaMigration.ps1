@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string]$Configuration = 'Release',
 
@@ -21,6 +21,8 @@ $ErrorActionPreference = 'Stop'
 # NuGet预览传递依赖例外记录.md
 # Avalonia12-切换前差异矩阵.md
 # Avalonia12-切换阻断清单.md
+# Avalonia12-现场试运行手册.md
+# Avalonia12-现场试运行验收记录模板.md
 
 function Join-UnicodeName {
     param(
@@ -391,7 +393,16 @@ function Test-AvaloniaReleaseLayout {
         [string]$SwitchMatrixName,
 
         [Parameter(Mandatory = $true)]
-        [string]$SwitchBlockerName
+        [string]$SwitchBlockerName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$TrialManualName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$TrialAcceptanceTemplateName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$TrialRunScriptName
     )
 
     Assert-AvaloniaRequiredFile -Root $LauncherRoot -RelativePath 'IIoT.Edge.Launcher.Avalonia.exe'
@@ -451,16 +462,25 @@ function Test-AvaloniaReleaseLayout {
     Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'docs') -RelativePath $NuGetExceptionName
     Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'docs') -RelativePath $SwitchMatrixName
     Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'docs') -RelativePath $SwitchBlockerName
+    Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'docs') -RelativePath $TrialManualName
+    Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'docs') -RelativePath $TrialAcceptanceTemplateName
+    Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'scripts') -RelativePath $TrialRunScriptName
 }
 
 $fieldChecklistName = 'Avalonia12-' + (Join-UnicodeName -CodePoints @(0x73B0, 0x573A, 0x8054, 0x8C03, 0x68C0, 0x67E5, 0x6E05, 0x5355)) + '.md'
 $nugetExceptionName = 'NuGet' + (Join-UnicodeName -CodePoints @(0x9884, 0x89C8, 0x4F20, 0x9012, 0x4F9D, 0x8D56, 0x4F8B, 0x5916, 0x8BB0, 0x5F55)) + '.md'
 $switchMatrixName = 'Avalonia12-' + (Join-UnicodeName -CodePoints @(0x5207, 0x6362, 0x524D, 0x5DEE, 0x5F02, 0x77E9, 0x9635)) + '.md'
 $switchBlockerName = 'Avalonia12-' + (Join-UnicodeName -CodePoints @(0x5207, 0x6362, 0x963B, 0x65AD, 0x6E05, 0x5355)) + '.md'
+$trialManualName = 'Avalonia12-' + (Join-UnicodeName -CodePoints @(0x73B0, 0x573A, 0x8BD5, 0x8FD0, 0x884C, 0x624B, 0x518C)) + '.md'
+$trialAcceptanceTemplateName = 'Avalonia12-' + (Join-UnicodeName -CodePoints @(0x73B0, 0x573A, 0x8BD5, 0x8FD0, 0x884C, 0x9A8C, 0x6536, 0x8BB0, 0x5F55, 0x6A21, 0x677F)) + '.md'
+$trialRunScriptName = 'StartAvaloniaTrialRun.ps1'
 $fieldChecklistRelativePath = Join-Path 'docs' $fieldChecklistName
 $nugetExceptionRelativePath = Join-Path 'docs' $nugetExceptionName
 $switchMatrixRelativePath = Join-Path 'docs' $switchMatrixName
 $switchBlockerRelativePath = Join-Path 'docs' $switchBlockerName
+$trialManualRelativePath = Join-Path 'docs' $trialManualName
+$trialAcceptanceTemplateRelativePath = Join-Path 'docs' $trialAcceptanceTemplateName
+$trialRunScriptRelativePath = Join-Path 'scripts' $trialRunScriptName
 
 $repoRoot = if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
     [System.IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
@@ -496,6 +516,7 @@ $pluginBuildRoot = Join-Path $stagingRoot 'build\module-homogenization'
 $launcherRoot = Join-Path $releaseRoot 'avalonia-launcher'
 $shellRoot = Join-Path $releaseRoot 'avalonia-shell'
 $docsRoot = Join-Path $releaseRoot 'docs'
+$scriptsRoot = Join-Path $releaseRoot 'scripts'
 $manifestPath = Join-Path $releaseRoot 'release-manifest.json'
 $validationCommands = [System.Collections.Generic.List[object]]::new()
 
@@ -504,7 +525,7 @@ try {
         Remove-AvaloniaPathIfExists -GuardRoot $repoRoot -TargetPath $releaseRoot
     }
     else {
-        foreach ($ownedPath in @($launcherRoot, $shellRoot, $docsRoot, $manifestPath)) {
+        foreach ($ownedPath in @($launcherRoot, $shellRoot, $docsRoot, $scriptsRoot, $manifestPath)) {
             Remove-AvaloniaPathIfExists -GuardRoot $repoRoot -TargetPath $ownedPath
         }
     }
@@ -593,6 +614,10 @@ try {
     Copy-Item -Path (Join-Path $repoRoot $nugetExceptionRelativePath) -Destination (Join-Path $docsRoot $nugetExceptionName) -Force
     Copy-Item -Path (Join-Path $repoRoot $switchMatrixRelativePath) -Destination (Join-Path $docsRoot $switchMatrixName) -Force
     Copy-Item -Path (Join-Path $repoRoot $switchBlockerRelativePath) -Destination (Join-Path $docsRoot $switchBlockerName) -Force
+    Copy-Item -Path (Join-Path $repoRoot $trialManualRelativePath) -Destination (Join-Path $docsRoot $trialManualName) -Force
+    Copy-Item -Path (Join-Path $repoRoot $trialAcceptanceTemplateRelativePath) -Destination (Join-Path $docsRoot $trialAcceptanceTemplateName) -Force
+    New-Item -Path $scriptsRoot -ItemType Directory -Force | Out-Null
+    Copy-Item -Path (Join-Path $repoRoot $trialRunScriptRelativePath) -Destination (Join-Path $scriptsRoot $trialRunScriptName) -Force
 
     $validationCommands.Add([PSCustomObject]@{
         name = 'validate Avalonia release layout'
@@ -605,7 +630,10 @@ try {
         -FieldChecklistName $fieldChecklistName `
         -NuGetExceptionName $nugetExceptionName `
         -SwitchMatrixName $switchMatrixName `
-        -SwitchBlockerName $switchBlockerName
+        -SwitchBlockerName $switchBlockerName `
+        -TrialManualName $trialManualName `
+        -TrialAcceptanceTemplateName $trialAcceptanceTemplateName `
+        -TrialRunScriptName $trialRunScriptName
 
     $validationCommands.Add([PSCustomObject]@{
         name = 'validate SkiaSharp preview exception'
@@ -648,6 +676,7 @@ try {
             launcher = $launcherRoot
             shell = $shellRoot
             docs = $docsRoot
+            scripts = $scriptsRoot
         }
         projects = @(
             Get-AvaloniaProjectMetadata -RepoRoot $repoRoot -ProjectPath $launcherProject -PublishedAssemblyPath (Join-Path $launcherRoot 'IIoT.Edge.Launcher.Avalonia.exe')

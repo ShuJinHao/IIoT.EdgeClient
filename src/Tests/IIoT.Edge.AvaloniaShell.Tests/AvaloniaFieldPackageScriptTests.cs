@@ -22,6 +22,9 @@ public sealed class AvaloniaFieldPackageScriptTests
         Assert.Contains("nugetExceptionRelativePath", script, StringComparison.Ordinal);
         Assert.Contains("switchMatrixRelativePath", script, StringComparison.Ordinal);
         Assert.Contains("switchBlockerRelativePath", script, StringComparison.Ordinal);
+        Assert.Contains("trialManualRelativePath", script, StringComparison.Ordinal);
+        Assert.Contains("trialAcceptanceTemplateRelativePath", script, StringComparison.Ordinal);
+        Assert.Contains("StartAvaloniaTrialRun.ps1", script, StringComparison.Ordinal);
         Assert.Contains("Join-UnicodeName", script, StringComparison.Ordinal);
         Assert.Contains("SkiaSharp", script, StringComparison.Ordinal);
         Assert.DoesNotContain("IIoT.Edge.Shell.csproj", script, StringComparison.Ordinal);
@@ -42,6 +45,8 @@ public sealed class AvaloniaFieldPackageScriptTests
         Assert.Contains("截图占位说明.md", script, StringComparison.Ordinal);
         Assert.Contains("Avalonia12-切换前差异矩阵.md", script, StringComparison.Ordinal);
         Assert.Contains("Avalonia12-切换阻断清单.md", script, StringComparison.Ordinal);
+        Assert.Contains("Avalonia12-现场试运行手册.md", script, StringComparison.Ordinal);
+        Assert.Contains("Avalonia12-现场试运行验收记录模板.md", script, StringComparison.Ordinal);
         Assert.Contains("diagnostics", script, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Remove-Item", script, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("DELETE FROM", script, StringComparison.OrdinalIgnoreCase);
