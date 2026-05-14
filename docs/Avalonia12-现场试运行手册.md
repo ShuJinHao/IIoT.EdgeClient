@@ -9,7 +9,7 @@
 - 使用 `publish\avalonia-migration\Release` 目录中的发布包。
 - 保留 WPF Launcher 和 WPF Shell 可用，作为回退入口。
 - 确认现场账号、设备配置、PLC 连接、Cloud/MES 配置由现有运行目录提供。
-- 试运行前先执行 `scripts\TestAvaloniaMigrationCandidate.ps1 -Configuration Release -VerifyWpfFallback`，确认候选包和 WPF 回退线均通过。
+- 试运行前先执行 `scripts\TestAvaloniaMigrationCandidate.ps1 -Configuration Release -VerifyWpfFallback -FullGate`，确认候选包、证据审查、全部回归和 WPF 回退线均通过。
 
 ## 步骤
 

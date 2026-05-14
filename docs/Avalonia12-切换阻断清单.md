@@ -36,5 +36,4 @@
 
 ## 当前判定
 
-截至第十三批开始前，Avalonia 迁移仍处于“发布候选与现场试运行准备”阶段。没有完成 P0/P1 验收前，不允许把 Avalonia Launcher 或 Avalonia Shell 切为生产默认入口。
-
+截至第十四批完成后，候选包发布、证据采集预检、依赖/漏洞扫描、WPF 回退构建和既有回归已通过自动化验证；P0 技术门禁具备进入 FullGate 复验条件。P1 中的多屏、高 DPI、触摸、真实 `--start-runtime` 和 PLC 侧状态仍需现场证据关闭。没有完整现场证据和问题回收结论前，不允许把 Avalonia Launcher 或 Avalonia Shell 切为生产默认入口。

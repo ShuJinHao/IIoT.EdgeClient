@@ -108,7 +108,10 @@ public sealed class AvaloniaPublishLayoutPreflightTests
         Assert.Contains("switchBlockerRelativePath", script, StringComparison.Ordinal);
         Assert.Contains("trialManualRelativePath", script, StringComparison.Ordinal);
         Assert.Contains("trialAcceptanceTemplateRelativePath", script, StringComparison.Ordinal);
+        Assert.Contains("trialIssueRecoveryRelativePath", script, StringComparison.Ordinal);
+        Assert.Contains("defaultEntryDecisionTemplateRelativePath", script, StringComparison.Ordinal);
         Assert.Contains("StartAvaloniaTrialRun.ps1", script, StringComparison.Ordinal);
+        Assert.Contains("ReviewAvaloniaTrialEvidence.ps1", script, StringComparison.Ordinal);
         Assert.Contains("SkiaSharp", script, StringComparison.Ordinal);
         Assert.DoesNotContain("PublishEdgeRuntime.ps1", script, StringComparison.Ordinal);
         Assert.DoesNotContain("PublishEdgeBundle.ps1", script, StringComparison.Ordinal);

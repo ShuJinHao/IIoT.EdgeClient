@@ -14,7 +14,9 @@ param(
 
     [switch]$RunRegressionTests,
 
-    [switch]$VerifyWpfFallback
+    [switch]$VerifyWpfFallback,
+
+    [switch]$FullGate
 )
 
 $ErrorActionPreference = 'Stop'
@@ -70,15 +72,26 @@ function Invoke-CandidateCommand {
     )
 
     Write-Host "==> $Name"
-    & $Executable @Arguments
+    $output = @(& $Executable @Arguments 2>&1)
+    foreach ($line in $output) {
+        Write-Host $line
+    }
+
     if ($LASTEXITCODE -ne 0) {
         throw "$Name failed with exit code $LASTEXITCODE."
     }
 
-    $Results.Add([PSCustomObject]@{
+    $commandResult = [ordered]@{
         name = $Name
         command = "$Executable $($Arguments -join ' ')"
-    }) | Out-Null
+    }
+
+    $outputText = ($output | ForEach-Object { $_.ToString() }) -join "`n"
+    if ($Name.StartsWith('test ', [System.StringComparison]::OrdinalIgnoreCase) -and $outputText -match '通过:\s*(\d+)') {
+        $commandResult.passedTests = [int]$Matches[1]
+    }
+
+    $Results.Add([PSCustomObject]$commandResult) | Out-Null
 }
 
 function Assert-CandidateRequiredFile {
@@ -186,7 +199,8 @@ function Assert-CandidateScriptSafety {
 
     $scriptPaths = @(
         (Join-Path $Root 'scripts\CollectAvaloniaFieldEvidence.ps1'),
-        (Join-Path $Root 'scripts\StartAvaloniaTrialRun.ps1')
+        (Join-Path $Root 'scripts\StartAvaloniaTrialRun.ps1'),
+        (Join-Path $Root 'scripts\ReviewAvaloniaTrialEvidence.ps1')
     )
     $forbiddenPatterns = @(
         ('Remove' + '-Item'),
@@ -209,6 +223,34 @@ function Assert-CandidateScriptSafety {
     }
 }
 
+function Sync-CandidateValidationArtifactsToEvidence {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$EvidencePackageRoot,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ReleaseManifestPath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$CandidateSummaryPath
+    )
+
+    if (-not (Test-Path -LiteralPath $EvidencePackageRoot -PathType Container)) {
+        return
+    }
+
+    Copy-Item -LiteralPath $ReleaseManifestPath -Destination (Join-Path $EvidencePackageRoot 'release-manifest.json') -Force
+    Copy-Item -LiteralPath $CandidateSummaryPath -Destination (Join-Path $EvidencePackageRoot 'candidate-validation-summary.json') -Force
+
+    $zipPath = "$EvidencePackageRoot.zip"
+    if (Test-Path -LiteralPath $zipPath -PathType Leaf) {
+        Compress-Archive `
+            -Path (Join-Path $EvidencePackageRoot 'release-manifest.json'), (Join-Path $EvidencePackageRoot 'candidate-validation-summary.json') `
+            -DestinationPath $zipPath `
+            -Update
+    }
+}
+
 $repoRoot = Resolve-CandidateRepositoryRoot -InputRoot $RepositoryRoot
 if (-not (Test-Path -LiteralPath (Join-Path $repoRoot 'IIoT.EdgeClient.slnx') -PathType Leaf)) {
     throw "Repository root is invalid: $repoRoot"
@@ -222,6 +264,7 @@ $trialManualName = 'Avalonia12-' + (Join-CandidateUnicodeName -CodePoints @(0x73
 $trialAcceptanceTemplateName = 'Avalonia12-' + (Join-CandidateUnicodeName -CodePoints @(0x73B0, 0x573A, 0x8BD5, 0x8FD0, 0x884C, 0x9A8C, 0x6536, 0x8BB0, 0x5F55, 0x6A21, 0x677F)) + '.md'
 $publishScript = Join-Path $repoRoot 'scripts\PublishAvaloniaMigration.ps1'
 $evidenceScript = Join-Path $repoRoot 'scripts\CollectAvaloniaFieldEvidence.ps1'
+$reviewEvidenceScript = Join-Path $repoRoot 'scripts\ReviewAvaloniaTrialEvidence.ps1'
 $releaseRoot = Join-Path (Resolve-CandidateFullPath -BasePath $repoRoot -PathValue $OutputRoot) $Configuration
 $launcherRoot = Join-Path $releaseRoot 'avalonia-launcher'
 $shellRoot = Join-Path $releaseRoot 'avalonia-shell'
@@ -231,6 +274,8 @@ $shellProject = Join-Path $repoRoot 'src\Edge\IIoT.Edge.AvaloniaShell\IIoT.Edge.
 $wpfLauncherProject = Join-Path $repoRoot 'src\Edge\IIoT.Edge.Launcher\IIoT.Edge.Launcher.csproj'
 $wpfShellProject = Join-Path $repoRoot 'src\Edge\IIoT.Edge.Shell\IIoT.Edge.Shell.csproj'
 $results = [System.Collections.Generic.List[object]]::new()
+$runRegressionGate = [bool]$RunRegressionTests -or [bool]$FullGate
+$verifyWpfFallbackGate = [bool]$VerifyWpfFallback -or [bool]$FullGate
 
 if (-not $SkipPublish) {
     Invoke-CandidateCommand `
@@ -253,6 +298,7 @@ Assert-CandidateRequiredFile -Root (Join-Path $releaseRoot 'docs') -RelativePath
 Assert-CandidateRequiredFile -Root (Join-Path $releaseRoot 'docs') -RelativePath $trialManualName
 Assert-CandidateRequiredFile -Root (Join-Path $releaseRoot 'docs') -RelativePath $trialAcceptanceTemplateName
 Assert-CandidateRequiredFile -Root (Join-Path $releaseRoot 'scripts') -RelativePath 'StartAvaloniaTrialRun.ps1'
+Assert-CandidateRequiredFile -Root (Join-Path $releaseRoot 'scripts') -RelativePath 'ReviewAvaloniaTrialEvidence.ps1'
 
 $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
 if ($manifest.releaseKind -ne 'AvaloniaMigration') {
@@ -268,6 +314,9 @@ Invoke-CandidateCommand `
 if ([string]::IsNullOrWhiteSpace($PackageName)) {
     $PackageName = "AvaloniaCandidateEvidence-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
 }
+
+$resolvedEvidenceOutputRoot = Resolve-CandidateFullPath -BasePath $repoRoot -PathValue $EvidenceOutputRoot
+$evidencePackageRoot = Join-Path $resolvedEvidenceOutputRoot $PackageName
 
 Invoke-CandidateCommand `
     -Name 'collect temporary field evidence package' `
@@ -317,7 +366,7 @@ $wpfFallback = [PSCustomObject]@{
     fallbackInstruction = '保留 WPF Launcher/WPF Shell 作为生产回退入口；Avalonia 试运行失败时保存证据后启动 WPF 入口。'
 }
 
-if ($VerifyWpfFallback) {
+if ($verifyWpfFallbackGate) {
     Invoke-CandidateCommand `
         -Name 'build WPF Shell fallback' `
         -Executable 'dotnet' `
@@ -338,7 +387,7 @@ if ($VerifyWpfFallback) {
     }
 }
 
-if ($RunRegressionTests) {
+if ($runRegressionGate) {
     foreach ($testProject in @(
         'src\Tests\IIoT.Edge.AvaloniaShell.Tests\IIoT.Edge.AvaloniaShell.Tests.csproj',
         'src\Tests\IIoT.Edge.Launcher.Tests\IIoT.Edge.Launcher.Tests.csproj',
@@ -361,12 +410,43 @@ $summary = [PSCustomObject]@{
     previewPackages = $previewPackages
     wpfFallback = $wpfFallback
     commands = @($results)
+    testResults = @($results | Where-Object { $_.PSObject.Properties.Name -contains 'passedTests' } | Select-Object name, passedTests)
     regressionTestsRequested = [bool]$RunRegressionTests
+    fullGate = [bool]$FullGate
     wpfFallbackVerificationRequested = [bool]$VerifyWpfFallback
+    effectiveRegressionTests = $runRegressionGate
+    effectiveWpfFallbackVerification = $verifyWpfFallbackGate
 }
 
 $summaryPath = Join-Path $releaseRoot 'candidate-validation-summary.json'
 $summary | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $summaryPath -Encoding UTF8
+Sync-CandidateValidationArtifactsToEvidence -EvidencePackageRoot $evidencePackageRoot -ReleaseManifestPath $manifestPath -CandidateSummaryPath $summaryPath
+
+if ($FullGate) {
+    Invoke-CandidateCommand `
+        -Name 'review temporary field evidence package' `
+        -Executable 'powershell' `
+        -Arguments @('-ExecutionPolicy', 'Bypass', '-File', $reviewEvidenceScript, '-EvidencePath', $evidencePackageRoot, '-OutputRoot', '.artifacts\avalonia-trial-review') `
+        -Results $results
+
+    $summary = [PSCustomObject]@{
+        generatedAt = [DateTimeOffset]::Now.ToString('O')
+        releaseRoot = $releaseRoot
+        manifest = $manifestPath
+        previewPackages = $previewPackages
+        wpfFallback = $wpfFallback
+        commands = @($results)
+        testResults = @($results | Where-Object { $_.PSObject.Properties.Name -contains 'passedTests' } | Select-Object name, passedTests)
+        regressionTestsRequested = [bool]$RunRegressionTests
+        fullGate = [bool]$FullGate
+        wpfFallbackVerificationRequested = [bool]$VerifyWpfFallback
+        effectiveRegressionTests = $runRegressionGate
+        effectiveWpfFallbackVerification = $verifyWpfFallbackGate
+    }
+
+    $summary | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $summaryPath -Encoding UTF8
+    Sync-CandidateValidationArtifactsToEvidence -EvidencePackageRoot $evidencePackageRoot -ReleaseManifestPath $manifestPath -CandidateSummaryPath $summaryPath
+}
 
 Write-Host 'Avalonia migration candidate validation passed.'
 Write-Host "  Release: $releaseRoot"

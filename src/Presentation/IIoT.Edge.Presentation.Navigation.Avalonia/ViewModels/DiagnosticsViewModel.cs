@@ -310,6 +310,10 @@ public sealed partial class DiagnosticsViewModel : NavigationPageViewModelBase
                 "试运行资料",
                 "发布包 docs",
                 "现场试运行手册、验收记录模板、切换阻断清单和证据采集脚本随发布包一起交付；本页仅提示资料位置。"),
+            new DiagnosticsFieldAcceptanceSummaryRow(
+                "试运行审查资料",
+                "发布包 docs",
+                "试运行问题回收清单、切默认入口决策包模板和证据审查脚本随发布包一起交付；本页不提供切换默认入口操作。"),
             new DiagnosticsFieldAcceptanceSummaryRow("I/O 写入申请", latestIoStatus, latestIoMessage),
             new DiagnosticsFieldAcceptanceSummaryRow("PLC 块写入轨迹", latestTraceStatus, latestTraceMessage),
             new DiagnosticsFieldAcceptanceSummaryRow("Cloud 状态", cloudStatus, cloudMessage),

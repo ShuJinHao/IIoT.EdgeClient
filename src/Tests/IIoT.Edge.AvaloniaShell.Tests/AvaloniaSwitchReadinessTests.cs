@@ -43,11 +43,15 @@ public sealed class AvaloniaSwitchReadinessTests
 
         var trialManual = File.ReadAllText(Path.Combine(root, "docs", "Avalonia12-现场试运行手册.md"));
         var acceptanceTemplate = File.ReadAllText(Path.Combine(root, "docs", "Avalonia12-现场试运行验收记录模板.md"));
+        var issueRecovery = File.ReadAllText(Path.Combine(root, "docs", "Avalonia12-试运行问题回收清单.md"));
+        var decisionTemplate = File.ReadAllText(Path.Combine(root, "docs", "Avalonia12-切默认入口决策包模板.md"));
         Assert.Contains("UI-only", trialManual, StringComparison.Ordinal);
         Assert.Contains("--start-runtime", trialManual, StringComparison.Ordinal);
         Assert.Contains("回退 WPF", trialManual, StringComparison.Ordinal);
         Assert.Contains("P0 阻断项", acceptanceTemplate, StringComparison.Ordinal);
         Assert.Contains("WPF Shell 回退", acceptanceTemplate, StringComparison.Ordinal);
+        Assert.Contains("P1 问题", issueRecovery, StringComparison.Ordinal);
+        Assert.Contains("是否允许进入切默认入口评审", decisionTemplate, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -66,6 +70,10 @@ public sealed class AvaloniaSwitchReadinessTests
         Assert.Contains("System\\.Windows|UseWPF|IIoT\\.Edge\\.UI\\.Shared|SukiUI", script, StringComparison.Ordinal);
         Assert.Contains("ReadDataAsync|WriteDataAsync", script, StringComparison.Ordinal);
         Assert.Contains("VerifyWpfFallback", script, StringComparison.Ordinal);
+        Assert.Contains("FullGate", script, StringComparison.Ordinal);
+        Assert.Contains("effectiveRegressionTests", script, StringComparison.Ordinal);
+        Assert.Contains("testResults", script, StringComparison.Ordinal);
+        Assert.Contains("ReviewAvaloniaTrialEvidence.ps1", script, StringComparison.Ordinal);
         Assert.Contains("IIoT.Edge.Launcher.csproj", script, StringComparison.Ordinal);
         Assert.Contains("IIoT.Edge.Shell.csproj", script, StringComparison.Ordinal);
         Assert.Contains("wpfFallback", script, StringComparison.Ordinal);

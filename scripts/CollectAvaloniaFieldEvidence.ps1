@@ -39,6 +39,8 @@ $script:SwitchMatrixPath = Join-Path $script:RepoRoot 'docs\Avalonia12-切换前
 $script:SwitchBlockerPath = Join-Path $script:RepoRoot 'docs\Avalonia12-切换阻断清单.md'
 $script:TrialManualPath = Join-Path $script:RepoRoot 'docs\Avalonia12-现场试运行手册.md'
 $script:TrialAcceptanceTemplatePath = Join-Path $script:RepoRoot 'docs\Avalonia12-现场试运行验收记录模板.md'
+$script:TrialIssueRecoveryPath = Join-Path $script:RepoRoot 'docs\Avalonia12-试运行问题回收清单.md'
+$script:DefaultEntryDecisionTemplatePath = Join-Path $script:RepoRoot 'docs\Avalonia12-切默认入口决策包模板.md'
 
 if (-not [string]::IsNullOrWhiteSpace($AvaloniaShellDirectory) -and -not $PSBoundParameters.ContainsKey('RuntimeRoot')) {
     $RuntimeRoot = $AvaloniaShellDirectory
@@ -441,8 +443,12 @@ function Write-PackageReadme {
         '- `docs/Avalonia12-现场联调检查清单.md`：现场联调清单副本。',
         '- `docs/Avalonia12-现场试运行手册.md`：现场试运行操作手册副本。',
         '- `docs/Avalonia12-现场试运行验收记录模板.md`：现场验收记录模板副本。',
+        '- `docs/Avalonia12-试运行问题回收清单.md`：P0/P1/P2 问题回收清单副本。',
+        '- `docs/Avalonia12-切默认入口决策包模板.md`：切默认入口评审模板副本。',
         '- `docs/Avalonia12-切换前差异矩阵.md`：WPF 与 Avalonia 切换差异副本。',
         '- `docs/Avalonia12-切换阻断清单.md`：P0/P1/P2 阻断项副本。',
+        '- `release-manifest.json`：发布包 manifest 副本。',
+        '- `candidate-validation-summary.json`：候选包验收摘要副本。',
         '- `manifest.json`：本次采集输入、输出和只读边界记录。',
         '',
         '## 只读边界',
@@ -516,6 +522,11 @@ $diagnosticsFilesRoot = Join-Path $packageRoot 'diagnostics'
 $launcherRoot = Join-Path $packageRoot 'launcher'
 $screenshotsRoot = Join-Path $packageRoot 'screenshots'
 $docsRoot = Join-Path $packageRoot 'docs'
+$releaseRoot = Split-Path -Parent $runtimeLayout.RuntimeRoot
+$releaseManifestSource = Join-Path $releaseRoot 'release-manifest.json'
+$candidateSummarySource = Join-Path $releaseRoot 'candidate-validation-summary.json'
+$copiedReleaseManifest = $false
+$copiedCandidateSummary = $false
 
 $copiedLogs = @(Copy-SelectedFiles `
     -SourceDirectory $runtimeLayout.LogDirectory `
@@ -583,6 +594,24 @@ if (Test-Path -LiteralPath $script:TrialAcceptanceTemplatePath -PathType Leaf) {
     Copy-Item -LiteralPath $script:TrialAcceptanceTemplatePath -Destination (Join-Path $docsRoot 'Avalonia12-现场试运行验收记录模板.md') -Force
 }
 
+if (Test-Path -LiteralPath $script:TrialIssueRecoveryPath -PathType Leaf) {
+    Copy-Item -LiteralPath $script:TrialIssueRecoveryPath -Destination (Join-Path $docsRoot 'Avalonia12-试运行问题回收清单.md') -Force
+}
+
+if (Test-Path -LiteralPath $script:DefaultEntryDecisionTemplatePath -PathType Leaf) {
+    Copy-Item -LiteralPath $script:DefaultEntryDecisionTemplatePath -Destination (Join-Path $docsRoot 'Avalonia12-切默认入口决策包模板.md') -Force
+}
+
+if (Test-Path -LiteralPath $releaseManifestSource -PathType Leaf) {
+    Copy-Item -LiteralPath $releaseManifestSource -Destination (Join-Path $packageRoot 'release-manifest.json') -Force
+    $copiedReleaseManifest = $true
+}
+
+if (Test-Path -LiteralPath $candidateSummarySource -PathType Leaf) {
+    Copy-Item -LiteralPath $candidateSummarySource -Destination (Join-Path $packageRoot 'candidate-validation-summary.json') -Force
+    $copiedCandidateSummary = $true
+}
+
 Write-DiagnosticsSummary `
     -Path (Join-Path $packageRoot 'diagnostics-summary.md') `
     -RuntimeLayout $runtimeLayout `
@@ -608,6 +637,9 @@ $manifest = [ordered]@{
     copiedLogCount = $copiedLogs.Count
     copiedDiagnosticsFileCount = $copiedDiagnosticsFiles.Count
     copiedScreenshotCount = $copiedScreenshots.Count
+    releaseRoot = $releaseRoot
+    releaseManifestPath = if ($copiedReleaseManifest) { $releaseManifestSource } else { $null }
+    candidateValidationSummaryPath = if ($copiedCandidateSummary) { $candidateSummarySource } else { $null }
     excludedRuntimeDataDirectories = @('db', 'context', 'recipe', 'excel')
     readonlyBoundary = @(
         '只复制诊断日志、诊断文本、Launcher profile 和用户提供的截图。',

@@ -24,7 +24,10 @@ public sealed class AvaloniaFieldPackageScriptTests
         Assert.Contains("switchBlockerRelativePath", script, StringComparison.Ordinal);
         Assert.Contains("trialManualRelativePath", script, StringComparison.Ordinal);
         Assert.Contains("trialAcceptanceTemplateRelativePath", script, StringComparison.Ordinal);
+        Assert.Contains("trialIssueRecoveryRelativePath", script, StringComparison.Ordinal);
+        Assert.Contains("defaultEntryDecisionTemplateRelativePath", script, StringComparison.Ordinal);
         Assert.Contains("StartAvaloniaTrialRun.ps1", script, StringComparison.Ordinal);
+        Assert.Contains("ReviewAvaloniaTrialEvidence.ps1", script, StringComparison.Ordinal);
         Assert.Contains("Join-UnicodeName", script, StringComparison.Ordinal);
         Assert.Contains("SkiaSharp", script, StringComparison.Ordinal);
         Assert.DoesNotContain("IIoT.Edge.Shell.csproj", script, StringComparison.Ordinal);
@@ -47,11 +50,39 @@ public sealed class AvaloniaFieldPackageScriptTests
         Assert.Contains("Avalonia12-切换阻断清单.md", script, StringComparison.Ordinal);
         Assert.Contains("Avalonia12-现场试运行手册.md", script, StringComparison.Ordinal);
         Assert.Contains("Avalonia12-现场试运行验收记录模板.md", script, StringComparison.Ordinal);
+        Assert.Contains("Avalonia12-试运行问题回收清单.md", script, StringComparison.Ordinal);
+        Assert.Contains("Avalonia12-切默认入口决策包模板.md", script, StringComparison.Ordinal);
+        Assert.Contains("release-manifest.json", script, StringComparison.Ordinal);
+        Assert.Contains("candidate-validation-summary.json", script, StringComparison.Ordinal);
         Assert.Contains("diagnostics", script, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Remove-Item", script, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("DELETE FROM", script, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("DROP TABLE", script, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("dotnet ef", script, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Trial_evidence_review_script_is_read_only_and_reports_gate_state()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var scriptPath = Path.Combine(repoRoot, "scripts", "ReviewAvaloniaTrialEvidence.ps1");
+
+        Assert.True(File.Exists(scriptPath), $"Missing script: {scriptPath}");
+
+        var script = File.ReadAllText(scriptPath);
+        Assert.Contains("trial-review-summary.json", script, StringComparison.Ordinal);
+        Assert.Contains("trial-review-report.md", script, StringComparison.Ordinal);
+        Assert.Contains("release-manifest.json", script, StringComparison.Ordinal);
+        Assert.Contains("candidate-validation-summary.json", script, StringComparison.Ordinal);
+        Assert.Contains("launcher.profiles.json", script, StringComparison.Ordinal);
+        Assert.Contains("截图占位说明", script, StringComparison.Ordinal);
+        Assert.Contains("P0Blocked", script, StringComparison.Ordinal);
+        Assert.Contains("P1Pending", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("Remove-Item", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("DELETE FROM", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("DROP TABLE", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ReadDataAsync", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("WriteDataAsync", script, StringComparison.Ordinal);
     }
 
     [Fact]
