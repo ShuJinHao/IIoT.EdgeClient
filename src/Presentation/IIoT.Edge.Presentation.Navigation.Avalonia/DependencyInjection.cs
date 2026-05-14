@@ -11,7 +11,8 @@ public static class DependencyInjection
     {
         services.AddSingleton<IAvaloniaResourceContributor, NavigationAvaloniaZhCnResources>();
         services.AddSingleton<IAvaloniaResourceContributor, NavigationAvaloniaEnUsResources>();
-        services.AddSingleton<IIoViewSafeInteractionPort, NoopIoViewSafeInteractionPort>();
+        services.AddSingleton<IIoViewWriteGateAuditStore, IoViewWriteGateAuditStore>();
+        services.AddSingleton<IIoViewSafeInteractionPort, RuntimeBufferIoViewSafeInteractionPort>();
         return services;
     }
 }

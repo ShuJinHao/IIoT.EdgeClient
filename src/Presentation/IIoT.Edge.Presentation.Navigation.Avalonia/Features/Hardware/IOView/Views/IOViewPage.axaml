@@ -30,6 +30,10 @@
           </Grid>
         </Border>
 
+        <Border Padding="10" Background="#111827" BorderBrush="#334155" BorderThickness="1" CornerRadius="8">
+          <TextBlock Foreground="#E2E8F0" Text="{Binding WriteGateStatusText}" TextWrapping="Wrap" />
+        </Border>
+
         <Border Padding="12" BorderBrush="#334155" BorderThickness="1" CornerRadius="8" IsVisible="{Binding HasInteractionRows}">
           <StackPanel Spacing="10">
             <TextBlock FontSize="15" FontWeight="SemiBold" Foreground="#F8FAFC" Text="{DynamicResource Navigation_Title_IoInteractionGroup}" />
@@ -40,6 +44,8 @@
                 <DataGridTextColumn Width="100" Binding="{Binding PlcValueText}" IsReadOnly="True" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_PlcValue" />
                 <DataGridTextColumn Width="2*" Binding="{Binding HostReplyAddressText}" IsReadOnly="True" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_CurrentReply" />
                 <DataGridTextColumn Width="100" Binding="{Binding HostReplyValueText}" IsReadOnly="True" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_ReplyValue" />
+                <DataGridTextColumn Width="110" Binding="{Binding LastWriteValueText}" IsReadOnly="True" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_LastWriteValue" />
+                <DataGridTextColumn Width="2*" Binding="{Binding LastWriteResultText}" IsReadOnly="True" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_LastWriteResult" />
                 <DataGridTemplateColumn Width="120" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_WriteValue">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate>

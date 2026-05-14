@@ -8,6 +8,8 @@ public sealed class IoInteractionRowModel : ObservableObject
 {
     private bool _writeValueInitialized;
     private int _writeValue;
+    private string _lastWriteValueText = "--";
+    private string _lastWriteResultText = "尚未申请写入";
 
     public string BusinessGroup { get; init; } = string.Empty;
 
@@ -33,6 +35,18 @@ public sealed class IoInteractionRowModel : ObservableObject
                 _writeValueInitialized = true;
             }
         }
+    }
+
+    public string LastWriteValueText
+    {
+        get => _lastWriteValueText;
+        set => SetProperty(ref _lastWriteValueText, value);
+    }
+
+    public string LastWriteResultText
+    {
+        get => _lastWriteResultText;
+        set => SetProperty(ref _lastWriteResultText, value);
     }
 
     public string PlcAddressSummary => FormatJoined(PlcSignals, static x => x.PlcAddress);

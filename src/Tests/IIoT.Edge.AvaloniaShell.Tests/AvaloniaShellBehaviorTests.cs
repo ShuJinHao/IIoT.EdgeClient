@@ -3,6 +3,7 @@ using Avalonia.Headless.XUnit;
 using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Context;
+using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
@@ -190,11 +191,26 @@ public sealed class AvaloniaShellBehaviorTests
         var plcManager = new FakePlcConnectionManager();
         var plcDataStore = new FakePlcDataStore();
         var runtimeState = new AvaloniaRuntimeState();
+        var dialog = new FakeAvaloniaDialogService { ConfirmResult = true };
+        var permission = new FakePermissionService { CanEditHardwareValue = true };
+        var auditStore = new IoViewWriteGateAuditStore();
+        var languageService = provider.GetRequiredService<IAvaloniaLanguageService>();
+        var safePort = new RuntimeBufferIoViewSafeInteractionPort(
+            runtimeState,
+            permission,
+            plcManager,
+            plcDataStore,
+            dialog,
+            languageService,
+            provider.GetRequiredService<ILogService>(),
+            auditStore);
         var viewModel = new IoViewViewModel(
             crud,
             plcManager,
             plcDataStore,
-            provider.GetRequiredService<IAvaloniaLanguageService>(),
+            languageService,
+            safePort,
+            permission,
             runtimeState);
 
         await viewModel.OnActivatedAsync();
@@ -233,8 +249,11 @@ public sealed class AvaloniaShellBehaviorTests
 
         var row = viewModel.InteractionRows.First();
         Assert.NotNull(row.WriteCommand);
+        row.WriteValue = 9;
         await row.WriteCommand.ExecuteAsync(null);
-        Assert.Contains("真实写入已禁用", viewModel.FeedbackMessage);
+        Assert.Contains("已写入运行时缓冲", viewModel.FeedbackMessage);
+        Assert.Equal("9", row.HostReplyValueText);
+        Assert.Contains("已写入运行时缓冲", Assert.Single(auditStore.GetRecent()).Message);
     }
 
     [AvaloniaFact]
@@ -984,7 +1003,9 @@ public sealed class AvaloniaShellBehaviorTests
 
         public bool CanEditParams => CanEditParamsValue;
 
-        public bool CanEditHardware => true;
+        public bool CanEditHardwareValue { get; set; } = true;
+
+        public bool CanEditHardware => CanEditHardwareValue;
 
         public bool IsLocalAdmin => true;
 

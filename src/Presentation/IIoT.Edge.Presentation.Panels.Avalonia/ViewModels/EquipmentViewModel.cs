@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Features.Production.Equipment;
@@ -14,6 +15,8 @@ public sealed partial class EquipmentViewModel : AvaloniaViewModelBase
     private readonly IDeviceService _deviceService;
     private readonly IEdgeSyncDiagnosticsQuery _diagnosticsQuery;
     private readonly IAvaloniaDispatcherService _dispatcherService;
+    private readonly IAvaloniaRuntimeState _runtimeState;
+    private readonly IClientPermissionService _permissionService;
     private readonly IAvaloniaTimer _timer;
     private bool _isRefreshing;
 
@@ -22,15 +25,21 @@ public sealed partial class EquipmentViewModel : AvaloniaViewModelBase
         IDeviceService deviceService,
         IEdgeSyncDiagnosticsQuery diagnosticsQuery,
         IAvaloniaDispatcherService dispatcherService,
+        IAvaloniaRuntimeState runtimeState,
+        IClientPermissionService permissionService,
         IAvaloniaTimerFactory timerFactory)
     {
         _equipmentPanelService = equipmentPanelService;
         _deviceService = deviceService;
         _diagnosticsQuery = diagnosticsQuery;
         _dispatcherService = dispatcherService;
+        _runtimeState = runtimeState;
+        _permissionService = permissionService;
 
         _deviceService.DeviceIdentified += OnDeviceIdentified;
         _deviceService.UploadGateChanged += OnUploadGateChanged;
+        _runtimeState.StateChanged += (_, _) => _dispatcherService.Post(() => _ = RefreshAsync());
+        _permissionService.PermissionStateChanged += () => _dispatcherService.Post(() => _ = RefreshAsync());
 
         _timer = timerFactory.Create(TimeSpan.FromSeconds(5));
         _timer.Tick += (_, _) => _ = RefreshAsync();
@@ -99,7 +108,8 @@ public sealed partial class EquipmentViewModel : AvaloniaViewModelBase
                 "运行链路",
                 "生产上下文",
                 diagnostics.ContextPersistence.CorruptFileCount == 0 ? "正常" : "异常",
-                $"今日产出={capacity.TodayOutput}；NG={capacity.NgCount}；良率={capacity.TodayYield}")
+                $"今日产出={capacity.TodayOutput}；NG={capacity.NgCount}；良率={capacity.TodayYield}"),
+            BuildIoWriteGateRow(hardware)
         };
 
         rows.AddRange(hardware
@@ -133,6 +143,27 @@ public sealed partial class EquipmentViewModel : AvaloniaViewModelBase
 
     private static string FormatTime(DateTimeOffset? value)
         => value.HasValue ? value.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") : "--";
+
+    private EquipmentStatusRow BuildIoWriteGateRow(IReadOnlyCollection<HardwareSnapshot> hardware)
+    {
+        if (!_runtimeState.IsRuntimeStarted)
+        {
+            return new EquipmentStatusRow("I/O", "写入闸门", "UI-only", "运行链路未启动，禁止申请写入运行时缓冲。");
+        }
+
+        if (!_permissionService.CanEditHardware)
+        {
+            return new EquipmentStatusRow("I/O", "写入闸门", "无权限", "当前用户无硬件配置权限，禁止申请 I/O 写入。");
+        }
+
+        var connectedCount = hardware.Count(static item => item.IsConnected);
+        if (connectedCount == 0)
+        {
+            return new EquipmentStatusRow("I/O", "写入闸门", "PLC 未连接", "没有已连接 PLC，禁止申请写入运行时缓冲。");
+        }
+
+        return new EquipmentStatusRow("I/O", "写入闸门", "可申请写入", $"已连接 PLC {connectedCount} 台，写入仍需页面确认。");
+    }
 }
 
 public sealed partial class EquipmentStatusRow : ObservableObject

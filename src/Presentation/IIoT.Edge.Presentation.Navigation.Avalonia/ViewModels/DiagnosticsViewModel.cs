@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Common.Diagnostics;
 using IIoT.Edge.Application.Modules.Diagnostics;
+using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Hardware.IOView;
 using IIoT.Edge.UI.Avalonia.Localization;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -37,6 +38,8 @@ public sealed partial class DiagnosticsViewModel : NavigationPageViewModelBase
 
     public ObservableCollection<DiagnosticsIssueRow> Issues { get; } = [];
 
+    public ObservableCollection<DiagnosticsIoWriteGateRow> IoWriteGateRows { get; } = [];
+
     [ObservableProperty]
     private string lastGeneratedText = "启动诊断尚未生成。";
 
@@ -65,6 +68,7 @@ public sealed partial class DiagnosticsViewModel : NavigationPageViewModelBase
             var syncDiagnostics = await ApplyPersistenceRowsAsync();
             ApplyPluginStates(report.PluginStates);
             ApplyIssues(report.Issues);
+            ApplyIoWriteGateRows();
 
             ConfigurationProfileText = BuildConfigurationProfileText(report.ConfigurationProfile);
             LastGeneratedText = report.GeneratedAt == DateTime.MinValue
@@ -194,6 +198,29 @@ public sealed partial class DiagnosticsViewModel : NavigationPageViewModelBase
         Replace(Issues, rows);
     }
 
+    private void ApplyIoWriteGateRows()
+    {
+        var auditStore = ResolveOptional<IIoViewWriteGateAuditStore>();
+        if (auditStore is null)
+        {
+            Replace(IoWriteGateRows, [new DiagnosticsIoWriteGateRow("--", "写入闸门", "未接入", "当前容器未注册 I/O 写入闸门审计。", "--")]);
+            return;
+        }
+
+        var rows = auditStore.GetRecent()
+            .Select(static item => new DiagnosticsIoWriteGateRow(
+                item.OccurredAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"),
+                item.DeviceName,
+                item.BusinessGroup,
+                item.Message,
+                item.Value?.ToString() ?? "--"))
+            .ToArray();
+
+        Replace(IoWriteGateRows, rows.Length == 0
+            ? [new DiagnosticsIoWriteGateRow("--", "I/O", "暂无申请", "本次启动尚未发生 I/O 写入申请。", "--")]
+            : rows);
+    }
+
     private static string BuildConfigurationProfileText(ConfigurationProfileSnapshot profile)
     {
         var machine = string.IsNullOrWhiteSpace(profile.MachineProfile)
@@ -272,3 +299,10 @@ public sealed record DiagnosticsPluginStateRow(
     string Message);
 
 public sealed record DiagnosticsIssueRow(string Code, string ModuleId, string DeviceName, string Message);
+
+public sealed record DiagnosticsIoWriteGateRow(
+    string Time,
+    string DeviceName,
+    string BusinessGroup,
+    string Message,
+    string Value);

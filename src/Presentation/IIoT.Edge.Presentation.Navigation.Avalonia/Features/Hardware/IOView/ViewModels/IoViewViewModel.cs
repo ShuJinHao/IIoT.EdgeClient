@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.Input;
+using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView;
@@ -16,6 +17,8 @@ public sealed class IoViewViewModel : NavigationPageViewModelBase
     private readonly IPlcConnectionManager _plcConnectionManager;
     private readonly IPlcDataStore _plcDataStore;
     private readonly IAvaloniaLanguageService _languageService;
+    private readonly IIoViewSafeInteractionPort _safeInteractionPort;
+    private readonly IClientPermissionService _permissionService;
     private readonly IAvaloniaRuntimeState _runtimeState;
     private readonly AsyncRelayCommand _refreshDevicesCommand;
     private readonly AsyncRelayCommand _manualReadCommand;
@@ -24,12 +27,15 @@ public sealed class IoViewViewModel : NavigationPageViewModelBase
     private string _feedbackMessage = string.Empty;
     private string _snapshotSourceText = "未启动";
     private string _snapshotRefreshText = "--";
+    private string _writeGateStatusText = string.Empty;
 
     public IoViewViewModel(
         IHardwareConfigCrudService hardwareConfigService,
         IPlcConnectionManager plcConnectionManager,
         IPlcDataStore plcDataStore,
         IAvaloniaLanguageService languageService,
+        IIoViewSafeInteractionPort safeInteractionPort,
+        IClientPermissionService permissionService,
         IAvaloniaRuntimeState? runtimeState = null,
         string viewId = "Hardware.IOView",
         string titleResourceKey = "Navigation_Title_IoInteract",
@@ -40,9 +46,14 @@ public sealed class IoViewViewModel : NavigationPageViewModelBase
         _plcConnectionManager = plcConnectionManager;
         _plcDataStore = plcDataStore;
         _languageService = languageService;
+        _safeInteractionPort = safeInteractionPort;
+        _permissionService = permissionService;
         _runtimeState = runtimeState ?? new AvaloniaRuntimeState();
         _refreshDevicesCommand = new AsyncRelayCommand(LoadDevicesAsync);
         _manualReadCommand = new AsyncRelayCommand(ManualReadSelectedDataAsync, () => SelectedDevice is not null);
+        _runtimeState.StateChanged += (_, _) => RefreshConnectionState();
+        _permissionService.PermissionStateChanged += RefreshWriteGateState;
+        RefreshWriteGateState();
     }
 
     public ObservableCollection<IoNetworkDeviceModel> Devices { get; } = [];
@@ -70,6 +81,7 @@ public sealed class IoViewViewModel : NavigationPageViewModelBase
             {
                 _ = LoadMappingsAsync();
                 _manualReadCommand.NotifyCanExecuteChanged();
+                RefreshWriteGateState();
                 OnPropertyChanged(nameof(HasSelectedDevice));
             }
         }
@@ -80,7 +92,13 @@ public sealed class IoViewViewModel : NavigationPageViewModelBase
     public bool IsConnected
     {
         get => _isConnected;
-        private set => SetProperty(ref _isConnected, value);
+        private set
+        {
+            if (SetProperty(ref _isConnected, value))
+            {
+                RefreshWriteGateState();
+            }
+        }
     }
 
     public string FeedbackMessage
@@ -99,6 +117,12 @@ public sealed class IoViewViewModel : NavigationPageViewModelBase
     {
         get => _snapshotRefreshText;
         private set => SetProperty(ref _snapshotRefreshText, value);
+    }
+
+    public string WriteGateStatusText
+    {
+        get => _writeGateStatusText;
+        private set => SetProperty(ref _writeGateStatusText, value);
     }
 
     public IAsyncRelayCommand RefreshDevicesCommand => _refreshDevicesCommand;
@@ -208,7 +232,7 @@ public sealed class IoViewViewModel : NavigationPageViewModelBase
                 }
             }
 
-            row.WriteCommand = new AsyncRelayCommand(() => WriteInteractionRowAsync(row), () => row.CanWrite && SelectedDevice is not null);
+            row.WriteCommand = new AsyncRelayCommand(() => WriteInteractionRowAsync(row), () => CanWriteInteraction(row));
             row.InitializeWriteValueFromCurrentBuffer();
             InteractionRows.Add(row);
         }
@@ -308,10 +332,24 @@ public sealed class IoViewViewModel : NavigationPageViewModelBase
         await Task.CompletedTask;
     }
 
-    private Task WriteInteractionRowAsync(IoInteractionRowModel row)
+    private async Task WriteInteractionRowAsync(IoInteractionRowModel row)
     {
-        FeedbackMessage = Text("Navigation_Io_WriteDisabled", "真实写入已禁用：Avalonia I/O 页面只允许只读联调，不会写 PLC。");
-        return Task.CompletedTask;
+        if (SelectedDevice is null)
+        {
+            FeedbackMessage = Text("Navigation_Io_Write_DeviceNotBound", "当前设备未绑定运行时设备，不能申请 I/O 写入。");
+            return;
+        }
+
+        var result = await _safeInteractionPort.WriteAsync(SelectedDevice, row, row.WriteValue, CancellationToken.None);
+        FeedbackMessage = result.Message;
+        row.LastWriteResultText = result.Message;
+        if (result.Accepted)
+        {
+            row.LastWriteValueText = row.WriteValue.ToString();
+        }
+
+        RefreshConnectionState();
+        RefreshWriteGateState();
     }
 
     private void ApplySnapshot(IPlcBuffer buffer)
@@ -384,10 +422,58 @@ public sealed class IoViewViewModel : NavigationPageViewModelBase
         if (SelectedDevice is null)
         {
             IsConnected = false;
+            RefreshWriteGateState();
             return;
         }
 
         IsConnected = _plcConnectionManager.GetRuntimeStatus(SelectedDevice.Id)?.IsConnected == true;
+        RefreshWriteGateState();
+    }
+
+    private bool CanWriteInteraction(IoInteractionRowModel row)
+        => row.CanWrite
+            && SelectedDevice is not null
+            && _runtimeState.IsRuntimeStarted
+            && _permissionService.CanEditHardware
+            && IsConnected;
+
+    private void RefreshWriteGateState()
+    {
+        WriteGateStatusText = BuildWriteGateStatusText();
+        foreach (var row in InteractionRows)
+        {
+            row.WriteCommand?.NotifyCanExecuteChanged();
+        }
+    }
+
+    private string BuildWriteGateStatusText()
+    {
+        if (!_runtimeState.IsRuntimeStarted)
+        {
+            return Text("Navigation_Io_WriteGate_UiOnly", "写入闸门：UI-only，运行链路未启动。");
+        }
+
+        if (!_permissionService.CanEditHardware)
+        {
+            return Text("Navigation_Io_WriteGate_NoPermission", "写入闸门：当前用户无硬件配置权限。");
+        }
+
+        if (SelectedDevice is null)
+        {
+            return Text("Navigation_Io_WriteGate_NoDevice", "写入闸门：未选择网络设备。");
+        }
+
+        if (InteractionRows.Count == 0)
+        {
+            return Text("Navigation_Io_WriteGate_NoInteraction", "写入闸门：当前设备没有可写交互点位。");
+        }
+
+        if (!IsConnected)
+        {
+            return Text("Navigation_Io_WriteGate_PlcDisconnected", "写入闸门：PLC 未连接。");
+        }
+
+        return Text("Navigation_Io_WriteGate_Ready", "写入闸门：运行中，可申请写入运行时缓冲。");
     }
 
     private void ClearMappings()
@@ -396,6 +482,7 @@ public sealed class IoViewViewModel : NavigationPageViewModelBase
         DataSections.Clear();
         ArraySections.Clear();
         NotifySignalCollectionsChanged();
+        RefreshWriteGateState();
     }
 
     private void NotifySignalCollectionsChanged()
