@@ -1,5 +1,6 @@
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Plc;
+using IIoT.Edge.Application.Abstractions.Plc.Diagnostics;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Features.Hardware.IoMappings;
 using IIoT.Edge.Application.Modules.Hardware;
@@ -17,6 +18,7 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
     private readonly IPlcService _plcService;
     private readonly IPlcDataStore _dataStore;
     private readonly ILogService _logger;
+    private readonly IPlcIoWriteTraceStore? _writeTraceStore;
     private readonly PlcIoScanDevice _device;
     private readonly int _loopIntervalMs;
     private readonly IReadOnlyList<PlcSignalBlock> _readBlocks;
@@ -31,12 +33,14 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
         IEnumerable<PlcIoScanMapping> mappings,
         ILogService logger,
         IPlcSignalBlockPlanner signalBlockPlanner,
-        PlcIoRuntimePolicy? runtimePolicy = null)
+        PlcIoRuntimePolicy? runtimePolicy = null,
+        IPlcIoWriteTraceStore? writeTraceStore = null)
     {
         _plcService = plcService ?? throw new ArgumentNullException(nameof(plcService));
         _dataStore = dataStore ?? throw new ArgumentNullException(nameof(dataStore));
         _device = device ?? throw new ArgumentNullException(nameof(device));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _writeTraceStore = writeTraceStore;
         ArgumentNullException.ThrowIfNull(signalBlockPlanner);
 
         var policy = runtimePolicy ?? PlcIoRuntimePolicy.Default;
@@ -231,7 +235,17 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
                     }
                 }
 
-                await _plcService.WriteDataAsync(block.StartAddress, blockWords.ToList()).ConfigureAwait(false);
+                RecordWriteTrace(block, PlcIoWriteTraceKind.Attempt);
+                try
+                {
+                    await _plcService.WriteDataAsync(block.StartAddress, blockWords.ToList()).ConfigureAwait(false);
+                    RecordWriteTrace(block, PlcIoWriteTraceKind.Success);
+                }
+                catch (Exception ex)
+                {
+                    RecordWriteTrace(block, PlcIoWriteTraceKind.Failed, ex.Message);
+                    throw;
+                }
             }
         }
         catch (Exception ex)
@@ -244,6 +258,38 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
             _plcService.Disconnect();
             MarkDisconnected($"PLC 写入失败：{ex.Message}");
             throw new InvalidOperationException("PLC 写入链路失败，连接已重置。", ex);
+        }
+    }
+
+    private void RecordWriteTrace(
+        PlcSignalBlock block,
+        PlcIoWriteTraceKind kind,
+        string? errorMessage = null)
+    {
+        if (_writeTraceStore is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _writeTraceStore.Record(new PlcIoWriteTraceEntry(
+                DateTimeOffset.UtcNow,
+                kind,
+                _device.DeviceId,
+                _device.DeviceName,
+                block.StartAddress,
+                block.WordCount,
+                block.Items
+                    .Select(static item => item.Mapping.SignalKey)
+                    .Where(static key => !string.IsNullOrWhiteSpace(key))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray(),
+                errorMessage));
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"[{_device.DeviceName}] PLC 写入轨迹记录失败：{ex.Message}");
         }
     }
 

@@ -81,7 +81,7 @@ public sealed class IoViewWriteGateAuditStore : IIoViewWriteGateAuditStore
 }
 
 /// <summary>
-/// I/O 页面的受控写入端口。它只写运行时缓冲，实际 PLC 写入仍由运行链路按块策略处理。
+/// I/O 页面的受控写入端口。它只写运行时缓冲，实际 PLC 写入仍由扫描任务按块策略处理。
 /// </summary>
 public sealed class RuntimeBufferIoViewSafeInteractionPort : IIoViewSafeInteractionPort
 {
@@ -164,7 +164,7 @@ public sealed class RuntimeBufferIoViewSafeInteractionPort : IIoViewSafeInteract
             Text("Navigation_Io_Write_ConfirmTitle", "确认 I/O 写入"),
             string.Format(
                 CultureInfo.CurrentCulture,
-                Text("Navigation_Io_Write_ConfirmMessageFormat", "将把 {0} 的交互项“{1}”写入运行时缓冲，值为 {2}。实际 PLC 写入仍等待运行链路按块策略处理。"),
+                Text("Navigation_Io_Write_ConfirmMessageFormat", "将把 {0} 的交互项“{1}”写入运行时缓冲，值为 {2}。实际 PLC 写入等待扫描任务按块写入。"),
                 device.DeviceName,
                 row.BusinessGroup,
                 value));
@@ -187,7 +187,7 @@ public sealed class RuntimeBufferIoViewSafeInteractionPort : IIoViewSafeInteract
         row.NotifyValuesChanged();
         var message = string.Format(
             CultureInfo.CurrentCulture,
-            Text("Navigation_Io_Write_AcceptedToRuntimeBuffer", "已写入运行时缓冲：{0} / {1} = {2}。实际 PLC 写入由运行链路按块策略处理。"),
+            Text("Navigation_Io_Write_AcceptedToRuntimeBuffer", "已进入运行时缓冲，等待扫描任务按块写入：{0} / {1} = {2}。"),
             device.DeviceName,
             row.BusinessGroup,
             value);

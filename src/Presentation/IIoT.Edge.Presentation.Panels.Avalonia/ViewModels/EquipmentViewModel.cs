@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Abstractions.Plc.Diagnostics;
 using IIoT.Edge.Application.Features.Production.Equipment;
 using IIoT.Edge.UI.Avalonia.Mvvm;
 using IIoT.Edge.UI.Avalonia.Services;
@@ -17,6 +18,7 @@ public sealed partial class EquipmentViewModel : AvaloniaViewModelBase
     private readonly IAvaloniaDispatcherService _dispatcherService;
     private readonly IAvaloniaRuntimeState _runtimeState;
     private readonly IClientPermissionService _permissionService;
+    private readonly IPlcIoWriteTraceStore? _writeTraceStore;
     private readonly IAvaloniaTimer _timer;
     private bool _isRefreshing;
 
@@ -27,7 +29,8 @@ public sealed partial class EquipmentViewModel : AvaloniaViewModelBase
         IAvaloniaDispatcherService dispatcherService,
         IAvaloniaRuntimeState runtimeState,
         IClientPermissionService permissionService,
-        IAvaloniaTimerFactory timerFactory)
+        IAvaloniaTimerFactory timerFactory,
+        IPlcIoWriteTraceStore? writeTraceStore = null)
     {
         _equipmentPanelService = equipmentPanelService;
         _deviceService = deviceService;
@@ -35,6 +38,7 @@ public sealed partial class EquipmentViewModel : AvaloniaViewModelBase
         _dispatcherService = dispatcherService;
         _runtimeState = runtimeState;
         _permissionService = permissionService;
+        _writeTraceStore = writeTraceStore;
 
         _deviceService.DeviceIdentified += OnDeviceIdentified;
         _deviceService.UploadGateChanged += OnUploadGateChanged;
@@ -109,7 +113,8 @@ public sealed partial class EquipmentViewModel : AvaloniaViewModelBase
                 "生产上下文",
                 diagnostics.ContextPersistence.CorruptFileCount == 0 ? "正常" : "异常",
                 $"今日产出={capacity.TodayOutput}；NG={capacity.NgCount}；良率={capacity.TodayYield}"),
-            BuildIoWriteGateRow(hardware)
+            BuildIoWriteGateRow(hardware),
+            BuildRecentPlcWriteTraceRow()
         };
 
         rows.AddRange(hardware
@@ -163,6 +168,30 @@ public sealed partial class EquipmentViewModel : AvaloniaViewModelBase
         }
 
         return new EquipmentStatusRow("I/O", "写入闸门", "可申请写入", $"已连接 PLC {connectedCount} 台，写入仍需页面确认。");
+    }
+
+    private EquipmentStatusRow BuildRecentPlcWriteTraceRow()
+    {
+        var trace = _writeTraceStore?.GetRecent(1).FirstOrDefault();
+        if (trace is null)
+        {
+            return new EquipmentStatusRow("PLC", "最近 PLC 块写入", "暂无", "本次启动尚未记录 PLC 块写入结果。");
+        }
+
+        var state = trace.Kind switch
+        {
+            PlcIoWriteTraceKind.Attempt => "尝试",
+            PlcIoWriteTraceKind.Success => "成功",
+            PlcIoWriteTraceKind.Failed => "失败",
+            _ => trace.Kind.ToString()
+        };
+        var detail = $"设备={trace.DeviceName}；块={trace.StartAddress} / {trace.WordCount} 字；时间={trace.OccurredAt.ToLocalTime():yyyy-MM-dd HH:mm:ss}";
+        if (!string.IsNullOrWhiteSpace(trace.ErrorMessage))
+        {
+            detail = $"{detail}；原因={trace.ErrorMessage}";
+        }
+
+        return new EquipmentStatusRow("PLC", "最近 PLC 块写入", state, detail);
     }
 }
 

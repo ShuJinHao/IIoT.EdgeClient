@@ -61,8 +61,8 @@ public sealed class IoViewWriteGateTests
         Assert.Equal(12, fixture.Buffer.SignalWrites["Start.Reply"]);
         Assert.Equal(12, fixture.Buffer.IndexWrites[5]);
         Assert.Equal(0, fixture.PlcConnectionManager.GetPlcCalls);
-        Assert.Contains("已写入运行时缓冲", result.Message);
-        Assert.Contains("已写入运行时缓冲", Assert.Single(fixture.AuditStore.GetRecent()).Message);
+        Assert.Contains("已进入运行时缓冲，等待扫描任务按块写入", result.Message);
+        Assert.Contains("已进入运行时缓冲，等待扫描任务按块写入", Assert.Single(fixture.AuditStore.GetRecent()).Message);
     }
 
     private static WriteGateFixture CreateFixture(

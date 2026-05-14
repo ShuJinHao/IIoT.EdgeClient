@@ -1,5 +1,6 @@
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Plc;
+using IIoT.Edge.Application.Abstractions.Plc.Diagnostics;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
@@ -25,7 +26,8 @@ public sealed class PlcIoScanTask : PlcIoScanTaskBase
         IPlcSignalBlockPlanner signalBlockPlanner,
         PlcConnectionStatusStore? statusStore = null,
         PlcIoRuntimePolicy? runtimePolicy = null,
-        PlcEndpoint? endpoint = null)
+        PlcEndpoint? endpoint = null,
+        IPlcIoWriteTraceStore? writeTraceStore = null)
         : base(
             plcService,
             dataStore,
@@ -46,7 +48,8 @@ public sealed class PlcIoScanTask : PlcIoScanTaskBase
                 mapping.SortOrder)),
             logger,
             signalBlockPlanner,
-            runtimePolicy)
+            runtimePolicy,
+            writeTraceStore)
     {
         _statusStore = statusStore;
     }

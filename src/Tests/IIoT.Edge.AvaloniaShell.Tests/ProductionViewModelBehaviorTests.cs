@@ -4,6 +4,7 @@ using System.Data;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc;
+using IIoT.Edge.Application.Abstractions.Plc.Diagnostics;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Context;
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
@@ -12,6 +13,7 @@ using IIoT.Edge.Application.Features.Production.DataView;
 using IIoT.Edge.Application.Features.Production.Monitor;
 using IIoT.Edge.Application.Modules.Diagnostics;
 using IIoT.Edge.Application.Modules.Hardware;
+using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Hardware.IOView;
 using IIoT.Edge.Presentation.Navigation.Avalonia.Localization;
 using IIoT.Edge.Presentation.Navigation.Avalonia.ViewModels;
 using IIoT.Edge.UI.Avalonia.Localization;
@@ -220,6 +222,95 @@ public sealed class ProductionViewModelBehaviorTests
         Assert.Single(viewModel.Issues);
         Assert.Contains("运行时注册 1 个", viewModel.FeedbackMessage, StringComparison.Ordinal);
         Assert.Contains("运行目录：runtime-data", viewModel.ConfigurationProfileText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Diagnostics_view_model_projects_io_write_gate_audit_rows_for_field_trace()
+    {
+        var auditStore = new IoViewWriteGateAuditStore();
+        auditStore.Record(new IoViewWriteGateAuditEntry(
+            new DateTimeOffset(2026, 5, 14, 9, 0, 0, TimeSpan.Zero),
+            "PLC-A",
+            "Start",
+            IoViewWriteResultKind.RuntimeNotStarted,
+            "Runtime not started; buffer write was blocked.",
+            1));
+        auditStore.Record(new IoViewWriteGateAuditEntry(
+            new DateTimeOffset(2026, 5, 14, 9, 5, 0, TimeSpan.Zero),
+            "PLC-A",
+            "Start",
+            IoViewWriteResultKind.AcceptedToRuntimeBuffer,
+            "Accepted to runtime buffer; PLC write waits for runtime block policy.",
+            12));
+
+        var services = new ServiceCollection();
+        services.AddSingleton<IIoViewWriteGateAuditStore>(auditStore);
+        var provider = services.BuildServiceProvider();
+
+        var viewModel = new DiagnosticsViewModel(
+            provider,
+            CreateLanguageService(),
+            "Core.Diagnostics",
+            "Navigation_Menu_CoreDiagnostics",
+            "系统诊断");
+
+        await viewModel.OnActivatedAsync();
+
+        Assert.Equal(2, viewModel.IoWriteGateRows.Count);
+        var latest = viewModel.IoWriteGateRows[0];
+        Assert.Equal("PLC-A", latest.DeviceName);
+        Assert.Equal("Start", latest.BusinessGroup);
+        Assert.Equal("12", latest.Value);
+        Assert.Contains("Accepted to runtime buffer", latest.Message, StringComparison.Ordinal);
+
+        var previous = viewModel.IoWriteGateRows[1];
+        Assert.Equal("1", previous.Value);
+        Assert.Contains("blocked", previous.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Diagnostics_view_model_projects_plc_block_write_trace_rows_without_actions()
+    {
+        var traceStore = new FakePlcIoWriteTraceStore();
+        traceStore.Record(new PlcIoWriteTraceEntry(
+            new DateTimeOffset(2026, 5, 14, 10, 0, 0, TimeSpan.Zero),
+            PlcIoWriteTraceKind.Attempt,
+            1,
+            "PLC-A",
+            "D100",
+            2,
+            ["Start.Reply"],
+            null));
+        traceStore.Record(new PlcIoWriteTraceEntry(
+            new DateTimeOffset(2026, 5, 14, 10, 0, 1, TimeSpan.Zero),
+            PlcIoWriteTraceKind.Success,
+            1,
+            "PLC-A",
+            "D100",
+            2,
+            ["Start.Reply"],
+            null));
+
+        var services = new ServiceCollection();
+        services.AddSingleton<IPlcIoWriteTraceStore>(traceStore);
+        var provider = services.BuildServiceProvider();
+
+        var viewModel = new DiagnosticsViewModel(
+            provider,
+            CreateLanguageService(),
+            "Core.Diagnostics",
+            "Navigation_Menu_CoreDiagnostics",
+            "系统诊断");
+
+        await viewModel.OnActivatedAsync();
+
+        Assert.Equal(2, viewModel.PlcWriteTraceRows.Count);
+        var latest = viewModel.PlcWriteTraceRows[0];
+        Assert.Equal("PLC-A", latest.DeviceName);
+        Assert.Equal("成功", latest.Kind);
+        Assert.Equal("D100", latest.StartAddress);
+        Assert.Equal("2", latest.WordCount);
+        Assert.Contains("Start.Reply", latest.Message, StringComparison.Ordinal);
     }
 
     private static IAvaloniaLanguageService CreateLanguageService()
@@ -562,6 +653,25 @@ public sealed class ProductionViewModelBehaviorTests
             ProductionContext context,
             IReadOnlySet<string> enabledTaskKeys)
             => [];
+    }
+
+    private sealed class FakePlcIoWriteTraceStore : IPlcIoWriteTraceStore
+    {
+        private readonly List<PlcIoWriteTraceEntry> _entries = [];
+
+        public void Record(PlcIoWriteTraceEntry entry)
+            => _entries.Insert(0, entry);
+
+        public IReadOnlyList<PlcIoWriteTraceEntry> GetRecent(int count = 50)
+            => _entries.Take(Math.Max(1, count)).ToArray();
+
+        public PlcIoWriteTraceEntry? GetLatestForSignals(int deviceId, IReadOnlyCollection<string> signalKeys)
+        {
+            var keys = signalKeys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            return _entries.FirstOrDefault(entry =>
+                entry.DeviceId == deviceId &&
+                entry.SignalKeys.Any(keys.Contains));
+        }
     }
 
     private sealed class FakeAvaloniaTimerFactory : IAvaloniaTimerFactory

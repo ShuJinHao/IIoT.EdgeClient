@@ -3,6 +3,7 @@ using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Factory;
+using IIoT.Edge.Application.Abstractions.Plc.Diagnostics;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
@@ -23,6 +24,7 @@ public sealed class PlcDeviceRuntimeBuilder
     private readonly ILogService _logger;
     private readonly PlcConnectionStatusStore _statusStore;
     private readonly IPlcSignalBlockPlanner _signalBlockPlanner;
+    private readonly IPlcIoWriteTraceStore? _writeTraceStore;
     private readonly IPlcEndpointResolver _endpointResolver;
     private readonly IReadOnlyDictionary<string, IModuleHardwareProfileProvider> _hardwareProfiles;
 
@@ -35,7 +37,8 @@ public sealed class PlcDeviceRuntimeBuilder
         PlcConnectionStatusStore statusStore,
         IPlcSignalBlockPlanner signalBlockPlanner,
         IPlcEndpointResolver endpointResolver,
-        IEnumerable<IModuleHardwareProfileProvider> hardwareProfiles)
+        IEnumerable<IModuleHardwareProfileProvider> hardwareProfiles,
+        IPlcIoWriteTraceStore? writeTraceStore = null)
     {
         _ioMappings = ioMappings;
         _dataStore = dataStore;
@@ -44,6 +47,7 @@ public sealed class PlcDeviceRuntimeBuilder
         _logger = logger;
         _statusStore = statusStore;
         _signalBlockPlanner = signalBlockPlanner;
+        _writeTraceStore = writeTraceStore;
         _endpointResolver = endpointResolver;
         _hardwareProfiles = hardwareProfiles.ToDictionary(x => x.ModuleId, StringComparer.OrdinalIgnoreCase);
     }
@@ -85,7 +89,8 @@ public sealed class PlcDeviceRuntimeBuilder
             _signalBlockPlanner,
             _statusStore,
             runtimePolicy,
-            endpoint);
+            endpoint,
+            _writeTraceStore);
         await ioScanTask.ConnectAsync().ConfigureAwait(false);
 
         var tasks = new List<IPlcTask> { ioScanTask };

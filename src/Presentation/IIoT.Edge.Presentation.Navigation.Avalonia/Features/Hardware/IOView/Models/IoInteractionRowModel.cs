@@ -10,6 +10,9 @@ public sealed class IoInteractionRowModel : ObservableObject
     private int _writeValue;
     private string _lastWriteValueText = "--";
     private string _lastWriteResultText = "尚未申请写入";
+    private string _lastPlcWriteTraceText = "暂无 PLC 写入轨迹";
+    private bool _awaitingPlcWriteTrace;
+    private DateTimeOffset? _lastRuntimeBufferAcceptedAt;
 
     public string BusinessGroup { get; init; } = string.Empty;
 
@@ -47,6 +50,24 @@ public sealed class IoInteractionRowModel : ObservableObject
     {
         get => _lastWriteResultText;
         set => SetProperty(ref _lastWriteResultText, value);
+    }
+
+    public string LastPlcWriteTraceText
+    {
+        get => _lastPlcWriteTraceText;
+        set => SetProperty(ref _lastPlcWriteTraceText, value);
+    }
+
+    public bool AwaitingPlcWriteTrace
+    {
+        get => _awaitingPlcWriteTrace;
+        set => SetProperty(ref _awaitingPlcWriteTrace, value);
+    }
+
+    public DateTimeOffset? LastRuntimeBufferAcceptedAt
+    {
+        get => _lastRuntimeBufferAcceptedAt;
+        set => SetProperty(ref _lastRuntimeBufferAcceptedAt, value);
     }
 
     public string PlcAddressSummary => FormatJoined(PlcSignals, static x => x.PlcAddress);

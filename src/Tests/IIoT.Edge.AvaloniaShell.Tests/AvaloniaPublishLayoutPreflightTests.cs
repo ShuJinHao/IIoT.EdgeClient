@@ -1,5 +1,8 @@
+using System.Reflection;
 using System.Text.Json;
 using System.Xml.Linq;
+using IIoT.Edge.AvaloniaShell;
+using IIoT.Edge.Host.Bootstrap.Avalonia;
 using Xunit;
 
 namespace IIoT.Edge.AvaloniaShell.Tests;
@@ -92,14 +95,67 @@ public sealed class AvaloniaPublishLayoutPreflightTests
     public void AvaloniaShellBuildOutput_ShouldContainHomogenizationPluginModuleLayout()
     {
         var root = FindRepositoryRoot();
-        var publishRoot = Path.GetFullPath(Path.Combine(root, "..", "publish", "Debug", "avalonia-shell"));
+        var publishRoot = GetAvaloniaPublishRoot(root, "avalonia-shell");
         var moduleRoot = Path.Combine(publishRoot, "Modules", "Homogenization");
 
-        Assert.True(File.Exists(Path.Combine(publishRoot, "IIoT.Edge.AvaloniaShell.exe")), publishRoot);
-        Assert.False(File.Exists(Path.Combine(publishRoot, "plugin.json")), "插件 manifest 不能落在 Shell 根目录，避免 catalog 扫到重复模块。");
-        Assert.True(File.Exists(Path.Combine(moduleRoot, "plugin.json")), moduleRoot);
-        Assert.True(File.Exists(Path.Combine(moduleRoot, "IIoT.Edge.Module.Homogenization.Avalonia.dll")), moduleRoot);
-        Assert.True(File.Exists(Path.Combine(moduleRoot, "Config", "homogenization.module.json")), moduleRoot);
+        AssertRequiredFile(publishRoot, "IIoT.Edge.AvaloniaShell.exe");
+        Assert.False(File.Exists(Path.Combine(publishRoot, "plugin.json")), "Plugin manifest must stay under Modules/{ModuleId}, not shell root.");
+        AssertRequiredFile(moduleRoot, "plugin.json");
+        AssertRequiredFile(moduleRoot, "IIoT.Edge.Module.Homogenization.Avalonia.dll");
+        AssertRequiredFile(moduleRoot, Path.Combine("Config", "homogenization.module.json"));
+    }
+
+    [Fact]
+    public void AvaloniaReleaseCandidateOutputs_ShouldContainLauncherShellPluginAndRuntimeTemplate()
+    {
+        var root = FindRepositoryRoot();
+        var configuration = ResolveCurrentConfiguration();
+        var launcherRoot = GetAvaloniaPublishRoot(root, "avalonia-launcher");
+        var shellRoot = GetAvaloniaPublishRoot(root, "avalonia-shell");
+        var shellModuleRoot = Path.Combine(shellRoot, "Modules", "Homogenization");
+        var moduleOutputRoot = Path.Combine(
+            root,
+            "src",
+            "Modules",
+            "IIoT.Edge.Module.Homogenization.Avalonia",
+            "bin",
+            configuration,
+            "net10.0");
+
+        AssertRequiredFile(launcherRoot, "IIoT.Edge.Launcher.Avalonia.exe");
+        AssertRequiredFile(launcherRoot, "launcher.profiles.json");
+        AssertRequiredFile(launcherRoot, Path.Combine("Assets", "Profiles", "homogenization.png"));
+
+        AssertRequiredFile(shellRoot, "IIoT.Edge.AvaloniaShell.exe");
+        AssertRequiredFile(shellModuleRoot, "plugin.json");
+        AssertRequiredFile(shellModuleRoot, "IIoT.Edge.Module.Homogenization.Avalonia.dll");
+        AssertRequiredFile(shellModuleRoot, Path.Combine("Config", "homogenization.module.json"));
+
+        AssertRequiredFile(moduleOutputRoot, "plugin.json");
+        AssertRequiredFile(moduleOutputRoot, "IIoT.Edge.Module.Homogenization.Avalonia.dll");
+        AssertRequiredFile(moduleOutputRoot, Path.Combine("Config", "homogenization.module.json"));
+
+        using var profiles = JsonDocument.Parse(File.ReadAllText(Path.Combine(launcherRoot, "launcher.profiles.json")));
+        var profileArray = profiles.RootElement.EnumerateArray().ToArray();
+        Assert.Equal(2, profileArray.Length);
+
+        foreach (var profile in profileArray)
+        {
+            var executablePath = profile.GetProperty("ExecutablePath").GetString();
+            Assert.False(string.IsNullOrWhiteSpace(executablePath));
+            var resolvedExecutable = Path.GetFullPath(Path.Combine(launcherRoot, executablePath!));
+            Assert.True(File.Exists(resolvedExecutable), resolvedExecutable);
+        }
+
+        var uiOnly = Assert.Single(profileArray, profile => profile.GetProperty("ProfileId").GetString() == "HomogenizationLineAvalonia");
+        Assert.False(uiOnly.TryGetProperty("Arguments", out _));
+
+        var runtime = Assert.Single(profileArray, profile => profile.GetProperty("ProfileId").GetString() == "HomogenizationLineAvaloniaRuntime");
+        Assert.Contains(
+            "--start-runtime",
+            runtime.GetProperty("Arguments").EnumerateArray().Select(static item => item.GetString()));
+
+        AssertAvaloniaRuntimeDirectoryTemplate();
     }
 
     private static void AssertHasCopyMetadata(
@@ -131,5 +187,52 @@ public sealed class AvaloniaPublishLayoutPreflightTests
         }
 
         throw new InvalidOperationException("Cannot locate IIoT.EdgeClient.AvaloniaMigration repository root.");
+    }
+
+    private static string GetAvaloniaPublishRoot(string root, string outputDirectory)
+        => Path.GetFullPath(Path.Combine(root, "..", "publish", ResolveCurrentConfiguration(), outputDirectory));
+
+    private static string ResolveCurrentConfiguration()
+    {
+        var segments = AppContext.BaseDirectory.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        for (var index = 0; index < segments.Length - 1; index++)
+        {
+            if (segments[index].Equals("bin", StringComparison.OrdinalIgnoreCase))
+            {
+                return segments[index + 1];
+            }
+        }
+
+        return "Debug";
+    }
+
+    private static void AssertRequiredFile(string root, string relativePath)
+    {
+        var fullPath = Path.Combine(root, relativePath);
+        Assert.True(File.Exists(fullPath), fullPath);
+    }
+
+    private static void AssertAvaloniaRuntimeDirectoryTemplate()
+    {
+        var baseDirectory = Path.Combine(Path.GetTempPath(), "iiot-avalonia-runtime-template");
+        Directory.CreateDirectory(baseDirectory);
+        var method = typeof(App).GetMethod("CreateBootstrapOptions", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(method);
+        var options = Assert.IsType<AvaloniaHostBootstrapOptions>(method.Invoke(null, [baseDirectory]));
+        var runtimeRoot = Path.Combine(baseDirectory, "data", "avalonia-migration");
+        var pluginDirectories = options.PluginDirectories ?? Array.Empty<string>();
+
+        Assert.Equal("AvaloniaMigration", options.EnvironmentName);
+        Assert.Equal(new[] { "Homogenization" }, options.ModuleIds);
+        Assert.Equal(runtimeRoot, options.RuntimePaths.RuntimeDataRoot);
+        Assert.Equal(Path.Combine(runtimeRoot, "db"), options.RuntimePaths.DatabaseDirectory);
+        Assert.Equal(Path.Combine(runtimeRoot, "context"), options.RuntimePaths.ContextDirectory);
+        Assert.Equal(Path.Combine(runtimeRoot, "recipe"), options.RuntimePaths.RecipeDirectory);
+        Assert.Equal(Path.Combine(runtimeRoot, "excel"), options.RuntimePaths.ExcelDirectory);
+        Assert.Equal(Path.Combine(runtimeRoot, "diagnostics"), options.RuntimePaths.DiagnosticsDirectory);
+        Assert.Equal(Path.Combine(runtimeRoot, "diagnostics", "logs"), options.RuntimePaths.LogDirectory);
+        Assert.Equal(Path.Combine(runtimeRoot, "device_cache.json"), options.RuntimePaths.DeviceCacheFilePath);
+        Assert.Contains(baseDirectory, pluginDirectories);
     }
 }

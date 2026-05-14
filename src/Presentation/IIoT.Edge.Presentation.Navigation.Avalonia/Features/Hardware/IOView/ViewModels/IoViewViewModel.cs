@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.Input;
 using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Plc;
+using IIoT.Edge.Application.Abstractions.Plc.Diagnostics;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Models;
@@ -20,6 +21,7 @@ public sealed class IoViewViewModel : NavigationPageViewModelBase
     private readonly IIoViewSafeInteractionPort _safeInteractionPort;
     private readonly IClientPermissionService _permissionService;
     private readonly IAvaloniaRuntimeState _runtimeState;
+    private readonly IPlcIoWriteTraceStore? _writeTraceStore;
     private readonly AsyncRelayCommand _refreshDevicesCommand;
     private readonly AsyncRelayCommand _manualReadCommand;
     private IoNetworkDeviceModel? _selectedDevice;
@@ -37,6 +39,7 @@ public sealed class IoViewViewModel : NavigationPageViewModelBase
         IIoViewSafeInteractionPort safeInteractionPort,
         IClientPermissionService permissionService,
         IAvaloniaRuntimeState? runtimeState = null,
+        IPlcIoWriteTraceStore? writeTraceStore = null,
         string viewId = "Hardware.IOView",
         string titleResourceKey = "Navigation_Title_IoInteract",
         string titleFallback = "I/O 交互")
@@ -49,6 +52,7 @@ public sealed class IoViewViewModel : NavigationPageViewModelBase
         _safeInteractionPort = safeInteractionPort;
         _permissionService = permissionService;
         _runtimeState = runtimeState ?? new AvaloniaRuntimeState();
+        _writeTraceStore = writeTraceStore;
         _refreshDevicesCommand = new AsyncRelayCommand(LoadDevicesAsync);
         _manualReadCommand = new AsyncRelayCommand(ManualReadSelectedDataAsync, () => SelectedDevice is not null);
         _runtimeState.StateChanged += (_, _) => RefreshConnectionState();
@@ -191,6 +195,7 @@ public sealed class IoViewViewModel : NavigationPageViewModelBase
         {
             var mappings = await _hardwareConfigService.LoadIoMappingsAsync(SelectedDevice.Id);
             BuildMappings(mappings.Items);
+            RefreshPlcWriteTraceRows();
             RefreshConnectionState();
             NotifySignalCollectionsChanged();
             FeedbackMessage = InteractionRows.Count + DataSections.Count + ArraySections.Count == 0
@@ -325,6 +330,7 @@ public sealed class IoViewViewModel : NavigationPageViewModelBase
         }
 
         ApplySnapshot(buffer);
+        RefreshPlcWriteTraceRows();
         RefreshConnectionState();
         SnapshotSourceText = Format("Navigation_Io_Source_RuntimeSnapshot", "运行时快照 / {0}", SelectedDevice.DeviceName);
         SnapshotRefreshText = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
@@ -340,12 +346,16 @@ public sealed class IoViewViewModel : NavigationPageViewModelBase
             return;
         }
 
+        var requestedAt = DateTimeOffset.Now;
         var result = await _safeInteractionPort.WriteAsync(SelectedDevice, row, row.WriteValue, CancellationToken.None);
         FeedbackMessage = result.Message;
         row.LastWriteResultText = result.Message;
         if (result.Accepted)
         {
             row.LastWriteValueText = row.WriteValue.ToString();
+            row.LastRuntimeBufferAcceptedAt = requestedAt;
+            row.AwaitingPlcWriteTrace = true;
+            RefreshPlcWriteTraceRow(row);
         }
 
         RefreshConnectionState();
@@ -444,6 +454,81 @@ public sealed class IoViewViewModel : NavigationPageViewModelBase
         {
             row.WriteCommand?.NotifyCanExecuteChanged();
         }
+    }
+
+    private void RefreshPlcWriteTraceRows()
+    {
+        foreach (var row in InteractionRows)
+        {
+            RefreshPlcWriteTraceRow(row);
+        }
+    }
+
+    private void RefreshPlcWriteTraceRow(IoInteractionRowModel row)
+    {
+        if (SelectedDevice is null)
+        {
+            return;
+        }
+
+        var signalKeys = row.HostSignals
+            .Select(static signal => signal.SignalKey)
+            .Where(static key => !string.IsNullOrWhiteSpace(key))
+            .ToArray();
+        var trace = FindLatestPlcWriteTrace(SelectedDevice.Id, signalKeys, row);
+        if (trace is null)
+        {
+            row.LastPlcWriteTraceText = row.AwaitingPlcWriteTrace
+                ? Text("Navigation_Io_PlcWriteTrace_Waiting", "已进入运行时缓冲，等待扫描任务按块写入。")
+                : Text("Navigation_Io_PlcWriteTrace_Empty", "暂无 PLC 写入轨迹。");
+            return;
+        }
+
+        row.AwaitingPlcWriteTrace = trace.Kind == PlcIoWriteTraceKind.Attempt;
+        row.LastPlcWriteTraceText = FormatPlcWriteTrace(trace);
+    }
+
+    private PlcIoWriteTraceEntry? FindLatestPlcWriteTrace(
+        int deviceId,
+        IReadOnlyCollection<string> signalKeys,
+        IoInteractionRowModel row)
+    {
+        if (_writeTraceStore is null || signalKeys.Count == 0)
+        {
+            return null;
+        }
+
+        var keys = signalKeys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var acceptedAt = row.LastRuntimeBufferAcceptedAt;
+        return _writeTraceStore.GetRecent()
+            .FirstOrDefault(entry =>
+                entry.DeviceId == deviceId
+                && entry.SignalKeys.Any(keys.Contains)
+                && (!row.AwaitingPlcWriteTrace
+                    || acceptedAt is null
+                    || entry.OccurredAt >= acceptedAt.Value));
+    }
+
+    private string FormatPlcWriteTrace(PlcIoWriteTraceEntry trace)
+    {
+        var status = trace.Kind switch
+        {
+            PlcIoWriteTraceKind.Attempt => Text("Navigation_Io_PlcWriteTrace_Attempt", "尝试"),
+            PlcIoWriteTraceKind.Success => Text("Navigation_Io_PlcWriteTrace_Success", "成功"),
+            PlcIoWriteTraceKind.Failed => Text("Navigation_Io_PlcWriteTrace_Failed", "失败"),
+            _ => trace.Kind.ToString()
+        };
+        var message = Format(
+            "Navigation_Io_PlcWriteTrace_Format",
+            "PLC 块写入{0}：{1} / {2} 字 / {3:yyyy-MM-dd HH:mm:ss}",
+            status,
+            trace.StartAddress,
+            trace.WordCount,
+            trace.OccurredAt.ToLocalTime());
+
+        return string.IsNullOrWhiteSpace(trace.ErrorMessage)
+            ? message
+            : $"{message}；原因：{trace.ErrorMessage}";
     }
 
     private string BuildWriteGateStatusText()

@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Abstractions.Plc.Diagnostics;
 using IIoT.Edge.Application.Common.Diagnostics;
 using IIoT.Edge.Application.Modules.Diagnostics;
 using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Hardware.IOView;
@@ -40,6 +41,8 @@ public sealed partial class DiagnosticsViewModel : NavigationPageViewModelBase
 
     public ObservableCollection<DiagnosticsIoWriteGateRow> IoWriteGateRows { get; } = [];
 
+    public ObservableCollection<DiagnosticsPlcWriteTraceRow> PlcWriteTraceRows { get; } = [];
+
     [ObservableProperty]
     private string lastGeneratedText = "启动诊断尚未生成。";
 
@@ -69,6 +72,7 @@ public sealed partial class DiagnosticsViewModel : NavigationPageViewModelBase
             ApplyPluginStates(report.PluginStates);
             ApplyIssues(report.Issues);
             ApplyIoWriteGateRows();
+            ApplyPlcWriteTraceRows();
 
             ConfigurationProfileText = BuildConfigurationProfileText(report.ConfigurationProfile);
             LastGeneratedText = report.GeneratedAt == DateTime.MinValue
@@ -221,6 +225,32 @@ public sealed partial class DiagnosticsViewModel : NavigationPageViewModelBase
             : rows);
     }
 
+    private void ApplyPlcWriteTraceRows()
+    {
+        var traceStore = ResolveOptional<IPlcIoWriteTraceStore>();
+        if (traceStore is null)
+        {
+            Replace(PlcWriteTraceRows, [new DiagnosticsPlcWriteTraceRow("--", "PLC 写入轨迹", "未接入", "--", "--", "当前容器未注册 PLC 写入轨迹存储。")]);
+            return;
+        }
+
+        var rows = traceStore.GetRecent()
+            .Select(static item => new DiagnosticsPlcWriteTraceRow(
+                item.OccurredAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"),
+                item.DeviceName,
+                FormatTraceKind(item.Kind),
+                item.StartAddress,
+                item.WordCount.ToString(),
+                string.IsNullOrWhiteSpace(item.ErrorMessage)
+                    ? string.Join("、", item.SignalKeys)
+                    : $"{string.Join("、", item.SignalKeys)}；原因：{item.ErrorMessage}"))
+            .ToArray();
+
+        Replace(PlcWriteTraceRows, rows.Length == 0
+            ? [new DiagnosticsPlcWriteTraceRow("--", "PLC", "暂无轨迹", "--", "--", "本次启动尚未记录 PLC 块写入。")]
+            : rows);
+    }
+
     private static string BuildConfigurationProfileText(ConfigurationProfileSnapshot profile)
     {
         var machine = string.IsNullOrWhiteSpace(profile.MachineProfile)
@@ -251,6 +281,15 @@ public sealed partial class DiagnosticsViewModel : NavigationPageViewModelBase
 
     private static string FormatTime(DateTime? value)
         => value.HasValue ? value.Value.ToString("yyyy-MM-dd HH:mm:ss") : "--";
+
+    private static string FormatTraceKind(PlcIoWriteTraceKind kind)
+        => kind switch
+        {
+            PlcIoWriteTraceKind.Attempt => "尝试",
+            PlcIoWriteTraceKind.Success => "成功",
+            PlcIoWriteTraceKind.Failed => "失败",
+            _ => kind.ToString()
+        };
 
     private static void Replace<T>(ObservableCollection<T> target, IEnumerable<T> source)
     {
@@ -306,3 +345,11 @@ public sealed record DiagnosticsIoWriteGateRow(
     string BusinessGroup,
     string Message,
     string Value);
+
+public sealed record DiagnosticsPlcWriteTraceRow(
+    string Time,
+    string DeviceName,
+    string Kind,
+    string StartAddress,
+    string WordCount,
+    string Message);

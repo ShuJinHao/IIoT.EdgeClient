@@ -6,6 +6,7 @@ using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc;
+using IIoT.Edge.Application.Abstractions.Plc.Diagnostics;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Recipe;
 using IIoT.Edge.Application.Common.Crud;
@@ -194,6 +195,7 @@ public sealed class AvaloniaShellBehaviorTests
         var dialog = new FakeAvaloniaDialogService { ConfirmResult = true };
         var permission = new FakePermissionService { CanEditHardwareValue = true };
         var auditStore = new IoViewWriteGateAuditStore();
+        var traceStore = new FakePlcIoWriteTraceStore();
         var languageService = provider.GetRequiredService<IAvaloniaLanguageService>();
         var safePort = new RuntimeBufferIoViewSafeInteractionPort(
             runtimeState,
@@ -211,7 +213,8 @@ public sealed class AvaloniaShellBehaviorTests
             languageService,
             safePort,
             permission,
-            runtimeState);
+            runtimeState,
+            traceStore);
 
         await viewModel.OnActivatedAsync();
 
@@ -251,9 +254,22 @@ public sealed class AvaloniaShellBehaviorTests
         Assert.NotNull(row.WriteCommand);
         row.WriteValue = 9;
         await row.WriteCommand.ExecuteAsync(null);
-        Assert.Contains("已写入运行时缓冲", viewModel.FeedbackMessage);
+        Assert.Contains("已进入运行时缓冲", viewModel.FeedbackMessage);
         Assert.Equal("9", row.HostReplyValueText);
-        Assert.Contains("已写入运行时缓冲", Assert.Single(auditStore.GetRecent()).Message);
+        Assert.Contains("已进入运行时缓冲，等待扫描任务按块写入", row.LastPlcWriteTraceText);
+        Assert.Contains("已进入运行时缓冲，等待扫描任务按块写入", Assert.Single(auditStore.GetRecent()).Message);
+
+        traceStore.Record(new PlcIoWriteTraceEntry(
+            DateTimeOffset.Now,
+            PlcIoWriteTraceKind.Success,
+            1,
+            "PLC-01",
+            "D101",
+            1,
+            ["Start.Reply"],
+            null));
+        await viewModel.ManualReadCommand.ExecuteAsync(null);
+        Assert.Contains("PLC 块写入成功", row.LastPlcWriteTraceText);
     }
 
     [AvaloniaFact]
@@ -932,6 +948,25 @@ public sealed class AvaloniaShellBehaviorTests
         public IPlcBufferTransport? GetBuffer(int networkDeviceId) => Buffer;
 
         public bool HasDevice(int networkDeviceId) => Buffer is not null;
+    }
+
+    private sealed class FakePlcIoWriteTraceStore : IPlcIoWriteTraceStore
+    {
+        private readonly List<PlcIoWriteTraceEntry> _entries = [];
+
+        public void Record(PlcIoWriteTraceEntry entry)
+            => _entries.Insert(0, entry);
+
+        public IReadOnlyList<PlcIoWriteTraceEntry> GetRecent(int count = 50)
+            => _entries.Take(Math.Max(1, count)).ToArray();
+
+        public PlcIoWriteTraceEntry? GetLatestForSignals(int deviceId, IReadOnlyCollection<string> signalKeys)
+        {
+            var keys = signalKeys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            return _entries.FirstOrDefault(entry =>
+                entry.DeviceId == deviceId &&
+                entry.SignalKeys.Any(keys.Contains));
+        }
     }
 
     private sealed class FakePlcBuffer : IPlcBufferTransport
