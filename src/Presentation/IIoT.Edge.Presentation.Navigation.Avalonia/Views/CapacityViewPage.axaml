@@ -4,20 +4,55 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:loc="clr-namespace:IIoT.Edge.UI.Avalonia.Localization;assembly=IIoT.Edge.UI.Avalonia">
   <Border Background="#0F172A" Padding="18">
-    <DockPanel>
-      <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="0,0,0,12">
+    <Grid RowDefinitions="Auto,Auto,*" RowSpacing="12">
+      <StackPanel Orientation="Horizontal" Spacing="10">
         <TextBlock FontSize="20" FontWeight="SemiBold" Foreground="#F8FAFC" Text="{DynamicResource Navigation_Menu_Capacity}" />
+        <ComboBox Width="180" ItemsSource="{Binding DeviceNames}" SelectedItem="{Binding SelectedDeviceName}" />
+        <ComboBox Width="110" ItemsSource="{Binding QueryModes}" SelectedItem="{Binding SelectedQueryMode}" />
         <Button Command="{Binding QueryCommand}" Content="{DynamicResource Navigation_Button_Query}" />
+        <Button Command="{Binding ExportCommand}" Content="{DynamicResource Navigation_Button_Export}" />
+        <TextBlock Foreground="#CBD5E1" VerticalAlignment="Center" Text="{Binding PeriodYield, StringFormat='良率 {0}'}" />
+        <TextBlock Foreground="#FCA5A5" VerticalAlignment="Center" Text="{Binding FeedbackMessage}" />
       </StackPanel>
-      <DataGrid ItemsSource="{Binding Records}" AutoGenerateColumns="False" IsReadOnly="True">
+
+      <Grid Grid.Row="1" ColumnDefinitions="*,*,*,*" ColumnSpacing="10">
+        <Border Background="#111827" BorderBrush="#334155" BorderThickness="1" CornerRadius="6" Padding="10">
+          <StackPanel>
+            <TextBlock Foreground="#94A3B8" Text="{DynamicResource Navigation_Column_Total}" />
+            <TextBlock Foreground="#F8FAFC" FontSize="18" FontWeight="SemiBold" Text="{Binding PeriodTotal}" />
+          </StackPanel>
+        </Border>
+        <Border Grid.Column="1" Background="#111827" BorderBrush="#334155" BorderThickness="1" CornerRadius="6" Padding="10">
+          <StackPanel>
+            <TextBlock Foreground="#94A3B8" Text="{DynamicResource Navigation_Column_Ok}" />
+            <TextBlock Foreground="#BBF7D0" FontSize="18" FontWeight="SemiBold" Text="{Binding PeriodOk}" />
+          </StackPanel>
+        </Border>
+        <Border Grid.Column="2" Background="#111827" BorderBrush="#334155" BorderThickness="1" CornerRadius="6" Padding="10">
+          <StackPanel>
+            <TextBlock Foreground="#94A3B8" Text="{DynamicResource Navigation_Column_Ng}" />
+            <TextBlock Foreground="#FECACA" FontSize="18" FontWeight="SemiBold" Text="{Binding PeriodNg}" />
+          </StackPanel>
+        </Border>
+        <Border Grid.Column="3" Background="#111827" BorderBrush="#334155" BorderThickness="1" CornerRadius="6" Padding="10">
+          <StackPanel>
+            <TextBlock Foreground="#94A3B8" Text="{DynamicResource Navigation_Column_Count}" />
+            <TextBlock Foreground="#F8FAFC" FontSize="18" FontWeight="SemiBold" Text="{Binding AvgDaily}" />
+          </StackPanel>
+        </Border>
+      </Grid>
+
+      <DataGrid Grid.Row="2" ItemsSource="{Binding Records}" AutoGenerateColumns="False" IsReadOnly="True">
         <DataGrid.Columns>
           <DataGridTextColumn Width="*" Binding="{Binding Date}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Time" />
           <DataGridTextColumn Width="110" Binding="{Binding Total}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Total" />
-          <DataGridTextColumn Width="110" Binding="{Binding Ok}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Ok" />
-          <DataGridTextColumn Width="110" Binding="{Binding Ng}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Ng" />
+          <DataGridTextColumn Width="110" Binding="{Binding OkCount}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Ok" />
+          <DataGridTextColumn Width="110" Binding="{Binding NgCount}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Ng" />
           <DataGridTextColumn Width="120" Binding="{Binding Yield}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Yield" />
+          <DataGridTextColumn Width="120" Binding="{Binding DayShiftTotal}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Count" />
+          <DataGridTextColumn Width="120" Binding="{Binding NightShiftTotal}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Status" />
         </DataGrid.Columns>
       </DataGrid>
-    </DockPanel>
+    </Grid>
   </Border>
 </UserControl>

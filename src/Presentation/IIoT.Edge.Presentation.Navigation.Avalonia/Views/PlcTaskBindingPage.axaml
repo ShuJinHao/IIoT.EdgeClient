@@ -4,15 +4,44 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:loc="clr-namespace:IIoT.Edge.UI.Avalonia.Localization;assembly=IIoT.Edge.UI.Avalonia">
   <Border Background="#0F172A" Padding="18">
-    <StackPanel Spacing="12">
-      <TextBlock FontSize="20" FontWeight="SemiBold" Foreground="#F8FAFC" Text="{DynamicResource Navigation_Menu_PlcTaskBinding}" />
-      <DataGrid ItemsSource="{Binding Bindings}" AutoGenerateColumns="False" IsReadOnly="True">
+    <DockPanel>
+      <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,14">
+        <StackPanel Spacing="4">
+          <TextBlock FontSize="20" FontWeight="SemiBold" Foreground="#F8FAFC" Text="{Binding ViewTitle}" />
+          <TextBlock Foreground="#CBD5E1" Text="{Binding FeedbackMessage}" TextWrapping="Wrap" />
+        </StackPanel>
+        <Button Grid.Column="1" Margin="0,0,8,0" Command="{Binding RefreshCommand}" Content="{DynamicResource Navigation_Button_Query}" />
+        <Button Grid.Column="2" MinWidth="92" Command="{Binding SaveCommand}" Content="{DynamicResource Navigation_Button_Save}" />
+      </Grid>
+
+      <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="0,0,0,12">
+        <TextBlock VerticalAlignment="Center" Foreground="#94A3B8" Text="{DynamicResource Navigation_Column_DeviceName}" />
+        <ComboBox Width="260" ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate>
+              <TextBlock Text="{Binding DisplayText}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <TextBlock VerticalAlignment="Center" Foreground="#94A3B8" Text="{Binding SelectedDevice.ModuleId}" />
+        <TextBlock VerticalAlignment="Center" Foreground="#94A3B8" Text="{Binding SelectedDevice.DeviceStateText}" />
+      </StackPanel>
+
+      <DataGrid ItemsSource="{Binding SelectedDeviceTasks}"
+                AutoGenerateColumns="False"
+                IsReadOnly="{Binding IsReadOnly}"
+                MinHeight="340">
         <DataGrid.Columns>
-          <DataGridTextColumn Width="180" Binding="{Binding TaskKey}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_TaskKey" />
-          <DataGridTextColumn Width="*" Binding="{Binding Signal}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Signal" />
-          <DataGridTextColumn Width="180" Binding="{Binding Binding}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Binding" />
+          <DataGridTextColumn Width="140" Binding="{Binding Key}" IsReadOnly="True" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_TaskKey" />
+          <DataGridTextColumn Width="160" Binding="{Binding DisplayName}" IsReadOnly="True" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Signal" />
+          <DataGridCheckBoxColumn Width="80" Binding="{Binding Enabled}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Enable" />
+          <DataGridTextColumn Width="90" Binding="{Binding TaskTypeText}" IsReadOnly="True" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_DataType" />
+          <DataGridTextColumn Width="90" Binding="{Binding SourceText}" IsReadOnly="True" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Label_Source" />
+          <DataGridTextColumn Width="220" Binding="{Binding RequiredSignalsText}" IsReadOnly="True" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_PlcSignal" />
+          <DataGridTextColumn Width="220" Binding="{Binding MissingRequiredSignalsText}" IsReadOnly="True" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Message" />
+          <DataGridTextColumn Width="180" Binding="{Binding AvailabilityText}" IsReadOnly="True" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Status" />
         </DataGrid.Columns>
       </DataGrid>
-    </StackPanel>
+    </DockPanel>
   </Border>
 </UserControl>

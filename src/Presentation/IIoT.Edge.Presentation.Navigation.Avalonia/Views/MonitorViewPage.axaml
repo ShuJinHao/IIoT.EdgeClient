@@ -4,18 +4,57 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:loc="clr-namespace:IIoT.Edge.UI.Avalonia.Localization;assembly=IIoT.Edge.UI.Avalonia">
   <Border Background="#0F172A" Padding="18">
-    <StackPanel Spacing="12">
-      <TextBlock FontSize="20" FontWeight="SemiBold" Foreground="#F8FAFC" Text="{DynamicResource Navigation_Menu_Monitor}" />
-      <DataGrid ItemsSource="{Binding Devices}" AutoGenerateColumns="False" IsReadOnly="True">
+    <Grid RowDefinitions="Auto,Auto,*" RowSpacing="12">
+      <StackPanel Orientation="Horizontal" Spacing="10">
+        <TextBlock FontSize="20" FontWeight="SemiBold" Foreground="#F8FAFC" Text="{DynamicResource Navigation_Menu_Monitor}" />
+        <Button Command="{Binding RefreshCommand}" Content="{DynamicResource Navigation_Button_Query}" />
+        <TextBlock Foreground="#FCA5A5" VerticalAlignment="Center" Text="{Binding FeedbackMessage}" />
+      </StackPanel>
+
+      <ItemsControl Grid.Row="1" ItemsSource="{Binding Devices}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Border Background="#111827" BorderBrush="#334155" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,8">
+              <Grid ColumnDefinitions="220,*,*,*" ColumnSpacing="14">
+                <StackPanel>
+                  <TextBlock Foreground="#F8FAFC" FontWeight="SemiBold" Text="{Binding DeviceName}" />
+                  <TextBlock Foreground="#CBD5E1" Text="{Binding DeviceDataSummary}" TextWrapping="Wrap" />
+                  <TextBlock Foreground="#94A3B8" Text="{Binding StepSummary}" TextWrapping="Wrap" />
+                </StackPanel>
+                <StackPanel Grid.Column="1">
+                  <TextBlock Foreground="#94A3B8" Text="{DynamicResource Navigation_Column_Total}" />
+                  <TextBlock Foreground="#F8FAFC" FontSize="18" FontWeight="SemiBold" Text="{Binding TotalAll}" />
+                  <TextBlock Foreground="#CBD5E1" Text="{Binding YieldAll}" />
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                  <TextBlock Foreground="#94A3B8" Text="{DynamicResource Navigation_Column_Ok}" />
+                  <TextBlock Foreground="#BBF7D0" FontSize="18" FontWeight="SemiBold" Text="{Binding OkAll}" />
+                  <TextBlock Foreground="#CBD5E1" Text="{Binding DayShiftYield}" />
+                </StackPanel>
+                <StackPanel Grid.Column="3">
+                  <TextBlock Foreground="#94A3B8" Text="{DynamicResource Navigation_Column_Ng}" />
+                  <TextBlock Foreground="#FECACA" FontSize="18" FontWeight="SemiBold" Text="{Binding NgAll}" />
+                  <TextBlock Foreground="#CBD5E1" Text="{Binding NightShiftYield}" />
+                </StackPanel>
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <DataGrid Grid.Row="2" ItemsSource="{Binding Devices}" AutoGenerateColumns="False" IsReadOnly="True">
         <DataGrid.Columns>
           <DataGridTextColumn Width="*" Binding="{Binding DeviceName}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_DeviceName" />
-          <DataGridTextColumn Width="100" Binding="{Binding Total}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Total" />
-          <DataGridTextColumn Width="100" Binding="{Binding Ok}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Ok" />
-          <DataGridTextColumn Width="100" Binding="{Binding Ng}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Ng" />
-          <DataGridTextColumn Width="100" Binding="{Binding Yield}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Yield" />
-          <DataGridTextColumn Width="160" Binding="{Binding Status}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Status" />
+          <DataGridTextColumn Width="90" Binding="{Binding DayShiftTotal}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Total" />
+          <DataGridTextColumn Width="90" Binding="{Binding DayShiftOk}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Ok" />
+          <DataGridTextColumn Width="90" Binding="{Binding DayShiftNg}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Ng" />
+          <DataGridTextColumn Width="90" Binding="{Binding NightShiftTotal}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Count" />
+          <DataGridTextColumn Width="90" Binding="{Binding TotalAll}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Total" />
+          <DataGridTextColumn Width="90" Binding="{Binding YieldAll}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Yield" />
+          <DataGridTextColumn Width="220" Binding="{Binding CloudSyncStatus}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Status" />
+          <DataGridTextColumn Width="180" Binding="{Binding MesSyncStatus}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Message" />
         </DataGrid.Columns>
       </DataGrid>
-    </StackPanel>
+    </Grid>
   </Border>
 </UserControl>
