@@ -78,7 +78,11 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
             entry.MachineProfile.Trim(),
             executablePath,
             iconKind,
-            accentColor);
+            accentColor,
+            entry.Arguments?
+                .Where(argument => !string.IsNullOrWhiteSpace(argument))
+                .Select(argument => argument.Trim())
+                .ToArray());
     }
 
     private string ResolvePath(string path)
@@ -114,5 +118,7 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
         public string? IconKind { get; set; }
 
         public string? AccentColor { get; set; }
+
+        public string[]? Arguments { get; set; }
     }
 }

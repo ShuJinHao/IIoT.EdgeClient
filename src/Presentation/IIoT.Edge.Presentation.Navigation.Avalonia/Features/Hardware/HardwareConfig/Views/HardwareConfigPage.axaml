@@ -7,11 +7,16 @@
   <Border Background="#0F172A" Padding="18">
     <DockPanel>
       <Grid DockPanel.Dock="Top" Margin="0,0,0,12" ColumnDefinitions="*,Auto">
-        <TextBlock VerticalAlignment="Center"
-                   FontSize="20"
-                   FontWeight="SemiBold"
-                   Foreground="#F8FAFC"
-                   Text="{Binding ViewTitle}" />
+        <StackPanel>
+          <TextBlock VerticalAlignment="Center"
+                     FontSize="20"
+                     FontWeight="SemiBold"
+                     Foreground="#F8FAFC"
+                     Text="{Binding ViewTitle}" />
+          <TextBlock Foreground="#CBD5E1"
+                     Text="{Binding FeedbackMessage}"
+                     TextTrimming="CharacterEllipsis" />
+        </StackPanel>
         <Button Grid.Column="1"
                 MinWidth="92"
                 Command="{Binding SaveCommand}"

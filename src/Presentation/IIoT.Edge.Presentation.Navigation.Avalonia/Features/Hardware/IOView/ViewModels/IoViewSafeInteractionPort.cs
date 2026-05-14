@@ -28,5 +28,5 @@ public sealed class NoopIoViewSafeInteractionPort : IIoViewSafeInteractionPort
         IoInteractionRowModel row,
         int value,
         CancellationToken cancellationToken)
-        => Task.FromResult(new IoViewWriteResult(Accepted: true));
+        => Task.FromResult(new IoViewWriteResult(Accepted: false, "真实写入已禁用，I/O 页面只允许只读联调。"));
 }

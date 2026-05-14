@@ -30,6 +30,11 @@ public sealed class ShellLaunchService : IShellLaunchService
             WorkingDirectory = Path.GetDirectoryName(profile.ExecutablePath) ?? AppContext.BaseDirectory
         };
 
+        foreach (var argument in profile.Arguments ?? [])
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
         startInfo.EnvironmentVariables["Shell__MachineProfile"] = profile.MachineProfile;
 
         var process = _processStarter.Start(startInfo);

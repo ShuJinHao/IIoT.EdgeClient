@@ -1,56 +1,53 @@
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using IIoT.Edge.Application.Common.Crud;
+using IIoT.Edge.Application.Features.Hardware.HardwareConfigView;
+using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Presentation.Navigation.Avalonia.ViewModels;
 using IIoT.Edge.UI.Avalonia.Localization;
-using System.Collections.ObjectModel;
+using IIoT.Edge.UI.Avalonia.Services;
 
 namespace IIoT.Edge.Presentation.Navigation.Avalonia.Features.Hardware.HardwareConfig.ViewModels;
 
 public sealed partial class HardwareConfigViewModel : NavigationPageViewModelBase
 {
+    private readonly IHardwareConfigCrudService _hardwareConfigService;
     private readonly IAvaloniaLanguageService _languageService;
-    private int _nextNetworkDeviceId = 3;
-    private int _nextSerialDeviceId = 3;
-    private int _nextIoMappingId = 4;
+    private readonly IAvaloniaDialogService _dialogService;
+    private readonly AsyncRelayCommand _loadCommand;
+    private readonly AsyncRelayCommand _saveCommand;
+    private int _nextNetworkDeviceId;
+    private int _nextSerialDeviceId;
+    private int _nextIoMappingId;
 
     public HardwareConfigViewModel(
+        IHardwareConfigCrudService hardwareConfigService,
         IAvaloniaLanguageService languageService,
+        IAvaloniaDialogService dialogService,
         string viewId,
         string titleResourceKey,
         string titleFallback)
         : base(languageService, viewId, titleResourceKey, titleFallback)
     {
+        _hardwareConfigService = hardwareConfigService;
         _languageService = languageService;
-        NetworkDevices =
-        [
-            new NetworkDeviceRow(1, "PLC-01", "PLC", "S7-1200", "Homogenization", "192.168.1.10", 102, 0, "Read", "Write", 3000, true, "主线 PLC"),
-            new NetworkDeviceRow(2, "Scanner-01", "Scanner", "TCP", "Homogenization", "192.168.1.20", 9000, 0, "TRIGGER", string.Empty, 3000, true, "工位扫码器")
-        ];
-        SerialDevices =
-        [
-            new SerialDeviceRow(1, "Scale-01", "Scale", "COM1", 9600, 8, "One", "None", "READ", string.Empty, true, "前段称重"),
-            new SerialDeviceRow(2, "Printer-01", "Printer", "COM2", 115200, 8, "One", "None", "PRINT", string.Empty, false, "标签打印")
-        ];
-        IoMappings =
-        [
-            new IoMappingRow(1, 1, "DB1.DBX0.0", 1, "交互", "启动请求", "Bool", "Read", true),
-            new IoMappingRow(2, 1, "DB1.DBX0.1", 1, "交互", "完成应答", "Bool", "Write", true),
-            new IoMappingRow(3, 1, "DB1.DBD10", 2, "数据点", "当前重量", "Real", "Read", false)
-        ];
-
-        SelectedNetworkDevice = NetworkDevices.FirstOrDefault();
-        RefreshFilteredIoMappings();
+        _dialogService = dialogService;
+        _loadCommand = new AsyncRelayCommand(LoadAsync);
+        _saveCommand = new AsyncRelayCommand(SaveAsync);
     }
 
-    public ObservableCollection<NetworkDeviceRow> NetworkDevices { get; }
+    public ObservableCollection<NetworkDeviceRow> NetworkDevices { get; } = [];
 
-    public ObservableCollection<SerialDeviceRow> SerialDevices { get; }
+    public ObservableCollection<SerialDeviceRow> SerialDevices { get; } = [];
 
-    public ObservableCollection<IoMappingRow> IoMappings { get; }
+    public ObservableCollection<IoMappingRow> IoMappings { get; } = [];
 
     public ObservableCollection<IoMappingRow> FilteredIoMappings { get; } = [];
 
-    public IReadOnlyList<string> NetworkDeviceTypes { get; } = ["PLC", "Scanner", "Camera"];
+    public ObservableCollection<IoMappingCandidateRow> CandidateIoSignals { get; } = [];
+
+    public IReadOnlyList<string> NetworkDeviceTypes { get; } = ["PLC", "Scanner", "Camera", "Tester"];
 
     public IReadOnlyList<string> NetworkDeviceModels { get; } = ["S7-1200", "S7-1500", "ModbusTcp", "TCP"];
 
@@ -63,6 +60,18 @@ public sealed partial class HardwareConfigViewModel : NavigationPageViewModelBas
     public IReadOnlyList<string> IoDirections { get; } = ["Read", "Write"];
 
     public IReadOnlyList<string> IoBusinessGroups { get; } = ["Interaction", "DataPoint"];
+
+    public bool CanEdit => true;
+
+    public string DialogTitle => Text(DialogTitleResourceKey, DialogTitleResourceKey);
+
+    public string DialogMessage => Text(DialogMessageResourceKey, DialogMessageResourceKey);
+
+    public string PendingOperationText => Text(PendingOperationResourceKey, PendingOperationResourceKey);
+
+    public IAsyncRelayCommand LoadCommand => _loadCommand;
+
+    public IAsyncRelayCommand SaveCommand => _saveCommand;
 
     [ObservableProperty]
     private int selectedTabIndex;
@@ -80,6 +89,9 @@ public sealed partial class HardwareConfigViewModel : NavigationPageViewModelBas
     private IoMappingRow? selectedIoMapping;
 
     [ObservableProperty]
+    private IoMappingCandidateRow? selectedCandidateIoSignal;
+
+    [ObservableProperty]
     private bool isDialogOpen;
 
     [ObservableProperty]
@@ -91,13 +103,13 @@ public sealed partial class HardwareConfigViewModel : NavigationPageViewModelBas
     [ObservableProperty]
     private string pendingOperationResourceKey = "Navigation_Status_ReadOnlyValidation";
 
-    public bool CanEdit => true;
+    [ObservableProperty]
+    private string feedbackMessage = string.Empty;
 
-    public string DialogTitle => Text(DialogTitleResourceKey, DialogTitleResourceKey);
-
-    public string DialogMessage => Text(DialogMessageResourceKey, DialogMessageResourceKey);
-
-    public string PendingOperationText => Text(PendingOperationResourceKey, PendingOperationResourceKey);
+    public override async Task OnActivatedAsync()
+    {
+        await LoadAsync();
+    }
 
     partial void OnDialogTitleResourceKeyChanged(string value) => OnPropertyChanged(nameof(DialogTitle));
 
@@ -108,15 +120,14 @@ public sealed partial class HardwareConfigViewModel : NavigationPageViewModelBas
     partial void OnSelectedNetworkDeviceChanged(NetworkDeviceRow? value)
     {
         SelectedIoMapping = null;
-        RefreshFilteredIoMappings();
-        DeleteNetworkDeviceCommand.NotifyCanExecuteChanged();
+        _ = LoadSelectedDeviceMappingsAsync();
     }
 
     [RelayCommand]
     private void AddNetworkDevice()
     {
         var row = new NetworkDeviceRow(
-            _nextNetworkDeviceId++,
+            --_nextNetworkDeviceId,
             "网络设备",
             "PLC",
             "S7-1200",
@@ -142,13 +153,13 @@ public sealed partial class HardwareConfigViewModel : NavigationPageViewModelBas
         }
 
         NetworkDevices.Remove(selected);
-        foreach (var mapping in IoMappings.Where(item => item.NetworkDeviceId == selected.Id).ToArray())
+        if (SelectedNetworkDevice?.Id == selected.Id)
         {
-            IoMappings.Remove(mapping);
+            IoMappings.Clear();
+            FilteredIoMappings.Clear();
         }
 
         SelectedNetworkDevice = NetworkDevices.FirstOrDefault();
-        RefreshFilteredIoMappings();
     }
 
     private bool CanDeleteNetworkDevice() => SelectedNetworkDevice is not null;
@@ -157,7 +168,7 @@ public sealed partial class HardwareConfigViewModel : NavigationPageViewModelBas
     private void AddSerialDevice()
     {
         var row = new SerialDeviceRow(
-            _nextSerialDeviceId++,
+            --_nextSerialDeviceId,
             "串口设备",
             "称重设备",
             "COM1",
@@ -208,28 +219,17 @@ public sealed partial class HardwareConfigViewModel : NavigationPageViewModelBas
     [RelayCommand]
     private void ConfirmDialog()
     {
-        if (PendingOperationResourceKey == "Navigation_Status_SavePending")
+        if (SelectedNetworkDevice is null)
         {
             IsDialogOpen = false;
             return;
         }
 
-        if (SelectedNetworkDevice is null)
-        {
-            return;
-        }
+        var selectedCandidate = SelectCandidateForPendingOperation();
+        var row = selectedCandidate is null
+            ? CreateBlankMappingForPendingOperation()
+            : new IoMappingRow(--_nextIoMappingId, SelectedNetworkDevice.Id, selectedCandidate.Source);
 
-        var group = PendingOperationResourceKey == "Navigation_Status_AddInteractionPending" ? "交互" : "数据点";
-        var row = new IoMappingRow(
-            _nextIoMappingId++,
-            SelectedNetworkDevice.Id,
-            string.Empty,
-            1,
-            group,
-            "新信号",
-            "Bool",
-            "Read",
-            group == "交互");
         IoMappings.Add(row);
         SelectedIoMapping = row;
         RefreshFilteredIoMappings();
@@ -252,18 +252,169 @@ public sealed partial class HardwareConfigViewModel : NavigationPageViewModelBas
     private bool CanDeleteIoMapping() => SelectedIoMapping is not null;
 
     [RelayCommand]
-    private void Save()
-    {
-        DialogTitleResourceKey = "Navigation_Dialog_Title_SaveHardwareConfig";
-        DialogMessageResourceKey = "Navigation_Dialog_Message_SaveHardwareConfigReadonly";
-        PendingOperationResourceKey = "Navigation_Status_SavePending";
-        IsDialogOpen = true;
-    }
-
-    [RelayCommand]
     private void CloseDialog()
     {
         IsDialogOpen = false;
+    }
+
+    private async Task LoadAsync()
+    {
+        var selectedId = SelectedNetworkDevice?.Id;
+        try
+        {
+            var result = await _hardwareConfigService.LoadAsync();
+            NetworkDevices.Clear();
+            foreach (var device in result.NetworkDevices.Select(static device => new NetworkDeviceRow(device)))
+            {
+                NetworkDevices.Add(device);
+            }
+
+            SerialDevices.Clear();
+            foreach (var device in result.SerialDevices.Select(static device => new SerialDeviceRow(device)))
+            {
+                SerialDevices.Add(device);
+            }
+
+            _nextNetworkDeviceId = Math.Min(0, NetworkDevices.Select(static x => x.Id).DefaultIfEmpty(0).Min());
+            _nextSerialDeviceId = Math.Min(0, SerialDevices.Select(static x => x.Id).DefaultIfEmpty(0).Min());
+            SelectedSerialDevice = SerialDevices.FirstOrDefault();
+            SelectedNetworkDevice = selectedId is null
+                ? NetworkDevices.FirstOrDefault()
+                : NetworkDevices.FirstOrDefault(device => device.Id == selectedId.Value) ?? NetworkDevices.FirstOrDefault();
+
+            if (SelectedNetworkDevice is null)
+            {
+                IoMappings.Clear();
+                FilteredIoMappings.Clear();
+                CandidateIoSignals.Clear();
+            }
+            else
+            {
+                await LoadSelectedDeviceMappingsAsync();
+            }
+
+            FeedbackMessage = Format("Navigation_Hardware_Loaded", "已加载 {0} 个网络设备、{1} 个串口设备。", NetworkDevices.Count, SerialDevices.Count);
+        }
+        catch (Exception ex)
+        {
+            FeedbackMessage = Format("Navigation_Hardware_LoadFailed", "硬件配置加载失败：{0}", ex.Message);
+        }
+    }
+
+    private async Task LoadSelectedDeviceMappingsAsync()
+    {
+        IoMappings.Clear();
+        FilteredIoMappings.Clear();
+        CandidateIoSignals.Clear();
+        SelectedCandidateIoSignal = null;
+
+        var selected = SelectedNetworkDevice;
+        if (selected is null || selected.Id <= 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var mappingResult = await _hardwareConfigService.LoadIoMappingsAsync(selected.Id);
+            foreach (var mapping in mappingResult.Items.Select(static mapping => new IoMappingRow(mapping)))
+            {
+                IoMappings.Add(mapping);
+            }
+
+            _nextIoMappingId = Math.Min(0, IoMappings.Select(static x => x.Id).DefaultIfEmpty(0).Min());
+
+            var templateInfo = await _hardwareConfigService.GetModuleTemplateInfoAsync(selected.ToVm());
+            foreach (var signal in templateInfo.CandidateSignals.Select(static signal => new IoMappingCandidateRow(signal)))
+            {
+                CandidateIoSignals.Add(signal);
+            }
+
+            SelectedCandidateIoSignal = CandidateIoSignals.FirstOrDefault();
+            RefreshFilteredIoMappings();
+        }
+        catch (Exception ex)
+        {
+            FeedbackMessage = Format("Navigation_Hardware_LoadMappingsFailed", "I/O 映射加载失败：{0}", ex.Message);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        var confirmed = await _dialogService.ConfirmAsync(
+            Text("Navigation_Dialog_Title_SaveHardwareConfig", "保存硬件配置"),
+            Text("Navigation_Dialog_Message_SaveHardwareConfigConfirm", "即将保存网络设备、串口设备和当前网络设备的 I/O 映射，是否继续？"));
+
+        if (!confirmed)
+        {
+            FeedbackMessage = Text("Navigation_Hardware_SaveCanceled", "已取消保存。");
+            return;
+        }
+
+        var selectedId = SelectedNetworkDevice?.Id ?? 0;
+        CrudOperationResult result;
+        try
+        {
+            result = await _hardwareConfigService.SaveAsync(
+                NetworkDevices.Select(static device => device.ToVm()).ToArray(),
+                SerialDevices.Select(static device => device.ToVm()).ToArray(),
+                selectedId,
+                FilteredIoMappings.Select(static mapping => mapping.ToVm()).ToArray());
+        }
+        catch (Exception ex)
+        {
+            FeedbackMessage = Format("Navigation_Hardware_SaveFailed", "硬件配置保存失败：{0}", ex.Message);
+            return;
+        }
+
+        FeedbackMessage = string.IsNullOrWhiteSpace(result.Message)
+            ? result.IsSuccess ? Text("Navigation_Hardware_SaveSuccess", "硬件配置已保存。") : Text("Navigation_Hardware_SaveFailedShort", "硬件配置保存失败。")
+            : result.Message;
+
+        if (result.IsSuccess)
+        {
+            await LoadAsync();
+        }
+    }
+
+    private IoMappingCandidateRow? SelectCandidateForPendingOperation()
+    {
+        if (SelectedCandidateIoSignal is { } selected
+            && MatchesPendingOperation(selected.Source))
+        {
+            return selected;
+        }
+
+        return CandidateIoSignals.FirstOrDefault(candidate => MatchesPendingOperation(candidate.Source));
+    }
+
+    private bool MatchesPendingOperation(ModuleIoTemplateEntry candidate)
+    {
+        var pendingInteraction = PendingOperationResourceKey == "Navigation_Status_AddInteractionPending";
+        var isInteraction = Contains(candidate.Category, "Interaction")
+            || Contains(candidate.Category, "交互")
+            || Contains(candidate.BusinessGroup, "Interaction")
+            || Contains(candidate.BusinessGroup, "交互");
+        return pendingInteraction == isInteraction;
+    }
+
+    private IoMappingRow CreateBlankMappingForPendingOperation()
+    {
+        var isInteraction = PendingOperationResourceKey == "Navigation_Status_AddInteractionPending";
+        return new IoMappingRow(
+            --_nextIoMappingId,
+            SelectedNetworkDevice!.Id,
+            string.Empty,
+            string.Empty,
+            1,
+            isInteraction ? "Interaction" : "SingleRead",
+            isInteraction ? "交互" : "数据点",
+            "新信号",
+            "Bool",
+            "Read",
+            IoMappings.Count + 1,
+            null,
+            isInteraction);
     }
 
     private void RefreshFilteredIoMappings()
@@ -276,7 +427,8 @@ public sealed partial class HardwareConfigViewModel : NavigationPageViewModelBas
 
         foreach (var item in IoMappings
             .Where(item => item.NetworkDeviceId == SelectedNetworkDevice.Id)
-            .OrderBy(item => item.BusinessGroup, StringComparer.Ordinal)
+            .OrderBy(item => item.SortOrder)
+            .ThenBy(item => item.BusinessGroup, StringComparer.Ordinal)
             .ThenBy(item => item.SignalName, StringComparer.Ordinal))
         {
             FilteredIoMappings.Add(item);
@@ -288,4 +440,10 @@ public sealed partial class HardwareConfigViewModel : NavigationPageViewModelBas
         var value = _languageService.GetText(key);
         return string.Equals(value, key, StringComparison.Ordinal) ? fallback : value;
     }
+
+    private string Format(string key, string fallback, params object[] args)
+        => string.Format(Text(key, fallback), args);
+
+    private static bool Contains(string? value, string token)
+        => value?.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0;
 }

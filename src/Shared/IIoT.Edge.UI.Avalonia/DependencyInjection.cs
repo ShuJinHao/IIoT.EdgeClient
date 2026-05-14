@@ -15,6 +15,8 @@ public static class DependencyInjection
         services.TryAddSingleton<IAvaloniaDialogService, AvaloniaDialogService>();
         services.TryAddSingleton<IAvaloniaTimerFactory, AvaloniaTimerFactory>();
         services.TryAddSingleton<IAvaloniaWindowService, AvaloniaWindowService>();
+        services.TryAddSingleton<IAvaloniaRuntimeState, AvaloniaRuntimeState>();
+        services.TryAddSingleton<IAvaloniaCsvExportService, AvaloniaCsvExportService>();
         return services;
     }
 }

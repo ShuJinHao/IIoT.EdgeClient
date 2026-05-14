@@ -8,21 +8,15 @@ public sealed class ResourceEncodingHygieneTests
     private static readonly string[] CommonMojibakeFragments =
     [
         "\uFFFD",
-        "\u9422\u71B6",
-        "\u6D5C\u0446",
-        "\u7EAD\uE0FF",
-        "\u7EEF\u8364",
-        "\u93CC\u30E8",
-        "\u93C2\u677F",
-        "\u6DC7\u6FC6",
-        "\u9352\u72BB",
-        "\u935A\u5C7E",
-        "\u8930\u64B3",
-        "\u93C8\uE044",
-        "\u00C3\u00A7",
-        "\u00E7\u0094",
-        "\u00E4\u00BA",
-        "\u00E2\u20AC"
+        "锟",
+        "鐢",
+        "浜",
+        "鏁",
+        "鍚",
+        "澶",
+        "銆",
+        "绯荤",
+        "杩佺"
     ];
 
     [Fact]

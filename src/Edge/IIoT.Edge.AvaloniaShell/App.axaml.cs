@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.AvaloniaShell.Services;
 using IIoT.Edge.AvaloniaShell.ViewModels;
 using IIoT.Edge.AvaloniaShell.Views;
 using IIoT.Edge.Host.Bootstrap.Avalonia;
@@ -14,20 +15,29 @@ namespace IIoT.Edge.AvaloniaShell;
 
 public partial class App : Avalonia.Application
 {
+    private static readonly TimeSpan ShutdownTimeout = TimeSpan.FromSeconds(8);
+
+    private ServiceProvider? _serviceProvider;
+    private IAvaloniaShellStartupCoordinator? _startupCoordinator;
+    private readonly CancellationTokenSource _appCts = new();
+    private bool _shutdownRequested;
+
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
     }
 
-    public override void OnFrameworkInitializationCompleted()
+    public override async void OnFrameworkInitializationCompleted()
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var services = new ServiceCollection()
                 .AddEdgeHostAvaloniaBootstrap(CreateBootstrapOptions(AppDomain.CurrentDomain.BaseDirectory))
+                .AddSingleton<IAvaloniaShellStartupCoordinator, AvaloniaShellStartupCoordinator>()
                 .AddSingleton<MainWindowViewModel>()
                 .AddSingleton<MainWindow>()
                 .BuildServiceProvider();
+            _serviceProvider = services;
             DependencyInjection.RegisterAvaloniaViews(services);
 
             var languageService = services.GetRequiredService<IAvaloniaLanguageService>();
@@ -36,9 +46,53 @@ public partial class App : Avalonia.Application
             var mainWindow = services.GetRequiredService<MainWindow>();
             mainWindow.DataContext = services.GetRequiredService<MainWindowViewModel>();
             desktop.MainWindow = mainWindow;
+            desktop.ShutdownRequested += Desktop_ShutdownRequested;
+
+            base.OnFrameworkInitializationCompleted();
+
+            _startupCoordinator = services.GetRequiredService<IAvaloniaShellStartupCoordinator>();
+            var startupResult = await _startupCoordinator.StartAsync(desktop.Args, _appCts.Token);
+            if (!startupResult.Success)
+            {
+                await ShowStartupErrorAsync(mainWindow, startupResult.Message ?? "AvaloniaShell 启动失败。");
+                desktop.Shutdown(-1);
+            }
+
+            return;
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private async void Desktop_ShutdownRequested(object? sender, ShutdownRequestedEventArgs e)
+    {
+        if (_shutdownRequested)
+        {
+            return;
+        }
+
+        _shutdownRequested = true;
+        e.Cancel = true;
+        _appCts.Cancel();
+
+        if (_startupCoordinator is not null)
+        {
+            await _startupCoordinator.StopAsync(ShutdownTimeout);
+        }
+
+        _serviceProvider?.Dispose();
+        _serviceProvider = null;
+
+        if (sender is IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            desktop.Shutdown();
+        }
+    }
+
+    private static async Task ShowStartupErrorAsync(MainWindow owner, string message)
+    {
+        var dialog = new StartupErrorWindow(message);
+        await dialog.ShowDialog(owner);
     }
 
     private static AvaloniaHostBootstrapOptions CreateBootstrapOptions(string baseDirectory)

@@ -21,8 +21,8 @@ public sealed class HomogenizationAvaloniaZhCnResources : IAvaloniaResourceContr
             ["Homogenization_Column_StirringSpeed"] = "搅拌转速",
             ["Homogenization_Column_Temperature"] = "温度",
             ["Homogenization_Column_Vacuum"] = "真空度",
-            ["Homogenization_Column_CntActual"] = "CNT实际值",
-            ["Homogenization_Column_NmpActual"] = "NMP实际值"
+            ["Homogenization_Column_CntActual"] = "CNT 实际值",
+            ["Homogenization_Column_NmpActual"] = "NMP 实际值"
         };
 }
 

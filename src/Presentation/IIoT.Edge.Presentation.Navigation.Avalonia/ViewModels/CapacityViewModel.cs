@@ -1,10 +1,11 @@
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Features.Production.CapacityView;
 using IIoT.Edge.UI.Avalonia.Localization;
 using IIoT.Edge.UI.Avalonia.Services;
-using System.Collections.ObjectModel;
 
 namespace IIoT.Edge.Presentation.Navigation.Avalonia.ViewModels;
 
@@ -14,6 +15,8 @@ public sealed partial class CapacityViewModel : NavigationPageViewModelBase
     private readonly IAvaloniaLanguageService _languageService;
     private readonly IAvaloniaDialogService _dialogService;
     private readonly IAvaloniaDispatcherService _dispatcherService;
+    private readonly EdgeRuntimePaths _runtimePaths;
+    private readonly IAvaloniaCsvExportService _csvExportService;
     private bool _isActivated;
     private bool _isRefreshingDeviceList;
 
@@ -22,6 +25,8 @@ public sealed partial class CapacityViewModel : NavigationPageViewModelBase
         IAvaloniaLanguageService languageService,
         IAvaloniaDialogService dialogService,
         IAvaloniaDispatcherService dispatcherService,
+        EdgeRuntimePaths runtimePaths,
+        IAvaloniaCsvExportService csvExportService,
         string viewId,
         string titleResourceKey,
         string titleFallback)
@@ -31,6 +36,29 @@ public sealed partial class CapacityViewModel : NavigationPageViewModelBase
         _languageService = languageService;
         _dialogService = dialogService;
         _dispatcherService = dispatcherService;
+        _runtimePaths = runtimePaths;
+        _csvExportService = csvExportService;
+    }
+
+    public CapacityViewModel(
+        ICapacityViewService capacityViewService,
+        IAvaloniaLanguageService languageService,
+        IAvaloniaDialogService dialogService,
+        IAvaloniaDispatcherService dispatcherService,
+        string viewId,
+        string titleResourceKey,
+        string titleFallback)
+        : this(
+            capacityViewService,
+            languageService,
+            dialogService,
+            dispatcherService,
+            CreateDefaultRuntimePaths(),
+            new AvaloniaCsvExportService(),
+            viewId,
+            titleResourceKey,
+            titleFallback)
+    {
     }
 
     public ObservableCollection<string> DeviceNames { get; } = [];
@@ -144,9 +172,33 @@ public sealed partial class CapacityViewModel : NavigationPageViewModelBase
     }
 
     [RelayCommand]
-    private void Export()
+    private async Task ExportAsync()
     {
-        FeedbackMessage = "当前 Avalonia 迁移批次不写出导出文件。";
+        try
+        {
+            var path = await _csvExportService.ExportAsync(
+                _runtimePaths.ExcelDirectory,
+                "Capacity",
+                ["日期", "总数", "OK", "NG", "良率", "白班", "夜班", "设备", "查询模式"],
+                Records.Select(row => new object?[]
+                {
+                    string.IsNullOrWhiteSpace(row.DateFull) ? row.Date : row.DateFull,
+                    row.Total,
+                    row.OkCount,
+                    row.NgCount,
+                    row.Yield,
+                    row.DayShiftTotal,
+                    row.NightShiftTotal,
+                    SelectedDeviceName,
+                    SelectedQueryMode
+                }),
+                DateTime.Now);
+            FeedbackMessage = $"已导出：{path}";
+        }
+        catch (Exception ex)
+        {
+            FeedbackMessage = $"导出产能数据失败：{ex.Message}";
+        }
     }
 
     private void OnUploadGateChanged(EdgeUploadGateSnapshot snapshot)
@@ -255,5 +307,23 @@ public sealed partial class CapacityViewModel : NavigationPageViewModelBase
     {
         var value = _languageService.GetText(key);
         return string.Equals(value, key, StringComparison.Ordinal) ? fallback : value;
+    }
+
+    private static EdgeRuntimePaths CreateDefaultRuntimePaths()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "iiot-edge-avalonia-export");
+        return new EdgeRuntimePaths(
+            root,
+            "avalonia-tests",
+            root,
+            Path.Combine(root, "db"),
+            Path.Combine(root, "context"),
+            Path.Combine(root, "recipes"),
+            Path.Combine(root, "excel"),
+            Path.Combine(root, "diagnostics"),
+            Path.Combine(root, "logs"),
+            Path.Combine(root, "diagnostics", "device-cache.json"),
+            Path.Combine(root, "logs", "crash.log"),
+            Path.Combine(root, "logs", "crash-fallback.log"));
     }
 }

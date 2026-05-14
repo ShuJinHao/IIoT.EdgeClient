@@ -226,7 +226,7 @@ public sealed class ModuleRuntimeRegistrationTests
         {
             Path.Combine(repoRoot, "src", "Infrastructure", "IIoT.Edge.Infrastructure.Integration", "Config", "CloudApiConfig.cs"),
             Path.Combine(repoRoot, "src", "Infrastructure", "IIoT.Edge.Infrastructure.Integration", "Config", "CloudApiEndpointProvider.cs"),
-            Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.Host.Bootstrap", "Core", "StartupDiagnosticsReportBuilder.cs")
+            Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.Host.Bootstrap.Core", "StartupDiagnosticsReportBuilder.cs")
         };
 
         foreach (var file in files)

@@ -28,7 +28,8 @@ public static class DependencyInjection
         var integrationRegistry = new ProcessIntegrationRegistry();
         var moduleParamRegistry = new ModuleParamRegistry();
         var moduleCatalog = new JsonEdgeProcessModuleCatalog(new EdgeProcessModuleCatalogOptions(
-            options.PluginDirectories ?? [options.RuntimePaths.BaseDirectory]));
+            options.PluginDirectories ?? [options.RuntimePaths.BaseDirectory],
+            ".Avalonia.dll"));
 
         services.TryAddSingleton<IAvaloniaViewRegistry>(viewRegistry);
         services.TryAddSingleton<ICellDataTypeRegistry>(cellDataTypeRegistry);

@@ -4,12 +4,17 @@ using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Abstractions.Plc;
+using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Recipe;
 using IIoT.Edge.Application.Common.Crud;
 using IIoT.Edge.Application.Context;
 using IIoT.Edge.Application.Features.Config.ParamView;
 using IIoT.Edge.Application.Features.Config.ParamView.Models;
 using IIoT.Edge.Application.Features.Formula.RecipeView;
+using IIoT.Edge.Application.Features.Hardware.HardwareConfigView;
+using IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Models;
+using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.AvaloniaShell.ViewModels;
 using IIoT.Edge.Host.Bootstrap.Avalonia;
 using IIoT.Edge.Module.Homogenization.Avalonia.Localization;
@@ -25,6 +30,7 @@ using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Hardware.IOView;
 using IIoT.Edge.Presentation.Shell.Avalonia.ViewModels;
 using IIoT.Edge.SharedKernel.DataPipeline.Recipe;
 using IIoT.Edge.SharedKernel.Context;
+using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.UI.Avalonia.Localization;
 using IIoT.Edge.UI.Avalonia.Modularity;
 using IIoT.Edge.UI.Avalonia.Services;
@@ -137,16 +143,26 @@ public sealed class AvaloniaShellBehaviorTests
     }
 
     [AvaloniaFact]
-    public void Hardware_config_page_uses_fake_data_and_confirmation_flow()
+    public async Task Hardware_config_page_loads_service_data_and_saves_after_confirm()
     {
         using var provider = BuildProvider();
-        provider.GetRequiredService<IAvaloniaLanguageService>().Apply("zh-CN");
-        var navigation = provider.GetRequiredService<IAvaloniaNavigationService>();
-        var ids = StandardAvaloniaModuleViewIds.Create("Homogenization");
+        var crud = new FakeHardwareConfigCrudService();
+        var dialog = new FakeAvaloniaDialogService { ConfirmResult = true };
+        var viewModel = new HardwareConfigViewModel(
+            crud,
+            provider.GetRequiredService<IAvaloniaLanguageService>(),
+            dialog,
+            "test.hardware",
+            "Navigation_Title_HardwareConfig",
+            "硬件配置");
 
-        navigation.NavigateTo(ids.HardwareConfigView);
+        await viewModel.OnActivatedAsync();
 
-        var viewModel = Assert.IsType<HardwareConfigViewModel>(navigation.CurrentViewModel);
+        Assert.Equal("PLC-01", Assert.Single(viewModel.NetworkDevices).DeviceName);
+        Assert.Single(viewModel.SerialDevices);
+        Assert.Equal(3, viewModel.IoMappings.Count);
+        Assert.NotEmpty(viewModel.CandidateIoSignals);
+
         var originalNetworkCount = viewModel.NetworkDevices.Count;
         viewModel.AddNetworkDeviceCommand.Execute(null);
         Assert.Equal(originalNetworkCount + 1, viewModel.NetworkDevices.Count);
@@ -158,36 +174,56 @@ public sealed class AvaloniaShellBehaviorTests
         Assert.False(viewModel.IsDialogOpen);
         Assert.True(viewModel.IoMappings.Count > originalMappingCount);
 
-        viewModel.SaveCommand.Execute(null);
-        Assert.True(viewModel.IsDialogOpen);
-        Assert.Equal("Navigation_Dialog_Title_SaveHardwareConfig", viewModel.DialogTitleResourceKey);
-        Assert.Equal("Navigation_Status_SavePending", viewModel.PendingOperationResourceKey);
-        viewModel.ConfirmDialogCommand.Execute(null);
-        Assert.False(viewModel.IsDialogOpen);
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.True(dialog.LastConfirmMessage?.Contains("I/O") == true);
+        Assert.NotEmpty(crud.SavedNetworkDevices);
+        Assert.NotEmpty(crud.SavedSerialDevices);
+        Assert.NotEmpty(crud.SavedIoMappings);
     }
 
     [AvaloniaFact]
-    public async Task Io_view_uses_fake_services_without_accessing_real_plc()
+    public async Task Io_view_reads_config_shape_and_runtime_snapshot_without_real_plc_write()
     {
         using var provider = BuildProvider();
-        provider.GetRequiredService<IAvaloniaLanguageService>().Apply("zh-CN");
-        var navigation = provider.GetRequiredService<IAvaloniaNavigationService>();
-        var ids = StandardAvaloniaModuleViewIds.Create("Homogenization");
+        var crud = new FakeHardwareConfigCrudService();
+        var plcManager = new FakePlcConnectionManager();
+        var plcDataStore = new FakePlcDataStore();
+        var viewModel = new IoViewViewModel(
+            crud,
+            plcManager,
+            plcDataStore,
+            provider.GetRequiredService<IAvaloniaLanguageService>());
 
-        navigation.NavigateTo(ids.IoView);
+        await viewModel.OnActivatedAsync();
 
-        var viewModel = Assert.IsType<IoViewViewModel>(navigation.CurrentViewModel);
         Assert.NotNull(viewModel.SelectedDevice);
         Assert.True(viewModel.HasInteractionRows);
         Assert.True(viewModel.HasDataSections);
 
         await viewModel.ManualReadCommand.ExecuteAsync(null);
-        Assert.False(string.IsNullOrWhiteSpace(viewModel.FeedbackMessage));
+        Assert.Contains("未启动", viewModel.FeedbackMessage);
+
+        plcDataStore.Buffer = new FakePlcBuffer(new Dictionary<string, ushort[]>
+        {
+            ["Start.Request"] = [7],
+            ["Weight.Current"] = [123]
+        });
+        plcManager.Snapshot = new PlcConnectionRuntimeSnapshot
+        {
+            NetworkDeviceId = 1,
+            DeviceName = "PLC-01",
+            IsConnected = true
+        };
+
+        await viewModel.ManualReadCommand.ExecuteAsync(null);
+        Assert.True(viewModel.IsConnected);
+        Assert.Equal("7", viewModel.InteractionRows[0].PlcValueText);
 
         var row = viewModel.InteractionRows.First();
         Assert.NotNull(row.WriteCommand);
         await row.WriteCommand.ExecuteAsync(null);
-        Assert.False(string.IsNullOrWhiteSpace(viewModel.FeedbackMessage));
+        Assert.Contains("真实写入已禁用", viewModel.FeedbackMessage);
     }
 
     [AvaloniaFact]
@@ -632,6 +668,297 @@ public sealed class AvaloniaShellBehaviorTests
             });
 
             return group;
+        }
+    }
+
+    private sealed class FakeHardwareConfigCrudService : IHardwareConfigCrudService
+    {
+        private readonly List<NetworkDeviceVm> _networkDevices =
+        [
+            new()
+            {
+                Id = 1,
+                DeviceName = "PLC-01",
+                DeviceType = DeviceType.PLC,
+                DeviceModel = "S7-1200",
+                ModuleId = "Homogenization",
+                IpAddress = "192.168.1.10",
+                Port1 = 102,
+                ConnectTimeout = 3000,
+                IsEnabled = true
+            }
+        ];
+
+        private readonly List<SerialDeviceVm> _serialDevices =
+        [
+            new()
+            {
+                Id = 1,
+                DeviceName = "Scale-01",
+                DeviceType = "Scale",
+                PortName = "COM1",
+                BaudRate = 9600,
+                DataBits = 8,
+                StopBits = "One",
+                Parity = "None",
+                IsEnabled = true
+            }
+        ];
+
+        private readonly List<IoMappingVm> _ioMappings =
+        [
+            new()
+            {
+                Id = 1,
+                NetworkDeviceId = 1,
+                SignalKey = "Start.Request",
+                PlcAddress = "D100",
+                AddressCount = 1,
+                Category = "Interaction",
+                BusinessGroup = "Start",
+                SignalName = "启动请求",
+                DataType = "Bool",
+                Direction = "Read",
+                SortOrder = 1
+            },
+            new()
+            {
+                Id = 2,
+                NetworkDeviceId = 1,
+                SignalKey = "Start.Reply",
+                PlcAddress = "D101",
+                AddressCount = 1,
+                Category = "Interaction",
+                BusinessGroup = "Start",
+                SignalName = "启动应答",
+                DataType = "Bool",
+                Direction = "Write",
+                SortOrder = 2
+            },
+            new()
+            {
+                Id = 3,
+                NetworkDeviceId = 1,
+                SignalKey = "Weight.Current",
+                PlcAddress = "D200",
+                AddressCount = 1,
+                Category = "SingleRead",
+                BusinessGroup = "Weight",
+                SignalName = "当前重量",
+                DataType = "Int16",
+                Direction = "Read",
+                SortOrder = 3
+            }
+        ];
+
+        public List<NetworkDeviceVm> SavedNetworkDevices { get; } = [];
+
+        public List<SerialDeviceVm> SavedSerialDevices { get; } = [];
+
+        public List<IoMappingVm> SavedIoMappings { get; } = [];
+
+        public Task<HardwareConfigInitResult> LoadAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(new HardwareConfigInitResult(_networkDevices.ToList(), _serialDevices.ToList()));
+
+        public Task<IoMappingPageResult> LoadIoMappingsAsync(int networkDeviceId, CancellationToken cancellationToken = default)
+            => Task.FromResult(new IoMappingPageResult(
+                _ioMappings.Where(mapping => mapping.NetworkDeviceId == networkDeviceId).ToList(),
+                _ioMappings.Count(mapping => mapping.NetworkDeviceId == networkDeviceId)));
+
+        public Task<ModuleTemplateInfoResult> GetModuleTemplateInfoAsync(
+            NetworkDeviceVm? selectedNetworkDevice,
+            CancellationToken cancellationToken = default)
+        {
+            IReadOnlyList<ModuleIoTemplateEntry> candidates =
+            [
+                new(
+                    "Start.Request",
+                    "D100",
+                    1,
+                    "Bool",
+                    "Read",
+                    1,
+                    Category: "Interaction",
+                    BusinessGroup: "Start",
+                    SignalName: "启动请求"),
+                new(
+                    "Weight.Current",
+                    "D200",
+                    1,
+                    "Int16",
+                    "Read",
+                    3,
+                    Category: "SingleRead",
+                    BusinessGroup: "Weight",
+                    SignalName: "当前重量")
+            ];
+
+            return Task.FromResult(new ModuleTemplateInfoResult(true, "Homogenization", candidates, candidates, "ok"));
+        }
+
+        public Task<CrudOperationResult> ApplyModuleTemplateAsync(
+            NetworkDeviceVm? selectedNetworkDevice,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(CrudOperationResult.Success("ok"));
+
+        public Task<CrudOperationResult> SaveAsync(
+            IReadOnlyCollection<NetworkDeviceVm> networkDevices,
+            IReadOnlyCollection<SerialDeviceVm> serialDevices,
+            int selectedNetworkDeviceId,
+            IReadOnlyCollection<IoMappingVm> ioMappings,
+            CancellationToken cancellationToken = default)
+        {
+            SavedNetworkDevices.Clear();
+            SavedNetworkDevices.AddRange(networkDevices);
+            SavedSerialDevices.Clear();
+            SavedSerialDevices.AddRange(serialDevices);
+            SavedIoMappings.Clear();
+            SavedIoMappings.AddRange(ioMappings);
+            return Task.FromResult(CrudOperationResult.Success("saved"));
+        }
+    }
+
+    private sealed class FakeAvaloniaDialogService : IAvaloniaDialogService
+    {
+        public event EventHandler<AvaloniaDialogRequest>? DialogRequested;
+
+        public bool ConfirmResult { get; set; }
+
+        public string? LastConfirmMessage { get; private set; }
+
+        public Task ShowInfoAsync(string title, string message)
+        {
+            DialogRequested?.Invoke(this, AvaloniaDialogRequest.CreateInfo(title, message));
+            return Task.CompletedTask;
+        }
+
+        public Task<bool> ConfirmAsync(string title, string message)
+        {
+            LastConfirmMessage = message;
+            var request = AvaloniaDialogRequest.CreateConfirm(title, message);
+            request.Complete(ConfirmResult);
+            DialogRequested?.Invoke(this, request);
+            return Task.FromResult(ConfirmResult);
+        }
+    }
+
+    private sealed class FakePlcConnectionManager : IPlcConnectionManager
+    {
+        public PlcConnectionRuntimeSnapshot? Snapshot { get; set; }
+
+        public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
+
+        public Task StopAsync(CancellationToken ct = default) => Task.CompletedTask;
+
+        public Task ReloadAsync(string deviceName, CancellationToken ct = default) => Task.CompletedTask;
+
+        public Task StopDeviceAsync(int networkDeviceId, CancellationToken ct = default) => Task.CompletedTask;
+
+        public void RegisterTasks(string deviceName, Func<IPlcBuffer, ProductionContext, List<IPlcTask>> factory)
+        {
+        }
+
+        public IPlcService? GetPlc(int networkDeviceId) => null;
+
+        public ProductionContext? GetContext(string deviceName) => null;
+
+        public void MarkRuntimeFault(int networkDeviceId, string deviceName, string error)
+        {
+        }
+
+        public PlcConnectionRuntimeSnapshot? GetRuntimeStatus(int networkDeviceId) => Snapshot;
+
+        public IReadOnlyCollection<PlcConnectionRuntimeSnapshot> GetRuntimeStatuses()
+            => Snapshot is null ? [] : [Snapshot];
+
+        public void Dispose()
+        {
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class FakePlcDataStore : IPlcDataStore
+    {
+        public IPlcBufferTransport? Buffer { get; set; }
+
+        public void Register(int networkDeviceId, int readSize, int writeSize)
+        {
+        }
+
+        public void Register(
+            int networkDeviceId,
+            int readSize,
+            int writeSize,
+            IReadOnlyCollection<PlcBufferSignalBinding> signalBindings)
+        {
+        }
+
+        public IPlcBufferTransport? GetBuffer(int networkDeviceId) => Buffer;
+
+        public bool HasDevice(int networkDeviceId) => Buffer is not null;
+    }
+
+    private sealed class FakePlcBuffer : IPlcBufferTransport
+    {
+        private readonly IReadOnlyDictionary<string, ushort[]> _readSignals;
+        private readonly Dictionary<string, ushort[]> _writeSignals = new(StringComparer.OrdinalIgnoreCase);
+
+        public FakePlcBuffer(IReadOnlyDictionary<string, ushort[]> readSignals)
+        {
+            _readSignals = readSignals;
+        }
+
+        public event EventHandler<PlcSignalBufferChangedEventArgs>? SignalValuesChanged;
+
+        public ushort GetReadValue(int index) => 0;
+
+        public bool TryGetReadWords(string signalKey, out ushort[] values)
+        {
+            if (_readSignals.TryGetValue(signalKey, out var words))
+            {
+                values = words;
+                return true;
+            }
+
+            values = [];
+            return false;
+        }
+
+        public bool TryGetWriteWords(string signalKey, out ushort[] values)
+        {
+            if (_writeSignals.TryGetValue(signalKey, out var words))
+            {
+                values = words;
+                return true;
+            }
+
+            values = [];
+            return false;
+        }
+
+        public void SetWriteValue(int index, ushort value)
+        {
+        }
+
+        public void SetWriteValue(string signalKey, int offset, ushort value)
+        {
+            _writeSignals[signalKey] = [value];
+            SignalValuesChanged?.Invoke(this, new PlcSignalBufferChangedEventArgs(signalKey, "Write"));
+        }
+
+        public void UpdateReadBuffer(ushort[] data)
+        {
+        }
+
+        public void UpdateReadSignal(string signalKey, IReadOnlyList<ushort> data)
+        {
+        }
+
+        public ushort[] GetWriteBuffer() => [];
+
+        public void SetSignalBindings(IReadOnlyCollection<PlcBufferSignalBinding> bindings)
+        {
         }
     }
 

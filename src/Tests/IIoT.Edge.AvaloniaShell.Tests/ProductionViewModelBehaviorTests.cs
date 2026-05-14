@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Abstractions.Auth;
+using IIoT.Edge.Application.Abstractions.Config;
 using System.Data;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
@@ -90,7 +91,7 @@ public sealed class ProductionViewModelBehaviorTests
 
         viewModel.ExportCommand.Execute(null);
 
-        Assert.Contains("不写出导出文件", viewModel.FeedbackMessage, StringComparison.Ordinal);
+        Assert.Contains("已导出", viewModel.FeedbackMessage, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -217,7 +218,7 @@ public sealed class ProductionViewModelBehaviorTests
         Assert.Equal(3, viewModel.PersistenceRows.Count);
         Assert.Single(viewModel.PluginStates);
         Assert.Single(viewModel.Issues);
-        Assert.Contains("1 个运行时注册", viewModel.FeedbackMessage, StringComparison.Ordinal);
+        Assert.Contains("运行时注册 1 个", viewModel.FeedbackMessage, StringComparison.Ordinal);
         Assert.Contains("运行目录：runtime-data", viewModel.ConfigurationProfileText, StringComparison.Ordinal);
     }
 

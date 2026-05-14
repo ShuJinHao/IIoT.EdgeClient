@@ -8,5 +8,18 @@
     "AccentColor": "#2563EB",
     "MachineProfile": "HomogenizationLine",
     "ExecutablePath": "..\\avalonia-shell\\IIoT.Edge.AvaloniaShell.exe"
+  },
+  {
+    "ProfileId": "HomogenizationLineAvaloniaRuntime",
+    "DisplayName": "匀浆 Avalonia 运行联调",
+    "Description": "传入 --start-runtime 启动 AvaloniaShell 运行时，仅用于运行联调。",
+    "ImagePath": "Assets/Profiles/homogenization.png",
+    "IconKind": "BeakerOutline",
+    "AccentColor": "#DC2626",
+    "MachineProfile": "HomogenizationLine",
+    "ExecutablePath": "..\\avalonia-shell\\IIoT.Edge.AvaloniaShell.exe",
+    "Arguments": [
+      "--start-runtime"
+    ]
   }
 ]

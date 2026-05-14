@@ -80,6 +80,40 @@ public sealed class LauncherProfileCatalogTests
     }
 
     [Fact]
+    public void LoadProfiles_ShouldLoadOptionalArguments()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            WriteText(
+                Path.Combine(tempDirectory, "launcher.profiles.json"),
+                """
+                [
+                  {
+                    "ProfileId": "HomogenizationLineAvaloniaRuntime",
+                    "DisplayName": "匀浆 Avalonia 运行联调",
+                    "Description": "Runtime profile",
+                    "MachineProfile": "HomogenizationLine",
+                    "Arguments": [
+                      "--start-runtime",
+                      "  --diagnostics "
+                    ]
+                  }
+                ]
+                """);
+
+            var catalog = new LauncherProfileCatalog(tempDirectory);
+
+            var profile = Assert.Single(catalog.LoadProfiles());
+            Assert.Equal(["--start-runtime", "--diagnostics"], profile.Arguments);
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
     public void LoadProfiles_WhenRequiredFieldIsMissing_ShouldThrowChineseError()
     {
         var tempDirectory = CreateTempDirectory();

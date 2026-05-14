@@ -24,7 +24,7 @@ public sealed partial class DiagnosticsViewModel : NavigationPageViewModelBase
     {
         _services = services;
         _refreshCommand = new AsyncRelayCommand(RefreshAsync);
-        FeedbackMessage = "诊断页仅读取当前注册与持久化状态，不执行清理或重试。";
+        FeedbackMessage = "诊断页只读取当前注册、启动与持久化状态，不执行死信清理或重试。";
     }
 
     public ObservableCollection<RuntimeRegistrationRow> RuntimeRegistrations { get; } = [];
@@ -41,7 +41,10 @@ public sealed partial class DiagnosticsViewModel : NavigationPageViewModelBase
     private string lastGeneratedText = "启动诊断尚未生成。";
 
     [ObservableProperty]
-    private string configurationProfileText = "配置概况：--";
+    private string configurationProfileText = "配置概况：-";
+
+    [ObservableProperty]
+    private string detailText = "等待刷新。";
 
     [ObservableProperty]
     private string feedbackMessage = string.Empty;
@@ -59,7 +62,7 @@ public sealed partial class DiagnosticsViewModel : NavigationPageViewModelBase
 
             ApplyRuntimeRegistrations(ResolveOptional<IStationRuntimeRegistry>()?.GetRegistrations());
             ApplyModuleRegistrations(report.ModuleRegistrations);
-            await ApplyPersistenceRowsAsync();
+            var syncDiagnostics = await ApplyPersistenceRowsAsync();
             ApplyPluginStates(report.PluginStates);
             ApplyIssues(report.Issues);
 
@@ -67,7 +70,8 @@ public sealed partial class DiagnosticsViewModel : NavigationPageViewModelBase
             LastGeneratedText = report.GeneratedAt == DateTime.MinValue
                 ? "启动诊断尚未生成。"
                 : $"最近生成：{report.GeneratedAt:yyyy-MM-dd HH:mm:ss}";
-            FeedbackMessage = $"已读取 {RuntimeRegistrations.Count} 个运行时注册、{ModuleRegistrations.Count} 个模块注册。";
+            DetailText = BuildDetailText(report, syncDiagnostics);
+            FeedbackMessage = $"已刷新：运行时注册 {RuntimeRegistrations.Count} 个，模块注册 {ModuleRegistrations.Count} 个，问题 {Issues.Count} 个。";
         }
         catch (Exception ex)
         {
@@ -119,13 +123,13 @@ public sealed partial class DiagnosticsViewModel : NavigationPageViewModelBase
         Replace(ModuleRegistrations, rows);
     }
 
-    private async Task ApplyPersistenceRowsAsync()
+    private async Task<EdgeSyncDiagnosticsSnapshot?> ApplyPersistenceRowsAsync()
     {
         var syncDiagnosticsQuery = ResolveOptional<IEdgeSyncDiagnosticsQuery>();
         if (syncDiagnosticsQuery is null)
         {
             Replace(PersistenceRows, [new DiagnosticsPersistenceRow("同步诊断", "未接入", "当前容器未注册同步诊断查询服务。")]);
-            return;
+            return null;
         }
 
         var snapshot = await syncDiagnosticsQuery.GetCurrentAsync();
@@ -158,6 +162,7 @@ public sealed partial class DiagnosticsViewModel : NavigationPageViewModelBase
         };
 
         Replace(PersistenceRows, rows);
+        return snapshot;
     }
 
     private void ApplyPluginStates(IReadOnlyList<PluginLifecycleSnapshot> states)
@@ -196,6 +201,21 @@ public sealed partial class DiagnosticsViewModel : NavigationPageViewModelBase
             : profile.MachineProfile;
         var loaded = profile.IsMachineProfileLoaded ? "已加载" : "未加载";
         return $"环境：{profile.EnvironmentName}；机型：{machine}（{loaded}）；运行目录：{profile.RuntimeDataRoot}";
+    }
+
+    private static string BuildDetailText(
+        StartupDiagnosticsReport report,
+        EdgeSyncDiagnosticsSnapshot? diagnostics)
+    {
+        var profile = report.ConfigurationProfile;
+        var cloud = diagnostics is null
+            ? "云端同步：未接入"
+            : $"云端同步：{diagnostics.Cloud.RuntimeState}，闸门 {diagnostics.Cloud.GateState}，待补传 {diagnostics.Cloud.PendingRetryCount + diagnostics.Cloud.PendingPassStationCount + diagnostics.Cloud.PendingDeviceLogCount + diagnostics.Cloud.PendingCapacityCount}";
+        var mes = diagnostics is null
+            ? "MES 同步：未接入"
+            : $"MES 同步：{diagnostics.Mes.RuntimeState}，待补传 {diagnostics.Mes.PendingRetryCount}";
+
+        return $"运行目录：{profile.RuntimeDataRoot}；模块 {report.ModuleRegistrations.Count} 个；插件 {report.PluginStates.Count} 个；{cloud}；{mes}";
     }
 
     private static string FormatRegistered(bool value) => value ? "已注册" : "未注册";

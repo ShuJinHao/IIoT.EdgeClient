@@ -8,4 +8,5 @@ public sealed record LauncherProfileDefinition(
     string MachineProfile,
     string ExecutablePath,
     string IconKind,
-    string AccentColor);
+    string AccentColor,
+    IReadOnlyList<string>? Arguments = null);
