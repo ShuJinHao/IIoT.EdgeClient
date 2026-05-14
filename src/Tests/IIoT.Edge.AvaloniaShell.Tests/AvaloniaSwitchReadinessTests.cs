@@ -68,9 +68,16 @@ public sealed class AvaloniaSwitchReadinessTests
         var previewTemplate = File.ReadAllText(Path.Combine(root, "docs", "Avalonia12-默认入口切换预演报告模板.md"));
         Assert.Contains("TestAvaloniaDefaultEntryReadiness.ps1", readinessGuide, StringComparison.Ordinal);
         Assert.Contains("SwitchAvaloniaDefaultEntry.ps1", readinessGuide, StringComparison.Ordinal);
+        Assert.Contains("RestoreAvaloniaDefaultEntry.ps1", readinessGuide, StringComparison.Ordinal);
+        Assert.Contains("-Apply", readinessGuide, StringComparison.Ordinal);
         Assert.Contains("不修改 Launcher profile", readinessGuide, StringComparison.Ordinal);
         Assert.Contains("IIoT.Edge.Launcher.exe", previewTemplate, StringComparison.Ordinal);
         Assert.Contains("IIoT.Edge.Launcher.Avalonia.exe", previewTemplate, StringComparison.Ordinal);
+
+        var applyGuide = File.ReadAllText(Path.Combine(root, "docs", "Avalonia12-默认入口真实切换与回退说明.md"));
+        Assert.Contains("rollback-snapshot", applyGuide, StringComparison.Ordinal);
+        Assert.Contains("RestoreAvaloniaDefaultEntry.ps1", applyGuide, StringComparison.Ordinal);
+        Assert.Contains("不改源码", applyGuide, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -94,6 +101,7 @@ public sealed class AvaloniaSwitchReadinessTests
         Assert.Contains("effectiveRegressionTests", script, StringComparison.Ordinal);
         Assert.Contains("testResults", script, StringComparison.Ordinal);
         Assert.Contains("ReviewAvaloniaTrialEvidence.ps1", script, StringComparison.Ordinal);
+        Assert.Contains("RestoreAvaloniaDefaultEntry.ps1", script, StringComparison.Ordinal);
         Assert.Contains("IIoT.Edge.Launcher.csproj", script, StringComparison.Ordinal);
         Assert.Contains("IIoT.Edge.Shell.csproj", script, StringComparison.Ordinal);
         Assert.Contains("wpfFallback", script, StringComparison.Ordinal);

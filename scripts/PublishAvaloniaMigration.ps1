@@ -28,6 +28,7 @@ $ErrorActionPreference = 'Stop'
 # Avalonia12-默认入口切换评审说明.md
 # Avalonia12-默认入口切换预演报告模板.md
 # Avalonia12-现场证据导入预审说明.md
+# Avalonia12-默认入口真实切换与回退说明.md
 
 function Join-UnicodeName {
     param(
@@ -425,6 +426,9 @@ function Test-AvaloniaReleaseLayout {
         [string]$FieldEvidenceImportGuideName,
 
         [Parameter(Mandatory = $true)]
+        [string]$DefaultEntryApplyGuideName,
+
+        [Parameter(Mandatory = $true)]
         [string]$TrialRunScriptName,
 
         [Parameter(Mandatory = $true)]
@@ -440,7 +444,10 @@ function Test-AvaloniaReleaseLayout {
         [string]$DefaultEntryReadinessScriptName,
 
         [Parameter(Mandatory = $true)]
-        [string]$DefaultEntrySwitchScriptName
+        [string]$DefaultEntrySwitchScriptName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$DefaultEntryRestoreScriptName
     )
 
     Assert-AvaloniaRequiredFile -Root $LauncherRoot -RelativePath 'IIoT.Edge.Launcher.Avalonia.exe'
@@ -508,12 +515,14 @@ function Test-AvaloniaReleaseLayout {
     Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'docs') -RelativePath $DefaultEntryReadinessGuideName
     Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'docs') -RelativePath $DefaultEntryPreviewTemplateName
     Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'docs') -RelativePath $FieldEvidenceImportGuideName
+    Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'docs') -RelativePath $DefaultEntryApplyGuideName
     Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'scripts') -RelativePath $TrialRunScriptName
     Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'scripts') -RelativePath $FieldEvidenceImportScriptName
     Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'scripts') -RelativePath $TrialEvidenceReviewScriptName
     Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'scripts') -RelativePath $DefaultEntryDecisionScriptName
     Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'scripts') -RelativePath $DefaultEntryReadinessScriptName
     Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'scripts') -RelativePath $DefaultEntrySwitchScriptName
+    Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'scripts') -RelativePath $DefaultEntryRestoreScriptName
 }
 
 $fieldChecklistName = 'Avalonia12-' + (Join-UnicodeName -CodePoints @(0x73B0, 0x573A, 0x8054, 0x8C03, 0x68C0, 0x67E5, 0x6E05, 0x5355)) + '.md'
@@ -528,12 +537,14 @@ $fieldEvidenceGuideName = 'Avalonia12-现场证据回收操作说明.md'
 $defaultEntryReadinessGuideName = 'Avalonia12-默认入口切换评审说明.md'
 $defaultEntryPreviewTemplateName = 'Avalonia12-默认入口切换预演报告模板.md'
 $fieldEvidenceImportGuideName = 'Avalonia12-现场证据导入预审说明.md'
+$defaultEntryApplyGuideName = 'Avalonia12-默认入口真实切换与回退说明.md'
 $trialRunScriptName = 'StartAvaloniaTrialRun.ps1'
 $fieldEvidenceImportScriptName = 'ImportAvaloniaFieldEvidence.ps1'
 $trialEvidenceReviewScriptName = 'ReviewAvaloniaTrialEvidence.ps1'
 $defaultEntryDecisionScriptName = 'NewAvaloniaDefaultEntryDecisionPackage.ps1'
 $defaultEntryReadinessScriptName = 'TestAvaloniaDefaultEntryReadiness.ps1'
 $defaultEntrySwitchScriptName = 'SwitchAvaloniaDefaultEntry.ps1'
+$defaultEntryRestoreScriptName = 'RestoreAvaloniaDefaultEntry.ps1'
 $fieldChecklistRelativePath = Join-Path 'docs' $fieldChecklistName
 $nugetExceptionRelativePath = Join-Path 'docs' $nugetExceptionName
 $switchMatrixRelativePath = Join-Path 'docs' $switchMatrixName
@@ -546,12 +557,14 @@ $fieldEvidenceGuideRelativePath = Join-Path 'docs' $fieldEvidenceGuideName
 $defaultEntryReadinessGuideRelativePath = Join-Path 'docs' $defaultEntryReadinessGuideName
 $defaultEntryPreviewTemplateRelativePath = Join-Path 'docs' $defaultEntryPreviewTemplateName
 $fieldEvidenceImportGuideRelativePath = Join-Path 'docs' $fieldEvidenceImportGuideName
+$defaultEntryApplyGuideRelativePath = Join-Path 'docs' $defaultEntryApplyGuideName
 $trialRunScriptRelativePath = Join-Path 'scripts' $trialRunScriptName
 $fieldEvidenceImportScriptRelativePath = Join-Path 'scripts' $fieldEvidenceImportScriptName
 $trialEvidenceReviewScriptRelativePath = Join-Path 'scripts' $trialEvidenceReviewScriptName
 $defaultEntryDecisionScriptRelativePath = Join-Path 'scripts' $defaultEntryDecisionScriptName
 $defaultEntryReadinessScriptRelativePath = Join-Path 'scripts' $defaultEntryReadinessScriptName
 $defaultEntrySwitchScriptRelativePath = Join-Path 'scripts' $defaultEntrySwitchScriptName
+$defaultEntryRestoreScriptRelativePath = Join-Path 'scripts' $defaultEntryRestoreScriptName
 
 $repoRoot = if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
     [System.IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
@@ -693,6 +706,7 @@ try {
     Copy-Item -Path (Join-Path $repoRoot $defaultEntryReadinessGuideRelativePath) -Destination (Join-Path $docsRoot $defaultEntryReadinessGuideName) -Force
     Copy-Item -Path (Join-Path $repoRoot $defaultEntryPreviewTemplateRelativePath) -Destination (Join-Path $docsRoot $defaultEntryPreviewTemplateName) -Force
     Copy-Item -Path (Join-Path $repoRoot $fieldEvidenceImportGuideRelativePath) -Destination (Join-Path $docsRoot $fieldEvidenceImportGuideName) -Force
+    Copy-Item -Path (Join-Path $repoRoot $defaultEntryApplyGuideRelativePath) -Destination (Join-Path $docsRoot $defaultEntryApplyGuideName) -Force
     New-Item -Path $scriptsRoot -ItemType Directory -Force | Out-Null
     Copy-Item -Path (Join-Path $repoRoot $trialRunScriptRelativePath) -Destination (Join-Path $scriptsRoot $trialRunScriptName) -Force
     Copy-Item -Path (Join-Path $repoRoot $fieldEvidenceImportScriptRelativePath) -Destination (Join-Path $scriptsRoot $fieldEvidenceImportScriptName) -Force
@@ -700,6 +714,7 @@ try {
     Copy-Item -Path (Join-Path $repoRoot $defaultEntryDecisionScriptRelativePath) -Destination (Join-Path $scriptsRoot $defaultEntryDecisionScriptName) -Force
     Copy-Item -Path (Join-Path $repoRoot $defaultEntryReadinessScriptRelativePath) -Destination (Join-Path $scriptsRoot $defaultEntryReadinessScriptName) -Force
     Copy-Item -Path (Join-Path $repoRoot $defaultEntrySwitchScriptRelativePath) -Destination (Join-Path $scriptsRoot $defaultEntrySwitchScriptName) -Force
+    Copy-Item -Path (Join-Path $repoRoot $defaultEntryRestoreScriptRelativePath) -Destination (Join-Path $scriptsRoot $defaultEntryRestoreScriptName) -Force
 
     $validationCommands.Add([PSCustomObject]@{
         name = 'validate Avalonia release layout'
@@ -721,12 +736,14 @@ try {
         -DefaultEntryReadinessGuideName $defaultEntryReadinessGuideName `
         -DefaultEntryPreviewTemplateName $defaultEntryPreviewTemplateName `
         -FieldEvidenceImportGuideName $fieldEvidenceImportGuideName `
+        -DefaultEntryApplyGuideName $defaultEntryApplyGuideName `
         -TrialRunScriptName $trialRunScriptName `
         -FieldEvidenceImportScriptName $fieldEvidenceImportScriptName `
         -TrialEvidenceReviewScriptName $trialEvidenceReviewScriptName `
         -DefaultEntryDecisionScriptName $defaultEntryDecisionScriptName `
         -DefaultEntryReadinessScriptName $defaultEntryReadinessScriptName `
-        -DefaultEntrySwitchScriptName $defaultEntrySwitchScriptName
+        -DefaultEntrySwitchScriptName $defaultEntrySwitchScriptName `
+        -DefaultEntryRestoreScriptName $defaultEntryRestoreScriptName
 
     $validationCommands.Add([PSCustomObject]@{
         name = 'validate SkiaSharp preview exception'

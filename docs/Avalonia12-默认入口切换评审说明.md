@@ -43,3 +43,11 @@ Preview 只生成以下材料：
 - WPF 回退入口和回退负责人。
 
 Preview 不写入任何 profile，不修改发布目录，不改变生产启动行为。
+
+## Apply 执行口径
+
+- `SwitchAvaloniaDefaultEntry.ps1` 默认仍是 Preview；只有显式传入 `-Apply` 才允许写发布包内 profile。
+- `-Apply` 必须读取 `ApprovedForDefaultEntrySwitch` 的 readiness summary，且签字字段完整。
+- `-Apply` 只修改发布包内 `avalonia-launcher/launcher.profiles.json`，不会改源码、WPF 项目、原仓或业务链路。
+- `-Apply` 执行前必须生成 `rollback-snapshot/`，用于 `RestoreAvaloniaDefaultEntry.ps1` 回退。
+- 没有用户明确批准真实切换时，只允许执行 Preview，不允许执行 Apply。

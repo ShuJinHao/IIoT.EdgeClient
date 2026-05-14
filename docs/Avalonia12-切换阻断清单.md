@@ -13,6 +13,8 @@
 | Diagnostics 或脚本开放 Cloud/MES 清理、重试、删除 | 只能只读展示，不能提供操作入口 |
 | 现场证据包缺失 | 必须包含 Launcher profile、Diagnostics 摘要、日志、截图占位说明和联调清单 |
 | 未通过默认入口评审门禁 | `TestAvaloniaDefaultEntryReadiness.ps1` 必须输出 `ApprovedForDefaultEntrySwitch`，且真实切换必须另起独立批次 |
+| 默认入口切换缺少回退快照 | 执行 `SwitchAvaloniaDefaultEntry.ps1 -Apply` 时必须生成 `rollback-snapshot/` |
+| 默认入口回退未验证 | `RestoreAvaloniaDefaultEntry.ps1` 必须能从 snapshot 恢复发布包内 Launcher profile |
 
 ## P1：阻断现场试运行
 
@@ -37,4 +39,4 @@
 
 ## 当前判定
 
-截至第十七批开始，候选包 FullGate 已通过自动化验证；P1 中的多屏、高 DPI、触摸、真实 `--start-runtime` 和 PLC 侧状态仍需现场证据关闭。没有完整现场证据、人工签字和默认入口评审门禁通过前，不允许把 Avalonia Launcher 或 Avalonia Shell 切为生产默认入口。
+截至第十九批开始，候选包 FullGate 已通过自动化验证；P1 中的多屏、高 DPI、触摸、真实 `--start-runtime` 和 PLC 侧状态仍需现场证据关闭。没有完整现场证据、人工签字、默认入口评审门禁、`-Apply` 回退快照和回退验证前，不允许把 Avalonia Launcher 或 Avalonia Shell 切为生产默认入口。

@@ -158,6 +158,226 @@ public sealed class AvaloniaDefaultEntryReadinessScriptTests
     }
 
     [Fact]
+    public void Switch_script_apply_requires_approved_readiness_and_does_not_modify_when_rejected()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), "iiot-avalonia-switch-rejected-" + Guid.NewGuid().ToString("N"));
+        var readinessSummaryPath = Path.Combine(tempRoot, "default-entry-readiness-summary.json");
+        var releaseRoot = CreateReleaseRoot(tempRoot);
+        var profilesPath = Path.Combine(releaseRoot, "avalonia-launcher", "launcher.profiles.json");
+        var before = File.ReadAllText(profilesPath, Encoding.UTF8);
+        Directory.CreateDirectory(tempRoot);
+        WriteUtf8(
+            readinessSummaryPath,
+            """
+            {
+              "overallStatus": "DefaultEntrySwitchRejected",
+              "approvedForDefaultEntrySwitch": false
+            }
+            """);
+
+        var result = RunPowerShell(
+            GetScriptPath("SwitchAvaloniaDefaultEntry.ps1"),
+            "-ReadinessSummaryPath",
+            readinessSummaryPath,
+            "-ReleaseRoot",
+            releaseRoot,
+            "-OutputRoot",
+            Path.Combine(tempRoot, "switch"),
+            "-Apply");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("ApprovedForDefaultEntrySwitch", result.Output, StringComparison.Ordinal);
+        Assert.Equal(before, File.ReadAllText(profilesPath, Encoding.UTF8));
+    }
+
+    [Fact]
+    public void Switch_script_apply_marks_default_profile_and_creates_rollback_snapshot()
+    {
+        var fixture = CreateReadinessFixture(
+            trialStatus: "ReadyForDefaultEntryReview",
+            trialReady: true,
+            p1Pending: [],
+            wpfFallbackVerified: true,
+            fullGate: true,
+            includeHumanApproval: true);
+        var readinessResult = RunPowerShell(
+            GetScriptPath("TestAvaloniaDefaultEntryReadiness.ps1"),
+            "-DecisionPackagePath",
+            fixture.DecisionPackagePath,
+            "-OutputRoot",
+            fixture.OutputRoot);
+        Assert.Equal(0, readinessResult.ExitCode);
+
+        var readinessSummaryPath = Directory.GetFiles(
+            fixture.OutputRoot,
+            "default-entry-readiness-summary.json",
+            SearchOption.AllDirectories).Single();
+        var releaseRoot = CreateReleaseRoot(fixture.TempRoot);
+        var profilesPath = Path.Combine(releaseRoot, "avalonia-launcher", "launcher.profiles.json");
+        var before = File.ReadAllText(profilesPath, Encoding.UTF8);
+        var switchOutputRoot = Path.Combine(fixture.TempRoot, "switch");
+
+        var applyResult = RunPowerShell(
+            GetScriptPath("SwitchAvaloniaDefaultEntry.ps1"),
+            "-ReadinessSummaryPath",
+            readinessSummaryPath,
+            "-ReleaseRoot",
+            releaseRoot,
+            "-OutputRoot",
+            switchOutputRoot,
+            "-ReportName",
+            "ApplyDefaultEntry",
+            "-Apply");
+
+        Assert.Equal(0, applyResult.ExitCode);
+        var applySummaryPath = Path.Combine(switchOutputRoot, "ApplyDefaultEntry", "default-entry-switch-apply-summary.json");
+        Assert.True(File.Exists(applySummaryPath), applySummaryPath);
+        using var profiles = JsonDocument.Parse(File.ReadAllText(profilesPath, Encoding.UTF8));
+        var profileArray = profiles.RootElement.EnumerateArray().ToArray();
+        var uiOnly = profileArray.Single(profile => profile.GetProperty("ProfileId").GetString() == "HomogenizationLineAvalonia");
+        var runtime = profileArray.Single(profile => profile.GetProperty("ProfileId").GetString() == "HomogenizationLineAvaloniaRuntime");
+        Assert.True(uiOnly.GetProperty("IsDefault").GetBoolean());
+        Assert.Equal("ProductionDefault", uiOnly.GetProperty("DefaultEntryRole").GetString());
+        Assert.False(runtime.GetProperty("IsDefault").GetBoolean());
+
+        var rollbackRoot = Path.Combine(switchOutputRoot, "ApplyDefaultEntry", "rollback-snapshot");
+        Assert.True(File.Exists(Path.Combine(rollbackRoot, "launcher.profiles.json")));
+        Assert.True(File.Exists(Path.Combine(rollbackRoot, "release-manifest.json")));
+        Assert.True(File.Exists(Path.Combine(rollbackRoot, "candidate-validation-summary.json")));
+        Assert.True(File.Exists(Path.Combine(rollbackRoot, "default-entry-readiness-summary.json")));
+        Assert.True(File.Exists(Path.Combine(rollbackRoot, "default-entry-switch-apply-summary.json")));
+        Assert.NotEqual(before, File.ReadAllText(profilesPath, Encoding.UTF8));
+
+        using var applySummary = JsonDocument.Parse(File.ReadAllText(applySummaryPath, Encoding.UTF8));
+        Assert.True(applySummary.RootElement.GetProperty("applyMode").GetBoolean());
+        Assert.True(applySummary.RootElement.GetProperty("wouldModifyFiles").GetBoolean());
+    }
+
+    [Fact]
+    public void Restore_script_restores_launcher_profile_from_rollback_snapshot()
+    {
+        var fixture = CreateReadinessFixture(
+            trialStatus: "ReadyForDefaultEntryReview",
+            trialReady: true,
+            p1Pending: [],
+            wpfFallbackVerified: true,
+            fullGate: true,
+            includeHumanApproval: true);
+        var readinessResult = RunPowerShell(
+            GetScriptPath("TestAvaloniaDefaultEntryReadiness.ps1"),
+            "-DecisionPackagePath",
+            fixture.DecisionPackagePath,
+            "-OutputRoot",
+            fixture.OutputRoot);
+        Assert.Equal(0, readinessResult.ExitCode);
+
+        var readinessSummaryPath = Directory.GetFiles(
+            fixture.OutputRoot,
+            "default-entry-readiness-summary.json",
+            SearchOption.AllDirectories).Single();
+        var releaseRoot = CreateReleaseRoot(fixture.TempRoot);
+        var profilesPath = Path.Combine(releaseRoot, "avalonia-launcher", "launcher.profiles.json");
+        var before = File.ReadAllText(profilesPath, Encoding.UTF8);
+        var switchOutputRoot = Path.Combine(fixture.TempRoot, "switch");
+        var applyResult = RunPowerShell(
+            GetScriptPath("SwitchAvaloniaDefaultEntry.ps1"),
+            "-ReadinessSummaryPath",
+            readinessSummaryPath,
+            "-ReleaseRoot",
+            releaseRoot,
+            "-OutputRoot",
+            switchOutputRoot,
+            "-ReportName",
+            "ApplyDefaultEntry",
+            "-Apply");
+        Assert.Equal(0, applyResult.ExitCode);
+
+        var rollbackRoot = Path.Combine(switchOutputRoot, "ApplyDefaultEntry", "rollback-snapshot");
+        var restoreOutputRoot = Path.Combine(fixture.TempRoot, "restore");
+        var restoreResult = RunPowerShell(
+            GetScriptPath("RestoreAvaloniaDefaultEntry.ps1"),
+            "-RollbackSnapshotPath",
+            rollbackRoot,
+            "-ReleaseRoot",
+            releaseRoot,
+            "-OutputRoot",
+            restoreOutputRoot);
+
+        Assert.Equal(0, restoreResult.ExitCode);
+        Assert.Equal(before, File.ReadAllText(profilesPath, Encoding.UTF8));
+        var restoreSummaryPath = Directory.GetFiles(restoreOutputRoot, "default-entry-restore-summary.json", SearchOption.AllDirectories).Single();
+        using var restoreSummary = JsonDocument.Parse(File.ReadAllText(restoreSummaryPath, Encoding.UTF8));
+        Assert.Equal(profilesPath, restoreSummary.RootElement.GetProperty("restoredFile").GetString());
+    }
+
+    [Fact]
+    public void Switch_script_rejects_repeated_apply_without_restore()
+    {
+        var fixture = CreateReadinessFixture(
+            trialStatus: "ReadyForDefaultEntryReview",
+            trialReady: true,
+            p1Pending: [],
+            wpfFallbackVerified: true,
+            fullGate: true,
+            includeHumanApproval: true);
+        var readinessResult = RunPowerShell(
+            GetScriptPath("TestAvaloniaDefaultEntryReadiness.ps1"),
+            "-DecisionPackagePath",
+            fixture.DecisionPackagePath,
+            "-OutputRoot",
+            fixture.OutputRoot);
+        Assert.Equal(0, readinessResult.ExitCode);
+
+        var readinessSummaryPath = Directory.GetFiles(
+            fixture.OutputRoot,
+            "default-entry-readiness-summary.json",
+            SearchOption.AllDirectories).Single();
+        var releaseRoot = CreateReleaseRoot(fixture.TempRoot);
+        var firstApply = RunPowerShell(
+            GetScriptPath("SwitchAvaloniaDefaultEntry.ps1"),
+            "-ReadinessSummaryPath",
+            readinessSummaryPath,
+            "-ReleaseRoot",
+            releaseRoot,
+            "-OutputRoot",
+            Path.Combine(fixture.TempRoot, "switch-1"),
+            "-Apply");
+        Assert.Equal(0, firstApply.ExitCode);
+
+        var secondApply = RunPowerShell(
+            GetScriptPath("SwitchAvaloniaDefaultEntry.ps1"),
+            "-ReadinessSummaryPath",
+            readinessSummaryPath,
+            "-ReleaseRoot",
+            releaseRoot,
+            "-OutputRoot",
+            Path.Combine(fixture.TempRoot, "switch-2"),
+            "-Apply");
+
+        Assert.NotEqual(0, secondApply.ExitCode);
+        Assert.Contains("已存在默认 profile", secondApply.Output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Restore_script_rejects_missing_snapshot()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), "iiot-avalonia-restore-missing-" + Guid.NewGuid().ToString("N"));
+        var releaseRoot = CreateReleaseRoot(tempRoot);
+
+        var result = RunPowerShell(
+            GetScriptPath("RestoreAvaloniaDefaultEntry.ps1"),
+            "-RollbackSnapshotPath",
+            Path.Combine(tempRoot, "missing-snapshot"),
+            "-ReleaseRoot",
+            releaseRoot,
+            "-OutputRoot",
+            Path.Combine(tempRoot, "restore"));
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("snapshot 不存在", result.Output, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Switch_script_rejects_non_approved_readiness_summary()
     {
         var tempRoot = Path.Combine(Path.GetTempPath(), "iiot-avalonia-switch-" + Guid.NewGuid().ToString("N"));
@@ -303,6 +523,24 @@ public sealed class AvaloniaDefaultEntryReadinessScriptTests
 
     private static string GetScriptPath(string scriptName)
         => Path.Combine(FindRepositoryRoot(), "scripts", scriptName);
+
+    private static string CreateReleaseRoot(string tempRoot)
+    {
+        var releaseRoot = Path.Combine(tempRoot, "release");
+        var launcherRoot = Path.Combine(releaseRoot, "avalonia-launcher");
+        Directory.CreateDirectory(launcherRoot);
+        WriteUtf8(Path.Combine(launcherRoot, "launcher.profiles.json"), LauncherProfilesJson);
+        WriteUtf8(Path.Combine(releaseRoot, "release-manifest.json"), """{ "releaseKind": "AvaloniaMigration" }""");
+        WriteUtf8(
+            Path.Combine(releaseRoot, "candidate-validation-summary.json"),
+            """
+            {
+              "fullGate": true,
+              "wpfFallback": { "verified": true }
+            }
+            """);
+        return releaseRoot;
+    }
 
     private static void WriteUtf8(string path, string content)
         => File.WriteAllText(path, content, Encoding.UTF8);

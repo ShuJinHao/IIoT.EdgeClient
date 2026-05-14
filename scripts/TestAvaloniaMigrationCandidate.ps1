@@ -204,7 +204,8 @@ function Assert-CandidateScriptSafety {
         (Join-Path $Root 'scripts\ReviewAvaloniaTrialEvidence.ps1'),
         (Join-Path $Root 'scripts\NewAvaloniaDefaultEntryDecisionPackage.ps1'),
         (Join-Path $Root 'scripts\TestAvaloniaDefaultEntryReadiness.ps1'),
-        (Join-Path $Root 'scripts\SwitchAvaloniaDefaultEntry.ps1')
+        (Join-Path $Root 'scripts\SwitchAvaloniaDefaultEntry.ps1'),
+        (Join-Path $Root 'scripts\RestoreAvaloniaDefaultEntry.ps1')
     )
     $forbiddenPatterns = @(
         ('Remove' + '-Item'),
@@ -267,6 +268,7 @@ $switchBlockerName = 'Avalonia12-' + (Join-CandidateUnicodeName -CodePoints @(0x
 $trialManualName = 'Avalonia12-' + (Join-CandidateUnicodeName -CodePoints @(0x73B0, 0x573A, 0x8BD5, 0x8FD0, 0x884C, 0x624B, 0x518C)) + '.md'
 $trialAcceptanceTemplateName = 'Avalonia12-' + (Join-CandidateUnicodeName -CodePoints @(0x73B0, 0x573A, 0x8BD5, 0x8FD0, 0x884C, 0x9A8C, 0x6536, 0x8BB0, 0x5F55, 0x6A21, 0x677F)) + '.md'
 $fieldEvidenceImportGuideName = 'Avalonia12-现场证据导入预审说明.md'
+$defaultEntryApplyGuideName = 'Avalonia12-默认入口真实切换与回退说明.md'
 $publishScript = Join-Path $repoRoot 'scripts\PublishAvaloniaMigration.ps1'
 $evidenceScript = Join-Path $repoRoot 'scripts\CollectAvaloniaFieldEvidence.ps1'
 $reviewEvidenceScript = Join-Path $repoRoot 'scripts\ReviewAvaloniaTrialEvidence.ps1'
@@ -303,9 +305,14 @@ Assert-CandidateRequiredFile -Root (Join-Path $releaseRoot 'docs') -RelativePath
 Assert-CandidateRequiredFile -Root (Join-Path $releaseRoot 'docs') -RelativePath $trialManualName
 Assert-CandidateRequiredFile -Root (Join-Path $releaseRoot 'docs') -RelativePath $trialAcceptanceTemplateName
 Assert-CandidateRequiredFile -Root (Join-Path $releaseRoot 'docs') -RelativePath $fieldEvidenceImportGuideName
+Assert-CandidateRequiredFile -Root (Join-Path $releaseRoot 'docs') -RelativePath $defaultEntryApplyGuideName
 Assert-CandidateRequiredFile -Root (Join-Path $releaseRoot 'scripts') -RelativePath 'StartAvaloniaTrialRun.ps1'
 Assert-CandidateRequiredFile -Root (Join-Path $releaseRoot 'scripts') -RelativePath 'ImportAvaloniaFieldEvidence.ps1'
 Assert-CandidateRequiredFile -Root (Join-Path $releaseRoot 'scripts') -RelativePath 'ReviewAvaloniaTrialEvidence.ps1'
+Assert-CandidateRequiredFile -Root (Join-Path $releaseRoot 'scripts') -RelativePath 'NewAvaloniaDefaultEntryDecisionPackage.ps1'
+Assert-CandidateRequiredFile -Root (Join-Path $releaseRoot 'scripts') -RelativePath 'TestAvaloniaDefaultEntryReadiness.ps1'
+Assert-CandidateRequiredFile -Root (Join-Path $releaseRoot 'scripts') -RelativePath 'SwitchAvaloniaDefaultEntry.ps1'
+Assert-CandidateRequiredFile -Root (Join-Path $releaseRoot 'scripts') -RelativePath 'RestoreAvaloniaDefaultEntry.ps1'
 
 $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
 if ($manifest.releaseKind -ne 'AvaloniaMigration') {

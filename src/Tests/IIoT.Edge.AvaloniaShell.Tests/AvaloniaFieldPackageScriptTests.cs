@@ -32,8 +32,10 @@ public sealed class AvaloniaFieldPackageScriptTests
         Assert.Contains("NewAvaloniaDefaultEntryDecisionPackage.ps1", script, StringComparison.Ordinal);
         Assert.Contains("TestAvaloniaDefaultEntryReadiness.ps1", script, StringComparison.Ordinal);
         Assert.Contains("SwitchAvaloniaDefaultEntry.ps1", script, StringComparison.Ordinal);
+        Assert.Contains("RestoreAvaloniaDefaultEntry.ps1", script, StringComparison.Ordinal);
         Assert.Contains("ImportAvaloniaFieldEvidence.ps1", script, StringComparison.Ordinal);
         Assert.Contains("Avalonia12-现场证据导入预审说明.md", script, StringComparison.Ordinal);
+        Assert.Contains("Avalonia12-默认入口真实切换与回退说明.md", script, StringComparison.Ordinal);
         Assert.Contains("Join-UnicodeName", script, StringComparison.Ordinal);
         Assert.Contains("SkiaSharp", script, StringComparison.Ordinal);
         Assert.DoesNotContain("IIoT.Edge.Shell.csproj", script, StringComparison.Ordinal);
@@ -133,9 +135,11 @@ public sealed class AvaloniaFieldPackageScriptTests
         var repoRoot = FindRepositoryRoot();
         var readinessScriptPath = Path.Combine(repoRoot, "scripts", "TestAvaloniaDefaultEntryReadiness.ps1");
         var switchScriptPath = Path.Combine(repoRoot, "scripts", "SwitchAvaloniaDefaultEntry.ps1");
+        var restoreScriptPath = Path.Combine(repoRoot, "scripts", "RestoreAvaloniaDefaultEntry.ps1");
 
         Assert.True(File.Exists(readinessScriptPath), $"Missing script: {readinessScriptPath}");
         Assert.True(File.Exists(switchScriptPath), $"Missing script: {switchScriptPath}");
+        Assert.True(File.Exists(restoreScriptPath), $"Missing script: {restoreScriptPath}");
 
         var readinessScript = File.ReadAllText(readinessScriptPath);
         Assert.Contains("ApprovedForDefaultEntrySwitch", readinessScript, StringComparison.Ordinal);
@@ -149,14 +153,25 @@ public sealed class AvaloniaFieldPackageScriptTests
 
         var switchScript = File.ReadAllText(switchScriptPath);
         Assert.Contains("default-entry-switch-preview.json", switchScript, StringComparison.Ordinal);
+        Assert.Contains("default-entry-switch-apply-summary.json", switchScript, StringComparison.Ordinal);
         Assert.Contains("ApprovedForDefaultEntrySwitch", switchScript, StringComparison.Ordinal);
-        Assert.Contains("wouldModifyFiles = $false", switchScript, StringComparison.Ordinal);
+        Assert.Contains("wouldModifyFiles = $applyMode", switchScript, StringComparison.Ordinal);
+        Assert.Contains("[switch]$Apply", switchScript, StringComparison.Ordinal);
+        Assert.Contains("rollback-snapshot", switchScript, StringComparison.Ordinal);
         Assert.Contains("IIoT.Edge.Launcher.exe", switchScript, StringComparison.Ordinal);
         Assert.Contains("IIoT.Edge.Launcher.Avalonia.exe", switchScript, StringComparison.Ordinal);
         Assert.DoesNotContain("Remove-Item", switchScript, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("Set-Content -LiteralPath $launcherProfilesPath", switchScript, StringComparison.Ordinal);
         Assert.DoesNotContain("ReadDataAsync", switchScript, StringComparison.Ordinal);
         Assert.DoesNotContain("WriteDataAsync", switchScript, StringComparison.Ordinal);
+
+        var restoreScript = File.ReadAllText(restoreScriptPath);
+        Assert.Contains("default-entry-restore-summary.json", restoreScript, StringComparison.Ordinal);
+        Assert.Contains("RollbackSnapshotPath", restoreScript, StringComparison.Ordinal);
+        Assert.Contains("launcher.profiles.json", restoreScript, StringComparison.Ordinal);
+        Assert.DoesNotContain("Remove-Item", restoreScript, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("DELETE FROM", restoreScript, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ReadDataAsync", restoreScript, StringComparison.Ordinal);
+        Assert.DoesNotContain("WriteDataAsync", restoreScript, StringComparison.Ordinal);
     }
 
     [Fact]

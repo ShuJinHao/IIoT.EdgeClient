@@ -9,7 +9,9 @@ param(
 
     [string]$ReportName,
 
-    [switch]$Preview
+    [switch]$Preview,
+
+    [switch]$Apply
 )
 
 $ErrorActionPreference = 'Stop'
@@ -41,6 +43,48 @@ function Get-SwitchJsonFile {
     return Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json
 }
 
+function Get-SwitchPropertyValue {
+    param(
+        [object]$InputObject,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+
+        [object]$DefaultValue = $null
+    )
+
+    if ($null -eq $InputObject) {
+        return $DefaultValue
+    }
+
+    $property = $InputObject.PSObject.Properties[$Name]
+    if ($null -eq $property) {
+        return $DefaultValue
+    }
+
+    return $property.Value
+}
+
+function Set-SwitchPropertyValue {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$InputObject,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+
+        [object]$Value
+    )
+
+    $property = $InputObject.PSObject.Properties[$Name]
+    if ($null -eq $property) {
+        $InputObject | Add-Member -NotePropertyName $Name -NotePropertyValue $Value
+    }
+    else {
+        $property.Value = $Value
+    }
+}
+
 function ConvertTo-SwitchArray {
     param([Parameter(Mandatory = $true)][object]$Value)
 
@@ -55,7 +99,32 @@ function ConvertTo-SwitchArray {
     return @($Value)
 }
 
-function Write-SwitchPreviewMarkdown {
+function Assert-SwitchReadinessApproved {
+    param([Parameter(Mandatory = $true)][object]$Summary)
+
+    if ($Summary.overallStatus -ne 'ApprovedForDefaultEntrySwitch' -or -not [bool]$Summary.approvedForDefaultEntrySwitch) {
+        throw '默认入口切换被拒绝：readiness summary 未达到 ApprovedForDefaultEntrySwitch。'
+    }
+
+    $gates = Get-SwitchPropertyValue -InputObject $Summary -Name 'gates'
+    $approver = [string](Get-SwitchPropertyValue -InputObject $gates -Name 'approver' -DefaultValue '')
+    $decidedAt = [string](Get-SwitchPropertyValue -InputObject $gates -Name 'decidedAt' -DefaultValue '')
+    $rollbackOwner = [string](Get-SwitchPropertyValue -InputObject $gates -Name 'rollbackOwner' -DefaultValue '')
+
+    if ([string]::IsNullOrWhiteSpace($approver)) {
+        throw '默认入口切换被拒绝：readiness summary 缺少人工决策人。'
+    }
+
+    if ([string]::IsNullOrWhiteSpace($decidedAt)) {
+        throw '默认入口切换被拒绝：readiness summary 缺少人工决策时间。'
+    }
+
+    if ([string]::IsNullOrWhiteSpace($rollbackOwner)) {
+        throw '默认入口切换被拒绝：readiness summary 缺少回退负责人。'
+    }
+}
+
+function Write-SwitchMarkdown {
     param(
         [Parameter(Mandatory = $true)]
         [string]$Path,
@@ -64,17 +133,34 @@ function Write-SwitchPreviewMarkdown {
         [object]$Report
     )
 
+    $title = if ($Report.applyMode) {
+        '# Avalonia 默认入口切换 Apply 报告'
+    }
+    else {
+        '# Avalonia 默认入口切换 Preview 报告'
+    }
+
+    $conclusion = if ($Report.applyMode) {
+        '本次只修改发布包内 Avalonia Launcher profile 默认入口元数据，并已生成 rollback snapshot；不改源码、不改 WPF 项目、不改业务链路。'
+    }
+    else {
+        '本次只生成 preview 报告，不修改 Launcher profile、不改发布链路、不改 WPF 默认入口。'
+    }
+
     $lines = @(
-        '# Avalonia 默认入口切换 Preview 报告',
+        $title,
         '',
         "- 生成时间：$($Report.generatedAt)",
         "- Preview：$($Report.previewOnly)",
+        "- Apply：$($Report.applyMode)",
         "- 将修改文件：$($Report.wouldModifyFiles)",
+        "- 输出目录：$($Report.outputRoot)",
         '',
         '## 当前默认入口',
         '',
         "- Launcher：$($Report.currentDefaultEntry.launcher)",
         "- Shell：$($Report.currentDefaultEntry.shell)",
+        "- Profile：$($Report.currentDefaultEntry.profileId)",
         '',
         '## 目标默认入口',
         '',
@@ -88,32 +174,49 @@ function Write-SwitchPreviewMarkdown {
         "- Launcher：$($Report.rollbackEntry.launcher)",
         "- Shell：$($Report.rollbackEntry.shell)",
         "- 回退负责人：$($Report.approval.rollbackOwner)",
+        "- rollback snapshot：$($Report.rollbackSnapshotRoot)",
         '',
         '## 结论',
         '',
-        '本批只生成 preview 报告，不修改 Launcher profile、不改发布链路、不改 WPF 默认入口。'
+        $conclusion
     )
 
     $lines | Set-Content -LiteralPath $Path -Encoding UTF8
 }
 
+if ($Preview -and $Apply) {
+    throw '默认入口切换参数无效：-Preview 和 -Apply 不能同时使用。'
+}
+
+$applyMode = [bool]$Apply
+$previewMode = -not $applyMode
 $repoRoot = [System.IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
 $resolvedReadinessSummaryPath = Resolve-SwitchFullPath -BasePath $repoRoot -PathValue $ReadinessSummaryPath
 $resolvedReleaseRoot = Resolve-SwitchFullPath -BasePath $repoRoot -PathValue $ReleaseRoot
 $readinessSummary = Get-SwitchJsonFile -Path $resolvedReadinessSummaryPath
-
-if ($readinessSummary.overallStatus -ne 'ApprovedForDefaultEntrySwitch' -or -not [bool]$readinessSummary.approvedForDefaultEntrySwitch) {
-    throw '默认入口切换 preview 被拒绝：readiness summary 未达到 ApprovedForDefaultEntrySwitch。'
-}
+Assert-SwitchReadinessApproved -Summary $readinessSummary
 
 $launcherProfilesPath = Join-Path $resolvedReleaseRoot 'avalonia-launcher\launcher.profiles.json'
-if (-not (Test-Path -LiteralPath $launcherProfilesPath -PathType Leaf)) {
-    throw "Avalonia launcher profile 文件不存在：$launcherProfilesPath"
+$manifestPath = Join-Path $resolvedReleaseRoot 'release-manifest.json'
+$candidateSummaryPath = Join-Path $resolvedReleaseRoot 'candidate-validation-summary.json'
+foreach ($requiredPath in @($launcherProfilesPath)) {
+    if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
+        throw "默认入口切换缺少必要发布包文件：$requiredPath"
+    }
+}
+
+if ($Apply) {
+    foreach ($requiredPath in @($manifestPath, $candidateSummaryPath)) {
+        if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
+            throw "默认入口 Apply 缺少必要发布包文件：$requiredPath"
+        }
+    }
 }
 
 $profiles = ConvertTo-SwitchArray -Value (Get-Content -LiteralPath $launcherProfilesPath -Raw -Encoding UTF8 | ConvertFrom-Json)
 $uiOnlyProfile = @($profiles | Where-Object { $_.ProfileId -eq 'HomogenizationLineAvalonia' }) | Select-Object -First 1
 $runtimeProfile = @($profiles | Where-Object { $_.ProfileId -eq 'HomogenizationLineAvaloniaRuntime' }) | Select-Object -First 1
+$existingDefaultProfile = @($profiles | Where-Object { [bool](Get-SwitchPropertyValue -InputObject $_ -Name 'IsDefault' -DefaultValue $false) }) | Select-Object -First 1
 
 if ($null -eq $uiOnlyProfile) {
     throw 'Avalonia launcher profile 缺少 HomogenizationLineAvalonia。'
@@ -123,30 +226,49 @@ if ($null -eq $runtimeProfile) {
     throw 'Avalonia launcher profile 缺少 HomogenizationLineAvaloniaRuntime。'
 }
 
+if ($applyMode -and $null -ne $existingDefaultProfile) {
+    throw "默认入口切换被拒绝：发布包已存在默认 profile '$($existingDefaultProfile.ProfileId)'，请先使用 rollback snapshot 回退或重新发布候选包。"
+}
+
 if ([string]::IsNullOrWhiteSpace($ReportName)) {
-    $ReportName = "DefaultEntrySwitchPreview-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+    $ReportName = if ($applyMode) {
+        "DefaultEntrySwitchApply-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+    }
+    else {
+        "DefaultEntrySwitchPreview-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+    }
 }
 
 $resolvedOutputRoot = Resolve-SwitchFullPath -BasePath $repoRoot -PathValue $OutputRoot
 $reportRoot = Join-Path $resolvedOutputRoot $ReportName
 if (Test-Path -LiteralPath $reportRoot) {
-    throw "默认入口切换 preview 输出目录已存在，为避免覆盖请更换 ReportName：$reportRoot"
+    throw "默认入口切换输出目录已存在，为避免覆盖请更换 ReportName：$reportRoot"
 }
 
 New-Item -Path $reportRoot -ItemType Directory -Force | Out-Null
+$rollbackSnapshotRoot = if ($applyMode) { Join-Path $reportRoot 'rollback-snapshot' } else { $null }
+$gates = Get-SwitchPropertyValue -InputObject $readinessSummary -Name 'gates'
+$approver = [string](Get-SwitchPropertyValue -InputObject $gates -Name 'approver' -DefaultValue '')
+$decidedAt = [string](Get-SwitchPropertyValue -InputObject $gates -Name 'decidedAt' -DefaultValue '')
+$rollbackOwner = [string](Get-SwitchPropertyValue -InputObject $gates -Name 'rollbackOwner' -DefaultValue '')
 
 $report = [PSCustomObject]@{
     generatedAt = [DateTimeOffset]::Now.ToString('O')
     outputRoot = $reportRoot
-    previewOnly = $true
+    previewOnly = $previewMode
+    applyMode = $applyMode
     requestedPreviewSwitch = [bool]$Preview
-    wouldModifyFiles = $false
+    requestedApplySwitch = $applyMode
+    wouldModifyFiles = $applyMode
+    modifiedFiles = if ($applyMode) { @($launcherProfilesPath) } else { @() }
     readinessSummaryPath = $resolvedReadinessSummaryPath
     releaseRoot = $resolvedReleaseRoot
+    rollbackSnapshotRoot = $rollbackSnapshotRoot
     currentDefaultEntry = [PSCustomObject]@{
         launcher = 'IIoT.Edge.Launcher.exe'
         shell = 'IIoT.Edge.Shell.exe'
-        note = '第十七批不修改 WPF 生产默认入口。'
+        profileId = if ($null -eq $existingDefaultProfile) { '未设置' } else { $existingDefaultProfile.ProfileId }
+        note = 'Apply 前 WPF Launcher/WPF Shell 仍是生产默认入口。'
     }
     targetDefaultEntry = [PSCustomObject]@{
         launcher = 'IIoT.Edge.Launcher.Avalonia.exe'
@@ -160,28 +282,57 @@ $report = [PSCustomObject]@{
     rollbackEntry = [PSCustomObject]@{
         launcher = 'IIoT.Edge.Launcher.exe'
         shell = 'IIoT.Edge.Shell.exe'
+        snapshotProfile = if ($applyMode) { Join-Path $rollbackSnapshotRoot 'launcher.profiles.json' } else { $null }
         note = 'WPF Launcher/WPF Shell 继续作为回退线。'
     }
     approval = [PSCustomObject]@{
-        approver = $readinessSummary.gates.approver
-        decidedAt = $readinessSummary.gates.decidedAt
-        rollbackOwner = $readinessSummary.gates.rollbackOwner
+        approver = $approver
+        decidedAt = $decidedAt
+        rollbackOwner = $rollbackOwner
         approvedForDefaultEntrySwitch = $readinessSummary.approvedForDefaultEntrySwitch
     }
-    readonlyBoundary = @(
-        '只读取 readiness summary 和 Avalonia launcher profile。',
-        '只写出 default-entry-switch-preview.md/json。',
-        '不修改 Launcher profile、发布链路或 WPF 默认入口。',
+    boundary = @(
+        '只读取 readiness summary、release manifest、candidate summary 和 Avalonia launcher profile。',
+        'Apply 只修改发布包内 avalonia-launcher\launcher.profiles.json。',
+        '不改源码、不改 WPF 项目、不改原仓生产入口。',
         '不调用 Cloud/MES 清理、重试、删除或 PLC 读写命令。'
     )
 }
 
-$jsonPath = Join-Path $reportRoot 'default-entry-switch-preview.json'
-$markdownPath = Join-Path $reportRoot 'default-entry-switch-preview.md'
-$report | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $jsonPath -Encoding UTF8
-Write-SwitchPreviewMarkdown -Path $markdownPath -Report $report
+if ($applyMode) {
+    New-Item -Path $rollbackSnapshotRoot -ItemType Directory -Force | Out-Null
+    Copy-Item -LiteralPath $launcherProfilesPath -Destination (Join-Path $rollbackSnapshotRoot 'launcher.profiles.json') -Force
+    Copy-Item -LiteralPath $manifestPath -Destination (Join-Path $rollbackSnapshotRoot 'release-manifest.json') -Force
+    Copy-Item -LiteralPath $candidateSummaryPath -Destination (Join-Path $rollbackSnapshotRoot 'candidate-validation-summary.json') -Force
+    Copy-Item -LiteralPath $resolvedReadinessSummaryPath -Destination (Join-Path $rollbackSnapshotRoot 'default-entry-readiness-summary.json') -Force
 
-Write-Host 'Avalonia default entry switch preview generated.'
-Write-Host "  Preview: True"
+    foreach ($profile in $profiles) {
+        Set-SwitchPropertyValue -InputObject $profile -Name 'IsDefault' -Value $false
+        Set-SwitchPropertyValue -InputObject $profile -Name 'DefaultEntryRole' -Value 'TrialOrFallback'
+    }
+
+    Set-SwitchPropertyValue -InputObject $uiOnlyProfile -Name 'IsDefault' -Value $true
+    Set-SwitchPropertyValue -InputObject $uiOnlyProfile -Name 'DefaultEntryRole' -Value 'ProductionDefault'
+    Set-SwitchPropertyValue -InputObject $uiOnlyProfile -Name 'DefaultEntryAppliedAt' -Value $report.generatedAt
+    Set-SwitchPropertyValue -InputObject $uiOnlyProfile -Name 'DefaultEntryApprovedBy' -Value $approver
+    Set-SwitchPropertyValue -InputObject $uiOnlyProfile -Name 'DefaultEntryRollbackOwner' -Value $rollbackOwner
+
+    @($profiles) | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $launcherProfilesPath -Encoding UTF8
+}
+
+$jsonFileName = if ($applyMode) { 'default-entry-switch-apply-summary.json' } else { 'default-entry-switch-preview.json' }
+$markdownFileName = if ($applyMode) { 'default-entry-switch-apply-summary.md' } else { 'default-entry-switch-preview.md' }
+$jsonPath = Join-Path $reportRoot $jsonFileName
+$markdownPath = Join-Path $reportRoot $markdownFileName
+$report | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $jsonPath -Encoding UTF8
+Write-SwitchMarkdown -Path $markdownPath -Report $report
+
+if ($applyMode) {
+    Copy-Item -LiteralPath $jsonPath -Destination (Join-Path $rollbackSnapshotRoot 'default-entry-switch-apply-summary.json') -Force
+}
+
+Write-Host 'Avalonia default entry switch report generated.'
+Write-Host "  Preview: $previewMode"
+Write-Host "  Apply: $applyMode"
 Write-Host "  Json: $jsonPath"
 Write-Host "  Markdown: $markdownPath"

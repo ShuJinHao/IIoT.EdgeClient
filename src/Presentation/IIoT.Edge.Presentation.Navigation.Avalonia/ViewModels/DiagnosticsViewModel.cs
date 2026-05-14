@@ -325,7 +325,7 @@ public sealed partial class DiagnosticsViewModel : NavigationPageViewModelBase
             new DiagnosticsFieldAcceptanceSummaryRow(
                 "默认入口切换门禁",
                 "只读提示",
-                "默认入口切换必须先通过 TestAvaloniaDefaultEntryReadiness.ps1，并由独立批次执行；本页不提供切换按钮。"),
+                "默认入口切换必须先通过 TestAvaloniaDefaultEntryReadiness.ps1；真实 Apply 必须保留 rollback snapshot，并可用 RestoreAvaloniaDefaultEntry.ps1 回退；本页不提供切换按钮。"),
             new DiagnosticsFieldAcceptanceSummaryRow("I/O 写入申请", latestIoStatus, latestIoMessage),
             new DiagnosticsFieldAcceptanceSummaryRow("PLC 块写入轨迹", latestTraceStatus, latestTraceMessage),
             new DiagnosticsFieldAcceptanceSummaryRow("Cloud 状态", cloudStatus, cloudMessage),
