@@ -362,7 +362,7 @@ public sealed class ProductionViewModelBehaviorTests
 
         await viewModel.OnActivatedAsync();
 
-        Assert.Equal(6, viewModel.FieldAcceptanceRows.Count);
+        Assert.Equal(8, viewModel.FieldAcceptanceRows.Count);
         Assert.Contains(viewModel.FieldAcceptanceRows, row =>
             row.Scope == "运行模式" &&
             row.Status == "--start-runtime" &&
@@ -376,6 +376,12 @@ public sealed class ProductionViewModelBehaviorTests
             row.Message.Contains("Start.Reply", StringComparison.Ordinal));
         Assert.Contains(viewModel.FieldAcceptanceRows, row => row.Scope == "Cloud 状态" && row.Status == "已就绪");
         Assert.Contains(viewModel.FieldAcceptanceRows, row => row.Scope == "MES 状态" && row.Status == "空闲");
+        Assert.Contains(viewModel.FieldAcceptanceRows, row =>
+            row.Scope == "运行目录证据" &&
+            row.Message.Contains("C:\\runtime\\diagnostics\\logs", StringComparison.Ordinal));
+        Assert.Contains(viewModel.FieldAcceptanceRows, row =>
+            row.Scope == "Cloud/MES 差异" &&
+            row.Message.Contains("不提供清理、重试、删除", StringComparison.Ordinal));
     }
 
     [Fact]

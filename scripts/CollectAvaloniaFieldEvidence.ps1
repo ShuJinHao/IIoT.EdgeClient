@@ -35,6 +35,8 @@ Set-StrictMode -Version Latest
 $script:RepoRoot = Split-Path -Parent $PSScriptRoot
 $script:ChecklistPath = Join-Path $script:RepoRoot 'docs\Avalonia12-现场联调检查清单.md'
 $script:NuGetExceptionPath = Join-Path $script:RepoRoot 'docs\NuGet预览传递依赖例外记录.md'
+$script:SwitchMatrixPath = Join-Path $script:RepoRoot 'docs\Avalonia12-切换前差异矩阵.md'
+$script:SwitchBlockerPath = Join-Path $script:RepoRoot 'docs\Avalonia12-切换阻断清单.md'
 
 if (-not [string]::IsNullOrWhiteSpace($AvaloniaShellDirectory) -and -not $PSBoundParameters.ContainsKey('RuntimeRoot')) {
     $RuntimeRoot = $AvaloniaShellDirectory
@@ -435,6 +437,8 @@ function Write-PackageReadme {
         '- `launcher/launcher-profile-summary.md`：UI-only 与 `--start-runtime` profile 摘要。',
         '- `screenshots/截图占位说明.md`：PLC 写入轨迹截图占位说明。',
         '- `docs/Avalonia12-现场联调检查清单.md`：现场联调清单副本。',
+        '- `docs/Avalonia12-切换前差异矩阵.md`：WPF 与 Avalonia 切换差异副本。',
+        '- `docs/Avalonia12-切换阻断清单.md`：P0/P1/P2 阻断项副本。',
         '- `manifest.json`：本次采集输入、输出和只读边界记录。',
         '',
         '## 只读边界',
@@ -557,6 +561,14 @@ else {
 
 if (Test-Path -LiteralPath $script:NuGetExceptionPath -PathType Leaf) {
     Copy-Item -LiteralPath $script:NuGetExceptionPath -Destination (Join-Path $docsRoot 'NuGet预览传递依赖例外记录.md') -Force
+}
+
+if (Test-Path -LiteralPath $script:SwitchMatrixPath -PathType Leaf) {
+    Copy-Item -LiteralPath $script:SwitchMatrixPath -Destination (Join-Path $docsRoot 'Avalonia12-切换前差异矩阵.md') -Force
+}
+
+if (Test-Path -LiteralPath $script:SwitchBlockerPath -PathType Leaf) {
+    Copy-Item -LiteralPath $script:SwitchBlockerPath -Destination (Join-Path $docsRoot 'Avalonia12-切换阻断清单.md') -Force
 }
 
 Write-DiagnosticsSummary `

@@ -299,10 +299,21 @@ public sealed partial class DiagnosticsViewModel : NavigationPageViewModelBase
                 "启动诊断",
                 report.GeneratedAt == DateTime.MinValue ? "未生成" : "已生成",
                 $"模块 {report.ModuleRegistrations.Count} 个；PLC 设备 {report.DeviceBindings.Count} 个；阻断问题 {report.Issues.Count} 个；运行目录 {report.ConfigurationProfile.RuntimeDataRoot}。"),
+            new DiagnosticsFieldAcceptanceSummaryRow(
+                "运行目录证据",
+                "只读路径",
+                JoinSummary(
+                    $"运行目录：{report.ConfigurationProfile.RuntimeDataRoot}",
+                    runtimeState is null || string.IsNullOrWhiteSpace(runtimeState.DiagnosticsLogPath) ? null : $"诊断日志：{runtimeState.DiagnosticsLogPath}",
+                    "证据采集脚本只复制日志、诊断文本、Launcher profile 和截图说明")),
             new DiagnosticsFieldAcceptanceSummaryRow("I/O 写入申请", latestIoStatus, latestIoMessage),
             new DiagnosticsFieldAcceptanceSummaryRow("PLC 块写入轨迹", latestTraceStatus, latestTraceMessage),
             new DiagnosticsFieldAcceptanceSummaryRow("Cloud 状态", cloudStatus, cloudMessage),
-            new DiagnosticsFieldAcceptanceSummaryRow("MES 状态", mesStatus, mesMessage)
+            new DiagnosticsFieldAcceptanceSummaryRow("MES 状态", mesStatus, mesMessage),
+            new DiagnosticsFieldAcceptanceSummaryRow(
+                "Cloud/MES 差异",
+                "独立只读",
+                "Cloud 与 MES 状态分开展示；本页不提供清理、重试、删除、补偿或强制上传入口。")
         ]);
     }
 

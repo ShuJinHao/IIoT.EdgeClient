@@ -19,6 +19,8 @@ $ErrorActionPreference = 'Stop'
 # Release docs copied into the package:
 # Avalonia12-现场联调检查清单.md
 # NuGet预览传递依赖例外记录.md
+# Avalonia12-切换前差异矩阵.md
+# Avalonia12-切换阻断清单.md
 
 function Join-UnicodeName {
     param(
@@ -383,7 +385,13 @@ function Test-AvaloniaReleaseLayout {
         [string]$FieldChecklistName,
 
         [Parameter(Mandatory = $true)]
-        [string]$NuGetExceptionName
+        [string]$NuGetExceptionName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$SwitchMatrixName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$SwitchBlockerName
     )
 
     Assert-AvaloniaRequiredFile -Root $LauncherRoot -RelativePath 'IIoT.Edge.Launcher.Avalonia.exe'
@@ -441,12 +449,18 @@ function Test-AvaloniaReleaseLayout {
 
     Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'docs') -RelativePath $FieldChecklistName
     Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'docs') -RelativePath $NuGetExceptionName
+    Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'docs') -RelativePath $SwitchMatrixName
+    Assert-AvaloniaRequiredFile -Root (Join-Path $ReleaseRoot 'docs') -RelativePath $SwitchBlockerName
 }
 
 $fieldChecklistName = 'Avalonia12-' + (Join-UnicodeName -CodePoints @(0x73B0, 0x573A, 0x8054, 0x8C03, 0x68C0, 0x67E5, 0x6E05, 0x5355)) + '.md'
 $nugetExceptionName = 'NuGet' + (Join-UnicodeName -CodePoints @(0x9884, 0x89C8, 0x4F20, 0x9012, 0x4F9D, 0x8D56, 0x4F8B, 0x5916, 0x8BB0, 0x5F55)) + '.md'
+$switchMatrixName = 'Avalonia12-' + (Join-UnicodeName -CodePoints @(0x5207, 0x6362, 0x524D, 0x5DEE, 0x5F02, 0x77E9, 0x9635)) + '.md'
+$switchBlockerName = 'Avalonia12-' + (Join-UnicodeName -CodePoints @(0x5207, 0x6362, 0x963B, 0x65AD, 0x6E05, 0x5355)) + '.md'
 $fieldChecklistRelativePath = Join-Path 'docs' $fieldChecklistName
 $nugetExceptionRelativePath = Join-Path 'docs' $nugetExceptionName
+$switchMatrixRelativePath = Join-Path 'docs' $switchMatrixName
+$switchBlockerRelativePath = Join-Path 'docs' $switchBlockerName
 
 $repoRoot = if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
     [System.IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
@@ -577,6 +591,8 @@ try {
     New-Item -Path $docsRoot -ItemType Directory -Force | Out-Null
     Copy-Item -Path (Join-Path $repoRoot $fieldChecklistRelativePath) -Destination (Join-Path $docsRoot $fieldChecklistName) -Force
     Copy-Item -Path (Join-Path $repoRoot $nugetExceptionRelativePath) -Destination (Join-Path $docsRoot $nugetExceptionName) -Force
+    Copy-Item -Path (Join-Path $repoRoot $switchMatrixRelativePath) -Destination (Join-Path $docsRoot $switchMatrixName) -Force
+    Copy-Item -Path (Join-Path $repoRoot $switchBlockerRelativePath) -Destination (Join-Path $docsRoot $switchBlockerName) -Force
 
     $validationCommands.Add([PSCustomObject]@{
         name = 'validate Avalonia release layout'
@@ -587,7 +603,9 @@ try {
         -LauncherRoot $launcherRoot `
         -ShellRoot $shellRoot `
         -FieldChecklistName $fieldChecklistName `
-        -NuGetExceptionName $nugetExceptionName
+        -NuGetExceptionName $nugetExceptionName `
+        -SwitchMatrixName $switchMatrixName `
+        -SwitchBlockerName $switchBlockerName
 
     $validationCommands.Add([PSCustomObject]@{
         name = 'validate SkiaSharp preview exception'

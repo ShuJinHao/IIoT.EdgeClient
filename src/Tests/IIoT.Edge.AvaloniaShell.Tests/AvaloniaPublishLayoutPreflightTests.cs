@@ -104,6 +104,8 @@ public sealed class AvaloniaPublishLayoutPreflightTests
         Assert.Contains("release-manifest.json", script, StringComparison.Ordinal);
         Assert.Contains("Avalonia12-现场联调检查清单.md", script, StringComparison.Ordinal);
         Assert.Contains("NuGet预览传递依赖例外记录.md", script, StringComparison.Ordinal);
+        Assert.Contains("switchMatrixRelativePath", script, StringComparison.Ordinal);
+        Assert.Contains("switchBlockerRelativePath", script, StringComparison.Ordinal);
         Assert.Contains("SkiaSharp", script, StringComparison.Ordinal);
         Assert.DoesNotContain("PublishEdgeRuntime.ps1", script, StringComparison.Ordinal);
         Assert.DoesNotContain("PublishEdgeBundle.ps1", script, StringComparison.Ordinal);
