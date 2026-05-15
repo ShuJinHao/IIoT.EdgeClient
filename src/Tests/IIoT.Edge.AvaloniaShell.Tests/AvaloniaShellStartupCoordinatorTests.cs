@@ -2,7 +2,7 @@ using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Modules.Diagnostics;
 using IIoT.Edge.AvaloniaShell.Services;
-using IIoT.Edge.Shell.Core;
+using IIoT.Edge.Host.Bootstrap.Core;
 using IIoT.Edge.UI.Avalonia.Services;
 using Xunit;
 

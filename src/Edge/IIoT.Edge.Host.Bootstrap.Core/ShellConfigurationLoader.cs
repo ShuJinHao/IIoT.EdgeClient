@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using System.IO;
 
-namespace IIoT.Edge.Shell.Core;
+namespace IIoT.Edge.Host.Bootstrap.Core;
 
 public sealed record ShellConfigurationLoadResult(
     IConfigurationRoot Configuration,

@@ -4,13 +4,13 @@ using IIoT.Edge.Application.Abstractions.Tasks;
 using IIoT.Edge.Application.Modules.Diagnostics;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
-using IIoT.Edge.Host.Bootstrap.Modules;
+using IIoT.Edge.Host.Bootstrap.Core.Modules;
 using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
 using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.SharedKernel.Repository;
 using Microsoft.Extensions.Configuration;
 
-namespace IIoT.Edge.Shell.Core;
+namespace IIoT.Edge.Host.Bootstrap.Core;
 
 public interface IStartupDiagnosticsReportBuilder
 {

@@ -1,8 +1,8 @@
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Modules.Diagnostics;
-using IIoT.Edge.Host.Bootstrap.Modules;
+using IIoT.Edge.Host.Bootstrap.Core.Modules;
 
-namespace IIoT.Edge.Shell.Core;
+namespace IIoT.Edge.Host.Bootstrap.Core;
 
 public interface IStartupPluginLifecycleSnapshotBuilder
 {

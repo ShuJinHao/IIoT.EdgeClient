@@ -3,7 +3,7 @@ using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Infrastructure.Persistence.Dapper;
 using IIoT.Edge.Infrastructure.Persistence.EfCore;
 
-namespace IIoT.Edge.Shell.Core;
+namespace IIoT.Edge.Host.Bootstrap.Core;
 
 public interface IAppStartupInitializer
 {

@@ -18,7 +18,7 @@ public sealed class LauncherMainViewModelTests
                 "Homogenization profile",
                 null,
                 "HomogenizationLine",
-                @"..\homogenization\IIoT.Edge.Shell.exe",
+                @"..\homogenization\IIoT.Edge.AvaloniaShell.exe",
                 "BeakerOutline",
                 "#4D7C0F")
         ];
@@ -62,8 +62,8 @@ public sealed class LauncherMainViewModelTests
     {
         IReadOnlyList<LauncherProfileDefinition> profiles =
         [
-            new("HomogenizationLine", "Homogenization", "Homogenization process", null, "HomogenizationLine", @"..\homogenization\IIoT.Edge.Shell.exe", "BeakerOutline", "#4D7C0F"),
-            new("MaintenanceLine", "Maintenance", "Maintenance process", null, "MaintenanceLine", @"..\maintenance\IIoT.Edge.Shell.exe", "Cog", "#0F766E")
+            new("HomogenizationLine", "Homogenization", "Homogenization process", null, "HomogenizationLine", @"..\homogenization\IIoT.Edge.AvaloniaShell.exe", "BeakerOutline", "#4D7C0F"),
+            new("MaintenanceLine", "Maintenance", "Maintenance process", null, "MaintenanceLine", @"..\maintenance\IIoT.Edge.AvaloniaShell.exe", "Cog", "#0F766E")
         ];
 
         var viewModel = new LauncherMainViewModel(

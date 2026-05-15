@@ -2,7 +2,7 @@ using System.Reflection;
 using System.IO;
 using System.Runtime.Loader;
 
-namespace IIoT.Edge.Host.Bootstrap.Modules;
+namespace IIoT.Edge.Host.Bootstrap.Core.Modules;
 
 public interface IModulePluginAssemblyResolver
 {

@@ -8,7 +8,7 @@ using IIoT.Edge.Runtime.Signals;
 using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.SharedKernel.Repository;
 
-namespace IIoT.Edge.Shell.Core;
+namespace IIoT.Edge.Host.Bootstrap.Core;
 
 public interface IPlcRuntimeTaskBinder
 {

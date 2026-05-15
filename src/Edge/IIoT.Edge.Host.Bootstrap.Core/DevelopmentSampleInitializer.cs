@@ -1,8 +1,8 @@
-﻿using IIoT.Edge.Application.Abstractions.Context;
+using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 
-namespace IIoT.Edge.Shell.Core;
+namespace IIoT.Edge.Host.Bootstrap.Core;
 
 public sealed class DevelopmentSampleInitializer : IDevelopmentSampleInitializer
 {

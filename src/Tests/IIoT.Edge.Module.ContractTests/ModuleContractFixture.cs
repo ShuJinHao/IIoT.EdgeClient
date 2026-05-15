@@ -17,8 +17,7 @@ public sealed class ModuleContractFixture
         ArgumentNullException.ThrowIfNull(module);
 
         var services = new ServiceCollection();
-        var viewRegistry = new ViewRegistry();
-        var moduleViewRegistry = new ModuleViewRegistry(viewRegistry, module.ModuleId);
+        var viewRegistry = new AvaloniaViewRegistry();
         var cellDataRegistry = new CellDataRegistry(new CellDataTypeRegistry());
         var runtimeRegistry = new StationRuntimeRegistry();
         var integrationRegistry = new ProcessIntegrationRegistry();
@@ -29,7 +28,7 @@ public sealed class ModuleContractFixture
             module.ProcessType,
             services,
             configuration,
-            moduleViewRegistry,
+            viewRegistry,
             cellDataRegistry,
             runtimeRegistry,
             integrationRegistry,
@@ -49,7 +48,7 @@ public sealed class ModuleContractFixture
 
 public sealed record ModuleContractResult(
     IServiceCollection Services,
-    ViewRegistry ViewRegistry,
+    AvaloniaViewRegistry ViewRegistry,
     CellDataRegistry CellDataRegistry,
     StationRuntimeRegistry RuntimeRegistry,
     ProcessIntegrationRegistry IntegrationRegistry,
@@ -60,7 +59,7 @@ internal sealed class TestEdgeProcessModuleBuilder(
     string processType,
     IServiceCollection services,
     IConfiguration configuration,
-    IViewRegistry viewRegistry,
+    IAvaloniaViewRegistry viewRegistry,
     ICellDataRegistry cellDataRegistry,
     IStationRuntimeRegistry runtimeRegistry,
     IProcessIntegrationRegistry integrationRegistry,
@@ -75,7 +74,7 @@ internal sealed class TestEdgeProcessModuleBuilder(
     public IConfiguration Configuration { get; } = configuration;
 
     public void RegisterRoute(string viewId, Type viewType, Type viewModelType, bool cacheView = true)
-        => viewRegistry.RegisterRoute(viewId, viewType, viewModelType, cacheView);
+        => viewRegistry.RegisterRoute(viewId, viewType, viewModelType, cacheView: cacheView);
 
     public void RegisterRoute(
         string viewId,
@@ -91,14 +90,11 @@ internal sealed class TestEdgeProcessModuleBuilder(
             cacheView);
 
     public void RegisterMenu(ModuleMenuDescriptor menuInfo)
-        => viewRegistry.RegisterMenu(new MenuInfo
+        => viewRegistry.RegisterMenu(new AvaloniaMenuInfo
         {
-            Title = menuInfo.Title,
             TitleResourceKey = menuInfo.TitleResourceKey,
             ViewId = menuInfo.ViewId,
-            Icon = menuInfo.Icon,
-            Order = menuInfo.Order,
-            RequiredPermission = menuInfo.RequiredPermission
+            Order = menuInfo.Order
         });
 
     public void RegisterDocumentPanel(
@@ -131,20 +127,13 @@ internal sealed class TestEdgeProcessModuleBuilder(
         bool cacheView = true)
         => RegisterPanel(info, viewType, viewModelType, viewModelFactory, cacheView);
 
-    private static AnchorableInfo ToAnchorableInfo(ModulePanelDescriptor info)
+    private static AvaloniaDockPaneInfo ToDockPaneInfo(ModulePanelDescriptor info)
         => new()
         {
-            Title = info.Title,
             TitleResourceKey = info.TitleResourceKey,
-            ContentId = info.ContentId,
-            InitialPosition = info.InitialPosition switch
-            {
-                ModulePanelPosition.Left => AnchorablePosition.Left,
-                ModulePanelPosition.Right => AnchorablePosition.Right,
-                ModulePanelPosition.Bottom => AnchorablePosition.Bottom,
-                _ => AnchorablePosition.Main
-            },
-            IsVisible = info.IsVisible
+            ViewId = info.ContentId,
+            DockGroup = info.InitialPosition == ModulePanelPosition.Main ? "documents" : "tools",
+            IsToolPane = info.InitialPosition != ModulePanelPosition.Main
         };
 
     private void RegisterPanel(
@@ -152,11 +141,11 @@ internal sealed class TestEdgeProcessModuleBuilder(
         Type viewType,
         Type viewModelType,
         bool cacheView)
-        => viewRegistry.RegisterAnchorable(
-            ToAnchorableInfo(info),
+        => viewRegistry.RegisterDockPane(
+            ToDockPaneInfo(info),
             viewType,
             viewModelType,
-            cacheView);
+            cacheView: cacheView);
 
     private void RegisterPanel(
         ModulePanelDescriptor info,
@@ -164,8 +153,8 @@ internal sealed class TestEdgeProcessModuleBuilder(
         Type viewModelType,
         Func<IServiceProvider, object> viewModelFactory,
         bool cacheView)
-        => viewRegistry.RegisterAnchorable(
-            ToAnchorableInfo(info),
+        => viewRegistry.RegisterDockPane(
+            ToDockPaneInfo(info),
             viewType,
             viewModelType,
             serviceProvider => ResolveViewModel(info.ContentId, viewModelFactory, serviceProvider),
@@ -225,14 +214,13 @@ internal sealed class TestEdgeProcessModuleBuilder(
         where TContributor : class, IDevelopmentSampleContributor
         => Services.AddSingleton<IDevelopmentSampleContributor, TContributor>();
 
-    private static ViewModelBase ResolveViewModel(
+    private static object ResolveViewModel(
         string viewId,
         Func<IServiceProvider, object> viewModelFactory,
         IServiceProvider serviceProvider)
     {
         var viewModel = viewModelFactory(serviceProvider);
-        return viewModel as ViewModelBase
-            ?? throw new InvalidOperationException(
-                $"View model factory for '{viewId}' must return {nameof(ViewModelBase)}.");
+        return viewModel
+            ?? throw new InvalidOperationException($"View model factory for '{viewId}' returned null.");
     }
 }

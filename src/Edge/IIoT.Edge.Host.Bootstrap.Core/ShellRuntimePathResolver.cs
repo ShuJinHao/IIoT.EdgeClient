@@ -2,7 +2,7 @@ using IIoT.Edge.Application.Abstractions.Config;
 using Microsoft.Extensions.Configuration;
 using System.IO;
 
-namespace IIoT.Edge.Shell.Core;
+namespace IIoT.Edge.Host.Bootstrap.Core;
 
 public interface IShellRuntimePathResolver
 {

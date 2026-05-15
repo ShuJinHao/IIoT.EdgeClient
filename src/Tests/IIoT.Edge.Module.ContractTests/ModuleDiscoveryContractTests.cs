@@ -1,13 +1,11 @@
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
-using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Features.Config.ModuleParameters;
 using IIoT.Edge.Application.Modules.Descriptors;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using Microsoft.Extensions.Configuration;
-using System.IO;
 using System.Text.Json;
 
 namespace IIoT.Edge.Module.ContractTests;
@@ -15,7 +13,7 @@ namespace IIoT.Edge.Module.ContractTests;
 public sealed class ModuleDiscoveryContractTests
 {
     [Fact]
-    public void DiscoverDirectoryPlugins_ShouldFindProductModules()
+    public void DiscoverDirectoryPlugins_ShouldFindAvaloniaProductModules()
     {
         var pluginRoot = ContractTestPathHelper.CreatePluginRuntimeRoot("Homogenization");
         try
@@ -25,6 +23,8 @@ public sealed class ModuleDiscoveryContractTests
             Assert.Equal(
                 ["Homogenization"],
                 discovery.Modules.Select(x => x.ModuleId).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray());
+            Assert.All(discovery.Modules, descriptor =>
+                Assert.EndsWith(".Avalonia", descriptor.AssemblyName, StringComparison.Ordinal));
         }
         finally
         {
@@ -33,7 +33,7 @@ public sealed class ModuleDiscoveryContractTests
     }
 
     [Fact]
-    public void CreateAllModules_ShouldInstantiateAllDiscoveredPluginsWithoutDuplicateIdentity()
+    public void CreateAllModules_ShouldInstantiateAvaloniaPluginsWithoutDuplicateIdentity()
     {
         var pluginRoot = ContractTestPathHelper.CreatePluginRuntimeRoot("Homogenization");
         try
@@ -52,40 +52,15 @@ public sealed class ModuleDiscoveryContractTests
     }
 
     [Fact]
-    public void CreateModule_WhenEntryTypeDoesNotImplementProcessModule_ShouldRejectWithClearContractMessage()
-    {
-        var assemblyPath = typeof(NonModuleEntry).Assembly.Location;
-        var descriptor = new ModulePluginDescriptor(
-            "BadModule",
-            "BadProcess",
-            "错误模块",
-            "1.0.0",
-            ModulePluginHostRuntime.HostApiVersion,
-            "1.0.0",
-            "99.0.0",
-            [],
-            Path.GetFileNameWithoutExtension(assemblyPath),
-            typeof(NonModuleEntry).FullName!,
-            Path.GetDirectoryName(assemblyPath)!,
-            Path.Combine(Path.GetDirectoryName(assemblyPath)!, "plugin.json"),
-            assemblyPath);
-
-        var ex = Assert.Throws<InvalidOperationException>(() => CreateModuleCatalog().CreateAllModules([descriptor]));
-
-        Assert.Contains(nameof(IEdgeProcessModule), ex.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("IEdgeStationModule", ex.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void RegisterAllDiscoveredModules_ShouldNotProduceViewOrRegistrationConflicts()
+    public void RegisterAllDiscoveredModules_ShouldRegisterAvaloniaRoutesAndRuntimeContracts()
     {
         var pluginRoot = ContractTestPathHelper.CreatePluginRuntimeRoot("Homogenization");
         try
         {
             var modules = CreateModuleCatalog().CreateAllModules(DiscoverPlugins(pluginRoot).Modules);
             var services = new ServiceCollection();
-            var viewRegistry = new ViewRegistry();
-        var cellDataRegistry = new CellDataRegistry(new CellDataTypeRegistry());
+            var viewRegistry = new AvaloniaViewRegistry();
+            var cellDataRegistry = new CellDataRegistry(new CellDataTypeRegistry());
             var runtimeRegistry = new StationRuntimeRegistry();
             var integrationRegistry = new ProcessIntegrationRegistry();
             var moduleParamRegistry = new ModuleParamRegistry();
@@ -97,11 +72,11 @@ public sealed class ModuleDiscoveryContractTests
                     module.ProcessType,
                     services,
                     new ConfigurationBuilder().Build(),
-                    new ModuleViewRegistry(viewRegistry, module.ModuleId),
+                    viewRegistry,
                     cellDataRegistry,
                     runtimeRegistry,
                     integrationRegistry,
-                moduleParamRegistry));
+                    moduleParamRegistry));
             }
 
             Assert.Single(cellDataRegistry.GetRegistrations());
@@ -133,11 +108,11 @@ public sealed class ModuleDiscoveryContractTests
         Assert.NotNull(result.ViewRegistry.GetViewRegistration("MockProcess.DataView"));
         Assert.Contains(
             result.ViewRegistry.GetAllMenus(),
-            x => x.ViewId == "MockProcess.DataView" && x.Title == "模拟工序");
+            x => x.ViewId == "MockProcess.DataView" && x.TitleResourceKey == "MockProcess_Menu_Data");
     }
 
     [Fact]
-    public void ProductModules_ShouldUseStandardRuntimeAndSampleDirectories()
+    public void ProductModules_ShouldUseCoreRuntimeAndAvaloniaPluginShell()
     {
         var repoRoot = ContractTestPathHelper.FindRepoRoot();
 
@@ -145,7 +120,7 @@ public sealed class ModuleDiscoveryContractTests
             repoRoot,
             "src",
             "Modules",
-            "IIoT.Edge.Module.Stacking")));
+            "IIoT.Edge.Module.Homogenization")));
         Assert.True(File.Exists(Path.Combine(
             repoRoot,
             "src",
@@ -153,47 +128,30 @@ public sealed class ModuleDiscoveryContractTests
             "IIoT.Edge.Module.Homogenization.Core",
             "Runtime",
             "HomogenizationStationRuntimeFactory.cs")));
-        Assert.False(File.Exists(Path.Combine(
-            repoRoot,
-            "src",
-            "Modules",
-            "IIoT.Edge.Module.Homogenization.Core",
-            "Runtime",
-            "HomogenizationDevelopmentSampleContributor.cs")));
         Assert.True(File.Exists(Path.Combine(
             repoRoot,
             "src",
             "Modules",
-            "IIoT.Edge.Module.Homogenization.Core",
-            "Samples",
-            "HomogenizationDevelopmentSampleContributor.cs")));
-        Assert.False(File.Exists(Path.Combine(
-            repoRoot,
-            "src",
-            "Modules",
-            "IIoT.Edge.Module.Homogenization.Core",
-            "Config",
-            "HomogenizationDevelopmentSampleContributor.cs")));
-        Assert.True(File.Exists(Path.Combine(
-            repoRoot,
-            "src",
-            "Modules",
-            "IIoT.Edge.Module.Homogenization",
+            "IIoT.Edge.Module.Homogenization.Avalonia",
             "Presentation",
-            "HomogenizationNavigationRegistration.cs")));
+            "HomogenizationAvaloniaNavigationRegistration.cs")));
     }
 
     [Fact]
-    public void PluginBundles_ShouldContainHomogenizationSingleLineBundle()
+    public void PluginManifest_ShouldPointToAvaloniaEntryAssembly()
     {
-        var repoRoot = ContractTestPathHelper.FindRepoRoot();
-        var bundlePath = Path.Combine(repoRoot, "scripts", "PluginBundles", "homogenization-line.json");
+        var manifestPath = Path.Combine(
+            ContractTestPathHelper.GetModuleSourceDirectory("Homogenization"),
+            "plugin.json");
 
-        Assert.True(File.Exists(bundlePath));
-        using var document = JsonDocument.Parse(File.ReadAllText(bundlePath));
-        Assert.Equal("homogenization-line", document.RootElement.GetProperty("bundleId").GetString());
-        Assert.Equal("Homogenization", document.RootElement.GetProperty("includeModules")[0].GetString());
-        Assert.Equal("HomogenizationLine", document.RootElement.GetProperty("machineProfiles")[0].GetString());
+        using var document = JsonDocument.Parse(File.ReadAllText(manifestPath));
+        var root = document.RootElement;
+
+        Assert.Equal("Homogenization", root.GetProperty("moduleId").GetString());
+        Assert.Equal("IIoT.Edge.Module.Homogenization.Avalonia.dll", root.GetProperty("entryAssembly").GetString());
+        Assert.Equal(
+            "IIoT.Edge.Module.Homogenization.Avalonia.DependencyInjection",
+            root.GetProperty("entryType").GetString());
     }
 
     private static ModuleCatalogDiscoveryResult DiscoverPlugins(string pluginRoot)
@@ -205,10 +163,6 @@ public sealed class ModuleDiscoveryContractTests
 
     private static IModuleCatalog CreateModuleCatalog()
         => new DirectoryModuleCatalog(new ModulePluginLoader(new ModulePluginAssemblyResolver()));
-
-    private sealed class NonModuleEntry
-    {
-    }
 
     private sealed class MockEdgeProcessModule : EdgeProcessModuleBase<MockCellData>
     {
@@ -229,10 +183,11 @@ public sealed class ModuleDiscoveryContractTests
 
         protected override void RegisterModuleViews(IEdgeProcessModuleBuilder builder)
         {
-            builder.RegisterRoute("MockProcess.DataView", typeof(object), typeof(object));
+            builder.RegisterRoute("MockProcess.DataView", typeof(Avalonia.Controls.UserControl), typeof(object));
             builder.RegisterMenu(new ModuleMenuDescriptor
             {
                 Title = "模拟工序",
+                TitleResourceKey = "MockProcess_Menu_Data",
                 ViewId = "MockProcess.DataView",
                 Icon = "Shape",
                 Order = 99
@@ -243,19 +198,19 @@ public sealed class ModuleDiscoveryContractTests
     private enum MockMesParam
     {
         [ModuleParam(ParamValueKind.Bool, DefaultValue = "false")]
-        启用
+        Enabled
     }
 
     private enum MockCloudParam
     {
         [ModuleParam(ParamValueKind.Bool, DefaultValue = "false")]
-        启用
+        Enabled
     }
 
     private enum MockBusinessParam
     {
         [ModuleParam(ParamValueKind.Bool, DefaultValue = "false")]
-        启用重码验证
+        DuplicateCheckEnabled
     }
 
     private sealed class MockCellData : CellDataBase

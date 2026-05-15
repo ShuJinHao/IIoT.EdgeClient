@@ -38,7 +38,7 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       <CopyToPublishDirectory>Always</CopyToPublishDirectory>
     </None>
-    <None Include="..\IIoT.Edge.Launcher\Assets\Profiles\homogenization.png" Link="Assets\Profiles\homogenization.png">
+    <None Update="Assets\Profiles\homogenization.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </None>

@@ -9,14 +9,14 @@ public sealed class ResourceEncodingHygieneTests
     [
         "\uFFFD",
         "锟",
-        "鐢",
-        "浜",
-        "鏁",
-        "鍚",
-        "澶",
-        "銆",
-        "绯荤",
-        "杩佺"
+        "Ã",
+        "Â",
+        "閿",
+        "鐢熶骇",
+        "杩愯",
+        "妯″",
+        "娴",
+        "榛"
     ];
 
     [Fact]
@@ -51,7 +51,6 @@ public sealed class ResourceEncodingHygieneTests
         Assert.Contains(files, path => Path.GetFileName(path) == "HomogenizationAvaloniaResources.cs");
         Assert.Contains(files, path => Path.GetFileName(path) == "launcher.profiles.json");
         Assert.Contains(files, path => Path.GetFileName(path) == "launcher.accounts.sample.json");
-        Assert.Contains(files, path => Path.GetFileName(path).Contains("迁移记录", StringComparison.Ordinal));
 
         foreach (var file in files)
         {
@@ -82,18 +81,13 @@ public sealed class ResourceEncodingHygieneTests
             yield return path;
         }
 
-        foreach (var launcherProject in new[] { "IIoT.Edge.Launcher.Avalonia", "IIoT.Edge.Launcher" })
-        {
-            var launcherRoot = Path.Combine(root, "src", "Edge", launcherProject);
-
-            yield return Path.Combine(launcherRoot, "launcher.profiles.json");
-            yield return Path.Combine(launcherRoot, "launcher.accounts.sample.json");
-        }
-
-        var docsRoot = Path.Combine(root, "docs");
+        var launcherRoot = Path.Combine(root, "src", "Edge", "IIoT.Edge.Launcher.Avalonia");
+        yield return Path.Combine(launcherRoot, "launcher.profiles.json");
+        yield return Path.Combine(launcherRoot, "launcher.accounts.sample.json");
 
         foreach (var path in Directory
-                     .EnumerateFiles(docsRoot, "Avalonia12-*迁移记录.md", SearchOption.TopDirectoryOnly)
+                     .EnumerateFiles(Path.Combine(root, "docs"), "Avalonia12-*.md", SearchOption.TopDirectoryOnly)
+                     .Where(static path => !Path.GetFileName(path).Contains("审核", StringComparison.Ordinal))
                      .Order(StringComparer.Ordinal))
         {
             yield return path;

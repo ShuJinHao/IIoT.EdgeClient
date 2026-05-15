@@ -1,6 +1,0 @@
-{
-  "bundleId": "homogenization-line",
-  "displayName": "Homogenization Line Bundle",
-  "includeModules": [ "Homogenization" ],
-  "machineProfiles": [ "HomogenizationLine" ]
-}

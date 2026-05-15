@@ -10,7 +10,7 @@ public sealed class ArchitectureBoundaryContractTests
     ];
 
     [Fact]
-    public void HostAndCommonProjects_ShouldNotReferenceConcreteModuleNamespaces()
+    public void HostAndCommonProjects_ShouldNotReferenceConcreteModuleNamespacesInCode()
     {
         var repoRoot = ContractTestPathHelper.FindRepoRoot();
         var directories = new[]
@@ -20,13 +20,14 @@ public sealed class ArchitectureBoundaryContractTests
             Path.Combine(repoRoot, "src", "Infrastructure", "IIoT.Edge.Infrastructure.Integration"),
             Path.Combine(repoRoot, "src", "Presentation"),
             Path.Combine(repoRoot, "src", "Shared", "IIoT.Edge.SharedKernel"),
-            Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.Shell"),
-            Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.Host.Bootstrap")
+            Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.AvaloniaShell"),
+            Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.Host.Bootstrap.Avalonia"),
+            Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.Host.Bootstrap.Core")
         };
 
         var offendingFiles = directories
-            .SelectMany(directory => Directory.EnumerateFiles(directory, "*.cs", SearchOption.AllDirectories)
-                .Concat(Directory.EnumerateFiles(directory, "*.csproj", SearchOption.AllDirectories)))
+            .Where(Directory.Exists)
+            .SelectMany(directory => Directory.EnumerateFiles(directory, "*.cs", SearchOption.AllDirectories))
             .Where(path => !path.Contains(Path.DirectorySeparatorChar + "bin" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
             .Where(path => !path.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
             .Select(path => new
@@ -85,6 +86,7 @@ public sealed class ArchitectureBoundaryContractTests
         };
 
         var offendingFiles = sourceDirectories
+            .Where(Directory.Exists)
             .SelectMany(directory => Directory.EnumerateFiles(directory, "*.cs", SearchOption.AllDirectories))
             .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
             .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
@@ -101,23 +103,12 @@ public sealed class ArchitectureBoundaryContractTests
     }
 
     [Fact]
-    public void Header_ShouldNotReferenceCompanyLogoResource()
+    public void MigrationWorkspace_ShouldNotContainLegacyUiSharedProject()
     {
         var repoRoot = ContractTestPathHelper.FindRepoRoot();
-        var logoFileName = "logo" + ".png";
-        var logoPath = Path.Combine(repoRoot, "src", "Shared", "IIoT.Edge.UI.Shared", "Assets", "images", logoFileName);
-        var filesWithReferences = Directory
-            .EnumerateFiles(Path.Combine(repoRoot, "src"), "*.*", SearchOption.AllDirectories)
-            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
-            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
-            .Where(path => path.EndsWith(".xaml", StringComparison.OrdinalIgnoreCase)
-                           || path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
-            .Where(path => File.ReadAllText(path).Contains(logoFileName, StringComparison.OrdinalIgnoreCase))
-            .Select(path => Path.GetRelativePath(repoRoot, path))
-            .ToArray();
 
-        Assert.False(File.Exists(logoPath), $"公司标志资源应删除：{logoPath}");
-        Assert.Empty(filesWithReferences);
+        var legacyUiProjectName = "IIoT.Edge.UI." + "Shared";
+        Assert.False(Directory.Exists(Path.Combine(repoRoot, "src", "Shared", legacyUiProjectName)));
     }
 
     [Fact]

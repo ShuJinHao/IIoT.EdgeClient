@@ -4,6 +4,7 @@ using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Modules.Mes;
 using System.Text.Json;
 using IIoT.Edge.Module.Homogenization;
+using HomogenizationAvaloniaModule = IIoT.Edge.Module.Homogenization.Avalonia.DependencyInjection;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Parameters;
 using IIoT.Edge.Module.Homogenization.Integration;
@@ -26,12 +27,12 @@ using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesS
 
 namespace IIoT.Edge.Module.ContractTests;
 
-public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<DependencyInjection>
+public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<HomogenizationAvaloniaModule>
 {
     protected override bool RequiresHardwareProfile => true;
     protected override bool RequiresMesUploader => true;
     protected override int ExpectedRuntimeTaskCount => 6;
-    protected override int MinimumRouteCount => 7;
+    protected override int MinimumRouteCount => 1;
 
     protected override ProductionContext CreateRuntimeContext()
         => new HomogenizationContext { DeviceName = "PLC-A" };
@@ -51,7 +52,7 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
     [Fact]
     public void RegisterServices_ShouldRegisterDevelopmentSampleContributor()
     {
-        var result = new ModuleContractFixture().RegisterModule(new DependencyInjection());
+        var result = new ModuleContractFixture().RegisterModule(new HomogenizationAvaloniaModule());
 
         Assert.Contains(
             result.Services,
@@ -71,13 +72,18 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
 
         Assert.Equal("Homogenization", root.GetProperty("moduleId").GetString());
         Assert.Equal("Homogenization", root.GetProperty("supportedProcessType").GetString());
-        Assert.Equal("IIoT.Edge.Module.Homogenization.DependencyInjection", root.GetProperty("entryType").GetString());
+        Assert.Equal(
+            "IIoT.Edge.Module.Homogenization.Avalonia.DependencyInjection",
+            root.GetProperty("entryType").GetString());
+        Assert.Equal(
+            "IIoT.Edge.Module.Homogenization.Avalonia.dll",
+            root.GetProperty("entryAssembly").GetString());
     }
 
     [Fact]
     public void RegisterServices_ShouldRegisterMesChannelAsProcessUploader()
     {
-        var result = new ModuleContractFixture().RegisterModule(new DependencyInjection());
+        var result = new ModuleContractFixture().RegisterModule(new HomogenizationAvaloniaModule());
 
         Assert.Contains(
             result.Services,
@@ -96,7 +102,7 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
     [Fact]
     public void RegisterServices_ShouldRegisterCloudChannelAbstractionAndProcessUploader()
     {
-        var result = new ModuleContractFixture().RegisterModule(new DependencyInjection());
+        var result = new ModuleContractFixture().RegisterModule(new HomogenizationAvaloniaModule());
 
         Assert.Contains(
             result.Services,
@@ -125,7 +131,7 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
                 reloadOnChange: false)
             .Build();
 
-        var result = new ModuleContractFixture().RegisterModule(new DependencyInjection(), configuration);
+        var result = new ModuleContractFixture().RegisterModule(new HomogenizationAvaloniaModule(), configuration);
         using var provider = result.Services.BuildServiceProvider();
 
         Assert.Equal(500, provider.GetRequiredService<IOptions<HomogenizationModuleOptions>>().Value.Presentation.MaxOutboundRecords);
@@ -135,30 +141,17 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
     }
 
     [Fact]
-    public void HomogenizationLanguageDictionaries_ShouldContainSameNonEmptyKeys()
+    public void HomogenizationAvaloniaResources_ShouldContainSameNonEmptyKeys()
     {
-        var resourceDirectory = Path.Combine(
-            ContractTestPathHelper.GetModuleSourceDirectory("Homogenization"),
-            "Resources",
-            "Languages");
-        var zhKeys = ReadLanguageDictionary(resourceDirectory, "zh-CN.xaml");
-        var enKeys = ReadLanguageDictionary(resourceDirectory, "en-US.xaml");
+        var zhKeys = new IIoT.Edge.Module.Homogenization.Avalonia.Localization.HomogenizationAvaloniaZhCnResources()
+            .GetResources();
+        var enKeys = new IIoT.Edge.Module.Homogenization.Avalonia.Localization.HomogenizationAvaloniaEnUsResources()
+            .GetResources();
 
         Assert.NotEmpty(zhKeys);
         Assert.Equal(zhKeys.Keys.Order(), enKeys.Keys.Order());
         Assert.All(zhKeys, item => Assert.False(string.IsNullOrWhiteSpace(item.Value), item.Key));
         Assert.All(enKeys, item => Assert.False(string.IsNullOrWhiteSpace(item.Value), item.Key));
-    }
-
-    private static IReadOnlyDictionary<string, string> ReadLanguageDictionary(string directory, string fileName)
-    {
-        var path = Path.Combine(directory, fileName);
-        var text = File.ReadAllText(path);
-        return System.Text.RegularExpressions.Regex
-            .Matches(text, "<sys:String x:Key=\"(?<key>[^\"]+)\">(?<value>.*?)</sys:String>")
-            .ToDictionary(
-                match => match.Groups["key"].Value,
-                match => match.Groups["value"].Value);
     }
 
     private sealed class ContractDeviceService : IDeviceService

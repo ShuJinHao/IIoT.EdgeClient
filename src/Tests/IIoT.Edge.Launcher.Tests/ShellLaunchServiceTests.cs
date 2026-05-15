@@ -10,7 +10,7 @@ public sealed class ShellLaunchServiceTests
     [Fact]
     public void Launch_ShouldSetMachineProfileEnvironmentVariable()
     {
-        var executablePath = Path.Combine(Path.GetTempPath(), "edge-launcher-shell-tests", Guid.NewGuid().ToString("N"), "IIoT.Edge.Shell.exe");
+        var executablePath = Path.Combine(Path.GetTempPath(), "edge-launcher-shell-tests", Guid.NewGuid().ToString("N"), "IIoT.Edge.AvaloniaShell.exe");
         Directory.CreateDirectory(Path.GetDirectoryName(executablePath)!);
         File.WriteAllText(executablePath, string.Empty);
         var starter = new SpyProcessStarter();

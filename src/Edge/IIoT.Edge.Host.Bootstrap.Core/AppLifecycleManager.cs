@@ -3,7 +3,7 @@ using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Tasks;
 using IIoT.Edge.Application.Modules.Diagnostics;
 
-namespace IIoT.Edge.Shell.Core;
+namespace IIoT.Edge.Host.Bootstrap.Core;
 
 public class AppLifecycleManager : IAppLifecycleCoordinator
 {

@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace IIoT.Edge.Host.Bootstrap.Modules;
+namespace IIoT.Edge.Host.Bootstrap.Core.Modules;
 
 public sealed class ModulePluginManifest
 {

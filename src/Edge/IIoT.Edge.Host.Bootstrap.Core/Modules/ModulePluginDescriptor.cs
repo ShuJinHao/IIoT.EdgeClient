@@ -1,4 +1,4 @@
-namespace IIoT.Edge.Host.Bootstrap.Modules;
+namespace IIoT.Edge.Host.Bootstrap.Core.Modules;
 
 public sealed record ModulePluginDescriptor(
     string ModuleId,

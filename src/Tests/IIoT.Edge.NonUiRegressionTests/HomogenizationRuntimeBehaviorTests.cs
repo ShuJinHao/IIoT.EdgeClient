@@ -77,7 +77,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
     [Fact]
     public void HomogenizationModuleConfig_ShouldNotCarryDevelopmentDeviceOrIoSeedJson()
     {
-        var assemblyDirectory = Path.GetDirectoryName(typeof(DependencyInjection).Assembly.Location);
+        var assemblyDirectory = Path.GetDirectoryName(typeof(HomogenizationModuleBase).Assembly.Location);
         Assert.False(string.IsNullOrWhiteSpace(assemblyDirectory));
 
         var configDirectory = Path.Combine(assemblyDirectory!, "Config");

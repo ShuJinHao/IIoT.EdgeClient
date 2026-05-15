@@ -3,7 +3,7 @@ using System.IO;
 using System.Text.Json;
 using IIoT.Edge.Application.Abstractions.Modules;
 
-namespace IIoT.Edge.Host.Bootstrap.Modules;
+namespace IIoT.Edge.Host.Bootstrap.Core.Modules;
 
 public interface IModuleCatalog
 {

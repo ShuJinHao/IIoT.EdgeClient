@@ -1,6 +1,6 @@
 using IIoT.Edge.Application.Abstractions.Integration;
 
-namespace IIoT.Edge.Shell.Core;
+namespace IIoT.Edge.Host.Bootstrap.Core;
 
 public sealed class ExternalHeartbeatStateStore : IExternalHeartbeatStateStore
 {

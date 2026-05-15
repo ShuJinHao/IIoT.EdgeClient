@@ -1,4 +1,4 @@
-namespace IIoT.Edge.Shell.Core;
+namespace IIoT.Edge.Host.Bootstrap.Core;
 
 public sealed record AppStartupResult(bool Success, string? Message = null)
 {
