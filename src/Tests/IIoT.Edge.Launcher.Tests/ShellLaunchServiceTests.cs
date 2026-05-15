@@ -23,7 +23,8 @@ public sealed class ShellLaunchServiceTests
             "HomogenizationLine",
             executablePath,
             "BeakerOutline",
-            "#4D7C0F");
+            "#4D7C0F",
+            ["--start-runtime"]);
 
         try
         {
@@ -31,6 +32,7 @@ public sealed class ShellLaunchServiceTests
 
             Assert.NotNull(starter.StartInfo);
             Assert.Equal(executablePath, starter.StartInfo!.FileName);
+            Assert.Equal(["--start-runtime"], starter.StartInfo.ArgumentList);
             Assert.Equal("HomogenizationLine", starter.StartInfo.EnvironmentVariables["Shell__MachineProfile"]);
             Assert.False(starter.StartInfo.UseShellExecute);
         }

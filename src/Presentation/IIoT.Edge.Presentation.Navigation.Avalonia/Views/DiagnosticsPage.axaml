@@ -1,0 +1,116 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Navigation.Avalonia.Views.DiagnosticsPage"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:loc="clr-namespace:IIoT.Edge.UI.Avalonia.Localization;assembly=IIoT.Edge.UI.Avalonia">
+  <Border Background="#0F172A" Padding="18">
+    <DockPanel>
+      <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,14">
+        <StackPanel Spacing="4">
+          <TextBlock FontSize="20" FontWeight="SemiBold" Foreground="#F8FAFC" Text="{Binding ViewTitle}" />
+          <TextBlock Foreground="#CBD5E1" Text="{Binding ConfigurationProfileText}" TextWrapping="Wrap" />
+          <TextBlock Foreground="#94A3B8" Text="{Binding LastGeneratedText}" />
+          <TextBlock Foreground="#CBD5E1" Text="{Binding FeedbackMessage}" TextWrapping="Wrap" />
+        </StackPanel>
+        <Button Grid.Column="1" Command="{Binding RefreshCommand}" Content="{DynamicResource Navigation_Button_Query}" />
+      </Grid>
+
+      <TabControl>
+        <TabItem Header="{DynamicResource Navigation_Diagnostics_Tab_FieldSummary}">
+          <DataGrid x:Name="FieldAcceptanceSummaryGrid" ItemsSource="{Binding FieldAcceptanceRows}" AutoGenerateColumns="False" IsReadOnly="True" MinHeight="340">
+            <DataGrid.Columns>
+              <DataGridTextColumn Width="180" Binding="{Binding Scope}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_SummaryItem" />
+              <DataGridTextColumn Width="150" Binding="{Binding Status}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Status" />
+              <DataGridTextColumn Width="*" Binding="{Binding Message}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Message" />
+            </DataGrid.Columns>
+          </DataGrid>
+        </TabItem>
+
+        <TabItem Header="运行时注册">
+          <DataGrid ItemsSource="{Binding RuntimeRegistrations}" AutoGenerateColumns="False" IsReadOnly="True" MinHeight="340">
+            <DataGrid.Columns>
+              <DataGridTextColumn Width="180" Binding="{Binding ModuleId}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_ModuleId" />
+              <DataGridTextColumn Width="120" Binding="{Binding TaskCount}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Count" />
+              <DataGridTextColumn Width="*" Binding="{Binding TaskNames}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_TaskKey" />
+            </DataGrid.Columns>
+          </DataGrid>
+        </TabItem>
+
+        <TabItem Header="模块注册">
+          <DataGrid ItemsSource="{Binding ModuleRegistrations}" AutoGenerateColumns="False" IsReadOnly="True" MinHeight="340">
+            <DataGrid.Columns>
+              <DataGridTextColumn Width="160" Binding="{Binding ModuleId}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_ModuleId" />
+              <DataGridTextColumn Width="140" Binding="{Binding ProcessType}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Label_Process" />
+              <DataGridTextColumn Width="180" Binding="{Binding AssemblyName}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Message" />
+              <DataGridTextColumn Width="100" Binding="{Binding EnabledText}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Enable" />
+              <DataGridTextColumn Width="110" Binding="{Binding CellDataText}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_DataType" />
+              <DataGridTextColumn Width="120" Binding="{Binding RuntimeFactoryText}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_TaskKey" />
+              <DataGridTextColumn Width="120" Header="云端上传" Binding="{Binding CloudUploaderText}" />
+              <DataGridTextColumn Width="120" Header="MES 上传" Binding="{Binding MesUploaderText}" />
+              <DataGridTextColumn Width="120" Binding="{Binding HardwareProfileText}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Menu_HardwareConfig" />
+            </DataGrid.Columns>
+          </DataGrid>
+        </TabItem>
+
+        <TabItem Header="持久化诊断">
+          <DataGrid ItemsSource="{Binding PersistenceRows}" AutoGenerateColumns="False" IsReadOnly="True" MinHeight="340">
+            <DataGrid.Columns>
+              <DataGridTextColumn Width="180" Binding="{Binding Scope}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_DeviceName" />
+              <DataGridTextColumn Width="140" Binding="{Binding Status}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Status" />
+              <DataGridTextColumn Width="*" Binding="{Binding Message}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Message" />
+            </DataGrid.Columns>
+          </DataGrid>
+        </TabItem>
+
+        <TabItem Header="插件状态">
+          <DataGrid ItemsSource="{Binding PluginStates}" AutoGenerateColumns="False" IsReadOnly="True" MinHeight="340">
+            <DataGrid.Columns>
+              <DataGridTextColumn Width="160" Binding="{Binding ModuleId}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_ModuleId" />
+              <DataGridTextColumn Width="160" Binding="{Binding DisplayName}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_DeviceName" />
+              <DataGridTextColumn Width="140" Binding="{Binding ProcessType}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Label_Process" />
+              <DataGridTextColumn Width="100" Binding="{Binding Version}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Label_Version" />
+              <DataGridTextColumn Width="130" Binding="{Binding State}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Status" />
+              <DataGridTextColumn Width="*" Binding="{Binding Message}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Message" />
+            </DataGrid.Columns>
+          </DataGrid>
+        </TabItem>
+
+        <TabItem Header="{DynamicResource Navigation_Diagnostics_Tab_IoWriteGate}">
+          <DataGrid ItemsSource="{Binding IoWriteGateRows}" AutoGenerateColumns="False" IsReadOnly="True" MinHeight="340">
+            <DataGrid.Columns>
+              <DataGridTextColumn Width="150" Binding="{Binding Time}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Time" />
+              <DataGridTextColumn Width="160" Binding="{Binding DeviceName}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_DeviceName" />
+              <DataGridTextColumn Width="140" Binding="{Binding BusinessGroup}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_BusinessGroup" />
+              <DataGridTextColumn Width="100" Binding="{Binding Value}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_WriteValue" />
+              <DataGridTextColumn Width="*" Binding="{Binding Message}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Message" />
+            </DataGrid.Columns>
+          </DataGrid>
+        </TabItem>
+
+        <TabItem Header="{DynamicResource Navigation_Diagnostics_Tab_PlcWriteTrace}">
+          <DataGrid ItemsSource="{Binding PlcWriteTraceRows}" AutoGenerateColumns="False" IsReadOnly="True" MinHeight="340">
+            <DataGrid.Columns>
+              <DataGridTextColumn Width="150" Binding="{Binding Time}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Time" />
+              <DataGridTextColumn Width="160" Binding="{Binding DeviceName}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_DeviceName" />
+              <DataGridTextColumn Width="100" Binding="{Binding Kind}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Status" />
+              <DataGridTextColumn Width="130" Binding="{Binding StartAddress}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_PlcAddress" />
+              <DataGridTextColumn Width="90" Binding="{Binding WordCount}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Count" />
+              <DataGridTextColumn Width="*" Binding="{Binding Message}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Message" />
+            </DataGrid.Columns>
+          </DataGrid>
+        </TabItem>
+
+        <TabItem Header="问题列表">
+          <DataGrid ItemsSource="{Binding Issues}" AutoGenerateColumns="False" IsReadOnly="True" MinHeight="340">
+            <DataGrid.Columns>
+              <DataGridTextColumn Width="160" Binding="{Binding Code}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_TaskKey" />
+              <DataGridTextColumn Width="140" Binding="{Binding ModuleId}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_ModuleId" />
+              <DataGridTextColumn Width="160" Binding="{Binding DeviceName}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_DeviceName" />
+              <DataGridTextColumn Width="*" Binding="{Binding Message}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Message" />
+            </DataGrid.Columns>
+          </DataGrid>
+        </TabItem>
+      </TabControl>
+    </DockPanel>
+  </Border>
+</UserControl>

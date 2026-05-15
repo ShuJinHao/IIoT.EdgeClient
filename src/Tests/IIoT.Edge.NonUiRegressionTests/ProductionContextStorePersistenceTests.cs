@@ -234,7 +234,7 @@ public sealed class ProductionContextStorePersistenceTests
 
             var baseContext = store.GetOrCreate("PLC-H");
             baseContext.NetworkDeviceId = 9;
-            baseContext.SetStep(HomogenizationTaskKeys.Inbound, 30);
+            baseContext.SetStep("Homogenization.Inbound", 30);
             baseContext.Set("BatchNo", "B-1001");
             baseContext.AddCell("BC-1001", new NamedCellData { Label = "Display-Only" });
 
@@ -242,7 +242,7 @@ public sealed class ProductionContextStorePersistenceTests
 
             var typedContext = Assert.IsType<TestProductionContext>(upgraded);
             Assert.Equal(9, typedContext.NetworkDeviceId);
-            Assert.Equal(30, typedContext.GetStep(HomogenizationTaskKeys.Inbound));
+            Assert.Equal(30, typedContext.GetStep("Homogenization.Inbound"));
             Assert.Equal("B-1001", typedContext.Get<string>("BatchNo"));
             Assert.True(typedContext.HasCell("BC-1001"));
             Assert.Equal("Display-Only", Assert.IsType<NamedCellData>(typedContext.GetCell("BC-1001")).DisplayLabel);

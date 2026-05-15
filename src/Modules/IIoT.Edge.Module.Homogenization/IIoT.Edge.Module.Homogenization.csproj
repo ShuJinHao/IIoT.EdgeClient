@@ -4,6 +4,7 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <CodePage>65001</CodePage>
     <UseWPF>true</UseWPF>
     <IsPackable>true</IsPackable>
     <PackageId>IIoT.Edge.Module.Homogenization</PackageId>
@@ -21,10 +22,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Presentation\IIoT.Edge.Presentation.Navigation\IIoT.Edge.Presentation.Navigation.csproj" />
-    <ProjectReference Include="..\..\Runtime\IIoT.Edge.Runtime\IIoT.Edge.Runtime.csproj" />
-    <ProjectReference Include="..\..\Shared\IIoT.Edge.SharedKernel\IIoT.Edge.SharedKernel.csproj" />
     <ProjectReference Include="..\..\Shared\IIoT.Edge.UI.Shared\IIoT.Edge.UI.Shared.csproj" />
     <ProjectReference Include="..\..\Application\IIoT.Edge.Application\IIoT.Edge.Application.csproj" />
+    <ProjectReference Include="..\IIoT.Edge.Module.Homogenization.Core\IIoT.Edge.Module.Homogenization.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -32,7 +32,7 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </None>
-    <None Update="Config\homogenization.module.json">
+    <None Include="..\IIoT.Edge.Module.Homogenization.Core\Config\homogenization.module.json" Link="Config\homogenization.module.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <TargetPath>Config\homogenization.module.json</TargetPath>

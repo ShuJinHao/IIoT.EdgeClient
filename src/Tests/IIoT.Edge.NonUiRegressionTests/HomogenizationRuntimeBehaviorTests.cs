@@ -62,7 +62,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
         await contributor.EnsureConfigurationSamplesAsync();
 
         var device = Assert.Single(networkDevices.Items);
-        Assert.Equal(HomogenizationModuleIdentity.ModuleId, device.ModuleId);
+        Assert.Equal("Homogenization", device.ModuleId);
         Assert.Equal(DeviceType.PLC, device.DeviceType);
         Assert.Equal(SeedableSignals().Count, ioMappings.Items.Count);
         Assert.Equal(
@@ -99,7 +99,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
         var networkDevices = new InMemoryRepository<NetworkDeviceEntity>();
         var ioMappings = new InMemoryRepository<IoMappingEntity>();
         var device = NetworkDeviceEntity.Create("PLC-Homogenization-01", DeviceType.PLC, "127.0.0.1", 6000);
-        device.AssignModule(HomogenizationModuleIdentity.ModuleId, "Mc");
+        device.AssignModule("Homogenization", "Mc");
         device.UpdateEndpoint("127.0.0.1", 6000, null, 3000);
         device.Enable();
         networkDevices.Add(device);
@@ -158,7 +158,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
             var ioMappings = new InMemoryRepository<IoMappingEntity>();
             var runtimePaths = CreateRuntimePaths(tempDirectory);
             var device = NetworkDeviceEntity.Create("PLC-Homogenization-01", DeviceType.PLC, "127.0.0.1", 6000);
-            device.AssignModule(HomogenizationModuleIdentity.ModuleId, "Mc");
+            device.AssignModule("Homogenization", "Mc");
             device.UpdateEndpoint("127.0.0.1", 6000, null, 3000);
             device.Enable();
             networkDevices.Add(device);
@@ -251,7 +251,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
         networkDevices.Add(otherDevice);
 
         var oldHomogenizationDevice = NetworkDeviceEntity.Create("PLC-Old-H", DeviceType.PLC, "10.0.0.3", 6000);
-        oldHomogenizationDevice.AssignModule(HomogenizationModuleIdentity.ModuleId, "Mc");
+        oldHomogenizationDevice.AssignModule("Homogenization", "Mc");
         oldHomogenizationDevice.UpdateEndpoint("10.0.0.3", 6000, null, 3000);
         oldHomogenizationDevice.Enable();
         networkDevices.Add(oldHomogenizationDevice);
@@ -277,7 +277,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
         Assert.Contains(ioMappings.Items, static mapping => mapping.SignalKey == "Other.Signal");
 
         var homogenizationDevices = networkDevices.Items
-            .Where(static device => device.ModuleId == HomogenizationModuleIdentity.ModuleId)
+            .Where(static device => device.ModuleId == "Homogenization")
             .ToArray();
 
         Assert.Single(homogenizationDevices);
@@ -377,36 +377,36 @@ public sealed class HomogenizationRuntimeBehaviorTests
         Assert.NotNull(mesApi.LastRealtimeSnapshot);
         Assert.Equal(123, mesApi.LastRealtimeSnapshot!.StirringSpeed);
         Assert.Equal(26, context.LastRealtimeSnapshot!.Temperature);
-        Assert.Equal(0, context.GetStep(HomogenizationTaskKeys.Inbound));
-        Assert.Equal(0, context.GetStep(HomogenizationTaskKeys.EquipmentStatus));
-        Assert.Equal(0, context.GetStep(HomogenizationTaskKeys.Outbound));
+        Assert.Equal(0, context.GetStep("Homogenization.Inbound"));
+        Assert.Equal(0, context.GetStep("Homogenization.EquipmentStatus"));
+        Assert.Equal(0, context.GetStep("Homogenization.Outbound"));
 
         mesApi.InboundGate = NewGate();
         SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.扫码进站), TestCodeOptions.Plc.SignalTrigger);
         buffer.UpdateReadBuffer(readValues);
-        await WaitUntilAsync(() => context.GetStep(HomogenizationTaskKeys.Inbound) == 10);
+        await WaitUntilAsync(() => context.GetStep("Homogenization.Inbound") == 10);
         await WaitUntilAsync(() => mesApi.InboundTrayCodes.Contains("TRAY-9001"));
-        Assert.Equal(10, context.GetStep(HomogenizationTaskKeys.Inbound));
+        Assert.Equal(10, context.GetStep("Homogenization.Inbound"));
         mesApi.InboundGate.SetResult(true);
-        await WaitUntilAsync(() => context.GetStep(HomogenizationTaskKeys.Inbound) == 30);
+        await WaitUntilAsync(() => context.GetStep("Homogenization.Inbound") == 30);
 
         Assert.Contains("TRAY-9001", mesApi.InboundTrayCodes);
         Assert.Equal(TestCodeOptions.Plc.AckOk, buffer.GetWriteBuffer()[writeOffsets[HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.扫码进站)]]);
 
         SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.扫码进站), TestCodeOptions.Plc.SignalReset);
         buffer.UpdateReadBuffer(readValues);
-        await WaitUntilAsync(() => context.GetStep(HomogenizationTaskKeys.Inbound) == 0);
+        await WaitUntilAsync(() => context.GetStep("Homogenization.Inbound") == 0);
         Assert.Equal(TestCodeOptions.Plc.SignalReset, buffer.GetWriteBuffer()[writeOffsets[HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.扫码进站)]]);
 
         mesApi.EquipmentStatusGate = NewGate();
         SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.设备状态值), 1);
         SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.设备状态上传), TestCodeOptions.Plc.SignalTrigger);
         buffer.UpdateReadBuffer(readValues);
-        await WaitUntilAsync(() => context.GetStep(HomogenizationTaskKeys.EquipmentStatus) == 10);
+        await WaitUntilAsync(() => context.GetStep("Homogenization.EquipmentStatus") == 10);
         await WaitUntilAsync(() => mesApi.LastEquipmentStatusSnapshot is not null);
-        Assert.Equal(10, context.GetStep(HomogenizationTaskKeys.EquipmentStatus));
+        Assert.Equal(10, context.GetStep("Homogenization.EquipmentStatus"));
         mesApi.EquipmentStatusGate.SetResult(true);
-        await WaitUntilAsync(() => context.GetStep(HomogenizationTaskKeys.EquipmentStatus) == 30);
+        await WaitUntilAsync(() => context.GetStep("Homogenization.EquipmentStatus") == 30);
 
         Assert.NotNull(mesApi.LastEquipmentStatusSnapshot);
         Assert.Equal(1, mesApi.LastEquipmentStatusSnapshot!.StatusCode);
@@ -415,17 +415,17 @@ public sealed class HomogenizationRuntimeBehaviorTests
 
         SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.设备状态上传), TestCodeOptions.Plc.SignalReset);
         buffer.UpdateReadBuffer(readValues);
-        await WaitUntilAsync(() => context.GetStep(HomogenizationTaskKeys.EquipmentStatus) == 0);
+        await WaitUntilAsync(() => context.GetStep("Homogenization.EquipmentStatus") == 0);
         Assert.Equal(TestCodeOptions.Plc.SignalReset, buffer.GetWriteBuffer()[writeOffsets[HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.设备状态上传)]]);
 
         pipeline.EnqueueGate = NewGate();
         SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.出料上传), TestCodeOptions.Plc.SignalTrigger);
         buffer.UpdateReadBuffer(readValues);
-        await WaitUntilAsync(() => context.GetStep(HomogenizationTaskKeys.Outbound) == 10);
+        await WaitUntilAsync(() => context.GetStep("Homogenization.Outbound") == 10);
         await WaitUntilAsync(() => pipeline.PendingCount == 1);
-        Assert.Equal(10, context.GetStep(HomogenizationTaskKeys.Outbound));
+        Assert.Equal(10, context.GetStep("Homogenization.Outbound"));
         pipeline.EnqueueGate.SetResult(true);
-        await WaitUntilAsync(() => context.GetStep(HomogenizationTaskKeys.Outbound) == 30);
+        await WaitUntilAsync(() => context.GetStep("Homogenization.Outbound") == 30);
 
         Assert.True(pipeline.TryDequeue(out var record));
         var cellData = Assert.IsType<HomogenizationCellData>(record!.CellData);
@@ -439,7 +439,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
 
         SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.出料上传), TestCodeOptions.Plc.SignalReset);
         buffer.UpdateReadBuffer(readValues);
-        await WaitUntilAsync(() => context.GetStep(HomogenizationTaskKeys.Outbound) == 0);
+        await WaitUntilAsync(() => context.GetStep("Homogenization.Outbound") == 0);
         Assert.Equal(TestCodeOptions.Plc.SignalReset, buffer.GetWriteBuffer()[writeOffsets[HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.出料上传)]]);
 
         cancellation.Cancel();
@@ -527,16 +527,16 @@ public sealed class HomogenizationRuntimeBehaviorTests
 
         await WaitUntilAsync(() =>
             buffer.GetWriteBuffer()[writeOffsets[HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.心跳)]] == 3);
-        Assert.Equal(0, context.GetStep(HomogenizationTaskKeys.Recipe));
+        Assert.Equal(0, context.GetStep("Homogenization.Recipe"));
 
         mesApi.RecipeGate = NewGate();
         SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.工艺参数上传), TestCodeOptions.Plc.SignalTrigger);
         buffer.UpdateReadBuffer(readValues);
-        await WaitUntilAsync(() => context.GetStep(HomogenizationTaskKeys.Recipe) == 10);
+        await WaitUntilAsync(() => context.GetStep("Homogenization.Recipe") == 10);
         await WaitUntilAsync(() => mesApi.LastRecipeSnapshot is not null);
-        Assert.Equal(10, context.GetStep(HomogenizationTaskKeys.Recipe));
+        Assert.Equal(10, context.GetStep("Homogenization.Recipe"));
         mesApi.RecipeGate.SetResult(true);
-        await WaitUntilAsync(() => context.GetStep(HomogenizationTaskKeys.Recipe) == 30);
+        await WaitUntilAsync(() => context.GetStep("Homogenization.Recipe") == 30);
 
         Assert.NotNull(mesApi.LastRecipeSnapshot);
         Assert.Equal(55, mesApi.LastRecipeSnapshot!.StirringSpeed[0]);
@@ -551,7 +551,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
 
         SetWord(readValues, readOffsets, HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.工艺参数上传), TestCodeOptions.Plc.SignalReset);
         buffer.UpdateReadBuffer(readValues);
-        await WaitUntilAsync(() => context.GetStep(HomogenizationTaskKeys.Recipe) == 0);
+        await WaitUntilAsync(() => context.GetStep("Homogenization.Recipe") == 0);
         Assert.Equal(TestCodeOptions.Plc.SignalReset, buffer.GetWriteBuffer()[writeOffsets[HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.工艺参数上传)]]);
 
         cancellation.Cancel();
@@ -607,11 +607,11 @@ public sealed class HomogenizationRuntimeBehaviorTests
             {
                 Channels = new HomogenizationMesChannelOptions
                 {
-                    Inbound = HomogenizationTaskKeys.Inbound,
+                    Inbound = "Homogenization.Inbound",
                     Outbound = "Homogenization",
-                    Realtime = HomogenizationTaskKeys.Realtime,
-                    Recipe = HomogenizationTaskKeys.Recipe,
-                    EquipmentStatus = HomogenizationTaskKeys.EquipmentStatus
+                    Realtime = "Homogenization.Realtime",
+                    Recipe = "Homogenization.Recipe",
+                    EquipmentStatus = "Homogenization.EquipmentStatus"
                 },
                 EquipmentStatusTexts = new(StringComparer.OrdinalIgnoreCase)
                 {
@@ -762,11 +762,11 @@ public sealed class HomogenizationRuntimeBehaviorTests
         public Task<ModuleParamSnapshot<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>> GetAsync(
             CancellationToken cancellationToken = default)
             => Task.FromResult(new ModuleParamSnapshot<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>(
-                HomogenizationModuleIdentity.ModuleId,
+                "Homogenization",
                 EmptyGroup<HomogenizationParams.Mes>(ModuleParamCategory.Mes),
                 EmptyGroup<HomogenizationParams.Cloud>(ModuleParamCategory.Cloud),
                 new ModuleParamGroup<HomogenizationParams.Business>(
-                    HomogenizationModuleIdentity.ModuleId,
+                    "Homogenization",
                     ModuleParamCategory.Business,
                     new Dictionary<HomogenizationParams.Business, string>(),
                     new Dictionary<HomogenizationParams.Business, string?>
@@ -782,7 +782,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
         private static ModuleParamGroup<TEnum> EmptyGroup<TEnum>(ModuleParamCategory category)
             where TEnum : struct, Enum
             => new(
-                HomogenizationModuleIdentity.ModuleId,
+                "Homogenization",
                 category,
                 new Dictionary<TEnum, string>(),
                 new Dictionary<TEnum, string?>(),
@@ -794,7 +794,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
     {
         public List<string> InboundTrayCodes { get; } = [];
 
-        public string ProcessType => HomogenizationModuleIdentity.ProcessType;
+        public string ProcessType => "Homogenization";
 
         public MesUploadMode UploadMode => MesUploadMode.Single;
 

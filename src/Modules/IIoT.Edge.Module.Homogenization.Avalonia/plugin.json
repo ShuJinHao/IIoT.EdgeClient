@@ -1,0 +1,12 @@
+{
+  "moduleId": "Homogenization",
+  "displayName": "匀浆",
+  "version": "1.0.0",
+  "hostApiVersion": "1.0.0",
+  "minHostVersion": "1.0.0",
+  "maxHostVersion": "99.0.0",
+  "entryAssembly": "IIoT.Edge.Module.Homogenization.Avalonia.dll",
+  "entryType": "IIoT.Edge.Module.Homogenization.Avalonia.DependencyInjection",
+  "supportedProcessType": "Homogenization",
+  "dependencies": []
+}

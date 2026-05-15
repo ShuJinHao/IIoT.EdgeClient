@@ -10,19 +10,7 @@ public static class LauncherDependencyInjection
         this IServiceCollection services,
         string baseDirectory)
     {
-        ArgumentNullException.ThrowIfNull(services);
-        ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
-
-        services.AddSingleton<ILauncherAccountCatalogInitializer>(
-            provider => ActivatorUtilities.CreateInstance<LauncherAccountCatalogInitializer>(provider, baseDirectory));
-        services.AddSingleton<ILauncherAccountCatalog>(
-            provider => ActivatorUtilities.CreateInstance<LauncherAccountCatalog>(provider, baseDirectory));
-        services.AddSingleton<ILauncherProfileCatalog>(
-            provider => ActivatorUtilities.CreateInstance<LauncherProfileCatalog>(provider, baseDirectory));
-        services.AddSingleton<ILocalLauncherAuthService, LocalLauncherAuthService>();
-        services.AddSingleton<IProcessStarter, ProcessStarter>();
-        services.AddSingleton<IShellLaunchService, ShellLaunchService>();
-        services.AddSingleton<LauncherMainViewModel>();
+        services.AddLauncherCore(baseDirectory);
         services.AddSingleton<MainWindow>();
 
         return services;

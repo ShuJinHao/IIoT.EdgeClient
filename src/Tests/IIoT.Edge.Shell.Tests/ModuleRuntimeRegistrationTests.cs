@@ -226,7 +226,7 @@ public sealed class ModuleRuntimeRegistrationTests
         {
             Path.Combine(repoRoot, "src", "Infrastructure", "IIoT.Edge.Infrastructure.Integration", "Config", "CloudApiConfig.cs"),
             Path.Combine(repoRoot, "src", "Infrastructure", "IIoT.Edge.Infrastructure.Integration", "Config", "CloudApiEndpointProvider.cs"),
-            Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.Host.Bootstrap", "Core", "StartupDiagnosticsReportBuilder.cs")
+            Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.Host.Bootstrap.Core", "StartupDiagnosticsReportBuilder.cs")
         };
 
         foreach (var file in files)
@@ -248,12 +248,12 @@ public sealed class ModuleRuntimeRegistrationTests
             "Homogenization",
             new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase)
             {
-                [HomogenizationTaskKeys.Heartbeat] = false,
-                [HomogenizationTaskKeys.Inbound] = true,
-                [HomogenizationTaskKeys.Outbound] = false,
-                [HomogenizationTaskKeys.Recipe] = false,
-                [HomogenizationTaskKeys.EquipmentStatus] = false,
-                [HomogenizationTaskKeys.Realtime] = false
+                ["Homogenization.Heartbeat"] = false,
+                ["Homogenization.Inbound"] = true,
+                ["Homogenization.Outbound"] = false,
+                ["Homogenization.Recipe"] = false,
+                ["Homogenization.EquipmentStatus"] = false,
+                ["Homogenization.Realtime"] = false
             });
         var mappings = await harness.GetIoMappingsAsync(device.Id);
         var incompleteMappings = mappings
@@ -269,7 +269,7 @@ public sealed class ModuleRuntimeRegistrationTests
         var fault = Assert.Single(harness.PlcManager.RuntimeFaults);
         Assert.Equal(device.Id, fault.NetworkDeviceId);
         Assert.Contains("任务绑定校验失败", fault.Error, StringComparison.Ordinal);
-        Assert.Contains(HomogenizationTaskKeys.Inbound, fault.Error, StringComparison.Ordinal);
+        Assert.Contains("Homogenization.Inbound", fault.Error, StringComparison.Ordinal);
         Assert.Contains("Homogenization.Interaction.Inbound/Write", fault.Error, StringComparison.Ordinal);
     }
 

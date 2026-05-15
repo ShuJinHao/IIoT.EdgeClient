@@ -19,6 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\Edge\IIoT.Edge.Launcher.Core\IIoT.Edge.Launcher.Core.csproj" />
     <ProjectReference Include="..\..\Edge\IIoT.Edge.Launcher\IIoT.Edge.Launcher.csproj" />
   </ItemGroup>
 

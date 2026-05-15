@@ -326,6 +326,65 @@ public sealed class DiagnosticsViewModelBehaviorTests
         });
 
     [Fact]
+    public Task DiagnosticsViewModel_WhenActivatedRepeatedly_ShouldObservePermissionStateOnce()
+        => RunOnStaThreadAsync(async () =>
+        {
+            var permissionService = new FakeClientPermissionService(isLocalAdmin: false);
+            var viewModel = CreateViewModel(
+                new FakeStartupDiagnosticsStore(),
+                new FakeEdgeSyncDiagnosticsQuery(),
+                new TestAppLanguageService(),
+                deadLetterOperator: new FakeDiagnosticsDeadLetterOperator(),
+                permissionService: permissionService);
+
+            Assert.Equal(0, permissionService.SubscriberCount);
+
+            await viewModel.OnActivatedAsync();
+            Assert.Equal(1, permissionService.SubscriberCount);
+
+            await viewModel.OnActivatedAsync();
+            Assert.Equal(1, permissionService.SubscriberCount);
+
+            await viewModel.OnDeactivatedAsync();
+            Assert.Equal(0, permissionService.SubscriberCount);
+
+            await viewModel.OnDeactivatedAsync();
+            Assert.Equal(0, permissionService.SubscriberCount);
+        });
+
+    [Fact]
+    public Task DiagnosticsViewModel_WhenDeactivated_ShouldIgnorePermissionStateChanges()
+        => RunOnStaThreadAsync(async () =>
+        {
+            var permissionService = new FakeClientPermissionService(isLocalAdmin: false);
+            var viewModel = CreateViewModel(
+                new FakeStartupDiagnosticsStore(),
+                new FakeEdgeSyncDiagnosticsQuery(),
+                new TestAppLanguageService(),
+                deadLetterOperator: new FakeDiagnosticsDeadLetterOperator(),
+                permissionService: permissionService);
+            var permissionRefreshCount = 0;
+            viewModel.PropertyChanged += (_, args) =>
+            {
+                if (args.PropertyName == nameof(DiagnosticsViewModel.CanOperateDeadLetters))
+                {
+                    permissionRefreshCount++;
+                }
+            };
+
+            await viewModel.OnActivatedAsync();
+            permissionService.SetLocalAdmin(true);
+            await WaitUntilAsync(() => permissionRefreshCount == 1);
+
+            await viewModel.OnDeactivatedAsync();
+            permissionService.SetLocalAdmin(false);
+            await Task.Delay(50);
+
+            Assert.Equal(1, permissionRefreshCount);
+            Assert.Equal(0, permissionService.SubscriberCount);
+        });
+
+    [Fact]
     public Task DeadLetterCommandEntry_WhenCurrentUserIsNotLocalAdmin_ShouldNotCallConfirmationOrOperator()
         => RunOnStaThreadAsync(async () =>
         {
@@ -348,7 +407,7 @@ public sealed class DiagnosticsViewModelBehaviorTests
 
     [Fact]
     public Task DeadLetterCommands_WhenPermissionChangesToLocalAdmin_ShouldBecomeExecutable()
-        => RunOnStaThreadAsync(() =>
+        => RunOnStaThreadAsync(async () =>
         {
             var permissionService = new FakeClientPermissionService(isLocalAdmin: false);
             var viewModel = CreateViewModel(
@@ -362,12 +421,13 @@ public sealed class DiagnosticsViewModelBehaviorTests
             Assert.False(viewModel.RequeueDeadLetterCommand.CanExecute(row));
             Assert.False(viewModel.DeleteDeadLetterCommand.CanExecute(row));
 
+            await viewModel.OnActivatedAsync();
             permissionService.SetLocalAdmin(true);
 
             Assert.True(viewModel.CanOperateDeadLetters);
             Assert.True(viewModel.RequeueDeadLetterCommand.CanExecute(row));
             Assert.True(viewModel.DeleteDeadLetterCommand.CanExecute(row));
-            return Task.CompletedTask;
+            await viewModel.OnDeactivatedAsync();
         });
 
     [Fact]
@@ -555,20 +615,28 @@ public sealed class DiagnosticsViewModelBehaviorTests
 
     private sealed class FakeClientPermissionService(bool isLocalAdmin = true) : IClientPermissionService
     {
+        private event Action? PermissionStateChangedCore;
+
         public bool CanEditParams => IsLocalAdmin;
 
         public bool CanEditHardware => IsLocalAdmin;
 
         public bool IsLocalAdmin { get; private set; } = isLocalAdmin;
 
-        public event Action? PermissionStateChanged;
+        public int SubscriberCount => PermissionStateChangedCore?.GetInvocationList().Length ?? 0;
+
+        public event Action? PermissionStateChanged
+        {
+            add => PermissionStateChangedCore += value;
+            remove => PermissionStateChangedCore -= value;
+        }
 
         public bool HasPermission(string permission) => IsLocalAdmin;
 
         public void SetLocalAdmin(bool isLocalAdmin)
         {
             IsLocalAdmin = isLocalAdmin;
-            PermissionStateChanged?.Invoke();
+            PermissionStateChangedCore?.Invoke();
         }
     }
 

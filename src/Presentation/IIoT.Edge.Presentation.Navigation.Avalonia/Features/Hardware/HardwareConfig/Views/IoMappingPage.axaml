@@ -1,0 +1,71 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Navigation.Avalonia.Features.Hardware.HardwareConfig.Views.IoMappingPage"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:loc="clr-namespace:IIoT.Edge.UI.Avalonia.Localization;assembly=IIoT.Edge.UI.Avalonia">
+  <DockPanel Margin="0,12,0,0">
+    <Grid DockPanel.Dock="Top" Margin="0,0,0,10" ColumnDefinitions="*,Auto">
+      <TextBlock VerticalAlignment="Center"
+                 FontSize="15"
+                 FontWeight="SemiBold"
+                 Foreground="#E2E8F0"
+                 Text="{DynamicResource Navigation_Tab_IoMapping}" />
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+        <ComboBox Width="280"
+                  ItemsSource="{Binding CandidateIoSignals}"
+                  SelectedItem="{Binding SelectedCandidateIoSignal}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate>
+              <TextBlock Text="{Binding DisplayText}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <Button Command="{Binding OpenAddInteractionMappingDialogCommand}" Content="{DynamicResource Navigation_Button_AddInteraction}" />
+        <Button Command="{Binding OpenAddDataPointMappingDialogCommand}" Content="{DynamicResource Navigation_Button_AddDataPoint}" />
+        <Button Command="{Binding DeleteIoMappingCommand}" Content="{DynamicResource Navigation_Button_Delete}" />
+      </StackPanel>
+    </Grid>
+
+    <Grid ColumnDefinitions="190,*">
+      <Border Grid.Column="0"
+              Margin="0,0,12,0"
+              BorderBrush="#334155"
+              BorderThickness="0,0,1,0">
+        <DockPanel>
+          <TextBlock DockPanel.Dock="Top"
+                     Margin="0,0,0,8"
+                     Foreground="#94A3B8"
+                     Text="{DynamicResource Navigation_Tab_NetworkDevice}" />
+          <ListBox ItemsSource="{Binding NetworkDevices}"
+                   SelectedItem="{Binding SelectedNetworkDevice}">
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <TextBlock Padding="4,6" Text="{Binding DeviceName}" />
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </DockPanel>
+      </Border>
+
+      <DataGrid Grid.Column="1"
+                AutoGenerateColumns="False"
+                CanUserReorderColumns="False"
+                CanUserResizeColumns="True"
+                GridLinesVisibility="Horizontal"
+                IsReadOnly="False"
+                ItemsSource="{Binding FilteredIoMappings}"
+                SelectedItem="{Binding SelectedIoMapping}">
+        <DataGrid.Columns>
+          <DataGridTextColumn Width="160" Binding="{Binding SignalKey}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_TaskKey" />
+          <DataGridTextColumn Width="120" Binding="{Binding PlcAddress}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_PlcAddress" />
+          <DataGridTextColumn Width="90" Binding="{Binding AddressCount}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Count" />
+          <DataGridTextColumn Width="140" Binding="{Binding BusinessGroup}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_BusinessGroup" />
+          <DataGridTextColumn Width="160" Binding="{Binding SignalName}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_SignalName" />
+          <DataGridTextColumn Width="110" Binding="{Binding DataType}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_DataType" />
+          <DataGridTextColumn Width="100" Binding="{Binding Direction}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Direction" />
+          <DataGridCheckBoxColumn Width="110" Binding="{Binding IsAddressCountEditable}" IsReadOnly="True" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Editable" />
+        </DataGrid.Columns>
+      </DataGrid>
+    </Grid>
+  </DockPanel>
+</UserControl>

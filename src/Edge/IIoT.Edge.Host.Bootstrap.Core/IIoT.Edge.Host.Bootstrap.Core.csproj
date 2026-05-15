@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AutoMapper" />
+    <PackageReference Include="MediatR" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Application\IIoT.Edge.Application\IIoT.Edge.Application.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\IIoT.Edge.Infrastructure.DeviceComm\IIoT.Edge.Infrastructure.DeviceComm.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\IIoT.Edge.Infrastructure.Integration\IIoT.Edge.Infrastructure.Integration.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\IIoT.Edge.Infrastructure.Persistence.Dapper\IIoT.Edge.Infrastructure.Persistence.Dapper.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\IIoT.Edge.Infrastructure.Persistence.EfCore\IIoT.Edge.Infrastructure.Persistence.EfCore.csproj" />
+    <ProjectReference Include="..\..\Runtime\IIoT.Edge.Runtime\IIoT.Edge.Runtime.csproj" />
+    <ProjectReference Include="..\..\Shared\IIoT.Edge.SharedKernel\IIoT.Edge.SharedKernel.csproj" />
+  </ItemGroup>
+
+</Project>

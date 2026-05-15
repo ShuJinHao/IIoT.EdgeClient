@@ -1,0 +1,32 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Panels.Avalonia.Views.LogView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Border Background="#151E2B" Padding="12">
+    <DockPanel>
+      <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,8">
+        <ComboBox ItemsSource="{Binding LogFiles}"
+                  SelectedItem="{Binding SelectedLogFile}"
+                  MaxWidth="360">
+          <ComboBox.ItemTemplate>
+            <DataTemplate>
+              <TextBlock Text="{Binding DisplayText}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <Button Grid.Column="1" Margin="8,0,0,0" Command="{Binding RefreshCommand}" Content="{DynamicResource Shell_Action_Refresh}" />
+        <Button Grid.Column="2" Margin="8,0,0,0" Command="{Binding ClearCommand}" Content="{DynamicResource Shell_Action_Clear}" />
+      </Grid>
+      <ListBox ItemsSource="{Binding Entries}" Margin="0,8,0,0">
+        <ListBox.ItemTemplate>
+          <DataTemplate>
+            <StackPanel Spacing="2" Margin="0,0,0,8">
+              <TextBlock Foreground="#94A3B8" Text="{Binding Time, StringFormat='{}{0:HH:mm:ss}'}" />
+              <TextBlock Foreground="#E2E8F0" Text="{Binding Message}" TextWrapping="Wrap" />
+            </StackPanel>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </DockPanel>
+  </Border>
+</UserControl>

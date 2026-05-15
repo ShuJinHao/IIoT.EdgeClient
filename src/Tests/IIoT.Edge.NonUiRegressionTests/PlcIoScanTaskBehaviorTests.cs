@@ -1,4 +1,6 @@
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Plc;
+using IIoT.Edge.Application.Abstractions.Plc.Diagnostics;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Features.Hardware.IoMappings;
 using IIoT.Edge.Application.Modules.Hardware;
@@ -7,11 +9,13 @@ using IIoT.Edge.Infrastructure.DeviceComm.Barcode.Readers;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Infrastructure.DeviceComm.Signals;
+using IIoT.Edge.Runtime;
 using IIoT.Edge.Runtime.Base;
 using IIoT.Edge.Runtime.Plc;
 using IIoT.Edge.Runtime.Signals;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.Enums;
+using Microsoft.Extensions.DependencyInjection;
 using System.Diagnostics;
 
 namespace IIoT.Edge.NonUiRegressionTests;
@@ -19,6 +23,57 @@ namespace IIoT.Edge.NonUiRegressionTests;
 public sealed class PlcIoScanTaskBehaviorTests
 {
     private static readonly IPlcSignalBlockPlanner SignalBlockPlanner = new DefaultPlcSignalBlockPlanner();
+
+    [Fact]
+    public void AddEdgeRuntime_ShouldRegisterPlcIoWriteTraceStore()
+    {
+        var services = new ServiceCollection();
+
+        services.AddEdgeRuntime(CreateRuntimePaths());
+        using var provider = services.BuildServiceProvider();
+
+        Assert.IsType<PlcIoWriteTraceStore>(provider.GetRequiredService<IPlcIoWriteTraceStore>());
+    }
+
+    [Fact]
+    public async Task PlcIoWriteTraceStore_WhenRecordedConcurrently_ShouldKeepBoundedReadOnlySnapshot()
+    {
+        var store = new PlcIoWriteTraceStore();
+        var mutableSignalKeys = new[] { "Signal.A" };
+
+        store.Record(new PlcIoWriteTraceEntry(
+            DateTimeOffset.UtcNow,
+            PlcIoWriteTraceKind.Attempt,
+            1,
+            "PLC-A",
+            "D100",
+            1,
+            mutableSignalKeys,
+            null));
+        mutableSignalKeys[0] = "Signal.Changed";
+
+        var firstEntry = Assert.Single(store.GetRecent());
+        Assert.Equal("Signal.A", Assert.Single(firstEntry.SignalKeys));
+        Assert.Throws<NotSupportedException>(() => ((IList<string>)firstEntry.SignalKeys)[0] = "Signal.Changed");
+
+        var tasks = Enumerable.Range(0, 260)
+            .Select(index => Task.Run(() => store.Record(new PlcIoWriteTraceEntry(
+                DateTimeOffset.UtcNow,
+                PlcIoWriteTraceKind.Success,
+                index % 3,
+                $"PLC-{index % 3}",
+                $"D{index}",
+                1,
+                [$"Signal.{index}"],
+                null))))
+            .ToArray();
+
+        await Task.WhenAll(tasks);
+
+        var recent = store.GetRecent(500);
+        Assert.Equal(200, recent.Count);
+        Assert.All(recent, entry => Assert.NotEmpty(entry.SignalKeys));
+    }
 
     [Fact]
     public void ProductionContextSignalBindingStore_ShouldPreserveIoDisplayMetadata()
@@ -343,6 +398,157 @@ public sealed class PlcIoScanTaskBehaviorTests
     }
 
     [Fact]
+    public async Task PlcIoScanTask_WhenWriteSucceeds_ShouldRecordAttemptAndSuccessTracePerBlock()
+    {
+        var plcService = new ScriptedPlcService();
+        plcService.ConnectOutcomes.Enqueue(true);
+        var traceStore = new PlcIoWriteTraceStore();
+
+        var dataStore = new PlcDataStore();
+        dataStore.Register(12, readSize: 0, writeSize: 0);
+        var buffer = Assert.IsType<PlcBuffer>(dataStore.GetBuffer(12));
+        buffer.SetWriteValue("Write-D600", 0, 1);
+        buffer.SetWriteValue("Write-D603", 0, 4);
+
+        var interaction = new PlcIoScanTask(
+            plcService,
+            dataStore,
+            CreateDevice(12, "PLC-TRACE-OK"),
+            [
+                CreateIoMapping(12, "Write", "D600", 1, sortOrder: 1),
+                CreateIoMapping(12, "Write", "D603", 1, sortOrder: 4)
+            ],
+            new FakeLogService(),
+            SignalBlockPlanner,
+            runtimePolicy: new PlcIoRuntimePolicy(WriteGapPolicy: PlcIoWriteGapPolicy.Split),
+            writeTraceStore: traceStore);
+
+        await interaction.ExecuteOneCycleAsync();
+
+        Assert.Equal(["D600", "D603"], plcService.WriteRequests.Select(static request => request.Address));
+        var records = traceStore.GetRecent(10).Reverse().ToArray();
+        Assert.Equal(
+            [
+                PlcIoWriteTraceKind.Attempt,
+                PlcIoWriteTraceKind.Success,
+                PlcIoWriteTraceKind.Attempt,
+                PlcIoWriteTraceKind.Success
+            ],
+            records.Select(static record => record.Kind));
+        Assert.Equal(["D600", "D600", "D603", "D603"], records.Select(static record => record.StartAddress));
+        Assert.All(records, record => Assert.Equal(TimeSpan.Zero, record.OccurredAt.Offset));
+        Assert.Contains("Write-D600", records[0].SignalKeys);
+        Assert.Contains("Write-D603", records[2].SignalKeys);
+    }
+
+    [Fact]
+    public async Task PlcIoScanTask_WhenWriteFails_ShouldRecordFailureTraceAndPreserveWriteException()
+    {
+        var plcService = new ScriptedPlcService();
+        plcService.ConnectOutcomes.Enqueue(true);
+        var writeException = new TimeoutException("write timeout");
+        plcService.WriteOutcomes.Enqueue(writeException);
+        var traceStore = new PlcIoWriteTraceStore();
+
+        var dataStore = new PlcDataStore();
+        dataStore.Register(13, readSize: 0, writeSize: 0);
+        var buffer = Assert.IsType<PlcBuffer>(dataStore.GetBuffer(13));
+        buffer.SetWriteValue("Write-D700", 0, 8);
+
+        var interaction = new PlcIoScanTask(
+            plcService,
+            dataStore,
+            CreateDevice(13, "PLC-TRACE-FAIL"),
+            [CreateIoMapping(13, "Write", "D700", 1)],
+            new FakeLogService(),
+            SignalBlockPlanner,
+            writeTraceStore: traceStore);
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => interaction.ExecuteOneCycleAsync());
+
+        Assert.Same(writeException, failure.InnerException);
+        Assert.Equal(1, plcService.WriteAsyncCallCount);
+        var records = traceStore.GetRecent(10).Reverse().ToArray();
+        Assert.Equal([PlcIoWriteTraceKind.Attempt, PlcIoWriteTraceKind.Failed], records.Select(static record => record.Kind));
+        Assert.Equal("D700", records[1].StartAddress);
+        Assert.Equal("write timeout", records[1].ErrorMessage);
+    }
+
+    [Fact]
+    public async Task PlcIoScanTask_ShouldRecordAttemptAndSuccessWriteTraceWithoutChangingBlockWrite()
+    {
+        var plcService = new ScriptedPlcService();
+        plcService.ConnectOutcomes.Enqueue(true);
+        var traceStore = new PlcIoWriteTraceStore();
+
+        var dataStore = new PlcDataStore();
+        dataStore.Register(11, readSize: 0, writeSize: 0);
+        var buffer = Assert.IsType<PlcBuffer>(dataStore.GetBuffer(11));
+        buffer.SetWriteValue("Write-D610", 0, 17);
+
+        var interaction = new PlcIoScanTask(
+            plcService,
+            dataStore,
+            CreateDevice(11, "PLC-TRACE"),
+            [CreateIoMapping(11, "Write", "D610", 1)],
+            new FakeLogService(),
+            SignalBlockPlanner,
+            writeTraceStore: traceStore);
+
+        await interaction.ExecuteOneCycleAsync();
+
+        var request = Assert.Single(plcService.WriteRequests);
+        Assert.Equal("D610", request.Address);
+        Assert.Equal([(ushort)17], request.Data);
+
+        var traces = traceStore.GetRecent();
+        Assert.Equal(2, traces.Count);
+        var attempt = Assert.Single(traces, item => item.Kind == PlcIoWriteTraceKind.Attempt);
+        var success = Assert.Single(traces, item => item.Kind == PlcIoWriteTraceKind.Success);
+        Assert.Equal(11, success.DeviceId);
+        Assert.Equal("PLC-TRACE", success.DeviceName);
+        Assert.Equal("D610", success.StartAddress);
+        Assert.Equal(1, success.WordCount);
+        Assert.Equal(["Write-D610"], success.SignalKeys);
+        Assert.Null(success.ErrorMessage);
+        Assert.Equal(attempt.StartAddress, success.StartAddress);
+    }
+
+    [Fact]
+    public async Task PlcIoScanTask_ShouldRecordFailedWriteTraceAndPreserveFailureSemantics()
+    {
+        var plcService = new ScriptedPlcService();
+        plcService.ConnectOutcomes.Enqueue(true);
+        plcService.WriteOutcomes.Enqueue(new TimeoutException("write timeout"));
+        var traceStore = new PlcIoWriteTraceStore();
+
+        var dataStore = new PlcDataStore();
+        dataStore.Register(12, readSize: 0, writeSize: 0);
+        var buffer = Assert.IsType<PlcBuffer>(dataStore.GetBuffer(12));
+        buffer.SetWriteValue("Write-D620", 0, 21);
+
+        var interaction = new PlcIoScanTask(
+            plcService,
+            dataStore,
+            CreateDevice(12, "PLC-TRACE-FAIL"),
+            [CreateIoMapping(12, "Write", "D620", 1)],
+            new FakeLogService(),
+            SignalBlockPlanner,
+            writeTraceStore: traceStore);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => interaction.ExecuteOneCycleAsync());
+
+        Assert.Equal(1, plcService.WriteAsyncCallCount);
+        Assert.Equal(1, plcService.DisconnectCallCount);
+        var traces = traceStore.GetRecent();
+        Assert.Contains(traces, item => item.Kind == PlcIoWriteTraceKind.Attempt);
+        var failed = Assert.Single(traces, item => item.Kind == PlcIoWriteTraceKind.Failed);
+        Assert.Equal("D620", failed.StartAddress);
+        Assert.Contains("write timeout", failed.ErrorMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain(traces, item => item.Kind == PlcIoWriteTraceKind.Success);
+    }
+
+    [Fact]
     public async Task PlcIoScanTask_ShouldOnlyScanRealtimeIoCategory()
     {
         var plcService = new ScriptedPlcService();
@@ -431,6 +637,24 @@ public sealed class PlcIoScanTaskBehaviorTests
         entity.WithId(id);
         entity.AssignModule("TestModule", "S7");
         return entity;
+    }
+
+    private static EdgeRuntimePaths CreateRuntimePaths()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"iiot-edge-test-{Guid.NewGuid():N}");
+        return new EdgeRuntimePaths(
+            root,
+            "test",
+            root,
+            Path.Combine(root, "db"),
+            Path.Combine(root, "context"),
+            Path.Combine(root, "recipes"),
+            Path.Combine(root, "excel"),
+            Path.Combine(root, "diagnostics"),
+            Path.Combine(root, "logs"),
+            Path.Combine(root, "device-cache.json"),
+            Path.Combine(root, "crash.log"),
+            Path.Combine(root, "crash-fallback.log"));
     }
 
     private static IoMappingEntity CreateIoMapping(

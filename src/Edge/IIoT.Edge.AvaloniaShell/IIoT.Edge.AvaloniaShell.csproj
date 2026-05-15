@@ -1,0 +1,68 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
+    <BaseOutputPath>..\..\..\..\publish\</BaseOutputPath>
+    <OutputPath>..\..\..\..\publish\$(Configuration)\avalonia-shell\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <EnableLocalAvaloniaPluginModuleBuild Condition="'$(EnableLocalAvaloniaPluginModuleBuild)' == ''">true</EnableLocalAvaloniaPluginModuleBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Controls.DataGrid" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Fonts.Inter" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="DialogHost.Avalonia" />
+    <PackageReference Include="Dock.Avalonia" />
+    <PackageReference Include="Dock.Avalonia.Themes.Fluent" />
+    <PackageReference Include="Dock.Model.Mvvm" />
+    <PackageReference Include="Material.Icons.Avalonia" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Application\IIoT.Edge.Application\IIoT.Edge.Application.csproj" />
+    <ProjectReference Include="..\IIoT.Edge.Host.Bootstrap.Core\IIoT.Edge.Host.Bootstrap.Core.csproj" />
+    <ProjectReference Include="..\IIoT.Edge.Host.Bootstrap.Avalonia\IIoT.Edge.Host.Bootstrap.Avalonia.csproj" />
+    <ProjectReference Include="..\..\Presentation\IIoT.Edge.Presentation.Shell.Avalonia\IIoT.Edge.Presentation.Shell.Avalonia.csproj" />
+    <ProjectReference Include="..\..\Shared\IIoT.Edge.SharedKernel\IIoT.Edge.SharedKernel.csproj" />
+    <ProjectReference Include="..\..\Shared\IIoT.Edge.UI.Avalonia\IIoT.Edge.UI.Avalonia.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(EnableLocalAvaloniaPluginModuleBuild)' == 'true'">
+    <AvaloniaPluginModuleProject Include="..\..\Modules\**\*.Avalonia.csproj" />
+  </ItemGroup>
+
+  <Target Name="ResolveAvaloniaPluginModuleArtifacts" Condition="'$(EnableLocalAvaloniaPluginModuleBuild)' == 'true'">
+    <MSBuild Projects="@(AvaloniaPluginModuleProject)" Targets="GetPluginArtifacts" BuildInParallel="false" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+      <Output TaskParameter="TargetOutputs" ItemName="AvaloniaPluginModuleArtifact" />
+    </MSBuild>
+    <ItemGroup>
+      <AvaloniaPluginModuleArtifact Include="..\..\Modules\IIoT.Edge.Module.Homogenization.Avalonia\bin\$(Configuration)\$(TargetFramework)\**\*.*"
+                                    Exclude="..\..\Modules\IIoT.Edge.Module.Homogenization.Avalonia\bin\$(Configuration)\$(TargetFramework)\ref\**;..\..\Modules\IIoT.Edge.Module.Homogenization.Avalonia\bin\$(Configuration)\$(TargetFramework)\refint\**;..\..\Modules\IIoT.Edge.Module.Homogenization.Avalonia\bin\$(Configuration)\$(TargetFramework)\**\*.nupkg;..\..\Modules\IIoT.Edge.Module.Homogenization.Avalonia\bin\$(Configuration)\$(TargetFramework)\plugin.json">
+        <ModuleId>Homogenization</ModuleId>
+      </AvaloniaPluginModuleArtifact>
+      <AvaloniaPluginModuleArtifact Include="..\..\Modules\IIoT.Edge.Module.Homogenization.Avalonia\plugin.json">
+        <ModuleId>Homogenization</ModuleId>
+      </AvaloniaPluginModuleArtifact>
+    </ItemGroup>
+  </Target>
+
+  <Target Name="CopyAvaloniaPluginModulesToBuildOutput" AfterTargets="Build" DependsOnTargets="ResolveAvaloniaPluginModuleArtifacts" Condition="'$(EnableLocalAvaloniaPluginModuleBuild)' == 'true'">
+    <MakeDir Directories="@(AvaloniaPluginModuleArtifact -> '$(TargetDir)Modules\%(ModuleId)\%(RecursiveDir)')" Condition="'@(AvaloniaPluginModuleArtifact)' != ''" />
+    <Copy SourceFiles="@(AvaloniaPluginModuleArtifact)" DestinationFiles="@(AvaloniaPluginModuleArtifact -> '$(TargetDir)Modules\%(ModuleId)\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" Condition="'@(AvaloniaPluginModuleArtifact)' != ''" />
+  </Target>
+
+  <Target Name="CopyAvaloniaPluginModulesToPublishOutput" AfterTargets="Publish" DependsOnTargets="ResolveAvaloniaPluginModuleArtifacts" Condition="'$(EnableLocalAvaloniaPluginModuleBuild)' == 'true' and '$(PublishDir)' != ''">
+    <MakeDir Directories="@(AvaloniaPluginModuleArtifact -> '$(PublishDir)Modules\%(ModuleId)\%(RecursiveDir)')" Condition="'@(AvaloniaPluginModuleArtifact)' != ''" />
+    <Copy SourceFiles="@(AvaloniaPluginModuleArtifact)" DestinationFiles="@(AvaloniaPluginModuleArtifact -> '$(PublishDir)Modules\%(ModuleId)\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" Condition="'@(AvaloniaPluginModuleArtifact)' != ''" />
+  </Target>
+
+</Project>

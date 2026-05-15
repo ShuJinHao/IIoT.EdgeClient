@@ -26,7 +26,7 @@ public sealed class HomogenizationDataViewModel : PresentationViewModelBase
             moduleOptions.Value.Presentation.DataViewRefreshIntervalMs);
     }
 
-    public override string ViewId => StandardModuleViewIds.Create(HomogenizationModuleIdentity.ModuleId).DataView;
+    public override string ViewId => StandardModuleViewIds.Create(DependencyInjection.ModuleKey).DataView;
 
     public override string ViewTitle => HomogenizationText.Get("Homogenization_Title_Data", "匀浆产品数据");
 

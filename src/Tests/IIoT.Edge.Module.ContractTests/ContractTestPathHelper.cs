@@ -87,7 +87,17 @@ internal static class ContractTestPathHelper
         var repoRoot = FindRepoRoot();
         return moduleId switch
         {
-            HomogenizationModuleIdentity.ModuleId => Path.Combine(repoRoot, "src", "Modules", "IIoT.Edge.Module.Homogenization"),
+            "Homogenization" => Path.Combine(repoRoot, "src", "Modules", "IIoT.Edge.Module.Homogenization"),
+            _ => throw new InvalidOperationException($"Unsupported module id '{moduleId}'.")
+        };
+    }
+
+    public static string GetModuleCoreSourceDirectory(string moduleId)
+    {
+        var repoRoot = FindRepoRoot();
+        return moduleId switch
+        {
+            "Homogenization" => Path.Combine(repoRoot, "src", "Modules", "IIoT.Edge.Module.Homogenization.Core"),
             _ => throw new InvalidOperationException($"Unsupported module id '{moduleId}'.")
         };
     }

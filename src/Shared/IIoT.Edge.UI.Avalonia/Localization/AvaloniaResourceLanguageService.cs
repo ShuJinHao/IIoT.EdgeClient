@@ -1,0 +1,85 @@
+namespace IIoT.Edge.UI.Avalonia.Localization;
+
+public sealed class AvaloniaResourceLanguageService : IAvaloniaLanguageService
+{
+    private readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> _resources;
+    private readonly string _defaultCulture;
+    private readonly string _toggleResourceKey;
+
+    public AvaloniaResourceLanguageService(
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> resources,
+        string defaultCulture = "zh-CN",
+        string toggleResourceKey = "Shell_Action_Language")
+    {
+        _resources = resources;
+        _defaultCulture = defaultCulture;
+        _toggleResourceKey = toggleResourceKey;
+        CultureName = defaultCulture;
+    }
+
+    public AvaloniaResourceLanguageService(
+        IEnumerable<IAvaloniaResourceContributor> contributors,
+        string defaultCulture = "zh-CN",
+        string toggleResourceKey = "Shell_Action_Language")
+        : this(Merge(contributors), defaultCulture, toggleResourceKey)
+    {
+    }
+
+    public string CultureName { get; private set; }
+
+    public string ToggleLabel => GetText(_toggleResourceKey);
+
+    public string GetText(string key)
+    {
+        return _resources.TryGetValue(CultureName, out var current) && current.TryGetValue(key, out var value)
+            ? value
+            : key;
+    }
+
+    public void Apply(string cultureName)
+    {
+        var nextCulture = _resources.ContainsKey(cultureName) ? cultureName : _defaultCulture;
+        CultureName = nextCulture;
+
+        if (global::Avalonia.Application.Current is not { } application)
+        {
+            return;
+        }
+
+        foreach (var pair in _resources[nextCulture])
+        {
+            application.Resources[pair.Key] = pair.Value;
+        }
+    }
+
+    public void Toggle()
+    {
+        Apply(CultureName.Equals("zh-CN", StringComparison.OrdinalIgnoreCase) ? "en-US" : "zh-CN");
+    }
+
+    private static IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> Merge(
+        IEnumerable<IAvaloniaResourceContributor> contributors)
+    {
+        var merged = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var contributor in contributors)
+        {
+            var cultureResources = contributor.GetResources();
+            if (!merged.TryGetValue(contributor.CultureName, out var target))
+            {
+                target = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                merged[contributor.CultureName] = target;
+            }
+
+            foreach (var pair in cultureResources)
+            {
+                target[pair.Key] = pair.Value;
+            }
+        }
+
+        return merged.ToDictionary(
+            pair => pair.Key,
+            pair => (IReadOnlyDictionary<string, string>)pair.Value,
+            StringComparer.OrdinalIgnoreCase);
+    }
+}

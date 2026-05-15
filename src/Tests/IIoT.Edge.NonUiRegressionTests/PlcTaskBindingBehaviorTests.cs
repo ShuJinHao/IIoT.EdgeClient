@@ -191,10 +191,10 @@ public sealed class PlcTaskBindingBehaviorTests
             provider,
             buffer,
             context,
-            new HashSet<string>([HomogenizationTaskKeys.Heartbeat], StringComparer.OrdinalIgnoreCase));
+            new HashSet<string>(["Homogenization.Heartbeat"], StringComparer.OrdinalIgnoreCase));
 
         var task = Assert.Single(tasks);
-        Assert.Equal(HomogenizationTaskKeys.Heartbeat, task.TaskName);
+        Assert.Equal("Homogenization.Heartbeat", task.TaskName);
     }
 
     [Fact]

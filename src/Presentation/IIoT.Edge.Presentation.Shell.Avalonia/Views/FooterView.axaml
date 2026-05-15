@@ -1,0 +1,18 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Shell.Avalonia.Views.FooterView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Border Background="#111827" BorderBrush="#243244" BorderThickness="0,1,0,0" Padding="12,0">
+    <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto" Height="30">
+      <TextBlock VerticalAlignment="Center" Foreground="#94A3B8" Text="{DynamicResource Shell_Footer_Clock}" />
+      <TextBlock Grid.Column="1" Margin="6,0,18,0" VerticalAlignment="Center" Foreground="#E2E8F0" Text="{Binding CurrentTime}" />
+      <TextBlock Grid.Column="2" VerticalAlignment="Center" Foreground="#94A3B8" Text="{DynamicResource Shell_Footer_Status}" />
+      <TextBlock Grid.Column="3" Margin="6,0,12,0" VerticalAlignment="Center" Foreground="#E2E8F0" Text="{Binding RuntimeStatusText}" />
+      <TextBlock Grid.Column="4" VerticalAlignment="Center" Foreground="#94A3B8" Text="{Binding DiagnosticsSummary}" TextTrimming="CharacterEllipsis" />
+      <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+        <TextBlock Foreground="#94A3B8" Text="{DynamicResource Shell_Footer_Uptime}" />
+        <TextBlock Foreground="#E2E8F0" Text="{Binding UpTime}" />
+      </StackPanel>
+    </Grid>
+  </Border>
+</UserControl>

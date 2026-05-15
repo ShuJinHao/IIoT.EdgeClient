@@ -1,0 +1,43 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Navigation.Avalonia.Features.Hardware.HardwareConfig.Views.NetworkDevicePage"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:loc="clr-namespace:IIoT.Edge.UI.Avalonia.Localization;assembly=IIoT.Edge.UI.Avalonia">
+  <DockPanel Margin="0,12,0,0">
+    <Grid DockPanel.Dock="Top" Margin="0,0,0,10" ColumnDefinitions="*,Auto">
+      <TextBlock VerticalAlignment="Center"
+                 FontSize="15"
+                 FontWeight="SemiBold"
+                 Foreground="#E2E8F0"
+                 Text="{DynamicResource Navigation_Tab_NetworkDevice}" />
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+        <Button Command="{Binding AddNetworkDeviceCommand}" Content="{DynamicResource Navigation_Button_Add}" />
+        <Button Command="{Binding DeleteNetworkDeviceCommand}" Content="{DynamicResource Navigation_Button_Delete}" />
+      </StackPanel>
+    </Grid>
+
+    <DataGrid x:Name="NetworkDeviceGrid"
+              AutoGenerateColumns="False"
+              CanUserReorderColumns="False"
+              CanUserResizeColumns="True"
+              GridLinesVisibility="Horizontal"
+              IsReadOnly="False"
+              ItemsSource="{Binding NetworkDevices}"
+              SelectedItem="{Binding SelectedNetworkDevice}">
+      <DataGrid.Columns>
+        <DataGridTextColumn Width="130" Binding="{Binding DeviceName}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_DeviceName" />
+        <DataGridTextColumn Width="110" Binding="{Binding DeviceType}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_DeviceType" />
+        <DataGridTextColumn Width="120" Binding="{Binding DeviceModel}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_DeviceModel" />
+        <DataGridTextColumn Width="130" Binding="{Binding ModuleId}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_ModuleId" />
+        <DataGridTextColumn Width="140" Binding="{Binding IpAddress}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_IpAddress" />
+        <DataGridTextColumn Width="90" Binding="{Binding Port1}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Port1" />
+        <DataGridTextColumn Width="90" Binding="{Binding Port2}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Port2" />
+        <DataGridTextColumn Width="110" Binding="{Binding SendCmd1}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Command1" />
+        <DataGridTextColumn Width="110" Binding="{Binding SendCmd2}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Command2" />
+        <DataGridTextColumn Width="110" Binding="{Binding ConnectTimeout}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_TimeoutMs" />
+        <DataGridCheckBoxColumn Width="80" Binding="{Binding IsEnabled}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Enable" />
+        <DataGridTextColumn Width="*" Binding="{Binding Remark}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Remark" />
+      </DataGrid.Columns>
+    </DataGrid>
+  </DockPanel>
+</UserControl>

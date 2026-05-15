@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
+    <IsPackable>true</IsPackable>
+    <PackageId>IIoT.Edge.Module.Homogenization.Avalonia</PackageId>
+    <IsEdgePluginModule>true</IsEdgePluginModule>
+    <PluginModuleId>Homogenization</PluginModuleId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Controls.DataGrid" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\IIoT.Edge.Module.Homogenization.Core\IIoT.Edge.Module.Homogenization.Core.csproj" />
+    <ProjectReference Include="..\..\Shared\IIoT.Edge.UI.Avalonia\IIoT.Edge.UI.Avalonia.csproj" />
+    <ProjectReference Include="..\..\Application\IIoT.Edge.Application\IIoT.Edge.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="plugin.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+    <None Include="..\IIoT.Edge.Module.Homogenization.Core\Config\homogenization.module.json" Link="Config\homogenization.module.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>Config\homogenization.module.json</TargetPath>
+    </None>
+  </ItemGroup>
+
+</Project>

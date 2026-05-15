@@ -7,6 +7,7 @@ using IIoT.Edge.Application.Abstractions.DataPipeline.SyncTask;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Abstractions.Plc.Diagnostics;
 using IIoT.Edge.Runtime.Context;
 using IIoT.Edge.Runtime.DataPipeline.Consumers;
 using IIoT.Edge.Runtime.DataPipeline.Services;
@@ -40,6 +41,7 @@ public static class DependencyInjection
         services.AddSingleton<IProductionContextStore>(sp => sp.GetRequiredService<ProductionContextStore>());
         services.AddSingleton<ITodayCapacityStore, TodayCapacityStore>();
         services.AddSingleton<IPlcSignalBlockPlanner, DefaultPlcSignalBlockPlanner>();
+        services.TryAddSingleton<IPlcIoWriteTraceStore, PlcIoWriteTraceStore>();
 
         AddDataPipelineRuntimeCore(services);
 
