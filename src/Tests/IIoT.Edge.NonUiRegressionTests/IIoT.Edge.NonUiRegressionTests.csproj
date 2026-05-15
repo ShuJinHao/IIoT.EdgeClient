@@ -24,7 +24,7 @@
     <ProjectReference Include="..\..\Infrastructure\IIoT.Edge.Infrastructure.Integration\IIoT.Edge.Infrastructure.Integration.csproj" />
     <ProjectReference Include="..\..\Infrastructure\IIoT.Edge.Infrastructure.Persistence.EfCore\IIoT.Edge.Infrastructure.Persistence.EfCore.csproj" />
     <ProjectReference Include="..\..\Infrastructure\IIoT.Edge.Infrastructure.Persistence.Dapper\IIoT.Edge.Infrastructure.Persistence.Dapper.csproj" />
-    <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.Homogenization.Core\IIoT.Edge.Module.Homogenization.Core.csproj" />
+    <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.Homogenization\IIoT.Edge.Module.Homogenization.csproj" />
   </ItemGroup>
 
 </Project>

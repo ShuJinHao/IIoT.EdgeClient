@@ -4,7 +4,7 @@ using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Modules.Mes;
 using System.Text.Json;
 using IIoT.Edge.Module.Homogenization;
-using HomogenizationAvaloniaModule = IIoT.Edge.Module.Homogenization.Avalonia.DependencyInjection;
+using HomogenizationAvaloniaModule = IIoT.Edge.Module.Homogenization.DependencyInjection;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Parameters;
 using IIoT.Edge.Module.Homogenization.Integration;
@@ -73,10 +73,10 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<H
         Assert.Equal("Homogenization", root.GetProperty("moduleId").GetString());
         Assert.Equal("Homogenization", root.GetProperty("supportedProcessType").GetString());
         Assert.Equal(
-            "IIoT.Edge.Module.Homogenization.Avalonia.DependencyInjection",
+            "IIoT.Edge.Module.Homogenization.DependencyInjection",
             root.GetProperty("entryType").GetString());
         Assert.Equal(
-            "IIoT.Edge.Module.Homogenization.Avalonia.dll",
+            "IIoT.Edge.Module.Homogenization.dll",
             root.GetProperty("entryAssembly").GetString());
     }
 
@@ -143,9 +143,9 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<H
     [Fact]
     public void HomogenizationAvaloniaResources_ShouldContainSameNonEmptyKeys()
     {
-        var zhKeys = new IIoT.Edge.Module.Homogenization.Avalonia.Localization.HomogenizationAvaloniaZhCnResources()
+        var zhKeys = new IIoT.Edge.Module.Homogenization.Localization.HomogenizationAvaloniaZhCnResources()
             .GetResources();
-        var enKeys = new IIoT.Edge.Module.Homogenization.Avalonia.Localization.HomogenizationAvaloniaEnUsResources()
+        var enKeys = new IIoT.Edge.Module.Homogenization.Localization.HomogenizationAvaloniaEnUsResources()
             .GetResources();
 
         Assert.NotEmpty(zhKeys);

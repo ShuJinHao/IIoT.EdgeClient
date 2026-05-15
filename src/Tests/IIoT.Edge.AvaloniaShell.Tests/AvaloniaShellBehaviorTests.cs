@@ -18,9 +18,9 @@ using IIoT.Edge.Application.Features.Hardware.HardwareConfigView;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Models;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.AvaloniaShell.ViewModels;
-using IIoT.Edge.Host.Bootstrap.Avalonia;
-using IIoT.Edge.Module.Homogenization.Avalonia.Localization;
-using IIoT.Edge.Module.Homogenization.Avalonia.Presentation;
+using IIoT.Edge.Host.Bootstrap;
+using IIoT.Edge.Module.Homogenization.Localization;
+using IIoT.Edge.Module.Homogenization.Presentation;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Runtime;
@@ -478,7 +478,7 @@ public sealed class AvaloniaShellBehaviorTests
             .AddSingleton<MainWindowViewModel>()
             .BuildServiceProvider();
 
-        IIoT.Edge.Host.Bootstrap.Avalonia.DependencyInjection.RegisterAvaloniaViews(services);
+        IIoT.Edge.Host.Bootstrap.DependencyInjection.RegisterAvaloniaViews(services);
         return services;
     }
 

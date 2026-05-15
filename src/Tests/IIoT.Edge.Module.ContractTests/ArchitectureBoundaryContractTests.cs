@@ -21,8 +21,8 @@ public sealed class ArchitectureBoundaryContractTests
             Path.Combine(repoRoot, "src", "Presentation"),
             Path.Combine(repoRoot, "src", "Shared", "IIoT.Edge.SharedKernel"),
             Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.AvaloniaShell"),
-            Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.Host.Bootstrap.Avalonia"),
-            Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.Host.Bootstrap.Core")
+            Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.Host.Bootstrap"),
+            Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.Host.Bootstrap")
         };
 
         var offendingFiles = directories

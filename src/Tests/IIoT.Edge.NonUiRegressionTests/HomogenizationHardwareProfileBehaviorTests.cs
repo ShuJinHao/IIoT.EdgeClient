@@ -152,7 +152,7 @@ public sealed class HomogenizationHardwareProfileBehaviorTests
             root,
             "src",
             "Modules",
-            "IIoT.Edge.Module.Homogenization.Core",
+            "IIoT.Edge.Module.Homogenization",
             "Config",
             "Hardware",
             "HomogenizationPlcSignals.cs");

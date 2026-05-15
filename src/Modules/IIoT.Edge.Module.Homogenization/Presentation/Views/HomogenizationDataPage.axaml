@@ -1,0 +1,27 @@
+<UserControl
+    x:Class="IIoT.Edge.Module.Homogenization.Presentation.Views.HomogenizationDataPage"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:loc="clr-namespace:IIoT.Edge.UI.Avalonia.Localization;assembly=IIoT.Edge.UI.Avalonia">
+  <Border Background="#0F172A" Padding="18">
+    <DockPanel>
+      <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,12">
+        <TextBlock FontSize="20" FontWeight="SemiBold" Foreground="#F8FAFC" Text="{DynamicResource Homogenization_Title_Data}" />
+        <TextBlock FontSize="13" Foreground="#CBD5E1" Text="{Binding StatusText}" />
+      </StackPanel>
+      <DataGrid ItemsSource="{Binding Records}" AutoGenerateColumns="False" IsReadOnly="True">
+        <DataGrid.Columns>
+          <DataGridTextColumn Width="*" Binding="{Binding TrayCode}" loc:LocalizedDataGrid.HeaderResourceKey="Homogenization_Column_TrayCode" />
+          <DataGridTextColumn Width="150" Binding="{Binding InboundTime}" loc:LocalizedDataGrid.HeaderResourceKey="Homogenization_Column_InboundTime" />
+          <DataGridTextColumn Width="150" Binding="{Binding OutboundTime}" loc:LocalizedDataGrid.HeaderResourceKey="Homogenization_Column_OutboundTime" />
+          <DataGridTextColumn Width="120" Binding="{Binding Status}" loc:LocalizedDataGrid.HeaderResourceKey="Homogenization_Column_Status" />
+          <DataGridTextColumn Width="110" Binding="{Binding StirringSpeed}" loc:LocalizedDataGrid.HeaderResourceKey="Homogenization_Column_StirringSpeed" />
+          <DataGridTextColumn Width="100" Binding="{Binding Temperature}" loc:LocalizedDataGrid.HeaderResourceKey="Homogenization_Column_Temperature" />
+          <DataGridTextColumn Width="100" Binding="{Binding Vacuum}" loc:LocalizedDataGrid.HeaderResourceKey="Homogenization_Column_Vacuum" />
+          <DataGridTextColumn Width="110" Binding="{Binding CntActual}" loc:LocalizedDataGrid.HeaderResourceKey="Homogenization_Column_CntActual" />
+          <DataGridTextColumn Width="110" Binding="{Binding NmpActual}" loc:LocalizedDataGrid.HeaderResourceKey="Homogenization_Column_NmpActual" />
+        </DataGrid.Columns>
+      </DataGrid>
+    </DockPanel>
+  </Border>
+</UserControl>

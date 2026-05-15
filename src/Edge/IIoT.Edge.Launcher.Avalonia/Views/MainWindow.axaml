@@ -1,8 +1,8 @@
-<Window
+﻿<Window
     x:Class="IIoT.Edge.Launcher.Avalonia.Views.MainWindow"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:models="clr-namespace:IIoT.Edge.Launcher.Models;assembly=IIoT.Edge.Launcher.Core"
+    xmlns:models="clr-namespace:IIoT.Edge.Launcher.Models;assembly=IIoT.Edge.Launcher.Avalonia"
     Width="1180"
     Height="760"
     MinWidth="960"
@@ -77,15 +77,15 @@
             <TextBlock FontSize="26"
                        FontWeight="SemiBold"
                        Foreground="#F8FAFC"
-                       Text="本地登录" />
+                       Text="鏈湴鐧诲綍" />
             <TextBlock Foreground="#CBD5E1"
                        Text="登录后选择要启动的工序客户端。Launcher 只负责本地账号校验和 profile 启动。"
                        TextWrapping="Wrap" />
           </StackPanel>
 
           <StackPanel Grid.Row="1" VerticalAlignment="Center" Spacing="12">
-            <TextBox x:Name="UserNameInput" PlaceholderText="账号" />
-            <TextBox x:Name="PasswordInput" PlaceholderText="密码" PasswordChar="*" />
+            <TextBox x:Name="UserNameInput" PlaceholderText="璐﹀彿" />
+            <TextBox x:Name="PasswordInput" PlaceholderText="瀵嗙爜" PasswordChar="*" />
             <TextBlock Foreground="#FCA5A5"
                        Text="{Binding ErrorMessage}"
                        TextWrapping="Wrap" />
@@ -93,9 +93,9 @@
                        Text="{Binding StatusMessage}"
                        TextWrapping="Wrap" />
             <Button Click="LoginButton_Click"
-                    Content="登录并进入工序选择" />
+                    Content="鐧诲綍骞惰繘鍏ュ伐搴忛€夋嫨" />
             <Button Click="ChangePasswordButton_Click"
-                    Content="修改本地密码" />
+                    Content="淇敼鏈湴瀵嗙爜" />
           </StackPanel>
 
           <TextBlock Grid.Row="2"
@@ -132,7 +132,7 @@
 
           <TextBox Grid.Row="1"
                    Margin="0,22,0,16"
-                   PlaceholderText="搜索工序、profile 或 MachineProfile"
+                   PlaceholderText="鎼滅储宸ュ簭銆乸rofile 鎴?MachineProfile"
                    Text="{Binding ProfileSearchText}" />
 
           <ScrollViewer Grid.Row="2">

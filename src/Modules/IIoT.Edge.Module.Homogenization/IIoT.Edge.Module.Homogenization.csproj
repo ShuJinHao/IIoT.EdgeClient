@@ -1,0 +1,52 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
+    <CodePage>65001</CodePage>
+    <IsPackable>true</IsPackable>
+    <PackageId>IIoT.Edge.Module.Homogenization</PackageId>
+    <IsEdgePluginModule>true</IsEdgePluginModule>
+    <PluginModuleId>Homogenization</PluginModuleId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Controls.DataGrid" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Application\IIoT.Edge.Application\IIoT.Edge.Application.csproj" />
+    <ProjectReference Include="..\..\Core\IIoT.Edge.Domain\IIoT.Edge.Domain.csproj" />
+    <ProjectReference Include="..\..\Runtime\IIoT.Edge.Runtime\IIoT.Edge.Runtime.csproj" />
+    <ProjectReference Include="..\..\Shared\IIoT.Edge.SharedKernel\IIoT.Edge.SharedKernel.csproj" />
+    <ProjectReference Include="..\..\Shared\IIoT.Edge.UI.Avalonia\IIoT.Edge.UI.Avalonia.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="plugin.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+    <None Update="Config\homogenization.module.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>Config\homogenization.module.json</TargetPath>
+    </None>
+  </ItemGroup>
+
+  <Target Name="GetPluginArtifacts" Returns="@(PluginArtifact)">
+    <ItemGroup>
+      <PluginArtifact Include="$(TargetDir)**\*.*"
+                      Exclude="$(TargetDir)ref\**;$(TargetDir)refint\**;$(TargetDir)**\*.nupkg" />
+    </ItemGroup>
+  </Target>
+
+</Project>

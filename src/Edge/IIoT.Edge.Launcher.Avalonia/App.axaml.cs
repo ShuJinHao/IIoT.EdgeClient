@@ -1,4 +1,4 @@
-using Avalonia.Controls.ApplicationLifetimes;
+﻿using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using IIoT.Edge.Launcher.Services;
 using IIoT.Edge.Launcher.Avalonia.Views;
@@ -39,7 +39,7 @@ public sealed partial class App : global::Avalonia.Application
     private static IServiceCollection ConfigureServices(string baseDirectory)
     {
         var services = new ServiceCollection();
-        services.AddLauncherCore(baseDirectory);
+        services.AddLauncherServices(baseDirectory);
         services.AddSingleton<MainWindow>();
         return services;
     }

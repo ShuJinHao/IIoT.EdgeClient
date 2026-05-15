@@ -1,11 +1,11 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.AvaloniaShell.Services;
 using IIoT.Edge.AvaloniaShell.ViewModels;
 using IIoT.Edge.AvaloniaShell.Views;
-using IIoT.Edge.Host.Bootstrap.Avalonia;
+using IIoT.Edge.Host.Bootstrap;
 using IIoT.Edge.UI.Avalonia.Localization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;

@@ -24,7 +24,7 @@ public sealed class ModuleDiscoveryContractTests
                 ["Homogenization"],
                 discovery.Modules.Select(x => x.ModuleId).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray());
             Assert.All(discovery.Modules, descriptor =>
-                Assert.EndsWith(".Avalonia", descriptor.AssemblyName, StringComparison.Ordinal));
+                Assert.Equal("IIoT.Edge.Module.Homogenization", descriptor.AssemblyName));
         }
         finally
         {
@@ -112,11 +112,11 @@ public sealed class ModuleDiscoveryContractTests
     }
 
     [Fact]
-    public void ProductModules_ShouldUseCoreRuntimeAndAvaloniaPluginShell()
+    public void ProductModules_ShouldUseSingleAvaloniaPluginProject()
     {
         var repoRoot = ContractTestPathHelper.FindRepoRoot();
 
-        Assert.False(Directory.Exists(Path.Combine(
+        Assert.True(Directory.Exists(Path.Combine(
             repoRoot,
             "src",
             "Modules",
@@ -125,14 +125,14 @@ public sealed class ModuleDiscoveryContractTests
             repoRoot,
             "src",
             "Modules",
-            "IIoT.Edge.Module.Homogenization.Core",
+            "IIoT.Edge.Module.Homogenization",
             "Runtime",
             "HomogenizationStationRuntimeFactory.cs")));
         Assert.True(File.Exists(Path.Combine(
             repoRoot,
             "src",
             "Modules",
-            "IIoT.Edge.Module.Homogenization.Avalonia",
+            "IIoT.Edge.Module.Homogenization",
             "Presentation",
             "HomogenizationAvaloniaNavigationRegistration.cs")));
     }
@@ -148,9 +148,9 @@ public sealed class ModuleDiscoveryContractTests
         var root = document.RootElement;
 
         Assert.Equal("Homogenization", root.GetProperty("moduleId").GetString());
-        Assert.Equal("IIoT.Edge.Module.Homogenization.Avalonia.dll", root.GetProperty("entryAssembly").GetString());
+        Assert.Equal("IIoT.Edge.Module.Homogenization.dll", root.GetProperty("entryAssembly").GetString());
         Assert.Equal(
-            "IIoT.Edge.Module.Homogenization.Avalonia.DependencyInjection",
+            "IIoT.Edge.Module.Homogenization.DependencyInjection",
             root.GetProperty("entryType").GetString());
     }
 
