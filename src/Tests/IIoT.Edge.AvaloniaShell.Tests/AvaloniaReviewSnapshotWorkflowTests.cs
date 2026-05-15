@@ -90,6 +90,64 @@ public sealed class AvaloniaReviewSnapshotWorkflowTests
         Assert.Contains("默认入口真实切换仍需后续独立批次", text, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Pr44_review_feedback_record_keeps_no_feedback_distinct_from_approval()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var recordPath = Path.Combine(repoRoot, "docs", "Avalonia12-PR44审核反馈回收记录.md");
+
+        Assert.True(File.Exists(recordPath), $"Missing record: {recordPath}");
+
+        var text = File.ReadAllText(recordPath);
+        Assert.Contains("https://github.com/ShuJinHao/IIoT.EdgeClient/pull/44", text, StringComparison.Ordinal);
+        Assert.Contains("暂无 review 评论", text, StringComparison.Ordinal);
+        Assert.Contains("无评论", text, StringComparison.Ordinal);
+        Assert.Contains("审核通过", text, StringComparison.Ordinal);
+        Assert.Contains("Cloud/MES", text, StringComparison.Ordinal);
+        Assert.Contains("ReadDataAsync", text, StringComparison.Ordinal);
+        Assert.Contains("WriteDataAsync", text, StringComparison.Ordinal);
+        Assert.Contains("需用户确认", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Field_evidence_minimal_sample_keeps_p1_pending_gate_explicit()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var documentPath = Path.Combine(repoRoot, "docs", "Avalonia12-现场证据包预审最小样例说明.md");
+
+        Assert.True(File.Exists(documentPath), $"Missing document: {documentPath}");
+
+        var text = File.ReadAllText(documentPath);
+        Assert.Contains("release-manifest.json", text, StringComparison.Ordinal);
+        Assert.Contains("candidate-validation-summary.json", text, StringComparison.Ordinal);
+        Assert.Contains("launcher.profiles.json", text, StringComparison.Ordinal);
+        Assert.Contains("01-diagnostics-summary.png", text, StringComparison.Ordinal);
+        Assert.Contains("02-io-write-gate.png", text, StringComparison.Ordinal);
+        Assert.Contains("03-plc-write-trace.png", text, StringComparison.Ordinal);
+        Assert.Contains("04-wpf-fallback.png", text, StringComparison.Ordinal);
+        Assert.Contains("P0Blocked", text, StringComparison.Ordinal);
+        Assert.Contains("P1Pending", text, StringComparison.Ordinal);
+        Assert.Contains("ReadyForDefaultEntryReview", text, StringComparison.Ordinal);
+        Assert.Contains("ApprovedForDefaultEntrySwitch", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Twenty_first_batch_record_keeps_review_and_field_evidence_scope()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var recordPath = Path.Combine(repoRoot, "docs", "Avalonia12-第二十一批迁移记录.md");
+
+        Assert.True(File.Exists(recordPath), $"Missing record: {recordPath}");
+
+        var text = File.ReadAllText(recordPath);
+        Assert.Contains("PR #44", text, StringComparison.Ordinal);
+        Assert.Contains("Draft", text, StringComparison.Ordinal);
+        Assert.Contains("P1Pending", text, StringComparison.Ordinal);
+        Assert.Contains("Cloud/MES", text, StringComparison.Ordinal);
+        Assert.Contains("默认入口真实切换仍需后续独立批次", text, StringComparison.Ordinal);
+        Assert.Contains("FullGate", text, StringComparison.Ordinal);
+    }
+
     private static string FindRepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
