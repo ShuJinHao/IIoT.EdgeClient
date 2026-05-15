@@ -25,6 +25,7 @@ public sealed class AvaloniaReviewSnapshotWorkflowTests
         Assert.Contains("TestResults", script, StringComparison.Ordinal);
         Assert.Contains("node_modules", script, StringComparison.Ordinal);
         Assert.Contains("Use -Commit together with -Push", script, StringComparison.Ordinal);
+        Assert.Contains("--force-with-lease", script, StringComparison.Ordinal);
         Assert.DoesNotContain("Remove-Item", script, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("DELETE FROM", script, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("DROP TABLE", script, StringComparison.OrdinalIgnoreCase);
@@ -45,6 +46,7 @@ public sealed class AvaloniaReviewSnapshotWorkflowTests
         Assert.Contains("codex/avalonia-default-entry-review-pr", text, StringComparison.Ordinal);
         Assert.Contains("PR #44", text, StringComparison.Ordinal);
         Assert.Contains("git diff --check", text, StringComparison.Ordinal);
+        Assert.Contains("--force-with-lease", text, StringComparison.Ordinal);
         Assert.Contains("TestResults", text, StringComparison.Ordinal);
         Assert.Contains("ApprovedForDefaultEntrySwitch", text, StringComparison.Ordinal);
         Assert.Contains("WPF Launcher/WPF Shell", text, StringComparison.Ordinal);

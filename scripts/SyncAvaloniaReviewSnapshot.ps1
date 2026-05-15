@@ -228,7 +228,7 @@ if ($Commit) {
         Invoke-SyncCommand -Name 'commit review snapshot' -Executable 'git' -Arguments @('-C', $work, 'commit', '-m', $CommitMessage)
 
         if ($Push) {
-            Invoke-SyncCommand -Name 'push review snapshot' -Executable 'git' -Arguments @('-C', $work, 'push', '-u', 'origin', $ReviewBranch)
+            Invoke-SyncCommand -Name 'push review snapshot' -Executable 'git' -Arguments @('-C', $work, 'push', '--force-with-lease', '-u', 'origin', $ReviewBranch)
         }
     }
 }

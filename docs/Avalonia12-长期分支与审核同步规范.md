@@ -14,6 +14,7 @@
 3. 执行 `scripts\SyncAvaloniaReviewSnapshot.ps1 -Commit -Push` 生成并推送审核快照。
 4. 同步脚本会从远端 `main` 新建临时工作树，镜像长期迁移副本，并排除 `.git`、`bin`、`obj`、`.artifacts`、`.vs`、`publish`、`TestResults`、`node_modules`、`dist`。
 5. 推送前必须通过 `git diff --check`、`git diff --cached --check` 和 staged 生成目录扫描。
+6. 审核快照分支是可再生分支，脚本只对 `codex/avalonia-default-entry-review-pr` 使用 `--force-with-lease` 更新；长期迁移分支不得被强推。
 
 ## 审核反馈处理
 
