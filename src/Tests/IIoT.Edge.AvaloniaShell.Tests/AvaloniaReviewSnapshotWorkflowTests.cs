@@ -20,6 +20,7 @@ public sealed class AvaloniaReviewSnapshotWorkflowTests
         Assert.Contains("diff', '--cached', '--check", script, StringComparison.Ordinal);
         Assert.Contains("robocopy", script, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("/MIR", script, StringComparison.Ordinal);
+        Assert.Contains("previousErrorActionPreference", script, StringComparison.Ordinal);
         Assert.Contains(".artifacts", script, StringComparison.Ordinal);
         Assert.Contains("TestResults", script, StringComparison.Ordinal);
         Assert.Contains("node_modules", script, StringComparison.Ordinal);

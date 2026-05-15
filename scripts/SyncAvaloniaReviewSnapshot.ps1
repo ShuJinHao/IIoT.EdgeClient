@@ -56,7 +56,15 @@ function Invoke-SyncCommand {
     )
 
     Write-Host "==> $Name"
-    $output = @(& $Executable @Arguments 2>&1)
+    $previousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $output = @(& $Executable @Arguments 2>&1)
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+
     foreach ($line in $output) {
         Write-Host $line
     }
@@ -99,7 +107,15 @@ function Invoke-SyncRobocopy {
         '/NP'
     )
 
-    $output = @(& robocopy @arguments 2>&1)
+    $previousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $output = @(& robocopy @arguments 2>&1)
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+
     foreach ($line in $output) {
         Write-Host $line
     }
@@ -157,7 +173,15 @@ function Get-SyncGitLines {
         [string[]]$Arguments
     )
 
-    $output = @(& git -C $Repository @Arguments 2>&1)
+    $previousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $output = @(& git -C $Repository @Arguments 2>&1)
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+
     if ($LASTEXITCODE -ne 0) {
         $text = $output -join "`n"
         throw "git $($Arguments -join ' ') failed in $Repository.`n$text"
