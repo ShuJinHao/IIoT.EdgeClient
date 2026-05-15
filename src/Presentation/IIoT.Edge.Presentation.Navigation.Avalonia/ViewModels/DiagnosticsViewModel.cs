@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Device;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -16,7 +17,14 @@ namespace IIoT.Edge.Presentation.Navigation.Avalonia.ViewModels;
 public sealed partial class DiagnosticsViewModel : NavigationPageViewModelBase
 {
     private readonly IServiceProvider _services;
+    private readonly IAvaloniaLanguageService _languageService;
     private readonly AsyncRelayCommand _refreshCommand;
+    private readonly AsyncRelayCommand<DiagnosticsDeadLetterRow> _requeueDeadLetterCommand;
+    private readonly AsyncRelayCommand<DiagnosticsDeadLetterRow> _deleteDeadLetterCommand;
+    private readonly IAvaloniaDiagnosticsDeadLetterOperator? _deadLetterOperator;
+    private readonly IAvaloniaDiagnosticsDeadLetterConfirmationService? _deadLetterConfirmationService;
+    private readonly IClientPermissionService? _permissionService;
+    private bool _isObservingPermission;
 
     public DiagnosticsViewModel(
         IServiceProvider services,
@@ -27,8 +35,14 @@ public sealed partial class DiagnosticsViewModel : NavigationPageViewModelBase
         : base(languageService, viewId, titleResourceKey, titleFallback)
     {
         _services = services;
+        _languageService = languageService;
         _refreshCommand = new AsyncRelayCommand(RefreshAsync);
-        FeedbackMessage = "诊断页只读取当前注册、启动与持久化状态，不执行死信清理或重试。";
+        _deadLetterOperator = services.GetService<IAvaloniaDiagnosticsDeadLetterOperator>();
+        _deadLetterConfirmationService = services.GetService<IAvaloniaDiagnosticsDeadLetterConfirmationService>();
+        _permissionService = services.GetService<IClientPermissionService>();
+        _requeueDeadLetterCommand = new AsyncRelayCommand<DiagnosticsDeadLetterRow>(RequeueDeadLetterAsync, CanOperateDeadLetter);
+        _deleteDeadLetterCommand = new AsyncRelayCommand<DiagnosticsDeadLetterRow>(DeleteDeadLetterAsync, CanOperateDeadLetter);
+        FeedbackMessage = "诊断页已接入注册、启动、持久化和 Cloud/MES 死信运维状态。";
     }
 
     public ObservableCollection<RuntimeRegistrationRow> RuntimeRegistrations { get; } = [];
@@ -47,6 +61,10 @@ public sealed partial class DiagnosticsViewModel : NavigationPageViewModelBase
 
     public ObservableCollection<DiagnosticsFieldAcceptanceSummaryRow> FieldAcceptanceRows { get; } = [];
 
+    public ObservableCollection<DiagnosticsDeadLetterRow> CloudDeadLetters { get; } = [];
+
+    public ObservableCollection<DiagnosticsDeadLetterRow> MesDeadLetters { get; } = [];
+
     [ObservableProperty]
     private string lastGeneratedText = "启动诊断尚未生成。";
 
@@ -61,8 +79,23 @@ public sealed partial class DiagnosticsViewModel : NavigationPageViewModelBase
 
     public IAsyncRelayCommand RefreshCommand => _refreshCommand;
 
-    public override Task OnActivatedAsync()
-        => RefreshAsync();
+    public IAsyncRelayCommand<DiagnosticsDeadLetterRow> RequeueDeadLetterCommand => _requeueDeadLetterCommand;
+
+    public IAsyncRelayCommand<DiagnosticsDeadLetterRow> DeleteDeadLetterCommand => _deleteDeadLetterCommand;
+
+    public bool CanOperateDeadLetters => _permissionService?.IsLocalAdmin ?? false;
+
+    public override async Task OnActivatedAsync()
+    {
+        StartDeadLetterPermissionObserving();
+        await RefreshAsync();
+    }
+
+    public override Task OnDeactivatedAsync()
+    {
+        StopDeadLetterPermissionObserving();
+        return Task.CompletedTask;
+    }
 
     internal async Task RefreshAsync()
     {
@@ -73,6 +106,11 @@ public sealed partial class DiagnosticsViewModel : NavigationPageViewModelBase
             ApplyRuntimeRegistrations(ResolveOptional<IStationRuntimeRegistry>()?.GetRegistrations());
             ApplyModuleRegistrations(report.ModuleRegistrations);
             var syncDiagnostics = await ApplyPersistenceRowsAsync();
+            if (syncDiagnostics is not null)
+            {
+                ApplyDeadLetterRows(syncDiagnostics);
+            }
+
             ApplyPluginStates(report.PluginStates);
             ApplyIssues(report.Issues);
             ApplyIoWriteGateRows();
@@ -305,35 +343,19 @@ public sealed partial class DiagnosticsViewModel : NavigationPageViewModelBase
                 JoinSummary(
                     $"运行目录：{report.ConfigurationProfile.RuntimeDataRoot}",
                     runtimeState is null || string.IsNullOrWhiteSpace(runtimeState.DiagnosticsLogPath) ? null : $"诊断日志：{runtimeState.DiagnosticsLogPath}",
-                    "证据采集脚本只复制日志、诊断文本、Launcher profile 和截图说明")),
+                    "本页只展示路径，不修改运行目录。")),
             new DiagnosticsFieldAcceptanceSummaryRow(
-                "试运行资料",
-                "发布包 docs",
-                "现场试运行手册、验收记录模板、切换阻断清单和证据采集脚本随发布包一起交付；本页仅提示资料位置。"),
-            new DiagnosticsFieldAcceptanceSummaryRow(
-                "试运行审查资料",
-                "发布包 docs",
-                "试运行问题回收清单、切默认入口决策包模板和证据审查脚本随发布包一起交付；本页不提供切换默认入口操作。"),
-            new DiagnosticsFieldAcceptanceSummaryRow(
-                "P1 关闭证据要求",
-                "现场证据",
-                "需要已填写验收记录、Diagnostics 摘要截图、I/O 写入闸门截图、PLC 写入轨迹截图和 WPF 回退截图；本页只提示要求，不关闭问题。"),
-            new DiagnosticsFieldAcceptanceSummaryRow(
-                "现场证据导入",
-                "只读预审",
-                "现场证据回传后使用 ImportAvaloniaFieldEvidence.ps1 导入并串联复审、决策包草案和 readiness 预审；本页不修改证据或 profile。"),
-            new DiagnosticsFieldAcceptanceSummaryRow(
-                "默认入口切换门禁",
-                "只读提示",
-                "默认入口切换必须先通过 TestAvaloniaDefaultEntryReadiness.ps1；真实 Apply 必须保留 rollback snapshot，并可用 RestoreAvaloniaDefaultEntry.ps1 回退；本页不提供切换按钮。"),
+                "Cloud/MES 死信运维",
+                CanOperateDeadLetters ? "本地管理员可操作" : "只读",
+                "Cloud 与 MES 死信分开展示；本地管理员可重新入队或删除本地死信记录；操作只进入对应本地补偿链路，不直接调用上传接口。"),
             new DiagnosticsFieldAcceptanceSummaryRow("I/O 写入申请", latestIoStatus, latestIoMessage),
             new DiagnosticsFieldAcceptanceSummaryRow("PLC 块写入轨迹", latestTraceStatus, latestTraceMessage),
             new DiagnosticsFieldAcceptanceSummaryRow("Cloud 状态", cloudStatus, cloudMessage),
             new DiagnosticsFieldAcceptanceSummaryRow("MES 状态", mesStatus, mesMessage),
             new DiagnosticsFieldAcceptanceSummaryRow(
                 "Cloud/MES 差异",
-                "独立只读",
-                "Cloud 与 MES 状态分开展示；本页不提供清理、重试、删除、补偿或强制上传入口。")
+                "独立链路",
+                "Cloud 与 MES 状态、死信和重新入队目标分开展示；本页不合并补偿链路，不提供强制上传入口。")
         ]);
     }
 
@@ -388,7 +410,7 @@ public sealed partial class DiagnosticsViewModel : NavigationPageViewModelBase
         {
             AvaloniaRuntimeStatus.UiOnly => "当前为 UI-only，运行链路未启动；需要现场联调时应从运行联调入口或传入 --start-runtime。",
             AvaloniaRuntimeStatus.Starting => "已接收到 --start-runtime，运行链路正在启动；诊断页只读展示当前启动过程。",
-            AvaloniaRuntimeStatus.Running => "已通过 --start-runtime 启动运行链路；诊断页只读展示状态，不执行清理、重试或写入。",
+            AvaloniaRuntimeStatus.Running => "已通过 --start-runtime 启动运行链路；诊断页展示状态，死信运维区只处理本地 Cloud/MES 死信记录。",
             AvaloniaRuntimeStatus.StartFailed => "已尝试 --start-runtime，但启动失败；应保留诊断信息，不继续 I/O 写入申请。",
             AvaloniaRuntimeStatus.Stopping => "运行链路正在停机；诊断页只读展示最后状态。",
             _ => "运行链路状态未知；诊断页只读展示当前快照。"

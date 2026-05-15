@@ -1,5 +1,6 @@
 <UserControl
     x:Class="IIoT.Edge.Presentation.Navigation.Avalonia.Views.DiagnosticsPage"
+    x:Name="DiagnosticsRoot"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:loc="clr-namespace:IIoT.Edge.UI.Avalonia.Localization;assembly=IIoT.Edge.UI.Avalonia">
@@ -60,6 +61,60 @@
               <DataGridTextColumn Width="*" Binding="{Binding Message}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Message" />
             </DataGrid.Columns>
           </DataGrid>
+        </TabItem>
+
+        <TabItem Header="{DynamicResource Navigation_Diagnostics_DeadLetters}">
+          <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel Spacing="14">
+              <TextBlock FontSize="16" FontWeight="SemiBold" Foreground="#F8FAFC" Text="{DynamicResource Navigation_Diagnostics_CloudDeadLetters}" />
+              <DataGrid ItemsSource="{Binding CloudDeadLetters}" AutoGenerateColumns="False" IsReadOnly="True" MinHeight="220">
+                <DataGrid.Columns>
+                  <DataGridTextColumn Width="80" Header="ID" Binding="{Binding Id}" />
+                  <DataGridTextColumn Width="130" Binding="{Binding ProcessType}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Process" />
+                  <DataGridTextColumn Width="150" Binding="{Binding FailedTarget}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Target" />
+                  <DataGridTextColumn Width="120" Binding="{Binding FailureStage}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Stage" />
+                  <DataGridTextColumn Width="140" Binding="{Binding Source}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Source" />
+                  <DataGridTextColumn Width="150" Binding="{Binding CreatedAt}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_CreatedAt" />
+                  <DataGridTextColumn Width="220" Binding="{Binding FailureReason}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_FailureReason" />
+                  <DataGridTextColumn Width="260" Binding="{Binding CellDataJson}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_CellData" />
+                  <DataGridTemplateColumn Width="170" Header="{DynamicResource Navigation_Column_Action}">
+                    <DataGridTemplateColumn.CellTemplate>
+                      <DataTemplate>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <Button Command="{Binding $parent[UserControl].DataContext.RequeueDeadLetterCommand}" CommandParameter="{Binding}" Content="{DynamicResource Navigation_Button_Requeue}" />
+                          <Button Command="{Binding $parent[UserControl].DataContext.DeleteDeadLetterCommand}" CommandParameter="{Binding}" Content="{DynamicResource Navigation_Button_Delete}" />
+                        </StackPanel>
+                      </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                  </DataGridTemplateColumn>
+                </DataGrid.Columns>
+              </DataGrid>
+
+              <TextBlock FontSize="16" FontWeight="SemiBold" Foreground="#F8FAFC" Text="{DynamicResource Navigation_Diagnostics_MesDeadLetters}" />
+              <DataGrid ItemsSource="{Binding MesDeadLetters}" AutoGenerateColumns="False" IsReadOnly="True" MinHeight="220">
+                <DataGrid.Columns>
+                  <DataGridTextColumn Width="80" Header="ID" Binding="{Binding Id}" />
+                  <DataGridTextColumn Width="130" Binding="{Binding ProcessType}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Process" />
+                  <DataGridTextColumn Width="150" Binding="{Binding FailedTarget}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Target" />
+                  <DataGridTextColumn Width="120" Binding="{Binding FailureStage}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Stage" />
+                  <DataGridTextColumn Width="140" Binding="{Binding Source}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Source" />
+                  <DataGridTextColumn Width="150" Binding="{Binding CreatedAt}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_CreatedAt" />
+                  <DataGridTextColumn Width="220" Binding="{Binding FailureReason}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_FailureReason" />
+                  <DataGridTextColumn Width="260" Binding="{Binding CellDataJson}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_CellData" />
+                  <DataGridTemplateColumn Width="170" Header="{DynamicResource Navigation_Column_Action}">
+                    <DataGridTemplateColumn.CellTemplate>
+                      <DataTemplate>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <Button Command="{Binding $parent[UserControl].DataContext.RequeueDeadLetterCommand}" CommandParameter="{Binding}" Content="{DynamicResource Navigation_Button_Requeue}" />
+                          <Button Command="{Binding $parent[UserControl].DataContext.DeleteDeadLetterCommand}" CommandParameter="{Binding}" Content="{DynamicResource Navigation_Button_Delete}" />
+                        </StackPanel>
+                      </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                  </DataGridTemplateColumn>
+                </DataGrid.Columns>
+              </DataGrid>
+            </StackPanel>
+          </ScrollViewer>
         </TabItem>
 
         <TabItem Header="插件状态">

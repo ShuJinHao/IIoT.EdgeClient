@@ -1,5 +1,6 @@
 using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Application.Abstractions.DataPipeline;
 using System.Data;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
@@ -13,11 +14,13 @@ using IIoT.Edge.Application.Features.Production.DataView;
 using IIoT.Edge.Application.Features.Production.Monitor;
 using IIoT.Edge.Application.Modules.Diagnostics;
 using IIoT.Edge.Application.Modules.Hardware;
+using IIoT.Edge.Presentation.Navigation.Avalonia;
 using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Hardware.IOView;
 using IIoT.Edge.Presentation.Navigation.Avalonia.Localization;
 using IIoT.Edge.Presentation.Navigation.Avalonia.ViewModels;
 using IIoT.Edge.UI.Avalonia.Localization;
 using IIoT.Edge.UI.Avalonia.Services;
+using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.Context;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -97,6 +100,58 @@ public sealed class ProductionViewModelBehaviorTests
     }
 
     [Fact]
+    public async Task Data_view_model_exports_empty_records_through_unified_export_service()
+    {
+        var service = new FakeDataViewService
+        {
+            Snapshot = new DataViewSnapshot(0, 0, 0, "0.00%", [])
+        };
+        var exportService = new FakeDataExportService
+        {
+            Result = AvaloniaDataExportResult.Success("C:\\export\\DataView.csv")
+        };
+        var viewModel = new DataViewModel(
+            service,
+            CreateLanguageService(),
+            CreateRuntimePaths(),
+            exportService,
+            "test.data",
+            "Navigation_Title_Data",
+            "生产数据");
+
+        await viewModel.OnActivatedAsync();
+        await viewModel.ExportCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, exportService.CallCount);
+        Assert.Equal("DataView", exportService.LastRequest?.PageType);
+        Assert.Empty(exportService.LastRows);
+        Assert.Contains("已导出", viewModel.FeedbackMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Data_view_model_export_failure_shows_chinese_feedback()
+    {
+        var exportService = new FakeDataExportService
+        {
+            Result = AvaloniaDataExportResult.Failure("磁盘已满")
+        };
+        var viewModel = new DataViewModel(
+            new FakeDataViewService(),
+            CreateLanguageService(),
+            CreateRuntimePaths(),
+            exportService,
+            "test.data",
+            "Navigation_Title_Data",
+            "生产数据");
+
+        await viewModel.OnActivatedAsync();
+        await viewModel.ExportCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, exportService.CallCount);
+        Assert.Contains("导出生产数据失败：磁盘已满", viewModel.FeedbackMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Capacity_view_model_loads_and_queries_capacity_through_service()
     {
         var service = new FakeCapacityViewService
@@ -133,6 +188,37 @@ public sealed class ProductionViewModelBehaviorTests
         Assert.Equal(new DateTime(2026, 5, 13), service.LastQueryDate);
         Assert.Equal("PLC-A", service.LastQueryPlcName);
         Assert.Equal(64, viewModel.PeriodTotal);
+    }
+
+    [Fact]
+    public async Task Capacity_view_model_export_failure_shows_chinese_feedback()
+    {
+        var service = new FakeCapacityViewService
+        {
+            IsOnline = true,
+            TodayResult = CreateCapacityResult("08:00", 32)
+        };
+        var exportService = new FakeDataExportService
+        {
+            Result = AvaloniaDataExportResult.Failure("目录不可写")
+        };
+        var viewModel = new CapacityViewModel(
+            service,
+            CreateLanguageService(),
+            new FakeAvaloniaDialogService(),
+            new ImmediateAvaloniaDispatcherService(),
+            CreateRuntimePaths(),
+            exportService,
+            "test.capacity",
+            "Navigation_Title_CapacityQuery",
+            "产能查询");
+
+        await viewModel.OnActivatedAsync();
+        await viewModel.ExportCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, exportService.CallCount);
+        Assert.Equal("Capacity", exportService.LastRequest?.PageType);
+        Assert.Contains("导出产能数据失败：目录不可写", viewModel.FeedbackMessage, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -224,6 +310,127 @@ public sealed class ProductionViewModelBehaviorTests
         Assert.Contains(viewModel.FieldAcceptanceRows, row => row.Scope == "MES 状态");
         Assert.Contains("运行时注册 1 个", viewModel.FeedbackMessage, StringComparison.Ordinal);
         Assert.Contains("运行目录：runtime-data", viewModel.ConfigurationProfileText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Diagnostics_view_model_loads_cloud_and_mes_dead_letters_with_details()
+    {
+        var cloudDeadLetter = CreateDeadLetter(10, "Homogenization", "failed_cloud_records");
+        cloudDeadLetter.CellDataJson = "{\"barcode\":\"CLOUD-001\"}";
+        var mesDeadLetter = CreateDeadLetter(20, "Homogenization", "failed_mes_records");
+        mesDeadLetter.CellDataJson = "{\"barcode\":\"MES-001\"}";
+
+        var services = new ServiceCollection();
+        services.AddSingleton<IEdgeSyncDiagnosticsQuery>(new FakeEdgeSyncDiagnosticsQuery(
+            CreateEdgeSyncSnapshot(
+                CreateDeadLetterSnapshot(cloudDeadLetter),
+                CreateDeadLetterSnapshot(mesDeadLetter))));
+        var provider = services.BuildServiceProvider();
+
+        var viewModel = new DiagnosticsViewModel(
+            provider,
+            CreateLanguageService(),
+            "Core.Diagnostics",
+            "Navigation_Menu_CoreDiagnostics",
+            "系统诊断");
+
+        await viewModel.OnActivatedAsync();
+
+        var cloudRow = Assert.Single(viewModel.CloudDeadLetters);
+        Assert.Equal(DataPipelineRetryChannel.Cloud, cloudRow.Channel);
+        Assert.Equal(10, cloudRow.Id);
+        Assert.Equal("Homogenization", cloudRow.ProcessType);
+        Assert.Contains("CLOUD-001", cloudRow.CellDataJson, StringComparison.Ordinal);
+
+        var mesRow = Assert.Single(viewModel.MesDeadLetters);
+        Assert.Equal(DataPipelineRetryChannel.Mes, mesRow.Channel);
+        Assert.Equal(20, mesRow.Id);
+        Assert.Contains("MES-001", mesRow.CellDataJson, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Diagnostics_dead_letter_commands_require_local_admin()
+    {
+        var maintenance = new FakeDeadLetterMaintenanceService();
+        var services = CreateDiagnosticsDeadLetterServices(
+            maintenance,
+            new FakeClientPermissionService { IsLocalAdmin = false },
+            new FakeAvaloniaDialogService());
+        var provider = services.BuildServiceProvider();
+        var viewModel = new DiagnosticsViewModel(
+            provider,
+            CreateLanguageService(),
+            "Core.Diagnostics",
+            "Navigation_Menu_CoreDiagnostics",
+            "系统诊断");
+
+        await viewModel.OnActivatedAsync();
+
+        var row = Assert.Single(viewModel.CloudDeadLetters);
+        Assert.False(viewModel.CanOperateDeadLetters);
+        Assert.False(viewModel.RequeueDeadLetterCommand.CanExecute(row));
+        Assert.False(viewModel.DeleteDeadLetterCommand.CanExecute(row));
+        Assert.Equal(0, maintenance.RequeueCalls);
+        Assert.Equal(0, maintenance.DeleteCalls);
+    }
+
+    [Fact]
+    public async Task Diagnostics_dead_letter_requeue_cancel_does_not_call_maintenance_service()
+    {
+        var maintenance = new FakeDeadLetterMaintenanceService();
+        var dialog = new FakeAvaloniaDialogService { ConfirmResult = false };
+        var services = CreateDiagnosticsDeadLetterServices(
+            maintenance,
+            new FakeClientPermissionService { IsLocalAdmin = true },
+            dialog);
+        var provider = services.BuildServiceProvider();
+        var viewModel = new DiagnosticsViewModel(
+            provider,
+            CreateLanguageService(),
+            "Core.Diagnostics",
+            "Navigation_Menu_CoreDiagnostics",
+            "系统诊断");
+
+        await viewModel.OnActivatedAsync();
+        var row = Assert.Single(viewModel.CloudDeadLetters);
+        await viewModel.RequeueDeadLetterCommand.ExecuteAsync(row);
+
+        Assert.Equal(0, maintenance.RequeueCalls);
+        Assert.Contains("已取消死信重新入队", viewModel.FeedbackMessage, StringComparison.Ordinal);
+        Assert.Contains("重新写入对应 retry 队列", Assert.Single(dialog.Requests).Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Diagnostics_dead_letter_requeue_and_delete_call_selected_channel_only()
+    {
+        var maintenance = new FakeDeadLetterMaintenanceService();
+        var dialog = new FakeAvaloniaDialogService { ConfirmResult = true };
+        var services = CreateDiagnosticsDeadLetterServices(
+            maintenance,
+            new FakeClientPermissionService { IsLocalAdmin = true },
+            dialog);
+        var provider = services.BuildServiceProvider();
+        var viewModel = new DiagnosticsViewModel(
+            provider,
+            CreateLanguageService(),
+            "Core.Diagnostics",
+            "Navigation_Menu_CoreDiagnostics",
+            "系统诊断");
+
+        await viewModel.OnActivatedAsync();
+        var cloudRow = Assert.Single(viewModel.CloudDeadLetters);
+        var mesRow = Assert.Single(viewModel.MesDeadLetters);
+
+        await viewModel.RequeueDeadLetterCommand.ExecuteAsync(cloudRow);
+        await viewModel.DeleteDeadLetterCommand.ExecuteAsync(mesRow);
+
+        Assert.Equal(1, maintenance.RequeueCalls);
+        Assert.Equal(DataPipelineRetryChannel.Cloud, maintenance.LastRequeueChannel);
+        Assert.Equal(10, maintenance.LastRequeueId);
+        Assert.Equal(1, maintenance.DeleteCalls);
+        Assert.Equal(DataPipelineRetryChannel.Mes, maintenance.LastDeleteChannel);
+        Assert.Equal(20, maintenance.LastDeleteId);
+        Assert.Contains("MES 死信已删除", viewModel.FeedbackMessage, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -362,7 +569,7 @@ public sealed class ProductionViewModelBehaviorTests
 
         await viewModel.OnActivatedAsync();
 
-        Assert.Equal(13, viewModel.FieldAcceptanceRows.Count);
+        Assert.Equal(9, viewModel.FieldAcceptanceRows.Count);
         Assert.Contains(viewModel.FieldAcceptanceRows, row =>
             row.Scope == "运行模式" &&
             row.Status == "--start-runtime" &&
@@ -381,22 +588,11 @@ public sealed class ProductionViewModelBehaviorTests
             row.Message.Contains("C:\\runtime\\diagnostics\\logs", StringComparison.Ordinal));
         Assert.Contains(viewModel.FieldAcceptanceRows, row =>
             row.Scope == "Cloud/MES 差异" &&
-            row.Message.Contains("不提供清理、重试、删除", StringComparison.Ordinal));
+            row.Message.Contains("不合并补偿链路", StringComparison.Ordinal));
         Assert.Contains(viewModel.FieldAcceptanceRows, row =>
-            row.Scope == "试运行资料" &&
-            row.Message.Contains("现场试运行手册", StringComparison.Ordinal));
-        Assert.Contains(viewModel.FieldAcceptanceRows, row =>
-            row.Scope == "试运行审查资料" &&
-            row.Message.Contains("切默认入口决策包模板", StringComparison.Ordinal));
-        Assert.Contains(viewModel.FieldAcceptanceRows, row =>
-            row.Scope == "P1 关闭证据要求" &&
-            row.Message.Contains("WPF 回退截图", StringComparison.Ordinal));
-        Assert.Contains(viewModel.FieldAcceptanceRows, row =>
-            row.Scope == "现场证据导入" &&
-            row.Message.Contains("ImportAvaloniaFieldEvidence.ps1", StringComparison.Ordinal));
-        Assert.Contains(viewModel.FieldAcceptanceRows, row =>
-            row.Scope == "默认入口切换门禁" &&
-            row.Message.Contains("不提供切换按钮", StringComparison.Ordinal));
+            row.Scope == "Cloud/MES 死信运维" &&
+            row.Status == "只读" &&
+            row.Message.Contains("重新入队或删除本地死信记录", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -433,6 +629,24 @@ public sealed class ProductionViewModelBehaviorTests
         return service;
     }
 
+    private static EdgeRuntimePaths CreateRuntimePaths()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "iiot-edge-avalonia-tests", Guid.NewGuid().ToString("N"));
+        return new EdgeRuntimePaths(
+            root,
+            "tests",
+            root,
+            Path.Combine(root, "db"),
+            Path.Combine(root, "context"),
+            Path.Combine(root, "recipes"),
+            Path.Combine(root, "excel"),
+            Path.Combine(root, "diagnostics"),
+            Path.Combine(root, "logs"),
+            Path.Combine(root, "diagnostics", "device-cache.json"),
+            Path.Combine(root, "logs", "crash.log"),
+            Path.Combine(root, "logs", "crash-fallback.log"));
+    }
+
     private static DeviceMonitorSnapshot CreateMonitorSnapshot(string deviceName, int total)
     {
         var table = new DataTable();
@@ -462,7 +676,7 @@ public sealed class ProductionViewModelBehaviorTests
             ContextPersistence: new ProductionContextPersistenceDiagnostics(0, null));
     }
 
-    private static CloudSyncDiagnosticsSnapshot CreateCloudSnapshot()
+    private static CloudSyncDiagnosticsSnapshot CreateCloudSnapshot(DeadLetterDiagnosticsSnapshot? deadLetters = null)
         => new(
             EdgeUploadGateState.Ready,
             EdgeUploadBlockReason.None,
@@ -484,9 +698,10 @@ public sealed class ProductionViewModelBehaviorTests
             IsPersistenceFaulted: false,
             LastPersistenceFaultAt: null,
             PersistenceFaultMessage: null,
+            DeadLetters: deadLetters,
             PendingPassStationCount: 3);
 
-    private static MesSyncDiagnosticsSnapshot CreateMesSnapshot()
+    private static MesSyncDiagnosticsSnapshot CreateMesSnapshot(DeadLetterDiagnosticsSnapshot? deadLetters = null)
         => new(
             MesRetryRuntimeState.Idle,
             LastAttemptAt: null,
@@ -501,7 +716,34 @@ public sealed class ProductionViewModelBehaviorTests
             LastCapacityBlockAt: null,
             IsPersistenceFaulted: false,
             LastPersistenceFaultAt: null,
-            PersistenceFaultMessage: null);
+            PersistenceFaultMessage: null,
+            DeadLetters: deadLetters);
+
+    private static EdgeSyncDiagnosticsSnapshot CreateEdgeSyncSnapshot(
+        DeadLetterDiagnosticsSnapshot? cloudDeadLetters = null,
+        DeadLetterDiagnosticsSnapshot? mesDeadLetters = null)
+        => new(
+            "PLC-A",
+            CreateCloudSnapshot(cloudDeadLetters),
+            CreateMesSnapshot(mesDeadLetters),
+            new ProductionContextPersistenceDiagnostics(1, new DateTime(2026, 5, 13, 9, 0, 0)));
+
+    private static DeadLetterDiagnosticsSnapshot CreateDeadLetterSnapshot(params DeadLetterRecord[] records)
+        => new(records.Length, [], records, false, null, null);
+
+    private static DeadLetterRecord CreateDeadLetter(long id, string processType, string sourceTable)
+        => new()
+        {
+            Id = id,
+            ProcessType = processType,
+            CellDataJson = "{\"barcode\":\"CELL-001\"}",
+            FailedTarget = sourceTable.Contains("mes", StringComparison.OrdinalIgnoreCase) ? "MES" : "Cloud",
+            SourceTable = sourceTable,
+            SourceRecordId = id + 1000,
+            FailureStage = "FallbackPersist",
+            FailureReason = "测试失败原因",
+            CreatedAt = new DateTime(2026, 5, 13, 10, 0, 0)
+        };
 
     private static CapacityViewResult CreateCapacityResult(string date, int total)
         => new(
@@ -537,6 +779,26 @@ public sealed class ProductionViewModelBehaviorTests
             [],
             [new StartupDiagnosticIssue("TEST", "只读诊断问题", "Homogenization", "PLC-A")]);
 
+    private static ServiceCollection CreateDiagnosticsDeadLetterServices(
+        FakeDeadLetterMaintenanceService maintenanceService,
+        FakeClientPermissionService permissionService,
+        FakeAvaloniaDialogService dialogService)
+    {
+        var cloudDeadLetter = CreateDeadLetter(10, "Homogenization", "failed_cloud_records");
+        var mesDeadLetter = CreateDeadLetter(20, "Homogenization", "failed_mes_records");
+        var services = new ServiceCollection();
+        services.AddSingleton(CreateLanguageService());
+        services.AddSingleton<IAvaloniaDialogService>(dialogService);
+        services.AddSingleton<IClientPermissionService>(permissionService);
+        services.AddSingleton<IDeadLetterMaintenanceService>(maintenanceService);
+        services.AddSingleton<IEdgeSyncDiagnosticsQuery>(new FakeEdgeSyncDiagnosticsQuery(
+            CreateEdgeSyncSnapshot(
+                CreateDeadLetterSnapshot(cloudDeadLetter),
+                CreateDeadLetterSnapshot(mesDeadLetter))));
+        services.AddNavigationAvaloniaPresentation();
+        return services;
+    }
+
     private sealed class FakeMonitorViewService : IMonitorViewService
     {
         public List<DeviceMonitorSnapshot> Snapshots { get; set; } = [];
@@ -550,11 +812,60 @@ public sealed class ProductionViewModelBehaviorTests
         }
     }
 
+    private sealed class FakeDeadLetterMaintenanceService : IDeadLetterMaintenanceService
+    {
+        public int RequeueCalls { get; private set; }
+
+        public int DeleteCalls { get; private set; }
+
+        public DataPipelineRetryChannel? LastRequeueChannel { get; private set; }
+
+        public long? LastRequeueId { get; private set; }
+
+        public DataPipelineRetryChannel? LastDeleteChannel { get; private set; }
+
+        public long? LastDeleteId { get; private set; }
+
+        public Task<IReadOnlyList<DeadLetterRecord>> GetLatestAsync(
+            DataPipelineRetryChannel channel,
+            int count = 50)
+            => Task.FromResult<IReadOnlyList<DeadLetterRecord>>([]);
+
+        public Task<DeadLetterRecord?> GetByIdAsync(DataPipelineRetryChannel channel, long id)
+            => Task.FromResult<DeadLetterRecord?>(CreateDeadLetter(id, "Homogenization", channel == DataPipelineRetryChannel.Mes ? "failed_mes_records" : "failed_cloud_records"));
+
+        public Task<DeadLetterOperationResult> RequeueAsync(DataPipelineRetryChannel channel, long id)
+        {
+            RequeueCalls++;
+            LastRequeueChannel = channel;
+            LastRequeueId = id;
+            return Task.FromResult(DeadLetterOperationResult.Success($"{FormatChannel(channel)}死信已重新写入 retry 队列。"));
+        }
+
+        public Task<DeadLetterOperationResult> DeleteAsync(DataPipelineRetryChannel channel, long id)
+        {
+            DeleteCalls++;
+            LastDeleteChannel = channel;
+            LastDeleteId = id;
+            return Task.FromResult(DeadLetterOperationResult.Success($"{FormatChannel(channel)} 死信已删除。"));
+        }
+
+        private static string FormatChannel(DataPipelineRetryChannel channel)
+            => channel == DataPipelineRetryChannel.Mes ? "MES" : "云端";
+    }
+
     private sealed class FakeDataViewService : IDataViewService
     {
         public DateTime LastDateFrom { get; private set; }
 
         public DateTime LastDateTo { get; private set; }
+
+        public DataViewSnapshot Snapshot { get; init; } = new(
+            128,
+            126,
+            2,
+            "98.44%",
+            [new ProductionRecordItem("08:00", "B-001", 64, 63, 1, "98.44%")]);
 
         public Task<DataViewSnapshot> QueryAsync(
             DateTime dateFrom,
@@ -563,12 +874,28 @@ public sealed class ProductionViewModelBehaviorTests
         {
             LastDateFrom = dateFrom;
             LastDateTo = dateTo;
-            return Task.FromResult(new DataViewSnapshot(
-                128,
-                126,
-                2,
-                "98.44%",
-                [new ProductionRecordItem("08:00", "B-001", 64, 63, 1, "98.44%")]));
+            return Task.FromResult(Snapshot);
+        }
+    }
+
+    private sealed class FakeDataExportService : IAvaloniaDataExportService
+    {
+        public AvaloniaDataExportResult Result { get; init; } = AvaloniaDataExportResult.Success("C:\\export\\data.csv");
+
+        public int CallCount { get; private set; }
+
+        public AvaloniaDataExportRequest? LastRequest { get; private set; }
+
+        public IReadOnlyList<IReadOnlyList<object?>> LastRows { get; private set; } = [];
+
+        public Task<AvaloniaDataExportResult> ExportAsync(
+            AvaloniaDataExportRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            LastRequest = request;
+            LastRows = request.Rows.ToArray();
+            return Task.FromResult(Result);
         }
     }
 
@@ -721,12 +1048,20 @@ public sealed class ProductionViewModelBehaviorTests
 
     private sealed class FakeEdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
     {
+        private readonly EdgeSyncDiagnosticsSnapshot _snapshot;
+
+        public FakeEdgeSyncDiagnosticsQuery()
+            : this(CreateEdgeSyncSnapshot())
+        {
+        }
+
+        public FakeEdgeSyncDiagnosticsQuery(EdgeSyncDiagnosticsSnapshot snapshot)
+        {
+            _snapshot = snapshot;
+        }
+
         public Task<EdgeSyncDiagnosticsSnapshot> GetCurrentAsync(CancellationToken ct = default)
-            => Task.FromResult(new EdgeSyncDiagnosticsSnapshot(
-                "PLC-A",
-                CreateCloudSnapshot(),
-                CreateMesSnapshot(),
-                new ProductionContextPersistenceDiagnostics(1, new DateTime(2026, 5, 13, 9, 0, 0))));
+            => Task.FromResult(_snapshot);
     }
 
     private sealed class FakeStationRuntimeRegistry : IStationRuntimeRegistry
@@ -815,6 +1150,8 @@ public sealed class ProductionViewModelBehaviorTests
 
         public List<AvaloniaDialogRequest> Requests { get; } = [];
 
+        public bool ConfirmResult { get; init; } = true;
+
         public Task ShowInfoAsync(string title, string message)
         {
             var request = AvaloniaDialogRequest.CreateInfo(title, message);
@@ -828,7 +1165,7 @@ public sealed class ProductionViewModelBehaviorTests
             var request = AvaloniaDialogRequest.CreateConfirm(title, message);
             Requests.Add(request);
             DialogRequested?.Invoke(this, request);
-            request.Complete(true);
+            request.Complete(ConfirmResult);
             return request.Result;
         }
     }
