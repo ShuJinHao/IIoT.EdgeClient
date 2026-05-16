@@ -1,0 +1,172 @@
+<UserControl
+    x:Class="IIoT.Edge.Launcher.Avalonia.Views.LauncherLoginView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia">
+
+  <Grid ColumnDefinitions="1.08*,0.92*" ColumnSpacing="20">
+    <Border Classes="launcher-login-card"
+            MinHeight="492"
+            VerticalAlignment="Center">
+      <StackPanel Spacing="24">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="launcher-page-title"
+                     Text="{DynamicResource Launcher_Login_Title}" />
+          <TextBlock Classes="launcher-body"
+                     Text="{DynamicResource Launcher_Description}"
+                     TextWrapping="Wrap" />
+        </StackPanel>
+
+        <StackPanel Spacing="14">
+          <Grid>
+            <TextBox Height="46"
+                     Padding="48,0,16,0"
+                     PlaceholderText="{DynamicResource Launcher_Login_AccountPlaceholder}"
+                     Text="{Binding UserName, Mode=TwoWay}" />
+            <icons:MaterialIcon Width="19"
+                                Height="19"
+                                Margin="18,0,0,0"
+                                HorizontalAlignment="Left"
+                                VerticalAlignment="Center"
+                                Foreground="{DynamicResource Launcher.Text.Muted}"
+                                Kind="AccountCircleOutline" />
+          </Grid>
+
+          <Grid>
+            <TextBox Height="46"
+                     Padding="48,0,16,0"
+                     PlaceholderText="{DynamicResource Launcher_Login_PasswordPlaceholder}"
+                     PasswordChar="*"
+                     Text="{Binding Password, Mode=TwoWay}" />
+            <icons:MaterialIcon Width="19"
+                                Height="19"
+                                Margin="18,0,0,0"
+                                HorizontalAlignment="Left"
+                                VerticalAlignment="Center"
+                                Foreground="{DynamicResource Launcher.Text.Muted}"
+                                Kind="LockOutline" />
+          </Grid>
+
+          <Border Classes="launcher-message error"
+                  MinHeight="38"
+                  IsVisible="{Binding HasError}">
+            <TextBlock Foreground="{DynamicResource Launcher.Text.Error}"
+                       Text="{Binding ErrorMessage}"
+                       TextWrapping="Wrap" />
+          </Border>
+
+          <Border Classes="launcher-message"
+                  MinHeight="44">
+            <TextBlock Foreground="{DynamicResource Launcher.Text.Secondary}"
+                       Text="{Binding StatusMessage}"
+                  TextWrapping="Wrap" />
+          </Border>
+        </StackPanel>
+
+        <StackPanel Spacing="10">
+          <Button Classes="launcher-primary"
+                  Height="46"
+                  HorizontalAlignment="Stretch"
+                  Command="{Binding LoginCommand}">
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Center"
+                        Spacing="8">
+              <TextBlock Text="{DynamicResource Launcher_Action_Login}" />
+              <icons:MaterialIcon Width="18"
+                                  Height="18"
+                                  VerticalAlignment="Center"
+                                  Foreground="{DynamicResource Launcher.Text.Primary}"
+                                  Kind="Login" />
+            </StackPanel>
+          </Button>
+
+          <Button Classes="launcher-ghost"
+                  Height="42"
+                  HorizontalAlignment="Stretch"
+                  Command="{Binding OpenChangePasswordCommand}">
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Center"
+                        Spacing="8">
+              <icons:MaterialIcon Width="18"
+                                  Height="18"
+                                  VerticalAlignment="Center"
+                                  Foreground="{DynamicResource Launcher.Text.Secondary}"
+                                  Kind="KeyOutline" />
+              <TextBlock Text="{DynamicResource Launcher_Action_ChangePassword}" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
+      </StackPanel>
+    </Border>
+
+    <StackPanel Grid.Column="1"
+                VerticalAlignment="Center"
+                Spacing="14">
+      <Border Classes="launcher-status-card">
+        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+          <Border Classes="launcher-status-mark active">
+            <icons:MaterialIcon Width="21"
+                                Height="21"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Foreground="{DynamicResource Launcher.Accent.Text}"
+                                Kind="AccountCircleOutline" />
+          </Border>
+          <StackPanel Grid.Column="1" Spacing="4">
+            <TextBlock Classes="launcher-section-title"
+                       Text="{DynamicResource Launcher_Card_LocalAccount_Title}" />
+            <TextBlock Classes="launcher-caption"
+                       Text="{DynamicResource Launcher_Card_LocalAccount_Value}"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <Border Classes="launcher-status-card">
+        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+          <Border Classes="launcher-status-mark soft">
+            <icons:MaterialIcon Width="21"
+                                Height="21"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Foreground="{DynamicResource Launcher.Text.Secondary}"
+                                Kind="FormatListChecks" />
+          </Border>
+          <StackPanel Grid.Column="1" Spacing="4">
+            <TextBlock Classes="launcher-section-title"
+                       Text="{DynamicResource Launcher_Card_Profile_Title}" />
+            <TextBlock Classes="launcher-caption"
+                       Text="{DynamicResource Launcher_Profile_SummaryZero}"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <Border Classes="launcher-steps-card">
+        <StackPanel Spacing="14">
+          <TextBlock Classes="launcher-section-title"
+                     Text="{DynamicResource Launcher_Card_Shell_Title}" />
+          <TextBlock Classes="launcher-body"
+                     Text="{DynamicResource Launcher_Card_Shell_Value}"
+                     TextWrapping="Wrap" />
+          <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="12">
+            <Border Classes="launcher-step-dot active" />
+            <TextBlock Grid.Column="1"
+                       Classes="launcher-body"
+                       Text="{DynamicResource Launcher_Step_Account}" />
+            <Border Grid.Row="1" Classes="launcher-step-dot" />
+            <TextBlock Grid.Row="1"
+                       Grid.Column="1"
+                       Classes="launcher-body"
+                       Text="{DynamicResource Launcher_Step_Profile}" />
+            <Border Grid.Row="2" Classes="launcher-step-dot" />
+            <TextBlock Grid.Row="2"
+                       Grid.Column="1"
+                       Classes="launcher-body"
+                       Text="{DynamicResource Launcher_Step_Launch}" />
+          </Grid>
+        </StackPanel>
+      </Border>
+    </StackPanel>
+  </Grid>
+</UserControl>

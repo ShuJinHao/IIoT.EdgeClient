@@ -1,10 +1,15 @@
 <Application
     x:Class="IIoT.Edge.Launcher.Avalonia.App"
     xmlns="https://github.com/avaloniaui"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    RequestedThemeVariant="Dark">
+    xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
   <Application.Styles>
     <FluentTheme />
+    <materialIcons:MaterialIconStyles />
+    <StyleInclude Source="avares://IIoT.Edge.UI.Avalonia/Themes/AppTypography.axaml" />
+    <StyleInclude Source="avares://IIoT.Edge.UI.Avalonia/Themes/IndustrialTheme.axaml" />
+    <StyleInclude Source="avares://IIoT.Edge.Launcher.Avalonia/Themes/LauncherTokens.axaml" />
+    <StyleInclude Source="avares://IIoT.Edge.Launcher.Avalonia/Themes/LauncherTheme.axaml" />
   </Application.Styles>
 </Application>

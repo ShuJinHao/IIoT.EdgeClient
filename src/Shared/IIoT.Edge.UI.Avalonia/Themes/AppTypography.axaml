@@ -1,0 +1,23 @@
+<Styles
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <Styles.Resources>
+    <FontFamily x:Key="App.FontFamily.Default">Microsoft YaHei UI, Segoe UI</FontFamily>
+    <x:Double x:Key="App.FontSize.Caption">12</x:Double>
+    <x:Double x:Key="App.FontSize.Body">14</x:Double>
+    <x:Double x:Key="App.FontSize.Subtitle">16</x:Double>
+    <x:Double x:Key="App.FontSize.Title">22</x:Double>
+    <x:Double x:Key="App.FontSize.PageTitle">26</x:Double>
+  </Styles.Resources>
+
+  <Style Selector="TemplatedControl">
+    <Setter Property="FontFamily" Value="{DynamicResource App.FontFamily.Default}" />
+    <Setter Property="FontSize" Value="{DynamicResource App.FontSize.Body}" />
+  </Style>
+
+  <Style Selector="TextBlock">
+    <Setter Property="FontFamily" Value="{DynamicResource App.FontFamily.Default}" />
+    <Setter Property="FontSize" Value="{DynamicResource App.FontSize.Body}" />
+  </Style>
+</Styles>

@@ -1,7 +1,7 @@
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Modules.Diagnostics;
-using IIoT.Edge.Shell.Core;
+using IIoT.Edge.Host.Bootstrap;
 using IIoT.Edge.UI.Avalonia.Services;
 
 namespace IIoT.Edge.AvaloniaShell.Services;
@@ -68,7 +68,7 @@ public sealed class AvaloniaShellStartupCoordinator : IAvaloniaShellStartupCoord
             var logPath = ResolveDiagnosticsLogPath();
             _runtimeState.SetStatus(
                 AvaloniaRuntimeStatus.Running,
-                "运行链路已启动，可进行只读现场联调。",
+                "运行链路已启动，可进行现场联调。",
                 summary,
                 logPath);
             return AvaloniaShellStartupResult.RuntimeStartedOk(summary, logPath);

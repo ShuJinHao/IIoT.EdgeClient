@@ -6,23 +6,23 @@
     Height="360"
     CanResize="False"
     WindowStartupLocation="CenterOwner"
-    Title="AvaloniaShell 启动失败">
+    Title="{DynamicResource Shell_StartupError_Title}">
   <Grid RowDefinitions="*,Auto" Margin="24">
     <StackPanel Spacing="10">
-      <TextBlock Text="AvaloniaShell 启动失败"
+      <TextBlock Text="{DynamicResource Shell_StartupError_Title}"
                  FontSize="20"
                  FontWeight="SemiBold" />
-      <TextBlock Text="错误详情" FontWeight="SemiBold" />
+      <TextBlock Text="{DynamicResource Shell_StartupError_Details}" FontWeight="SemiBold" />
       <TextBox Text="{Binding Message}"
                AcceptsReturn="True"
                IsReadOnly="True"
                MinHeight="72"
                TextWrapping="Wrap" />
-      <TextBlock Text="启动诊断摘要" FontWeight="SemiBold" />
+      <TextBlock Text="{DynamicResource Shell_StartupError_DiagnosticsSummary}" FontWeight="SemiBold" />
       <TextBox Text="{Binding DiagnosticsSummary}"
                IsReadOnly="True"
                TextWrapping="Wrap" />
-      <TextBlock Text="诊断日志路径" FontWeight="SemiBold" />
+      <TextBlock Text="{DynamicResource Shell_StartupError_DiagnosticsLogPath}" FontWeight="SemiBold" />
       <TextBox Text="{Binding DiagnosticsLogPath}"
                IsReadOnly="True"
                TextWrapping="Wrap" />
@@ -30,7 +30,7 @@
     <Button Grid.Row="1"
             HorizontalAlignment="Right"
             MinWidth="96"
-            Content="关闭"
+            Content="{DynamicResource Shell_Action_Close}"
             Click="CloseButton_Click" />
   </Grid>
 </Window>

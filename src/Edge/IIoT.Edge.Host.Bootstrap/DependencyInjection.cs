@@ -1,279 +1,112 @@
-﻿using IIoT.Edge.Application;
+using System.Reflection;
 using IIoT.Edge.Application.Abstractions.Config;
-using IIoT.Edge.Application.Abstractions.Context;
-using IIoT.Edge.Application.Abstractions.DataPipeline;
-using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
-using IIoT.Edge.Application.Abstractions.DataPipeline.SyncTask;
-using IIoT.Edge.Application.Abstractions.Device;
-using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Features.Config.ModuleParameters;
-using IIoT.Edge.Application.Abstractions.Plc;
-using IIoT.Edge.Application.Abstractions.Tasks;
-using IIoT.Edge.Application.Abstractions.Time;
-using IIoT.Edge.Application.Common.Tasks;
-using IIoT.Edge.Application.Common.Time;
-using IIoT.Edge.Host.Bootstrap.Modules;
-using IIoT.Edge.Infrastructure.DeviceComm;
-using IIoT.Edge.Infrastructure.Integration;
-using IIoT.Edge.Infrastructure.Integration.Mes;
-using IIoT.Edge.Infrastructure.Integration.Recipe;
-using IIoT.Edge.Infrastructure.Persistence.Dapper;
-using IIoT.Edge.Infrastructure.Persistence.EfCore;
-using IIoT.Edge.Presentation.Navigation;
-using IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
-using IIoT.Edge.Presentation.Panels;
-using IIoT.Edge.Presentation.Shell;
-using IIoT.Edge.Runtime;
-using IIoT.Edge.Runtime.DataPipeline.Tasks;
-using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
+using IIoT.Edge.Host.Bootstrap;
+using IIoT.Edge.Host.Bootstrap.Plugins;
+using IIoT.Edge.Presentation.Navigation.Avalonia;
+using IIoT.Edge.Presentation.Panels.Avalonia;
+using IIoT.Edge.Presentation.Shell.Avalonia;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
-using IIoT.Edge.Shell.Core;
-using IIoT.Edge.UI.Shared.Modularity;
-using Microsoft.Extensions.Configuration;
+using IIoT.Edge.UI.Avalonia;
+using IIoT.Edge.UI.Avalonia.Localization;
+using IIoT.Edge.UI.Avalonia.Modularity;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.FileProviders;
-using Microsoft.Extensions.Hosting;
-using System.IO;
 
 namespace IIoT.Edge.Host.Bootstrap;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddEdgeHostBootstrap(
+    public static IServiceCollection AddEdgeHostAvaloniaBootstrap(
         this IServiceCollection services,
-        IViewRegistry viewRegistry,
-        IConfiguration configuration,
-        EdgeRuntimePaths runtimePaths,
-        string environmentName,
-        IReadOnlyCollection<ModulePluginDescriptor> discoveredModules,
-        IReadOnlyCollection<ModuleCatalogIssue> moduleCatalogIssues,
-        IReadOnlyCollection<string> configuredEnabledModuleIds,
-        IEnumerable<IEdgeProcessModule> modules)
+        AvaloniaHostBootstrapOptions options)
     {
-        ArgumentNullException.ThrowIfNull(discoveredModules);
-        ArgumentNullException.ThrowIfNull(moduleCatalogIssues);
-        ArgumentNullException.ThrowIfNull(configuredEnabledModuleIds);
-        ArgumentNullException.ThrowIfNull(modules);
-
-        var enabledModules = modules.ToList();
-        var discoveredModuleList = discoveredModules.ToArray();
-        var moduleCatalogIssueList = moduleCatalogIssues.ToArray();
-        var configuredEnabledModuleList = configuredEnabledModuleIds.ToArray();
-        var moduleAssemblies = enabledModules
-            .Select(static module => module.GetType().Assembly)
-            .Distinct()
-            .ToArray();
-        var efDbPath = Path.Combine(runtimePaths.DatabaseDirectory, "edge.db");
-
-        Directory.CreateDirectory(runtimePaths.DatabaseDirectory);
-        Directory.CreateDirectory(runtimePaths.ExcelDirectory);
-        Directory.CreateDirectory(runtimePaths.LogDirectory);
-
-        services.AddSingleton(configuration);
-        services.AddSingleton(runtimePaths);
-        services.AddSingleton<IHostEnvironment>(
-            new EdgeHostEnvironment(environmentName, AppContext.BaseDirectory));
+        var viewRegistry = new AvaloniaViewRegistry();
         var cellDataTypeRegistry = new CellDataTypeRegistry();
-        services.AddSingleton<ICellDataTypeRegistry>(cellDataTypeRegistry);
-        services.AddSingleton<ICellDataJsonSerializer, CellDataJsonSerializer>();
-        var productionTimeOptions =
-            configuration.GetSection(ProductionTimeOptions.SectionName).Get<ProductionTimeOptions>()
-            ?? new ProductionTimeOptions();
-        productionTimeOptions.Validate();
-        services.AddSingleton(productionTimeOptions);
-        services.AddSingleton<IProductionTimeProvider, ProductionTimeProvider>();
-        services.AddSingleton(viewRegistry);
-        services.AddSingleton<IViewRegistry>(viewRegistry);
-        services.AddSingleton<IReadOnlyCollection<ModulePluginDescriptor>>(discoveredModuleList);
-        services.AddSingleton<IReadOnlyCollection<ModuleCatalogIssue>>(moduleCatalogIssueList);
-        services.AddSingleton<IReadOnlyCollection<string>>(configuredEnabledModuleList);
-        services.TryAddSingleton<ICrashLogWriter, CrashLogWriter>();
-        services.TryAddSingleton<IModulePluginAssemblyResolver, ModulePluginAssemblyResolver>();
-        services.TryAddSingleton<IModulePluginLoader, ModulePluginLoader>();
-        services.TryAddSingleton<IModuleCatalog, DirectoryModuleCatalog>();
-        services.AddSingleton<IDevelopmentSampleInitializer, DevelopmentSampleInitializer>();
-        services.AddSingleton<IStartupDiagnosticsStore, StartupDiagnosticsStore>();
-        services.AddSingleton<ICloudUploadDiagnosticsStore, CloudUploadDiagnosticsStore>();
-        services.AddSingleton<IMesUploadDiagnosticsStore, MesUploadDiagnosticsStore>();
-        services.AddSingleton<IMesRetryDiagnosticsStore, MesRetryDiagnosticsStore>();
-        services.AddSingleton<IExternalHeartbeatStateStore, ExternalHeartbeatStateStore>();
-        services.AddSingleton<ICriticalPersistenceFallbackWriter, CriticalPersistenceFallbackWriter>();
-        services.Configure<DataPipelineCapacityOptions>(configuration.GetSection(DataPipelineCapacityOptions.SectionName));
-        services.AddSingleton(configuration.GetSection(DataPipelineRuntimeOptions.SectionName).Get<DataPipelineRuntimeOptions>() ?? new DataPipelineRuntimeOptions());
-
-        var shiftConfig = new ShiftConfig();
-        configuration.GetSection("Shift").Bind(shiftConfig);
-        services.AddSingleton(shiftConfig);
-
-        services.AddEdgeApplication();
-        services.AddEfCorePersistenceInfrastructure(efDbPath);
-        services.AddDapperPersistenceInfrastructure(runtimePaths.DatabaseDirectory);
-        services.AddIntegrationInfrastructure(configuration, runtimePaths);
-        services.AddDeviceCommInfrastructure();
-        services.AddEdgeRuntime(runtimePaths);
-
-        services.AddMediatR(cfg =>
-        {
-            var licenseKey = ResolveMediatRLicenseKey(configuration);
-            if (!string.IsNullOrWhiteSpace(licenseKey))
-            {
-                cfg.LicenseKey = licenseKey;
-            }
-
-            cfg.RegisterServicesFromAssemblies(
-                [
-                    typeof(IIoT.Edge.Application.DependencyInjection).Assembly,
-                    typeof(IIoT.Edge.Presentation.Navigation.DependencyInjection).Assembly,
-                    typeof(IIoT.Edge.Presentation.Panels.DependencyInjection).Assembly,
-                    ..moduleAssemblies
-                ]);
-        });
-
-        services.AddAutoMapper(
-            _ => { },
-            [
-                typeof(IIoT.Edge.Application.DependencyInjection).Assembly,
-                typeof(IIoT.Edge.Presentation.Shell.DependencyInjection).Assembly,
-                typeof(IIoT.Edge.Presentation.Navigation.DependencyInjection).Assembly,
-                typeof(IIoT.Edge.Presentation.Panels.DependencyInjection).Assembly,
-                typeof(IIoT.Edge.Infrastructure.Integration.DependencyInjection).Assembly,
-                typeof(IIoT.Edge.Infrastructure.DeviceComm.DependencyInjection).Assembly,
-                ..moduleAssemblies
-            ]);
-        services.AddShellPresentation();
-        services.AddNavigationPresentation();
-        services.AddPanelPresentation();
-
-        RegisterHostViews(new HostViewRegistry(viewRegistry));
-        RegisterModules(services, viewRegistry, configuration, enabledModules, cellDataTypeRegistry);
-        viewRegistry.RegisterPanelViews();
-
-        services.AddSingleton<IManagedBackgroundService>(sp =>
-            new LongRunningBackgroundTaskService(
-                new DelegatingBackgroundTask(
-                    "RuntimeState.AutoSave",
-                    ct => sp.GetRequiredService<IProductionContextStore>()
-                        .StartAutoSaveAsync(ct, intervalSeconds: 30))));
-
-        services.AddSingleton<IManagedBackgroundService>(sp =>
-            new DelegatingBackgroundService(
-                "Config.RuntimeWarmup",
-                ct => sp.GetRequiredService<ILocalSystemRuntimeConfigService>().EnsureInitializedAsync(ct),
-                _ => Task.CompletedTask));
-
-        services.AddSingleton<IManagedBackgroundService>(sp =>
-            new DelegatingBackgroundService(
-                "Device.Heartbeat",
-                ct => sp.GetRequiredService<IDeviceService>().StartAsync(ct),
-                _ => sp.GetRequiredService<IDeviceService>().StopAsync()));
-
-        services.AddSingleton<IManagedBackgroundService>(sp =>
-            new DelegatingBackgroundService(
-                "MES.Heartbeat",
-                ct => sp.GetRequiredService<MesHeartbeatTask>().StartAsync(ct),
-                _ => sp.GetRequiredService<MesHeartbeatTask>().StopAsync()));
-
-        services.AddSingleton<IManagedBackgroundService>(sp =>
-            new DelegatingBackgroundService(
-                "PLC.Runtime",
-                ct => sp.GetRequiredService<IPlcConnectionManager>().InitializeAsync(ct),
-                ct => sp.GetRequiredService<IPlcConnectionManager>().StopAsync(ct)));
-
-        services.AddSingleton<IManagedBackgroundService>(sp =>
-            new LongRunningBackgroundTaskGroupService(
-                "DataPipeline.Runtime",
-                [
-                    sp.GetRequiredService<ProcessQueueTask>(),
-                    sp.GetRequiredService<CloudRetryTask>(),
-                    sp.GetRequiredService<MesRetryTask>()
-                ]));
-
-        services.AddSingleton<IManagedBackgroundService>(sp =>
-            new DelegatingBackgroundService(
-                "Cloud.CapacitySync",
-                ct => sp.GetRequiredService<ICapacitySyncTask>().StartAsync(ct),
-                _ => sp.GetRequiredService<ICapacitySyncTask>().StopAsync()));
-
-        services.AddSingleton<IManagedBackgroundService>(sp =>
-            new DelegatingBackgroundService(
-                "Cloud.DeviceLogSync",
-                ct => sp.GetRequiredService<IDeviceLogSyncTask>().StartAsync(ct),
-                _ => sp.GetRequiredService<IDeviceLogSyncTask>().StopAsync()));
-
-        services.AddSingleton<IManagedBackgroundService>(sp =>
-            new LongRunningBackgroundTaskService(
-                sp.GetRequiredService<RecipeSyncTask>()));
-
-        services.AddSingleton<INavigationService, NavigationService>();
-        services.AddSingleton<IAppStartupInitializer, AppStartupInitializer>();
-        services.AddSingleton<IStartupPluginLifecycleSnapshotBuilder, StartupPluginLifecycleSnapshotBuilder>();
-        services.AddSingleton<IStartupDiagnosticsReportBuilder, StartupDiagnosticsReportBuilder>();
-        services.AddSingleton<IPlcRuntimeTaskBinder, PlcRuntimeTaskBinder>();
-        services.AddSingleton<IAppRuntimeStateCoordinator, AppRuntimeStateCoordinator>();
-        services.AddSingleton<IAppLifecycleCoordinator, AppLifecycleManager>();
-        services.AddSingleton<AppLifecycleManager>(sp =>
-            (AppLifecycleManager)sp.GetRequiredService<IAppLifecycleCoordinator>());
-
-        return services;
-    }
-
-    private static string? ResolveMediatRLicenseKey(IConfiguration configuration)
-        => FirstNonEmpty(
-            Environment.GetEnvironmentVariable("MediatR__LicenseKey"),
-            Environment.GetEnvironmentVariable("MEDIATR_LICENSE_KEY"),
-            configuration["MediatR:LicenseKey"]);
-
-    private static string? FirstNonEmpty(params string?[] values)
-        => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
-
-    private static void RegisterHostViews(IViewRegistry registry)
-    {
-        registry.RegisterRoute(
-            CoreViewIds.Diagnostics,
-            typeof(DiagnosticsPage),
-            typeof(DiagnosticsViewModel),
-            cacheView: false);
-        registry.RegisterMenu(new MenuInfo
-        {
-            Title = "系统诊断",
-            TitleResourceKey = "Navigation_Menu_CoreDiagnostics",
-            ViewId = CoreViewIds.Diagnostics,
-            Icon = "Stethoscope",
-            Order = 999,
-            RequiredPermission = string.Empty
-        });
-    }
-
-    private static void RegisterModules(
-        IServiceCollection services,
-        IViewRegistry viewRegistry,
-        IConfiguration configuration,
-        IReadOnlyCollection<IEdgeProcessModule> modules,
-        ICellDataTypeRegistry cellDataTypeRegistry)
-    {
         var cellDataRegistry = new CellDataRegistry(cellDataTypeRegistry);
         var runtimeRegistry = new StationRuntimeRegistry();
         var integrationRegistry = new ProcessIntegrationRegistry();
         var moduleParamRegistry = new ModuleParamRegistry();
+        var moduleCatalog = new JsonEdgeProcessModuleCatalog(new EdgeProcessModuleCatalogOptions(
+            options.PluginDirectories ?? [options.RuntimePaths.BaseDirectory],
+            ".dll"));
 
-        services.AddSingleton<ICellDataRegistry>(cellDataRegistry);
-        services.AddSingleton<IStationRuntimeRegistry>(runtimeRegistry);
-        services.AddSingleton<IProcessIntegrationRegistry>(integrationRegistry);
-        services.AddSingleton<IModuleParamRegistry>(moduleParamRegistry);
+        services.TryAddSingleton<IAvaloniaViewRegistry>(viewRegistry);
+        services.TryAddSingleton<ICellDataTypeRegistry>(cellDataTypeRegistry);
+        services.TryAddSingleton<ICellDataRegistry>(cellDataRegistry);
+        services.TryAddSingleton<IStationRuntimeRegistry>(runtimeRegistry);
+        services.TryAddSingleton<IProcessIntegrationRegistry>(integrationRegistry);
+        services.TryAddSingleton<IModuleParamRegistry>(moduleParamRegistry);
+        services.TryAddSingleton<IEdgeProcessModuleCatalog>(moduleCatalog);
+        var modules = ResolveModules(services, options);
+
+        services.AddEdgeHostRuntimeServices(new EdgeHostBootstrapOptions(
+            options.Configuration,
+            options.RuntimePaths,
+            options.EnvironmentName));
+        services.AddAvaloniaUiShared();
+        services.AddShellAvaloniaPresentation();
+        services.AddPanelAvaloniaPresentation();
+        services.AddNavigationAvaloniaPresentation();
+        services.AddSingleton(options);
+        services.AddSingleton<IAvaloniaLanguageService>(sp =>
+        {
+            var loader = sp.GetRequiredService<IAvaloniaXamlStringResourceLoader>();
+            return new AvaloniaResourceLanguageService(
+                loader.Load(GetResourceAssemblies(modules)),
+                storagePath: Path.Combine(options.RuntimePaths.RuntimeDataRoot, "language.json"));
+        });
+        RegisterModules(
+            services,
+            options,
+            modules,
+            viewRegistry,
+            cellDataRegistry,
+            runtimeRegistry,
+            integrationRegistry,
+            moduleParamRegistry);
+        RegisterAvaloniaViewRegistry(viewRegistry, options.ModuleIds);
+        return services;
+    }
+
+    public static void RegisterAvaloniaViewRegistry(
+        IAvaloniaViewRegistry viewRegistry,
+        IReadOnlyCollection<string> moduleIds)
+    {
+        ArgumentNullException.ThrowIfNull(viewRegistry);
+        ArgumentNullException.ThrowIfNull(moduleIds);
+
+        PanelAvaloniaPresentationRegistration.RegisterPanelViews(viewRegistry);
+        NavigationAvaloniaPresentationRegistration.RegisterNavigationViews(viewRegistry, moduleIds);
+    }
+
+    private static void RegisterModules(
+        IServiceCollection services,
+        AvaloniaHostBootstrapOptions options,
+        IReadOnlyCollection<IEdgeProcessModule> modules,
+        IAvaloniaViewRegistry viewRegistry,
+        ICellDataRegistry cellDataRegistry,
+        IStationRuntimeRegistry runtimeRegistry,
+        IProcessIntegrationRegistry integrationRegistry,
+        IModuleParamRegistry moduleParamRegistry)
+    {
+        if (modules.Count == 0)
+        {
+            return;
+        }
 
         ValidateModuleIdentity(modules);
 
         foreach (var module in modules)
         {
             services.AddSingleton<IEdgeProcessModule>(module);
-            var builder = new EdgeProcessModuleBuilder(
+            var builder = new AvaloniaEdgeProcessModuleBuilder(
                 module.ModuleId,
                 module.ProcessType,
                 services,
-                configuration,
-                new ModuleViewRegistry(viewRegistry, module.ModuleId),
+                options.Configuration,
+                viewRegistry,
                 cellDataRegistry,
                 runtimeRegistry,
                 integrationRegistry,
@@ -283,6 +116,39 @@ public static class DependencyInjection
         }
 
         ValidateModuleRegistrations(modules, cellDataRegistry, runtimeRegistry, integrationRegistry);
+    }
+
+    private static IEdgeProcessModule[] ResolveModules(
+        IServiceCollection services,
+        AvaloniaHostBootstrapOptions options)
+    {
+        if (options.Modules is not null)
+        {
+            return options.Modules.ToArray();
+        }
+
+        var catalog = services
+            .FirstOrDefault(descriptor => descriptor.ServiceType == typeof(IEdgeProcessModuleCatalog))
+            ?.ImplementationInstance as IEdgeProcessModuleCatalog;
+
+        return catalog?.LoadModules().ToArray() ?? [];
+    }
+
+    private static IReadOnlyCollection<Assembly> GetResourceAssemblies(IReadOnlyCollection<IEdgeProcessModule> modules)
+    {
+        var assemblies = new List<Assembly>();
+        var entryAssembly = Assembly.GetEntryAssembly();
+        if (entryAssembly is not null)
+        {
+            assemblies.Add(entryAssembly);
+        }
+
+        assemblies.Add(typeof(IIoT.Edge.Presentation.Shell.Avalonia.DependencyInjection).Assembly);
+        assemblies.Add(typeof(PanelAvaloniaPresentationRegistration).Assembly);
+        assemblies.Add(typeof(NavigationAvaloniaPresentationRegistration).Assembly);
+        assemblies.AddRange(modules.Select(static module => module.GetType().Assembly));
+
+        return assemblies.Distinct().ToArray();
     }
 
     private static void ValidateModuleIdentity(IEnumerable<IEdgeProcessModule> modules)
@@ -330,40 +196,5 @@ public static class DependencyInjection
                     $"Module '{module.ModuleId}' is missing cloud uploader registration for process type '{module.ProcessType}'.");
             }
         }
-    }
-
-    private sealed class DelegatingBackgroundTask : IBackgroundTask
-    {
-        private readonly Func<CancellationToken, Task> _startAsync;
-        private readonly Func<CancellationToken, Task> _stopAsync;
-
-        public DelegatingBackgroundTask(
-            string taskName,
-            Func<CancellationToken, Task> startAsync,
-            Func<CancellationToken, Task>? stopAsync = null)
-        {
-            TaskName = taskName;
-            _startAsync = startAsync ?? throw new ArgumentNullException(nameof(startAsync));
-            _stopAsync = stopAsync ?? (_ => Task.CompletedTask);
-        }
-
-        public string TaskName { get; }
-
-        public Task StartAsync(CancellationToken ct) => _startAsync(ct);
-
-        public Task StopAsync(CancellationToken ct) => _stopAsync(ct);
-    }
-
-    private sealed class EdgeHostEnvironment(string environmentName, string contentRootPath) : IHostEnvironment
-    {
-        public string EnvironmentName { get; set; } = string.IsNullOrWhiteSpace(environmentName)
-            ? Environments.Production
-            : environmentName.Trim();
-
-        public string ApplicationName { get; set; } = "IIoT.Edge.Shell";
-
-        public string ContentRootPath { get; set; } = contentRootPath;
-
-        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
 }

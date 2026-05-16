@@ -10,6 +10,8 @@ public interface IAvaloniaViewRegistry
 
     AvaloniaViewRegistration? GetViewRegistration(string viewId);
 
+    IReadOnlyList<AvaloniaViewRegistration> GetAllViewRegistrations();
+
     IReadOnlyList<AvaloniaMenuInfo> GetAllMenus();
 
     IReadOnlyList<AvaloniaDockPaneInfo> GetAllDockPanes();

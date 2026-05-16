@@ -1,0 +1,757 @@
+<Styles
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <Styles.Resources>
+    <SolidColorBrush x:Key="Edge.Bg.Canvas" Color="#EEF1EC" />
+    <SolidColorBrush x:Key="Edge.Bg.Shell" Color="#F8FAF5" />
+    <SolidColorBrush x:Key="Edge.Bg.Card" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="Edge.Bg.CardSoft" Color="#F5F8F1" />
+    <SolidColorBrush x:Key="Edge.Bg.Workbench" Color="#18232B" />
+    <SolidColorBrush x:Key="Edge.Bg.WorkbenchAlt" Color="#22313A" />
+    <SolidColorBrush x:Key="Edge.Bg.WorkbenchNode" Color="#263640" />
+    <SolidColorBrush x:Key="Edge.Bg.WorkbenchPanel" Color="#21313A" />
+    <SolidColorBrush x:Key="Edge.Bg.Selected" Color="#D6F25B" />
+    <SolidColorBrush x:Key="Edge.Bg.SelectedSoft" Color="#EEF9BD" />
+    <SolidColorBrush x:Key="Edge.Bg.Mint" Color="#EAF8F3" />
+    <SolidColorBrush x:Key="Edge.Bg.Blue" Color="#EDF5FF" />
+    <SolidColorBrush x:Key="Edge.Bg.Lime" Color="#F5FBE4" />
+    <SolidColorBrush x:Key="Edge.Bg.Violet" Color="#F4F0FF" />
+    <SolidColorBrush x:Key="Edge.Bg.Warning" Color="#FFF7E6" />
+    <SolidColorBrush x:Key="Edge.Bg.Error" Color="#FFF0EF" />
+    <SolidColorBrush x:Key="Edge.Border.Muted" Color="#E4E6E0" />
+    <SolidColorBrush x:Key="Edge.Border.Strong" Color="#D1D6CB" />
+    <SolidColorBrush x:Key="Edge.Border.Subtle" Color="#EEF0EA" />
+    <SolidColorBrush x:Key="Edge.Border.Workbench" Color="#31424C" />
+    <SolidColorBrush x:Key="Edge.Text.Primary" Color="#141922" />
+    <SolidColorBrush x:Key="Edge.Text.Secondary" Color="#4C5664" />
+    <SolidColorBrush x:Key="Edge.Text.Muted" Color="#7B8491" />
+    <SolidColorBrush x:Key="Edge.Text.Disabled" Color="#AEB5BC" />
+    <SolidColorBrush x:Key="Edge.Text.Inverse" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="Edge.Text.WorkbenchBody" Color="#DDE6E1" />
+    <SolidColorBrush x:Key="Edge.Text.WorkbenchMuted" Color="#B8C6CC" />
+    <SolidColorBrush x:Key="Edge.Accent.Lime" Color="#BDEA30" />
+    <SolidColorBrush x:Key="Edge.Accent.LimeDark" Color="#6BAE1D" />
+    <SolidColorBrush x:Key="Edge.Accent.Teal" Color="#28B8A8" />
+    <SolidColorBrush x:Key="Edge.Accent.Blue" Color="#4D8FEA" />
+    <SolidColorBrush x:Key="Edge.Accent.Violet" Color="#8A74E8" />
+    <SolidColorBrush x:Key="Edge.Accent.Warning" Color="#F2A900" />
+    <SolidColorBrush x:Key="Edge.Status.Success" Color="#6BAE1D" />
+    <SolidColorBrush x:Key="Edge.Status.SuccessSoft" Color="#E8F6D6" />
+    <SolidColorBrush x:Key="Edge.Status.Warning" Color="#F2A900" />
+    <SolidColorBrush x:Key="Edge.Status.WarningSoft" Color="#FFF1CC" />
+    <SolidColorBrush x:Key="Edge.Status.Error" Color="#EF5350" />
+    <SolidColorBrush x:Key="Edge.Status.ErrorSoft" Color="#FFE4E2" />
+    <SolidColorBrush x:Key="Edge.Status.ErrorText" Color="#C62828" />
+
+    <SolidColorBrush x:Key="Ind.Bg.Main" Color="#EEF0EC" />
+    <SolidColorBrush x:Key="Ind.Bg.Panel" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="Ind.Bg.SurfaceAlt" Color="#F7F8F4" />
+    <SolidColorBrush x:Key="Ind.Bg.Deep" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="Ind.Bg.Selected" Color="#D6F25B" />
+    <SolidColorBrush x:Key="Ind.Border.Muted" Color="#E4E6E0" />
+    <SolidColorBrush x:Key="Ind.Border.Strong" Color="#D1D6CB" />
+    <SolidColorBrush x:Key="Ind.Text.Primary" Color="#141922" />
+    <SolidColorBrush x:Key="Ind.Text.Secondary" Color="#4C5664" />
+    <SolidColorBrush x:Key="Ind.Text.Muted" Color="#7B8491" />
+    <SolidColorBrush x:Key="Ind.Text.Disabled" Color="#AEB5BC" />
+    <SolidColorBrush x:Key="Ind.Text.Inverse" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="Ind.Accent.Primary" Color="#BDEA30" />
+    <SolidColorBrush x:Key="Ind.Accent.Blue" Color="#4D8FEA" />
+    <SolidColorBrush x:Key="Ind.Accent.Muted" Color="#9BB8D9" />
+    <SolidColorBrush x:Key="Ind.Status.Success" Color="#6BAE1D" />
+    <SolidColorBrush x:Key="Ind.Status.SuccessSoft" Color="#6BAE1D" />
+    <SolidColorBrush x:Key="Ind.Status.Warning" Color="#F2A900" />
+    <SolidColorBrush x:Key="Ind.Status.Error" Color="#EF5350" />
+    <SolidColorBrush x:Key="Ind.Status.ErrorSoft" Color="#EF5350" />
+    <SolidColorBrush x:Key="Ind.Status.ErrorText" Color="#C62828" />
+  </Styles.Resources>
+
+  <Style Selector="Window">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Canvas}" />
+    <Setter Property="Foreground" Value="{DynamicResource Edge.Text.Primary}" />
+  </Style>
+
+  <Style Selector="TextBox">
+    <Setter Property="MinHeight" Value="38" />
+    <Setter Property="Padding" Value="14,8" />
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Card}" />
+    <Setter Property="Foreground" Value="{DynamicResource Edge.Text.Primary}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Edge.Border.Muted}" />
+    <Setter Property="CornerRadius" Value="18" />
+  </Style>
+
+  <Style Selector="TextBox:focus">
+    <Setter Property="BorderBrush" Value="{DynamicResource Edge.Border.Strong}" />
+  </Style>
+
+  <Style Selector="ComboBox">
+    <Setter Property="MinHeight" Value="38" />
+    <Setter Property="Padding" Value="12,6" />
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Card}" />
+    <Setter Property="Foreground" Value="{DynamicResource Edge.Text.Primary}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Edge.Border.Muted}" />
+    <Setter Property="CornerRadius" Value="18" />
+  </Style>
+
+  <Style Selector="Button">
+    <Setter Property="MinHeight" Value="36" />
+    <Setter Property="Padding" Value="16,8" />
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Card}" />
+    <Setter Property="Foreground" Value="{DynamicResource Edge.Text.Primary}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Edge.Border.Muted}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="12" />
+  </Style>
+
+  <Style Selector="Button:pointerover">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.CardSoft}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Edge.Border.Strong}" />
+  </Style>
+
+  <Style Selector="Button.accent">
+    <Setter Property="Background" Value="{DynamicResource Edge.Accent.Lime}" />
+    <Setter Property="Foreground" Value="{DynamicResource Edge.Text.Primary}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Edge.Accent.Lime}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <Style Selector="Button.accent:pointerover">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.SelectedSoft}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Edge.Accent.LimeDark}" />
+  </Style>
+
+  <Style Selector="Button.ghost">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+
+  <Style Selector="Button.quiet">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Edge.Border.Muted}" />
+    <Setter Property="Foreground" Value="{DynamicResource Edge.Text.Secondary}" />
+  </Style>
+
+  <Style Selector="Button.quiet:pointerover">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.CardSoft}" />
+    <Setter Property="Foreground" Value="{DynamicResource Edge.Text.Primary}" />
+  </Style>
+
+  <Style Selector="Button.icon">
+    <Setter Property="Width" Value="42" />
+    <Setter Property="Height" Value="42" />
+    <Setter Property="MinHeight" Value="42" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="21" />
+  </Style>
+
+  <Style Selector="Button.chip">
+    <Setter Property="MinHeight" Value="30" />
+    <Setter Property="Padding" Value="12,4" />
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.CardSoft}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="CornerRadius" Value="15" />
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+
+  <Style Selector="Button.window-control">
+    <Setter Property="Width" Value="40" />
+    <Setter Property="Height" Value="40" />
+    <Setter Property="MinHeight" Value="40" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource Edge.Text.Muted}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="CornerRadius" Value="20" />
+  </Style>
+
+  <Style Selector="Button.window-control:pointerover">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.CardSoft}" />
+    <Setter Property="Foreground" Value="{DynamicResource Edge.Text.Primary}" />
+  </Style>
+
+  <Style Selector="Button.nav-menu">
+    <Setter Property="Height" Value="48" />
+    <Setter Property="Padding" Value="16,0" />
+    <Setter Property="Margin" Value="4,2" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="Foreground" Value="{DynamicResource Edge.Text.Muted}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+
+  <Style Selector="Button.nav-menu:pointerover">
+    <Setter Property="Foreground" Value="{DynamicResource Edge.Text.Primary}" />
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.CardSoft}" />
+  </Style>
+
+  <Style Selector="Button.nav-menu:disabled">
+    <Setter Property="Foreground" Value="{DynamicResource Edge.Text.Disabled}" />
+  </Style>
+
+  <Style Selector="Border.dock-root">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Shell}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Edge.Border.Muted}" />
+  </Style>
+
+  <Style Selector="Border.dock-document">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Shell}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+
+  <Style Selector="Border.dock-tool">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Edge.Border.Muted}" />
+  </Style>
+
+  <Style Selector="Border.edge-shell">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Shell}" />
+    <Setter Property="CornerRadius" Value="30" />
+    <Setter Property="BoxShadow" Value="0 24 56 0 #24000000" />
+  </Style>
+
+  <Style Selector="Border.edge-shell.flush">
+    <Setter Property="CornerRadius" Value="30" />
+    <Setter Property="BoxShadow" Value="0 0 0 0 #00000000" />
+  </Style>
+
+  <Style Selector="Border.edge-workspace-host">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Shell}" />
+    <Setter Property="Padding" Value="0,0,10,0" />
+  </Style>
+
+  <Style Selector="Border.edge-document-host">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Shell}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="24" />
+    <Setter Property="ClipToBounds" Value="True" />
+  </Style>
+
+  <Style Selector="Border.edge-tool-shell">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Shell}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="24" />
+    <Setter Property="Padding" Value="8" />
+    <Setter Property="BoxShadow" Value="0 0 0 0 #00000000" />
+    <Setter Property="ClipToBounds" Value="True" />
+  </Style>
+
+  <Style Selector="Border.edge-tool-shell.stacked">
+    <Setter Property="Padding" Value="0,0,8,0" />
+    <Setter Property="CornerRadius" Value="24" />
+  </Style>
+
+  <Style Selector="Border.edge-card">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Edge.Border.Muted}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="22" />
+    <Setter Property="Padding" Value="20" />
+    <Setter Property="BoxShadow" Value="0 10 28 0 #0F000000" />
+  </Style>
+
+  <Style Selector="Border.edge-card.compact">
+    <Setter Property="Padding" Value="16" />
+    <Setter Property="CornerRadius" Value="20" />
+    <Setter Property="BoxShadow" Value="0 8 22 0 #0D000000" />
+  </Style>
+
+  <Style Selector="Border.edge-right-panel">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Card}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="22" />
+    <Setter Property="Padding" Value="18" />
+    <Setter Property="BoxShadow" Value="0 12 30 0 #0E000000" />
+  </Style>
+
+  <Style Selector="Border.edge-right-panel.chromeless">
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="18" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="BoxShadow" Value="0 0 0 0 #00000000" />
+  </Style>
+
+  <Style Selector="Border.edge-right-panel.compact">
+    <Setter Property="Padding" Value="14" />
+    <Setter Property="CornerRadius" Value="20" />
+    <Setter Property="BoxShadow" Value="0 8 22 0 #0D000000" />
+  </Style>
+
+  <Style Selector="Border.edge-page-panel">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Shell}" />
+    <Setter Property="Padding" Value="20" />
+  </Style>
+
+  <Style Selector="Border.edge-table-card">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Edge.Border.Muted}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="22" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="BoxShadow" Value="0 10 28 0 #11000000" />
+    <Setter Property="ClipToBounds" Value="True" />
+  </Style>
+
+  <Style Selector="Border.edge-summary-card">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Edge.Border.Subtle}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="20" />
+    <Setter Property="Padding" Value="16" />
+    <Setter Property="BoxShadow" Value="0 8 22 0 #0D000000" />
+  </Style>
+
+  <Style Selector="Border.edge-summary-card.soft">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.CardSoft}" />
+  </Style>
+
+  <Style Selector="Border.edge-summary-card.lime">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Lime}" />
+  </Style>
+
+  <Style Selector="Border.edge-summary-card.blue">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Blue}" />
+  </Style>
+
+  <Style Selector="Border.edge-summary-card.mint">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Mint}" />
+  </Style>
+
+  <Style Selector="Border.edge-toolbar-card">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Edge.Border.Subtle}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="18" />
+    <Setter Property="Padding" Value="12" />
+  </Style>
+
+  <Style Selector="Border.edge-table-shell">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Edge.Border.Muted}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="18" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="ClipToBounds" Value="True" />
+  </Style>
+
+  <Style Selector="Border.edge-side-list">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.CardSoft}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Edge.Border.Subtle}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="18" />
+    <Setter Property="Padding" Value="12" />
+  </Style>
+
+  <Style Selector="Border.edge-form-section">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Edge.Border.Muted}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="18" />
+    <Setter Property="Padding" Value="16" />
+  </Style>
+
+  <Style Selector="Border.edge-card.mint">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Mint}" />
+  </Style>
+
+  <Style Selector="Border.edge-card.blue">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Blue}" />
+  </Style>
+
+  <Style Selector="Border.edge-card.lime">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Lime}" />
+  </Style>
+
+  <Style Selector="Border.edge-card.violet">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Violet}" />
+  </Style>
+
+  <Style Selector="Border.edge-kpi-card">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Edge.Border.Subtle}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="20" />
+    <Setter Property="Padding" Value="14" />
+    <Setter Property="BoxShadow" Value="0 12 26 0 #0F000000" />
+  </Style>
+
+  <Style Selector="Border.edge-kpi-card.mint">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Mint}" />
+  </Style>
+
+  <Style Selector="Border.edge-kpi-card.blue">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Blue}" />
+  </Style>
+
+  <Style Selector="Border.edge-kpi-card.lime">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Lime}" />
+  </Style>
+
+  <Style Selector="Border.edge-kpi-card.violet">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Violet}" />
+  </Style>
+
+  <Style Selector="Border.edge-workbench">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Workbench}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Edge.Border.Workbench}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="22" />
+    <Setter Property="Padding" Value="18" />
+    <Setter Property="BoxShadow" Value="0 14 30 0 #22000000" />
+  </Style>
+
+  <Style Selector="Border.edge-workbench-node">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.WorkbenchNode}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Edge.Border.Workbench}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="Padding" Value="10" />
+  </Style>
+
+  <Style Selector="Border.edge-workbench-pill">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.WorkbenchPanel}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Edge.Border.Workbench}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="16" />
+    <Setter Property="Padding" Value="10,6" />
+  </Style>
+
+  <Style Selector="Border.edge-status-card">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Card}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="15" />
+    <Setter Property="Padding" Value="12" />
+    <Setter Property="BoxShadow" Value="0 6 16 0 #08000000" />
+  </Style>
+
+  <Style Selector="Border.edge-status-card.soft">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.CardSoft}" />
+  </Style>
+
+  <Style Selector="Border.edge-mini-tab">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.CardSoft}" />
+    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="Padding" Value="8,6" />
+  </Style>
+
+  <Style Selector="Border.edge-mini-tab.selected">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Selected}" />
+  </Style>
+
+  <Style Selector="Border.edge-status-card.compact">
+    <Setter Property="CornerRadius" Value="15" />
+    <Setter Property="Padding" Value="12" />
+  </Style>
+
+  <Style Selector="Border.edge-alert">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Warning}" />
+    <Setter Property="BorderBrush" Value="#F4D48B" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="16" />
+    <Setter Property="Padding" Value="14" />
+  </Style>
+
+  <Style Selector="Border.edge-inline-note">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.CardSoft}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="Padding" Value="10" />
+  </Style>
+
+  <Style Selector="Border.edge-log-metric">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.CardSoft}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="15" />
+    <Setter Property="Padding" Value="10" />
+    <Setter Property="BoxShadow" Value="0 4 12 0 #06000000" />
+  </Style>
+
+  <Style Selector="Border.edge-log-empty">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.CardSoft}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="16" />
+    <Setter Property="Padding" Value="14" />
+    <Setter Property="BoxShadow" Value="0 6 18 0 #08000000" />
+  </Style>
+
+  <Style Selector="Border.edge-log-entry">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Card}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="16" />
+    <Setter Property="Padding" Value="12" />
+    <Setter Property="BoxShadow" Value="0 6 16 0 #08000000" />
+  </Style>
+
+  <Style Selector="Border.edge-log-entry.warning">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Warning}" />
+    <Setter Property="BorderBrush" Value="#F4D48B" />
+  </Style>
+
+  <Style Selector="Border.edge-log-entry.error">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Error}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Edge.Status.ErrorSoft}" />
+  </Style>
+
+  <Style Selector="Border.edge-log-entry.debug">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.CardSoft}" />
+  </Style>
+
+  <Style Selector="Border.edge-log-level">
+    <Setter Property="Background" Value="{DynamicResource Edge.Status.SuccessSoft}" />
+    <Setter Property="CornerRadius" Value="11" />
+    <Setter Property="Padding" Value="8,2" />
+  </Style>
+
+  <Style Selector="Border.edge-log-level.warning">
+    <Setter Property="Background" Value="{DynamicResource Edge.Status.WarningSoft}" />
+  </Style>
+
+  <Style Selector="Border.edge-log-level.error">
+    <Setter Property="Background" Value="{DynamicResource Edge.Status.ErrorSoft}" />
+  </Style>
+
+  <Style Selector="Border.edge-log-level.debug">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.CardSoft}" />
+  </Style>
+
+  <Style Selector="Border.edge-dot.warning">
+    <Setter Property="Background" Value="{DynamicResource Edge.Status.Warning}" />
+  </Style>
+
+  <Style Selector="Border.edge-dot.error">
+    <Setter Property="Background" Value="{DynamicResource Edge.Status.Error}" />
+  </Style>
+
+  <Style Selector="Border.edge-dot.debug">
+    <Setter Property="Background" Value="{DynamicResource Edge.Text.Disabled}" />
+  </Style>
+
+  <Style Selector="ListBox.edge-log-list">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
+  <Style Selector="ListBox.edge-log-list ListBoxItem">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Margin" Value="0,0,0,10" />
+  </Style>
+
+  <Style Selector="ListBox.edge-log-list ListBoxItem:pointerover">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="ListBox.edge-log-list ListBoxItem:selected">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="TabControl.edge-tool-tabs">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
+  <Style Selector="TabControl.edge-tool-tabs TabItem">
+    <Setter Property="MinHeight" Value="34" />
+    <Setter Property="Padding" Value="14,6" />
+    <Setter Property="Margin" Value="0,0,8,10" />
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.CardSoft}" />
+    <Setter Property="Foreground" Value="{DynamicResource Edge.Text.Primary}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="CornerRadius" Value="17" />
+    <Setter Property="FontSize" Value="13" />
+  </Style>
+
+  <Style Selector="TabControl.edge-tool-tabs TabItem:selected">
+    <Setter Property="Background" Value="{DynamicResource Edge.Accent.Lime}" />
+    <Setter Property="Foreground" Value="{DynamicResource Edge.Text.Primary}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <Style Selector="ListBox.edge-tool-tab-list">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Margin" Value="0,0,0,10" />
+    <Setter Property="MinHeight" Value="36" />
+  </Style>
+
+  <Style Selector="ListBox.edge-tool-tab-list ListBoxItem">
+    <Setter Property="MinHeight" Value="34" />
+    <Setter Property="Padding" Value="14,7" />
+    <Setter Property="Margin" Value="0,0,8,8" />
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.CardSoft}" />
+    <Setter Property="Foreground" Value="{DynamicResource Edge.Text.Primary}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="17" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="ListBox.edge-tool-tab-list ListBoxItem:pointerover">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.SelectedSoft}" />
+  </Style>
+
+  <Style Selector="ListBox.edge-tool-tab-list ListBoxItem:selected">
+    <Setter Property="Background" Value="{DynamicResource Edge.Accent.Lime}" />
+    <Setter Property="Foreground" Value="{DynamicResource Edge.Text.Primary}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <Style Selector="TabControl">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
+  <Style Selector="TabItem">
+    <Setter Property="MinHeight" Value="36" />
+    <Setter Property="Padding" Value="14,7" />
+    <Setter Property="Margin" Value="0,0,8,10" />
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.CardSoft}" />
+    <Setter Property="Foreground" Value="{DynamicResource Edge.Text.Primary}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="CornerRadius" Value="18" />
+    <Setter Property="FontSize" Value="13" />
+  </Style>
+
+  <Style Selector="TabItem:pointerover">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.SelectedSoft}" />
+  </Style>
+
+  <Style Selector="TabItem:selected">
+    <Setter Property="Background" Value="{DynamicResource Edge.Accent.Lime}" />
+    <Setter Property="Foreground" Value="{DynamicResource Edge.Text.Primary}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <Style Selector="Border.edge-nav-rail">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Shell}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <Style Selector="Border.edge-nav-item">
+    <Setter Property="Width" Value="54" />
+    <Setter Property="Height" Value="54" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="18" />
+  </Style>
+
+  <Style Selector="Border.edge-nav-item.selected">
+    <Setter Property="Background" Value="{DynamicResource Edge.Accent.Lime}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Edge.Bg.SelectedSoft}" />
+    <Setter Property="BoxShadow" Value="0 10 22 0 #335C7A00" />
+  </Style>
+
+  <Style Selector="Border.edge-chip">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.CardSoft}" />
+    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="Padding" Value="10,4" />
+  </Style>
+
+  <Style Selector="Border.edge-chip.success">
+    <Setter Property="Background" Value="{DynamicResource Edge.Status.SuccessSoft}" />
+  </Style>
+
+  <Style Selector="Border.edge-chip.warning">
+    <Setter Property="Background" Value="{DynamicResource Edge.Status.WarningSoft}" />
+  </Style>
+
+  <Style Selector="Border.edge-dot">
+    <Setter Property="Width" Value="8" />
+    <Setter Property="Height" Value="8" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Background" Value="{DynamicResource Edge.Status.Success}" />
+  </Style>
+
+  <Style Selector="TextBlock.section-title">
+    <Setter Property="FontSize" Value="18" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource Edge.Text.Primary}" />
+  </Style>
+
+  <Style Selector="TextBlock.page-title">
+    <Setter Property="FontSize" Value="24" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource Edge.Text.Primary}" />
+  </Style>
+
+  <Style Selector="TextBlock.caption">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource Edge.Text.Muted}" />
+  </Style>
+
+  <Style Selector="TextBlock.kpi-value">
+    <Setter Property="FontSize" Value="28" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource Edge.Text.Primary}" />
+  </Style>
+
+  <Style Selector="Border.edge-login-card">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Edge.Border.Muted}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="24" />
+    <Setter Property="Padding" Value="26" />
+    <Setter Property="BoxShadow" Value="0 18 48 0 #22000000" />
+  </Style>
+
+  <Style Selector="Border.edge-inline-error">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Error}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Edge.Status.ErrorSoft}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="Padding" Value="10" />
+  </Style>
+
+  <Style Selector="DataGrid">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.Card}" />
+    <Setter Property="Foreground" Value="{DynamicResource Edge.Text.Primary}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="GridLinesVisibility" Value="Horizontal" />
+    <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource Edge.Border.Muted}" />
+    <Setter Property="RowBackground" Value="{DynamicResource Edge.Bg.Card}" />
+  </Style>
+
+  <Style Selector="DataGridColumnHeader">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.CardSoft}" />
+    <Setter Property="Foreground" Value="{DynamicResource Edge.Text.Muted}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Edge.Border.Subtle}" />
+    <Setter Property="MinHeight" Value="40" />
+    <Setter Property="Padding" Value="14,0" />
+  </Style>
+
+  <Style Selector="DataGridRow">
+    <Setter Property="MinHeight" Value="42" />
+  </Style>
+
+  <Style Selector="DataGridRow:pointerover">
+    <Setter Property="Background" Value="{DynamicResource Edge.Bg.CardSoft}" />
+  </Style>
+
+  <Style Selector="DataGridCell">
+    <Setter Property="Padding" Value="14,0" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Edge.Border.Subtle}" />
+  </Style>
+
+</Styles>

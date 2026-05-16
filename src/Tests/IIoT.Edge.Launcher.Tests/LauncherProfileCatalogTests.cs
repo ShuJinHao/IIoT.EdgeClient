@@ -28,11 +28,11 @@ public sealed class LauncherProfileCatalogTests
             var catalog = new LauncherProfileCatalog(tempDirectory);
 
             var profile = Assert.Single(catalog.LoadProfiles());
-            Assert.Equal(Path.Combine(tempDirectory, "IIoT.Edge.Shell.exe"), profile.ExecutablePath);
+            Assert.Equal(Path.Combine(tempDirectory, "IIoT.Edge.AvaloniaShell.exe"), profile.ExecutablePath);
             Assert.Null(profile.ImagePath);
             Assert.Equal("HomogenizationLine", profile.MachineProfile);
             Assert.Equal("Cog", profile.IconKind);
-            Assert.Equal("#0F766E", profile.AccentColor);
+            Assert.Equal("Launcher.Accent.Default", profile.AccentColor);
         }
         finally
         {
@@ -58,7 +58,7 @@ public sealed class LauncherProfileCatalogTests
                     "IconKind": "BeakerOutline",
                     "AccentColor": "#4D7C0F",
                     "MachineProfile": "HomogenizationLine",
-                    "ExecutablePath": "..\\homogenization\\IIoT.Edge.Shell.exe"
+                    "ExecutablePath": "..\\homogenization\\IIoT.Edge.AvaloniaShell.exe"
                   }
                 ]
                 """);
@@ -67,7 +67,7 @@ public sealed class LauncherProfileCatalogTests
 
             var profile = Assert.Single(catalog.LoadProfiles());
             Assert.Equal(
-                Path.GetFullPath(Path.Combine(tempDirectory, @"..\homogenization\IIoT.Edge.Shell.exe")),
+                Path.GetFullPath(Path.Combine(tempDirectory, @"..\homogenization\IIoT.Edge.AvaloniaShell.exe")),
                 profile.ExecutablePath);
             Assert.Equal(Path.Combine(tempDirectory, "Assets", "Profiles", "homogenization.png"), profile.ImagePath);
             Assert.Equal("BeakerOutline", profile.IconKind);
@@ -191,15 +191,15 @@ public sealed class LauncherProfileCatalogTests
     public void SourceProfileCatalog_ShouldLoadHomogenizationProfile()
     {
         var repoRoot = FindRepoRoot();
-        var catalogPath = Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.Launcher", "launcher.profiles.json");
+        var catalogPath = Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.Launcher.Avalonia", "launcher.profiles.json");
         var catalog = new LauncherProfileCatalog(Path.GetDirectoryName(catalogPath)!, Path.GetFileName(catalogPath));
 
-        var profile = Assert.Single(catalog.LoadProfiles());
-        Assert.Equal("HomogenizationLine", profile.ProfileId);
-        Assert.Equal("匀浆", profile.DisplayName);
+        var profile = Assert.Single(catalog.LoadProfiles(), item => item.ProfileId == "HomogenizationLineAvalonia");
+        Assert.Equal("HomogenizationLineAvalonia", profile.ProfileId);
+        Assert.Equal("匀浆 Avalonia 迁移验证 UI-only", profile.DisplayName);
         Assert.Equal("HomogenizationLine", profile.MachineProfile);
         Assert.EndsWith(
-            Path.Combine("homogenization", "IIoT.Edge.Shell.exe"),
+            Path.Combine("avalonia-shell", "IIoT.Edge.AvaloniaShell.exe"),
             profile.ExecutablePath,
             StringComparison.OrdinalIgnoreCase);
     }

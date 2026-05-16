@@ -1,0 +1,13 @@
+<ResourceDictionary
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+    <sys:String x:Key="Shell_Action_Cancel">取消</sys:String>
+    <sys:String x:Key="Shell_Action_Confirm">确认</sys:String>
+    <sys:String x:Key="Shell_Action_Ok">知道了</sys:String>
+    <sys:String x:Key="Shell_App_Title">产线边缘控制台</sys:String>
+    <sys:String x:Key="Shell_AppTitle">产线边缘控制台</sys:String>
+    <sys:String x:Key="Shell_Dialog_Message">这是 Avalonia DialogHost 迁移验证弹窗。</sys:String>
+    <sys:String x:Key="Shell_Dialog_Title">确认操作</sys:String>
+    <sys:String x:Key="Shell_SystemTitle">产线边缘控制台</sys:String>
+</ResourceDictionary>

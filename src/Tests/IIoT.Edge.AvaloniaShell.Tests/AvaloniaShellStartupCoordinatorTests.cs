@@ -2,7 +2,7 @@ using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Modules.Diagnostics;
 using IIoT.Edge.AvaloniaShell.Services;
-using IIoT.Edge.Shell.Core;
+using IIoT.Edge.Host.Bootstrap;
 using IIoT.Edge.UI.Avalonia.Services;
 using Xunit;
 
@@ -187,7 +187,7 @@ public sealed class AvaloniaShellStartupCoordinatorTests
             ["Homogenization"],
             ["Homogenization"],
             [new PluginLifecycleSnapshot("Homogenization", "匀浆", "Homogenization", "1.0.0", PluginLifecycleState.Activated, "已激活")],
-            [new ModuleRegistrationSnapshot("Homogenization", "Homogenization", "IIoT.Edge.Module.Homogenization.Avalonia", true, true, true, true, true, true)],
+            [new ModuleRegistrationSnapshot("Homogenization", "Homogenization", "IIoT.Edge.Module.Homogenization", true, true, true, true, true, true)],
             [new DeviceModuleBindingSnapshot("PLC-01", "Homogenization", true, true, true)],
             []);
 

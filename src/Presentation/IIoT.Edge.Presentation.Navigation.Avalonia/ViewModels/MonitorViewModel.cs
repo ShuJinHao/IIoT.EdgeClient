@@ -5,6 +5,7 @@ using IIoT.Edge.UI.Avalonia.Localization;
 using IIoT.Edge.UI.Avalonia.Services;
 using System.Collections.ObjectModel;
 using System.Data;
+using System.Globalization;
 
 namespace IIoT.Edge.Presentation.Navigation.Avalonia.ViewModels;
 
@@ -34,6 +35,18 @@ public sealed partial class MonitorViewModel : NavigationPageViewModelBase
 
     [ObservableProperty]
     private string feedbackMessage = string.Empty;
+
+    [ObservableProperty]
+    private string totalOutputText = "0";
+
+    [ObservableProperty]
+    private string okYieldText = "0%";
+
+    [ObservableProperty]
+    private string ngTotalText = "0";
+
+    [ObservableProperty]
+    private string deviceCountText = "0";
 
     [RelayCommand]
     private Task RefreshAsync()
@@ -90,6 +103,21 @@ public sealed partial class MonitorViewModel : NavigationPageViewModelBase
             row.Apply(snapshot, FormatCloudSync(snapshot), FormatMesSync(snapshot), FormatContextPersistence(snapshot));
             Devices.Add(row);
         }
+
+        RefreshSummary();
+    }
+
+    private void RefreshSummary()
+    {
+        var total = Devices.Sum(device => device.TotalAll);
+        var ok = Devices.Sum(device => device.OkAll);
+        var ng = Devices.Sum(device => device.NgAll);
+        var yield = total == 0 ? 0 : ok * 100d / total;
+
+        TotalOutputText = total.ToString("N0", CultureInfo.CurrentCulture);
+        OkYieldText = string.Format(CultureInfo.CurrentCulture, "{0:0.00}%", yield);
+        NgTotalText = ng.ToString("N0", CultureInfo.CurrentCulture);
+        DeviceCountText = Devices.Count.ToString(CultureInfo.CurrentCulture);
     }
 
     private static string FormatCloudSync(DeviceMonitorSnapshot snapshot)

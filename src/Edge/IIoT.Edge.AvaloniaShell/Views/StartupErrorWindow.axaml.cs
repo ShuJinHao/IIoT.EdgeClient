@@ -15,14 +15,24 @@ public partial class StartupErrorWindow : Window
     {
         DataContext = new StartupErrorViewModel(
             message,
-            string.IsNullOrWhiteSpace(diagnosticsSummary) ? "启动诊断尚未生成。" : diagnosticsSummary,
-            string.IsNullOrWhiteSpace(diagnosticsLogPath) ? "诊断日志路径尚未生成。" : diagnosticsLogPath);
+            string.IsNullOrWhiteSpace(diagnosticsSummary)
+                ? Text("Shell_StartupError_DiagnosticsSummaryMissing")
+                : diagnosticsSummary,
+            string.IsNullOrWhiteSpace(diagnosticsLogPath)
+                ? Text("Shell_StartupError_DiagnosticsLogPathMissing")
+                : diagnosticsLogPath);
     }
 
     private void CloseButton_Click(object? sender, RoutedEventArgs e)
     {
         Close();
     }
+
+    private static string Text(string resourceKey)
+        => global::Avalonia.Application.Current?.Resources.TryGetResource(resourceKey, null, out var value) == true &&
+           value is string text
+            ? text
+            : resourceKey;
 
     private sealed record StartupErrorViewModel(
         string Message,

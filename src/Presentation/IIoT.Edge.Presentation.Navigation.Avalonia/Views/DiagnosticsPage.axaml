@@ -1,116 +1,262 @@
 <UserControl
     x:Class="IIoT.Edge.Presentation.Navigation.Avalonia.Views.DiagnosticsPage"
+    x:Name="DiagnosticsRoot"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:loc="clr-namespace:IIoT.Edge.UI.Avalonia.Localization;assembly=IIoT.Edge.UI.Avalonia">
-  <Border Background="#0F172A" Padding="18">
-    <DockPanel>
-      <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,14">
-        <StackPanel Spacing="4">
-          <TextBlock FontSize="20" FontWeight="SemiBold" Foreground="#F8FAFC" Text="{Binding ViewTitle}" />
-          <TextBlock Foreground="#CBD5E1" Text="{Binding ConfigurationProfileText}" TextWrapping="Wrap" />
-          <TextBlock Foreground="#94A3B8" Text="{Binding LastGeneratedText}" />
-          <TextBlock Foreground="#CBD5E1" Text="{Binding FeedbackMessage}" TextWrapping="Wrap" />
+  <Border Classes="edge-page-panel">
+    <Grid RowDefinitions="Auto,Auto,*" RowSpacing="16">
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+        <StackPanel Spacing="5">
+          <TextBlock Classes="page-title" Text="{Binding ViewTitle}" />
+          <TextBlock Foreground="{DynamicResource Edge.Text.Secondary}"
+                     Text="{Binding ConfigurationProfileText}"
+                     TextWrapping="Wrap" />
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <TextBlock Classes="caption" Text="{Binding LastGeneratedText}" />
+            <TextBlock FontSize="12"
+                       Foreground="{DynamicResource Edge.Status.ErrorText}"
+                       Text="{Binding FeedbackMessage}"
+                       TextTrimming="CharacterEllipsis" />
+          </StackPanel>
         </StackPanel>
-        <Button Grid.Column="1" Command="{Binding RefreshCommand}" Content="{DynamicResource Navigation_Button_Query}" />
+        <Button Grid.Column="1"
+                Classes="chip accent"
+                VerticalAlignment="Center"
+                Command="{Binding RefreshCommand}"
+                Content="{DynamicResource Navigation_Button_Query}" />
       </Grid>
 
-      <TabControl>
-        <TabItem Header="{DynamicResource Navigation_Diagnostics_Tab_FieldSummary}">
-          <DataGrid x:Name="FieldAcceptanceSummaryGrid" ItemsSource="{Binding FieldAcceptanceRows}" AutoGenerateColumns="False" IsReadOnly="True" MinHeight="340">
-            <DataGrid.Columns>
-              <DataGridTextColumn Width="180" Binding="{Binding Scope}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_SummaryItem" />
-              <DataGridTextColumn Width="150" Binding="{Binding Status}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Status" />
-              <DataGridTextColumn Width="*" Binding="{Binding Message}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Message" />
-            </DataGrid.Columns>
-          </DataGrid>
-        </TabItem>
+      <UniformGrid Grid.Row="1" Columns="4">
+        <Border Classes="edge-summary-card lime" Margin="0,0,10,0">
+          <StackPanel Spacing="8">
+            <TextBlock Classes="caption" Text="{DynamicResource Navigation_Diagnostics_RuntimeRegistration}" />
+            <TextBlock FontSize="30" FontWeight="SemiBold" Text="{Binding RuntimeRegistrations.Count}" />
+            <TextBlock Foreground="{DynamicResource Edge.Text.Secondary}"
+                       Text="{DynamicResource Navigation_Column_TaskKey}" />
+          </StackPanel>
+        </Border>
 
-        <TabItem Header="运行时注册">
-          <DataGrid ItemsSource="{Binding RuntimeRegistrations}" AutoGenerateColumns="False" IsReadOnly="True" MinHeight="340">
-            <DataGrid.Columns>
-              <DataGridTextColumn Width="180" Binding="{Binding ModuleId}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_ModuleId" />
-              <DataGridTextColumn Width="120" Binding="{Binding TaskCount}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Count" />
-              <DataGridTextColumn Width="*" Binding="{Binding TaskNames}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_TaskKey" />
-            </DataGrid.Columns>
-          </DataGrid>
-        </TabItem>
+        <Border Classes="edge-summary-card blue" Margin="0,0,10,0">
+          <StackPanel Spacing="8">
+            <TextBlock Classes="caption" Text="{DynamicResource Navigation_Diagnostics_ModuleRegistration}" />
+            <TextBlock FontSize="30" FontWeight="SemiBold" Text="{Binding ModuleRegistrations.Count}" />
+            <TextBlock Foreground="{DynamicResource Edge.Text.Secondary}"
+                       Text="{DynamicResource Navigation_Column_ModuleId}" />
+          </StackPanel>
+        </Border>
 
-        <TabItem Header="模块注册">
-          <DataGrid ItemsSource="{Binding ModuleRegistrations}" AutoGenerateColumns="False" IsReadOnly="True" MinHeight="340">
-            <DataGrid.Columns>
-              <DataGridTextColumn Width="160" Binding="{Binding ModuleId}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_ModuleId" />
-              <DataGridTextColumn Width="140" Binding="{Binding ProcessType}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Label_Process" />
-              <DataGridTextColumn Width="180" Binding="{Binding AssemblyName}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Message" />
-              <DataGridTextColumn Width="100" Binding="{Binding EnabledText}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Enable" />
-              <DataGridTextColumn Width="110" Binding="{Binding CellDataText}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_DataType" />
-              <DataGridTextColumn Width="120" Binding="{Binding RuntimeFactoryText}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_TaskKey" />
-              <DataGridTextColumn Width="120" Header="云端上传" Binding="{Binding CloudUploaderText}" />
-              <DataGridTextColumn Width="120" Header="MES 上传" Binding="{Binding MesUploaderText}" />
-              <DataGridTextColumn Width="120" Binding="{Binding HardwareProfileText}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Menu_HardwareConfig" />
-            </DataGrid.Columns>
-          </DataGrid>
-        </TabItem>
+        <Border Classes="edge-summary-card mint" Margin="0,0,10,0">
+          <StackPanel Spacing="8">
+            <TextBlock Classes="caption" Text="{DynamicResource Navigation_Diagnostics_DeadLetters}" />
+            <TextBlock FontSize="30" FontWeight="SemiBold" Text="{Binding CloudDeadLetters.Count}" />
+            <TextBlock Foreground="{DynamicResource Edge.Text.Secondary}"
+                       Text="{DynamicResource Navigation_Diagnostics_CloudDeadLetters}" />
+          </StackPanel>
+        </Border>
 
-        <TabItem Header="持久化诊断">
-          <DataGrid ItemsSource="{Binding PersistenceRows}" AutoGenerateColumns="False" IsReadOnly="True" MinHeight="340">
-            <DataGrid.Columns>
-              <DataGridTextColumn Width="180" Binding="{Binding Scope}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_DeviceName" />
-              <DataGridTextColumn Width="140" Binding="{Binding Status}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Status" />
-              <DataGridTextColumn Width="*" Binding="{Binding Message}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Message" />
-            </DataGrid.Columns>
-          </DataGrid>
-        </TabItem>
+        <Border Classes="edge-summary-card soft">
+          <StackPanel Spacing="8">
+            <TextBlock Classes="caption" Text="{DynamicResource Navigation_Diagnostics_IssueList}" />
+            <TextBlock FontSize="30" FontWeight="SemiBold" Text="{Binding Issues.Count}" />
+            <TextBlock Foreground="{DynamicResource Edge.Text.Secondary}"
+                       Text="{DynamicResource Navigation_Column_Message}" />
+          </StackPanel>
+        </Border>
+      </UniformGrid>
 
-        <TabItem Header="插件状态">
-          <DataGrid ItemsSource="{Binding PluginStates}" AutoGenerateColumns="False" IsReadOnly="True" MinHeight="340">
-            <DataGrid.Columns>
-              <DataGridTextColumn Width="160" Binding="{Binding ModuleId}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_ModuleId" />
-              <DataGridTextColumn Width="160" Binding="{Binding DisplayName}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_DeviceName" />
-              <DataGridTextColumn Width="140" Binding="{Binding ProcessType}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Label_Process" />
-              <DataGridTextColumn Width="100" Binding="{Binding Version}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Label_Version" />
-              <DataGridTextColumn Width="130" Binding="{Binding State}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Status" />
-              <DataGridTextColumn Width="*" Binding="{Binding Message}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Message" />
-            </DataGrid.Columns>
-          </DataGrid>
-        </TabItem>
+      <Border Grid.Row="2" Classes="edge-table-card" Padding="16">
+        <TabControl Classes="edge-tool-tabs">
+          <TabItem Header="{DynamicResource Navigation_Diagnostics_Tab_FieldSummary}">
+            <Border Classes="edge-table-shell">
+              <DataGrid x:Name="FieldAcceptanceSummaryGrid"
+                        ItemsSource="{Binding FieldAcceptanceRows}"
+                        AutoGenerateColumns="False"
+                        IsReadOnly="True"
+                        MinHeight="360">
+                <DataGrid.Columns>
+                  <DataGridTextColumn Width="180" Binding="{Binding Scope}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_SummaryItem" />
+                  <DataGridTextColumn Width="150" Binding="{Binding Status}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Status" />
+                  <DataGridTextColumn Width="*" Binding="{Binding Message}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Message" />
+                </DataGrid.Columns>
+              </DataGrid>
+            </Border>
+          </TabItem>
 
-        <TabItem Header="{DynamicResource Navigation_Diagnostics_Tab_IoWriteGate}">
-          <DataGrid ItemsSource="{Binding IoWriteGateRows}" AutoGenerateColumns="False" IsReadOnly="True" MinHeight="340">
-            <DataGrid.Columns>
-              <DataGridTextColumn Width="150" Binding="{Binding Time}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Time" />
-              <DataGridTextColumn Width="160" Binding="{Binding DeviceName}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_DeviceName" />
-              <DataGridTextColumn Width="140" Binding="{Binding BusinessGroup}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_BusinessGroup" />
-              <DataGridTextColumn Width="100" Binding="{Binding Value}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_WriteValue" />
-              <DataGridTextColumn Width="*" Binding="{Binding Message}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Message" />
-            </DataGrid.Columns>
-          </DataGrid>
-        </TabItem>
+          <TabItem Header="{DynamicResource Navigation_Diagnostics_RuntimeRegistration}">
+            <Border Classes="edge-table-shell">
+              <DataGrid ItemsSource="{Binding RuntimeRegistrations}" AutoGenerateColumns="False" IsReadOnly="True" MinHeight="360">
+                <DataGrid.Columns>
+                  <DataGridTextColumn Width="180" Binding="{Binding ModuleId}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_ModuleId" />
+                  <DataGridTextColumn Width="120" Binding="{Binding TaskCount}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Count" />
+                  <DataGridTextColumn Width="*" Binding="{Binding TaskNames}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_TaskKey" />
+                </DataGrid.Columns>
+              </DataGrid>
+            </Border>
+          </TabItem>
 
-        <TabItem Header="{DynamicResource Navigation_Diagnostics_Tab_PlcWriteTrace}">
-          <DataGrid ItemsSource="{Binding PlcWriteTraceRows}" AutoGenerateColumns="False" IsReadOnly="True" MinHeight="340">
-            <DataGrid.Columns>
-              <DataGridTextColumn Width="150" Binding="{Binding Time}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Time" />
-              <DataGridTextColumn Width="160" Binding="{Binding DeviceName}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_DeviceName" />
-              <DataGridTextColumn Width="100" Binding="{Binding Kind}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Status" />
-              <DataGridTextColumn Width="130" Binding="{Binding StartAddress}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_PlcAddress" />
-              <DataGridTextColumn Width="90" Binding="{Binding WordCount}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Count" />
-              <DataGridTextColumn Width="*" Binding="{Binding Message}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Message" />
-            </DataGrid.Columns>
-          </DataGrid>
-        </TabItem>
+          <TabItem Header="{DynamicResource Navigation_Diagnostics_ModuleRegistration}">
+            <Border Classes="edge-table-shell">
+              <DataGrid ItemsSource="{Binding ModuleRegistrations}" AutoGenerateColumns="False" IsReadOnly="True" MinHeight="360">
+                <DataGrid.Columns>
+                  <DataGridTextColumn Width="160" Binding="{Binding ModuleId}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_ModuleId" />
+                  <DataGridTextColumn Width="140" Binding="{Binding ProcessType}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Label_Process" />
+                  <DataGridTextColumn Width="180" Binding="{Binding AssemblyName}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Message" />
+                  <DataGridTextColumn Width="100" Binding="{Binding EnabledText}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Enable" />
+                  <DataGridTextColumn Width="110" Binding="{Binding CellDataText}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_DataType" />
+                  <DataGridTextColumn Width="120" Binding="{Binding RuntimeFactoryText}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_TaskKey" />
+                  <DataGridTextColumn Width="120" Binding="{Binding CloudUploaderText}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Diagnostics_CloudUpload" />
+                  <DataGridTextColumn Width="120" Binding="{Binding MesUploaderText}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Diagnostics_MesUpload" />
+                  <DataGridTextColumn Width="120" Binding="{Binding HardwareProfileText}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Menu_HardwareConfig" />
+                </DataGrid.Columns>
+              </DataGrid>
+            </Border>
+          </TabItem>
 
-        <TabItem Header="问题列表">
-          <DataGrid ItemsSource="{Binding Issues}" AutoGenerateColumns="False" IsReadOnly="True" MinHeight="340">
-            <DataGrid.Columns>
-              <DataGridTextColumn Width="160" Binding="{Binding Code}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_TaskKey" />
-              <DataGridTextColumn Width="140" Binding="{Binding ModuleId}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_ModuleId" />
-              <DataGridTextColumn Width="160" Binding="{Binding DeviceName}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_DeviceName" />
-              <DataGridTextColumn Width="*" Binding="{Binding Message}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Message" />
-            </DataGrid.Columns>
-          </DataGrid>
-        </TabItem>
-      </TabControl>
-    </DockPanel>
+          <TabItem Header="{DynamicResource Navigation_Diagnostics_Persistence}">
+            <Border Classes="edge-table-shell">
+              <DataGrid ItemsSource="{Binding PersistenceRows}" AutoGenerateColumns="False" IsReadOnly="True" MinHeight="360">
+                <DataGrid.Columns>
+                  <DataGridTextColumn Width="180" Binding="{Binding Scope}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_DeviceName" />
+                  <DataGridTextColumn Width="140" Binding="{Binding Status}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Status" />
+                  <DataGridTextColumn Width="*" Binding="{Binding Message}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Message" />
+                </DataGrid.Columns>
+              </DataGrid>
+            </Border>
+          </TabItem>
+
+          <TabItem Header="{DynamicResource Navigation_Diagnostics_DeadLetters}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+              <StackPanel Spacing="16">
+                <Border Classes="edge-table-shell">
+                  <Grid RowDefinitions="Auto,*" RowSpacing="10">
+                    <TextBlock Margin="14,14,14,0"
+                               Classes="section-title"
+                               Text="{DynamicResource Navigation_Diagnostics_CloudDeadLetters}" />
+                    <DataGrid Grid.Row="1"
+                              ItemsSource="{Binding CloudDeadLetters}"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True"
+                              MinHeight="220">
+                      <DataGrid.Columns>
+                        <DataGridTextColumn Width="80" Binding="{Binding Id}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Index" />
+                        <DataGridTextColumn Width="130" Binding="{Binding ProcessType}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Process" />
+                        <DataGridTextColumn Width="150" Binding="{Binding FailedTarget}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Target" />
+                        <DataGridTextColumn Width="120" Binding="{Binding FailureStage}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Stage" />
+                        <DataGridTextColumn Width="140" Binding="{Binding Source}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Source" />
+                        <DataGridTextColumn Width="150" Binding="{Binding CreatedAt}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_CreatedAt" />
+                        <DataGridTextColumn Width="220" Binding="{Binding FailureReason}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_FailureReason" />
+                        <DataGridTextColumn Width="260" Binding="{Binding CellDataJson}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_CellData" />
+                        <DataGridTemplateColumn Width="190" Header="{DynamicResource Navigation_Column_Action}">
+                          <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                              <StackPanel Orientation="Horizontal" Spacing="6">
+                                <Button Classes="chip" Command="{Binding $parent[UserControl].DataContext.RequeueDeadLetterCommand}" CommandParameter="{Binding}" Content="{DynamicResource Navigation_Button_Requeue}" />
+                                <Button Classes="chip" Command="{Binding $parent[UserControl].DataContext.DeleteDeadLetterCommand}" CommandParameter="{Binding}" Content="{DynamicResource Navigation_Button_Delete}" />
+                              </StackPanel>
+                            </DataTemplate>
+                          </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                      </DataGrid.Columns>
+                    </DataGrid>
+                  </Grid>
+                </Border>
+
+                <Border Classes="edge-table-shell">
+                  <Grid RowDefinitions="Auto,*" RowSpacing="10">
+                    <TextBlock Margin="14,14,14,0"
+                               Classes="section-title"
+                               Text="{DynamicResource Navigation_Diagnostics_MesDeadLetters}" />
+                    <DataGrid Grid.Row="1"
+                              ItemsSource="{Binding MesDeadLetters}"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True"
+                              MinHeight="220">
+                      <DataGrid.Columns>
+                        <DataGridTextColumn Width="80" Binding="{Binding Id}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Index" />
+                        <DataGridTextColumn Width="130" Binding="{Binding ProcessType}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Process" />
+                        <DataGridTextColumn Width="150" Binding="{Binding FailedTarget}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Target" />
+                        <DataGridTextColumn Width="120" Binding="{Binding FailureStage}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Stage" />
+                        <DataGridTextColumn Width="140" Binding="{Binding Source}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Source" />
+                        <DataGridTextColumn Width="150" Binding="{Binding CreatedAt}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_CreatedAt" />
+                        <DataGridTextColumn Width="220" Binding="{Binding FailureReason}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_FailureReason" />
+                        <DataGridTextColumn Width="260" Binding="{Binding CellDataJson}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_CellData" />
+                        <DataGridTemplateColumn Width="190" Header="{DynamicResource Navigation_Column_Action}">
+                          <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                              <StackPanel Orientation="Horizontal" Spacing="6">
+                                <Button Classes="chip" Command="{Binding $parent[UserControl].DataContext.RequeueDeadLetterCommand}" CommandParameter="{Binding}" Content="{DynamicResource Navigation_Button_Requeue}" />
+                                <Button Classes="chip" Command="{Binding $parent[UserControl].DataContext.DeleteDeadLetterCommand}" CommandParameter="{Binding}" Content="{DynamicResource Navigation_Button_Delete}" />
+                              </StackPanel>
+                            </DataTemplate>
+                          </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                      </DataGrid.Columns>
+                    </DataGrid>
+                  </Grid>
+                </Border>
+              </StackPanel>
+            </ScrollViewer>
+          </TabItem>
+
+          <TabItem Header="{DynamicResource Navigation_Diagnostics_PluginState}">
+            <Border Classes="edge-table-shell">
+              <DataGrid ItemsSource="{Binding PluginStates}" AutoGenerateColumns="False" IsReadOnly="True" MinHeight="360">
+                <DataGrid.Columns>
+                  <DataGridTextColumn Width="160" Binding="{Binding ModuleId}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_ModuleId" />
+                  <DataGridTextColumn Width="160" Binding="{Binding DisplayName}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_DeviceName" />
+                  <DataGridTextColumn Width="140" Binding="{Binding ProcessType}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Label_Process" />
+                  <DataGridTextColumn Width="100" Binding="{Binding Version}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Label_Version" />
+                  <DataGridTextColumn Width="130" Binding="{Binding State}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Status" />
+                  <DataGridTextColumn Width="*" Binding="{Binding Message}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Message" />
+                </DataGrid.Columns>
+              </DataGrid>
+            </Border>
+          </TabItem>
+
+          <TabItem Header="{DynamicResource Navigation_Diagnostics_Tab_IoWriteGate}">
+            <Border Classes="edge-table-shell">
+              <DataGrid ItemsSource="{Binding IoWriteGateRows}" AutoGenerateColumns="False" IsReadOnly="True" MinHeight="360">
+                <DataGrid.Columns>
+                  <DataGridTextColumn Width="150" Binding="{Binding Time}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Time" />
+                  <DataGridTextColumn Width="160" Binding="{Binding DeviceName}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_DeviceName" />
+                  <DataGridTextColumn Width="140" Binding="{Binding BusinessGroup}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_BusinessGroup" />
+                  <DataGridTextColumn Width="100" Binding="{Binding Value}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_WriteValue" />
+                  <DataGridTextColumn Width="*" Binding="{Binding Message}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Message" />
+                </DataGrid.Columns>
+              </DataGrid>
+            </Border>
+          </TabItem>
+
+          <TabItem Header="{DynamicResource Navigation_Diagnostics_Tab_PlcWriteTrace}">
+            <Border Classes="edge-table-shell">
+              <DataGrid ItemsSource="{Binding PlcWriteTraceRows}" AutoGenerateColumns="False" IsReadOnly="True" MinHeight="360">
+                <DataGrid.Columns>
+                  <DataGridTextColumn Width="150" Binding="{Binding Time}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Time" />
+                  <DataGridTextColumn Width="160" Binding="{Binding DeviceName}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_DeviceName" />
+                  <DataGridTextColumn Width="100" Binding="{Binding Kind}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Status" />
+                  <DataGridTextColumn Width="130" Binding="{Binding StartAddress}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_PlcAddress" />
+                  <DataGridTextColumn Width="90" Binding="{Binding WordCount}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Count" />
+                  <DataGridTextColumn Width="*" Binding="{Binding Message}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Message" />
+                </DataGrid.Columns>
+              </DataGrid>
+            </Border>
+          </TabItem>
+
+          <TabItem Header="{DynamicResource Navigation_Diagnostics_IssueList}">
+            <Border Classes="edge-table-shell">
+              <DataGrid ItemsSource="{Binding Issues}" AutoGenerateColumns="False" IsReadOnly="True" MinHeight="360">
+                <DataGrid.Columns>
+                  <DataGridTextColumn Width="160" Binding="{Binding Code}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_TaskKey" />
+                  <DataGridTextColumn Width="140" Binding="{Binding ModuleId}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_ModuleId" />
+                  <DataGridTextColumn Width="160" Binding="{Binding DeviceName}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_DeviceName" />
+                  <DataGridTextColumn Width="*" Binding="{Binding Message}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Message" />
+                </DataGrid.Columns>
+              </DataGrid>
+            </Border>
+          </TabItem>
+        </TabControl>
+      </Border>
+    </Grid>
   </Border>
 </UserControl>

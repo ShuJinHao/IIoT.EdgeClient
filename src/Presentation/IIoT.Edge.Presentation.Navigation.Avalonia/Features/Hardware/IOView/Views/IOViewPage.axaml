@@ -3,41 +3,50 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:loc="clr-namespace:IIoT.Edge.UI.Avalonia.Localization;assembly=IIoT.Edge.UI.Avalonia">
-  <Border Background="#0F172A" Padding="18">
+  <Border Classes="edge-page-panel">
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-      <StackPanel Spacing="14">
-        <Grid ColumnDefinitions="Auto,280,Auto,*" RowDefinitions="Auto">
-          <TextBlock Grid.Column="0" VerticalAlignment="Center" FontSize="20" FontWeight="SemiBold" Foreground="#F8FAFC" Text="{Binding ViewTitle}" />
-          <ComboBox Grid.Column="1" Margin="16,0,0,0" ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}">
+      <StackPanel Spacing="18">
+        <Grid ColumnDefinitions="*,280,Auto" ColumnSpacing="12">
+          <StackPanel Spacing="4">
+            <TextBlock Classes="page-title" Text="{Binding ViewTitle}" />
+            <TextBlock Foreground="{DynamicResource Edge.Text.Secondary}" Text="{Binding FeedbackMessage}" TextTrimming="CharacterEllipsis" />
+          </StackPanel>
+          <ComboBox Grid.Column="1" VerticalAlignment="Center" ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}">
             <ComboBox.ItemTemplate>
               <DataTemplate>
                 <TextBlock Text="{Binding DeviceName}" />
               </DataTemplate>
             </ComboBox.ItemTemplate>
           </ComboBox>
-          <Border Grid.Column="2" Width="10" Height="10" Margin="16,0,6,0" CornerRadius="5" Background="#EF4444" />
-          <TextBlock Grid.Column="3" VerticalAlignment="Center" Foreground="#CBD5E1" Text="{Binding FeedbackMessage}" TextTrimming="CharacterEllipsis" />
+          <Button Grid.Column="2" Classes="chip accent" VerticalAlignment="Center" Command="{Binding ManualReadCommand}" Content="{DynamicResource Navigation_Io_ManualRead}" />
         </Grid>
 
-        <Button HorizontalAlignment="Left" Command="{Binding ManualReadCommand}" Content="{DynamicResource Navigation_Io_ManualRead}" />
+        <Grid ColumnDefinitions="*,*" ColumnSpacing="16">
+          <Border Classes="edge-card mint">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+              <Border Classes="edge-dot" Width="14" Height="14" CornerRadius="7" VerticalAlignment="Center" />
+              <StackPanel Grid.Column="1" Spacing="5">
+                <TextBlock Classes="caption" Text="{DynamicResource Navigation_Io_SnapshotSource}" />
+                <TextBlock FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Text.Primary}" Text="{Binding SnapshotSourceText}" TextWrapping="Wrap" />
+              </StackPanel>
+            </Grid>
+          </Border>
+          <Border Grid.Column="1" Classes="edge-card blue">
+            <StackPanel Spacing="5">
+              <TextBlock Classes="caption" Text="{DynamicResource Navigation_Io_SnapshotRefreshTime}" />
+              <TextBlock FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Text.Primary}" Text="{Binding SnapshotRefreshText}" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+        </Grid>
 
-        <Border Padding="10" Background="#111827" BorderBrush="#334155" BorderThickness="1" CornerRadius="8">
-          <Grid ColumnDefinitions="Auto,*,Auto,*" RowDefinitions="Auto">
-            <TextBlock Grid.Column="0" Foreground="#94A3B8" Text="{DynamicResource Navigation_Io_SnapshotSource}" />
-            <TextBlock Grid.Column="1" Margin="6,0,18,0" Foreground="#E2E8F0" Text="{Binding SnapshotSourceText}" />
-            <TextBlock Grid.Column="2" Foreground="#94A3B8" Text="{DynamicResource Navigation_Io_SnapshotRefreshTime}" />
-            <TextBlock Grid.Column="3" Margin="6,0,0,0" Foreground="#E2E8F0" Text="{Binding SnapshotRefreshText}" />
-          </Grid>
+        <Border Classes="edge-alert">
+          <TextBlock Foreground="{DynamicResource Edge.Text.Primary}" Text="{Binding WriteGateStatusText}" TextWrapping="Wrap" />
         </Border>
 
-        <Border Padding="10" Background="#111827" BorderBrush="#334155" BorderThickness="1" CornerRadius="8">
-          <TextBlock Foreground="#E2E8F0" Text="{Binding WriteGateStatusText}" TextWrapping="Wrap" />
-        </Border>
-
-        <Border Padding="12" BorderBrush="#334155" BorderThickness="1" CornerRadius="8" IsVisible="{Binding HasInteractionRows}">
-          <StackPanel Spacing="10">
-            <TextBlock FontSize="15" FontWeight="SemiBold" Foreground="#F8FAFC" Text="{DynamicResource Navigation_Title_IoInteractionGroup}" />
-            <DataGrid ItemsSource="{Binding InteractionRows}" AutoGenerateColumns="False" IsReadOnly="False">
+        <Border Classes="edge-table-card" IsVisible="{Binding HasInteractionRows}">
+          <Grid RowDefinitions="Auto,*">
+            <TextBlock Margin="18,16,18,10" Classes="section-title" Text="{DynamicResource Navigation_Title_IoInteractionGroup}" />
+            <DataGrid Grid.Row="1" ItemsSource="{Binding InteractionRows}" AutoGenerateColumns="False" IsReadOnly="False">
               <DataGrid.Columns>
                 <DataGridTextColumn Width="120" Binding="{Binding BusinessGroup}" IsReadOnly="True" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_InteractionItem" />
                 <DataGridTextColumn Width="2*" Binding="{Binding PlcAddressSummary}" IsReadOnly="True" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_PlcSignal" />
@@ -54,25 +63,25 @@
                     </DataTemplate>
                   </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
-                <DataGridTemplateColumn Width="90" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Action">
+                <DataGridTemplateColumn Width="100" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Action">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate>
-                      <Button Command="{Binding WriteCommand}" Content="{DynamicResource Navigation_Button_Write}" />
+                      <Button Classes="chip accent" Command="{Binding WriteCommand}" Content="{DynamicResource Navigation_Button_Write}" />
                     </DataTemplate>
                   </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
               </DataGrid.Columns>
             </DataGrid>
-          </StackPanel>
+          </Grid>
         </Border>
 
         <ItemsControl ItemsSource="{Binding DataSections}" IsVisible="{Binding HasDataSections}">
           <ItemsControl.ItemTemplate>
             <DataTemplate>
-              <Border Margin="0,0,0,12" Padding="12" BorderBrush="#334155" BorderThickness="1" CornerRadius="8">
-                <StackPanel Spacing="10">
-                  <TextBlock FontSize="15" FontWeight="SemiBold" Foreground="#F8FAFC" Text="{Binding Title}" />
-                  <DataGrid ItemsSource="{Binding Signals}" AutoGenerateColumns="False" IsReadOnly="True">
+              <Border Classes="edge-table-card" Margin="0,0,0,14">
+                <Grid RowDefinitions="Auto,*">
+                  <TextBlock Margin="18,16,18,10" Classes="section-title" Text="{Binding Title}" />
+                  <DataGrid Grid.Row="1" ItemsSource="{Binding Signals}" AutoGenerateColumns="False" IsReadOnly="True">
                     <DataGrid.Columns>
                       <DataGridTextColumn Width="2*" Binding="{Binding SignalName}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Signal" />
                       <DataGridTextColumn Width="160" Binding="{Binding PlcAddress}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Address" />
@@ -80,7 +89,7 @@
                       <DataGridTextColumn Width="120" Binding="{Binding DisplayValue}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_CurrentValue" />
                     </DataGrid.Columns>
                   </DataGrid>
-                </StackPanel>
+                </Grid>
               </Border>
             </DataTemplate>
           </ItemsControl.ItemTemplate>
@@ -89,14 +98,14 @@
         <ItemsControl ItemsSource="{Binding ArraySections}" IsVisible="{Binding HasArraySections}">
           <ItemsControl.ItemTemplate>
             <DataTemplate>
-              <Border Margin="0,0,0,12" Padding="12" BorderBrush="#334155" BorderThickness="1" CornerRadius="8">
-                <StackPanel Spacing="10">
+              <Border Classes="edge-form-section" Margin="0,0,0,14">
+                <StackPanel Spacing="12">
                   <Grid ColumnDefinitions="*,Auto">
                     <StackPanel>
-                      <TextBlock FontSize="15" FontWeight="SemiBold" Foreground="#F8FAFC" Text="{Binding Title}" />
-                      <TextBlock Foreground="#CBD5E1" Text="{Binding Summary}" />
+                      <TextBlock Classes="section-title" Text="{Binding Title}" />
+                      <TextBlock Foreground="{DynamicResource Edge.Text.Secondary}" Text="{Binding Summary}" />
                     </StackPanel>
-                    <Button Grid.Column="1" Command="{Binding ToggleExpandedCommand}" Content="{Binding ToggleText}" />
+                    <Button Grid.Column="1" Classes="chip" Command="{Binding ToggleExpandedCommand}" Content="{Binding ToggleText}" />
                   </Grid>
                   <DataGrid ItemsSource="{Binding Rows}" AutoGenerateColumns="False" IsReadOnly="True" IsVisible="{Binding IsExpanded}">
                     <DataGrid.Columns>
@@ -112,10 +121,10 @@
                               </ItemsControl.ItemsPanel>
                               <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                  <Border Margin="0,0,8,6" Padding="8,4" Background="#1E293B" CornerRadius="4">
+                                  <Border Classes="edge-chip" Margin="0,0,8,6">
                                     <StackPanel Orientation="Horizontal" Spacing="4">
-                                      <TextBlock Foreground="#94A3B8" Text="{Binding ColumnName}" />
-                                      <TextBlock Foreground="#F8FAFC" FontWeight="SemiBold" Text="{Binding Value}" />
+                                      <TextBlock Foreground="{DynamicResource Edge.Text.Muted}" Text="{Binding ColumnName}" />
+                                      <TextBlock Foreground="{DynamicResource Edge.Text.Primary}" FontWeight="SemiBold" Text="{Binding Value}" />
                                     </StackPanel>
                                   </Border>
                                 </DataTemplate>
@@ -132,7 +141,9 @@
           </ItemsControl.ItemTemplate>
         </ItemsControl>
 
-        <TextBlock Foreground="#CBD5E1" Text="{DynamicResource Navigation_Io_NoSignals}" IsVisible="{Binding HasNoSignals}" />
+        <Border Classes="edge-form-section" IsVisible="{Binding HasNoSignals}">
+          <TextBlock Foreground="{DynamicResource Edge.Text.Secondary}" Text="{DynamicResource Navigation_Io_NoSignals}" />
+        </Border>
       </StackPanel>
     </ScrollViewer>
   </Border>

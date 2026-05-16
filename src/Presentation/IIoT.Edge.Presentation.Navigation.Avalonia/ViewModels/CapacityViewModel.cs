@@ -16,7 +16,7 @@ public sealed partial class CapacityViewModel : NavigationPageViewModelBase
     private readonly IAvaloniaDialogService _dialogService;
     private readonly IAvaloniaDispatcherService _dispatcherService;
     private readonly EdgeRuntimePaths _runtimePaths;
-    private readonly IAvaloniaCsvExportService _csvExportService;
+    private readonly IAvaloniaDataExportService _exportService;
     private bool _isActivated;
     private bool _isRefreshingDeviceList;
 
@@ -26,7 +26,7 @@ public sealed partial class CapacityViewModel : NavigationPageViewModelBase
         IAvaloniaDialogService dialogService,
         IAvaloniaDispatcherService dispatcherService,
         EdgeRuntimePaths runtimePaths,
-        IAvaloniaCsvExportService csvExportService,
+        IAvaloniaDataExportService exportService,
         string viewId,
         string titleResourceKey,
         string titleFallback)
@@ -37,7 +37,7 @@ public sealed partial class CapacityViewModel : NavigationPageViewModelBase
         _dialogService = dialogService;
         _dispatcherService = dispatcherService;
         _runtimePaths = runtimePaths;
-        _csvExportService = csvExportService;
+        _exportService = exportService;
     }
 
     public CapacityViewModel(
@@ -54,7 +54,7 @@ public sealed partial class CapacityViewModel : NavigationPageViewModelBase
             dialogService,
             dispatcherService,
             CreateDefaultRuntimePaths(),
-            new AvaloniaCsvExportService(),
+            new AvaloniaDataExportService(new AvaloniaCsvExportService()),
             viewId,
             titleResourceKey,
             titleFallback)
@@ -174,9 +174,8 @@ public sealed partial class CapacityViewModel : NavigationPageViewModelBase
     [RelayCommand]
     private async Task ExportAsync()
     {
-        try
-        {
-            var path = await _csvExportService.ExportAsync(
+        var result = await _exportService.ExportAsync(
+            new AvaloniaDataExportRequest(
                 _runtimePaths.ExcelDirectory,
                 "Capacity",
                 ["日期", "总数", "OK", "NG", "良率", "白班", "夜班", "设备", "查询模式"],
@@ -192,13 +191,11 @@ public sealed partial class CapacityViewModel : NavigationPageViewModelBase
                     SelectedDeviceName,
                     SelectedQueryMode
                 }),
-                DateTime.Now);
-            FeedbackMessage = $"已导出：{path}";
-        }
-        catch (Exception ex)
-        {
-            FeedbackMessage = $"导出产能数据失败：{ex.Message}";
-        }
+                DateTime.Now));
+
+        FeedbackMessage = result.IsSuccess
+            ? result.Message
+            : $"导出产能数据失败：{result.Message}";
     }
 
     private void OnUploadGateChanged(EdgeUploadGateSnapshot snapshot)

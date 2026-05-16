@@ -36,6 +36,11 @@ public sealed class AvaloniaViewRegistry : IAvaloniaViewRegistry
         return _views.TryGetValue(viewId, out var registration) ? registration : null;
     }
 
+    public IReadOnlyList<AvaloniaViewRegistration> GetAllViewRegistrations()
+    {
+        return _views.Values.OrderBy(item => item.ViewId, StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
     public IReadOnlyList<AvaloniaMenuInfo> GetAllMenus()
     {
         return _menus.OrderBy(item => item.Order).ToArray();

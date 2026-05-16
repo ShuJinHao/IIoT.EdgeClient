@@ -10,9 +10,19 @@ public sealed record ModuleHardwareSignalRequirement(
     int SortOrder,
     string Category = "");
 
-public static class ModuleHardwareProfileValidator
+public interface IModuleHardwareProfileValidator
 {
-    public static ModuleHardwareValidationResult Validate(
+    ModuleHardwareValidationResult Validate(
+        string deviceName,
+        IReadOnlyCollection<ModuleIoSnapshot> mappings,
+        IReadOnlyCollection<ModuleHardwareSignalRequirement> requirements,
+        bool requireCategory = false,
+        bool validateSequentialOrder = false);
+}
+
+public sealed class ModuleHardwareProfileValidator : IModuleHardwareProfileValidator
+{
+    public ModuleHardwareValidationResult Validate(
         string deviceName,
         IReadOnlyCollection<ModuleIoSnapshot> mappings,
         IReadOnlyCollection<ModuleHardwareSignalRequirement> requirements,

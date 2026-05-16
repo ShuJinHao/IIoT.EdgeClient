@@ -7,32 +7,41 @@ namespace IIoT.Edge.Presentation.Panels.Avalonia;
 
 public static class PanelAvaloniaPresentationRegistration
 {
-    public static void RegisterPanelViews(IServiceProvider services)
+    public static void RegisterPanelViews(IAvaloniaViewRegistry registry)
     {
-        var registry = services.GetRequiredService<IAvaloniaViewRegistry>();
+        ArgumentNullException.ThrowIfNull(registry);
 
-        registry.RegisterDockPane(
-            new AvaloniaDockPaneInfo
-            {
-                ViewId = "Core.Equipment",
-                TitleResourceKey = "Shell_EquipmentInfo",
-                DockGroup = "tools",
-                IsToolPane = true
-            },
-            typeof(EquipmentView),
-            typeof(EquipmentViewModel),
-            provider => provider.GetRequiredService<EquipmentViewModel>());
+        registry.RegisterMenu(new AvaloniaMenuInfo
+        {
+            ViewId = "Core.SysLog",
+            Title = "运行日志",
+            TitleResourceKey = "Panels_Title_RuntimeLog",
+            Icon = "FileDocumentOutline",
+            Order = 1
+        });
 
         registry.RegisterDockPane(
             new AvaloniaDockPaneInfo
             {
                 ViewId = "Core.SysLog",
-                TitleResourceKey = "Shell_SystemLog",
+                TitleResourceKey = "Panels_Title_RuntimeLog",
                 DockGroup = "tools",
                 IsToolPane = true
             },
             typeof(LogView),
             typeof(LogViewModel),
             provider => provider.GetRequiredService<LogViewModel>());
+
+        registry.RegisterDockPane(
+            new AvaloniaDockPaneInfo
+            {
+                ViewId = "Core.Equipment",
+                TitleResourceKey = "Panels_Title_DeviceStatus",
+                DockGroup = "tools",
+                IsToolPane = true
+            },
+            typeof(EquipmentView),
+            typeof(EquipmentViewModel),
+            provider => provider.GetRequiredService<EquipmentViewModel>());
     }
 }

@@ -1,19 +1,63 @@
 <UserControl
     x:Class="IIoT.Edge.Presentation.Panels.Avalonia.Views.EquipmentView"
     xmlns="https://github.com/avaloniaui"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:loc="clr-namespace:IIoT.Edge.UI.Avalonia.Localization;assembly=IIoT.Edge.UI.Avalonia">
-  <Border Background="#151E2B" Padding="12">
-    <StackPanel Spacing="10">
-      <TextBlock FontSize="16" FontWeight="SemiBold" Foreground="#F8FAFC" Text="{DynamicResource Shell_EquipmentInfo}" />
-      <DataGrid ItemsSource="{Binding Items}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="None">
-        <DataGrid.Columns>
-          <DataGridTextColumn Width="84" Binding="{Binding Group}" loc:LocalizedDataGrid.HeaderResourceKey="Shell_Column_Group" />
-          <DataGridTextColumn Width="*" Binding="{Binding Name}" loc:LocalizedDataGrid.HeaderResourceKey="Shell_Column_Name" />
-          <DataGridTextColumn Width="90" Binding="{Binding State}" loc:LocalizedDataGrid.HeaderResourceKey="Shell_Column_Status" />
-          <DataGridTextColumn Width="130" Binding="{Binding LastValue}" loc:LocalizedDataGrid.HeaderResourceKey="Shell_Column_Value" />
-        </DataGrid.Columns>
-      </DataGrid>
-    </StackPanel>
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Border Background="Transparent" Padding="0,0,0,0">
+    <Border Classes="edge-right-panel chromeless">
+      <Grid RowDefinitions="Auto,*" RowSpacing="14">
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Classes="section-title"
+                     VerticalAlignment="Center"
+                     Text="{DynamicResource Panels_Title_DeviceStatus}" />
+          <Border Grid.Column="1"
+                  Classes="edge-chip success"
+                  VerticalAlignment="Center">
+            <TextBlock FontSize="12"
+                       Foreground="{DynamicResource Edge.Accent.LimeDark}"
+                       Text="{DynamicResource Panels_Status_ReadOnly}" />
+          </Border>
+        </Grid>
+
+        <ScrollViewer Grid.Row="1"
+                      VerticalScrollBarVisibility="Auto">
+          <StackPanel Spacing="10">
+            <ItemsControl ItemsSource="{Binding Items}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border Classes="edge-status-card compact" Margin="0,0,0,10">
+                    <Grid ColumnDefinitions="34,*,Auto" ColumnSpacing="10">
+                      <Border Width="30" Height="30" CornerRadius="15" Background="{DynamicResource Edge.Status.SuccessSoft}">
+                        <Border Classes="edge-dot" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      </Border>
+                      <StackPanel Grid.Column="1" Spacing="2">
+                        <TextBlock FontSize="14"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource Edge.Text.Primary}"
+                                   Text="{Binding Name}"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock FontSize="12"
+                                   Foreground="{DynamicResource Edge.Text.Muted}"
+                                   MaxHeight="38"
+                                   Text="{Binding LastValue}"
+                                   TextWrapping="Wrap" />
+                      </StackPanel>
+                      <Border Grid.Column="2"
+                              Classes="edge-chip success"
+                              MaxWidth="86"
+                              VerticalAlignment="Top">
+                        <TextBlock FontSize="12"
+                                   Foreground="{DynamicResource Edge.Accent.LimeDark}"
+                                   Text="{Binding State}"
+                                   TextTrimming="CharacterEllipsis" />
+                      </Border>
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </ScrollViewer>
+      </Grid>
+    </Border>
   </Border>
 </UserControl>

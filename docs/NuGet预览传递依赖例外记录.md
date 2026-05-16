@@ -14,7 +14,6 @@
 - 用户已明确选择 Avalonia 12 最新稳定版路线，并接受 SkiaSharp preview 作为传递依赖临时例外。
 - 当前 NuGet 验证显示，`Avalonia.Desktop 12.0.3` 会通过 `Avalonia.Skia` 传递依赖 `SkiaSharp 3.119.4-preview.1.1`。
 - 如果完全禁止传递 preview 依赖，当前只能退回 Avalonia 11 线；用户已明确选择继续 Avalonia 12。
-- 第六批验证中发现 `SukiUI 6.1.0` 会引入 Avalonia 11 系列传递包，并且 `SukiWindow` 在 Avalonia 12 Headless 运行时触发 `WindowStateProperty` 缺失，因此 SukiUI 已从本迁移主线移除，改用 Avalonia Fluent + Dock Fluent。
 
 ## 已验证依赖
 

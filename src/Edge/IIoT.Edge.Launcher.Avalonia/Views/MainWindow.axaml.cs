@@ -1,7 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
-using IIoT.Edge.Launcher.Models;
+using Avalonia.VisualTree;
 using IIoT.Edge.Launcher.ViewModels;
 
 namespace IIoT.Edge.Launcher.Avalonia.Views;
@@ -9,10 +9,6 @@ namespace IIoT.Edge.Launcher.Avalonia.Views;
 public partial class MainWindow : Window
 {
     private readonly LauncherMainViewModel _viewModel;
-    private readonly Border _loginPanel;
-    private readonly Border _profilePanel;
-    private readonly TextBox _userNameInput;
-    private readonly TextBox _passwordInput;
 
     public MainWindow()
         : this(LauncherDesignTimeViewModelFactory.Create())
@@ -23,19 +19,8 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
-        _loginPanel = this.FindControl<Border>("LoginPanel") ?? throw new InvalidOperationException(nameof(LoginPanel));
-        _profilePanel = this.FindControl<Border>("ProfilePanel") ?? throw new InvalidOperationException(nameof(ProfilePanel));
-        _userNameInput = this.FindControl<TextBox>("UserNameInput") ?? throw new InvalidOperationException(nameof(UserNameInput));
-        _passwordInput = this.FindControl<TextBox>("PasswordInput") ?? throw new InvalidOperationException(nameof(PasswordInput));
         DataContext = _viewModel;
-        _viewModel.PropertyChanged += (_, args) =>
-        {
-            if (string.Equals(args.PropertyName, nameof(LauncherMainViewModel.IsAuthenticated), StringComparison.Ordinal))
-            {
-                UpdateVisualState();
-            }
-        };
-        UpdateVisualState();
+        _viewModel.LoginViewModel.ChangePasswordRequested += HandleChangePasswordRequested;
     }
 
     private void InitializeComponent()
@@ -43,46 +28,29 @@ public partial class MainWindow : Window
         AvaloniaXamlLoader.Load(this);
     }
 
-    private async void LoginButton_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+    private async void HandleChangePasswordRequested(object? sender, EventArgs e)
     {
-        await _viewModel.LoginAsync(_userNameInput.Text, _passwordInput.Text);
-        if (_viewModel.IsAuthenticated)
-        {
-            _passwordInput.Text = string.Empty;
-        }
-
-        UpdateVisualState();
-    }
-
-    private async void ChangePasswordButton_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
-    {
-        var dialog = new ChangePasswordWindow(_viewModel, _userNameInput.Text);
+        var dialog = new ChangePasswordWindow(_viewModel, _viewModel.LoginViewModel.UserName);
         var changed = await dialog.ShowDialog<bool?>(this);
         if (changed == true)
         {
-            _passwordInput.Text = string.Empty;
+            _viewModel.LoginViewModel.Password = string.Empty;
         }
     }
 
-    private async void LaunchProfileButton_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+    private void DragSurface_PointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if ((sender as Control)?.DataContext is LauncherProfileDefinition profile)
-        {
-            await _viewModel.LaunchAsync(profile);
-        }
-    }
-
-    private void UpdateVisualState()
-    {
-        _loginPanel.IsVisible = !_viewModel.IsAuthenticated;
-        _profilePanel.IsVisible = _viewModel.IsAuthenticated;
-    }
-
-    private void TitleBar_PointerPressed(object? sender, PointerPressedEventArgs e)
-    {
-        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed && !IsFromInteractiveElement(e.Source))
         {
             BeginMoveDrag(e);
+        }
+    }
+
+    private void DragSurface_DoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (!IsFromInteractiveElement(e.Source))
+        {
+            ToggleWindowState();
         }
     }
 
@@ -93,6 +61,11 @@ public partial class MainWindow : Window
 
     private void ToggleWindowStateButton_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
     {
+        ToggleWindowState();
+    }
+
+    private void ToggleWindowState()
+    {
         WindowState = WindowState == WindowState.Maximized
             ? WindowState.Normal
             : WindowState.Maximized;
@@ -101,5 +74,28 @@ public partial class MainWindow : Window
     private void CloseWindowButton_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
     {
         Close();
+    }
+
+    private static bool IsFromInteractiveElement(object? source)
+    {
+        if (source is not Control control)
+        {
+            return false;
+        }
+
+        if (control is Button or TextBox or ScrollViewer or ItemsControl)
+        {
+            return true;
+        }
+
+        foreach (var ancestor in control.GetVisualAncestors().OfType<Control>())
+        {
+            if (ancestor is Button or TextBox or ScrollViewer or ItemsControl)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

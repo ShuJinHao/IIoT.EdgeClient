@@ -1,0 +1,111 @@
+<UserControl
+    x:Class="IIoT.Edge.Module.Homogenization.Presentation.Views.HomogenizationDataPage"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:loc="clr-namespace:IIoT.Edge.UI.Avalonia.Localization;assembly=IIoT.Edge.UI.Avalonia">
+  <Border Classes="edge-page-panel" Padding="24">
+    <Grid RowDefinitions="Auto,*" RowSpacing="18">
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+        <StackPanel Spacing="6" VerticalAlignment="Center">
+          <TextBlock Classes="page-title" Text="{DynamicResource Homogenization_Title_Data}" />
+          <TextBlock Classes="caption"
+                     Text="{DynamicResource Homogenization_Data_Subtitle}"
+                     TextWrapping="Wrap" />
+        </StackPanel>
+
+        <Border Grid.Column="1"
+                Classes="edge-chip success"
+                VerticalAlignment="Center">
+          <TextBlock FontSize="13"
+                     FontWeight="SemiBold"
+                     Foreground="{DynamicResource Edge.Text.Primary}"
+                     Text="{Binding StatusText}" />
+        </Border>
+      </Grid>
+
+      <Border Grid.Row="1" Classes="edge-table-card">
+        <Grid RowDefinitions="Auto,*">
+          <Grid Margin="20,18,20,14" ColumnDefinitions="*,Auto" ColumnSpacing="16">
+            <StackPanel Spacing="4" VerticalAlignment="Center">
+              <TextBlock Classes="section-title" Text="{DynamicResource Homogenization_Data_TableTitle}" />
+              <TextBlock Classes="caption"
+                         Text="{DynamicResource Homogenization_Data_TableHint}"
+                         TextWrapping="Wrap" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1"
+                        Orientation="Horizontal"
+                        Spacing="8"
+                        VerticalAlignment="Center">
+              <Border Classes="edge-chip">
+                <TextBlock FontSize="12"
+                           Foreground="{DynamicResource Edge.Text.Secondary}"
+                           Text="{DynamicResource Homogenization_Data_ReadOnly}" />
+              </Border>
+              <Border Classes="edge-chip">
+                <TextBlock FontSize="12"
+                           Foreground="{DynamicResource Edge.Text.Secondary}"
+                           Text="{DynamicResource Homogenization_Data_LocalCache}" />
+              </Border>
+            </StackPanel>
+          </Grid>
+
+          <Grid Grid.Row="1" Margin="20,0,20,20">
+            <DataGrid ItemsSource="{Binding Records}"
+                      AutoGenerateColumns="False"
+                      IsReadOnly="True"
+                      IsVisible="{Binding HasRecords}"
+                      MinHeight="420"
+                      HorizontalScrollBarVisibility="Auto"
+                      VerticalScrollBarVisibility="Auto">
+              <DataGrid.Columns>
+                <DataGridTextColumn Width="1.4*" Binding="{Binding TrayCode}" loc:LocalizedDataGrid.HeaderResourceKey="Homogenization_Column_TrayCode" />
+                <DataGridTextColumn Width="160" Binding="{Binding InboundTime}" loc:LocalizedDataGrid.HeaderResourceKey="Homogenization_Column_InboundTime" />
+                <DataGridTextColumn Width="160" Binding="{Binding OutboundTime}" loc:LocalizedDataGrid.HeaderResourceKey="Homogenization_Column_OutboundTime" />
+                <DataGridTextColumn Width="130" Binding="{Binding Status}" loc:LocalizedDataGrid.HeaderResourceKey="Homogenization_Column_Status" />
+                <DataGridTextColumn Width="120" Binding="{Binding StirringSpeed}" loc:LocalizedDataGrid.HeaderResourceKey="Homogenization_Column_StirringSpeed" />
+                <DataGridTextColumn Width="110" Binding="{Binding Temperature}" loc:LocalizedDataGrid.HeaderResourceKey="Homogenization_Column_Temperature" />
+                <DataGridTextColumn Width="110" Binding="{Binding Vacuum}" loc:LocalizedDataGrid.HeaderResourceKey="Homogenization_Column_Vacuum" />
+                <DataGridTextColumn Width="120" Binding="{Binding CntActual}" loc:LocalizedDataGrid.HeaderResourceKey="Homogenization_Column_CntActual" />
+                <DataGridTextColumn Width="120" Binding="{Binding NmpActual}" loc:LocalizedDataGrid.HeaderResourceKey="Homogenization_Column_NmpActual" />
+              </DataGrid.Columns>
+            </DataGrid>
+
+            <Border Classes="edge-inline-note"
+                    IsVisible="{Binding HasNoRecords}"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Stretch"
+                    MinHeight="420">
+              <StackPanel HorizontalAlignment="Center"
+                          VerticalAlignment="Center"
+                          Width="360"
+                          Spacing="10">
+                <Border Width="54"
+                        Height="54"
+                        CornerRadius="18"
+                        Background="{DynamicResource Edge.Bg.SelectedSoft}"
+                        HorizontalAlignment="Center">
+                  <TextBlock Text="--"
+                             FontSize="20"
+                             FontWeight="SemiBold"
+                             Foreground="{DynamicResource Edge.Text.Secondary}"
+                             HorizontalAlignment="Center"
+                             VerticalAlignment="Center" />
+                </Border>
+                <TextBlock FontSize="20"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource Edge.Text.Primary}"
+                           Text="{DynamicResource Homogenization_Data_EmptyTitle}"
+                           HorizontalAlignment="Center" />
+                <TextBlock Classes="caption"
+                           Text="{DynamicResource Homogenization_Data_EmptyHint}"
+                           TextWrapping="Wrap"
+                           TextAlignment="Center" />
+              </StackPanel>
+            </Border>
+          </Grid>
+        </Grid>
+      </Border>
+    </Grid>
+  </Border>
+</UserControl>
