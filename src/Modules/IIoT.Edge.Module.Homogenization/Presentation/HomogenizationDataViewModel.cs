@@ -40,6 +40,10 @@ public sealed class HomogenizationDataViewModel : AvaloniaViewModelBase
 
     public string StatusText { get; private set; } = string.Empty;
 
+    public bool HasRecords { get; private set; }
+
+    public bool HasNoRecords => !HasRecords;
+
     public override async Task OnActivatedAsync()
     {
         _timer.Start();
@@ -78,12 +82,15 @@ public sealed class HomogenizationDataViewModel : AvaloniaViewModelBase
                 Records.Add(row);
             }
 
+            HasRecords = rows.Length > 0;
             StatusText = rows.Length == 0
                 ? ResolveText("Homogenization_Empty_OutboundRecords", "暂无匀浆出料记录。")
                 : string.Format(
                     ResolveText("Homogenization_RecordCountFormat", "共 {0} 条出料记录。"),
                     rows.Length);
             OnPropertyChanged(nameof(StatusText));
+            OnPropertyChanged(nameof(HasRecords));
+            OnPropertyChanged(nameof(HasNoRecords));
             OnPropertyChanged(nameof(ViewTitle));
         }).ConfigureAwait(false);
     }

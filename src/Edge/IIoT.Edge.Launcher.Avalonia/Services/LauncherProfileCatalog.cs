@@ -8,7 +8,7 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
 {
     private const string DefaultExecutableFileName = "IIoT.Edge.AvaloniaShell.exe";
     private const string DefaultIconKind = "Cog";
-    private const string DefaultAccentColor = "#0F766E";
+    private const string DefaultAccentColor = "Launcher.Accent.Default";
 
     private readonly string _baseDirectory;
     private readonly string _catalogPath;

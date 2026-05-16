@@ -4,14 +4,18 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:dialogHost="clr-namespace:DialogHostAvalonia;assembly=DialogHost.Avalonia"
     xmlns:dock="clr-namespace:Dock.Avalonia.Controls;assembly=Dock.Avalonia"
+    xmlns:dockControls="clr-namespace:Dock.Avalonia.Controls;assembly=Dock.Avalonia"
     xmlns:docking="clr-namespace:IIoT.Edge.UI.Avalonia.Docking;assembly=IIoT.Edge.UI.Avalonia"
     xmlns:shellViews="clr-namespace:IIoT.Edge.Presentation.Shell.Avalonia.Views;assembly=IIoT.Edge.Presentation.Shell.Avalonia"
-    Width="1360"
-    Height="860"
-    MinWidth="1100"
-    MinHeight="720"
+    xmlns:sysMenuViews="clr-namespace:IIoT.Edge.Presentation.Shell.Avalonia.Features.SysMenu.Views;assembly=IIoT.Edge.Presentation.Shell.Avalonia"
+    Width="1900"
+    Height="1200"
+    MinWidth="1180"
+    MinHeight="760"
     Title="{DynamicResource Shell_App_Title}"
-    Background="#0F172A">
+    CanResize="True"
+    WindowDecorations="None"
+    Background="{DynamicResource Edge.Bg.Canvas}">
 
   <Window.DataTemplates>
     <DataTemplate DataType="{x:Type docking:AvaloniaDockable}">
@@ -19,27 +23,72 @@
     </DataTemplate>
   </Window.DataTemplates>
 
+  <Window.Styles>
+    <Style Selector="dockControls|DockControl">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="dockControls|RootDockControl">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="dockControls|ProportionalDockControl">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="dockControls|DocumentDockControl">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="dockControls|DocumentControl">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="dockControls|DocumentContentControl">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="dockControls|ToolDockControl">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="dockControls|ToolControl">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="dockControls|ToolContentControl">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="dockControls|ToolChromeControl">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="dockControls|DocumentTabStrip">
+      <Setter Property="IsVisible" Value="False" />
+      <Setter Property="Height" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Margin" Value="0" />
+    </Style>
+    <Style Selector="dockControls|ToolTabStrip">
+      <Setter Property="IsVisible" Value="False" />
+      <Setter Property="Height" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Margin" Value="0" />
+    </Style>
+  </Window.Styles>
+
   <dialogHost:DialogHost IsOpen="{Binding IsSystemDialogOpen}" CloseOnClickAway="False">
     <dialogHost:DialogHost.DialogContent>
       <Border Width="440"
-              Padding="20"
-              Background="#111827"
-              BorderBrush="#334155"
-              BorderThickness="1"
-              CornerRadius="6">
-        <StackPanel Spacing="14">
-          <TextBlock FontSize="16"
+              Classes="edge-card"
+              Padding="24">
+        <StackPanel Spacing="16">
+          <TextBlock FontSize="18"
                      FontWeight="SemiBold"
-                     Foreground="#F8FAFC"
+                     Foreground="{DynamicResource Edge.Text.Primary}"
                      Text="{Binding SystemDialogRequest.Title}" />
-          <TextBlock Foreground="#CBD5E1"
+          <TextBlock Foreground="{DynamicResource Edge.Text.Secondary}"
                      Text="{Binding SystemDialogRequest.Message}"
                      TextWrapping="Wrap" />
           <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="8">
             <Button IsVisible="{Binding IsSystemDialogConfirm}"
                     Command="{Binding CancelSystemDialogCommand}"
                     Content="{DynamicResource Shell_Action_Cancel}" />
-            <Button Command="{Binding CompleteSystemDialogCommand}"
+            <Button Classes="accent"
+                    Command="{Binding CompleteSystemDialogCommand}"
                     Content="{Binding SystemDialogPrimaryActionText}" />
           </StackPanel>
         </StackPanel>
@@ -51,44 +100,89 @@
         <shellViews:LoginView DataContext="{Binding LoginViewModel}" />
       </dialogHost:DialogHost.DialogContent>
 
-      <Grid RowDefinitions="46,*,30" Background="#0F172A">
-        <shellViews:HeaderView Grid.Row="0" DataContext="{Binding HeaderViewModel}" />
-
-        <Grid Grid.Row="1" ColumnDefinitions="220,*">
-          <Border Background="#0B1120" BorderBrush="#263244" BorderThickness="0,0,1,0" Padding="12">
+      <Border Classes="edge-shell flush" Margin="0" ClipToBounds="True">
+        <Grid RowDefinitions="72,*,32" ColumnDefinitions="72,*">
+          <Border Grid.Row="0"
+                  Grid.RowSpan="3"
+                  Grid.Column="0"
+                  Classes="edge-nav-rail">
             <DockPanel>
-              <StackPanel DockPanel.Dock="Bottom" Spacing="8">
-                <Button HorizontalAlignment="Stretch" Command="{Binding ToggleLanguageCommand}" Content="{Binding LanguageToggleText}" />
-                <Button HorizontalAlignment="Stretch" Command="{Binding OpenLoginCommand}" Content="{DynamicResource Shell_Action_Login}" />
+              <Grid DockPanel.Dock="Top"
+                    Height="72"
+                    HorizontalAlignment="Stretch">
+                <Grid HorizontalAlignment="Center"
+                      VerticalAlignment="Center"
+                      Width="30"
+                      Height="30">
+                  <Border Width="6"
+                          Height="25"
+                          CornerRadius="3"
+                          Background="{DynamicResource Edge.Accent.Lime}"
+                          HorizontalAlignment="Left"
+                          VerticalAlignment="Bottom" />
+                  <Border Width="6"
+                          Height="18"
+                          CornerRadius="3"
+                          Background="{DynamicResource Edge.Accent.Teal}"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Bottom" />
+                  <Border Width="6"
+                          Height="23"
+                          CornerRadius="3"
+                          Background="{DynamicResource Edge.Text.Primary}"
+                          HorizontalAlignment="Right"
+                          VerticalAlignment="Bottom" />
+                </Grid>
+              </Grid>
+
+              <StackPanel DockPanel.Dock="Bottom"
+                          Margin="9,0,9,14"
+                          Spacing="10">
+                <Button Classes="chip"
+                        Width="50"
+                        HorizontalAlignment="Center"
+                        Command="{Binding ToggleLanguageCommand}"
+                        Content="{Binding LanguageToggleText}"
+                        ToolTip.Tip="{Binding LanguageToggleText}"
+                        AutomationProperties.Name="{Binding LanguageToggleText}" />
               </StackPanel>
 
-              <ItemsControl ItemsSource="{Binding MenuItems}">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate>
-                    <Button
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Left"
-                        Margin="0,0,0,8"
-                        Command="{Binding NavigateCommand}"
-                        Content="{Binding Title}" />
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
+              <sysMenuViews:SysMenuView DataContext="{Binding SysMenuViewModel}" />
             </DockPanel>
           </Border>
 
-          <dock:DockControl
-              Grid.Column="1"
-              AutoCreateDataTemplates="True"
-              Factory="{Binding DockFactory}"
-              InitializeFactory="True"
-              InitializeLayout="True"
-              IsDockingEnabled="True"
-              Layout="{Binding DockLayout}" />
-        </Grid>
+          <shellViews:HeaderView Grid.Row="0"
+                                 Grid.Column="1"
+                                 DataContext="{Binding HeaderViewModel}" />
 
-        <shellViews:FooterView Grid.Row="2" DataContext="{Binding FooterViewModel}" />
-      </Grid>
+          <Border Grid.Row="1"
+                  Grid.Column="1"
+                  Classes="edge-workspace-host">
+            <Grid ColumnDefinitions="*,380" ColumnSpacing="14">
+              <Border Classes="edge-document-host">
+                <dock:DockControl
+                    AutoCreateDataTemplates="True"
+                    Factory="{Binding DockFactory}"
+                    InitializeFactory="True"
+                    InitializeLayout="True"
+                    IsDockingEnabled="True"
+                    Layout="{Binding DockLayout}" />
+              </Border>
+
+              <Border Grid.Column="1" Classes="edge-tool-shell stacked">
+                <Grid RowDefinitions="0.36*,0.64*" RowSpacing="12">
+                  <ContentControl Content="{Binding EquipmentToolDockable.Content}" />
+                  <ContentControl Grid.Row="1" Content="{Binding LogToolDockable.Content}" />
+                </Grid>
+              </Border>
+            </Grid>
+          </Border>
+
+          <shellViews:FooterView Grid.Row="2"
+                                 Grid.Column="1"
+                                 DataContext="{Binding FooterViewModel}" />
+        </Grid>
+      </Border>
     </dialogHost:DialogHost>
   </dialogHost:DialogHost>
 </Window>

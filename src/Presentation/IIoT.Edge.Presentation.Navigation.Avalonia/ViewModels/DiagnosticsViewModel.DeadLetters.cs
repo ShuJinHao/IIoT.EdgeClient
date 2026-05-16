@@ -19,7 +19,7 @@ public sealed partial class DiagnosticsViewModel
         DataPipelineRetryChannel channel,
         DeadLetterDiagnosticsSnapshot? snapshot)
         => snapshot?.LatestRecords
-            .Select(record => DiagnosticsDeadLetterRow.From(channel, record, FormatTime((DateTime?)record.CreatedAt)))
+            .Select(record => DiagnosticsDeadLetterRow.From(channel, record, DiagnosticsReportProjectionFormatter.FormatTime((DateTime?)record.CreatedAt)))
             .ToArray()
         ?? [];
 
@@ -148,34 +148,4 @@ public sealed partial class DiagnosticsViewModel
         var value = _languageService.GetText(key);
         return string.Equals(value, key, StringComparison.Ordinal) ? fallback : value;
     }
-}
-
-public sealed record DiagnosticsDeadLetterRow(
-    DataPipelineRetryChannel Channel,
-    long Id,
-    string ProcessType,
-    string FailedTarget,
-    string FailureStage,
-    string Source,
-    string CreatedAt,
-    string FailureReason,
-    string CellDataJson)
-{
-    public static DiagnosticsDeadLetterRow From(
-        DataPipelineRetryChannel channel,
-        DeadLetterRecord record,
-        string createdAt)
-        => new(
-            channel,
-            record.Id,
-            Normalize(record.ProcessType),
-            Normalize(record.FailedTarget),
-            Normalize(record.FailureStage),
-            $"{Normalize(record.SourceTable)}/{record.SourceRecordId?.ToString() ?? "--"}",
-            createdAt,
-            Normalize(record.FailureReason),
-            Normalize(record.CellDataJson));
-
-    private static string Normalize(string? value)
-        => string.IsNullOrWhiteSpace(value) ? "--" : value;
 }

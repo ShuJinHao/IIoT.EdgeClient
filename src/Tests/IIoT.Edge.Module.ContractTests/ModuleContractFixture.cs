@@ -93,6 +93,9 @@ internal sealed class TestEdgeProcessModuleBuilder(
         => viewRegistry.RegisterMenu(new AvaloniaMenuInfo
         {
             TitleResourceKey = menuInfo.TitleResourceKey,
+            Title = menuInfo.Title,
+            Icon = menuInfo.Icon,
+            RequiredPermission = menuInfo.RequiredPermission,
             ViewId = menuInfo.ViewId,
             Order = menuInfo.Order
         });

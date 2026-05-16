@@ -1,3 +1,5 @@
+using System.Reflection;
+using System.Text.Json;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using IIoT.Edge.Application.Abstractions.Auth;
@@ -10,6 +12,7 @@ using IIoT.Edge.Application.Abstractions.Plc.Diagnostics;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Recipe;
 using IIoT.Edge.Application.Common.Crud;
+using IIoT.Edge.Application.Common.Models;
 using IIoT.Edge.Application.Context;
 using IIoT.Edge.Application.Features.Config.ParamView;
 using IIoT.Edge.Application.Features.Config.ParamView.Models;
@@ -17,9 +20,9 @@ using IIoT.Edge.Application.Features.Formula.RecipeView;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Models;
 using IIoT.Edge.Application.Modules.Hardware;
+using IIoT.Edge.AvaloniaShell.Services;
 using IIoT.Edge.AvaloniaShell.ViewModels;
 using IIoT.Edge.Host.Bootstrap;
-using IIoT.Edge.Module.Homogenization.Localization;
 using IIoT.Edge.Module.Homogenization.Presentation;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Payload;
@@ -31,6 +34,7 @@ using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Hardware.HardwareConfi
 using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Hardware.IOView;
 using IIoT.Edge.Presentation.Navigation.Avalonia.Views;
 using IIoT.Edge.Presentation.Shell.Avalonia.ViewModels;
+using IIoT.Edge.Presentation.Shell.Avalonia.Features.SysMenu.ViewModels;
 using IIoT.Edge.SharedKernel.DataPipeline.Recipe;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.Enums;
@@ -46,16 +50,173 @@ namespace IIoT.Edge.AvaloniaShell.Tests;
 
 public sealed class AvaloniaShellBehaviorTests
 {
+    [Fact]
+    public void Shell_configuration_loader_loads_environment_machine_profile_and_plugin_defaults()
+    {
+        var root = CreateTempDirectory();
+        var oldEnvironment = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT");
+        try
+        {
+            Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", "Development");
+            File.WriteAllText(
+                Path.Combine(root, "appsettings.json"),
+                """
+                {
+                  "Shell": { "MachineProfile": "LineA" },
+                  "Custom": { "Value": "base" }
+                }
+                """);
+            File.WriteAllText(
+                Path.Combine(root, "appsettings.Development.json"),
+                """
+                {
+                  "Custom": { "Value": "environment" }
+                }
+                """);
+            File.WriteAllText(
+                Path.Combine(root, "appsettings.machine.LineA.json"),
+                """
+                {
+                  "Custom": { "Machine": "loaded" }
+                }
+                """);
+            var pluginConfig = Path.Combine(root, "Modules", "Homogenization", "Config");
+            Directory.CreateDirectory(pluginConfig);
+            File.WriteAllText(
+                Path.Combine(pluginConfig, "defaults.module.json"),
+                """
+                {
+                  "Plugin": { "Default": "loaded" }
+                }
+                """);
+
+            var result = new ShellConfigurationLoader().Load(root);
+
+            Assert.Equal("Development", result.EnvironmentName);
+            Assert.Equal("LineA", result.MachineProfile);
+            Assert.Equal("appsettings.machine.LineA.json", result.MachineProfileFileName);
+            Assert.True(result.IsMachineProfileLoaded);
+            Assert.Equal("environment", result.Configuration["Custom:Value"]);
+            Assert.Equal("loaded", result.Configuration["Custom:Machine"]);
+            Assert.Equal("loaded", result.Configuration["Plugin:Default"]);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", oldEnvironment);
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Shell_runtime_path_resolver_uses_configured_relative_runtime_root()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            var configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Shell:MachineProfile"] = "LineA",
+                    ["Shell:RuntimeDataRoot"] = "runtime/line-a"
+                })
+                .Build();
+
+            var paths = new ShellRuntimePathResolver().Resolve(root, configuration);
+
+            Assert.Equal("LineA", paths.ProfileName);
+            Assert.Equal(Path.GetFullPath(Path.Combine(root, "runtime", "line-a")), paths.RuntimeDataRoot);
+            Assert.Equal(Path.Combine(paths.RuntimeDataRoot, "diagnostics", "logs"), paths.LogDirectory);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Avalonia_bootstrap_options_factory_uses_configuration_paths_and_modules()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(root, "appsettings.json"),
+                """
+                {
+                  "Shell": {
+                    "RuntimeDataRoot": "runtime",
+                    "MachineProfile": "LineA"
+                  },
+                  "Modules": {
+                    "Enabled": [ "Homogenization", "CustomModule" ]
+                  }
+                }
+                """);
+
+            var factory = new AvaloniaShellBootstrapOptionsFactory(
+                new ShellConfigurationLoader(),
+                new ShellRuntimePathResolver());
+
+            var options = factory.Create(root);
+
+            Assert.Equal(Path.GetFullPath(Path.Combine(root, "runtime")), options.RuntimePaths.RuntimeDataRoot);
+            Assert.Equal(["Homogenization", "CustomModule"], options.ModuleIds);
+            Assert.Equal([root], options.PluginDirectories);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Avalonia_shell_project_contains_copied_appsettings_files()
+    {
+        var root = FindRepositoryRoot();
+        var projectDirectory = Path.Combine(root, "src", "Edge", "IIoT.Edge.AvaloniaShell");
+        var projectFile = File.ReadAllText(Path.Combine(projectDirectory, "IIoT.Edge.AvaloniaShell.csproj"));
+
+        Assert.True(File.Exists(Path.Combine(projectDirectory, "appsettings.json")));
+        Assert.True(File.Exists(Path.Combine(projectDirectory, "appsettings.Development.json")));
+        Assert.True(File.Exists(Path.Combine(projectDirectory, "appsettings.Production.json")));
+        Assert.True(File.Exists(Path.Combine(projectDirectory, "appsettings.machine.HomogenizationLine.json")));
+        Assert.Contains("appsettings.machine.*.json", projectFile, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Avalonia_shell_appsettings_keep_security_values_as_empty_deployment_placeholders()
+    {
+        var root = FindRepositoryRoot();
+        var projectDirectory = Path.Combine(root, "src", "Edge", "IIoT.Edge.AvaloniaShell");
+        var files = new[]
+        {
+            "appsettings.json",
+            "appsettings.machine.HomogenizationLine.json"
+        };
+
+        foreach (var fileName in files)
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(projectDirectory, fileName)));
+            var rootElement = document.RootElement;
+
+            Assert.Equal(string.Empty, rootElement.GetProperty("CloudApi").GetProperty("BootstrapSecret").GetString());
+            Assert.Equal(string.Empty, rootElement.GetProperty("LocalAdmin").GetProperty("PasswordHash").GetString());
+        }
+    }
+
     [AvaloniaFact]
-    public void Bootstrap_registers_real_shell_menu_and_resource_contributors()
+    public void Bootstrap_registers_real_shell_menu_and_xaml_resources()
     {
         using var provider = BuildProvider();
 
         provider.GetRequiredService<IAvaloniaLanguageService>().Apply("zh-CN");
         var registry = provider.GetRequiredService<IAvaloniaViewRegistry>();
         var menus = registry.GetAllMenus();
+        var sysMenu = provider.GetRequiredService<SysMenuViewModel>();
         var ids = StandardAvaloniaModuleViewIds.Create("Homogenization");
 
+        Assert.Equal("Core.SysMenu", sysMenu.ViewId);
+        Assert.Equal("系统导航菜单", sysMenu.ViewTitle);
         Assert.Contains(menus, item => item.ViewId == ids.Monitor);
         Assert.Contains(menus, item => item.ViewId == ids.DataView);
         Assert.Contains(menus, item => item.ViewId == ids.CapacityView);
@@ -67,6 +228,110 @@ public sealed class AvaloniaShellBehaviorTests
         Assert.Contains(menus, item => item.ViewId == CoreAvaloniaViewIds.Diagnostics);
         Assert.NotEqual("Navigation_Menu_Monitor", provider.GetRequiredService<IAvaloniaLanguageService>().GetText("Navigation_Menu_Monitor"));
         Assert.Equal("匀浆出料数据", provider.GetRequiredService<IAvaloniaLanguageService>().GetText("Homogenization_Title_Data"));
+    }
+
+    [AvaloniaFact]
+    public void Bootstrap_registers_startup_diagnostics_collaborators_through_di()
+    {
+        using var provider = BuildProvider();
+
+        Assert.NotNull(provider.GetRequiredService<IStartupDiagnosticsConfigurationValidator>());
+        Assert.NotNull(provider.GetRequiredService<IStartupDiagnosticsPlcDeviceValidator>());
+        Assert.NotNull(provider.GetRequiredService<IStartupDiagnosticsModuleRegistrationSnapshotBuilder>());
+        Assert.NotNull(provider.GetRequiredService<IStartupDiagnosticsReportBuilder>());
+    }
+
+    [AvaloniaFact]
+    public void SysMenu_view_model_preserves_core_id_permissions_selection_and_login_semantics()
+    {
+        var registry = new FakeAvaloniaViewRegistry(
+        [
+            new AvaloniaMenuInfo
+            {
+                ViewId = "Allowed.View",
+                Title = "允许菜单",
+                TitleResourceKey = "Allowed_Menu",
+                Icon = "Home"
+            },
+            new AvaloniaMenuInfo
+            {
+                ViewId = "Blocked.View",
+                Title = "受限菜单",
+                TitleResourceKey = "Missing_Menu",
+                Icon = "Lock",
+                RequiredPermission = "Config.Edit"
+            }
+        ]);
+        var resources = new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["zh-CN"] = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["Allowed_Menu"] = "允许菜单资源",
+                ["Shell_Login"] = "登录",
+                ["Shell_LogoutFormat"] = "注销 ({0})",
+                ["Shell_ViewTitle_SysMenu"] = "系统导航菜单"
+            },
+            ["en-US"] = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["Allowed_Menu"] = "Allowed Menu",
+                ["Shell_Login"] = "Sign in",
+                ["Shell_LogoutFormat"] = "Sign out ({0})",
+                ["Shell_ViewTitle_SysMenu"] = "System Menu"
+            }
+        };
+        var languageService = new AvaloniaResourceLanguageService(
+            resources,
+            storagePath: Path.Combine(CreateTempDirectory(), "language.json"));
+        languageService.Apply("zh-CN");
+        var navigation = new FakeAvaloniaNavigationService();
+        var auth = new FakeAuthService();
+        var permission = new FakePermissionService { CanEditParamsValue = false };
+        var viewModel = new SysMenuViewModel(
+            navigation,
+            auth,
+            permission,
+            languageService,
+            new ImmediateAvaloniaDispatcherService(),
+            registry);
+        var requestedViews = new List<string>();
+        var loginRequested = false;
+        viewModel.NavigationRequested += requestedViews.Add;
+        viewModel.LoginRequested += () => loginRequested = true;
+
+        Assert.Equal("Core.SysMenu", viewModel.ViewId);
+        Assert.Equal("系统导航菜单", viewModel.ViewTitle);
+        Assert.Equal("登录", viewModel.LoginButtonText);
+
+        var allowed = Assert.Single(viewModel.MenuItems, item => item.ViewId == "Allowed.View");
+        var blocked = Assert.Single(viewModel.MenuItems, item => item.ViewId == "Blocked.View");
+        Assert.Equal("Home", allowed.Icon);
+        Assert.Equal("允许菜单资源", allowed.Title);
+        Assert.Equal("受限菜单", blocked.Title);
+        Assert.True(allowed.IsAccessible);
+        Assert.False(blocked.IsAccessible);
+
+        blocked.NavigateCommand.Execute(null);
+        Assert.Null(navigation.LastViewId);
+
+        allowed.NavigateCommand.Execute(null);
+        Assert.Equal("Allowed.View", navigation.LastViewId);
+        Assert.Equal(["Allowed.View"], requestedViews);
+        Assert.True(allowed.IsSelected);
+        Assert.Same(allowed, viewModel.SelectedItem);
+
+        viewModel.ExecuteLoginAction();
+        Assert.True(loginRequested);
+        Assert.Equal(0, auth.LogoutCalls);
+
+        auth.SignIn("现场管理员");
+        Assert.Equal("注销 (现场管理员)", viewModel.LoginButtonText);
+        viewModel.ExecuteLoginAction();
+        Assert.Equal(1, auth.LogoutCalls);
+        Assert.False(auth.IsAuthenticated);
+
+        permission.CanEditParamsValue = true;
+        permission.RaisePermissionStateChanged();
+        Assert.True(blocked.IsAccessible);
     }
 
     [AvaloniaFact]
@@ -404,12 +669,7 @@ public sealed class AvaloniaShellBehaviorTests
             NmpActualKg = 3.4d
         });
 
-        var languageService = new AvaloniaResourceLanguageService(
-            [
-                new HomogenizationAvaloniaZhCnResources(),
-                new HomogenizationAvaloniaEnUsResources()
-            ]);
-        languageService.Apply("zh-CN");
+        var languageService = CreateLanguageService(typeof(HomogenizationDataViewModel).Assembly);
         var timerFactory = new FakeAvaloniaTimerFactory();
         var viewModel = new HomogenizationDataViewModel(
             new FakeProductionContextStore([context]),
@@ -478,8 +738,40 @@ public sealed class AvaloniaShellBehaviorTests
             .AddSingleton<MainWindowViewModel>()
             .BuildServiceProvider();
 
-        IIoT.Edge.Host.Bootstrap.DependencyInjection.RegisterAvaloniaViews(services);
         return services;
+    }
+
+    private static IAvaloniaLanguageService CreateLanguageService(params Assembly[] assemblies)
+    {
+        var service = new AvaloniaResourceLanguageService(new AvaloniaXamlStringResourceLoader().Load(assemblies));
+        service.Apply("zh-CN");
+        return service;
+    }
+
+    private static string CreateTempDirectory()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "iiot-edge-avalonia-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(path);
+        return path;
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "IIoT.EdgeClient.slnx")) &&
+                Directory.Exists(Path.Combine(directory.FullName, "src")) &&
+                Directory.Exists(Path.Combine(directory.FullName, "docs")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new InvalidOperationException("Cannot locate IIoT.EdgeClient.AvaloniaMigration repository root.");
     }
 
     private static AvaloniaHostBootstrapOptions CreateOptions()
@@ -584,6 +876,107 @@ public sealed class AvaloniaShellBehaviorTests
         {
             action();
             return Task.CompletedTask;
+        }
+    }
+
+    private sealed class FakeAvaloniaViewRegistry : IAvaloniaViewRegistry
+    {
+        private readonly IReadOnlyList<AvaloniaMenuInfo> _menus;
+
+        public FakeAvaloniaViewRegistry(IReadOnlyList<AvaloniaMenuInfo> menus)
+        {
+            _menus = menus;
+        }
+
+        public void RegisterRoute(
+            string viewId,
+            Type viewType,
+            Type viewModelType,
+            Func<IServiceProvider, object>? viewModelFactory = null,
+            bool cacheView = true)
+            => throw new NotSupportedException();
+
+        public void RegisterMenu(AvaloniaMenuInfo menuInfo)
+            => throw new NotSupportedException();
+
+        public void RegisterDockPane(
+            AvaloniaDockPaneInfo info,
+            Type viewType,
+            Type viewModelType,
+            Func<IServiceProvider, object>? viewModelFactory = null,
+            bool cacheView = true)
+            => throw new NotSupportedException();
+
+        public AvaloniaViewRegistration? GetViewRegistration(string viewId) => null;
+
+        public IReadOnlyList<AvaloniaViewRegistration> GetAllViewRegistrations() => [];
+
+        public IReadOnlyList<AvaloniaMenuInfo> GetAllMenus() => _menus;
+
+        public IReadOnlyList<AvaloniaDockPaneInfo> GetAllDockPanes() => [];
+    }
+
+    private sealed class FakeAvaloniaNavigationService : IAvaloniaNavigationService
+    {
+        public string? LastViewId { get; private set; }
+
+        public object? CurrentViewModel => null;
+
+        public Control? CurrentView => null;
+
+        public event Action<object?>? Navigated
+        {
+            add { }
+            remove { }
+        }
+
+        public void NavigateTo(string viewId)
+        {
+            LastViewId = viewId;
+        }
+    }
+
+    private sealed class FakeAuthService : IAuthService
+    {
+        public UserSession? CurrentUser { get; private set; }
+
+        public bool IsAuthenticated => CurrentUser is not null;
+
+        public int LogoutCalls { get; private set; }
+
+        public event Action<UserSession?>? AuthStateChanged;
+
+        public bool HasPermission(string permission)
+            => CurrentUser?.Permissions.Contains(permission) == true;
+
+        public Task<bool> EnsureAuthenticatedAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(IsAuthenticated);
+
+        public Task<AuthResult> LoginLocalAsync(string password)
+            => Task.FromResult(AuthResult.Fail("not used"));
+
+        public Task<AuthResult> LoginCloudAsync(
+            string employeeNo,
+            string password,
+            Guid deviceId)
+            => Task.FromResult(AuthResult.Fail("not used"));
+
+        public void Logout()
+        {
+            LogoutCalls++;
+            CurrentUser = null;
+            AuthStateChanged?.Invoke(null);
+        }
+
+        public void SignIn(string displayName)
+        {
+            CurrentUser = new UserSession
+            {
+                DisplayName = displayName,
+                EmployeeNo = "E001",
+                IsLocalAdmin = true
+            };
+            AuthStateChanged?.Invoke(CurrentUser);
         }
     }
 

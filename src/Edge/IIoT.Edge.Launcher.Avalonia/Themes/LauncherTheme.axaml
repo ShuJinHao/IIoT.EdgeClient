@@ -1,0 +1,354 @@
+<Styles
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <Styles.Resources>
+    <SolidColorBrush x:Key="Launcher.Bg.Window" Color="#EEF1EC" />
+    <SolidColorBrush x:Key="Launcher.Bg.Surface" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="Launcher.Bg.SurfaceAlt" Color="#F5F8F1" />
+    <SolidColorBrush x:Key="Launcher.Bg.Panel" Color="#F7F8F4" />
+    <SolidColorBrush x:Key="Launcher.Bg.Chip" Color="#EEF9BD" />
+    <SolidColorBrush x:Key="Launcher.Bg.CardSoft" Color="#F3F6EE" />
+    <SolidColorBrush x:Key="Launcher.Bg.Hover" Color="#EEF3E8" />
+    <SolidColorBrush x:Key="Launcher.Bg.Disabled" Color="#EEF0EC" />
+    <SolidColorBrush x:Key="Launcher.Border" Color="#E4E6E0" />
+    <SolidColorBrush x:Key="Launcher.Border.Strong" Color="#C8CEC1" />
+    <SolidColorBrush x:Key="Launcher.Border.Focus" Color="#A4B19A" />
+    <SolidColorBrush x:Key="Launcher.Text.Primary" Color="#141922" />
+    <SolidColorBrush x:Key="Launcher.Text.Secondary" Color="#4C5664" />
+    <SolidColorBrush x:Key="Launcher.Text.Muted" Color="#7B8491" />
+    <SolidColorBrush x:Key="Launcher.Text.Error" Color="#C62828" />
+    <SolidColorBrush x:Key="Launcher.Accent.Default" Color="#BDEA30" />
+    <SolidColorBrush x:Key="Launcher.Accent.Hover" Color="#A9D624" />
+    <SolidColorBrush x:Key="Launcher.Accent.Pressed" Color="#97C215" />
+    <SolidColorBrush x:Key="Launcher.Accent.Soft" Color="#EEF9BD" />
+    <SolidColorBrush x:Key="Launcher.Accent.Text" Color="#5C9319" />
+    <SolidColorBrush x:Key="Launcher.Status.Success" Color="#6BAE1D" />
+    <SolidColorBrush x:Key="Launcher.Status.SuccessSoft" Color="#E8F6D6" />
+    <SolidColorBrush x:Key="Launcher.Status.Warning" Color="#E7A900" />
+    <SolidColorBrush x:Key="Launcher.Status.WarningSoft" Color="#FFF2C7" />
+    <SolidColorBrush x:Key="Launcher.Status.ErrorSoft" Color="#FFE4E2" />
+
+    <LinearGradientBrush x:Key="Launcher.WindowGradient" StartPoint="0,0" EndPoint="1,1">
+      <GradientStop Color="#EEF0EC" Offset="0" />
+      <GradientStop Color="#F8F8F5" Offset="0.55" />
+      <GradientStop Color="#E7ECE5" Offset="1" />
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="Launcher.HeroOverlay" StartPoint="0,0" EndPoint="1,1">
+      <GradientStop Color="#F8F8F5" Offset="0" />
+      <GradientStop Color="#EEF9BD" Offset="0.56" />
+      <GradientStop Color="#EAF8F3" Offset="1" />
+    </LinearGradientBrush>
+  </Styles.Resources>
+
+  <Style Selector="Window">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Bg.Window}" />
+    <Setter Property="Foreground" Value="{DynamicResource Launcher.Text.Primary}" />
+  </Style>
+
+  <Style Selector="Border.launcher-shell">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Bg.Panel}" />
+    <Setter Property="CornerRadius" Value="28" />
+    <Setter Property="BoxShadow" Value="{DynamicResource Shadow.Subtle}" />
+  </Style>
+
+  <Style Selector="Border.launcher-surface">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Bg.Surface}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Lg}" />
+    <Setter Property="Padding" Value="24" />
+    <Setter Property="BoxShadow" Value="{DynamicResource Shadow.Elevated}" />
+  </Style>
+
+  <Style Selector="Border.launcher-login-card">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Bg.Surface}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Lg}" />
+    <Setter Property="Padding" Value="32,30" />
+    <Setter Property="BoxShadow" Value="{DynamicResource Shadow.Elevated}" />
+  </Style>
+
+  <Style Selector="Border.launcher-card">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Bg.Surface}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Lg}" />
+    <Setter Property="Padding" Value="32" />
+    <Setter Property="BoxShadow" Value="{DynamicResource Shadow.Elevated}" />
+  </Style>
+
+  <Style Selector="Border.launcher-workspace">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Bg.Surface}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Lg}" />
+    <Setter Property="Padding" Value="32" />
+  </Style>
+
+  <Style Selector="Border.launcher-brand-panel">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Bg.SurfaceAlt}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Border}" />
+    <Setter Property="BorderThickness" Value="0,0,1,0" />
+    <Setter Property="Padding" Value="30,26" />
+  </Style>
+
+  <Style Selector="Border.launcher-profile-card">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Bg.Surface}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Md}" />
+    <Setter Property="Padding" Value="18" />
+    <Setter Property="BoxShadow" Value="{DynamicResource Shadow.Subtle}" />
+  </Style>
+
+  <Style Selector="Border.launcher-profile-card:pointerover">
+    <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Border.Strong}" />
+    <Setter Property="BoxShadow" Value="{DynamicResource Shadow.Elevated}" />
+  </Style>
+
+  <Style Selector="Border.launcher-status-card">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Bg.Surface}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Lg}" />
+    <Setter Property="Padding" Value="18" />
+    <Setter Property="BoxShadow" Value="{DynamicResource Shadow.Subtle}" />
+  </Style>
+
+  <Style Selector="Border.launcher-steps-card">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Bg.CardSoft}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Lg}" />
+    <Setter Property="Padding" Value="20" />
+  </Style>
+
+  <Style Selector="Border.launcher-steps-card.compact">
+    <Setter Property="Padding" Value="16" />
+  </Style>
+
+  <Style Selector="Border.launcher-chip">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Bg.Chip}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Md}" />
+    <Setter Property="Padding" Value="10,4" />
+  </Style>
+
+  <Style Selector="Border.launcher-chip.muted">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Bg.SurfaceAlt}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+
+  <Style Selector="Button.launcher-primary">
+    <Setter Property="MinHeight" Value="44" />
+    <Setter Property="Padding" Value="18,0" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Background" Value="{DynamicResource Launcher.Accent.Default}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Accent.Default}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Foreground" Value="{DynamicResource Launcher.Text.Primary}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Md}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+
+  <Style Selector="Button.launcher-primary:pointerover">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Accent.Hover}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Accent.Hover}" />
+  </Style>
+
+  <Style Selector="Button.launcher-primary:pressed">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Accent.Pressed}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Accent.Pressed}" />
+  </Style>
+
+  <Style Selector="Button.launcher-primary:focus">
+    <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Border.Focus}" />
+  </Style>
+
+  <Style Selector="Button.launcher-primary:disabled">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Bg.Disabled}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Border}" />
+    <Setter Property="Foreground" Value="{DynamicResource Launcher.Text.Muted}" />
+    <Setter Property="Opacity" Value="0.78" />
+  </Style>
+
+  <Style Selector="Button.launcher-ghost">
+    <Setter Property="MinHeight" Value="40" />
+    <Setter Property="Padding" Value="16,0" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Background" Value="{DynamicResource Launcher.Bg.Surface}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Foreground" Value="{DynamicResource Launcher.Text.Secondary}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Md}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+
+  <Style Selector="Button.launcher-ghost:pointerover">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Bg.Hover}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Border.Strong}" />
+    <Setter Property="Foreground" Value="{DynamicResource Launcher.Text.Primary}" />
+  </Style>
+
+  <Style Selector="Button.launcher-ghost:pressed">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Bg.Chip}" />
+  </Style>
+
+  <Style Selector="Button.launcher-ghost:focus">
+    <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Border.Focus}" />
+  </Style>
+
+  <Style Selector="Button.launcher-ghost:disabled">
+    <Setter Property="Opacity" Value="0.72" />
+  </Style>
+
+  <Style Selector="Button.launcher-window-command">
+    <Setter Property="Width" Value="40" />
+    <Setter Property="Height" Value="40" />
+    <Setter Property="MinHeight" Value="40" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Foreground" Value="{DynamicResource Launcher.Text.Secondary}" />
+    <Setter Property="CornerRadius" Value="20" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+
+  <Style Selector="Button.launcher-window-command:pointerover">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Bg.Hover}" />
+    <Setter Property="Foreground" Value="{DynamicResource Launcher.Text.Primary}" />
+  </Style>
+
+  <Style Selector="Button.launcher-window-command:pressed">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Bg.Chip}" />
+  </Style>
+
+  <Style Selector="Button.launcher-window-command:focus">
+    <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Border.Focus}" />
+  </Style>
+
+  <Style Selector="Button.launcher-window-command.close:pointerover">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Status.ErrorSoft}" />
+    <Setter Property="Foreground" Value="{DynamicResource Launcher.Text.Error}" />
+  </Style>
+
+  <Style Selector="TextBox">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Bg.Surface}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Md}" />
+    <Setter Property="Padding" Value="16,0" />
+    <Setter Property="Foreground" Value="{DynamicResource Launcher.Text.Primary}" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="MinHeight" Value="44" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="TextBox:pointerover">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Bg.Surface}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Border.Strong}" />
+  </Style>
+
+  <Style Selector="TextBox:focus">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Bg.Surface}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Border.Focus}" />
+  </Style>
+
+  <Style Selector="TextBox:focus-within">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Bg.Surface}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Border.Focus}" />
+  </Style>
+
+  <Style Selector="TextBox:focus-visible">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Bg.Surface}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Border.Focus}" />
+  </Style>
+
+  <Style Selector="TextBox:disabled">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Bg.Disabled}" />
+    <Setter Property="Foreground" Value="{DynamicResource Launcher.Text.Muted}" />
+    <Setter Property="Opacity" Value="0.78" />
+  </Style>
+
+  <Style Selector="TextBlock.launcher-page-title">
+    <Setter Property="FontSize" Value="26" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource Launcher.Text.Primary}" />
+  </Style>
+
+  <Style Selector="TextBlock.launcher-section-title">
+    <Setter Property="FontSize" Value="16" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource Launcher.Text.Primary}" />
+  </Style>
+
+  <Style Selector="TextBlock.launcher-subtitle">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Foreground" Value="{DynamicResource Launcher.Text.Secondary}" />
+  </Style>
+
+  <Style Selector="TextBlock.launcher-label">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource Launcher.Text.Secondary}" />
+  </Style>
+
+  <Style Selector="TextBlock.launcher-body">
+    <Setter Property="Foreground" Value="{DynamicResource Launcher.Text.Secondary}" />
+    <Setter Property="FontSize" Value="13" />
+  </Style>
+
+  <Style Selector="TextBlock.launcher-caption">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource Launcher.Text.Muted}" />
+  </Style>
+
+  <Style Selector="Border.launcher-status-mark">
+    <Setter Property="Width" Value="36" />
+    <Setter Property="Height" Value="36" />
+    <Setter Property="CornerRadius" Value="18" />
+    <Setter Property="Background" Value="{DynamicResource Launcher.Status.SuccessSoft}" />
+  </Style>
+
+  <Style Selector="Border.launcher-status-mark.active">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Bg.Chip}" />
+  </Style>
+
+  <Style Selector="Border.launcher-status-mark.soft">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Bg.SurfaceAlt}" />
+  </Style>
+
+  <Style Selector="Border.launcher-step-dot">
+    <Setter Property="Width" Value="9" />
+    <Setter Property="Height" Value="9" />
+    <Setter Property="CornerRadius" Value="5" />
+    <Setter Property="Background" Value="{DynamicResource Launcher.Border.Strong}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="Border.launcher-step-dot.active">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Accent.Text}" />
+  </Style>
+
+  <Style Selector="Border.launcher-message">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Bg.SurfaceAlt}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Md}" />
+    <Setter Property="Padding" Value="12" />
+  </Style>
+
+  <Style Selector="Border.launcher-message.error">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Status.ErrorSoft}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Status.ErrorSoft}" />
+  </Style>
+</Styles>

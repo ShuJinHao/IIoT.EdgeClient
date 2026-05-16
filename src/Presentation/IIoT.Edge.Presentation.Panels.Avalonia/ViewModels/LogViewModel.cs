@@ -1,8 +1,10 @@
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Common.Models;
+using IIoT.Edge.UI.Avalonia.Localization;
 using IIoT.Edge.UI.Avalonia.Mvvm;
 using IIoT.Edge.UI.Avalonia.Services;
 using System.Collections.ObjectModel;
@@ -12,30 +14,51 @@ namespace IIoT.Edge.Presentation.Panels.Avalonia.ViewModels;
 public sealed partial class LogViewModel : AvaloniaViewModelBase
 {
     private const int MaxEntries = 300;
+    private readonly ILogService _logService;
     private readonly EdgeRuntimePaths _runtimePaths;
     private readonly IStartupDiagnosticsStore _diagnosticsStore;
     private readonly IAvaloniaDispatcherService _dispatcherService;
+    private readonly IAvaloniaLanguageService _languageService;
     private LogFileOption? _selectedLogFile;
 
     public LogViewModel(
         ILogService logService,
         EdgeRuntimePaths runtimePaths,
         IStartupDiagnosticsStore diagnosticsStore,
-        IAvaloniaDispatcherService dispatcherService)
+        IAvaloniaDispatcherService dispatcherService,
+        IAvaloniaLanguageService languageService)
     {
+        _logService = logService;
         _runtimePaths = runtimePaths;
         _diagnosticsStore = diagnosticsStore;
         _dispatcherService = dispatcherService;
+        _languageService = languageService;
 
         LoadInitialEntries();
         logService.EntryAdded += HandleEntryAdded;
+        _languageService.LanguageChanged += (_, _) => UpdateLogMetrics();
     }
 
     public override string ViewId => "Core.SysLog";
 
-    public ObservableCollection<LogEntry> Entries { get; } = [];
+    public ObservableCollection<LogEntryRow> Entries { get; } = [];
 
     public ObservableCollection<LogFileOption> LogFiles { get; } = [];
+
+    [ObservableProperty]
+    private int totalCount;
+
+    [ObservableProperty]
+    private int warningCount;
+
+    [ObservableProperty]
+    private int errorCount;
+
+    [ObservableProperty]
+    private string latestLogSummary = string.Empty;
+
+    [ObservableProperty]
+    private bool isLogEmpty;
 
     public LogFileOption? SelectedLogFile
     {
@@ -50,7 +73,11 @@ public sealed partial class LogViewModel : AvaloniaViewModelBase
     }
 
     [RelayCommand]
-    private void Clear() => Entries.Clear();
+    private void Clear()
+    {
+        Entries.Clear();
+        UpdateLogMetrics();
+    }
 
     [RelayCommand]
     private void Refresh() => LoadInitialEntries();
@@ -61,32 +88,40 @@ public sealed partial class LogViewModel : AvaloniaViewModelBase
         Entries.Clear();
         foreach (var entry in ReadRuntimeLogEntries().Take(MaxEntries))
         {
-            Entries.Add(entry);
+            Entries.Add(LogEntryRow.From(entry));
         }
 
-        if (Entries.Count == 0)
-        {
-            Entries.Add(CreateStartupDiagnosticsEntry());
-        }
+        UpdateLogMetrics();
     }
 
     private IEnumerable<LogEntry> ReadRuntimeLogEntries()
     {
         if (SelectedLogFile is not null)
         {
-            return ReadFileTail(SelectedLogFile.Path).Reverse();
+            return ReadFileTail(SelectedLogFile.Path);
         }
+
+        var bufferedEntries = _logService is ILogDisplayService displayService
+            ? displayService.Entries
+                .Reverse()
+                .Take(MaxEntries)
+                .ToArray()
+            : Array.Empty<LogEntry>();
 
         if (!Directory.Exists(_runtimePaths.LogDirectory))
         {
-            return [];
+            return bufferedEntries;
         }
 
-        return Directory.EnumerateFiles(_runtimePaths.LogDirectory, "*.log", SearchOption.TopDirectoryOnly)
+        var fileEntries = Directory.EnumerateFiles(_runtimePaths.LogDirectory, "*.log", SearchOption.TopDirectoryOnly)
             .OrderByDescending(File.GetLastWriteTimeUtc)
             .Take(3)
             .SelectMany(ReadFileTail)
-            .Reverse();
+            .ToArray();
+
+        return bufferedEntries
+            .Concat(fileEntries)
+            .Take(MaxEntries);
     }
 
     private void RefreshLogFiles()
@@ -160,29 +195,74 @@ public sealed partial class LogViewModel : AvaloniaViewModelBase
         return new LogEntry { Time = DateTime.Now, Level = level, Message = line };
     }
 
-    private LogEntry CreateStartupDiagnosticsEntry()
+    private string CreateStartupDiagnosticsSummary()
     {
         var report = _diagnosticsStore.Current;
-        var message = report.GeneratedAt == DateTime.MinValue
-            ? "迁移运行目录暂无日志，启动诊断尚未生成。"
-            : $"迁移运行目录暂无日志。启动诊断：模块 {report.ModuleRegistrations.Count} 个，问题 {report.Issues.Count} 个，生成时间 {report.GeneratedAt:yyyy-MM-dd HH:mm:ss}。";
-        return new LogEntry { Time = DateTime.Now, Level = "INFO", Message = message };
+        return report.GeneratedAt == DateTime.MinValue
+            ? _languageService.GetText("Panels_Log_NoRuntimeLog")
+            : string.Format(
+                _languageService.GetText("Panels_Log_StartupDiagnosticsFormat"),
+                report.ModuleRegistrations.Count,
+                report.Issues.Count,
+                report.GeneratedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"));
+    }
+
+    private void UpdateLogMetrics()
+    {
+        TotalCount = Entries.Count;
+        WarningCount = Entries.Count(static entry => entry.IsWarning);
+        ErrorCount = Entries.Count(static entry => entry.IsError);
+        IsLogEmpty = Entries.Count == 0;
+        LatestLogSummary = Entries.FirstOrDefault()?.Message ?? CreateStartupDiagnosticsSummary();
     }
 
     private void HandleEntryAdded(LogEntry entry)
     {
         _ = _dispatcherService.InvokeAsync(() =>
         {
-            Entries.Insert(0, entry);
+            Entries.Insert(0, LogEntryRow.From(entry));
             while (Entries.Count > MaxEntries)
             {
                 Entries.RemoveAt(Entries.Count - 1);
             }
+
+            UpdateLogMetrics();
         });
     }
 }
 
+public sealed record LogEntryRow(
+    DateTime Time,
+    string Level,
+    string Message,
+    bool IsWarning,
+    bool IsError,
+    bool IsDebug)
+{
+    public static LogEntryRow From(LogEntry entry)
+    {
+        var level = string.IsNullOrWhiteSpace(entry.Level)
+            ? "INFO"
+            : entry.Level.ToUpperInvariant();
+
+        return new LogEntryRow(
+            entry.Time,
+            level,
+            entry.Message,
+            IsWarningLevel(level),
+            IsErrorLevel(level),
+            level.Contains("DEBUG", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsWarningLevel(string level)
+        => level.Contains("WARN", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsErrorLevel(string level)
+        => level.Contains("ERROR", StringComparison.OrdinalIgnoreCase)
+           || level.Contains("FATAL", StringComparison.OrdinalIgnoreCase);
+}
+
 public sealed record LogFileOption(string FileName, string Path, string UpdatedAt)
 {
-    public string DisplayText => $"{FileName}（{UpdatedAt}）";
+    public string DisplayText => $"{FileName} - {UpdatedAt}";
 }

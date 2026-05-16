@@ -210,90 +210,24 @@ public sealed class IoViewViewModel : NavigationPageViewModelBase
 
     private void BuildMappings(IReadOnlyCollection<IoMappingVm> mappings)
     {
-        var interactionGroups = mappings
-            .Where(IsInteractionMapping)
-            .GroupBy(static mapping => NormalizeGroup(mapping.BusinessGroup), StringComparer.OrdinalIgnoreCase)
-            .OrderBy(static group => group.Min(mapping => mapping.SortOrder));
+        var projection = new IoViewMappingProjectionBuilder(Text)
+            .Build(mappings, WriteInteractionRowAsync, CanWriteInteraction);
 
-        foreach (var group in interactionGroups)
+        foreach (var row in projection.InteractionRows)
         {
-            var row = new IoInteractionRowModel
-            {
-                BusinessGroup = group.Key,
-                SortOrder = group.Min(static mapping => mapping.SortOrder),
-                ListSeparator = Text("Navigation_ListSeparator", "、")
-            };
-
-            foreach (var mapping in group.OrderBy(static mapping => mapping.SortOrder))
-            {
-                var signal = CreateSignal(mapping);
-                if (IsWrite(mapping.Direction))
-                {
-                    row.AddHostSignal(signal);
-                }
-                else
-                {
-                    row.AddPlcSignal(signal);
-                }
-            }
-
-            row.WriteCommand = new AsyncRelayCommand(() => WriteInteractionRowAsync(row), () => CanWriteInteraction(row));
-            row.InitializeWriteValueFromCurrentBuffer();
             InteractionRows.Add(row);
         }
 
-        var readMappings = mappings
-            .Where(static mapping => !IsWrite(mapping.Direction))
-            .Where(static mapping => !IsInteractionMapping(mapping))
-            .OrderBy(static mapping => mapping.SortOrder)
-            .ToArray();
-
-        foreach (var group in readMappings.Where(static mapping => mapping.AddressCount <= 1)
-            .GroupBy(static mapping => BuildSectionTitle(mapping), StringComparer.OrdinalIgnoreCase))
+        foreach (var section in projection.DataSections)
         {
-            var first = group.First();
-            var section = new IoDataSectionModel
-            {
-                Category = first.Category,
-                BusinessGroup = NormalizeGroup(first.BusinessGroup),
-                SortOrder = first.SortOrder,
-                Title = group.Key,
-                CanManualRead = true
-            };
-            foreach (var mapping in group)
-            {
-                section.Signals.Add(CreateSignal(mapping));
-            }
-
             DataSections.Add(section);
         }
 
-        foreach (var group in readMappings.Where(static mapping => mapping.AddressCount > 1)
-            .GroupBy(static mapping => BuildSectionTitle(mapping), StringComparer.OrdinalIgnoreCase))
+        foreach (var section in projection.ArraySections)
         {
-            var first = group.First();
-            var section = new IoContinuousReadMatrixSectionModel(
-                Text("Navigation_Io_CollapseDetails", "收起明细"),
-                Text("Navigation_Io_ViewDetails", "查看明细"))
-            {
-                Category = first.Category,
-                BusinessGroup = NormalizeGroup(first.BusinessGroup),
-                SortOrder = first.SortOrder,
-                Title = group.Key,
-                EmptySummary = Text("Navigation_Io_NoContinuousValues", "暂无连续值"),
-                SummaryFormat = Text("Navigation_Io_ArraySummaryFormat", "{0} 行 x {1} 项")
-            };
-
-            foreach (var mapping in group)
-            {
-                section.Columns.Add(CreateSignal(mapping));
-            }
-
-            section.RebuildRows();
             ArraySections.Add(section);
         }
     }
-
     private async Task ManualReadSelectedDataAsync()
     {
         if (SelectedDevice is null)
@@ -363,70 +297,7 @@ public sealed class IoViewViewModel : NavigationPageViewModelBase
     }
 
     private void ApplySnapshot(IPlcBuffer buffer)
-    {
-        foreach (var row in InteractionRows)
-        {
-            foreach (var signal in row.PlcSignals)
-            {
-                ApplySignalSnapshot(buffer, signal, readDirection: true);
-            }
-
-            foreach (var signal in row.HostSignals)
-            {
-                ApplySignalSnapshot(buffer, signal, readDirection: false);
-            }
-
-            row.InitializeWriteValueFromCurrentBuffer();
-            row.NotifyValuesChanged();
-        }
-
-        foreach (var signal in DataSections.SelectMany(static section => section.Signals))
-        {
-            ApplySignalSnapshot(buffer, signal, readDirection: true);
-        }
-
-        foreach (var section in ArraySections)
-        {
-            foreach (var column in section.Columns)
-            {
-                ApplySignalSnapshot(buffer, column, readDirection: true);
-            }
-
-            section.RebuildRows();
-        }
-    }
-
-    private static void ApplySignalSnapshot(IPlcBuffer buffer, IoSignalModel signal, bool readDirection)
-    {
-        ushort[] words;
-        var found = readDirection
-            ? buffer.TryGetReadWords(signal.SignalKey, out words)
-            : buffer.TryGetWriteWords(signal.SignalKey, out words);
-
-        if (!found)
-        {
-            signal.DisplayValue = "-";
-            signal.PreviewValue = "-";
-            return;
-        }
-
-        if (signal.AddressCount > 1)
-        {
-            signal.ExpandedValues.Clear();
-            for (var index = 0; index < Math.Min(signal.AddressCount, words.Length); index++)
-            {
-                signal.ExpandedValues.Add(new IoSignalValueModel(index + 1, words[index].ToString()));
-            }
-        }
-
-        signal.SetValue(words.Length == 0 ? 0 : words[0]);
-        if (words.Length > 1 && signal.AddressCount <= 1)
-        {
-            signal.DisplayValue = string.Join(",", words);
-            signal.PreviewValue = signal.DisplayValue;
-        }
-    }
-
+        => IoViewPlcSnapshotApplier.Apply(buffer, InteractionRows, DataSections, ArraySections);
     private void RefreshConnectionState()
     {
         if (SelectedDevice is null)
@@ -475,7 +346,7 @@ public sealed class IoViewViewModel : NavigationPageViewModelBase
             .Select(static signal => signal.SignalKey)
             .Where(static key => !string.IsNullOrWhiteSpace(key))
             .ToArray();
-        var trace = FindLatestPlcWriteTrace(SelectedDevice.Id, signalKeys, row);
+        var trace = IoViewPlcWriteTraceFormatter.FindLatest(_writeTraceStore, SelectedDevice.Id, signalKeys, row);
         if (trace is null)
         {
             row.LastPlcWriteTraceText = row.AwaitingPlcWriteTrace
@@ -485,50 +356,7 @@ public sealed class IoViewViewModel : NavigationPageViewModelBase
         }
 
         row.AwaitingPlcWriteTrace = trace.Kind == PlcIoWriteTraceKind.Attempt;
-        row.LastPlcWriteTraceText = FormatPlcWriteTrace(trace);
-    }
-
-    private PlcIoWriteTraceEntry? FindLatestPlcWriteTrace(
-        int deviceId,
-        IReadOnlyCollection<string> signalKeys,
-        IoInteractionRowModel row)
-    {
-        if (_writeTraceStore is null || signalKeys.Count == 0)
-        {
-            return null;
-        }
-
-        var keys = signalKeys.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var acceptedAt = row.LastRuntimeBufferAcceptedAt;
-        return _writeTraceStore.GetRecent()
-            .FirstOrDefault(entry =>
-                entry.DeviceId == deviceId
-                && entry.SignalKeys.Any(keys.Contains)
-                && (!row.AwaitingPlcWriteTrace
-                    || acceptedAt is null
-                    || entry.OccurredAt >= acceptedAt.Value));
-    }
-
-    private string FormatPlcWriteTrace(PlcIoWriteTraceEntry trace)
-    {
-        var status = trace.Kind switch
-        {
-            PlcIoWriteTraceKind.Attempt => Text("Navigation_Io_PlcWriteTrace_Attempt", "尝试"),
-            PlcIoWriteTraceKind.Success => Text("Navigation_Io_PlcWriteTrace_Success", "成功"),
-            PlcIoWriteTraceKind.Failed => Text("Navigation_Io_PlcWriteTrace_Failed", "失败"),
-            _ => trace.Kind.ToString()
-        };
-        var message = Format(
-            "Navigation_Io_PlcWriteTrace_Format",
-            "PLC 块写入{0}：{1} / {2} 字 / {3:yyyy-MM-dd HH:mm:ss}",
-            status,
-            trace.StartAddress,
-            trace.WordCount,
-            trace.OccurredAt.ToLocalTime());
-
-        return string.IsNullOrWhiteSpace(trace.ErrorMessage)
-            ? message
-            : $"{message}；原因：{trace.ErrorMessage}";
+        row.LastPlcWriteTraceText = IoViewPlcWriteTraceFormatter.Format(trace, Text, Format);
     }
 
     private string BuildWriteGateStatusText()
@@ -578,22 +406,6 @@ public sealed class IoViewViewModel : NavigationPageViewModelBase
         OnPropertyChanged(nameof(HasNoSignals));
     }
 
-    private IoSignalModel CreateSignal(IoMappingVm mapping)
-        => new()
-        {
-            SignalKey = mapping.SignalKey,
-            SignalName = string.IsNullOrWhiteSpace(mapping.SignalName) ? mapping.SignalKey : mapping.SignalName,
-            PlcAddress = mapping.PlcAddress,
-            AddressCount = Math.Max(1, mapping.AddressCount),
-            Direction = mapping.Direction,
-            DataType = mapping.DataType,
-            DirectionText = IsWrite(mapping.Direction)
-                ? Text("Navigation_Io_Direction_HostToPlc", "上位机到 PLC")
-                : Text("Navigation_Io_Direction_PlcToHost", "PLC 到上位机"),
-            Remark = mapping.Remark,
-            SortOrder = mapping.SortOrder
-        };
-
     private string Text(string key, string fallback)
     {
         var value = _languageService.GetText(key);
@@ -602,26 +414,4 @@ public sealed class IoViewViewModel : NavigationPageViewModelBase
 
     private string Format(string key, string fallback, params object[] args)
         => string.Format(Text(key, fallback), args);
-
-    private static string BuildSectionTitle(IoMappingVm mapping)
-    {
-        var category = string.IsNullOrWhiteSpace(mapping.Category) ? "I/O" : mapping.Category.Trim();
-        var group = NormalizeGroup(mapping.BusinessGroup);
-        return string.IsNullOrWhiteSpace(group) ? category : $"{category} / {group}";
-    }
-
-    private static string NormalizeGroup(string? value)
-        => string.IsNullOrWhiteSpace(value) ? "未分组" : value.Trim();
-
-    private static bool IsInteractionMapping(IoMappingVm mapping)
-        => Contains(mapping.Category, "Interaction")
-            || Contains(mapping.Category, "交互")
-            || Contains(mapping.BusinessGroup, "Interaction")
-            || Contains(mapping.BusinessGroup, "交互");
-
-    private static bool IsWrite(string? direction)
-        => string.Equals(direction, "Write", StringComparison.OrdinalIgnoreCase);
-
-    private static bool Contains(string? value, string token)
-        => value?.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0;
 }

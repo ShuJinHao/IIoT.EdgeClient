@@ -174,6 +174,12 @@ public sealed class IoViewWriteGateTests
 
         public string ToggleLabel => "English";
 
+        public event EventHandler? LanguageChanged
+        {
+            add { }
+            remove { }
+        }
+
         public string GetText(string key) => key;
 
         public void Apply(string cultureName)

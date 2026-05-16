@@ -32,7 +32,7 @@ public sealed class LauncherProfileCatalogTests
             Assert.Null(profile.ImagePath);
             Assert.Equal("HomogenizationLine", profile.MachineProfile);
             Assert.Equal("Cog", profile.IconKind);
-            Assert.Equal("#0F766E", profile.AccentColor);
+            Assert.Equal("Launcher.Accent.Default", profile.AccentColor);
         }
         finally
         {

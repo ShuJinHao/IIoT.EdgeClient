@@ -27,8 +27,10 @@ public sealed partial class HeaderViewModel : AvaloniaViewModelBase
         _authService.AuthStateChanged += _ => RefreshUser();
         _windowService.StateChanged += (_, _) => MaxRestoreIcon = _windowService.MaxRestoreIcon;
         _runtimeState.StateChanged += (_, _) => RefreshRuntimeState();
+        _languageService.LanguageChanged += (_, _) => RefreshLocalizedHeaderText();
         RefreshUser();
         RefreshRuntimeState();
+        RefreshLocalizedHeaderText();
         MaxRestoreIcon = _windowService.MaxRestoreIcon;
     }
 
@@ -45,6 +47,23 @@ public sealed partial class HeaderViewModel : AvaloniaViewModelBase
 
     [ObservableProperty]
     private string runtimeDetailText = string.Empty;
+
+    [ObservableProperty]
+    private string localModeText = string.Empty;
+
+    [ObservableProperty]
+    private string productionLineText = string.Empty;
+
+    [ObservableProperty]
+    private string searchText = string.Empty;
+
+    [ObservableProperty]
+    private int notificationCount;
+
+    public bool HasNotifications => NotificationCount > 0;
+
+    partial void OnNotificationCountChanged(int value)
+        => OnPropertyChanged(nameof(HasNotifications));
 
     [RelayCommand]
     private void Minimize() => _windowService.Minimize();
@@ -70,5 +89,11 @@ public sealed partial class HeaderViewModel : AvaloniaViewModelBase
     {
         RuntimeStatusText = _runtimeState.Snapshot.StatusText;
         RuntimeDetailText = _runtimeState.Snapshot.DetailText;
+    }
+
+    private void RefreshLocalizedHeaderText()
+    {
+        LocalModeText = _languageService.GetText("Shell_Header_LocalMode");
+        ProductionLineText = _languageService.GetText("Shell_Header_ProductionLineDefault");
     }
 }

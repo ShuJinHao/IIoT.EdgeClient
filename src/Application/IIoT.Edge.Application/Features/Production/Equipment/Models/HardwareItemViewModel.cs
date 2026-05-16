@@ -14,7 +14,7 @@ namespace IIoT.Edge.Application.Features.Production.Equipment.Models
             set { _isConnected = value; OnPropertyChanged(); OnPropertyChanged(nameof(StatusColor)); OnPropertyChanged(nameof(StatusText)); }
         }
 
-        public string StatusColor => IsConnected ? "#4CAF50" : "#F44336";
+        public string StatusColor => IsConnected ? "Ind.Status.Success" : "Ind.Status.Error";
         public string StatusText => IsConnected ? "已连接" : "未连接";
 
         private string _name = string.Empty;

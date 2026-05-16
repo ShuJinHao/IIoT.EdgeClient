@@ -2,6 +2,8 @@
 using Avalonia.Markup.Xaml;
 using IIoT.Edge.Launcher.Services;
 using IIoT.Edge.Launcher.Avalonia.Views;
+using IIoT.Edge.UI.Avalonia.Localization;
+using IIoT.Edge.UI.Avalonia.Services;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace IIoT.Edge.Launcher.Avalonia;
@@ -20,6 +22,9 @@ public sealed partial class App : global::Avalonia.Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             _serviceProvider = ConfigureServices(AppContext.BaseDirectory).BuildServiceProvider();
+            _serviceProvider.GetRequiredService<IAvaloniaThemeService>().Apply();
+            var languageService = _serviceProvider.GetRequiredService<IAvaloniaLanguageService>();
+            languageService.Apply(languageService.CultureName);
             _serviceProvider.GetRequiredService<ILauncherAccountCatalogInitializer>().EnsureCatalogExists();
 
             var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
@@ -40,6 +45,7 @@ public sealed partial class App : global::Avalonia.Application
     {
         var services = new ServiceCollection();
         services.AddLauncherServices(baseDirectory);
+        services.AddSingleton<IAvaloniaThemeService, AvaloniaThemeService>();
         services.AddSingleton<MainWindow>();
         return services;
     }

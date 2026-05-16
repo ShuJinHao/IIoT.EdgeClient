@@ -1,0 +1,199 @@
+<UserControl
+    x:Class="IIoT.Edge.Launcher.Avalonia.Views.LauncherProfileView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+    xmlns:models="clr-namespace:IIoT.Edge.Launcher.Models;assembly=IIoT.Edge.Launcher.Avalonia">
+
+  <UserControl.DataTemplates>
+    <DataTemplate DataType="{x:Type models:LauncherProfileGroupViewModel}">
+      <Border Classes="launcher-profile-card" Margin="0,0,0,10">
+        <Grid ColumnDefinitions="Auto,*,112" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="14">
+          <Border Width="42"
+                  Height="42"
+                  Grid.RowSpan="4"
+                  CornerRadius="{DynamicResource Radius.Md}"
+                  Background="{DynamicResource Launcher.Bg.Chip}">
+            <icons:MaterialIcon Width="23"
+                                Height="23"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Foreground="{DynamicResource Launcher.Accent.Text}"
+                                Kind="Factory" />
+          </Border>
+
+          <TextBlock Grid.Column="1"
+                     FontSize="17"
+                     FontWeight="SemiBold"
+                     Foreground="{DynamicResource Launcher.Text.Primary}"
+                     Text="{Binding DisplayName}"
+                     TextTrimming="CharacterEllipsis" />
+          <TextBlock Grid.Row="1"
+                     Grid.Column="1"
+                     Margin="0,5,0,0"
+                     MaxHeight="38"
+                     Foreground="{DynamicResource Launcher.Text.Secondary}"
+                     Text="{Binding Description}"
+                     TextWrapping="Wrap" />
+          <TextBlock Grid.Row="2"
+                     Grid.Column="1"
+                     Margin="0,10,0,0"
+                     FontSize="13"
+                     Foreground="{DynamicResource Launcher.Accent.Text}"
+                     Text="{Binding MachineProfile}"
+                     TextTrimming="CharacterEllipsis" />
+          <ItemsControl Grid.Row="3"
+                        Grid.Column="1"
+                        Margin="0,9,0,0"
+                        ItemsSource="{Binding Variants}"
+                        IsVisible="{Binding HasVariants}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel Orientation="Horizontal" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate DataType="{x:Type models:LauncherProfileDefinition}">
+                <Border Classes="launcher-chip muted" Margin="0,0,6,6">
+                  <TextBlock FontSize="11"
+                             Foreground="{DynamicResource Launcher.Text.Secondary}"
+                             Text="{Binding DisplayName}"
+                             TextTrimming="CharacterEllipsis"
+                             MaxWidth="116" />
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <Button Grid.Column="2"
+                  Grid.RowSpan="4"
+                  Classes="launcher-primary"
+                  MinWidth="100"
+                  Height="42"
+                  VerticalAlignment="Center"
+                  Command="{Binding $parent[ItemsControl].DataContext.LaunchProfileCommand}"
+                  CommandParameter="{Binding}">
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Center"
+                        Spacing="6">
+              <TextBlock Text="{DynamicResource Launcher_Action_Launch}" />
+              <icons:MaterialIcon Width="17"
+                                  Height="17"
+                                  VerticalAlignment="Center"
+                                  Foreground="{DynamicResource Launcher.Text.Primary}"
+                                  Kind="RocketLaunch" />
+            </StackPanel>
+          </Button>
+        </Grid>
+      </Border>
+    </DataTemplate>
+  </UserControl.DataTemplates>
+
+  <Border Classes="launcher-workspace"
+          MinHeight="500"
+          MaxHeight="596"
+          VerticalAlignment="Center">
+    <Grid ColumnDefinitions="*,250" ColumnSpacing="22">
+      <Grid RowDefinitions="Auto,Auto,*">
+        <Grid ColumnDefinitions="*,Auto">
+          <StackPanel>
+            <TextBlock Classes="launcher-page-title"
+                       Text="{Binding WelcomeText}" />
+            <TextBlock Margin="0,6,0,0"
+                       Classes="launcher-body"
+                       Text="{Binding StatusMessage}"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+          <StackPanel Grid.Column="1"
+                      Orientation="Horizontal"
+                      Spacing="8"
+                      VerticalAlignment="Top">
+            <Border Classes="launcher-chip">
+              <TextBlock Foreground="{DynamicResource Launcher.Accent.Text}"
+                         Text="{Binding ProfileSummaryText}" />
+            </Border>
+            <Button Classes="launcher-ghost"
+                    Height="34"
+                    MinWidth="34"
+                    Padding="9,0"
+                    Command="{Binding RefreshProfilesCommand}"
+                    ToolTip.Tip="{DynamicResource Launcher_Status_SelectProfile}">
+              <icons:MaterialIcon Width="18"
+                                  Height="18"
+                                  Foreground="{DynamicResource Launcher.Text.Secondary}"
+                                  Kind="Refresh" />
+            </Button>
+          </StackPanel>
+        </Grid>
+
+        <Grid Grid.Row="1" Margin="0,18,0,14">
+          <TextBox Height="44"
+                   Padding="46,0,16,0"
+                   PlaceholderText="{DynamicResource Launcher_Profile_SearchPlaceholder}"
+                   Text="{Binding ProfileSearchText, Mode=TwoWay}" />
+          <icons:MaterialIcon Width="18"
+                              Height="18"
+                              Margin="17,0,0,0"
+                              HorizontalAlignment="Left"
+                              VerticalAlignment="Center"
+                              Foreground="{DynamicResource Launcher.Text.Muted}"
+                              Kind="Magnify" />
+        </Grid>
+
+        <Grid Grid.Row="2">
+          <ScrollViewer>
+            <ItemsControl ItemsSource="{Binding ProfileGroups}" />
+          </ScrollViewer>
+        </Grid>
+      </Grid>
+
+      <StackPanel Grid.Column="1" Spacing="14">
+        <Button Classes="launcher-ghost"
+                Height="40"
+                HorizontalAlignment="Stretch"
+                Command="{Binding BackToLoginCommand}">
+          <StackPanel Orientation="Horizontal"
+                      HorizontalAlignment="Center"
+                      Spacing="8">
+            <icons:MaterialIcon Width="18"
+                                Height="18"
+                                VerticalAlignment="Center"
+                                Foreground="{DynamicResource Launcher.Text.Secondary}"
+                                Kind="ArrowLeft" />
+            <TextBlock Text="{DynamicResource Launcher_Login_Title}" />
+          </StackPanel>
+        </Button>
+
+        <Border Classes="launcher-status-card">
+          <StackPanel Spacing="6">
+            <icons:MaterialIcon Width="24"
+                                Height="24"
+                                Foreground="{DynamicResource Launcher.Accent.Text}"
+                                Kind="Monitor" />
+            <TextBlock Classes="launcher-section-title"
+                       Text="{DynamicResource Launcher_Profile_Title}" />
+            <TextBlock Classes="launcher-caption"
+                       Text="{DynamicResource Launcher_Profile_Description}"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+
+        <Border Classes="launcher-steps-card">
+          <StackPanel Spacing="12">
+            <TextBlock Classes="launcher-section-title"
+                       Text="{DynamicResource Launcher_Card_Shell_Title}" />
+            <TextBlock Classes="launcher-body"
+                       Text="{DynamicResource Launcher_Profile_SidebarText}"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+
+        <Border Classes="launcher-message error"
+                IsVisible="{Binding HasError}">
+          <TextBlock Foreground="{DynamicResource Launcher.Text.Error}"
+                     Text="{Binding ErrorMessage}"
+                     TextWrapping="Wrap" />
+        </Border>
+      </StackPanel>
+    </Grid>
+  </Border>
+</UserControl>

@@ -5,7 +5,7 @@ namespace IIoT.Edge.Application.Common.Diagnostics;
 
 /// <summary>
 /// 云端同步状态在界面上的归类。
-/// 枚举顺序不代表优先级，优先级由 <see cref="EdgeSyncDiagnosticStatusClassifier"/> 集中判断。
+/// 枚举顺序不代表优先级，优先级由 <see cref="IEdgeSyncDiagnosticStatusClassifier"/> 集中判断。
 /// </summary>
 public enum CloudSyncDiagnosticStatus
 {
@@ -19,7 +19,7 @@ public enum CloudSyncDiagnosticStatus
 
 /// <summary>
 /// MES 同步状态在界面上的归类。
-/// 枚举顺序不代表优先级，优先级由 <see cref="EdgeSyncDiagnosticStatusClassifier"/> 集中判断。
+/// 枚举顺序不代表优先级，优先级由 <see cref="IEdgeSyncDiagnosticStatusClassifier"/> 集中判断。
 /// </summary>
 public enum MesSyncDiagnosticStatus
 {
@@ -32,12 +32,19 @@ public enum MesSyncDiagnosticStatus
     Idle
 }
 
+public interface IEdgeSyncDiagnosticStatusClassifier
+{
+    CloudSyncDiagnosticStatus ClassifyCloud(CloudSyncDiagnosticsSnapshot snapshot);
+
+    MesSyncDiagnosticStatus ClassifyMes(MesSyncDiagnosticsSnapshot snapshot);
+}
+
 /// <summary>
 /// 集中维护 Cloud/MES 同步诊断的显示状态优先级，避免页脚、诊断页和监控页各写一套判断。
 /// </summary>
-public static class EdgeSyncDiagnosticStatusClassifier
+public sealed class EdgeSyncDiagnosticStatusClassifier : IEdgeSyncDiagnosticStatusClassifier
 {
-    public static CloudSyncDiagnosticStatus ClassifyCloud(CloudSyncDiagnosticsSnapshot snapshot)
+    public CloudSyncDiagnosticStatus ClassifyCloud(CloudSyncDiagnosticsSnapshot snapshot)
         => snapshot switch
         {
             { IsPersistenceFaulted: true } => CloudSyncDiagnosticStatus.PersistenceFaulted,
@@ -48,7 +55,7 @@ public static class EdgeSyncDiagnosticStatusClassifier
             _ => CloudSyncDiagnosticStatus.Blocked
         };
 
-    public static MesSyncDiagnosticStatus ClassifyMes(MesSyncDiagnosticsSnapshot snapshot)
+    public MesSyncDiagnosticStatus ClassifyMes(MesSyncDiagnosticsSnapshot snapshot)
         => snapshot switch
         {
             { IsPersistenceFaulted: true } => MesSyncDiagnosticStatus.PersistenceFaulted,

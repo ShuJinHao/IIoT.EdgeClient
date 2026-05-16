@@ -138,10 +138,14 @@ public abstract class ModuleHardwareProfileProviderBase<TSignalKey> : IModuleHar
     where TSignalKey : struct, Enum
 {
     private readonly IModulePlcSignalProfile<TSignalKey> _signalProfile;
+    private readonly IModuleHardwareProfileValidator _hardwareProfileValidator;
 
-    protected ModuleHardwareProfileProviderBase(IModulePlcSignalProfile<TSignalKey> signalProfile)
+    protected ModuleHardwareProfileProviderBase(
+        IModulePlcSignalProfile<TSignalKey> signalProfile,
+        IModuleHardwareProfileValidator hardwareProfileValidator)
     {
         _signalProfile = signalProfile ?? throw new ArgumentNullException(nameof(signalProfile));
+        _hardwareProfileValidator = hardwareProfileValidator ?? throw new ArgumentNullException(nameof(hardwareProfileValidator));
     }
 
     public string ModuleId => _signalProfile.ModuleId;
@@ -169,7 +173,7 @@ public abstract class ModuleHardwareProfileProviderBase<TSignalKey> : IModuleHar
         string deviceName,
         string? deviceModel,
         IReadOnlyCollection<ModuleIoSnapshot> mappings)
-        => ModuleHardwareProfileValidator.Validate(
+        => _hardwareProfileValidator.Validate(
             deviceName,
             mappings,
             Signals.Select(static signal => new ModuleHardwareSignalRequirement(

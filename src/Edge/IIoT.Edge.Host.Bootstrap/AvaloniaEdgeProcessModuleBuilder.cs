@@ -79,8 +79,11 @@ internal sealed class AvaloniaEdgeProcessModuleBuilder : IEdgeProcessModuleBuild
         _viewRegistry.RegisterMenu(new AvaloniaMenuInfo
         {
             ViewId = menuInfo.ViewId,
+            Title = menuInfo.Title,
             TitleResourceKey = menuInfo.TitleResourceKey,
-            Order = menuInfo.Order
+            Icon = menuInfo.Icon,
+            Order = menuInfo.Order,
+            RequiredPermission = menuInfo.RequiredPermission
         });
     }
 

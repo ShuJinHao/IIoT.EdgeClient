@@ -57,7 +57,9 @@ public static class RuntimeServiceRegistration
         services.AddSingleton(runtimePaths);
         services.AddSingleton<IHostEnvironment>(
             new EdgeHostEnvironment(options.EnvironmentName, runtimePaths.BaseDirectory));
-        services.TryAddSingleton<ILogService, EdgeHostLogService>();
+        services.TryAddSingleton<EdgeHostLogService>();
+        services.TryAddSingleton<ILogService>(sp => sp.GetRequiredService<EdgeHostLogService>());
+        services.TryAddSingleton<ILogDisplayService>(sp => sp.GetRequiredService<EdgeHostLogService>());
         services.TryAddSingleton<IModuleParamRegistry, ModuleParamRegistry>();
         services.TryAddSingleton<ICellDataTypeRegistry, CellDataTypeRegistry>();
         services.TryAddSingleton<ICellDataJsonSerializer, CellDataJsonSerializer>();
@@ -181,6 +183,9 @@ public static class RuntimeServiceRegistration
 
         services.TryAddSingleton<IAppStartupInitializer, AppStartupInitializer>();
         services.TryAddSingleton<IStartupPluginLifecycleSnapshotBuilder, StartupPluginLifecycleSnapshotBuilder>();
+        services.TryAddSingleton<IStartupDiagnosticsConfigurationValidator, StartupDiagnosticsConfigurationValidator>();
+        services.TryAddSingleton<IStartupDiagnosticsPlcDeviceValidator, StartupDiagnosticsPlcDeviceValidator>();
+        services.TryAddSingleton<IStartupDiagnosticsModuleRegistrationSnapshotBuilder, StartupDiagnosticsModuleRegistrationSnapshotBuilder>();
         services.TryAddSingleton<IStartupDiagnosticsReportBuilder, StartupDiagnosticsReportBuilder>();
         services.TryAddSingleton<IPlcRuntimeTaskBinder, PlcRuntimeTaskBinder>();
         services.TryAddSingleton<IAppRuntimeStateCoordinator, AppRuntimeStateCoordinator>();

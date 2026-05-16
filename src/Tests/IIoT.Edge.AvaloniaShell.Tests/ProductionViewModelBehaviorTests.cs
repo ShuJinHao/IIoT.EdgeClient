@@ -1,3 +1,4 @@
+using System.Reflection;
 using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
@@ -8,6 +9,7 @@ using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Diagnostics;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Context;
+using IIoT.Edge.Application.Common.Diagnostics;
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 using IIoT.Edge.Application.Features.Production.CapacityView;
 using IIoT.Edge.Application.Features.Production.DataView;
@@ -16,7 +18,6 @@ using IIoT.Edge.Application.Modules.Diagnostics;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Presentation.Navigation.Avalonia;
 using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Hardware.IOView;
-using IIoT.Edge.Presentation.Navigation.Avalonia.Localization;
 using IIoT.Edge.Presentation.Navigation.Avalonia.ViewModels;
 using IIoT.Edge.UI.Avalonia.Localization;
 using IIoT.Edge.UI.Avalonia.Services;
@@ -295,6 +296,7 @@ public sealed class ProductionViewModelBehaviorTests
         var viewModel = new DiagnosticsViewModel(
             provider,
             CreateLanguageService(),
+            new EdgeSyncDiagnosticStatusClassifier(),
             "Core.Diagnostics",
             "Navigation_Menu_CoreDiagnostics",
             "系统诊断");
@@ -330,6 +332,7 @@ public sealed class ProductionViewModelBehaviorTests
         var viewModel = new DiagnosticsViewModel(
             provider,
             CreateLanguageService(),
+            new EdgeSyncDiagnosticStatusClassifier(),
             "Core.Diagnostics",
             "Navigation_Menu_CoreDiagnostics",
             "系统诊断");
@@ -360,6 +363,7 @@ public sealed class ProductionViewModelBehaviorTests
         var viewModel = new DiagnosticsViewModel(
             provider,
             CreateLanguageService(),
+            new EdgeSyncDiagnosticStatusClassifier(),
             "Core.Diagnostics",
             "Navigation_Menu_CoreDiagnostics",
             "系统诊断");
@@ -387,6 +391,7 @@ public sealed class ProductionViewModelBehaviorTests
         var viewModel = new DiagnosticsViewModel(
             provider,
             CreateLanguageService(),
+            new EdgeSyncDiagnosticStatusClassifier(),
             "Core.Diagnostics",
             "Navigation_Menu_CoreDiagnostics",
             "系统诊断");
@@ -413,6 +418,7 @@ public sealed class ProductionViewModelBehaviorTests
         var viewModel = new DiagnosticsViewModel(
             provider,
             CreateLanguageService(),
+            new EdgeSyncDiagnosticStatusClassifier(),
             "Core.Diagnostics",
             "Navigation_Menu_CoreDiagnostics",
             "系统诊断");
@@ -459,6 +465,7 @@ public sealed class ProductionViewModelBehaviorTests
         var viewModel = new DiagnosticsViewModel(
             provider,
             CreateLanguageService(),
+            new EdgeSyncDiagnosticStatusClassifier(),
             "Core.Diagnostics",
             "Navigation_Menu_CoreDiagnostics",
             "系统诊断");
@@ -507,6 +514,7 @@ public sealed class ProductionViewModelBehaviorTests
         var viewModel = new DiagnosticsViewModel(
             provider,
             CreateLanguageService(),
+            new EdgeSyncDiagnosticStatusClassifier(),
             "Core.Diagnostics",
             "Navigation_Menu_CoreDiagnostics",
             "系统诊断");
@@ -563,6 +571,7 @@ public sealed class ProductionViewModelBehaviorTests
         var viewModel = new DiagnosticsViewModel(
             provider,
             CreateLanguageService(),
+            new EdgeSyncDiagnosticStatusClassifier(),
             "Core.Diagnostics",
             "Navigation_Menu_CoreDiagnostics",
             "系统诊断");
@@ -606,6 +615,7 @@ public sealed class ProductionViewModelBehaviorTests
         var viewModel = new DiagnosticsViewModel(
             provider,
             CreateLanguageService(),
+            new EdgeSyncDiagnosticStatusClassifier(),
             "Core.Diagnostics",
             "Navigation_Menu_CoreDiagnostics",
             "系统诊断");
@@ -621,10 +631,7 @@ public sealed class ProductionViewModelBehaviorTests
     private static IAvaloniaLanguageService CreateLanguageService()
     {
         var service = new AvaloniaResourceLanguageService(
-            [
-                new NavigationAvaloniaZhCnResources(),
-                new NavigationAvaloniaEnUsResources()
-            ]);
+            new AvaloniaXamlStringResourceLoader().Load([typeof(NavigationAvaloniaPresentationRegistration).Assembly]));
         service.Apply("zh-CN");
         return service;
     }

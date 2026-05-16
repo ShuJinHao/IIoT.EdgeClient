@@ -5,10 +5,14 @@ namespace IIoT.Edge.Launcher.Services;
 public sealed class LocalLauncherAuthService : ILocalLauncherAuthService
 {
     private readonly ILauncherAccountCatalog _accountCatalog;
+    private readonly IPasswordHasher _passwordHasher;
 
-    public LocalLauncherAuthService(ILauncherAccountCatalog accountCatalog)
+    public LocalLauncherAuthService(
+        ILauncherAccountCatalog accountCatalog,
+        IPasswordHasher passwordHasher)
     {
         _accountCatalog = accountCatalog ?? throw new ArgumentNullException(nameof(accountCatalog));
+        _passwordHasher = passwordHasher ?? throw new ArgumentNullException(nameof(passwordHasher));
     }
 
     public LauncherAuthenticationResult Authenticate(string? userName, string? password)
@@ -30,9 +34,15 @@ public sealed class LocalLauncherAuthService : ILocalLauncherAuthService
             return LauncherAuthenticationResult.Failed("本地账号不存在，或已被禁用。");
         }
 
-        if (!LauncherPasswordHasher.Verify(password, account.PasswordHash))
+        var verification = _passwordHasher.VerifyPassword(password, account.PasswordHash);
+        if (!verification.Success)
         {
             return LauncherAuthenticationResult.Failed("账号或密码不正确。");
+        }
+
+        if (verification.NeedsRehash)
+        {
+            _accountCatalog.UpdatePasswordHash(account.UserName, _passwordHasher.HashPassword(password));
         }
 
         return LauncherAuthenticationResult.Passed(account.DisplayName);
@@ -58,7 +68,7 @@ public sealed class LocalLauncherAuthService : ILocalLauncherAuthService
 
         _accountCatalog.UpdatePasswordHash(
             userName!.Trim(),
-            LauncherPasswordHasher.ComputeSha256(newPassword));
+            _passwordHasher.HashPassword(newPassword));
         return LauncherPasswordChangeResult.Passed();
     }
 }

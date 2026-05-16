@@ -7,9 +7,8 @@ using IIoT.Edge.AvaloniaShell.ViewModels;
 using IIoT.Edge.AvaloniaShell.Views;
 using IIoT.Edge.Host.Bootstrap;
 using IIoT.Edge.UI.Avalonia.Localization;
-using Microsoft.Extensions.Configuration;
+using IIoT.Edge.UI.Avalonia.Services;
 using Microsoft.Extensions.DependencyInjection;
-using System.IO;
 
 namespace IIoT.Edge.AvaloniaShell;
 
@@ -18,6 +17,7 @@ public partial class App : Avalonia.Application
     private static readonly TimeSpan ShutdownTimeout = TimeSpan.FromSeconds(8);
 
     private ServiceProvider? _serviceProvider;
+    private ServiceProvider? _startupServiceProvider;
     private IAvaloniaShellStartupCoordinator? _startupCoordinator;
     private readonly CancellationTokenSource _appCts = new();
     private bool _shutdownRequested;
@@ -31,17 +31,26 @@ public partial class App : Avalonia.Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            _startupServiceProvider = new ServiceCollection()
+                .AddAvaloniaShellStartupServices()
+                .BuildServiceProvider();
+            var bootstrapOptions = _startupServiceProvider
+                .GetRequiredService<IAvaloniaShellBootstrapOptionsFactory>()
+                .Create(AppDomain.CurrentDomain.BaseDirectory);
+
             var services = new ServiceCollection()
-                .AddEdgeHostAvaloniaBootstrap(CreateBootstrapOptions(AppDomain.CurrentDomain.BaseDirectory))
+                .AddEdgeHostAvaloniaBootstrap(bootstrapOptions)
                 .AddSingleton<IAvaloniaShellStartupCoordinator, AvaloniaShellStartupCoordinator>()
                 .AddSingleton<MainWindowViewModel>()
                 .AddSingleton<MainWindow>()
                 .BuildServiceProvider();
             _serviceProvider = services;
-            DependencyInjection.RegisterAvaloniaViews(services);
+
+            var themeService = services.GetRequiredService<IAvaloniaThemeService>();
+            themeService.Apply();
 
             var languageService = services.GetRequiredService<IAvaloniaLanguageService>();
-            languageService.Apply("zh-CN");
+            languageService.Apply(languageService.CultureName);
 
             var mainWindow = services.GetRequiredService<MainWindow>();
             mainWindow.DataContext = services.GetRequiredService<MainWindowViewModel>();
@@ -86,6 +95,8 @@ public partial class App : Avalonia.Application
 
         _serviceProvider?.Dispose();
         _serviceProvider = null;
+        _startupServiceProvider?.Dispose();
+        _startupServiceProvider = null;
 
         if (sender is IClassicDesktopStyleApplicationLifetime desktop)
         {
@@ -101,42 +112,5 @@ public partial class App : Avalonia.Application
     {
         var dialog = new StartupErrorWindow(message, diagnosticsSummary, diagnosticsLogPath);
         await dialog.ShowDialog(owner);
-    }
-
-    private static AvaloniaHostBootstrapOptions CreateBootstrapOptions(string baseDirectory)
-    {
-        var configuration = new ConfigurationBuilder()
-            .SetBasePath(baseDirectory)
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["Shell:Environment"] = "AvaloniaMigration",
-                ["LocalAdmin:PasswordHash"] = string.Empty,
-                ["CloudApi:BaseUrl"] = "http://127.0.0.1",
-                ["MesApi:BaseUrl"] = "http://127.0.0.1"
-            })
-            .Build();
-
-        var runtimeRoot = Path.Combine(baseDirectory, "data", "avalonia-migration");
-        var diagnosticsDirectory = Path.Combine(runtimeRoot, "diagnostics");
-        var runtimePaths = new EdgeRuntimePaths(
-            BaseDirectory: baseDirectory,
-            ProfileName: "AvaloniaMigration",
-            RuntimeDataRoot: runtimeRoot,
-            DatabaseDirectory: Path.Combine(runtimeRoot, "db"),
-            ContextDirectory: Path.Combine(runtimeRoot, "context"),
-            RecipeDirectory: Path.Combine(runtimeRoot, "recipe"),
-            ExcelDirectory: Path.Combine(runtimeRoot, "excel"),
-            DiagnosticsDirectory: diagnosticsDirectory,
-            LogDirectory: Path.Combine(diagnosticsDirectory, "logs"),
-            DeviceCacheFilePath: Path.Combine(runtimeRoot, "device_cache.json"),
-            PrimaryCrashLogPath: Path.Combine(diagnosticsDirectory, "crash.log"),
-            FallbackCrashLogPath: Path.Combine(diagnosticsDirectory, "crash.fallback.log"));
-
-        return new AvaloniaHostBootstrapOptions(
-            configuration,
-            runtimePaths,
-            "AvaloniaMigration",
-            ["Homogenization"],
-            PluginDirectories: [baseDirectory]);
     }
 }

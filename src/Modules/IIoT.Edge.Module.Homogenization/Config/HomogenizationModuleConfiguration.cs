@@ -1,6 +1,6 @@
-using IIoT.Edge.Module.Homogenization.Resources;
 using IIoT.Edge.Application.Modules.Mes;
 using IIoT.Edge.Module.Homogenization.Payload;
+using IIoT.Edge.Module.Homogenization.Resources;
 using Microsoft.Extensions.Options;
 
 namespace IIoT.Edge.Module.Homogenization.Config;
@@ -63,6 +63,8 @@ public sealed class HomogenizationRuntimeOptions
     public int MinRealtimeLoopIntervalMs { get; set; } = 200;
 }
 
+
+
 /// <summary>
 /// 匀浆 MES 接口配置。
 /// </summary>
@@ -120,7 +122,76 @@ public sealed class HomogenizationMesPathOptions : IMesUploadPathOptions
 }
 
 /// <summary>
-/// 匀浆 PLC 和 MES 码表配置。
+/// 匀浆 MES 通道名称配置。
+/// </summary>
+public sealed class HomogenizationMesChannelOptions
+{
+    /// <summary>
+    /// 进站通道。
+    /// </summary>
+    public string Inbound { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 出料通道。
+    /// </summary>
+    public string Outbound { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 实时数据通道。
+    /// </summary>
+    public string Realtime { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 配方参数通道。
+    /// </summary>
+    public string Recipe { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 设备状态通道。
+    /// </summary>
+    public string EquipmentStatus { get; set; } = string.Empty;
+
+    internal void AppendValidationErrors(ICollection<string> errors)
+    {
+        HomogenizationOptionValidation.Require(Inbound, "MES 进站诊断通道", errors);
+        HomogenizationOptionValidation.Require(Outbound, "MES 出料诊断通道", errors);
+        HomogenizationOptionValidation.Require(Realtime, "MES 实时数据诊断通道", errors);
+        HomogenizationOptionValidation.Require(Recipe, "MES 工艺参数诊断通道", errors);
+        HomogenizationOptionValidation.Require(EquipmentStatus, "MES 设备状态诊断通道", errors);
+    }
+}
+
+/// <summary>
+/// 单个 MES 字段码表项。
+/// </summary>
+public sealed class HomogenizationMesItemCodeOptions
+{
+    /// <summary>
+    /// MES 字段编码。
+    /// </summary>
+    public string Code { get; set; } = string.Empty;
+
+    /// <summary>
+    /// MES 字段显示名称。
+    /// </summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>
+    /// MES 字段类型。
+    /// </summary>
+    public string Type { get; set; } = string.Empty;
+
+    /// <summary>
+    /// MES 字段单位。
+    /// </summary>
+    public string Unit { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// 匀浆模块界面和运行循环配置校验器，防止无效间隔导致任务空转或 UI 缓存不可用。
+
+/// <summary>
+/// 匀浆 PLC、MES 和 Cloud 码表配置。
 /// </summary>
 public sealed class HomogenizationCodeOptions
 {
@@ -363,72 +434,6 @@ public sealed class HomogenizationMesCodeOptions
             }
         }
     }
-}
-
-/// <summary>
-/// 匀浆 MES 诊断通道配置。
-/// </summary>
-public sealed class HomogenizationMesChannelOptions
-{
-    /// <summary>
-    /// 进站通道。
-    /// </summary>
-    public string Inbound { get; set; } = string.Empty;
-
-    /// <summary>
-    /// 出料通道。
-    /// </summary>
-    public string Outbound { get; set; } = string.Empty;
-
-    /// <summary>
-    /// 实时数据通道。
-    /// </summary>
-    public string Realtime { get; set; } = string.Empty;
-
-    /// <summary>
-    /// 配方参数通道。
-    /// </summary>
-    public string Recipe { get; set; } = string.Empty;
-
-    /// <summary>
-    /// 设备状态通道。
-    /// </summary>
-    public string EquipmentStatus { get; set; } = string.Empty;
-
-    internal void AppendValidationErrors(ICollection<string> errors)
-    {
-        HomogenizationOptionValidation.Require(Inbound, "MES 进站诊断通道", errors);
-        HomogenizationOptionValidation.Require(Outbound, "MES 出料诊断通道", errors);
-        HomogenizationOptionValidation.Require(Realtime, "MES 实时数据诊断通道", errors);
-        HomogenizationOptionValidation.Require(Recipe, "MES 工艺参数诊断通道", errors);
-        HomogenizationOptionValidation.Require(EquipmentStatus, "MES 设备状态诊断通道", errors);
-    }
-}
-
-/// <summary>
-/// 单个 MES 字段码表项。
-/// </summary>
-public sealed class HomogenizationMesItemCodeOptions
-{
-    /// <summary>
-    /// MES 字段编码。
-    /// </summary>
-    public string Code { get; set; } = string.Empty;
-
-    /// <summary>
-    /// MES 字段显示名称。
-    /// </summary>
-    public string Name { get; set; } = string.Empty;
-
-    /// <summary>
-    /// MES 字段类型。
-    /// </summary>
-    public string Type { get; set; } = string.Empty;
-
-    /// <summary>
-    /// MES 字段单位。
-    /// </summary>
-    public string Unit { get; set; } = string.Empty;
 }
 
 /// <summary>

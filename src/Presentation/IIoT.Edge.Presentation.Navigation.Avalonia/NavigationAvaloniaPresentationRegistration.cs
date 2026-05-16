@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Config.ParamView;
 using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Formula.RecipeView;
 using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Hardware.HardwareConfig.ViewModels;
@@ -13,9 +14,11 @@ namespace IIoT.Edge.Presentation.Navigation.Avalonia;
 
 public static class NavigationAvaloniaPresentationRegistration
 {
-    public static void RegisterNavigationViews(IServiceProvider services, IReadOnlyCollection<string> moduleIds)
+    public static void RegisterNavigationViews(IAvaloniaViewRegistry registry, IReadOnlyCollection<string> moduleIds)
     {
-        var registry = services.GetRequiredService<IAvaloniaViewRegistry>();
+        ArgumentNullException.ThrowIfNull(registry);
+        ArgumentNullException.ThrowIfNull(moduleIds);
+
         RegisterDiagnostics(registry);
 
         var modules = moduleIds.Count == 0
@@ -33,7 +36,9 @@ public static class NavigationAvaloniaPresentationRegistration
         registry.RegisterMenu(new AvaloniaMenuInfo
         {
             ViewId = CoreAvaloniaViewIds.Diagnostics,
+            Title = "系统诊断",
             TitleResourceKey = "Navigation_Menu_CoreDiagnostics",
+            Icon = "Stethoscope",
             Order = 999
         });
         registry.RegisterDockPane(
@@ -56,13 +61,13 @@ public static class NavigationAvaloniaPresentationRegistration
     private static void RegisterModule(IAvaloniaViewRegistry registry, string moduleId)
     {
         var ids = StandardAvaloniaModuleViewIds.Create(moduleId);
-        RegisterDocument<MonitorViewPage, MonitorViewModel>(registry, ids.Monitor, "Navigation_Menu_Monitor", 4, "实时监控");
-        RegisterDocument<CapacityViewPage, CapacityViewModel>(registry, ids.CapacityView, "Navigation_Menu_Capacity", 2, "产能");
-        RegisterDocument<IOViewPage, IoViewViewModel>(registry, ids.IoView, "Navigation_Menu_Io", 3, "IO 交互");
-        RegisterDocument<RecipeViewPage, RecipeViewModel>(registry, ids.RecipeView, "Navigation_Menu_Recipe", 5, "产品配方");
-        RegisterDocument<ParamViewPage, ParamViewModel>(registry, ids.ParamView, "Navigation_Menu_ParamConfig", 6, "参数配置");
-        RegisterDocument<HardwareConfigPage, HardwareConfigViewModel>(registry, ids.HardwareConfigView, "Navigation_Menu_HardwareConfig", 7, "硬件配置");
-        RegisterDocument<PlcTaskBindingPage, PlcTaskBindingViewModel>(registry, ids.PlcTaskBindingView, "Navigation_Menu_PlcTaskBinding", 8, "PLC 任务绑定");
+        RegisterDocument<MonitorViewPage, MonitorViewModel>(registry, ids.Monitor, "Navigation_Menu_Monitor", 4, "监控", "MonitorDashboard");
+        RegisterDocument<CapacityViewPage, CapacityViewModel>(registry, ids.CapacityView, "Navigation_Menu_Capacity", 2, "产能", "ChartLine");
+        RegisterDocument<IOViewPage, IoViewViewModel>(registry, ids.IoView, "Navigation_Menu_Io", 3, "IO 交互", "SwapHorizontal");
+        RegisterDocument<RecipeViewPage, RecipeViewModel>(registry, ids.RecipeView, "Navigation_Menu_Recipe", 5, "产品配方", "FileDocumentOutline");
+        RegisterDocument<ParamViewPage, ParamViewModel>(registry, ids.ParamView, "Navigation_Menu_ParamConfig", 6, "参数配置", "Cog", Permissions.ParamConfig);
+        RegisterDocument<HardwareConfigPage, HardwareConfigViewModel>(registry, ids.HardwareConfigView, "Navigation_Menu_HardwareConfig", 7, "硬件配置", "ServerNetwork", Permissions.HardwareConfig);
+        RegisterDocument<PlcTaskBindingPage, PlcTaskBindingViewModel>(registry, ids.PlcTaskBindingView, "Navigation_Menu_PlcTaskBinding", 8, "PLC 任务绑定", "Tune", Permissions.HardwareConfig);
     }
 
     private static void RegisterDocument<TView, TViewModel>(
@@ -70,15 +75,20 @@ public static class NavigationAvaloniaPresentationRegistration
         string viewId,
         string titleResourceKey,
         int order,
-        string titleFallback)
+        string titleFallback,
+        string icon,
+        string requiredPermission = "")
         where TView : Control
         where TViewModel : NavigationPageViewModelBase
     {
         registry.RegisterMenu(new AvaloniaMenuInfo
         {
             ViewId = viewId,
+            Title = titleFallback,
             TitleResourceKey = titleResourceKey,
-            Order = order
+            Icon = icon,
+            Order = order,
+            RequiredPermission = requiredPermission
         });
         registry.RegisterDockPane(
             new AvaloniaDockPaneInfo

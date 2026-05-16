@@ -1,17 +1,72 @@
 <UserControl
     x:Class="IIoT.Edge.Presentation.Shell.Avalonia.Views.LoginView"
     xmlns="https://github.com/avaloniaui"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-  <Border Width="360" Background="#111827" CornerRadius="8" Padding="22">
-    <StackPanel Spacing="14">
-      <TextBlock FontSize="18" FontWeight="SemiBold" Foreground="#F8FAFC" Text="{DynamicResource Shell_Login_Title}" />
-      <TextBlock Foreground="#94A3B8" Text="{Binding ModeTitle}" />
-      <TextBox PlaceholderText="{DynamicResource Shell_Login_EmployeeNo}" Text="{Binding EmployeeNo}" IsVisible="{Binding IsCloudMode}" />
-      <TextBox PlaceholderText="{DynamicResource Shell_Login_Password}" PasswordChar="*" Text="{Binding Password}" />
-      <TextBlock Foreground="#FCA5A5" Text="{Binding ErrorMessage}" IsVisible="{Binding HasError}" TextWrapping="Wrap" />
-      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
-        <Button Command="{Binding SwitchModeCommand}" Content="{Binding SwitchModeText}" />
-        <Button Grid.Column="1" Classes="accent" Command="{Binding LoginCommand}" Content="{DynamicResource Shell_Login_Submit}" />
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia">
+  <Border Width="468"
+          Classes="edge-login-card">
+    <StackPanel Spacing="20">
+      <Grid ColumnDefinitions="48,*" ColumnSpacing="14">
+        <Border Width="46"
+                Height="46"
+                CornerRadius="23"
+                Background="{DynamicResource Edge.Bg.SelectedSoft}">
+          <icons:MaterialIcon Width="24"
+                              Height="24"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              Foreground="{DynamicResource Edge.Accent.LimeDark}"
+                              Kind="ShieldAccountOutline" />
+        </Border>
+        <StackPanel Grid.Column="1" Spacing="4">
+          <TextBlock FontSize="22"
+                     FontWeight="SemiBold"
+                     Foreground="{DynamicResource Edge.Text.Primary}"
+                     Text="{DynamicResource Shell_Login_Title}" />
+          <TextBlock FontSize="13"
+                     Foreground="{DynamicResource Edge.Text.Muted}"
+                     Text="{Binding ModeTitle}"
+                     TextTrimming="CharacterEllipsis" />
+        </StackPanel>
+      </Grid>
+
+      <StackPanel Spacing="12">
+        <TextBox Height="44"
+                 PlaceholderText="{DynamicResource Shell_Login_EmployeeNo}"
+                 Text="{Binding EmployeeNo}"
+                 IsVisible="{Binding IsCloudMode}" />
+        <TextBox Height="44"
+                 PlaceholderText="{DynamicResource Shell_Login_Password}"
+                 PasswordChar="*"
+                 Text="{Binding Password}" />
+        <Border Classes="edge-inline-error"
+                MinHeight="38"
+                IsVisible="{Binding HasError}">
+          <Grid ColumnDefinitions="22,*" ColumnSpacing="8">
+            <icons:MaterialIcon Width="18"
+                                Height="18"
+                                VerticalAlignment="Top"
+                                Foreground="{DynamicResource Edge.Status.ErrorText}"
+                                Kind="AlertCircleOutline" />
+            <TextBlock Grid.Column="1"
+                       FontSize="12"
+                       Foreground="{DynamicResource Edge.Status.ErrorText}"
+                       Text="{Binding ErrorMessage}"
+                       TextWrapping="Wrap" />
+          </Grid>
+        </Border>
+      </StackPanel>
+
+      <Grid ColumnDefinitions="*,12,Auto">
+        <Button Grid.Column="0"
+                Classes="quiet"
+                Command="{Binding SwitchModeCommand}"
+                Content="{Binding SwitchModeText}" />
+        <Button Grid.Column="2"
+                Classes="accent"
+                MinWidth="128"
+                Command="{Binding LoginCommand}"
+                Content="{DynamicResource Shell_Login_Submit}" />
       </Grid>
     </StackPanel>
   </Border>

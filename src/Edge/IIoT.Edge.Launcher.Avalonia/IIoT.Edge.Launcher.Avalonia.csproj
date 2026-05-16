@@ -14,17 +14,21 @@
   <ItemGroup>
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Desktop" />
-    <PackageReference Include="Avalonia.Fonts.Inter" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="LucideAvalonia" />
+    <PackageReference Include="Material.Avalonia" />
+    <PackageReference Include="Material.Icons.Avalonia" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\IIoT.Edge.AvaloniaShell\IIoT.Edge.AvaloniaShell.csproj"
                       ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\Shared\IIoT.Edge.UI.Avalonia\IIoT.Edge.UI.Avalonia.csproj" />
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Resources\Languages\*.xaml" />
     <None Update="launcher.accounts.json" Condition="Exists('launcher.accounts.json')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>

@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using IIoT.Edge.Launcher.ViewModels;
 
@@ -62,35 +63,48 @@ public partial class ChangePasswordWindow : Window
         Close(false);
     }
 
+    private void TitleBar_PointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (e.Source is Button)
+        {
+            return;
+        }
+
+        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            BeginMoveDrag(e);
+        }
+    }
+
     private bool ValidateInput()
     {
         if (string.IsNullOrWhiteSpace(_userNameInput.Text))
         {
-            _dialogErrorText.Text = "账号不能为空。";
+            _dialogErrorText.Text = _viewModel.GetText("Launcher_Validation_UserNameRequired");
             return false;
         }
 
         if (string.IsNullOrWhiteSpace(_oldPasswordInput.Text))
         {
-            _dialogErrorText.Text = "旧密码不能为空。";
+            _dialogErrorText.Text = _viewModel.GetText("Launcher_Validation_OldPasswordRequired");
             return false;
         }
 
         if (string.IsNullOrWhiteSpace(_newPasswordInput.Text))
         {
-            _dialogErrorText.Text = "新密码不能为空。";
+            _dialogErrorText.Text = _viewModel.GetText("Launcher_Validation_NewPasswordRequired");
             return false;
         }
 
         if (_newPasswordInput.Text.Length < 6)
         {
-            _dialogErrorText.Text = "新密码至少 6 位。";
+            _dialogErrorText.Text = _viewModel.GetText("Launcher_Validation_NewPasswordMinLength");
             return false;
         }
 
         if (!string.Equals(_newPasswordInput.Text, _confirmPasswordInput.Text, StringComparison.Ordinal))
         {
-            _dialogErrorText.Text = "两次输入的新密码不一致。";
+            _dialogErrorText.Text = _viewModel.GetText("Launcher_Validation_ConfirmPasswordMismatch");
             return false;
         }
 

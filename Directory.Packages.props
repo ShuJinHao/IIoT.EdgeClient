@@ -19,6 +19,7 @@
     <PackageVersion Include="Dock.Avalonia.Themes.Fluent" Version="12.0.0.2" />
     <PackageVersion Include="Dock.Model.Mvvm" Version="12.0.0.2" />
     <PackageVersion Include="log4net" Version="3.3.0" />
+    <PackageVersion Include="LucideAvalonia" Version="1.6.2" />
     <PackageVersion Include="MCProtocol" Version="1.2.5" />
     <PackageVersion Include="Material.Avalonia" Version="3.16.1" />
     <PackageVersion Include="Material.Avalonia.DataGrid" Version="3.16.1" />

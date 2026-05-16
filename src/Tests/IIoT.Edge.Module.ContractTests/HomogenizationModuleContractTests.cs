@@ -13,6 +13,7 @@ using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using IIoT.Edge.Module.Homogenization.Samples;
 using IIoT.Edge.SharedKernel.Context;
+using IIoT.Edge.UI.Avalonia.Localization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using HomogenizationCloudUploadChannel = IIoT.Edge.Application.Modules.Cloud.ICloudUploadChannel<
@@ -141,12 +142,11 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<H
     }
 
     [Fact]
-    public void HomogenizationAvaloniaResources_ShouldContainSameNonEmptyKeys()
+    public void Homogenization_xaml_resources_should_contain_same_non_empty_keys()
     {
-        var zhKeys = new IIoT.Edge.Module.Homogenization.Localization.HomogenizationAvaloniaZhCnResources()
-            .GetResources();
-        var enKeys = new IIoT.Edge.Module.Homogenization.Localization.HomogenizationAvaloniaEnUsResources()
-            .GetResources();
+        var resources = new AvaloniaXamlStringResourceLoader().Load([typeof(HomogenizationAvaloniaModule).Assembly]);
+        var zhKeys = resources["zh-CN"];
+        var enKeys = resources["en-US"];
 
         Assert.NotEmpty(zhKeys);
         Assert.Equal(zhKeys.Keys.Order(), enKeys.Keys.Order());

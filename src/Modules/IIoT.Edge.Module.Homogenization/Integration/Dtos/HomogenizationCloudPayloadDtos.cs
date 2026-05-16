@@ -1,7 +1,7 @@
 using System.Text.Json.Serialization;
 using IIoT.Edge.Module.Homogenization.Payload;
 
-namespace IIoT.Edge.Module.Homogenization.Integration.Cloud;
+namespace IIoT.Edge.Module.Homogenization.Integration.Dtos;
 
 /// <summary>
 /// 匀浆工序上传到 Cloud process-records 入口的批量 payload 草案；云端契约确认前不接入运行时发送。

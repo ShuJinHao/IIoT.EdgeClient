@@ -1,77 +1,79 @@
 using IIoT.Edge.Launcher.Models;
-using IIoT.Edge.Launcher.Services;
+using IIoT.Edge.UI.Avalonia.Localization;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Reflection;
 
 namespace IIoT.Edge.Launcher.ViewModels;
 
 public sealed class LauncherMainViewModel : ObservableObject
 {
-    private readonly ILauncherProfileCatalog _profileCatalog;
-    private readonly ILocalLauncherAuthService _authService;
-    private readonly IShellLaunchService _launchService;
-    private readonly List<LauncherProfileDefinition> _allProfiles = [];
-
-    private string _errorMessage = string.Empty;
-    private string _statusMessage = "请先使用本地账号登录。";
-    private string _welcomeText = "未登录";
-    private string _profileSearchText = string.Empty;
-    private string _profileSummaryText = "共 0 个工序";
+    private readonly IAvaloniaLanguageService _languageService;
+    private ObservableObject _currentView;
     private bool _isAuthenticated;
-    private bool _isBusy;
 
     public LauncherMainViewModel(
-        ILauncherProfileCatalog profileCatalog,
-        ILocalLauncherAuthService authService,
-        IShellLaunchService launchService)
+        LauncherLoginViewModel loginViewModel,
+        LauncherProfileViewModel profileViewModel,
+        IAvaloniaLanguageService languageService)
     {
-        _profileCatalog = profileCatalog ?? throw new ArgumentNullException(nameof(profileCatalog));
-        _authService = authService ?? throw new ArgumentNullException(nameof(authService));
-        _launchService = launchService ?? throw new ArgumentNullException(nameof(launchService));
+        LoginViewModel = loginViewModel ?? throw new ArgumentNullException(nameof(loginViewModel));
+        ProfileViewModel = profileViewModel ?? throw new ArgumentNullException(nameof(profileViewModel));
+        _languageService = languageService ?? throw new ArgumentNullException(nameof(languageService));
+        _currentView = LoginViewModel;
 
         AppVersionText = BuildAppVersionText();
-        PlatformMetaText = "标准平台 / 本地登录 / 插件加载";
-        MaintainerText = "维护：Edge Platform Team";
-        ArchitectureText = "架构：Launcher + Shell + MachineProfile";
+        PlatformMetaText = Text("Launcher_Meta_Platform");
+        MaintainerText = Text("Launcher_Meta_Maintainer");
+        ArchitectureText = Text("Launcher_Meta_Architecture");
+
+        LoginViewModel.LoginSucceeded += (_, args) => NavigateToProfile(args.DisplayName);
+        ProfileViewModel.BackToLoginRequested += (_, _) => NavigateToLogin();
+        LoginViewModel.PropertyChanged += HandleChildPropertyChanged;
+        ProfileViewModel.PropertyChanged += HandleChildPropertyChanged;
     }
 
-    public ObservableCollection<LauncherProfileDefinition> Profiles { get; } = [];
+    public LauncherLoginViewModel LoginViewModel { get; }
 
-    public string ErrorMessage
-    {
-        get => _errorMessage;
-        private set => SetProperty(ref _errorMessage, value);
-    }
+    public LauncherProfileViewModel ProfileViewModel { get; }
 
-    public string StatusMessage
+    public ObservableObject CurrentView
     {
-        get => _statusMessage;
-        private set => SetProperty(ref _statusMessage, value);
-    }
-
-    public string WelcomeText
-    {
-        get => _welcomeText;
-        private set => SetProperty(ref _welcomeText, value);
-    }
-
-    public string ProfileSearchText
-    {
-        get => _profileSearchText;
-        set
+        get => _currentView;
+        private set
         {
-            if (SetProperty(ref _profileSearchText, value))
+            if (SetProperty(ref _currentView, value))
             {
-                ApplyProfileFilter();
+                RaiseFacadeProperties();
             }
         }
     }
 
-    public string ProfileSummaryText
+    public string ErrorMessage => IsProfileCurrent
+        ? ProfileViewModel.ErrorMessage
+        : LoginViewModel.ErrorMessage;
+
+    public bool HasError => IsProfileCurrent
+        ? ProfileViewModel.HasError
+        : LoginViewModel.HasError;
+
+    public string StatusMessage => IsProfileCurrent
+        ? ProfileViewModel.StatusMessage
+        : LoginViewModel.StatusMessage;
+
+    public string WelcomeText => ProfileViewModel.WelcomeText;
+
+    public string ProfileSearchText
     {
-        get => _profileSummaryText;
-        private set => SetProperty(ref _profileSummaryText, value);
+        get => ProfileViewModel.ProfileSearchText;
+        set => ProfileViewModel.ProfileSearchText = value;
     }
+
+    public string ProfileSummaryText => ProfileViewModel.ProfileSummaryText;
+
+    public ObservableCollection<LauncherProfileDefinition> Profiles => ProfileViewModel.Profiles;
+
+    public ObservableCollection<LauncherProfileGroupViewModel> ProfileGroups => ProfileViewModel.ProfileGroups;
 
     public string AppVersionText { get; }
 
@@ -87,143 +89,71 @@ public sealed class LauncherMainViewModel : ObservableObject
         private set => SetProperty(ref _isAuthenticated, value);
     }
 
-    public bool IsBusy
+    public bool IsBusy => LoginViewModel.IsBusy || ProfileViewModel.IsBusy;
+
+    private bool IsProfileCurrent => ReferenceEquals(CurrentView, ProfileViewModel);
+
+    public string GetText(string key) => Text(key);
+
+    public void NavigateToProfile(string displayName)
     {
-        get => _isBusy;
-        private set => SetProperty(ref _isBusy, value);
+        try
+        {
+            ProfileViewModel.Activate(displayName);
+            IsAuthenticated = true;
+            CurrentView = ProfileViewModel;
+        }
+        catch (Exception ex)
+        {
+            ProfileViewModel.Reset();
+            IsAuthenticated = false;
+            CurrentView = LoginViewModel;
+            LoginViewModel.ShowProfileLoadFailure(ex.Message);
+            RaiseFacadeProperties();
+        }
+    }
+
+    public void NavigateToLogin()
+    {
+        ProfileViewModel.Reset();
+        LoginViewModel.Reset();
+        IsAuthenticated = false;
+        CurrentView = LoginViewModel;
+        RaiseFacadeProperties();
     }
 
     public async Task LoginAsync(string? userName, string? password)
     {
-        ErrorMessage = string.Empty;
-        StatusMessage = "正在验证本地账号...";
-        IsBusy = true;
-
-        try
-        {
-            await Task.Yield();
-
-            var result = _authService.Authenticate(userName, password);
-            if (!result.Success)
-            {
-                ResetToLoggedOutState();
-                ErrorMessage = result.ErrorMessage ?? "本地登录失败。";
-                StatusMessage = "请修正账号信息后重试。";
-                return;
-            }
-
-            _allProfiles.Clear();
-            _allProfiles.AddRange(_profileCatalog.LoadProfiles());
-
-            IsAuthenticated = true;
-            WelcomeText = $"已登录：{result.DisplayName}";
-            ProfileSearchText = string.Empty;
-            ApplyProfileFilter();
-            StatusMessage = "请选择要启动的工序客户端。";
-        }
-        catch (Exception ex)
-        {
-            ResetToLoggedOutState();
-            ErrorMessage = ex.Message;
-            StatusMessage = "本地登录通过，但工序清单加载失败。";
-        }
-        finally
-        {
-            IsBusy = false;
-        }
+        await LoginViewModel.LoginAsync(userName, password);
+        RaiseFacadeProperties();
     }
 
-    public async Task<bool> ChangePasswordAsync(string? userName, string? oldPassword, string? newPassword)
+    public Task<bool> ChangePasswordAsync(string? userName, string? oldPassword, string? newPassword)
+        => LoginViewModel.ChangePasswordAsync(userName, oldPassword, newPassword);
+
+    public async Task LaunchAsync(LauncherProfileDefinition profile)
     {
-        ErrorMessage = string.Empty;
-        StatusMessage = "正在修改本地密码...";
-        IsBusy = true;
-
-        try
-        {
-            await Task.Yield();
-            var result = _authService.ChangePassword(userName, oldPassword, newPassword);
-            if (!result.Success)
-            {
-                ErrorMessage = result.ErrorMessage ?? "本地密码修改失败。";
-                StatusMessage = "请修正密码信息后重试。";
-                return false;
-            }
-
-            StatusMessage = "本地密码已修改，请使用新密码登录。";
-            return true;
-        }
-        catch (Exception ex)
-        {
-            ErrorMessage = ex.Message;
-            StatusMessage = "本地密码修改失败。";
-            return false;
-        }
-        finally
-        {
-            IsBusy = false;
-        }
+        await ProfileViewModel.LaunchAsync(profile);
+        RaiseFacadeProperties();
     }
 
-    public Task LaunchAsync(LauncherProfileDefinition profile)
+    private void HandleChildPropertyChanged(object? sender, PropertyChangedEventArgs args)
+        => RaiseFacadeProperties();
+
+    private void RaiseFacadeProperties()
     {
-        ArgumentNullException.ThrowIfNull(profile);
-
-        ErrorMessage = string.Empty;
-        try
-        {
-            _launchService.Launch(profile);
-            StatusMessage = $"已启动 {profile.DisplayName}，MachineProfile = {profile.MachineProfile}。";
-        }
-        catch (Exception ex)
-        {
-            ErrorMessage = ex.Message;
-            StatusMessage = $"启动 {profile.DisplayName} 失败。";
-        }
-
-        return Task.CompletedTask;
+        RaisePropertyChanged(nameof(ErrorMessage));
+        RaisePropertyChanged(nameof(HasError));
+        RaisePropertyChanged(nameof(StatusMessage));
+        RaisePropertyChanged(nameof(WelcomeText));
+        RaisePropertyChanged(nameof(ProfileSearchText));
+        RaisePropertyChanged(nameof(ProfileSummaryText));
+        RaisePropertyChanged(nameof(Profiles));
+        RaisePropertyChanged(nameof(ProfileGroups));
+        RaisePropertyChanged(nameof(IsBusy));
     }
 
-    private void ApplyProfileFilter()
-    {
-        var keyword = ProfileSearchText?.Trim();
-        IEnumerable<LauncherProfileDefinition> filtered = _allProfiles;
-
-        if (!string.IsNullOrWhiteSpace(keyword))
-        {
-            filtered = filtered.Where(profile =>
-                Contains(profile.DisplayName, keyword) ||
-                Contains(profile.Description, keyword) ||
-                Contains(profile.ProfileId, keyword) ||
-                Contains(profile.MachineProfile, keyword));
-        }
-
-        Profiles.Clear();
-        foreach (var profile in filtered)
-        {
-            Profiles.Add(profile);
-        }
-
-        ProfileSummaryText = _allProfiles.Count == 0
-            ? "共 0 个工序"
-            : string.IsNullOrWhiteSpace(keyword)
-                ? $"共 {_allProfiles.Count} 个工序"
-                : $"显示 {Profiles.Count} / {_allProfiles.Count} 个工序";
-    }
-
-    private void ResetToLoggedOutState()
-    {
-        IsAuthenticated = false;
-        WelcomeText = "未登录";
-        ProfileSearchText = string.Empty;
-        _allProfiles.Clear();
-        Profiles.Clear();
-        ProfileSummaryText = "共 0 个工序";
-    }
-
-    private static bool Contains(string? source, string keyword)
-        => !string.IsNullOrWhiteSpace(source) &&
-           source.Contains(keyword, StringComparison.OrdinalIgnoreCase);
+    private string Text(string key) => _languageService.GetText(key);
 
     private static string BuildAppVersionText()
     {

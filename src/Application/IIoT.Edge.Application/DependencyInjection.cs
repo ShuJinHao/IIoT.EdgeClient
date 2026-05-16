@@ -18,6 +18,7 @@ using IIoT.Edge.Application.Features.Production.DataView;
 using IIoT.Edge.Application.Features.Production.Equipment;
 using IIoT.Edge.Application.Features.Production.Monitor;
 using IIoT.Edge.Application.Features.SysLog.LogView;
+using IIoT.Edge.Application.Modules.Hardware;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace IIoT.Edge.Application;
@@ -28,6 +29,8 @@ public static class DependencyInjection
     {
         services.AddSingleton<CapacityCloudQueryService>();
         services.AddSingleton<IClientPermissionService, ClientPermissionService>();
+        services.AddSingleton<IEdgeSyncDiagnosticStatusClassifier, EdgeSyncDiagnosticStatusClassifier>();
+        services.AddSingleton<IModuleHardwareProfileValidator, ModuleHardwareProfileValidator>();
         services.AddSingleton<LocalParameterConfigService>();
         services.AddSingleton<ILocalParameterConfigService>(sp => sp.GetRequiredService<LocalParameterConfigService>());
         services.AddSingleton<ILocalParameterConfigChangePublisher>(sp => sp.GetRequiredService<LocalParameterConfigService>());

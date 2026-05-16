@@ -17,11 +17,11 @@ public sealed class HomogenizationHardwareProfileProvider
 {
     public HomogenizationHardwareProfileProvider()
         : this(
-            new EnumInteractionSignalProfile<HomogenizationPlcSignals.Interaction>(HomogenizationModuleBase.ModuleKey),
-            new EnumReadSignalProfile<HomogenizationPlcSignals.SingleRead>(HomogenizationModuleBase.ModuleKey, "单点读数据"),
-            new EnumReadSignalProfile<HomogenizationPlcSignals.ContinuousRead>(HomogenizationModuleBase.ModuleKey, "连续读数据"),
-            new EnumWriteSignalProfile<HomogenizationPlcSignals.SingleWrite>(HomogenizationModuleBase.ModuleKey, "单点写数据"),
-            new EnumWriteSignalProfile<HomogenizationPlcSignals.ContinuousWrite>(HomogenizationModuleBase.ModuleKey, "连续写数据"))
+            new EnumInteractionSignalProfile<HomogenizationPlcSignals.Interaction>(DependencyInjection.ModuleKey),
+            new EnumReadSignalProfile<HomogenizationPlcSignals.SingleRead>(DependencyInjection.ModuleKey, "单点读数据"),
+            new EnumReadSignalProfile<HomogenizationPlcSignals.ContinuousRead>(DependencyInjection.ModuleKey, "连续读数据"),
+            new EnumWriteSignalProfile<HomogenizationPlcSignals.SingleWrite>(DependencyInjection.ModuleKey, "单点写数据"),
+            new EnumWriteSignalProfile<HomogenizationPlcSignals.ContinuousWrite>(DependencyInjection.ModuleKey, "连续写数据"))
     {
     }
 
@@ -30,13 +30,15 @@ public sealed class HomogenizationHardwareProfileProvider
         IModulePlcSignalProfile<HomogenizationPlcSignals.SingleRead> singleReadProfile,
         IModulePlcSignalProfile<HomogenizationPlcSignals.ContinuousRead> continuousReadProfile,
         IModulePlcSignalProfile<HomogenizationPlcSignals.SingleWrite> singleWriteProfile,
-        IModulePlcSignalProfile<HomogenizationPlcSignals.ContinuousWrite> continuousWriteProfile)
+        IModulePlcSignalProfile<HomogenizationPlcSignals.ContinuousWrite> continuousWriteProfile,
+        IModuleHardwareProfileValidator? hardwareProfileValidator = null)
         : base(
             interactionProfile,
             singleReadProfile,
             continuousReadProfile,
             singleWriteProfile,
-            continuousWriteProfile)
+            continuousWriteProfile,
+            hardwareProfileValidator ?? new ModuleHardwareProfileValidator())
     {
     }
 

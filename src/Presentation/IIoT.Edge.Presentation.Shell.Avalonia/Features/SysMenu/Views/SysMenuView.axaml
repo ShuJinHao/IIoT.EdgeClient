@@ -1,0 +1,52 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Shell.Avalonia.Features.SysMenu.Views.SysMenuView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia">
+
+  <DockPanel>
+    <Button DockPanel.Dock="Bottom"
+            Classes="ghost icon"
+            Margin="10,0,10,16"
+            HorizontalAlignment="Center"
+            Command="{Binding LoginCommand}"
+            ToolTip.Tip="{Binding LoginButtonText}"
+            AutomationProperties.Name="{Binding LoginButtonText}">
+      <icons:MaterialIcon Width="22"
+                          Height="22"
+                          Foreground="{DynamicResource Edge.Text.Primary}"
+                          Kind="AccountCircleOutline" />
+    </Button>
+
+    <ItemsControl Margin="10,18,10,0" ItemsSource="{Binding MenuItems}">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate>
+          <Border Margin="0,0,0,12"
+                  Classes="edge-nav-item"
+                  Classes.selected="{Binding IsSelected}"
+                  IsVisible="{Binding IsAccessible}">
+            <Button Classes="ghost"
+                    Width="54"
+                    Height="54"
+                    MinHeight="54"
+                    Padding="0"
+                    HorizontalAlignment="Center"
+                    HorizontalContentAlignment="Center"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Command="{Binding NavigateCommand}"
+                    IsEnabled="{Binding IsAccessible}"
+                    ToolTip.Tip="{Binding Title}"
+                    AutomationProperties.Name="{Binding Title}">
+              <icons:MaterialIcon Width="22"
+                                  Height="22"
+                                  VerticalAlignment="Center"
+                                  Foreground="{DynamicResource Edge.Text.Primary}"
+                                  Kind="{Binding Icon}" />
+            </Button>
+          </Border>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+  </DockPanel>
+</UserControl>

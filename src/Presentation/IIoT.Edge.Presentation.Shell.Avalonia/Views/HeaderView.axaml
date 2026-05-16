@@ -3,26 +3,136 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia">
-  <Border Background="#111827" BorderBrush="#243244" BorderThickness="0,0,0,1" Padding="14,0">
-    <Grid ColumnDefinitions="*,Auto" Height="46">
-      <StackPanel VerticalAlignment="Center" Spacing="2">
-        <TextBlock FontSize="17" FontWeight="SemiBold" Foreground="#F8FAFC" Text="{DynamicResource Shell_Header_Process}" />
-        <StackPanel Orientation="Horizontal" Spacing="8">
-          <TextBlock FontSize="12" Foreground="#94A3B8" Text="{Binding RuntimeStatusText}" />
-          <TextBlock FontSize="12" Foreground="#64748B" Text="|" />
-          <TextBlock FontSize="12" Foreground="#94A3B8" Text="{Binding RuntimeDetailText}" />
-        </StackPanel>
+  <Border Background="{DynamicResource Edge.Bg.Shell}"
+          BorderBrush="{DynamicResource Edge.Border.Muted}"
+          BorderThickness="0"
+          Padding="18,0,16,0"
+          PointerPressed="HeaderRoot_PointerPressed"
+          DoubleTapped="HeaderRoot_DoubleTapped">
+    <Grid Height="72" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+      <StackPanel Grid.Column="0"
+                  Orientation="Horizontal"
+                  VerticalAlignment="Center"
+                  Spacing="14">
+        <Button Classes="ghost icon"
+                Width="38"
+                Height="38"
+                MinHeight="38"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                ToolTip.Tip="{DynamicResource Shell_Header_Menu}">
+          <icons:MaterialIcon Width="22"
+                              Height="22"
+                              Foreground="{DynamicResource Edge.Text.Primary}"
+                              Kind="Menu" />
+        </Button>
+        <TextBlock FontSize="20"
+                   FontWeight="SemiBold"
+                   Foreground="{DynamicResource Edge.Text.Primary}"
+                   MaxWidth="230"
+                   TextTrimming="CharacterEllipsis"
+                   Text="{DynamicResource Shell_Header_Process}" />
       </StackPanel>
-      <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
-        <TextBlock VerticalAlignment="Center" Foreground="#CBD5E1" Text="{Binding CurrentUser}" />
-        <Button Width="34" Height="30" Command="{Binding MinimizeCommand}">
-          <icons:MaterialIcon Kind="WindowMinimize" />
+
+      <StackPanel Grid.Column="1"
+                  Orientation="Horizontal"
+                  VerticalAlignment="Center"
+                  Spacing="8">
+        <Border Classes="edge-chip success" VerticalAlignment="Center">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <Border Classes="edge-dot" VerticalAlignment="Center" />
+            <TextBlock FontSize="12"
+                       Foreground="{DynamicResource Edge.Accent.LimeDark}"
+                       MaxWidth="68"
+                       TextTrimming="CharacterEllipsis"
+                       Text="{Binding RuntimeStatusText}" />
+          </StackPanel>
+        </Border>
+        <Border Classes="edge-chip" VerticalAlignment="Center">
+          <TextBlock FontSize="12"
+                     Foreground="{DynamicResource Edge.Text.Secondary}"
+                     MaxWidth="94"
+                     TextTrimming="CharacterEllipsis"
+                     Text="{Binding LocalModeText}" />
+        </Border>
+        <Border Classes="edge-chip" VerticalAlignment="Center">
+          <TextBlock FontSize="12"
+                     Foreground="{DynamicResource Edge.Text.Secondary}"
+                     MaxWidth="150"
+                     TextTrimming="CharacterEllipsis"
+                     Text="{Binding ProductionLineText}" />
+        </Border>
+      </StackPanel>
+
+      <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
+        <Button Classes="ghost icon"
+                Width="38"
+                Height="38"
+                MinHeight="38"
+                ToolTip.Tip="{DynamicResource Shell_Header_Notification}">
+          <Grid Width="24" Height="24">
+            <icons:MaterialIcon Width="22"
+                                Height="22"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Foreground="{DynamicResource Edge.Text.Primary}"
+                                Kind="BellOutline" />
+            <Border Width="16"
+                    Height="16"
+                    CornerRadius="8"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    Background="{DynamicResource Edge.Status.Error}"
+                    IsVisible="{Binding HasNotifications}">
+              <TextBlock HorizontalAlignment="Center"
+                         VerticalAlignment="Center"
+                         FontSize="10"
+                         Foreground="{DynamicResource Edge.Text.Inverse}"
+                         Text="{Binding NotificationCount}" />
+            </Border>
+          </Grid>
         </Button>
-        <Button Width="34" Height="30" Command="{Binding ToggleMaximizeCommand}">
-          <icons:MaterialIcon Kind="{Binding MaxRestoreIcon}" />
+
+        <Border Width="1" Height="28" Background="{DynamicResource Edge.Border.Muted}" Margin="2,0" />
+
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
+          <Border Width="38" Height="38" CornerRadius="19" Background="{DynamicResource Edge.Bg.Blue}">
+            <icons:MaterialIcon Width="22"
+                                Height="22"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Foreground="{DynamicResource Edge.Accent.Blue}"
+                                Kind="AccountCircleOutline" />
+          </Border>
+          <StackPanel VerticalAlignment="Center" Spacing="0">
+            <TextBlock FontSize="13"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource Edge.Text.Primary}"
+                       Width="72"
+                       TextTrimming="CharacterEllipsis"
+                       Text="{Binding CurrentUser}" />
+            <TextBlock FontSize="11"
+                       Foreground="{DynamicResource Edge.Text.Muted}"
+                       Width="72"
+                       TextTrimming="CharacterEllipsis"
+                       Text="{DynamicResource Shell_Header_Operator}" />
+          </StackPanel>
+        </StackPanel>
+
+        <Button Classes="window-control"
+                Command="{Binding MinimizeCommand}"
+                ToolTip.Tip="{DynamicResource Shell_Tooltip_Minimize}">
+          <icons:MaterialIcon Width="18" Height="18" Kind="WindowMinimize" />
         </Button>
-        <Button Width="34" Height="30" Command="{Binding CloseCommand}">
-          <icons:MaterialIcon Kind="Close" />
+        <Button Classes="window-control"
+                Command="{Binding ToggleMaximizeCommand}"
+                ToolTip.Tip="{DynamicResource Shell_Tooltip_MaximizeRestore}">
+          <icons:MaterialIcon Width="18" Height="18" Kind="{Binding MaxRestoreIcon}" />
+        </Button>
+        <Button Classes="window-control"
+                Command="{Binding CloseCommand}"
+                ToolTip.Tip="{DynamicResource Shell_Tooltip_Close}">
+          <icons:MaterialIcon Width="18" Height="18" Kind="Close" />
         </Button>
       </StackPanel>
     </Grid>

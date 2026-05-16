@@ -19,19 +19,22 @@ public abstract class StandardModuleHardwareProfileProviderBase<TInteraction, TS
     private readonly IModulePlcSignalProfile<TContinuousRead> _continuousReadProfile;
     private readonly IModulePlcSignalProfile<TSingleWrite> _singleWriteProfile;
     private readonly IModulePlcSignalProfile<TContinuousWrite> _continuousWriteProfile;
+    private readonly IModuleHardwareProfileValidator _hardwareProfileValidator;
 
     protected StandardModuleHardwareProfileProviderBase(
         IModulePlcSignalProfile<TInteraction> interactionProfile,
         IModulePlcSignalProfile<TSingleRead> singleReadProfile,
         IModulePlcSignalProfile<TContinuousRead> continuousReadProfile,
         IModulePlcSignalProfile<TSingleWrite> singleWriteProfile,
-        IModulePlcSignalProfile<TContinuousWrite> continuousWriteProfile)
+        IModulePlcSignalProfile<TContinuousWrite> continuousWriteProfile,
+        IModuleHardwareProfileValidator hardwareProfileValidator)
     {
         _interactionProfile = interactionProfile ?? throw new ArgumentNullException(nameof(interactionProfile));
         _singleReadProfile = singleReadProfile ?? throw new ArgumentNullException(nameof(singleReadProfile));
         _continuousReadProfile = continuousReadProfile ?? throw new ArgumentNullException(nameof(continuousReadProfile));
         _singleWriteProfile = singleWriteProfile ?? throw new ArgumentNullException(nameof(singleWriteProfile));
         _continuousWriteProfile = continuousWriteProfile ?? throw new ArgumentNullException(nameof(continuousWriteProfile));
+        _hardwareProfileValidator = hardwareProfileValidator ?? throw new ArgumentNullException(nameof(hardwareProfileValidator));
 
         EnsureSameModuleId(_interactionProfile.ModuleId, _singleReadProfile.ModuleId, nameof(singleReadProfile));
         EnsureSameModuleId(_interactionProfile.ModuleId, _continuousReadProfile.ModuleId, nameof(continuousReadProfile));
@@ -66,7 +69,7 @@ public abstract class StandardModuleHardwareProfileProviderBase<TInteraction, TS
         string deviceName,
         string? deviceModel,
         IReadOnlyCollection<ModuleIoSnapshot> mappings)
-        => ModuleHardwareProfileValidator.Validate(
+        => _hardwareProfileValidator.Validate(
             deviceName,
             mappings,
             CreateRequirementsForExistingMappings(mappings),

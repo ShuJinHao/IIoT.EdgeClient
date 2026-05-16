@@ -2,16 +2,45 @@
     x:Class="IIoT.Edge.Presentation.Shell.Avalonia.Views.FooterView"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-  <Border Background="#111827" BorderBrush="#243244" BorderThickness="0,1,0,0" Padding="12,0">
-    <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto" Height="30">
-      <TextBlock VerticalAlignment="Center" Foreground="#94A3B8" Text="{DynamicResource Shell_Footer_Clock}" />
-      <TextBlock Grid.Column="1" Margin="6,0,18,0" VerticalAlignment="Center" Foreground="#E2E8F0" Text="{Binding CurrentTime}" />
-      <TextBlock Grid.Column="2" VerticalAlignment="Center" Foreground="#94A3B8" Text="{DynamicResource Shell_Footer_Status}" />
-      <TextBlock Grid.Column="3" Margin="6,0,12,0" VerticalAlignment="Center" Foreground="#E2E8F0" Text="{Binding RuntimeStatusText}" />
-      <TextBlock Grid.Column="4" VerticalAlignment="Center" Foreground="#94A3B8" Text="{Binding DiagnosticsSummary}" TextTrimming="CharacterEllipsis" />
-      <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-        <TextBlock Foreground="#94A3B8" Text="{DynamicResource Shell_Footer_Uptime}" />
-        <TextBlock Foreground="#E2E8F0" Text="{Binding UpTime}" />
+  <Border Background="{DynamicResource Edge.Bg.Shell}" Padding="0,0,0,2">
+    <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto" Height="32">
+      <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
+        <Border Classes="edge-dot" Background="{DynamicResource Edge.Status.Success}" VerticalAlignment="Center" />
+        <TextBlock FontSize="12" Foreground="{DynamicResource Edge.Text.Secondary}" Text="{Binding RuntimeStatusText}" />
+      </StackPanel>
+
+      <TextBlock Grid.Column="1"
+                 Margin="22,0,6,0"
+                 VerticalAlignment="Center"
+                 FontSize="12"
+                 Foreground="{DynamicResource Edge.Text.Muted}"
+                 Text="{DynamicResource Shell_Footer_Clock}" />
+      <TextBlock Grid.Column="2"
+                 VerticalAlignment="Center"
+                 FontSize="12"
+                 Foreground="{DynamicResource Edge.Text.Secondary}"
+                 Text="{Binding CurrentTime}" />
+      <TextBlock Grid.Column="3"
+                 Margin="22,0"
+                 VerticalAlignment="Center"
+                 FontSize="12"
+                 Foreground="{DynamicResource Edge.Text.Muted}"
+                 Text="{Binding DiagnosticsSummary}"
+                 TextTrimming="CharacterEllipsis" />
+      <TextBlock Grid.Column="4"
+                 VerticalAlignment="Center"
+                 FontSize="12"
+                 Foreground="{DynamicResource Edge.Text.Muted}"
+                 Text="{DynamicResource Shell_Footer_Uptime}" />
+      <TextBlock Grid.Column="5"
+                 Margin="6,0,22,0"
+                 VerticalAlignment="Center"
+                 FontSize="12"
+                 Foreground="{DynamicResource Edge.Text.Secondary}"
+                 Text="{Binding UpTime}" />
+      <StackPanel Grid.Column="6" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+        <TextBlock FontSize="12" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Shell_Footer_EdgeId}" />
+        <TextBlock FontSize="12" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Shell_Footer_Version}" />
       </StackPanel>
     </Grid>
   </Border>

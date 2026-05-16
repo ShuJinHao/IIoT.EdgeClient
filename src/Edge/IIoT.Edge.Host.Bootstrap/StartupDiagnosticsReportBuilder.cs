@@ -25,7 +25,9 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
 {
     private readonly IConfiguration _configuration;
     private readonly EdgeRuntimePaths _runtimePaths;
-    private readonly ShiftConfig _shiftConfig;
+    private readonly IStartupDiagnosticsConfigurationValidator _configurationValidator;
+    private readonly IStartupDiagnosticsPlcDeviceValidator _plcDeviceValidator;
+    private readonly IStartupDiagnosticsModuleRegistrationSnapshotBuilder _moduleRegistrationSnapshotBuilder;
     private readonly IRepository<NetworkDeviceEntity> _networkDevices;
     private readonly IRepository<IoMappingEntity> _ioMappings;
     private readonly ICellDataRegistry _cellDataRegistry;
@@ -43,7 +45,9 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
     public StartupDiagnosticsReportBuilder(
         IConfiguration configuration,
         EdgeRuntimePaths runtimePaths,
-        ShiftConfig shiftConfig,
+        IStartupDiagnosticsConfigurationValidator configurationValidator,
+        IStartupDiagnosticsPlcDeviceValidator plcDeviceValidator,
+        IStartupDiagnosticsModuleRegistrationSnapshotBuilder moduleRegistrationSnapshotBuilder,
         IRepository<NetworkDeviceEntity> networkDevices,
         IRepository<IoMappingEntity> ioMappings,
         ICellDataRegistry cellDataRegistry,
@@ -59,7 +63,9 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
     {
         _configuration = configuration;
         _runtimePaths = runtimePaths;
-        _shiftConfig = shiftConfig;
+        _configurationValidator = configurationValidator;
+        _plcDeviceValidator = plcDeviceValidator;
+        _moduleRegistrationSnapshotBuilder = moduleRegistrationSnapshotBuilder;
         _networkDevices = networkDevices;
         _ioMappings = ioMappings;
         _cellDataRegistry = cellDataRegistry;
@@ -91,7 +97,7 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
                 issue.Message,
                 issue.ModuleId)));
 
-        ValidateAppSettings(issues, _runtimeConfigService?.Current.CloudUploadEnabled ?? true);
+        _configurationValidator.Validate(issues, _runtimeConfigService?.Current.CloudUploadEnabled ?? true, BuildConfigurationProfile());
         ValidateModuleConfiguration(issues);
 
         var plcDevices = await _networkDevices.GetListAsync(
@@ -142,113 +148,6 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
                 var scopeText = scope.Count == 0 ? string.Empty : $" ({string.Join(", ", scope)})";
                 return $"- [{x.Code}]{scopeText} {x.Message}";
             }));
-    }
-
-    private void ValidateAppSettings(List<StartupDiagnosticIssue> issues, bool cloudUploadEnabled)
-    {
-        if (!cloudUploadEnabled)
-        {
-            return;
-        }
-
-        var baseUrl = _configuration["CloudApi:BaseUrl"]?.Trim();
-        if (string.IsNullOrWhiteSpace(baseUrl))
-        {
-            issues.Add(CreateIssue("CONFIG_INVALID", "CloudApi:BaseUrl 未配置。"));
-        }
-        else if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out _))
-        {
-            issues.Add(CreateIssue("CONFIG_INVALID", $"CloudApi:BaseUrl 无效：{baseUrl}。"));
-        }
-
-        var clientCode = _configuration["CloudApi:ClientCode"]?.Trim();
-        if (string.IsNullOrWhiteSpace(clientCode))
-        {
-            issues.Add(CreateIssue("CONFIG_INVALID", "CloudApi:ClientCode 未配置。"));
-        }
-
-        var bootstrapSecret = _configuration["CloudApi:BootstrapSecret"]?.Trim();
-        if (string.IsNullOrWhiteSpace(bootstrapSecret))
-        {
-            issues.Add(CreateIssue("CONFIG_INVALID", "CloudApi:BootstrapSecret 未配置。"));
-        }
-
-        foreach (var key in CloudApiPathKeys)
-        {
-            ValidateRequiredCloudPath(issues, key);
-        }
-
-        var recipePath = _configuration["CloudApi:Paths:RecipeByDeviceTemplate"]?.Trim();
-        if (!string.IsNullOrWhiteSpace(recipePath)
-            && !recipePath.Contains("{deviceId}", StringComparison.OrdinalIgnoreCase))
-        {
-            issues.Add(CreateIssue(
-                "CONFIG_INVALID",
-                "CloudApi:Paths:RecipeByDeviceTemplate 必须包含 {deviceId} 占位符。"));
-        }
-
-        if (!TimeSpan.TryParse(_shiftConfig.DayStart, out var dayStart))
-        {
-            issues.Add(CreateIssue("CONFIG_INVALID", $"Shift:DayStart 无效：{_shiftConfig.DayStart}。"));
-        }
-
-        if (!TimeSpan.TryParse(_shiftConfig.DayEnd, out var dayEnd))
-        {
-            issues.Add(CreateIssue("CONFIG_INVALID", $"Shift:DayEnd 无效：{_shiftConfig.DayEnd}。"));
-        }
-
-        if (TimeSpan.TryParse(_shiftConfig.DayStart, out dayStart)
-            && TimeSpan.TryParse(_shiftConfig.DayEnd, out dayEnd)
-            && dayStart == dayEnd)
-        {
-            issues.Add(CreateIssue("CONFIG_INVALID", "Shift:DayStart 和 Shift:DayEnd 不能相同。"));
-        }
-
-        var configurationProfile = BuildConfigurationProfile();
-        if (!string.IsNullOrWhiteSpace(configurationProfile.MachineProfile)
-            && !configurationProfile.IsMachineProfileLoaded)
-        {
-            issues.Add(CreateIssue(
-                "MACHINE_PROFILE_MISSING",
-                $"已请求机型配置“{configurationProfile.MachineProfile}”，但文件“{configurationProfile.MachineProfileFileName}”未加载。"));
-        }
-    }
-
-    private static readonly string[] CloudApiPathKeys =
-    [
-        "CloudApi:Paths:DeviceInstance",
-        "CloudApi:Paths:BootstrapRefresh",
-        "CloudApi:Paths:IdentityDeviceLogin",
-        "CloudApi:Paths:HumanIdentityRefresh",
-        "CloudApi:Paths:DeviceLog",
-        "CloudApi:Paths:ProcessUpload",
-        "CloudApi:Paths:CapacityHourly",
-        "CloudApi:Paths:CapacitySummary",
-        "CloudApi:Paths:CapacitySummaryRange",
-        "CloudApi:Paths:RecipeByDeviceTemplate"
-    ];
-
-    private void ValidateRequiredCloudPath(
-        List<StartupDiagnosticIssue> issues,
-        string key)
-    {
-        var configured = _configuration[key]?.Trim();
-        if (string.IsNullOrWhiteSpace(configured))
-        {
-            issues.Add(CreateIssue("CONFIG_INVALID", $"{key} 未配置。"));
-            return;
-        }
-
-        if (Uri.TryCreate(configured, UriKind.Absolute, out _))
-        {
-            issues.Add(CreateIssue("CONFIG_INVALID", $"{key} 只能填写相对 API 路径，不能填写完整地址。"));
-            return;
-        }
-
-        if (!configured.StartsWith('/'))
-        {
-            issues.Add(CreateIssue("CONFIG_INVALID", $"{key} 必须以 / 开头。"));
-        }
     }
 
     private void ValidateModuleConfiguration(List<StartupDiagnosticIssue> issues)
@@ -343,8 +242,8 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
             ValidateEnabledModuleServices(device, deviceName, issues);
         }
 
-        ValidateDeviceEndpoint(device, deviceName, issues);
-        ValidateIoMappings(device, deviceName, mappings, issues);
+        _plcDeviceValidator.ValidateDeviceEndpoint(device, deviceName, issues);
+        _plcDeviceValidator.ValidateIoMappings(device, deviceName, mappings, issues);
     }
 
     private void ValidateEnabledModuleServices(
@@ -361,77 +260,6 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
         if (!_cellDataRegistry.IsRegistered(module.ProcessType))
         {
             issues.Add(CreateIssue("CELLDATA_REGISTRATION_MISSING", $"PLC“{deviceName}”使用模块“{module.ModuleId}”，但 CellData 未注册。", module.ModuleId, deviceName));
-        }
-    }
-
-    private static void ValidateDeviceEndpoint(
-        NetworkDeviceEntity device,
-        string deviceName,
-        List<StartupDiagnosticIssue> issues)
-    {
-        if (string.IsNullOrWhiteSpace(device.DeviceModel)
-            || !Enum.TryParse<PlcType>(device.DeviceModel, ignoreCase: true, out var plcType))
-        {
-            issues.Add(CreateIssue("DEVICE_MODEL_INVALID", $"PLC“{deviceName}”的 DeviceModel 无效：{device.DeviceModel ?? "<空>"}。", device.ModuleId, deviceName));
-            return;
-        }
-
-        if (plcType == PlcType.ModbusRtu)
-        {
-            if (string.IsNullOrWhiteSpace(device.SendCmd1))
-            {
-                issues.Add(CreateIssue("CONFIG_INVALID", $"PLC“{deviceName}”是 Modbus RTU 时，Command1 必须填写串口设备名称。", device.ModuleId, deviceName));
-            }
-
-            if (device.Port1 is < 1 or > 247)
-            {
-                issues.Add(CreateIssue("CONFIG_INVALID", $"PLC“{deviceName}”是 Modbus RTU 时，Port1 必须填写 1 到 247 之间的从站 ID。", device.ModuleId, deviceName));
-            }
-        }
-        else
-        {
-            if (string.IsNullOrWhiteSpace(device.IpAddress))
-            {
-                issues.Add(CreateIssue("CONFIG_INVALID", $"PLC“{deviceName}”缺少 IpAddress。", device.ModuleId, deviceName));
-            }
-
-            if (device.Port1 <= 0 || device.Port1 > 65535)
-            {
-                issues.Add(CreateIssue("CONFIG_INVALID", $"PLC“{deviceName}”的 Port1 无效：{device.Port1}。", device.ModuleId, deviceName));
-            }
-        }
-
-        if (device.ConnectTimeout <= 0)
-        {
-            issues.Add(CreateIssue("CONFIG_INVALID", $"PLC“{deviceName}”的 ConnectTimeout 必须大于 0。", device.ModuleId, deviceName));
-        }
-    }
-
-    private static void ValidateIoMappings(
-        NetworkDeviceEntity device,
-        string deviceName,
-        IReadOnlyCollection<IoMappingEntity> mappings,
-        List<StartupDiagnosticIssue> issues)
-    {
-        if (mappings.Count == 0)
-        {
-            issues.Add(CreateIssue("DEVICE_MODULE_MISMATCH", $"PLC“{deviceName}”没有配置 IO 映射。", device.ModuleId, deviceName));
-            return;
-        }
-
-        if (mappings.Any(x => string.IsNullOrWhiteSpace(x.PlcAddress)))
-        {
-            issues.Add(CreateIssue("DEVICE_MODULE_MISMATCH", $"PLC“{deviceName}”存在 PlcAddress 为空的 IO 映射。", device.ModuleId, deviceName));
-        }
-
-        if (mappings.Any(x => x.AddressCount <= 0))
-        {
-            issues.Add(CreateIssue("DEVICE_MODULE_MISMATCH", $"PLC“{deviceName}”存在 AddressCount 小于等于 0 的 IO 映射。", device.ModuleId, deviceName));
-        }
-
-        if (mappings.Any(x => x.Direction is not ("Read" or "Write")))
-        {
-            issues.Add(CreateIssue("DEVICE_MODULE_MISMATCH", $"PLC“{deviceName}”存在 Direction 无效的 IO 映射。", device.ModuleId, deviceName));
         }
     }
 
@@ -470,19 +298,13 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
     }
 
     private IReadOnlyList<ModuleRegistrationSnapshot> BuildModuleRegistrations()
-        => _discoveredModulesById.Values
-            .OrderBy(x => x.ModuleId, StringComparer.OrdinalIgnoreCase)
-            .Select(x => new ModuleRegistrationSnapshot(
-                x.ModuleId,
-                x.ProcessType,
-                x.AssemblyName,
-                _modulesById.ContainsKey(x.ModuleId),
-                _cellDataRegistry.IsRegistered(x.ProcessType),
-                _runtimeRegistry.HasFactory(x.ModuleId),
-                _integrationRegistry.HasCloudUploader(x.ProcessType),
-                _integrationRegistry.HasMesUploader(x.ProcessType),
-                _hardwareProfilesByModuleId.ContainsKey(x.ModuleId)))
-            .ToArray();
+        => _moduleRegistrationSnapshotBuilder.Build(
+            _discoveredModulesById,
+            _modulesById,
+            _cellDataRegistry,
+            _runtimeRegistry,
+            _integrationRegistry,
+            _hardwareProfilesByModuleId);
 
     private ConfigurationProfileSnapshot BuildConfigurationProfile()
     {

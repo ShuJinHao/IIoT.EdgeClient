@@ -2,59 +2,493 @@
     x:Class="IIoT.Edge.Presentation.Navigation.Avalonia.Views.MonitorViewPage"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
     xmlns:loc="clr-namespace:IIoT.Edge.UI.Avalonia.Localization;assembly=IIoT.Edge.UI.Avalonia">
-  <Border Background="#0F172A" Padding="18">
-    <Grid RowDefinitions="Auto,Auto,*" RowSpacing="12">
-      <StackPanel Orientation="Horizontal" Spacing="10">
-        <TextBlock FontSize="20" FontWeight="SemiBold" Foreground="#F8FAFC" Text="{DynamicResource Navigation_Menu_Monitor}" />
-        <Button Command="{Binding RefreshCommand}" Content="{DynamicResource Navigation_Button_Query}" />
-        <TextBlock Foreground="#FCA5A5" VerticalAlignment="Center" Text="{Binding FeedbackMessage}" />
-      </StackPanel>
+  <Border Classes="edge-page-panel">
+    <Grid RowDefinitions="Auto,*,220" RowSpacing="14">
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+        <StackPanel Spacing="4">
+          <TextBlock Classes="page-title"
+                     Text="{DynamicResource Navigation_Monitor_Title}" />
+          <TextBlock Foreground="{DynamicResource Edge.Text.Muted}"
+                     Text="{DynamicResource Navigation_Monitor_Subtitle}" />
+        </StackPanel>
 
-      <ItemsControl Grid.Row="1" ItemsSource="{Binding Devices}">
-        <ItemsControl.ItemTemplate>
-          <DataTemplate>
-            <Border Background="#111827" BorderBrush="#334155" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,8">
-              <Grid ColumnDefinitions="220,*,*,*" ColumnSpacing="14">
-                <StackPanel>
-                  <TextBlock Foreground="#F8FAFC" FontWeight="SemiBold" Text="{Binding DeviceName}" />
-                  <TextBlock Foreground="#CBD5E1" Text="{Binding DeviceDataSummary}" TextWrapping="Wrap" />
-                  <TextBlock Foreground="#94A3B8" Text="{Binding StepSummary}" TextWrapping="Wrap" />
+        <StackPanel Grid.Column="1"
+                    Orientation="Horizontal"
+                    VerticalAlignment="Center"
+                    Spacing="8">
+          <Button Classes="chip"
+                  Command="{Binding RefreshCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <icons:MaterialIcon Width="16"
+                                  Height="16"
+                                  Foreground="{DynamicResource Edge.Text.Secondary}"
+                                  Kind="Refresh" />
+              <TextBlock Text="{DynamicResource Navigation_Button_Query}" />
+            </StackPanel>
+          </Button>
+          <TextBlock MaxWidth="360"
+                     VerticalAlignment="Center"
+                     Foreground="{DynamicResource Edge.Status.ErrorText}"
+                     Text="{Binding FeedbackMessage}"
+                     TextTrimming="CharacterEllipsis" />
+        </StackPanel>
+      </Grid>
+
+      <Grid Grid.Row="1"
+            RowDefinitions="98,*"
+            RowSpacing="14">
+        <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="12">
+          <Border Classes="edge-kpi-card mint">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+              <Border Width="42"
+                      Height="42"
+                      CornerRadius="21"
+                      Background="{DynamicResource Edge.Bg.Card}">
+                <icons:MaterialIcon Width="22"
+                                    Height="22"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Foreground="{DynamicResource Edge.Accent.Teal}"
+                                    Kind="ChartBar" />
+              </Border>
+              <StackPanel Grid.Column="1" Spacing="3">
+                <TextBlock Classes="caption" Text="{DynamicResource Navigation_Monitor_TodayOutput}" />
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <TextBlock Classes="kpi-value" Text="{Binding TotalOutputText}" />
+                  <TextBlock VerticalAlignment="Bottom"
+                             Margin="0,0,0,5"
+                             Foreground="{DynamicResource Edge.Text.Secondary}"
+                             Text="{DynamicResource Navigation_Unit_Piece}" />
                 </StackPanel>
-                <StackPanel Grid.Column="1">
-                  <TextBlock Foreground="#94A3B8" Text="{DynamicResource Navigation_Column_Total}" />
-                  <TextBlock Foreground="#F8FAFC" FontSize="18" FontWeight="SemiBold" Text="{Binding TotalAll}" />
-                  <TextBlock Foreground="#CBD5E1" Text="{Binding YieldAll}" />
+                <TextBlock FontSize="12"
+                           Foreground="{DynamicResource Edge.Status.Success}"
+                           Text="{DynamicResource Navigation_Monitor_LocalRuntime}" />
+              </StackPanel>
+            </Grid>
+          </Border>
+
+          <Border Grid.Column="1" Classes="edge-kpi-card blue">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+              <Border Width="42"
+                      Height="42"
+                      CornerRadius="21"
+                      Background="{DynamicResource Edge.Bg.Card}">
+                <icons:MaterialIcon Width="22"
+                                    Height="22"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Foreground="{DynamicResource Edge.Accent.Blue}"
+                                    Kind="ProgressCheck" />
+              </Border>
+              <StackPanel Grid.Column="1" Spacing="3">
+                <TextBlock Classes="caption" Text="{DynamicResource Navigation_Monitor_GoodRate}" />
+                <TextBlock Classes="kpi-value" Text="{Binding OkYieldText}" />
+                <TextBlock FontSize="12"
+                           Foreground="{DynamicResource Edge.Status.Success}"
+                           Text="{DynamicResource Navigation_Monitor_ComparedYesterday}" />
+              </StackPanel>
+            </Grid>
+          </Border>
+
+          <Border Grid.Column="2" Classes="edge-kpi-card lime">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+              <Border Width="42"
+                      Height="42"
+                      CornerRadius="21"
+                      Background="{DynamicResource Edge.Bg.Card}">
+                <icons:MaterialIcon Width="22"
+                                    Height="22"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Foreground="{DynamicResource Edge.Accent.Warning}"
+                                    Kind="AlertCircleOutline" />
+              </Border>
+              <StackPanel Grid.Column="1" Spacing="3">
+                <TextBlock Classes="caption" Text="{DynamicResource Navigation_Monitor_NgCount}" />
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <TextBlock Classes="kpi-value" Text="{Binding NgTotalText}" />
+                  <TextBlock VerticalAlignment="Bottom"
+                             Margin="0,0,0,5"
+                             Foreground="{DynamicResource Edge.Text.Secondary}"
+                             Text="{DynamicResource Navigation_Unit_Piece}" />
                 </StackPanel>
-                <StackPanel Grid.Column="2">
-                  <TextBlock Foreground="#94A3B8" Text="{DynamicResource Navigation_Column_Ok}" />
-                  <TextBlock Foreground="#BBF7D0" FontSize="18" FontWeight="SemiBold" Text="{Binding OkAll}" />
-                  <TextBlock Foreground="#CBD5E1" Text="{Binding DayShiftYield}" />
+                <TextBlock FontSize="12"
+                           Foreground="{DynamicResource Edge.Text.Muted}"
+                           Text="{DynamicResource Navigation_Monitor_FromRuntime}" />
+              </StackPanel>
+            </Grid>
+          </Border>
+
+          <Border Grid.Column="3" Classes="edge-kpi-card violet">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+              <Border Width="42"
+                      Height="42"
+                      CornerRadius="21"
+                      Background="{DynamicResource Edge.Bg.Card}">
+                <icons:MaterialIcon Width="22"
+                                    Height="22"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Foreground="{DynamicResource Edge.Accent.Violet}"
+                                    Kind="AccessPointNetwork" />
+              </Border>
+              <StackPanel Grid.Column="1" Spacing="3">
+                <TextBlock Classes="caption" Text="{DynamicResource Navigation_Monitor_DeviceCount}" />
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <TextBlock Classes="kpi-value" Text="{Binding DeviceCountText}" />
+                  <TextBlock VerticalAlignment="Bottom"
+                             Margin="0,0,0,5"
+                             Foreground="{DynamicResource Edge.Text.Secondary}"
+                             Text="{DynamicResource Navigation_Unit_Device}" />
                 </StackPanel>
-                <StackPanel Grid.Column="3">
-                  <TextBlock Foreground="#94A3B8" Text="{DynamicResource Navigation_Column_Ng}" />
-                  <TextBlock Foreground="#FECACA" FontSize="18" FontWeight="SemiBold" Text="{Binding NgAll}" />
-                  <TextBlock Foreground="#CBD5E1" Text="{Binding NightShiftYield}" />
+                <TextBlock FontSize="12"
+                           Foreground="{DynamicResource Edge.Text.Muted}"
+                           Text="{DynamicResource Navigation_Monitor_DeviceScope}" />
+              </StackPanel>
+            </Grid>
+          </Border>
+        </Grid>
+
+        <Grid Grid.Row="1"
+              ColumnDefinitions="0.82*,1.42*,320"
+              ColumnSpacing="14">
+          <Border Classes="edge-card compact" Padding="16">
+            <Grid RowDefinitions="Auto,*" RowSpacing="14">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Spacing="2">
+                  <TextBlock Classes="section-title" Text="{DynamicResource Navigation_Monitor_TrendTitle}" />
+                  <TextBlock Classes="caption" Text="{DynamicResource Navigation_Monitor_TrendSubtitle}" />
+                </StackPanel>
+                <Border Grid.Column="1" Classes="edge-chip" VerticalAlignment="Top">
+                  <TextBlock FontSize="12"
+                             Foreground="{DynamicResource Edge.Text.Secondary}"
+                             Text="{DynamicResource Navigation_Monitor_Last7Days}" />
+                </Border>
+              </Grid>
+
+              <ScrollViewer Grid.Row="1"
+                            VerticalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding Devices}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Grid ColumnDefinitions="130,*,Auto"
+                    ColumnSpacing="10"
+                            Margin="0,0,0,12">
+                        <StackPanel Spacing="2">
+                          <TextBlock FontWeight="SemiBold"
+                                     Foreground="{DynamicResource Edge.Text.Primary}"
+                                     Text="{Binding DeviceName}"
+                                     TextTrimming="CharacterEllipsis" />
+                          <TextBlock FontSize="12"
+                                     Foreground="{DynamicResource Edge.Text.Muted}"
+                                     Text="{Binding StepSummary}"
+                                     TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                        <ProgressBar Grid.Column="1"
+                                     Height="8"
+                                     Minimum="0"
+                                     Maximum="10000"
+                                     Value="{Binding TotalAll}"
+                                     VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="2"
+                                   MinWidth="54"
+                                   HorizontalAlignment="Right"
+                                   Foreground="{DynamicResource Edge.Text.Secondary}"
+                                   Text="{Binding TotalAll}" />
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </ScrollViewer>
+            </Grid>
+          </Border>
+
+          <Border Grid.Column="1" Classes="edge-workbench">
+            <Grid RowDefinitions="Auto,*,Auto" RowSpacing="12">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Spacing="2">
+                  <TextBlock FontSize="18"
+                             FontWeight="SemiBold"
+                             Foreground="{DynamicResource Edge.Text.Inverse}"
+                             Text="{DynamicResource Navigation_Monitor_WorkbenchTitle}" />
+                  <TextBlock FontSize="12"
+                             Foreground="{DynamicResource Edge.Text.WorkbenchMuted}"
+                             Text="{DynamicResource Navigation_Monitor_StationCanvasSubtitle}" />
+                </StackPanel>
+                <StackPanel Grid.Column="1"
+                            Orientation="Horizontal"
+                            Spacing="8"
+                            VerticalAlignment="Top">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Border Classes="edge-dot"
+                            Background="{DynamicResource Edge.Status.Success}"
+                            VerticalAlignment="Center" />
+                    <TextBlock FontSize="12"
+                               Foreground="{DynamicResource Edge.Text.WorkbenchBody}"
+                               Text="{DynamicResource Navigation_Monitor_StatusRunning}" />
+                  </StackPanel>
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Border Classes="edge-dot"
+                            Background="{DynamicResource Edge.Status.Warning}"
+                            VerticalAlignment="Center" />
+                    <TextBlock FontSize="12"
+                               Foreground="{DynamicResource Edge.Text.WorkbenchBody}"
+                               Text="{DynamicResource Navigation_Monitor_StatusWaiting}" />
+                  </StackPanel>
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Border Classes="edge-dot"
+                            Background="{DynamicResource Edge.Status.Error}"
+                            VerticalAlignment="Center" />
+                    <TextBlock FontSize="12"
+                               Foreground="{DynamicResource Edge.Text.WorkbenchBody}"
+                               Text="{DynamicResource Navigation_Monitor_StatusStopped}" />
+                  </StackPanel>
                 </StackPanel>
               </Grid>
-            </Border>
-          </DataTemplate>
-        </ItemsControl.ItemTemplate>
-      </ItemsControl>
 
-      <DataGrid Grid.Row="2" ItemsSource="{Binding Devices}" AutoGenerateColumns="False" IsReadOnly="True">
-        <DataGrid.Columns>
-          <DataGridTextColumn Width="*" Binding="{Binding DeviceName}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_DeviceName" />
-          <DataGridTextColumn Width="90" Binding="{Binding DayShiftTotal}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Total" />
-          <DataGridTextColumn Width="90" Binding="{Binding DayShiftOk}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Ok" />
-          <DataGridTextColumn Width="90" Binding="{Binding DayShiftNg}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Ng" />
-          <DataGridTextColumn Width="90" Binding="{Binding NightShiftTotal}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Count" />
-          <DataGridTextColumn Width="90" Binding="{Binding TotalAll}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Total" />
-          <DataGridTextColumn Width="90" Binding="{Binding YieldAll}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Yield" />
-          <DataGridTextColumn Width="220" Binding="{Binding CloudSyncStatus}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Status" />
-          <DataGridTextColumn Width="180" Binding="{Binding MesSyncStatus}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Message" />
-        </DataGrid.Columns>
-      </DataGrid>
+              <Grid Grid.Row="1"
+                    ColumnDefinitions="*,*,*,*,*"
+                    ColumnSpacing="8"
+                    VerticalAlignment="Center">
+                <Border Classes="edge-workbench-node">
+                  <StackPanel Spacing="8">
+                    <Border Width="34" Height="34" CornerRadius="17" Background="{DynamicResource Edge.Status.Success}" HorizontalAlignment="Center">
+                      <icons:MaterialIcon Width="20"
+                                          Height="20"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          Foreground="{DynamicResource Edge.Text.Inverse}"
+                                          Kind="DatabaseCheck" />
+                    </Border>
+                    <TextBlock HorizontalAlignment="Center" Foreground="{DynamicResource Edge.Text.Inverse}" TextAlignment="Center" Text="{DynamicResource Navigation_Monitor_Station_Infeed}" />
+                    <TextBlock HorizontalAlignment="Center" FontSize="12" Foreground="{DynamicResource Edge.Text.WorkbenchMuted}" Text="{DynamicResource Navigation_Monitor_ChannelLabelPlc}" />
+                    <TextBlock HorizontalAlignment="Center" FontSize="12" Foreground="{DynamicResource Edge.Text.WorkbenchMuted}" Text="{DynamicResource Navigation_Monitor_ChannelLabelMes}" />
+                  </StackPanel>
+                </Border>
+                <Border Grid.Column="1" Classes="edge-workbench-node">
+                  <StackPanel Spacing="8">
+                    <Border Width="34" Height="34" CornerRadius="17" Background="{DynamicResource Edge.Status.Success}" HorizontalAlignment="Center">
+                      <icons:MaterialIcon Width="20"
+                                          Height="20"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          Foreground="{DynamicResource Edge.Text.Inverse}"
+                                          Kind="Sync" />
+                    </Border>
+                    <TextBlock HorizontalAlignment="Center" Foreground="{DynamicResource Edge.Text.Inverse}" TextAlignment="Center" Text="{DynamicResource Navigation_Monitor_Station_PreProcess}" />
+                    <TextBlock HorizontalAlignment="Center" FontSize="12" Foreground="{DynamicResource Edge.Text.WorkbenchMuted}" Text="{DynamicResource Navigation_Monitor_ChannelLabelPlc}" />
+                    <TextBlock HorizontalAlignment="Center" FontSize="12" Foreground="{DynamicResource Edge.Text.WorkbenchMuted}" Text="{DynamicResource Navigation_Monitor_ChannelLabelCloud}" />
+                  </StackPanel>
+                </Border>
+                <Border Grid.Column="2" Classes="edge-workbench-node">
+                  <StackPanel Spacing="8">
+                    <Border Width="34" Height="34" CornerRadius="17" Background="{DynamicResource Edge.Status.Warning}" HorizontalAlignment="Center">
+                      <icons:MaterialIcon Width="20"
+                                          Height="20"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          Foreground="{DynamicResource Edge.Text.Inverse}"
+                                          Kind="Factory" />
+                    </Border>
+                    <TextBlock HorizontalAlignment="Center" Foreground="{DynamicResource Edge.Text.Inverse}" TextAlignment="Center" Text="{DynamicResource Navigation_Monitor_Station_Homogenize}" />
+                    <TextBlock HorizontalAlignment="Center" FontSize="12" Foreground="{DynamicResource Edge.Text.WorkbenchMuted}" Text="{DynamicResource Navigation_Monitor_ChannelLabelPlc}" />
+                    <TextBlock HorizontalAlignment="Center" FontSize="12" Foreground="{DynamicResource Edge.Text.WorkbenchMuted}" Text="{DynamicResource Navigation_Monitor_ChannelLabelMes}" />
+                  </StackPanel>
+                </Border>
+                <Border Grid.Column="3" Classes="edge-workbench-node">
+                  <StackPanel Spacing="8">
+                    <Border Width="34" Height="34" CornerRadius="17" Background="{DynamicResource Edge.Status.Success}" HorizontalAlignment="Center">
+                      <icons:MaterialIcon Width="20"
+                                          Height="20"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          Foreground="{DynamicResource Edge.Text.Inverse}"
+                                          Kind="ClipboardCheckOutline" />
+                    </Border>
+                    <TextBlock HorizontalAlignment="Center" Foreground="{DynamicResource Edge.Text.Inverse}" TextAlignment="Center" Text="{DynamicResource Navigation_Monitor_Station_Inspect}" />
+                    <TextBlock HorizontalAlignment="Center" FontSize="12" Foreground="{DynamicResource Edge.Text.WorkbenchMuted}" Text="{DynamicResource Navigation_Monitor_ChannelLabelMes}" />
+                    <TextBlock HorizontalAlignment="Center" FontSize="12" Foreground="{DynamicResource Edge.Text.WorkbenchMuted}" Text="{DynamicResource Navigation_Monitor_ChannelLabelCloud}" />
+                  </StackPanel>
+                </Border>
+                <Border Grid.Column="4" Classes="edge-workbench-node">
+                  <StackPanel Spacing="8">
+                    <Border Width="34" Height="34" CornerRadius="17" Background="{DynamicResource Edge.Status.Error}" HorizontalAlignment="Center">
+                      <icons:MaterialIcon Width="20"
+                                          Height="20"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          Foreground="{DynamicResource Edge.Text.Inverse}"
+                                          Kind="PackageVariantClosed" />
+                    </Border>
+                    <TextBlock HorizontalAlignment="Center" Foreground="{DynamicResource Edge.Text.Inverse}" TextAlignment="Center" Text="{DynamicResource Navigation_Monitor_Station_Pack}" />
+                    <TextBlock HorizontalAlignment="Center" FontSize="12" Foreground="{DynamicResource Edge.Text.WorkbenchMuted}" Text="{DynamicResource Navigation_Monitor_ChannelLabelPlc}" />
+                    <TextBlock HorizontalAlignment="Center" FontSize="12" Foreground="{DynamicResource Edge.Text.WorkbenchMuted}" Text="{DynamicResource Navigation_Monitor_ChannelLabelCloud}" />
+                  </StackPanel>
+                </Border>
+              </Grid>
+
+              <Border Grid.Row="2" Classes="edge-workbench-pill">
+                <Grid ColumnDefinitions="*,*,*" ColumnSpacing="12">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Border Classes="edge-dot" Background="{DynamicResource Edge.Status.Success}" VerticalAlignment="Center" />
+                    <TextBlock Foreground="{DynamicResource Edge.Text.WorkbenchBody}" Text="{DynamicResource Navigation_Monitor_ChannelLabelPlc}" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                    <Border Classes="edge-dot" Background="{DynamicResource Edge.Status.Success}" VerticalAlignment="Center" />
+                    <TextBlock Foreground="{DynamicResource Edge.Text.WorkbenchBody}" Text="{DynamicResource Navigation_Monitor_ChannelLabelMes}" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
+                    <Border Classes="edge-dot" Background="{DynamicResource Edge.Status.Success}" VerticalAlignment="Center" />
+                    <TextBlock Foreground="{DynamicResource Edge.Text.WorkbenchBody}" Text="{DynamicResource Navigation_Monitor_ChannelLabelCloud}" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+            </Grid>
+          </Border>
+
+          <Border Grid.Column="2" Classes="edge-right-panel compact" Padding="14">
+            <Grid RowDefinitions="Auto,*,Auto" RowSpacing="12">
+              <StackPanel Spacing="10">
+                <TextBlock Classes="section-title" Text="{DynamicResource Navigation_Monitor_RuntimeStatusTitle}" />
+                <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="4">
+                  <Border Classes="edge-mini-tab selected">
+                    <TextBlock HorizontalAlignment="Center" FontSize="12" FontWeight="SemiBold" Text="{DynamicResource Navigation_Monitor_PlanTab}" />
+                  </Border>
+                  <Border Grid.Column="1" Classes="edge-mini-tab">
+                    <TextBlock HorizontalAlignment="Center" FontSize="12" Text="{DynamicResource Navigation_Monitor_TaskTab}" />
+                  </Border>
+                  <Border Grid.Column="2" Classes="edge-mini-tab">
+                    <TextBlock HorizontalAlignment="Center" FontSize="12" Text="{DynamicResource Navigation_Monitor_AlarmTab}" />
+                  </Border>
+                  <Border Grid.Column="3" Classes="edge-mini-tab">
+                    <TextBlock HorizontalAlignment="Center" FontSize="12" Text="{DynamicResource Navigation_Monitor_AuditTab}" />
+                  </Border>
+                </Grid>
+              </StackPanel>
+
+              <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                <StackPanel Spacing="10">
+                  <Border Classes="edge-status-card">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                      <Border Width="38" Height="38" CornerRadius="19" Background="{DynamicResource Edge.Status.SuccessSoft}">
+                        <icons:MaterialIcon Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource Edge.Status.Success}" Kind="RouterNetwork" />
+                      </Border>
+                      <StackPanel Grid.Column="1" Spacing="3">
+                        <TextBlock FontWeight="SemiBold" Text="{DynamicResource Navigation_Monitor_ChannelLabelPlc}" />
+                        <TextBlock Classes="caption" Text="{DynamicResource Navigation_Monitor_ChannelPlc}" />
+                      </StackPanel>
+                      <Border Grid.Column="2" Classes="edge-chip success" VerticalAlignment="Top">
+                        <TextBlock FontSize="12" Foreground="{DynamicResource Edge.Accent.LimeDark}" Text="{DynamicResource Navigation_Monitor_StatusRunning}" />
+                      </Border>
+                    </Grid>
+                  </Border>
+
+                  <Border Classes="edge-status-card">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                      <Border Width="38" Height="38" CornerRadius="19" Background="{DynamicResource Edge.Bg.Blue}">
+                        <icons:MaterialIcon Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource Edge.Accent.Blue}" Kind="CloudSync" />
+                      </Border>
+                      <StackPanel Grid.Column="1" Spacing="3">
+                        <TextBlock FontWeight="SemiBold" Text="{DynamicResource Navigation_Monitor_MesUpload}" />
+                        <TextBlock Classes="caption" Text="{DynamicResource Navigation_Monitor_ChannelMes}" />
+                      </StackPanel>
+                      <Border Grid.Column="2" Classes="edge-chip success" VerticalAlignment="Top">
+                        <TextBlock FontSize="12" Foreground="{DynamicResource Edge.Accent.LimeDark}" Text="{DynamicResource Navigation_Monitor_StatusRunning}" />
+                      </Border>
+                    </Grid>
+                  </Border>
+
+                  <Border Classes="edge-status-card">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                      <Border Width="38" Height="38" CornerRadius="19" Background="{DynamicResource Edge.Bg.Mint}">
+                        <icons:MaterialIcon Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource Edge.Accent.Teal}" Kind="CloudCheck" />
+                      </Border>
+                      <StackPanel Grid.Column="1" Spacing="3">
+                        <TextBlock FontWeight="SemiBold" Text="{DynamicResource Navigation_Monitor_CloudSync}" />
+                        <TextBlock Classes="caption" Text="{DynamicResource Navigation_Monitor_ChannelCloud}" />
+                      </StackPanel>
+                      <Border Grid.Column="2" Classes="edge-chip success" VerticalAlignment="Top">
+                        <TextBlock FontSize="12" Foreground="{DynamicResource Edge.Accent.LimeDark}" Text="{DynamicResource Navigation_Monitor_StatusRunning}" />
+                      </Border>
+                    </Grid>
+                  </Border>
+
+                  <Border Classes="edge-status-card soft">
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                      <Border Width="38" Height="38" CornerRadius="19" Background="{DynamicResource Edge.Bg.Lime}">
+                        <icons:MaterialIcon Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource Edge.Accent.LimeDark}" Kind="Database" />
+                      </Border>
+                      <StackPanel Grid.Column="1" Spacing="3">
+                        <TextBlock FontWeight="SemiBold" Text="{DynamicResource Navigation_Monitor_CacheQueue}" />
+                        <TextBlock Classes="caption" Text="{DynamicResource Navigation_Monitor_CacheQueueValue}" />
+                      </StackPanel>
+                    </Grid>
+                  </Border>
+                </StackPanel>
+              </ScrollViewer>
+
+              <Border Grid.Row="2" Classes="edge-alert">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                  <icons:MaterialIcon Width="22"
+                                      Height="22"
+                                      Foreground="{DynamicResource Edge.Accent.Warning}"
+                                      Kind="AlertCircleOutline" />
+                  <StackPanel Grid.Column="1" Spacing="3">
+                    <TextBlock FontWeight="SemiBold" Text="{DynamicResource Navigation_Monitor_LatestAlarm}" />
+                    <TextBlock Classes="caption"
+                               Text="{DynamicResource Navigation_Monitor_NoActiveAlarm}" />
+                    <TextBlock FontSize="12"
+                               Foreground="{DynamicResource Edge.Status.ErrorText}"
+                               Text="{Binding FeedbackMessage}"
+                               TextTrimming="CharacterEllipsis" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+            </Grid>
+          </Border>
+        </Grid>
+      </Grid>
+
+      <Border Grid.Row="2" Classes="edge-table-card">
+        <Grid RowDefinitions="Auto,*">
+          <Grid ColumnDefinitions="*,Auto,Auto" Margin="16,12,16,6" ColumnSpacing="10">
+            <StackPanel Spacing="2">
+              <TextBlock Classes="section-title" Text="{DynamicResource Navigation_Monitor_DeviceTableTitle}" />
+              <TextBlock Classes="caption" Text="{DynamicResource Navigation_Monitor_DeviceTableSubtitle}" />
+            </StackPanel>
+            <ComboBox Grid.Column="1" Width="140" SelectedIndex="0" VerticalAlignment="Center">
+              <ComboBoxItem Content="{DynamicResource Navigation_Monitor_AllDevices}" />
+            </ComboBox>
+            <Button Grid.Column="2" Classes="chip" VerticalAlignment="Center" Command="{Binding RefreshCommand}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <icons:MaterialIcon Width="16"
+                                    Height="16"
+                                    Foreground="{DynamicResource Edge.Text.Secondary}"
+                                    Kind="Refresh" />
+                <TextBlock Text="{DynamicResource Navigation_Button_Query}" />
+              </StackPanel>
+            </Button>
+          </Grid>
+
+          <DataGrid Grid.Row="1"
+                    ItemsSource="{Binding Devices}"
+                    AutoGenerateColumns="False"
+                    IsReadOnly="True">
+            <DataGrid.Columns>
+              <DataGridTextColumn Width="1.5*" Binding="{Binding DeviceName}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_DeviceName" />
+              <DataGridTextColumn Width="*" Binding="{Binding StepSummary}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Process" />
+              <DataGridTextColumn Width="90" Binding="{Binding TotalAll}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Total" />
+              <DataGridTextColumn Width="90" Binding="{Binding OkAll}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Ok" />
+              <DataGridTextColumn Width="90" Binding="{Binding NgAll}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Ng" />
+              <DataGridTextColumn Width="90" Binding="{Binding YieldAll}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Yield" />
+              <DataGridTextColumn Width="180" Binding="{Binding CloudSyncStatus}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Monitor_ColumnCloud" />
+              <DataGridTextColumn Width="160" Binding="{Binding MesSyncStatus}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Monitor_ColumnMes" />
+            </DataGrid.Columns>
+          </DataGrid>
+        </Grid>
+      </Border>
     </Grid>
   </Border>
 </UserControl>

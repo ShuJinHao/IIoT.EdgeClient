@@ -187,4 +187,78 @@ public sealed class ArchitectureBoundaryContractTests
 
         Assert.Empty(offenders);
     }
+
+    [Fact]
+    public void StartupDiagnostics_ShouldNotUseStaticBusinessCollaborators()
+    {
+        var repoRoot = ContractTestPathHelper.FindRepoRoot();
+        var bootstrapRoot = Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.Host.Bootstrap");
+        var offenders = Directory
+            .EnumerateFiles(bootstrapRoot, "StartupDiagnostics*.cs", SearchOption.TopDirectoryOnly)
+            .Select(path => new
+            {
+                Path = Path.GetRelativePath(repoRoot, path),
+                Text = File.ReadAllText(path)
+            })
+            .Where(file => file.Text.Contains("static class", StringComparison.Ordinal))
+            .Select(file => file.Path)
+            .ToArray();
+
+        Assert.Empty(offenders);
+    }
+
+    [Fact]
+    public void HomogenizationWireDtosAndPayloadModels_ShouldStayInSeparatedFolders()
+    {
+        var repoRoot = ContractTestPathHelper.FindRepoRoot();
+        var moduleRoot = Path.Combine(repoRoot, "src", "Modules", "IIoT.Edge.Module.Homogenization");
+        var payloadRoot = Path.Combine(moduleRoot, "Payload");
+
+        Assert.False(
+            File.Exists(Path.Combine(moduleRoot, "Integration", "Cloud", "HomogenizationCloudPayloadDtos.cs")),
+            "Cloud wire DTOs must live under Integration/Dtos.");
+        Assert.True(File.Exists(Path.Combine(moduleRoot, "Integration", "Dtos", "HomogenizationCloudPayloadDtos.cs")));
+        Assert.False(Directory.Exists(Path.Combine(moduleRoot, "Integration", "Dtos", "Cloud")));
+        Assert.False(Directory.Exists(Path.Combine(moduleRoot, "Integration", "Dtos", "Mes")));
+        Assert.False(Directory.Exists(Path.Combine(payloadRoot, "Entities")));
+        Assert.False(Directory.Exists(Path.Combine(payloadRoot, "Snapshots")));
+        Assert.False(Directory.Exists(Path.Combine(payloadRoot, "Validation")));
+        Assert.True(File.Exists(Path.Combine(payloadRoot, "HomogenizationCellData.cs")));
+        Assert.True(File.Exists(Path.Combine(payloadRoot, "HomogenizationCellDataValidator.cs")));
+        Assert.True(File.Exists(Path.Combine(payloadRoot, "HomogenizationEquipmentStatusSnapshot.cs")));
+        Assert.True(File.Exists(Path.Combine(payloadRoot, "HomogenizationRealtimeSnapshot.cs")));
+        Assert.True(File.Exists(Path.Combine(payloadRoot, "HomogenizationRecipeSnapshot.cs")));
+
+        var payloadDtoReferences = Directory
+            .EnumerateFiles(payloadRoot, "*.cs", SearchOption.AllDirectories)
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            .Select(path => new
+            {
+                Path = Path.GetRelativePath(repoRoot, path),
+                Text = File.ReadAllText(path)
+            })
+            .Where(file => file.Text.Contains("Integration.Dtos", StringComparison.Ordinal))
+            .Select(file => file.Path)
+            .ToArray();
+
+        Assert.Empty(payloadDtoReferences);
+    }
+
+    [Fact]
+    public void HomogenizationConfiguration_ShouldUseWpfStyleSingleConfigurationFile()
+    {
+        var repoRoot = ContractTestPathHelper.FindRepoRoot();
+        var configRoot = Path.Combine(repoRoot, "src", "Modules", "IIoT.Edge.Module.Homogenization", "Config");
+
+        Assert.True(File.Exists(Path.Combine(configRoot, "HomogenizationModuleConfiguration.cs")));
+        Assert.True(File.Exists(Path.Combine(configRoot, "homogenization.module.json")));
+        Assert.True(File.Exists(Path.Combine(configRoot, "README.md")));
+        Assert.True(Directory.Exists(Path.Combine(configRoot, "Hardware")));
+        Assert.True(Directory.Exists(Path.Combine(configRoot, "Parameters")));
+        Assert.False(File.Exists(Path.Combine(configRoot, "HomogenizationMesOptions.cs")));
+        Assert.False(File.Exists(Path.Combine(configRoot, "HomogenizationCodeOptions.cs")));
+        Assert.False(File.Exists(Path.Combine(configRoot, "HomogenizationOptionsValidators.cs")));
+        Assert.False(File.Exists(Path.Combine(repoRoot, "src", "Modules", "IIoT.Edge.Module.Homogenization", "HomogenizationModuleBase.cs")));
+    }
 }

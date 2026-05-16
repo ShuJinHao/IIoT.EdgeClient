@@ -1,4 +1,6 @@
 using System.Text;
+using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using Xunit;
 
 namespace IIoT.Edge.AvaloniaShell.Tests;
@@ -8,49 +10,46 @@ public sealed class ResourceEncodingHygieneTests
     private static readonly string[] CommonMojibakeFragments =
     [
         "\uFFFD",
-        "锟",
         "Ã",
         "Â",
+        "锟",
         "閿",
-        "鐢熶骇",
-        "杩愯",
-        "妯″",
-        "娴",
-        "榛"
+        "闁",
+        "鏉",
+        "濡"
     ];
 
     [Fact]
-    public void NavigationAvaloniaZhCnResources_ShouldUseReadableChineseText()
+    public void Unified_xaml_resources_should_use_readable_chinese_text()
     {
         var root = FindRepositoryRoot();
-        var resourceText = File.ReadAllText(GetNavigationResourcePath(root), Encoding.UTF8);
 
-        Assert.Contains("[\"Navigation_Menu_Data\"] = \"生产数据\"", resourceText);
-        Assert.Contains("[\"Navigation_Menu_Io\"] = \"I/O 交互\"", resourceText);
-        Assert.Contains("[\"Navigation_Menu_CoreDiagnostics\"] = \"系统诊断\"", resourceText);
-        Assert.Contains("[\"Navigation_Button_AddInteraction\"] = \"新增交互点\"", resourceText);
-        Assert.Contains("[\"Navigation_Io_NoSignals\"] = \"当前设备没有可显示的 I/O 点位。\"", resourceText);
-        Assert.Contains("[\"Navigation_Io_RuntimeNotStarted\"] = \"运行链路未启动，无法读取运行时快照。\"", resourceText);
-        Assert.DoesNotContain("Demo", resourceText, StringComparison.OrdinalIgnoreCase);
-        Assert.False(ContainsMojibake(resourceText));
+        Assert.Contains(
+            "<sys:String x:Key=\"Shell_Login\">登录</sys:String>",
+            File.ReadAllText(GetLanguagePath(root, "Presentation", "IIoT.Edge.Presentation.Shell.Avalonia", "zh-CN"), Encoding.UTF8));
+        Assert.Contains(
+            "<sys:String x:Key=\"Navigation_Menu_Data\">生产数据</sys:String>",
+            File.ReadAllText(GetLanguagePath(root, "Presentation", "IIoT.Edge.Presentation.Navigation.Avalonia", "zh-CN"), Encoding.UTF8));
+        Assert.Contains(
+            "<sys:String x:Key=\"Navigation_Menu_Io\">I/O 交互</sys:String>",
+            File.ReadAllText(GetLanguagePath(root, "Presentation", "IIoT.Edge.Presentation.Navigation.Avalonia", "zh-CN"), Encoding.UTF8));
+        Assert.Contains(
+            "<sys:String x:Key=\"Homogenization_Title_Data\">匀浆出料数据</sys:String>",
+            File.ReadAllText(GetLanguagePath(root, "Modules", "IIoT.Edge.Module.Homogenization", "zh-CN"), Encoding.UTF8));
+        Assert.Contains(
+            "<sys:String x:Key=\"Panels_Tab_HardwareStatus\">硬件状态</sys:String>",
+            File.ReadAllText(GetLanguagePath(root, "Presentation", "IIoT.Edge.Presentation.Panels.Avalonia", "zh-CN"), Encoding.UTF8));
     }
 
     [Fact]
-    public void AvaloniaMigrationTextAssets_ShouldNotContainCommonMojibakeFragments()
+    public void AvaloniaMigration_text_assets_should_not_contain_common_mojibake_fragments()
     {
         var root = FindRepositoryRoot();
         var files = GetTextAssetPaths(root).ToArray();
-        var missingFiles = files
-            .Where(path => !File.Exists(path))
-            .Select(path => ToRepositoryPath(root, path))
-            .ToArray();
         var findings = new List<string>();
 
-        Assert.Empty(missingFiles);
-        Assert.Contains(files, path => Path.GetFileName(path) == "NavigationAvaloniaResources.cs");
-        Assert.Contains(files, path => Path.GetFileName(path) == "HomogenizationAvaloniaResources.cs");
-        Assert.Contains(files, path => Path.GetFileName(path) == "launcher.profiles.json");
-        Assert.Contains(files, path => Path.GetFileName(path) == "launcher.accounts.sample.json");
+        Assert.NotEmpty(files);
+        Assert.All(files, path => Assert.True(File.Exists(path), ToRepositoryPath(root, path)));
 
         foreach (var file in files)
         {
@@ -68,13 +67,130 @@ public sealed class ResourceEncodingHygieneTests
         Assert.Empty(findings);
     }
 
-    private static bool ContainsMojibake(string value)
-        => CommonMojibakeFragments.Any(fragment => value.Contains(fragment, StringComparison.Ordinal));
+    [Fact]
+    public void Avalonia_resources_should_use_xaml_language_dictionaries_instead_of_code_tables()
+    {
+        var root = FindRepositoryRoot();
+        var codeTables = Directory
+            .EnumerateFiles(Path.Combine(root, "src"), "*AvaloniaResources.cs", SearchOption.AllDirectories)
+            .Where(static path => !IsGeneratedPath(path))
+            .Select(path => ToRepositoryPath(root, path))
+            .ToArray();
+
+        Assert.Empty(codeTables);
+        Assert.True(File.Exists(GetLanguagePath(root, "Edge", "IIoT.Edge.AvaloniaShell", "zh-CN")));
+        Assert.True(File.Exists(GetLanguagePath(root, "Presentation", "IIoT.Edge.Presentation.Shell.Avalonia", "zh-CN")));
+        Assert.True(File.Exists(GetLanguagePath(root, "Presentation", "IIoT.Edge.Presentation.Navigation.Avalonia", "zh-CN")));
+        Assert.True(File.Exists(GetLanguagePath(root, "Presentation", "IIoT.Edge.Presentation.Panels.Avalonia", "zh-CN")));
+        Assert.True(File.Exists(GetLanguagePath(root, "Modules", "IIoT.Edge.Module.Homogenization", "zh-CN")));
+    }
+
+    [Fact]
+    public void Avalonia_theme_resources_should_be_present_and_wired_from_app_xaml()
+    {
+        var root = FindRepositoryRoot();
+        var sharedThemeRoot = Path.Combine(root, "src", "Shared", "IIoT.Edge.UI.Avalonia", "Themes");
+        var launcherThemeRoot = Path.Combine(root, "src", "Edge", "IIoT.Edge.Launcher.Avalonia", "Themes");
+
+        Assert.True(File.Exists(Path.Combine(sharedThemeRoot, "IndustrialTheme.axaml")));
+        Assert.True(File.Exists(Path.Combine(sharedThemeRoot, "AppTypography.axaml")));
+        Assert.True(File.Exists(Path.Combine(launcherThemeRoot, "LauncherTheme.axaml")));
+
+        var shellApp = File.ReadAllText(Path.Combine(root, "src", "Edge", "IIoT.Edge.AvaloniaShell", "App.axaml"), Encoding.UTF8);
+        var launcherApp = File.ReadAllText(Path.Combine(root, "src", "Edge", "IIoT.Edge.Launcher.Avalonia", "App.axaml"), Encoding.UTF8);
+
+        Assert.DoesNotContain("RequestedThemeVariant", shellApp, StringComparison.Ordinal);
+        Assert.DoesNotContain("RequestedThemeVariant", launcherApp, StringComparison.Ordinal);
+        Assert.Contains("IndustrialTheme.axaml", shellApp, StringComparison.Ordinal);
+        Assert.Contains("AppTypography.axaml", shellApp, StringComparison.Ordinal);
+        Assert.Contains("LauncherTheme.axaml", launcherApp, StringComparison.Ordinal);
+        Assert.Contains("AppTypography.axaml", launcherApp, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Avalonia_fonts_should_come_from_xaml_resources()
+    {
+        var root = FindRepositoryRoot();
+        var typography = File.ReadAllText(
+            Path.Combine(root, "src", "Shared", "IIoT.Edge.UI.Avalonia", "Themes", "AppTypography.axaml"),
+            Encoding.UTF8);
+        var shellProgram = File.ReadAllText(Path.Combine(root, "src", "Edge", "IIoT.Edge.AvaloniaShell", "Program.cs"), Encoding.UTF8);
+        var launcherProgram = File.ReadAllText(Path.Combine(root, "src", "Edge", "IIoT.Edge.Launcher.Avalonia", "Program.cs"), Encoding.UTF8);
+
+        Assert.Contains("App.FontFamily.Default", typography, StringComparison.Ordinal);
+        Assert.DoesNotContain("WithInterFont", shellProgram, StringComparison.Ordinal);
+        Assert.DoesNotContain("WithInterFont", launcherProgram, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Production_ui_sources_should_not_inline_hex_colors()
+    {
+        var root = FindRepositoryRoot();
+        var findings = GetProductionSourceFiles(root)
+            .Where(static path => !IsResourceDefinitionPath(path))
+            .Select(path => new
+            {
+                Path = ToRepositoryPath(root, path),
+                Matches = Regex.Matches(
+                        File.ReadAllText(path, Encoding.UTF8),
+                        @"#[0-9A-Fa-f]{6,8}")
+                    .Select(match => match.Value)
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray()
+            })
+            .Where(item => item.Matches.Length > 0)
+            .Select(item => $"{item.Path}: {string.Join(", ", item.Matches)}")
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Empty(findings);
+    }
+
+    [Fact]
+    public void Xaml_language_dictionaries_should_have_matching_zh_and_en_keys()
+    {
+        var root = FindRepositoryRoot();
+        foreach (var directory in Directory.EnumerateDirectories(Path.Combine(root, "src"), "Resources", SearchOption.AllDirectories)
+                     .Select(path => Path.Combine(path, "Languages"))
+                     .Where(Directory.Exists))
+        {
+            var zh = ReadKeys(Path.Combine(directory, "zh-CN.xaml"));
+            var en = ReadKeys(Path.Combine(directory, "en-US.xaml"));
+
+            Assert.NotEmpty(zh);
+            Assert.Equal(zh.Order(), en.Order());
+        }
+    }
+
+    [Fact]
+    public void Avalonia_resource_references_should_resolve_from_unified_xaml_dictionaries()
+    {
+        var root = FindRepositoryRoot();
+        var resourceKeys = GetXamlResourceDefinitionFiles(root)
+            .Where(static path => !IsGeneratedPath(path))
+            .SelectMany(ReadKeys)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var unresolved = GetProductionSourceFiles(root)
+            .SelectMany(path => FindResourceReferences(File.ReadAllText(path, Encoding.UTF8))
+                .Select(key => new
+                {
+                    Key = key,
+                    Path = ToRepositoryPath(root, path)
+                }))
+            .Where(item => !resourceKeys.Contains(item.Key))
+            .Select(item => $"{item.Path}: {item.Key}")
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Empty(unresolved);
+    }
 
     private static IEnumerable<string> GetTextAssetPaths(string root)
     {
         foreach (var path in Directory
-                     .EnumerateFiles(Path.Combine(root, "src"), "*AvaloniaResources.cs", SearchOption.AllDirectories)
+                     .EnumerateFiles(Path.Combine(root, "src"), "*.xaml", SearchOption.AllDirectories)
                      .Where(static path => !IsGeneratedPath(path))
                      .Order(StringComparer.Ordinal))
         {
@@ -92,6 +208,75 @@ public sealed class ResourceEncodingHygieneTests
         {
             yield return path;
         }
+    }
+
+    private static IReadOnlyList<string> ReadKeys(string path)
+    {
+        Assert.True(File.Exists(path), path);
+        XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
+        return XDocument.Load(path)
+            .Descendants()
+            .Select(element => element.Attribute(xaml + "Key")?.Value)
+            .Where(static key => !string.IsNullOrWhiteSpace(key))
+            .Select(static key => key!)
+            .ToArray();
+    }
+
+    private static IEnumerable<string> GetXamlResourceDefinitionFiles(string root)
+    {
+        foreach (var path in Directory
+                     .EnumerateFiles(Path.Combine(root, "src"), "*.xaml", SearchOption.AllDirectories)
+                     .Where(IsResourceDefinitionPath))
+        {
+            yield return path;
+        }
+
+        foreach (var path in Directory
+                     .EnumerateFiles(Path.Combine(root, "src"), "*.axaml", SearchOption.AllDirectories)
+                     .Where(IsResourceDefinitionPath))
+        {
+            yield return path;
+        }
+    }
+
+    private static IEnumerable<string> GetProductionSourceFiles(string root)
+        => Directory
+            .EnumerateFiles(Path.Combine(root, "src"), "*.*", SearchOption.AllDirectories)
+            .Where(static path => path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
+                                  || path.EndsWith(".xaml", StringComparison.OrdinalIgnoreCase)
+                                  || path.EndsWith(".axaml", StringComparison.OrdinalIgnoreCase))
+            .Where(static path => !IsGeneratedPath(path))
+            .Where(static path => !path.Contains($"{Path.DirectorySeparatorChar}Tests{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase));
+
+    private static IEnumerable<string> FindResourceReferences(string text)
+    {
+        foreach (Match match in Regex.Matches(text, @"DynamicResource\s+([A-Za-z0-9_.]+)"))
+        {
+            yield return match.Groups[1].Value;
+        }
+
+        foreach (Match match in Regex.Matches(text, @"GetText\(\s*""([A-Za-z0-9_]+)"""))
+        {
+            yield return match.Groups[1].Value;
+        }
+
+        foreach (Match match in Regex.Matches(text, @"HomogenizationText\.(?:Get|Format)\(\s*""([A-Za-z0-9_]+)"""))
+        {
+            yield return match.Groups[1].Value;
+        }
+    }
+
+    private static string GetLanguagePath(string root, string area, string projectName, string culture)
+    {
+        var projectRoot = area switch
+        {
+            "Edge" => Path.Combine(root, "src", "Edge", projectName),
+            "Presentation" => Path.Combine(root, "src", "Presentation", projectName),
+            "Modules" => Path.Combine(root, "src", "Modules", projectName),
+            _ => throw new ArgumentOutOfRangeException(nameof(area), area, null)
+        };
+
+        return Path.Combine(projectRoot, "Resources", "Languages", $"{culture}.xaml");
     }
 
     private static string FindRepositoryRoot()
@@ -119,14 +304,9 @@ public sealed class ResourceEncodingHygieneTests
     private static string ToCodePoints(string value)
         => string.Join(" ", value.Select(character => $"U+{(int)character:X4}"));
 
-    private static string GetNavigationResourcePath(string root)
-        => Path.Combine(
-            root,
-            "src",
-            "Presentation",
-            "IIoT.Edge.Presentation.Navigation.Avalonia",
-            "Localization",
-            "NavigationAvaloniaResources.cs");
+    private static bool IsResourceDefinitionPath(string path)
+        => path.Contains($"{Path.DirectorySeparatorChar}Resources{Path.DirectorySeparatorChar}Languages{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase)
+           || path.Contains($"{Path.DirectorySeparatorChar}Themes{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsGeneratedPath(string path)
     {

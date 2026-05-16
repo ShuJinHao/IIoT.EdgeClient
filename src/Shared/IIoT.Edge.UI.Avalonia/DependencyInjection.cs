@@ -1,4 +1,5 @@
 using IIoT.Edge.UI.Avalonia.Modularity;
+using IIoT.Edge.UI.Avalonia.Localization;
 using IIoT.Edge.UI.Avalonia.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -15,6 +16,8 @@ public static class DependencyInjection
         services.TryAddSingleton<IAvaloniaDialogService, AvaloniaDialogService>();
         services.TryAddSingleton<IAvaloniaTimerFactory, AvaloniaTimerFactory>();
         services.TryAddSingleton<IAvaloniaWindowService, AvaloniaWindowService>();
+        services.TryAddSingleton<IAvaloniaThemeService, AvaloniaThemeService>();
+        services.TryAddSingleton<IAvaloniaXamlStringResourceLoader, AvaloniaXamlStringResourceLoader>();
         services.TryAddSingleton<IAvaloniaRuntimeState, AvaloniaRuntimeState>();
         services.TryAddSingleton<IAvaloniaCsvExportService, AvaloniaCsvExportService>();
         services.TryAddSingleton<IAvaloniaDataExportService, AvaloniaDataExportService>();

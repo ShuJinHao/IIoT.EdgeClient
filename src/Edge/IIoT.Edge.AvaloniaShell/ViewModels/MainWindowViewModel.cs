@@ -3,11 +3,14 @@ using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Core;
 using Dock.Model.Mvvm;
 using Dock.Model.Mvvm.Controls;
+using IIoT.Edge.Application.Abstractions.Auth;
+using IIoT.Edge.Presentation.Shell.Avalonia.Features.SysMenu.ViewModels;
 using IIoT.Edge.Presentation.Shell.Avalonia.ViewModels;
 using IIoT.Edge.UI.Avalonia.Docking;
 using IIoT.Edge.UI.Avalonia.Localization;
 using IIoT.Edge.UI.Avalonia.Modularity;
 using IIoT.Edge.UI.Avalonia.Services;
+using System.Collections.ObjectModel;
 
 namespace IIoT.Edge.AvaloniaShell.ViewModels;
 
@@ -16,36 +19,43 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private readonly IServiceProvider _services;
     private readonly IAvaloniaLanguageService _languageService;
     private readonly IAvaloniaViewRegistry _viewRegistry;
-    private readonly IAvaloniaNavigationService _navigationService;
     private readonly IAvaloniaDialogService _dialogService;
+    private readonly IAvaloniaDispatcherService _dispatcherService;
+    private readonly IAuthService _authService;
     private readonly Dictionary<string, string> _dockTitleKeys = new(StringComparer.OrdinalIgnoreCase);
 
     public MainWindowViewModel(
         IServiceProvider services,
         IAvaloniaLanguageService languageService,
         IAvaloniaViewRegistry viewRegistry,
-        IAvaloniaNavigationService navigationService,
         IAvaloniaDialogService dialogService,
+        IAvaloniaDispatcherService dispatcherService,
+        IAuthService authService,
         HeaderViewModel headerViewModel,
         FooterViewModel footerViewModel,
-        LoginViewModel loginViewModel)
+        LoginViewModel loginViewModel,
+        SysMenuViewModel sysMenuViewModel)
     {
         _services = services;
         _languageService = languageService;
         _viewRegistry = viewRegistry;
-        _navigationService = navigationService;
         _dialogService = dialogService;
+        _dispatcherService = dispatcherService;
+        _authService = authService;
         HeaderViewModel = headerViewModel;
         FooterViewModel = footerViewModel;
         LoginViewModel = loginViewModel;
+        SysMenuViewModel = sysMenuViewModel;
         LoginViewModel.LoginSucceeded += () => IsDialogOpen = false;
+        SysMenuViewModel.LoginRequested += () => IsDialogOpen = true;
+        SysMenuViewModel.NavigationRequested += OnSysMenuNavigationRequested;
         _dialogService.DialogRequested += OnDialogRequested;
+        _authService.AuthStateChanged += _ => _dispatcherService.Post(RefreshAuthState);
 
         DockFactory = new Factory();
         DockLayout = CreateDockLayout();
-        MenuItems = _viewRegistry.GetAllMenus()
-            .Select(item => new ShellMenuItemViewModel(item.ViewId, _languageService.GetText(item.TitleResourceKey), Navigate))
-            .ToArray();
+        MenuItems = SysMenuViewModel.MenuItems;
+        SelectMenuItem(DockLayout.ActiveDockable?.Id);
 
         CultureName = _languageService.CultureName;
         LanguageToggleText = _languageService.ToggleLabel;
@@ -55,13 +65,17 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public RootDock DockLayout { get; }
 
-    public IReadOnlyList<ShellMenuItemViewModel> MenuItems { get; }
+    public ObservableCollection<AvaloniaDockable> RightToolDockables { get; } = [];
+
+    public IReadOnlyList<SysMenuItemViewModel> MenuItems { get; }
 
     public HeaderViewModel HeaderViewModel { get; }
 
     public FooterViewModel FooterViewModel { get; }
 
     public LoginViewModel LoginViewModel { get; }
+
+    public SysMenuViewModel SysMenuViewModel { get; }
 
     [ObservableProperty]
     private string cultureName;
@@ -76,12 +90,23 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private bool isSystemDialogOpen;
 
     [ObservableProperty]
+    private AvaloniaDockable? activeRightToolDockable;
+
+    [ObservableProperty]
+    private AvaloniaDockable? equipmentToolDockable;
+
+    [ObservableProperty]
+    private AvaloniaDockable? logToolDockable;
+
+    [ObservableProperty]
     private AvaloniaDialogRequest? systemDialogRequest;
 
     public bool IsSystemDialogConfirm => SystemDialogRequest?.Kind == AvaloniaDialogRequestKind.Confirm;
 
     public string SystemDialogPrimaryActionText
         => _languageService.GetText(IsSystemDialogConfirm ? "Shell_Action_Confirm" : "Shell_Action_Ok");
+
+    public string LoginButtonText => SysMenuViewModel.LoginButtonText;
 
     partial void OnSystemDialogRequestChanged(AvaloniaDialogRequest? value)
     {
@@ -97,12 +122,16 @@ public sealed partial class MainWindowViewModel : ObservableObject
         LanguageToggleText = _languageService.ToggleLabel;
         LocalizedDataGrid.RefreshHeaders();
         RefreshDockTitles();
-        RefreshMenuTitles();
+        SysMenuViewModel.RefreshLocalization();
         OnPropertyChanged(nameof(SystemDialogPrimaryActionText));
+        OnPropertyChanged(nameof(LoginButtonText));
     }
 
     [RelayCommand]
-    private void OpenLogin() => IsDialogOpen = true;
+    private void OpenLogin()
+    {
+        SysMenuViewModel.ExecuteLoginAction();
+    }
 
     [RelayCommand]
     private void CloseDialog() => IsDialogOpen = false;
@@ -159,23 +188,28 @@ public sealed partial class MainWindowViewModel : ObservableObject
             CanCloseLastDockable = false
         };
 
-        var tools = new ToolDock
+        RightToolDockables.Clear();
+        foreach (var dockable in toolDockables
+            .OrderBy(static item => string.Equals(item.Id, "Core.SysLog", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            .ThenBy(static item => item.Title, StringComparer.CurrentCulture))
         {
-            Id = "right-tools",
-            Title = "Tools",
-            Alignment = Alignment.Right,
-            Proportion = 0.28,
-            VisibleDockables = toolDockables,
-            ActiveDockable = toolDockables.FirstOrDefault(),
-            IsExpanded = true
-        };
+            RightToolDockables.Add((AvaloniaDockable)dockable);
+        }
+
+        ActiveRightToolDockable = RightToolDockables.FirstOrDefault(static item =>
+                string.Equals(item.Id, "Core.SysLog", StringComparison.OrdinalIgnoreCase))
+            ?? RightToolDockables.FirstOrDefault();
+        EquipmentToolDockable = RightToolDockables.FirstOrDefault(static item =>
+            string.Equals(item.Id, "Core.Equipment", StringComparison.OrdinalIgnoreCase));
+        LogToolDockable = RightToolDockables.FirstOrDefault(static item =>
+            string.Equals(item.Id, "Core.SysLog", StringComparison.OrdinalIgnoreCase));
 
         var mainDock = new ProportionalDock
         {
             Id = "main-dock",
             Title = "Main",
             Orientation = Orientation.Horizontal,
-            VisibleDockables = [documents, new ProportionalDockSplitter(), tools],
+            VisibleDockables = [documents],
             ActiveDockable = documents
         };
 
@@ -202,20 +236,39 @@ public sealed partial class MainWindowViewModel : ObservableObject
         var dockable = new AvaloniaDockable(pane.ViewId, _languageService.GetText(pane.TitleResourceKey), view)
         {
             DockGroup = pane.DockGroup,
-            CanPin = pane.IsToolPane,
-            CanFloat = true,
+            CanPin = false,
+            CanFloat = false,
             CanClose = false,
-            MinWidth = pane.IsToolPane ? 260 : 0
+            MinWidth = pane.IsToolPane ? 320 : 0
         };
 
         _dockTitleKeys[pane.ViewId] = pane.TitleResourceKey;
         return dockable;
     }
 
-    private void Navigate(string viewId)
+    private void OnSysMenuNavigationRequested(string viewId)
     {
-        _navigationService.NavigateTo(viewId);
+        if (ActivateRightTool(viewId))
+        {
+            SelectMenuItem(viewId);
+            return;
+        }
+
         ActivateDockable(DockLayout, viewId);
+        SelectMenuItem(viewId);
+    }
+
+    private bool ActivateRightTool(string viewId)
+    {
+        var tool = RightToolDockables.FirstOrDefault(item =>
+            string.Equals(item.Id, viewId, StringComparison.OrdinalIgnoreCase));
+        if (tool is null)
+        {
+            return false;
+        }
+
+        ActiveRightToolDockable = tool;
+        return true;
     }
 
     private static bool ActivateDockable(IDockable dockable, string id)
@@ -246,20 +299,23 @@ public sealed partial class MainWindowViewModel : ObservableObject
         foreach (var pair in _dockTitleKeys)
         {
             RefreshTitle(DockLayout, pair.Key, pair.Value);
-        }
-    }
-
-    private void RefreshMenuTitles()
-    {
-        foreach (var menu in MenuItems)
-        {
-            var info = _viewRegistry.GetAllMenus().FirstOrDefault(item => item.ViewId == menu.ViewId);
-            if (info is not null)
+            var tool = RightToolDockables.FirstOrDefault(item =>
+                string.Equals(item.Id, pair.Key, StringComparison.OrdinalIgnoreCase));
+            if (tool is not null)
             {
-                menu.Title = _languageService.GetText(info.TitleResourceKey);
+                tool.Title = _languageService.GetText(pair.Value);
             }
         }
     }
+
+    private void RefreshAuthState()
+    {
+        OnPropertyChanged(nameof(LoginButtonText));
+        SysMenuViewModel.RefreshAuthState();
+    }
+
+    private void SelectMenuItem(string? viewId)
+        => SysMenuViewModel.SelectMenuItem(viewId);
 
     private void RefreshTitle(IDockable dockable, string id, string titleKey)
     {
