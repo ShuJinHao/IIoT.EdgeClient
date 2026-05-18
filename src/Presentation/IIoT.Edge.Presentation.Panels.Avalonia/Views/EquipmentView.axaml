@@ -2,61 +2,102 @@
     x:Class="IIoT.Edge.Presentation.Panels.Avalonia.Views.EquipmentView"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-  <Border Background="Transparent" Padding="0,0,0,0">
+  <Border Background="Transparent" Padding="0">
     <Border Classes="edge-right-panel chromeless">
-      <Grid RowDefinitions="Auto,*" RowSpacing="14">
-        <Grid ColumnDefinitions="*,Auto">
-          <TextBlock Classes="section-title"
-                     VerticalAlignment="Center"
-                     Text="{DynamicResource Panels_Title_DeviceStatus}" />
-          <Border Grid.Column="1"
-                  Classes="edge-chip success"
-                  VerticalAlignment="Center">
-            <TextBlock FontSize="12"
-                       Foreground="{DynamicResource Edge.Accent.LimeDark}"
-                       Text="{DynamicResource Panels_Status_ReadOnly}" />
-          </Border>
-        </Grid>
+      <Grid RowDefinitions="Auto,*,Auto" RowSpacing="10">
+        <TextBlock Classes="section-title"
+                   VerticalAlignment="Center"
+                   Text="{DynamicResource Panels_Title_DeviceStatus}" />
 
-        <ScrollViewer Grid.Row="1"
-                      VerticalScrollBarVisibility="Auto">
-          <StackPanel Spacing="10">
-            <ItemsControl ItemsSource="{Binding Items}">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                  <Border Classes="edge-status-card compact" Margin="0,0,0,10">
-                    <Grid ColumnDefinitions="34,*,Auto" ColumnSpacing="10">
-                      <Border Width="30" Height="30" CornerRadius="15" Background="{DynamicResource Edge.Status.SuccessSoft}">
-                        <Border Classes="edge-dot" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                      </Border>
-                      <StackPanel Grid.Column="1" Spacing="2">
-                        <TextBlock FontSize="14"
-                                   FontWeight="SemiBold"
-                                   Foreground="{DynamicResource Edge.Text.Primary}"
-                                   Text="{Binding Name}"
-                                   TextTrimming="CharacterEllipsis" />
-                        <TextBlock FontSize="12"
-                                   Foreground="{DynamicResource Edge.Text.Muted}"
-                                   MaxHeight="38"
-                                   Text="{Binding LastValue}"
-                                   TextWrapping="Wrap" />
-                      </StackPanel>
-                      <Border Grid.Column="2"
-                              Classes="edge-chip success"
-                              MaxWidth="86"
-                              VerticalAlignment="Top">
-                        <TextBlock FontSize="12"
-                                   Foreground="{DynamicResource Edge.Accent.LimeDark}"
-                                   Text="{Binding State}"
-                                   TextTrimming="CharacterEllipsis" />
-                      </Border>
-                    </Grid>
+        <ItemsControl x:Name="EquipmentPagedItems"
+                      Grid.Row="1"
+                      ItemsSource="{Binding PagedItems}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Border Classes="edge-status-card paged" Margin="0,0,0,10">
+                <Grid RowDefinitions="Auto,*"
+                      ColumnDefinitions="40,*,96"
+                      RowSpacing="8"
+                      ColumnSpacing="10">
+                  <Border Classes="edge-status-icon"
+                          Classes.success="{Binding IsStateSuccess}"
+                          Classes.warning="{Binding IsStateWarning}"
+                          Classes.error="{Binding IsStateError}">
+                    <Border Classes="edge-dot"
+                            Classes.success="{Binding IsStateSuccess}"
+                            Classes.warning="{Binding IsStateWarning}"
+                            Classes.error="{Binding IsStateError}"
+                            Classes.muted="{Binding IsStateMuted}"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center" />
                   </Border>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-          </StackPanel>
-        </ScrollViewer>
+
+                  <StackPanel Grid.Column="1" Spacing="1">
+                    <TextBlock FontSize="13"
+                               Foreground="{DynamicResource Edge.Text.Muted}"
+                               Text="{Binding Group}"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock FontSize="15"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource Edge.Text.Primary}"
+                               Text="{Binding Name}"
+                               TextTrimming="CharacterEllipsis" />
+                  </StackPanel>
+
+                  <Border Grid.Column="2"
+                          Classes="edge-status-pill"
+                          Classes.success="{Binding IsStateSuccess}"
+                          Classes.warning="{Binding IsStateWarning}"
+                          Classes.error="{Binding IsStateError}"
+                          Width="96"
+                          VerticalAlignment="Top">
+                    <TextBlock FontSize="12"
+                               HorizontalAlignment="Center"
+                               Foreground="{DynamicResource Edge.Text.Secondary}"
+                               Text="{Binding StateDisplayText}"
+                               TextTrimming="CharacterEllipsis" />
+                  </Border>
+
+                  <TextBlock Grid.Row="1"
+                             Grid.Column="1"
+                             Grid.ColumnSpan="2"
+                             FontSize="12"
+                             Foreground="{DynamicResource Edge.Text.Muted}"
+                             MaxHeight="42"
+                             Text="{Binding LastValue}"
+                             TextWrapping="Wrap" />
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <Grid x:Name="EquipmentPager"
+              Grid.Row="2"
+              ColumnDefinitions="Auto,*,Auto"
+              Margin="0,0,0,2">
+          <Button x:Name="EquipmentPreviousPageButton"
+                  Classes="chip"
+                  MinWidth="36"
+                  MinHeight="30"
+                  Content="‹"
+                  Command="{Binding PreviousPageCommand}"
+                  IsEnabled="{Binding CanGoPrevious}" />
+          <TextBlock Grid.Column="1"
+                     HorizontalAlignment="Center"
+                     VerticalAlignment="Center"
+                     FontSize="12"
+                     Foreground="{DynamicResource Edge.Text.Muted}"
+                     Text="{Binding PageText}" />
+          <Button x:Name="EquipmentNextPageButton"
+                  Grid.Column="2"
+                  Classes="chip"
+                  MinWidth="36"
+                  MinHeight="30"
+                  Content="›"
+                  Command="{Binding NextPageCommand}"
+                  IsEnabled="{Binding CanGoNext}" />
+        </Grid>
       </Grid>
     </Border>
   </Border>

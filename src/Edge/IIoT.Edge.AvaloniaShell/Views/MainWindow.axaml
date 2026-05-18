@@ -100,7 +100,7 @@
         <shellViews:LoginView DataContext="{Binding LoginViewModel}" />
       </dialogHost:DialogHost.DialogContent>
 
-      <Border Classes="edge-shell flush" Margin="0" ClipToBounds="True">
+      <Border x:Name="ShellRoot" Classes="edge-shell flush" Margin="0" ClipToBounds="True">
         <Grid RowDefinitions="72,*,32" ColumnDefinitions="72,*">
           <Border Grid.Row="0"
                   Grid.RowSpan="3"
@@ -155,11 +155,12 @@
                                  Grid.Column="1"
                                  DataContext="{Binding HeaderViewModel}" />
 
-          <Border Grid.Row="1"
+          <Border x:Name="WorkspaceHost"
+                  Grid.Row="1"
                   Grid.Column="1"
                   Classes="edge-workspace-host">
-            <Grid ColumnDefinitions="*,380" ColumnSpacing="14">
-              <Border Classes="edge-document-host">
+            <Grid ColumnDefinitions="*,340" ColumnSpacing="0">
+              <Border x:Name="DocumentHost" Classes="edge-document-host">
                 <dock:DockControl
                     AutoCreateDataTemplates="True"
                     Factory="{Binding DockFactory}"
@@ -169,10 +170,13 @@
                     Layout="{Binding DockLayout}" />
               </Border>
 
-              <Border Grid.Column="1" Classes="edge-tool-shell stacked">
+              <Border x:Name="RightToolShell"
+                      Grid.Column="1"
+                      Classes="edge-tool-shell stacked"
+                      Margin="-4,0,0,0">
                 <Grid RowDefinitions="0.36*,0.64*" RowSpacing="12">
-                  <ContentControl Content="{Binding EquipmentToolDockable.Content}" />
-                  <ContentControl Grid.Row="1" Content="{Binding LogToolDockable.Content}" />
+                  <ContentControl x:Name="EquipmentToolHost" Content="{Binding EquipmentToolDockable.Content}" />
+                  <ContentControl x:Name="LogToolHost" Grid.Row="1" Content="{Binding LogToolDockable.Content}" />
                 </Grid>
               </Border>
             </Grid>

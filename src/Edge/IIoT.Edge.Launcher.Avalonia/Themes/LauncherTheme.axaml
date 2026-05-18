@@ -23,11 +23,24 @@
     <SolidColorBrush x:Key="Launcher.Accent.Pressed" Color="#97C215" />
     <SolidColorBrush x:Key="Launcher.Accent.Soft" Color="#EEF9BD" />
     <SolidColorBrush x:Key="Launcher.Accent.Text" Color="#5C9319" />
+    <SolidColorBrush x:Key="Launcher.Status.Neutral" Color="#7B8491" />
+    <SolidColorBrush x:Key="Launcher.Status.NeutralSoft" Color="#EEF0EA" />
+    <SolidColorBrush x:Key="Launcher.Status.Muted" Color="#AEB5BC" />
+    <SolidColorBrush x:Key="Launcher.Status.MutedSoft" Color="#F4F6F1" />
     <SolidColorBrush x:Key="Launcher.Status.Success" Color="#6BAE1D" />
     <SolidColorBrush x:Key="Launcher.Status.SuccessSoft" Color="#E8F6D6" />
     <SolidColorBrush x:Key="Launcher.Status.Warning" Color="#E7A900" />
     <SolidColorBrush x:Key="Launcher.Status.WarningSoft" Color="#FFF2C7" />
+    <SolidColorBrush x:Key="Launcher.Status.Error" Color="#EF5350" />
     <SolidColorBrush x:Key="Launcher.Status.ErrorSoft" Color="#FFE4E2" />
+    <SolidColorBrush x:Key="Launcher.Status.Running" Color="#6BAE1D" />
+    <SolidColorBrush x:Key="Launcher.Status.RunningSoft" Color="#E8F6D6" />
+    <SolidColorBrush x:Key="Launcher.Status.Stopped" Color="#7B8491" />
+    <SolidColorBrush x:Key="Launcher.Status.StoppedSoft" Color="#EEF0EA" />
+    <SolidColorBrush x:Key="Launcher.Status.Failed" Color="#C62828" />
+    <SolidColorBrush x:Key="Launcher.Status.FailedSoft" Color="#FFE4E2" />
+    <SolidColorBrush x:Key="Launcher.Status.Development" Color="#4D8FEA" />
+    <SolidColorBrush x:Key="Launcher.Status.DevelopmentSoft" Color="#EDF5FF" />
 
     <LinearGradientBrush x:Key="Launcher.WindowGradient" StartPoint="0,0" EndPoint="1,1">
       <GradientStop Color="#EEF0EC" Offset="0" />
@@ -116,6 +129,26 @@
     <Setter Property="CornerRadius" Value="{DynamicResource Radius.Lg}" />
     <Setter Property="Padding" Value="18" />
     <Setter Property="BoxShadow" Value="{DynamicResource Shadow.Subtle}" />
+  </Style>
+
+  <Style Selector="Border.launcher-status-card.running">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Status.RunningSoft}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Status.RunningSoft}" />
+  </Style>
+
+  <Style Selector="Border.launcher-status-card.stopped">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Status.StoppedSoft}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Status.StoppedSoft}" />
+  </Style>
+
+  <Style Selector="Border.launcher-status-card.failed">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Status.FailedSoft}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Status.FailedSoft}" />
+  </Style>
+
+  <Style Selector="Border.launcher-status-card.development">
+    <Setter Property="Background" Value="{DynamicResource Launcher.Status.DevelopmentSoft}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Status.DevelopmentSoft}" />
   </Style>
 
   <Style Selector="Border.launcher-steps-card">

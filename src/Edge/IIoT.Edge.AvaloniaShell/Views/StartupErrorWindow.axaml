@@ -1,36 +1,154 @@
 <Window
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
     x:Class="IIoT.Edge.AvaloniaShell.Views.StartupErrorWindow"
-    Width="640"
-    Height="360"
+    Width="860"
+    Height="520"
+    MinWidth="760"
+    MinHeight="500"
     CanResize="False"
-    WindowStartupLocation="CenterOwner"
+    WindowDecorations="None"
+    WindowStartupLocation="CenterScreen"
+    Background="Transparent"
     Title="{DynamicResource Shell_StartupError_Title}">
-  <Grid RowDefinitions="*,Auto" Margin="24">
-    <StackPanel Spacing="10">
-      <TextBlock Text="{DynamicResource Shell_StartupError_Title}"
-                 FontSize="20"
-                 FontWeight="SemiBold" />
-      <TextBlock Text="{DynamicResource Shell_StartupError_Details}" FontWeight="SemiBold" />
-      <TextBox Text="{Binding Message}"
-               AcceptsReturn="True"
-               IsReadOnly="True"
-               MinHeight="72"
-               TextWrapping="Wrap" />
-      <TextBlock Text="{DynamicResource Shell_StartupError_DiagnosticsSummary}" FontWeight="SemiBold" />
-      <TextBox Text="{Binding DiagnosticsSummary}"
-               IsReadOnly="True"
-               TextWrapping="Wrap" />
-      <TextBlock Text="{DynamicResource Shell_StartupError_DiagnosticsLogPath}" FontWeight="SemiBold" />
-      <TextBox Text="{Binding DiagnosticsLogPath}"
-               IsReadOnly="True"
-               TextWrapping="Wrap" />
-    </StackPanel>
-    <Button Grid.Row="1"
-            HorizontalAlignment="Right"
-            MinWidth="96"
-            Content="{DynamicResource Shell_Action_Close}"
-            Click="CloseButton_Click" />
-  </Grid>
+  <Border Classes="edge-startup-error-window">
+    <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" RowSpacing="14">
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel Spacing="4">
+          <TextBlock Text="{DynamicResource Shell_StartupError_Title}"
+                     FontSize="24"
+                     FontWeight="SemiBold"
+                     Foreground="{DynamicResource Edge.Text.Primary}" />
+          <TextBlock Text="{Binding OperatorMessage}"
+                     FontSize="13"
+                     Foreground="{DynamicResource Edge.Text.Secondary}"
+                     TextWrapping="Wrap" />
+        </StackPanel>
+
+        <Button Grid.Column="1"
+                Classes="icon ghost"
+                Width="34"
+                Height="34"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                Click="CloseButton_Click">
+          <icons:MaterialIcon Kind="Close"
+                              Width="18"
+                              Height="18" />
+        </Button>
+      </Grid>
+
+      <Border Grid.Row="1" Classes="edge-startup-error-issue">
+        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+          <Border Classes="edge-startup-error-icon">
+            <icons:MaterialIcon Kind="AlertCircleOutline"
+                                Width="22"
+                                Height="22"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Foreground="{DynamicResource Edge.Status.Warning}" />
+          </Border>
+          <StackPanel Grid.Column="1" Spacing="5">
+            <TextBlock Text="{DynamicResource Shell_StartupError_PrimaryIssue}"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource Edge.Text.Primary}" />
+            <TextBlock Text="{Binding PrimaryIssue}"
+                       Foreground="{DynamicResource Edge.Text.Secondary}"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <Grid Grid.Row="2"
+            RowDefinitions="Auto,Auto"
+            ColumnDefinitions="*,*,*"
+            RowSpacing="10"
+            ColumnSpacing="10">
+        <Border x:Name="StartupErrorDeviceField"
+                Classes="edge-startup-error-card compact">
+          <StackPanel Spacing="5">
+            <TextBlock Text="{DynamicResource Shell_StartupError_Field_Device}"
+                       FontSize="12"
+                       Foreground="{DynamicResource Edge.Text.Muted}" />
+            <TextBlock x:Name="StartupErrorDeviceValue"
+                       Text="{Binding DeviceName}"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource Edge.Text.Primary}"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+
+        <Border x:Name="StartupErrorModuleField"
+                Grid.Column="1"
+                Classes="edge-startup-error-card compact">
+          <StackPanel Spacing="5">
+            <TextBlock Text="{DynamicResource Shell_StartupError_Field_ReferencedModule}"
+                       FontSize="12"
+                       Foreground="{DynamicResource Edge.Text.Muted}" />
+            <TextBlock x:Name="StartupErrorModuleValue"
+                       Text="{Binding ReferencedModule}"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource Edge.Text.Primary}"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+
+        <Border x:Name="StartupErrorLoadedModuleField"
+                Grid.Column="2"
+                Classes="edge-startup-error-card compact">
+          <StackPanel Spacing="5">
+            <TextBlock Text="{DynamicResource Shell_StartupError_Field_LoadedModules}"
+                       FontSize="12"
+                       Foreground="{DynamicResource Edge.Text.Muted}" />
+            <TextBlock x:Name="StartupErrorLoadedModuleValue"
+                       Text="{Binding LoadedModuleCount}"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource Edge.Text.Primary}"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+
+        <Border x:Name="StartupErrorDiagnosticsPathField"
+                Grid.Row="1"
+                Grid.ColumnSpan="3"
+                Classes="edge-startup-error-card compact">
+          <StackPanel Spacing="5">
+            <TextBlock Text="{DynamicResource Shell_StartupError_DiagnosticsLogPath}"
+                       FontSize="12"
+                       Foreground="{DynamicResource Edge.Text.Muted}" />
+            <TextBlock x:Name="StartupErrorDiagnosticsPathValue"
+                       Text="{Binding DiagnosticsLogPath}"
+                       Foreground="{DynamicResource Edge.Text.Secondary}"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+      </Grid>
+
+      <Border Grid.Row="3" Classes="edge-startup-error-card technical">
+        <Grid RowDefinitions="Auto,*" RowSpacing="8">
+          <TextBlock Text="{DynamicResource Shell_StartupError_Details}"
+                     FontWeight="SemiBold"
+                     Foreground="{DynamicResource Edge.Text.Primary}" />
+          <TextBox x:Name="StartupErrorTechnicalDetails"
+                   Grid.Row="1"
+                   Text="{Binding TechnicalDetails}"
+                   AcceptsReturn="True"
+                   IsReadOnly="True"
+                   BorderThickness="0"
+                   Padding="0"
+                   Background="Transparent"
+                   Foreground="{DynamicResource Edge.Text.Secondary}"
+                   TextWrapping="Wrap" />
+        </Grid>
+      </Border>
+
+      <Button Grid.Row="4"
+              Classes="accent"
+              HorizontalAlignment="Right"
+              MinWidth="112"
+              Content="{DynamicResource Shell_Action_Close}"
+              Click="CloseButton_Click" />
+    </Grid>
+  </Border>
 </Window>

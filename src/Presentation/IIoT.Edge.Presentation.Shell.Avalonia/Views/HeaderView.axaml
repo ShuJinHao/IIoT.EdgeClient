@@ -38,11 +38,18 @@
                   Orientation="Horizontal"
                   VerticalAlignment="Center"
                   Spacing="8">
-        <Border Classes="edge-chip success" VerticalAlignment="Center">
+        <Border Classes="edge-chip"
+                Classes.success="{Binding RuntimeStatusIsSuccess}"
+                Classes.warning="{Binding RuntimeStatusIsWarning}"
+                Classes.error="{Binding RuntimeStatusIsError}"
+                VerticalAlignment="Center">
           <StackPanel Orientation="Horizontal" Spacing="6">
-            <Border Classes="edge-dot" VerticalAlignment="Center" />
+            <Border Classes="edge-dot"
+                    Classes.warning="{Binding RuntimeStatusIsWarning}"
+                    Classes.error="{Binding RuntimeStatusIsError}"
+                    VerticalAlignment="Center" />
             <TextBlock FontSize="12"
-                       Foreground="{DynamicResource Edge.Accent.LimeDark}"
+                       Foreground="{DynamicResource Edge.Text.Secondary}"
                        MaxWidth="68"
                        TextTrimming="CharacterEllipsis"
                        Text="{Binding RuntimeStatusText}" />

@@ -3,8 +3,8 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:loc="clr-namespace:IIoT.Edge.UI.Avalonia.Localization;assembly=IIoT.Edge.UI.Avalonia">
-  <Border Classes="edge-page-panel">
-    <Grid RowDefinitions="Auto,Auto,*" RowSpacing="18">
+  <Border x:Name="PlcTaskBindingPageRoot" Classes="edge-page-panel">
+    <Grid RowDefinitions="Auto,Auto,*" RowSpacing="14">
       <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
         <StackPanel Spacing="4">
           <TextBlock Classes="page-title" Text="{Binding ViewTitle}" />
@@ -14,7 +14,7 @@
         <Button Grid.Column="2" Classes="chip accent" VerticalAlignment="Center" MinWidth="92" Command="{Binding SaveCommand}" Content="{DynamicResource Navigation_Button_Save}" />
       </Grid>
 
-      <Border Grid.Row="1" Classes="edge-form-section">
+      <Border x:Name="PlcDeviceToolbar" Grid.Row="1" Classes="edge-toolbar-card">
         <Grid ColumnDefinitions="Auto,280,Auto,Auto,*" ColumnSpacing="10">
           <TextBlock VerticalAlignment="Center" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Navigation_Column_DeviceName}" />
           <ComboBox Grid.Column="1" ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}">
@@ -25,30 +25,36 @@
             </ComboBox.ItemTemplate>
           </ComboBox>
           <Border Grid.Column="2" Classes="edge-chip" VerticalAlignment="Center">
-            <TextBlock FontSize="12" Foreground="{DynamicResource Edge.Text.Secondary}" Text="{Binding SelectedDevice.ModuleId}" />
+            <TextBlock FontSize="12" Foreground="{DynamicResource Edge.Text.Secondary}" Text="{Binding SelectedDevice.ModuleId}" TextTrimming="CharacterEllipsis" />
           </Border>
           <Border Grid.Column="3" Classes="edge-chip success" VerticalAlignment="Center">
-            <TextBlock FontSize="12" Foreground="{DynamicResource Edge.Accent.LimeDark}" Text="{Binding SelectedDevice.DeviceStateText}" />
+            <TextBlock FontSize="12" Foreground="{DynamicResource Edge.Accent.LimeDark}" Text="{Binding SelectedDevice.DeviceStateText}" TextTrimming="CharacterEllipsis" />
           </Border>
+          <TextBlock Grid.Column="4" VerticalAlignment="Center" Classes="caption" Text="{Binding FeedbackMessage}" TextTrimming="CharacterEllipsis" />
         </Grid>
       </Border>
 
       <Border Grid.Row="2" Classes="edge-table-card">
-        <DataGrid ItemsSource="{Binding SelectedDeviceTasks}"
-                  AutoGenerateColumns="False"
-                  IsReadOnly="{Binding IsReadOnly}"
-                  MinHeight="340">
-          <DataGrid.Columns>
-            <DataGridTextColumn Width="140" Binding="{Binding Key}" IsReadOnly="True" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_TaskKey" />
-            <DataGridTextColumn Width="160" Binding="{Binding DisplayName}" IsReadOnly="True" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Signal" />
-            <DataGridCheckBoxColumn Width="80" Binding="{Binding Enabled}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Enable" />
-            <DataGridTextColumn Width="90" Binding="{Binding TaskTypeText}" IsReadOnly="True" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_DataType" />
-            <DataGridTextColumn Width="90" Binding="{Binding SourceText}" IsReadOnly="True" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Label_Source" />
-            <DataGridTextColumn Width="220" Binding="{Binding RequiredSignalsText}" IsReadOnly="True" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_PlcSignal" />
-            <DataGridTextColumn Width="220" Binding="{Binding MissingRequiredSignalsText}" IsReadOnly="True" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Message" />
-            <DataGridTextColumn Width="180" Binding="{Binding AvailabilityText}" IsReadOnly="True" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Status" />
-          </DataGrid.Columns>
-        </DataGrid>
+        <Grid RowDefinitions="Auto,*">
+          <TextBlock Margin="18,16,18,10" Classes="section-title" Text="{DynamicResource Navigation_Menu_PlcTaskBinding}" />
+          <DataGrid x:Name="PlcTaskBindingGrid"
+                    Grid.Row="1"
+                    ItemsSource="{Binding SelectedDeviceTasks}"
+                    AutoGenerateColumns="False"
+                    IsReadOnly="{Binding IsReadOnly}"
+                    MinHeight="340">
+            <DataGrid.Columns>
+              <DataGridTextColumn Width="140" Binding="{Binding Key}" IsReadOnly="True" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_TaskKey" />
+              <DataGridTextColumn Width="160" Binding="{Binding DisplayName}" IsReadOnly="True" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Signal" />
+              <DataGridCheckBoxColumn Width="80" Binding="{Binding Enabled}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Enable" />
+              <DataGridTextColumn Width="90" Binding="{Binding TaskTypeText}" IsReadOnly="True" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_DataType" />
+              <DataGridTextColumn Width="90" Binding="{Binding SourceText}" IsReadOnly="True" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Label_Source" />
+              <DataGridTextColumn Width="220" Binding="{Binding RequiredSignalsText}" IsReadOnly="True" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_PlcSignal" />
+              <DataGridTextColumn Width="220" Binding="{Binding MissingRequiredSignalsText}" IsReadOnly="True" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Message" />
+              <DataGridTextColumn Width="180" Binding="{Binding AvailabilityText}" IsReadOnly="True" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Status" />
+            </DataGrid.Columns>
+          </DataGrid>
+        </Grid>
       </Border>
     </Grid>
   </Border>

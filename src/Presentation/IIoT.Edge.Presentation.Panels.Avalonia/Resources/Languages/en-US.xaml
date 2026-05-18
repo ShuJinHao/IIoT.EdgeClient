@@ -45,6 +45,7 @@
   <sys:String x:Key="Panels_Log_NoEntries">No runtime logs yet.</sys:String>
   <sys:String x:Key="Panels_Log_NoRuntimeLog">No logs exist in the migration runtime directory, and startup diagnostics have not been generated.</sys:String>
   <sys:String x:Key="Panels_Log_StartupDiagnosticsFormat">No logs exist in the migration runtime directory. Startup diagnostics: {0} modules, {1} issues, generated at {2}.</sys:String>
+  <sys:String x:Key="Panels_Log_UnknownTime">Unknown time</sys:String>
   <sys:String x:Key="Panels_Label_TodayOutput">Today Output</sys:String>
   <sys:String x:Key="Panels_Label_TodayYield">Today Yield</sys:String>
   <sys:String x:Key="Panels_Label_NgCount">NG Count</sys:String>

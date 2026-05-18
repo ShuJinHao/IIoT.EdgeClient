@@ -178,13 +178,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
             }
         }
 
+        var defaultDocument = SelectDefaultDocumentDockable(documentDockables);
         var documents = new DocumentDock
         {
             Id = "documents",
             Title = "Documents",
             CanCreateDocument = false,
             VisibleDockables = documentDockables,
-            ActiveDockable = documentDockables.FirstOrDefault(),
+            ActiveDockable = defaultDocument,
             CanCloseLastDockable = false
         };
 
@@ -226,6 +227,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
         DockFactory.InitLayout(root);
         return root;
     }
+
+    private static IDockable? SelectDefaultDocumentDockable(IReadOnlyList<IDockable> documentDockables)
+        => documentDockables
+            .OfType<AvaloniaDockable>()
+            .FirstOrDefault(static item => item.Id.EndsWith(".Monitor", StringComparison.OrdinalIgnoreCase))
+            ?? documentDockables.FirstOrDefault();
 
     private AvaloniaDockable CreateDockable(AvaloniaDockPaneInfo pane)
     {

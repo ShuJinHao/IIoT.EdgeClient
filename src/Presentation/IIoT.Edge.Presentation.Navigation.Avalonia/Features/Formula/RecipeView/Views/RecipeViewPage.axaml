@@ -3,47 +3,48 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:loc="clr-namespace:IIoT.Edge.UI.Avalonia.Localization;assembly=IIoT.Edge.UI.Avalonia">
-  <Border Classes="edge-page-panel">
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-      <StackPanel Spacing="18">
-        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+  <Border x:Name="RecipePageRoot" Classes="edge-page-panel">
+    <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="14">
+      <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
           <StackPanel Spacing="4">
             <TextBlock Classes="page-title" Text="{Binding ViewTitle}" />
             <TextBlock Foreground="{DynamicResource Edge.Text.Secondary}" Text="{Binding FeedbackMessage}" TextTrimming="CharacterEllipsis" />
           </StackPanel>
           <Button Grid.Column="1" Classes="chip" VerticalAlignment="Center" Command="{Binding SyncCloudCommand}" Content="{DynamicResource Navigation_Button_SyncCloud}" />
           <Button Grid.Column="2" Classes="chip accent" VerticalAlignment="Center" Command="{Binding SwitchSourceCommand}" Content="{DynamicResource Navigation_Button_SwitchSource}" />
-        </Grid>
+      </Grid>
 
-        <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="16">
-          <Border Classes="edge-card mint">
+      <Grid x:Name="RecipeSummaryPanel" Grid.Row="1" ColumnDefinitions="*,*,*,*" ColumnSpacing="12">
+          <Border Classes="edge-card compact mint" MinHeight="86">
             <StackPanel Spacing="5">
               <TextBlock Classes="caption" Text="{DynamicResource Navigation_Label_Source}" />
-              <TextBlock FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Text.Primary}" Text="{Binding SourceLabel}" />
+              <TextBlock FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Text.Primary}" Text="{Binding SourceLabel}" TextTrimming="CharacterEllipsis" />
             </StackPanel>
           </Border>
-          <Border Grid.Column="1" Classes="edge-card blue">
+          <Border Grid.Column="1" Classes="edge-card compact blue" MinHeight="86">
             <StackPanel Spacing="5">
               <TextBlock Classes="caption" Text="{DynamicResource Navigation_Label_Version}" />
-              <TextBlock FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Text.Primary}" Text="{Binding RecipeVersion}" />
+              <TextBlock FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Text.Primary}" Text="{Binding RecipeVersion}" TextTrimming="CharacterEllipsis" />
             </StackPanel>
           </Border>
-          <Border Grid.Column="2" Classes="edge-card lime">
+          <Border Grid.Column="2" Classes="edge-card compact lime" MinHeight="86">
             <StackPanel Spacing="5">
               <TextBlock Classes="caption" Text="{DynamicResource Navigation_Label_Process}" />
-              <TextBlock FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Text.Primary}" Text="{Binding ProcessName}" />
+              <TextBlock FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Text.Primary}" Text="{Binding ProcessName}" TextTrimming="CharacterEllipsis" />
             </StackPanel>
           </Border>
-          <Border Grid.Column="3" Classes="edge-card violet">
+          <Border Grid.Column="3" Classes="edge-card compact violet" MinHeight="86">
             <StackPanel Spacing="5">
               <TextBlock Classes="caption" Text="{DynamicResource Navigation_Label_Update}" />
-              <TextBlock FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Text.Primary}" Text="{Binding UpdatedAt}" />
+              <TextBlock FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Text.Primary}" Text="{Binding UpdatedAt}" TextTrimming="CharacterEllipsis" />
             </StackPanel>
           </Border>
-        </Grid>
+      </Grid>
 
-        <Border Classes="edge-table-card">
-          <DataGrid ItemsSource="{Binding Params}" AutoGenerateColumns="False" IsReadOnly="True" MinHeight="260">
+      <Border Grid.Row="2" Classes="edge-table-card">
+        <Grid RowDefinitions="Auto,*">
+          <TextBlock Margin="18,16,18,10" Classes="section-title" Text="{DynamicResource Navigation_Menu_Recipe}" />
+          <DataGrid x:Name="RecipeParamsGrid" Grid.Row="1" ItemsSource="{Binding Params}" AutoGenerateColumns="False" IsReadOnly="True" MinHeight="260">
             <DataGrid.Columns>
               <DataGridTextColumn Width="2*" Binding="{Binding Name}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_ParamName" />
               <DataGridTextColumn Width="*" Binding="{Binding Min}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_LowerLimit" />
@@ -58,9 +59,10 @@
               </DataGridTemplateColumn>
             </DataGrid.Columns>
           </DataGrid>
-        </Border>
+        </Grid>
+      </Border>
 
-        <Border Classes="edge-form-section">
+      <Border x:Name="RecipeEmergencyEdit" Grid.Row="3" Classes="edge-form-section">
           <StackPanel Spacing="12">
             <TextBlock Classes="section-title" Text="{DynamicResource Navigation_Label_EmergencyEdit}" />
             <Grid ColumnDefinitions="2*,*,*,*,Auto" ColumnSpacing="8">
@@ -71,8 +73,7 @@
               <Button Grid.Column="4" Classes="accent" Command="{Binding SaveLocalParamCommand}" Content="{DynamicResource Navigation_Button_Save}" />
             </Grid>
           </StackPanel>
-        </Border>
-      </StackPanel>
-    </ScrollViewer>
+      </Border>
+    </Grid>
   </Border>
 </UserControl>

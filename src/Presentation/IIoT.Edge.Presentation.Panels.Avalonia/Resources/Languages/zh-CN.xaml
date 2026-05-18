@@ -45,6 +45,7 @@
   <sys:String x:Key="Panels_Log_NoEntries">暂无运行日志。</sys:String>
   <sys:String x:Key="Panels_Log_NoRuntimeLog">迁移运行目录暂无日志，启动诊断尚未生成。</sys:String>
   <sys:String x:Key="Panels_Log_StartupDiagnosticsFormat">迁移运行目录暂无日志。启动诊断：模块 {0} 个，问题 {1} 个，生成时间 {2}。</sys:String>
+  <sys:String x:Key="Panels_Log_UnknownTime">未知时间</sys:String>
   <sys:String x:Key="Panels_Label_TodayOutput">今日产量</sys:String>
   <sys:String x:Key="Panels_Label_TodayYield">今日良率</sys:String>
   <sys:String x:Key="Panels_Label_NgCount">NG 数量</sys:String>

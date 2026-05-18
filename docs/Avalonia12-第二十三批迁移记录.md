@@ -251,7 +251,7 @@
 - `dotnet test src\Tests\IIoT.Edge.AvaloniaShell.Tests\IIoT.Edge.AvaloniaShell.Tests.csproj --no-restore`：通过，59 passed，0 failed。
 - `rg "LoginPanel|ProfilePanel|UserNameInput|PasswordInput|LoginButton_Click|LaunchProfileButton_Click|ChangePasswordButton_Click"` 针对新 `MainWindow` 检查：无命中。
 - `rg "[一-龥]"` 针对 `MainWindow.axaml`、`LauncherLoginView.axaml`、`LauncherProfileView.axaml` 检查：无命中。
-- `rg "閺|鐠|鐎|娣|鏈|鍖|宸|璐|瀵|鐧|鍚|鏃|绠"` 针对 Launcher Views、ViewModels、Resources 检查：无命中。
+- 常见乱码片段扫描针对 Launcher Views、ViewModels、Resources 检查：无命中。
 
 ### 剩余风险
 
@@ -284,7 +284,7 @@
 - `dotnet test src\Tests\IIoT.Edge.AvaloniaShell.Tests\IIoT.Edge.AvaloniaShell.Tests.csproj --no-restore /m:1 /p:UseSharedCompilation=false`：通过，59 passed，0 failed。
 - `rg "[一-龥]" src\Edge\IIoT.Edge.Launcher.Avalonia\Views\ChangePasswordWindow.axaml`：无命中。
 - `Compare-Object` 检查 `zh-CN.xaml` 与 `en-US.xaml` 中 `Launcher_ChangePassword_*` key：无差异。
-- `rg "閺|鐠|鐎|娣|鏈|鍖|宸|璐|瀵|鐧|鍚|鏃|绠|鈭|鈻|脳"` 针对 Launcher Views/Resources 检查：无命中。
+- 常见乱码片段扫描针对 Launcher Views/Resources 检查：无命中。
 
 ### 剩余风险
 
@@ -315,7 +315,7 @@
 - `rg "LoginPanel|ProfilePanel|UserNameInput|PasswordInput|LoginButton_Click|LaunchProfileButton_Click"` 针对新 `MainWindow` 检查：无命中。
 - `rg "[一-龥]"` 针对 Launcher Views 下 `*.axaml` 检查：无命中。
 - `Compare-Object` 检查 `zh-CN.xaml` 与 `en-US.xaml` 中 `Launcher_*` key：无差异。
-- `rg "閺|鐠|鐎|娣|鏈|鍖|宸|璐|瀵|鐧|鍚|鏃|绠|鈭|鈻|脳"` 针对 Launcher Views/Resources 检查：无命中。
+- 常见乱码片段扫描针对 Launcher Views/Resources 检查：无命中。
 
 ### 剩余风险
 
@@ -593,6 +593,7 @@
 - Panels/ViewModels/Theme 常见乱码片段扫描：无命中。
 - 目标范围手写 Path / Geometry / Data="M" 图标扫描：无命中。
 - Panels `zh-CN.xaml` 与 `en-US.xaml` 资源 key 集合比对：无差异。
+
 ## 主客户端诊断页与硬件配置页细腻化记录
 
 - 完成内容：
@@ -618,3 +619,256 @@
   - 当前只完成宿主诊断和硬件配置页细腻化，其它宿主页还需要按标杆逐页推进。
 - 下一阶段进入条件：
   - 用户人工确认诊断页和硬件配置页视觉方向可接受后，再进入产能、数据、配方、参数、PLC 任务绑定等宿主页的下一批迁移。
+
+## Launcher 与 Monitor 首页真实化收口记录
+
+- 完成内容：
+  - `launcher.profiles.json` 收口为单个现场入口“匀浆产线”，默认携带 `--start-runtime`；分组主入口排序改为 runtime 优先，避免同一 MachineProfile 下回退到 UI-only。
+  - `LogViewModel` 文件日志解析不再用当前时间填充历史日志行；能解析行首时间时展示真实时间，无法解析时展示“未知时间”。
+  - Monitor 首页第四个 KPI 改为 PLC 在线数 / 总数；左侧趋势改为今日设备产量分布，进度条按当前设备快照归一化，不再显示 7 天折线含义。
+  - Monitor 右侧状态区移除计划/任务/告警/审计空 Tab 和硬编码正常状态，改为 PLC、MES、Cloud、缓存队列真实状态卡；最新告警区改为从运行日志中过滤 ERROR/FATAL。
+  - Header/Footer 运行状态点按 `IAvaloniaRuntimeState` 显示成功、警告、错误态；Header 产线名称从 `Shell:MachineProfile` 派生，已补匀浆产线显示资源。
+- 边界：
+  - 本轮只修改 `IIoT.EdgeClient.AvaloniaMigration`。
+  - 未新增 Cloud/API/Runtime/PLC/MES 公共接口，未修改原 WPF EdgeClient、Cloud、AICopilot、插件 Runtime/PLC/MES/Cloud 链路。
+  - 截图中的节拍、7 天折线、计划/任务/告警/审计 Tab、清理缓存弹窗因缺少稳定真实来源未照抄。
+- 验证：
+  - `dotnet build src/Edge/IIoT.Edge.AvaloniaShell/IIoT.Edge.AvaloniaShell.csproj --no-restore /m:1 /p:UseSharedCompilation=false`：通过，0 warning，0 error。
+  - `dotnet build src/Edge/IIoT.Edge.Launcher.Avalonia/IIoT.Edge.Launcher.Avalonia.csproj --no-restore /m:1 /p:UseSharedCompilation=false`：通过，0 warning，0 error。
+  - `dotnet test src/Tests/IIoT.Edge.AvaloniaShell.Tests/IIoT.Edge.AvaloniaShell.Tests.csproj --no-restore /m:1 /p:UseSharedCompilation=false`：通过，60 passed，0 failed。
+  - `dotnet test src/Tests/IIoT.Edge.Launcher.Tests/IIoT.Edge.Launcher.Tests.csproj --no-restore /m:1 /p:UseSharedCompilation=false`：通过，27 passed，0 failed。
+- 剩余风险：
+  - 仍需人工在真实窗口检查 `1900x1200`、`1600x1000`、`1366x768` 三档截图，重点确认无原生标题栏、右侧日志常驻、状态无假正常、中文不溢出。
+
+## 主客户端真实窗口验收与窄屏收口记录
+
+- 完成内容：
+  - 增加主窗口关键区域命名，覆盖 Shell 根容器、主工作区、文档区、右侧工具区、设备状态区和日志区，便于 headless 布局验收定位。
+  - Shell 默认主文档从注册顺序的首个插件页收口为 Monitor 首页，真实窗口启动后优先进入生产总览，不再先展示匀浆出料数据页。
+  - Avalonia headless 测试宿主补齐真实应用使用的 Fluent、Material Icon、DataGrid、Dock、DialogHost 和工业主题样式，避免布局 smoke 测试绕开真实模板。
+  - 新增 `1366x768` 主窗口布局 smoke 测试，验证无原生标题栏、默认激活 Monitor、主工作区、文档区、右侧设备状态区和日志常驻区均可创建并落在工作区内。
+  - 使用真实 Launcher/Shell 进程采集窗口截图，输出到 `%TEMP%\iiot-avalonia-visual-check\`，默认不进入仓库。
+- 边界：
+  - 本轮只修改 `IIoT.EdgeClient.AvaloniaMigration` 的 Avalonia Shell 展示层、测试宿主和迁移记录。
+  - 未新增 Cloud/API/Runtime/PLC/MES 公共接口，未修改 PLC、MES、Cloud、缓存、上传、重试、死信、模块运行时或业务服务。
+  - 未恢复 Launcher UI-only 正式入口，未新增搜索、假告警、假正常状态或清理缓存弹窗。
+- 验证：
+  - 基线执行 `dotnet build src/Edge/IIoT.Edge.AvaloniaShell/IIoT.Edge.AvaloniaShell.csproj --no-restore /m:1 /p:UseSharedCompilation=false`：通过，0 warning，0 error。
+  - 基线执行 `dotnet build src/Edge/IIoT.Edge.Launcher.Avalonia/IIoT.Edge.Launcher.Avalonia.csproj --no-restore /m:1 /p:UseSharedCompilation=false`：通过，0 warning，0 error。
+  - 基线执行 `dotnet test src/Tests/IIoT.Edge.AvaloniaShell.Tests/IIoT.Edge.AvaloniaShell.Tests.csproj --no-restore /m:1 /p:UseSharedCompilation=false`：通过，60 passed，0 failed。
+  - 基线执行 `dotnet test src/Tests/IIoT.Edge.Launcher.Tests/IIoT.Edge.Launcher.Tests.csproj --no-restore /m:1 /p:UseSharedCompilation=false`：通过，27 passed，0 failed。
+  - Navigation、Panels、Shell 三组 `zh-CN.xaml` / `en-US.xaml` 资源键配对检查：无缺项。
+  - 真实窗口截图：本机虚拟屏幕为 `1440x900`，`1900x1200` 和 `1600x1000` 会被系统裁成约 `1455x915`，只能作为受限截图；`1366x768` 可生成完整物理窗口截图，并确认 Shell 默认进入 Monitor 首页。
+- 剩余风险：
+  - 受当前桌面分辨率限制，本机无法完整采集 `1900x1200` 和 `1600x1000` 真实窗口截图，仍需在对应尺寸显示器或目标工控机上人工复核。
+  - 当前自动化能验证 `1366x768` 逻辑布局不崩溃、关键区域存在且右侧常驻区不越界；中文细节、DPI 缩放和真实现场数据密度仍需人工看图确认。
+
+## 宿主页第二批细腻化记录
+
+- 完成内容：
+  - `CapacityViewPage` 调整为“页头 + 筛选工具卡 + 指标卡 + 表格卡”结构，保留 `DeviceNames`、`QueryModes`、`QueryCommand`、`ExportCommand` 和 `Records` 原绑定，仅收口列宽、卡片尺寸、表格容器和窄屏文本裁剪。
+  - `DataViewPage` 调整为同一浅色宿主页结构，保留生产数据查询、导出、今日汇总和记录表绑定；注意当前匀浆模块运行时会用 `HomogenizationDataPage` 覆盖标准 `DataView` 路由，本轮未修改该插件页。
+  - `RecipeViewPage` 从整页滚动堆叠改为“状态摘要 + 配方参数表格卡 + 本地应急编辑区”，保留同步云端、切换来源、删除参数和保存本地参数命令。
+  - `ParamViewPage` 统一为白色表格工作区，`TabControl` 使用现有 `edge-tool-tabs`，MES/Cloud/插件业务参数组仍按原 `ItemsSource` 和 `CanEdit` 权限展示。
+  - `PlcTaskBindingPage` 调整为“设备选择工具卡 + 任务绑定表格卡”的工作台布局，设备模块、启停状态和反馈信息均从现有 `SelectedDevice` / `FeedbackMessage` 派生。
+- 边界：
+  - 本轮只修改 Avalonia 宿主页展示层 XAML 和布局 smoke 测试。
+  - 未修改 Application、Domain、Runtime、Infrastructure、Modules 运行链路；未新增 Cloud/API/Runtime/PLC/MES 公共接口。
+  - 未新增 UI 库、图标库、动画库、截图库；未新增用户可见资源键。
+  - 未修改 `HomogenizationDataPage`。
+- 验证：
+  - `dotnet build src/Edge/IIoT.Edge.AvaloniaShell/IIoT.Edge.AvaloniaShell.csproj --no-restore /m:1 /p:UseSharedCompilation=false`：通过，0 warning，0 error。
+  - `dotnet build src/Edge/IIoT.Edge.Launcher.Avalonia/IIoT.Edge.Launcher.Avalonia.csproj --no-restore /m:1 /p:UseSharedCompilation=false`：通过，0 warning，0 error。
+  - `dotnet test src/Tests/IIoT.Edge.AvaloniaShell.Tests/IIoT.Edge.AvaloniaShell.Tests.csproj --no-restore /m:1 /p:UseSharedCompilation=false`：通过，62 passed，0 failed。
+  - `dotnet test src/Tests/IIoT.Edge.Launcher.Tests/IIoT.Edge.Launcher.Tests.csproj --no-restore /m:1 /p:UseSharedCompilation=false`：通过，27 passed，0 failed。
+  - Navigation、Panels、Shell 三组 `zh-CN.xaml` / `en-US.xaml` 资源键配对检查：无缺项。
+  - 新增 `Host_pages_layout_smoke_keeps_key_regions_available_at_1366x768`：直接创建本轮五个目标宿主页，验证 1366x768 下根容器、工具区和关键表格可创建且不抛布局异常。
+  - 真实窗口截图输出到 `%TEMP%\iiot-avalonia-visual-check\shell-host-pages-1366x768-printwindow.png`。本机屏幕为 `1440x900`，可完整采集 `1366x768`；`1600x1000`、`1900x1200` 仍受物理屏幕限制。
+- 剩余风险：
+  - 真实 Shell 默认进入 Monitor 首页，标准 `DataView` 路由在匀浆模块下被插件页覆盖；本轮目标 `DataViewPage` 通过 headless 直接创建验证，仍需在非覆盖路由或独立宿主场景人工确认。
+  - 当前真实窗口截图只确认应用可启动和 `1366x768` 物理窗口可采集；五个宿主页的逐页真实截图仍建议在可导航到标准宿主页的目标环境中复核。
+  - 若后续需要继续压缩 1366 宽度下主 Shell 默认 Monitor 的右侧区域显示，应作为 Shell/Monitor 窄屏单独批次处理，避免混入本轮宿主页展示层收口。
+
+## 宿主页逐页真实窗口验收与路由覆盖风险收口记录
+
+- 完成内容：
+  - 在 `IIoT.Edge.AvaloniaShell.Tests` 中新增宿主页直接承载 visual check，用测试/本地验收窗口直接创建 `CapacityViewPage`、`DataViewPage`、`RecipeViewPage`、`ParamViewPage`、`PlcTaskBindingPage`。
+  - 将上一轮宿主页布局 smoke 的页面清单抽为共享验收用例，继续验证 1366x768 下根容器、工具栏、表格或关键区域存在。
+  - 新增截图输出：五个标准宿主页在 1366x768 Headless 真窗口下逐页渲染，并保存到 `%TEMP%\iiot-avalonia-visual-check\host-page-direct-1366x768-*.png`。
+  - 验收路径明确区分正式 Shell 默认 Monitor 截图和标准宿主页直接承载截图；本轮未改变正式 Shell 路由，也未改变匀浆模块 `DataView` 被 `HomogenizationDataPage` 覆盖的规则。
+- 边界：
+  - 本轮只修改 AvaloniaShell 测试和迁移记录。
+  - 未修改 Application、Domain、Runtime、Infrastructure、Modules 运行链路；未新增 Cloud/API/Runtime/PLC/MES 公共接口。
+  - 未新增 UI 库、图标库、截图依赖或跨层服务；继续复用现有 Avalonia.Headless 测试依赖。
+  - 未修改 `HomogenizationDataPage`，标准 `DataViewPage` 只通过测试/本地验收 helper 直接承载确认。
+- 验证：
+  - 基线执行 `dotnet build src/Edge/IIoT.Edge.AvaloniaShell/IIoT.Edge.AvaloniaShell.csproj --no-restore /m:1 /p:UseSharedCompilation=false`：通过，0 warning，0 error。
+  - 基线执行 `dotnet build src/Edge/IIoT.Edge.Launcher.Avalonia/IIoT.Edge.Launcher.Avalonia.csproj --no-restore /m:1 /p:UseSharedCompilation=false`：通过，0 warning，0 error。
+  - 最终执行 `dotnet test src/Tests/IIoT.Edge.AvaloniaShell.Tests/IIoT.Edge.AvaloniaShell.Tests.csproj --no-restore /m:1 /p:UseSharedCompilation=false`：通过，63 passed，0 failed。
+  - 基线执行 `dotnet test src/Tests/IIoT.Edge.Launcher.Tests/IIoT.Edge.Launcher.Tests.csproj --no-restore /m:1 /p:UseSharedCompilation=false`：通过，27 passed，0 failed。
+  - Navigation、Panels、Shell 三组 `zh-CN.xaml` / `en-US.xaml` 资源键配对检查：无缺项。
+  - 新增 `Host_pages_visual_check_writes_direct_1366x768_screenshots`：通过，五张截图均已写入临时目录，文件尺寸均为 1366x768 且非空。
+- 截图结果：
+  - `%TEMP%\iiot-avalonia-visual-check\host-page-direct-1366x768-capacity.png`
+  - `%TEMP%\iiot-avalonia-visual-check\host-page-direct-1366x768-data.png`
+  - `%TEMP%\iiot-avalonia-visual-check\host-page-direct-1366x768-recipe.png`
+  - `%TEMP%\iiot-avalonia-visual-check\host-page-direct-1366x768-param.png`
+  - `%TEMP%\iiot-avalonia-visual-check\host-page-direct-1366x768-plc-task-binding.png`
+- 剩余风险：
+  - 本机物理屏幕仍为 1440x900，`1600x1000` 和 `1900x1200` 无法完整做真实窗口人工截图，只能记录为受限结论。
+  - Headless 逐页截图能确认标准宿主页可直接承载、关键区域可创建和输出非空画面；中文细节、DPI 缩放和真实现场数据密度仍需在目标屏幕或工控机上人工复核。
+  - 匀浆模块正式导航仍会覆盖标准 `DataViewPage`，后续若要在正式 Shell 中验收标准 `DataViewPage`，需要使用非覆盖模块或继续走本轮这种验收 helper，不应误把插件页截图当宿主页结果。
+
+## Avalonia 迁移阶段整批收口验收记录
+
+- 完成内容：
+  - 对当前未提交 diff 做范围审核，确认改动集中在 Avalonia Shell、Avalonia Launcher、Presentation、Shared Avalonia Theme、测试和本迁移记录。
+  - 迁移记录最终口径统一为本节：前文各节保留为阶段历史；当前评审以本节的验证结果、截图结果和剩余风险为准。
+  - 明确三类截图口径：正式 Shell 默认进入 Monitor 首页；五个标准宿主页通过测试/本地验收 helper 直接承载截图；匀浆插件 `HomogenizationDataPage` 覆盖标准 `DataViewPage`，不能把插件页误作标准宿主页验收结果。
+  - 检查 `%TEMP%\iiot-avalonia-visual-check\`，确认 Launcher、Shell/Monitor、Shell PrintWindow、五个标准宿主页的 1366x768 截图均存在、尺寸正确且非空。
+- 边界：
+  - 本轮只做整批收口验收和记录整理。
+  - 未修改旧 WPF EdgeClient、Cloud、AICopilot、Application、Domain、Runtime、Infrastructure、PLC/MES/Cloud 链路、缓存、上传、重试、死信或模块运行时。
+  - 未新增 Cloud/API/Runtime/PLC/MES 公共接口；未新增 UI 库、图标库、截图依赖或跨层服务。
+  - 未修改 `HomogenizationDataPage`，未改变正式 Shell 路由和匀浆插件覆盖规则。
+- diff 范围审核：
+  - 允许范围内：`docs/`、`src/Edge/IIoT.Edge.AvaloniaShell/`、`src/Edge/IIoT.Edge.Launcher.Avalonia/`、`src/Presentation/`、`src/Shared/IIoT.Edge.UI.Avalonia/`、`src/Tests/`。
+  - 未发现越界路径：无 `IIoT.CloudPlatform`、旧 `IIoT.EdgeClient`、`AICopilot`、`src/Application`、`src/Runtime`、PLC/MES/Cloud 运行链路文件进入本批 diff。
+- 截图结果：
+  - `launcher-1366x768.png`：1366x768，非空。
+  - `shell-runtime-1366x768-monitor.png`：1366x768，非空。
+  - `shell-host-pages-1366x768-printwindow.png`：1366x768，非空。
+  - `host-page-direct-1366x768-capacity.png`：1366x768，非空。
+  - `host-page-direct-1366x768-data.png`：1366x768，非空。
+  - `host-page-direct-1366x768-recipe.png`：1366x768，非空。
+  - `host-page-direct-1366x768-param.png`：1366x768，非空。
+  - `host-page-direct-1366x768-plc-task-binding.png`：1366x768，非空。
+  - `launcher-1600x1000.png`、`launcher-1900x1200.png`、`shell-runtime-1600x1000.png`、`shell-runtime-1900x1200.png` 在当前 1440x900 屏幕上实际输出约 1455x915，只能作为受限截图记录，不能标记为完整通过。
+- 最终验证：
+  - `dotnet build src/Edge/IIoT.Edge.AvaloniaShell/IIoT.Edge.AvaloniaShell.csproj --no-restore /m:1 /p:UseSharedCompilation=false`：通过，0 warning，0 error。
+  - `dotnet build src/Edge/IIoT.Edge.Launcher.Avalonia/IIoT.Edge.Launcher.Avalonia.csproj --no-restore /m:1 /p:UseSharedCompilation=false`：通过，0 warning，0 error。
+  - `dotnet test src/Tests/IIoT.Edge.AvaloniaShell.Tests/IIoT.Edge.AvaloniaShell.Tests.csproj --no-restore /m:1 /p:UseSharedCompilation=false`：通过，63 passed，0 failed。
+  - `dotnet test src/Tests/IIoT.Edge.Launcher.Tests/IIoT.Edge.Launcher.Tests.csproj --no-restore /m:1 /p:UseSharedCompilation=false`：通过，27 passed，0 failed。
+  - Navigation、Panels、Shell 三组 `zh-CN.xaml` / `en-US.xaml` 资源键配对检查：无缺项。
+- 剩余风险：
+  - 本机物理屏幕限制仍未解除，`1600x1000` 和 `1900x1200` 必须在目标显示器或工控机上做完整真实窗口人工验收。
+  - Headless 和 PrintWindow 能确认窗口可创建、截图非空、关键区域存在；中文细节、DPI 缩放、真实现场数据密度和长文本仍需人工看图确认。
+  - 后续若要在正式 Shell 中验证标准 `DataViewPage`，需要使用非匀浆覆盖路由或继续使用本批直接承载 helper，不能用匀浆插件页替代。
+
+## zip 计划 UTF-8 落地与阶段索引记录
+
+- 完成内容：
+  - 将 `C:\Users\jinha\Downloads\avalonia_ui_refactor_plan.zip` 内 11 份 md 按 UTF-8 文件名恢复并落地到 `docs/avalonia-ui-refactor-plan/`。
+  - 新增 `docs/avalonia-ui-refactor-plan/00_INDEX.md`，逐项标注 Phase 0 到 Phase 7、SKILL、Codex 提示词模板的当前状态。
+  - 索引明确当前 Avalonia UI 改造不是“7 批全部完工”，而是 Launcher、Monitor、Shell、日志、匀浆页、五个宿主页和验收 helper 已进入可评审状态。
+  - Phase 7 主题与设计系统固化在该文档落地批次中仍作为下一代码批次；后续执行结果见下方 Phase 7 记录。
+- 边界：
+  - 本批只修改文档和迁移记录，不修改 `src/`。
+  - 未修改 Launcher、Shell、Presentation、Shared Avalonia Theme、Application、Domain、Runtime、Infrastructure、Modules、PLC/MES/Cloud 链路、缓存、上传、重试、死信或模块运行时。
+  - 未新增 Cloud/API/Runtime/PLC/MES 公共接口；未新增 UI 库、图标库、截图依赖或跨层服务。
+  - zip 原文只做忠实落地；该批当时未重写 SKILL 与 Codex 提示词模板，后续同步结果见“全局 Skill 同步与 Codex 模板收口记录”。
+- 文件结果：
+  - `00_UI总体改造总计划.md`
+  - `01_Phase0_冻结范围与事实核查.md`
+  - `02_Phase1_Launcher真实入口收口.md`
+  - `03_Phase2_Shell信息骨架重建.md`
+  - `04_Phase3_日志与设备状态真实化.md`
+  - `05_Phase4_去硬框与视觉圆滑化.md`
+  - `06_Phase5_匀浆模块页v2.md`
+  - `07_Phase6_宿主页逐页细腻化.md`
+  - `08_Phase7_主题与设计系统固化.md`
+  - `09_SKILL_Avalonia工业上位机前端规则.md`
+  - `10_Codex执行总提示词模板.md`
+  - `00_INDEX.md`
+- 验证：
+  - `docs/avalonia-ui-refactor-plan/` 下 12 份 md 存在，包含 11 份 zip 原计划和 1 份阶段索引。
+  - 文档编码扫描：未发现本轮关注的常见乱码片段。
+  - 索引内容检查：已列出 Phase 0 到 Phase 7、SKILL、Codex 模板。
+  - diff 范围检查：本批新增/修改仅涉及 `docs/avalonia-ui-refactor-plan/` 和本迁移记录；当前工作树仍保留前序 UI diff，未被本批回滚。
+  - `dotnet build src/Edge/IIoT.Edge.AvaloniaShell/IIoT.Edge.AvaloniaShell.csproj --no-restore /m:1 /p:UseSharedCompilation=false`：通过，0 warning，0 error。
+  - `dotnet test src/Tests/IIoT.Edge.AvaloniaShell.Tests/IIoT.Edge.AvaloniaShell.Tests.csproj --no-restore /m:1 /p:UseSharedCompilation=false`：通过，63 passed，0 failed。
+- 剩余风险：
+  - Phase 7 主题与设计系统固化已在后续独立批次执行，当前剩余是评审和目标屏幕人工验收。
+  - 1600x1000 与 1900x1200 完整真实窗口人工验收仍依赖目标屏幕或工控机。
+  - SKILL 与 Codex 提示词模板已在后续全局同步批次中按当前索引和真实数据边界修订，避免重复执行已完成阶段。
+
+## Avalonia Phase 7 主题与设计系统固化记录
+
+- 完成内容：
+  - 在 `IndustrialTheme.axaml` 中以 `Edge.*` 作为主客户端 canonical token，补齐 neutral、muted、running、stopped、failed、development 等状态 token，并保留现有 `Ind.*` 兼容 token。
+  - 补齐 `Edge.Shadow.*` 和卡片、KPI、状态卡、日志、chip、空态、表单、弹窗等通用 class 的边界样式，页面后续优先复用这些 class。
+  - 在 `AppTypography.axaml` 中补充 Micro、Metric、Display 字号 token 和少量文本 class，避免页面继续散落字体口径。
+  - 在 Launcher 主题中补齐 `Launcher.Status.*` 语义 token 和状态卡变体，让 Launcher 与主客户端状态色含义对齐。
+  - 新增 `docs/Avalonia-Industrial-Design-System.md` 与 `docs/Avalonia-UI-验收清单.md`，明确 token 规则、状态语义、页面模板、禁止事项、三档验收表和真实数据底线。
+  - 更新 `docs/avalonia-ui-refactor-plan/00_INDEX.md`，将 Phase 7 标记为“本批已执行，待评审”。
+  - 扩展 AvaloniaShell 资源卫生测试，覆盖关键 token/class、两份设计系统文档和索引状态。
+- 边界：
+  - 未修改 Application、Domain、Runtime、Infrastructure、Modules、PLC/MES/Cloud、缓存、上传、重试、死信链路。
+  - 未新增 Cloud/API/Runtime/PLC/MES 公共接口。
+  - 未新增 UI 库、图标库、截图依赖或跨层服务。
+  - 未修改 `HomogenizationDataPage` 或宿主页业务绑定；本批只做主题、文档和测试固化。
+  - Phase 7 当时未修改全局 `.codex/skills`；后续全局 skill 同步结果见下方记录。
+- 验证：
+  - `dotnet build src/Edge/IIoT.Edge.AvaloniaShell/IIoT.Edge.AvaloniaShell.csproj --no-restore /m:1 /p:UseSharedCompilation=false`：通过，0 warning，0 error。
+  - `dotnet build src/Edge/IIoT.Edge.Launcher.Avalonia/IIoT.Edge.Launcher.Avalonia.csproj --no-restore /m:1 /p:UseSharedCompilation=false`：通过，0 warning，0 error。
+  - `dotnet test src/Tests/IIoT.Edge.AvaloniaShell.Tests/IIoT.Edge.AvaloniaShell.Tests.csproj --no-restore /m:1 /p:UseSharedCompilation=false`：通过，65 passed，0 failed。
+  - `dotnet test src/Tests/IIoT.Edge.Launcher.Tests/IIoT.Edge.Launcher.Tests.csproj --no-restore /m:1 /p:UseSharedCompilation=false`：通过，27 passed，0 failed。
+  - `git diff --check`：通过，仅有工作区 LF/CRLF 提示，无空白错误。
+  - Phase 7 文档乱码片段扫描：`docs/Avalonia-Industrial-Design-System.md`、`docs/Avalonia-UI-验收清单.md`、`docs/avalonia-ui-refactor-plan/00_INDEX.md` 未命中本轮关注的常见乱码片段。
+- 剩余风险：
+  - `1600x1000` 与 `1900x1200` 完整真实窗口人工验收仍依赖目标屏幕或工控机。
+  - Phase 7 固化的是仓库内设计系统与测试约束；全局 skill 同步结果见下方记录。
+  - 后续页面如要接入新业务状态，必须先确认真实数据来源，不得为了视觉完整度新增 mock 状态。
+
+## Avalonia 全局 Skill 同步与 Codex 模板收口记录
+
+- 完成内容：
+  - 新增全局专用 skill：`C:\Users\jinha\.codex\skills\iiot-avalonia-hmi-polish\`，用于 `IIoT.EdgeClient.AvaloniaMigration` 的 Avalonia 工业上位机 UI、主题、资源、日志、设备状态和验收任务。
+  - 保留现有 `iiot-frontend-polish` 的 Cloud/Vue 与 AICopilot 职责，不把 Edge Avalonia 规则混入旧 skill。
+  - 新增 `SKILL.md`，固化 Phase 状态读取流程、真实数据底线、主题 token 规则、验证命令和停止条件。
+  - 新增 `references/phase-status.md`、`references/design-system.md`、`references/visual-acceptance.md`，将当前 Phase 0-7 状态、设计系统和验收口径浓缩到全局 skill reference。
+  - 用 `skill-creator` 脚本生成 `agents/openai.yaml`，显示名为 `IIoT Avalonia HMI Polish`。
+  - 更新 `docs/avalonia-ui-refactor-plan/09_SKILL_Avalonia工业上位机前端规则.md`，标记规则已同步到全局 skill，并移除从 zip 原 Phase 重启执行的倾向。
+  - 更新 `docs/avalonia-ui-refactor-plan/10_Codex执行总提示词模板.md`，要求先读 `00_INDEX.md` 和迁移记录，再判断当前 Phase 是否已完成。
+  - 更新 `docs/avalonia-ui-refactor-plan/00_INDEX.md`，将 SKILL 与 Codex 模板状态改为已同步，待实际使用验证。
+- 边界：
+  - 未修改 `src/` 代码。
+  - 未修改 Application、Domain、Runtime、Infrastructure、Modules、PLC/MES/Cloud、缓存、上传、重试、死信链路。
+  - 未新增 Cloud/API/Runtime/PLC/MES 公共接口。
+  - 未修改 `C:\Users\jinha\.codex\skills\iiot-frontend-polish\`。
+  - 未新增脚本依赖，只复用 `skill-creator` 自带脚本。
+- 验证：
+  - `python C:\Users\jinha\.codex\skills\.system\skill-creator\scripts\quick_validate.py C:\Users\jinha\.codex\skills\iiot-avalonia-hmi-polish`：通过，`Skill is valid!`。
+  - 新增 skill 与仓库同步文档乱码片段扫描：通过，未命中本轮关注的常见乱码片段。
+  - `git diff --check`：通过，仅有工作区 LF/CRLF 提示，无空白错误。
+  - `dotnet test src/Tests/IIoT.Edge.AvaloniaShell.Tests/IIoT.Edge.AvaloniaShell.Tests.csproj --no-restore /m:1 /p:UseSharedCompilation=false`：通过，65 passed，0 failed。
+- 剩余风险：
+  - 新 skill 已落地到全局目录，但当前 Codex 会话的 skills 列表可能需要刷新或新开会话后才显示。
+  - 这批只同步规则，不补 `1600x1000`、`1900x1200` 目标屏幕截图。
+
+## Avalonia 迁移整批评审交付记录
+
+- 完成内容：
+  - 新增 `docs/Avalonia-UI-整批评审交付说明.md`，汇总本批目标、改动分类、未触碰边界、真实数据底线、截图资产、封版验证和剩余人工验收项。
+  - 复核当前整批 diff，改动集中在 Avalonia Shell、Launcher、Presentation、Shared Avalonia Theme、测试、docs 和全局 `iiot-avalonia-hmi-polish` skill。
+  - 复核未跟踪文件，包含设计系统文档、验收清单、zip 计划文档和 `Presentation` 展示层 helper；未发现 Cloud、旧 WPF EdgeClient、AICopilot、Application、Domain、Runtime、Infrastructure、PLC/MES/Cloud 链路文件误入。
+  - 复核 `%TEMP%\iiot-avalonia-visual-check\` 截图资产，确认 Launcher、Shell/Monitor、Shell 宿主页和五个标准宿主页 `1366x768` 截图均存在、尺寸正确且非空。
+  - 明确 `launcher-1600x1000.png`、`launcher-1900x1200.png`、`shell-runtime-1600x1000.png`、`shell-runtime-1900x1200.png` 在当前 `1440x900` 屏幕上实际输出约 `1455x915`，只能作为受限截图记录，不能标记为完整通过。
+- 边界：
+  - 本轮封版只做交付说明、记录收口、截图复核和验证。
+  - 未修改 `src/` UI 行为。
+  - 未修改 Application、Domain、Runtime、Infrastructure、Modules runtime、PLC/MES/Cloud、缓存、上传、重试、死信链路。
+  - 未新增 Cloud/API/Runtime/PLC/MES 公共接口。
+  - 未修改 `C:\Users\jinha\.codex\skills\iiot-frontend-polish\`。
+- 验证：
+  - `dotnet build src/Edge/IIoT.Edge.AvaloniaShell/IIoT.Edge.AvaloniaShell.csproj --no-restore /m:1 /p:UseSharedCompilation=false`：通过，0 warning，0 error。
+  - `dotnet build src/Edge/IIoT.Edge.Launcher.Avalonia/IIoT.Edge.Launcher.Avalonia.csproj --no-restore /m:1 /p:UseSharedCompilation=false`：通过，0 warning，0 error。
+  - `dotnet test src/Tests/IIoT.Edge.AvaloniaShell.Tests/IIoT.Edge.AvaloniaShell.Tests.csproj --no-restore /m:1 /p:UseSharedCompilation=false`：通过，65 passed，0 failed。
+  - `dotnet test src/Tests/IIoT.Edge.Launcher.Tests/IIoT.Edge.Launcher.Tests.csproj --no-restore /m:1 /p:UseSharedCompilation=false`：通过，27 passed，0 failed。
+  - `python C:\Users\jinha\.codex\skills\.system\skill-creator\scripts\quick_validate.py C:\Users\jinha\.codex\skills\iiot-avalonia-hmi-polish`：通过，`Skill is valid!`。
+  - 文档/skill 乱码片段扫描：通过，未命中本轮关注的常见乱码片段。
+  - `git diff --check`：通过，仅有工作区 LF/CRLF 提示，无空白错误。
+  - diff 范围检查：通过，未发现 Cloud、旧 WPF EdgeClient、AICopilot、Application、Domain、Runtime、Infrastructure、PLC/MES/Cloud 运行链路文件误入。
+- 剩余风险：
+  - `1600x1000` 与 `1900x1200` 真实窗口完整验收仍依赖目标屏幕或工控机。
+  - 当前交付材料可支持评审，但正式 PR 审核后若出现修改意见，需要单独对齐后再处理。

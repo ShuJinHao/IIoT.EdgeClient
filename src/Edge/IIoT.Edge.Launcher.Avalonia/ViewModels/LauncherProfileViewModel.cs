@@ -240,7 +240,7 @@ public sealed class LauncherProfileViewModel : ObservableObject
             .Select(group =>
             {
                 var variants = group
-                    .OrderBy(profile => IsRuntimeProfile(profile))
+                    .OrderByDescending(profile => IsRuntimeProfile(profile))
                     .ThenBy(profile => profile.DisplayName, StringComparer.OrdinalIgnoreCase)
                     .ToList();
                 var primary = variants[0];

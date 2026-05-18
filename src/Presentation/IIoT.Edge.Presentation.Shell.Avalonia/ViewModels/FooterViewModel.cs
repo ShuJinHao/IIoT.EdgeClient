@@ -38,6 +38,15 @@ public sealed partial class FooterViewModel : AvaloniaViewModelBase
     private string runtimeDetailText = string.Empty;
 
     [ObservableProperty]
+    private bool runtimeStatusIsSuccess;
+
+    [ObservableProperty]
+    private bool runtimeStatusIsWarning = true;
+
+    [ObservableProperty]
+    private bool runtimeStatusIsError;
+
+    [ObservableProperty]
     private string diagnosticsSummary = string.Empty;
 
     private void UpdateClock()
@@ -53,5 +62,8 @@ public sealed partial class FooterViewModel : AvaloniaViewModelBase
         RuntimeStatusText = snapshot.StatusText;
         RuntimeDetailText = snapshot.DetailText;
         DiagnosticsSummary = snapshot.DiagnosticsSummary;
+        RuntimeStatusIsSuccess = snapshot.Status == AvaloniaRuntimeStatus.Running;
+        RuntimeStatusIsError = snapshot.Status == AvaloniaRuntimeStatus.StartFailed;
+        RuntimeStatusIsWarning = !RuntimeStatusIsSuccess && !RuntimeStatusIsError;
     }
 }

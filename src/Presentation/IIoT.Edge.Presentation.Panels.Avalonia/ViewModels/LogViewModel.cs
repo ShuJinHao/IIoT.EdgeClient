@@ -8,12 +8,28 @@ using IIoT.Edge.UI.Avalonia.Localization;
 using IIoT.Edge.UI.Avalonia.Mvvm;
 using IIoT.Edge.UI.Avalonia.Services;
 using System.Collections.ObjectModel;
+using System.Globalization;
+using System.Text.RegularExpressions;
 
 namespace IIoT.Edge.Presentation.Panels.Avalonia.ViewModels;
 
 public sealed partial class LogViewModel : AvaloniaViewModelBase
 {
     private const int MaxEntries = 300;
+    private static readonly Regex LeadingTimestampPattern = new(
+        @"^\s*(?:\[(?<timestamp>\d{4}[-/]\d{2}[-/]\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d{1,7})?(?:Z|[+-]\d{2}:?\d{2})?)\]|(?<timestamp>\d{4}[-/]\d{2}[-/]\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d{1,7})?(?:Z|[+-]\d{2}:?\d{2})?))",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private static readonly string[] TimestampFormats =
+    [
+        "yyyy-MM-dd HH:mm:ss",
+        "yyyy-MM-dd HH:mm:ss.FFFFFFF",
+        "yyyy/MM/dd HH:mm:ss",
+        "yyyy/MM/dd HH:mm:ss.FFFFFFF",
+        "yyyy-MM-ddTHH:mm:ssK",
+        "yyyy-MM-ddTHH:mm:ss.FFFFFFFK"
+    ];
+
     private readonly ILogService _logService;
     private readonly EdgeRuntimePaths _runtimePaths;
     private readonly IStartupDiagnosticsStore _diagnosticsStore;
@@ -88,7 +104,7 @@ public sealed partial class LogViewModel : AvaloniaViewModelBase
         Entries.Clear();
         foreach (var entry in ReadRuntimeLogEntries().Take(MaxEntries))
         {
-            Entries.Add(LogEntryRow.From(entry));
+            Entries.Add(CreateRow(entry));
         }
 
         UpdateLogMetrics();
@@ -192,7 +208,67 @@ public sealed partial class LogViewModel : AvaloniaViewModelBase
             }
         }
 
-        return new LogEntry { Time = DateTime.Now, Level = level, Message = line };
+        return new LogEntry
+        {
+            Time = TryParseTimestamp(line, out var timestamp) ? timestamp : DateTime.MinValue,
+            Level = level,
+            Message = line
+        };
+    }
+
+    private static bool TryParseTimestamp(string line, out DateTime timestamp)
+    {
+        timestamp = DateTime.MinValue;
+        var match = LeadingTimestampPattern.Match(line);
+        if (!match.Success)
+        {
+            return false;
+        }
+
+        var value = match.Groups["timestamp"].Value.Replace(',', '.');
+        if (DateTimeOffset.TryParseExact(
+                value,
+                TimestampFormats,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal,
+                out var offsetTimestamp))
+        {
+            timestamp = offsetTimestamp.LocalDateTime;
+            return true;
+        }
+
+        if (DateTime.TryParseExact(
+                value,
+                TimestampFormats,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal,
+                out var localTimestamp))
+        {
+            timestamp = localTimestamp;
+            return true;
+        }
+
+        if (DateTimeOffset.TryParse(
+                value,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal,
+                out offsetTimestamp))
+        {
+            timestamp = offsetTimestamp.LocalDateTime;
+            return true;
+        }
+
+        if (DateTime.TryParse(
+                value,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal,
+                out localTimestamp))
+        {
+            timestamp = localTimestamp;
+            return true;
+        }
+
+        return false;
     }
 
     private string CreateStartupDiagnosticsSummary()
@@ -220,7 +296,7 @@ public sealed partial class LogViewModel : AvaloniaViewModelBase
     {
         _ = _dispatcherService.InvokeAsync(() =>
         {
-            Entries.Insert(0, LogEntryRow.From(entry));
+            Entries.Insert(0, CreateRow(entry));
             while (Entries.Count > MaxEntries)
             {
                 Entries.RemoveAt(Entries.Count - 1);
@@ -229,17 +305,21 @@ public sealed partial class LogViewModel : AvaloniaViewModelBase
             UpdateLogMetrics();
         });
     }
+
+    private LogEntryRow CreateRow(LogEntry entry)
+        => LogEntryRow.From(entry, _languageService.GetText("Panels_Log_UnknownTime"));
 }
 
 public sealed record LogEntryRow(
     DateTime Time,
+    string TimeText,
     string Level,
     string Message,
     bool IsWarning,
     bool IsError,
     bool IsDebug)
 {
-    public static LogEntryRow From(LogEntry entry)
+    public static LogEntryRow From(LogEntry entry, string unknownTimeText)
     {
         var level = string.IsNullOrWhiteSpace(entry.Level)
             ? "INFO"
@@ -247,6 +327,9 @@ public sealed record LogEntryRow(
 
         return new LogEntryRow(
             entry.Time,
+            entry.Time == DateTime.MinValue
+                ? unknownTimeText
+                : entry.Time.ToString("HH:mm:ss", CultureInfo.CurrentCulture),
             level,
             entry.Message,
             IsWarningLevel(level),

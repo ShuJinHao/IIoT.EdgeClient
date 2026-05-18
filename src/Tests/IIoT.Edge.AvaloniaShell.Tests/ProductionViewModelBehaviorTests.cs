@@ -4,26 +4,33 @@ using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using System.Data;
 using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Diagnostics;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Context;
 using IIoT.Edge.Application.Common.Diagnostics;
+using IIoT.Edge.Application.Common.Models;
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 using IIoT.Edge.Application.Features.Production.CapacityView;
 using IIoT.Edge.Application.Features.Production.DataView;
+using IIoT.Edge.Application.Features.Production.Equipment;
 using IIoT.Edge.Application.Features.Production.Monitor;
 using IIoT.Edge.Application.Modules.Diagnostics;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Presentation.Navigation.Avalonia;
 using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Hardware.IOView;
 using IIoT.Edge.Presentation.Navigation.Avalonia.ViewModels;
+using IIoT.Edge.Presentation.Panels.Avalonia;
+using IIoT.Edge.Presentation.Panels.Avalonia.ViewModels;
 using IIoT.Edge.UI.Avalonia.Localization;
 using IIoT.Edge.UI.Avalonia.Services;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.Context;
 using Microsoft.Extensions.DependencyInjection;
+using System.Collections.ObjectModel;
+using System.Text;
 using Xunit;
 
 namespace IIoT.Edge.AvaloniaShell.Tests;
@@ -40,6 +47,10 @@ public sealed class ProductionViewModelBehaviorTests
         var timerFactory = new FakeAvaloniaTimerFactory();
         var viewModel = new MonitorViewModel(
             service,
+            new FakeEquipmentPanelService(),
+            new FakeEdgeSyncDiagnosticsQuery(),
+            new FakeDisplayLogService(),
+            new AvaloniaRuntimeState(),
             CreateLanguageService(),
             timerFactory,
             "test.monitor",
@@ -66,6 +77,39 @@ public sealed class ProductionViewModelBehaviorTests
         await viewModel.OnDeactivatedAsync();
 
         Assert.False(timerFactory.LastTimer?.IsEnabled);
+    }
+
+    [Fact]
+    public void Log_view_model_uses_file_timestamp_and_marks_unknown_time_without_now_fallback()
+    {
+        var runtimePaths = CreateRuntimePaths();
+        Directory.CreateDirectory(runtimePaths.LogDirectory);
+        File.WriteAllLines(
+            Path.Combine(runtimePaths.LogDirectory, "runtime.log"),
+            [
+                "2026-05-15 10:21:34 [ERROR] Cloud upload failed",
+                "ERROR line without timestamp"
+            ],
+            new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+
+        var viewModel = new LogViewModel(
+            new FakeDisplayLogService(),
+            runtimePaths,
+            new FakeStartupDiagnosticsStore(StartupDiagnosticsReport.Empty()),
+            new ImmediateAvaloniaDispatcherService(),
+            CreatePanelLanguageService());
+
+        var parsed = Assert.Single(
+            viewModel.Entries,
+            entry => entry.Message.Contains("Cloud upload failed", StringComparison.Ordinal));
+        Assert.Equal(new DateTime(2026, 5, 15, 10, 21, 34), parsed.Time);
+        Assert.Equal("10:21:34", parsed.TimeText);
+
+        var unknown = Assert.Single(
+            viewModel.Entries,
+            entry => entry.Message.Contains("without timestamp", StringComparison.Ordinal));
+        Assert.Equal(DateTime.MinValue, unknown.Time);
+        Assert.Equal("未知时间", unknown.TimeText);
     }
 
     [Fact]
@@ -636,6 +680,14 @@ public sealed class ProductionViewModelBehaviorTests
         return service;
     }
 
+    private static IAvaloniaLanguageService CreatePanelLanguageService()
+    {
+        var service = new AvaloniaResourceLanguageService(
+            new AvaloniaXamlStringResourceLoader().Load([typeof(PanelAvaloniaPresentationRegistration).Assembly]));
+        service.Apply("zh-CN");
+        return service;
+    }
+
     private static EdgeRuntimePaths CreateRuntimePaths()
     {
         var root = Path.Combine(Path.GetTempPath(), "iiot-edge-avalonia-tests", Guid.NewGuid().ToString("N"));
@@ -816,6 +868,44 @@ public sealed class ProductionViewModelBehaviorTests
         {
             CallCount++;
             return Task.FromResult(Snapshots);
+        }
+    }
+
+    private sealed class FakeEquipmentPanelService : IEquipmentPanelService
+    {
+        public List<HardwareSnapshot> Hardware { get; init; } = [];
+
+        public Task<List<HardwareSnapshot>> GetHardwareStatusAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(Hardware);
+
+        public Task<RecipeSnapshot?> GetRecipeSnapshotAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult<RecipeSnapshot?>(null);
+
+        public Task<CapacitySnapshot> GetCapacitySnapshotAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(new CapacitySnapshot(0, 0, "0.0%", "--"));
+    }
+
+    private sealed class FakeDisplayLogService : ILogDisplayService
+    {
+        public event Action<LogEntry>? EntryAdded;
+
+        public ObservableCollection<LogEntry> Entries { get; } = [];
+
+        public void Debug(string message) => Add("DEBUG", message);
+
+        public void Info(string message) => Add("INFO", message);
+
+        public void Warn(string message) => Add("WARN", message);
+
+        public void Error(string message) => Add("ERROR", message);
+
+        public void Fatal(string message) => Add("FATAL", message);
+
+        private void Add(string level, string message)
+        {
+            var entry = new LogEntry { Time = DateTime.Now, Level = level, Message = message };
+            Entries.Add(entry);
+            EntryAdded?.Invoke(entry);
         }
     }
 

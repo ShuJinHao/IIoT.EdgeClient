@@ -3,9 +3,9 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:loc="clr-namespace:IIoT.Edge.UI.Avalonia.Localization;assembly=IIoT.Edge.UI.Avalonia">
-  <Border Classes="edge-page-panel">
-    <Grid RowDefinitions="Auto,Auto,*" RowSpacing="18">
-      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+  <Border x:Name="CapacityPageRoot" Classes="edge-page-panel">
+    <Grid RowDefinitions="Auto,Auto,Auto,*" RowSpacing="14">
+      <Grid ColumnDefinitions="*" ColumnSpacing="12">
         <StackPanel Spacing="4">
           <TextBlock Classes="page-title" Text="{DynamicResource Navigation_Menu_Capacity}" />
           <StackPanel Orientation="Horizontal" Spacing="8">
@@ -14,46 +14,50 @@
             <TextBlock FontSize="12" Foreground="{DynamicResource Edge.Status.ErrorText}" Text="{Binding FeedbackMessage}" TextTrimming="CharacterEllipsis" />
           </StackPanel>
         </StackPanel>
-
-        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-          <ComboBox Width="180" ItemsSource="{Binding DeviceNames}" SelectedItem="{Binding SelectedDeviceName}" />
-          <ComboBox Width="120" ItemsSource="{Binding QueryModes}" SelectedItem="{Binding SelectedQueryMode}" />
-          <Button Classes="chip" Command="{Binding QueryCommand}" Content="{DynamicResource Navigation_Button_Query}" />
-          <Button Classes="chip accent" Command="{Binding ExportCommand}" Content="{DynamicResource Navigation_Button_Export}" />
-        </StackPanel>
       </Grid>
 
-      <Grid Grid.Row="1" ColumnDefinitions="*,*,*,*" ColumnSpacing="16">
-        <Border Classes="edge-card mint">
+      <Border x:Name="CapacityToolbar" Grid.Row="1" Classes="edge-toolbar-card">
+        <Grid ColumnDefinitions="Auto,180,Auto,120,*,Auto,Auto" ColumnSpacing="10">
+          <TextBlock VerticalAlignment="Center" Classes="caption" Text="{DynamicResource Navigation_Column_DeviceName}" />
+          <ComboBox Grid.Column="1" Width="180" ItemsSource="{Binding DeviceNames}" SelectedItem="{Binding SelectedDeviceName}" />
+          <TextBlock Grid.Column="2" VerticalAlignment="Center" Classes="caption" Text="{DynamicResource Navigation_Column_Time}" />
+          <ComboBox Grid.Column="3" Width="120" ItemsSource="{Binding QueryModes}" SelectedItem="{Binding SelectedQueryMode}" />
+          <Button Grid.Column="5" Classes="chip" Command="{Binding QueryCommand}" Content="{DynamicResource Navigation_Button_Query}" />
+          <Button Grid.Column="6" Classes="chip accent" Command="{Binding ExportCommand}" Content="{DynamicResource Navigation_Button_Export}" />
+        </Grid>
+      </Border>
+
+      <Grid Grid.Row="2" ColumnDefinitions="*,*,*,*" ColumnSpacing="12">
+        <Border Classes="edge-card compact mint" MinHeight="92">
           <StackPanel Spacing="5">
             <TextBlock Classes="caption" Text="{DynamicResource Navigation_Column_Total}" />
-            <TextBlock Classes="kpi-value" Text="{Binding PeriodTotal}" />
+            <TextBlock Classes="kpi-value" Text="{Binding PeriodTotal}" TextTrimming="CharacterEllipsis" />
           </StackPanel>
         </Border>
-        <Border Grid.Column="1" Classes="edge-card blue">
+        <Border Grid.Column="1" Classes="edge-card compact blue" MinHeight="92">
           <StackPanel Spacing="5">
             <TextBlock Classes="caption" Text="{DynamicResource Navigation_Column_Ok}" />
-            <TextBlock Classes="kpi-value" Foreground="{DynamicResource Edge.Status.Success}" Text="{Binding PeriodOk}" />
+            <TextBlock Classes="kpi-value" Foreground="{DynamicResource Edge.Status.Success}" Text="{Binding PeriodOk}" TextTrimming="CharacterEllipsis" />
           </StackPanel>
         </Border>
-        <Border Grid.Column="2" Classes="edge-card lime">
+        <Border Grid.Column="2" Classes="edge-card compact lime" MinHeight="92">
           <StackPanel Spacing="5">
             <TextBlock Classes="caption" Text="{DynamicResource Navigation_Column_Ng}" />
-            <TextBlock Classes="kpi-value" Foreground="{DynamicResource Edge.Status.Error}" Text="{Binding PeriodNg}" />
+            <TextBlock Classes="kpi-value" Foreground="{DynamicResource Edge.Status.Error}" Text="{Binding PeriodNg}" TextTrimming="CharacterEllipsis" />
           </StackPanel>
         </Border>
-        <Border Grid.Column="3" Classes="edge-card violet">
+        <Border Grid.Column="3" Classes="edge-card compact violet" MinHeight="92">
           <StackPanel Spacing="5">
             <TextBlock Classes="caption" Text="{DynamicResource Navigation_Column_Count}" />
-            <TextBlock Classes="kpi-value" Text="{Binding AvgDaily}" />
+            <TextBlock Classes="kpi-value" Text="{Binding AvgDaily}" TextTrimming="CharacterEllipsis" />
           </StackPanel>
         </Border>
       </Grid>
 
-      <Border Grid.Row="2" Classes="edge-table-card">
+      <Border Grid.Row="3" Classes="edge-table-card">
         <Grid RowDefinitions="Auto,*">
           <TextBlock Margin="18,16,18,10" Classes="section-title" Text="{DynamicResource Navigation_Menu_Capacity}" />
-          <DataGrid Grid.Row="1" ItemsSource="{Binding Records}" AutoGenerateColumns="False" IsReadOnly="True">
+          <DataGrid x:Name="CapacityRecordsGrid" Grid.Row="1" ItemsSource="{Binding Records}" AutoGenerateColumns="False" IsReadOnly="True" MinHeight="320">
             <DataGrid.Columns>
               <DataGridTextColumn Width="*" Binding="{Binding Date}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Time" />
               <DataGridTextColumn Width="110" Binding="{Binding Total}" loc:LocalizedDataGrid.HeaderResourceKey="Navigation_Column_Total" />

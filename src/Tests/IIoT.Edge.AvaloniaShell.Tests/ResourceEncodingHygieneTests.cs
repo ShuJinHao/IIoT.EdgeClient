@@ -108,6 +108,125 @@ public sealed class ResourceEncodingHygieneTests
     }
 
     [Fact]
+    public void Avalonia_design_system_should_define_phase7_tokens_and_classes()
+    {
+        var root = FindRepositoryRoot();
+        var sharedThemeRoot = Path.Combine(root, "src", "Shared", "IIoT.Edge.UI.Avalonia", "Themes");
+        var launcherThemeRoot = Path.Combine(root, "src", "Edge", "IIoT.Edge.Launcher.Avalonia", "Themes");
+
+        var industrialThemePath = Path.Combine(sharedThemeRoot, "IndustrialTheme.axaml");
+        var typographyPath = Path.Combine(sharedThemeRoot, "AppTypography.axaml");
+        var launcherThemePath = Path.Combine(launcherThemeRoot, "LauncherTheme.axaml");
+
+        var industrialTheme = File.ReadAllText(industrialThemePath, Encoding.UTF8);
+        var typography = File.ReadAllText(typographyPath, Encoding.UTF8);
+        var launcherTheme = File.ReadAllText(launcherThemePath, Encoding.UTF8);
+
+        AssertContainsAll(
+            industrialTheme,
+            industrialThemePath,
+            "x:Key=\"Edge.Status.Neutral\"",
+            "x:Key=\"Edge.Status.Muted\"",
+            "x:Key=\"Edge.Status.Running\"",
+            "x:Key=\"Edge.Status.Stopped\"",
+            "x:Key=\"Edge.Status.Failed\"",
+            "x:Key=\"Edge.Status.Development\"",
+            "x:Key=\"Edge.Shadow.Card\"",
+            "Selector=\"Border.edge-card\"",
+            "Selector=\"Border.edge-kpi-card\"",
+            "Selector=\"Border.edge-status-card\"",
+            "Selector=\"Border.edge-status-card.running\"",
+            "Selector=\"Border.edge-table-card\"",
+            "Selector=\"Border.edge-form-section\"",
+            "Selector=\"Border.edge-empty-state\"",
+            "Selector=\"Border.edge-dialog-card\"",
+            "Selector=\"Border.edge-log-entry\"",
+            "Selector=\"Border.edge-status-pill\"",
+            "Selector=\"Button.danger\"",
+            "Selector=\"ListBox.edge-log-list\"",
+            "Selector=\"TabControl.edge-tool-tabs\"",
+            "Selector=\"DataGrid\"");
+
+        AssertContainsAll(
+            typography,
+            typographyPath,
+            "x:Key=\"App.FontSize.Micro\"",
+            "x:Key=\"App.FontSize.Metric\"",
+            "x:Key=\"App.FontSize.Display\"",
+            "Selector=\"TextBlock.app-page-title\"",
+            "Selector=\"TextBlock.app-section-title\"",
+            "Selector=\"TextBlock.app-caption\"");
+
+        AssertContainsAll(
+            launcherTheme,
+            launcherThemePath,
+            "x:Key=\"Launcher.Status.Neutral\"",
+            "x:Key=\"Launcher.Status.Muted\"",
+            "x:Key=\"Launcher.Status.Running\"",
+            "x:Key=\"Launcher.Status.Stopped\"",
+            "x:Key=\"Launcher.Status.Failed\"",
+            "x:Key=\"Launcher.Status.Development\"",
+            "Selector=\"Border.launcher-status-card.running\"",
+            "Selector=\"Border.launcher-status-card.failed\"",
+            "Selector=\"Border.launcher-status-card.development\"");
+    }
+
+    [Fact]
+    public void Avalonia_phase7_design_system_docs_should_exist_and_match_index()
+    {
+        var root = FindRepositoryRoot();
+        var designSystemPath = Path.Combine(root, "docs", "Avalonia-Industrial-Design-System.md");
+        var checklistPath = Path.Combine(root, "docs", "Avalonia-UI-验收清单.md");
+        var indexPath = Path.Combine(root, "docs", "avalonia-ui-refactor-plan", "00_INDEX.md");
+        var forbiddenFragments = new[] { "鎬", "€", "\uE178", "鍖", "涓" };
+
+        Assert.True(File.Exists(designSystemPath), ToRepositoryPath(root, designSystemPath));
+        Assert.True(File.Exists(checklistPath), ToRepositoryPath(root, checklistPath));
+        Assert.True(File.Exists(indexPath), ToRepositoryPath(root, indexPath));
+
+        var designSystem = File.ReadAllText(designSystemPath, Encoding.UTF8);
+        var checklist = File.ReadAllText(checklistPath, Encoding.UTF8);
+        var index = File.ReadAllText(indexPath, Encoding.UTF8);
+
+        AssertContainsAll(
+            designSystem,
+            designSystemPath,
+            "Edge.*",
+            "Ind.*",
+            "Launcher.*",
+            "真实数据底线",
+            "禁止事项",
+            "状态语义");
+
+        AssertContainsAll(
+            checklist,
+            checklistPath,
+            "1366x768",
+            "1600x1000",
+            "1900x1200",
+            "不造假",
+            "真实数据",
+            "人工验收");
+
+        AssertContainsAll(
+            index,
+            indexPath,
+            "Phase 7 主题与设计系统固化",
+            "本批已执行，待评审",
+            "Avalonia-Industrial-Design-System.md",
+            "Avalonia-UI-验收清单.md");
+
+        foreach (var file in new[] { designSystemPath, checklistPath, indexPath })
+        {
+            var text = File.ReadAllText(file, Encoding.UTF8);
+            foreach (var fragment in forbiddenFragments)
+            {
+                Assert.DoesNotContain(fragment, text, StringComparison.Ordinal);
+            }
+        }
+    }
+
+    [Fact]
     public void Avalonia_fonts_should_come_from_xaml_resources()
     {
         var root = FindRepositoryRoot();
@@ -207,6 +326,18 @@ public sealed class ResourceEncodingHygieneTests
                      .Order(StringComparer.Ordinal))
         {
             yield return path;
+        }
+
+        yield return Path.Combine(root, "docs", "avalonia-ui-refactor-plan", "00_INDEX.md");
+        yield return Path.Combine(root, "docs", "Avalonia-Industrial-Design-System.md");
+        yield return Path.Combine(root, "docs", "Avalonia-UI-验收清单.md");
+    }
+
+    private static void AssertContainsAll(string text, string path, params string[] expectedFragments)
+    {
+        foreach (var fragment in expectedFragments)
+        {
+            Assert.True(text.Contains(fragment, StringComparison.Ordinal), $"{path} missing {fragment}");
         }
     }
 

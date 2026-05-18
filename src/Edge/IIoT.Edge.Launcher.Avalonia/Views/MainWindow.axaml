@@ -33,13 +33,14 @@
             <Border Width="54"
                     Height="54"
                     CornerRadius="18"
-                    Background="{DynamicResource Launcher.Text.Primary}"
-                    BoxShadow="{DynamicResource Shadow.Elevated}">
+                    Background="{DynamicResource Launcher.Bg.Chip}"
+                    BorderBrush="{DynamicResource Launcher.Border}"
+                    BorderThickness="1">
               <icons:MaterialIcon Width="30"
                                   Height="30"
                                   HorizontalAlignment="Center"
                                   VerticalAlignment="Center"
-                                  Foreground="{DynamicResource Launcher.Accent.Default}"
+                                  Foreground="{DynamicResource Launcher.Accent.Text}"
                                   Kind="Factory" />
             </Border>
 

@@ -188,16 +188,18 @@ public sealed class LauncherProfileCatalogTests
     }
 
     [Fact]
-    public void SourceProfileCatalog_ShouldLoadHomogenizationProfile()
+    public void SourceProfileCatalog_ShouldExposeOnlyHomogenizationRuntimeProfile()
     {
         var repoRoot = FindRepoRoot();
         var catalogPath = Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.Launcher.Avalonia", "launcher.profiles.json");
         var catalog = new LauncherProfileCatalog(Path.GetDirectoryName(catalogPath)!, Path.GetFileName(catalogPath));
 
-        var profile = Assert.Single(catalog.LoadProfiles(), item => item.ProfileId == "HomogenizationLineAvalonia");
-        Assert.Equal("HomogenizationLineAvalonia", profile.ProfileId);
-        Assert.Equal("匀浆 Avalonia 迁移验证 UI-only", profile.DisplayName);
+        var profile = Assert.Single(catalog.LoadProfiles());
+        Assert.Equal("HomogenizationLineAvaloniaRuntime", profile.ProfileId);
+        Assert.Equal("匀浆产线", profile.DisplayName);
         Assert.Equal("HomogenizationLine", profile.MachineProfile);
+        Assert.NotNull(profile.Arguments);
+        Assert.Contains("--start-runtime", profile.Arguments);
         Assert.EndsWith(
             Path.Combine("avalonia-shell", "IIoT.Edge.AvaloniaShell.exe"),
             profile.ExecutablePath,

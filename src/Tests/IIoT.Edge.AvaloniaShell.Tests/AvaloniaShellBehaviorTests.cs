@@ -1,7 +1,12 @@
 using System.Reflection;
 using System.Text.Json;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.LogicalTree;
+using Avalonia.VisualTree;
+using Dock.Model.Mvvm.Controls;
 using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Context;
@@ -22,6 +27,7 @@ using IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Models;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.AvaloniaShell.Services;
 using IIoT.Edge.AvaloniaShell.ViewModels;
+using IIoT.Edge.AvaloniaShell.Views;
 using IIoT.Edge.Host.Bootstrap;
 using IIoT.Edge.Module.Homogenization.Presentation;
 using IIoT.Edge.Module.Homogenization.Config;
@@ -32,7 +38,9 @@ using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Config.ParamView;
 using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Formula.RecipeView;
 using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Hardware.HardwareConfig.ViewModels;
 using IIoT.Edge.Presentation.Navigation.Avalonia.Features.Hardware.IOView;
+using IIoT.Edge.Presentation.Navigation.Avalonia.ViewModels;
 using IIoT.Edge.Presentation.Navigation.Avalonia.Views;
+using IIoT.Edge.Presentation.Panels.Avalonia.Views;
 using IIoT.Edge.Presentation.Shell.Avalonia.ViewModels;
 using IIoT.Edge.Presentation.Shell.Avalonia.Features.SysMenu.ViewModels;
 using IIoT.Edge.SharedKernel.DataPipeline.Recipe;
@@ -359,11 +367,167 @@ public sealed class AvaloniaShellBehaviorTests
         Assert.Contains(viewModel.MenuItems, item => item.ViewId == ids.Monitor);
         Assert.Contains(viewModel.MenuItems, item => item.ViewId == ids.RecipeView);
         Assert.Contains(viewModel.MenuItems, item => item.ViewId == ids.ParamView);
+        var mainDock = Assert.IsType<ProportionalDock>(Assert.Single(viewModel.DockLayout.VisibleDockables!));
+        var documents = Assert.IsType<DocumentDock>(Assert.Single(mainDock.VisibleDockables!));
+        Assert.Equal(ids.Monitor, documents.ActiveDockable?.Id);
 
         viewModel.ToggleLanguageCommand.Execute(null);
 
         Assert.Equal("en-US", viewModel.CultureName);
         Assert.Contains(viewModel.MenuItems, item => item.ViewId == ids.Monitor && item.Title == "Monitor");
+    }
+
+    [AvaloniaFact]
+    public void Main_window_layout_smoke_keeps_core_regions_available_at_1366x768()
+    {
+        using var provider = BuildProvider();
+        provider.GetRequiredService<IAvaloniaLanguageService>().Apply("zh-CN");
+        var viewModel = provider.GetRequiredService<MainWindowViewModel>();
+        var window = new MainWindow
+        {
+            DataContext = viewModel,
+            Width = 1366,
+            Height = 768
+        };
+
+        try
+        {
+            window.Show();
+
+            Assert.Equal(WindowDecorations.None, window.WindowDecorations);
+            Assert.True(window.MinWidth <= 1366);
+            Assert.True(window.MinHeight <= 768);
+            Assert.NotNull(viewModel.DockLayout);
+            Assert.NotNull(viewModel.EquipmentToolDockable);
+            Assert.NotNull(viewModel.LogToolDockable);
+            var shellRoot = window.FindControl<Control>("ShellRoot");
+            var workspaceHost = window.FindControl<Control>("WorkspaceHost");
+            var documentHost = window.FindControl<Control>("DocumentHost");
+            var rightToolShell = window.FindControl<Control>("RightToolShell");
+            var equipmentToolHost = window.FindControl<ContentControl>("EquipmentToolHost");
+            var logToolHost = window.FindControl<ContentControl>("LogToolHost");
+
+            Assert.NotNull(shellRoot);
+            Assert.NotNull(workspaceHost);
+            Assert.NotNull(documentHost);
+            Assert.NotNull(rightToolShell);
+            Assert.NotNull(equipmentToolHost);
+            Assert.NotNull(logToolHost);
+            Assert.True(workspaceHost!.Bounds.Width > 0);
+            Assert.True(documentHost!.Bounds.Width > 0);
+            Assert.True(rightToolShell!.Bounds.Width > 0);
+            Assert.True(equipmentToolHost!.Bounds.Height > 0);
+            Assert.True(logToolHost!.Bounds.Height > 0);
+            Assert.True(rightToolShell.Bounds.Right <= workspaceHost.Bounds.Width + 1);
+
+            var outputRoot = Path.Combine(Path.GetTempPath(), "iiot-avalonia-visual-check");
+            Directory.CreateDirectory(outputRoot);
+            var bitmap = window.CaptureRenderedFrame();
+            Assert.NotNull(bitmap);
+            var screenshotPath = Path.Combine(outputRoot, "shell-right-tools-1366x768.png");
+            bitmap!.Save(screenshotPath);
+            Assert.True(File.Exists(screenshotPath), $"Shell screenshot was not written to {screenshotPath}");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task Startup_error_window_without_visible_owner_should_not_throw()
+    {
+        var owner = new Window();
+        var dialog = new StartupErrorWindow("启动校验失败。", "模块数：0", "diagnostics.log");
+
+        var showTask = dialog.ShowSafelyAsync(owner);
+
+        try
+        {
+            Assert.True(dialog.IsVisible);
+            Assert.Equal(WindowStartupLocation.CenterScreen, dialog.WindowStartupLocation);
+
+            dialog.Close();
+            await showTask.WaitAsync(TimeSpan.FromSeconds(2));
+        }
+        finally
+        {
+            if (dialog.IsVisible)
+            {
+                dialog.Close();
+            }
+        }
+    }
+
+    [AvaloniaFact]
+    public void Startup_error_window_module_mismatch_uses_fixed_operator_fields()
+    {
+        var dialog = new StartupErrorWindow(
+            "启动校验失败：\n- [DEVICE_MODULE_MISMATCH] (模块=Homogenization, 设备=PLC-Homogenization-01) PLC 引用了未知模块。",
+            "模块数：0；PLC 设备数：1；阻断问题数：1",
+            @"C:\logs");
+
+        try
+        {
+            dialog.Show();
+            dialog.ApplyTemplate();
+
+            var deviceValue = FindNamedControl<TextBlock>(dialog, "StartupErrorDeviceValue");
+            var moduleValue = FindNamedControl<TextBlock>(dialog, "StartupErrorModuleValue");
+            var loadedModuleValue = FindNamedControl<TextBlock>(dialog, "StartupErrorLoadedModuleValue");
+            var diagnosticsPathValue = FindNamedControl<TextBlock>(dialog, "StartupErrorDiagnosticsPathValue");
+
+            Assert.NotNull(deviceValue);
+            Assert.NotNull(moduleValue);
+            Assert.NotNull(loadedModuleValue);
+            Assert.NotNull(diagnosticsPathValue);
+            Assert.Equal("PLC-Homogenization-01", deviceValue!.Text);
+            Assert.Equal("Homogenization", moduleValue!.Text);
+            Assert.Equal("0", loadedModuleValue!.Text);
+            Assert.Equal(@"C:\logs", diagnosticsPathValue!.Text);
+            Assert.Null(FindNamedControl<ScrollViewer>(dialog, "StartupErrorOuterScroll"));
+        }
+        finally
+        {
+            dialog.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public void Right_tool_views_use_paged_equipment_and_direct_log_list()
+    {
+        var equipmentView = new EquipmentView();
+        var logView = new LogView();
+        var window = new Window
+        {
+            Width = 340,
+            Height = 640,
+            Content = new StackPanel
+            {
+                Children =
+                {
+                    equipmentView,
+                    logView
+                }
+            }
+        };
+
+        try
+        {
+            window.Show();
+            equipmentView.ApplyTemplate();
+            logView.ApplyTemplate();
+
+            Assert.NotNull(FindNamedControl<ItemsControl>(equipmentView, "EquipmentPagedItems"));
+            Assert.NotNull(FindNamedControl<Control>(equipmentView, "EquipmentPager"));
+            Assert.NotNull(FindNamedControl<StackPanel>(logView, "LogActions"));
+            Assert.Empty(logView.GetVisualDescendants().OfType<ComboBox>());
+            Assert.Null(FindNamedControl<Control>(logView, "LogLatestSummary"));
+        }
+        finally
+        {
+            window.Close();
+        }
     }
 
     [AvaloniaFact]
@@ -390,6 +554,127 @@ public sealed class AvaloniaShellBehaviorTests
 
             Assert.NotNull(navigation.CurrentView);
             Assert.NotNull(navigation.CurrentViewModel);
+        }
+    }
+
+    [AvaloniaFact]
+    public void Host_pages_layout_smoke_keeps_key_regions_available_at_1366x768()
+    {
+        using var provider = BuildProvider();
+        provider.GetRequiredService<IAvaloniaLanguageService>().Apply("zh-CN");
+        var pageCases = CreateHostPageVisualCases();
+
+        foreach (var pageCase in pageCases)
+        {
+            var page = pageCase.CreatePage(provider);
+            var window = new Window
+            {
+                Width = 1366,
+                Height = 768,
+                Content = page
+            };
+
+            try
+            {
+                window.Show();
+                window.ApplyTemplate();
+                page.ApplyTemplate();
+                AssertHostPageKeyRegions(pageCase, page);
+            }
+            finally
+            {
+                window.Content = null;
+                window.Close();
+            }
+        }
+    }
+
+    [AvaloniaFact]
+    public void Host_pages_visual_check_writes_direct_1366x768_screenshots()
+    {
+        using var provider = BuildProvider();
+        provider.GetRequiredService<IAvaloniaLanguageService>().Apply("zh-CN");
+        var outputRoot = Path.Combine(Path.GetTempPath(), "iiot-avalonia-visual-check");
+        Directory.CreateDirectory(outputRoot);
+
+        foreach (var pageCase in CreateHostPageVisualCases())
+        {
+            var page = pageCase.CreatePage(provider);
+            var window = new Window
+            {
+                Width = 1366,
+                Height = 768,
+                Content = page
+            };
+
+            try
+            {
+                window.Show();
+                window.ApplyTemplate();
+                page.ApplyTemplate();
+                AssertHostPageKeyRegions(pageCase, page);
+
+                var bitmap = window.CaptureRenderedFrame();
+                Assert.NotNull(bitmap);
+
+                var screenshotPath = Path.Combine(outputRoot, $"host-page-direct-1366x768-{pageCase.Slug}.png");
+                bitmap!.Save(screenshotPath);
+
+                var screenshot = new FileInfo(screenshotPath);
+                Assert.True(screenshot.Exists, $"{pageCase.Name} screenshot was not written to {screenshotPath}");
+                Assert.True(screenshot.Length > 0, $"{pageCase.Name} screenshot is empty: {screenshotPath}");
+            }
+            finally
+            {
+                window.Content = null;
+                window.Close();
+            }
+        }
+    }
+
+    [AvaloniaFact]
+    public void Monitor_visual_check_writes_1366x768_screenshot()
+    {
+        using var provider = BuildProvider();
+        provider.GetRequiredService<IAvaloniaLanguageService>().Apply("zh-CN");
+        var ids = StandardAvaloniaModuleViewIds.Create("Homogenization");
+        var page = CreatePage<MonitorViewPage, MonitorViewModel>(
+            provider,
+            ids.Monitor,
+            "Navigation_Menu_Monitor",
+            "Monitor");
+        var window = new Window
+        {
+            Width = 1366,
+            Height = 768,
+            Content = page
+        };
+        var outputRoot = Path.Combine(Path.GetTempPath(), "iiot-avalonia-visual-check");
+        Directory.CreateDirectory(outputRoot);
+
+        try
+        {
+            window.Show();
+            window.ApplyTemplate();
+            page.ApplyTemplate();
+
+            Assert.NotNull(FindNamedControl<Control>(page, "MonitorProcessFlowCard"));
+            Assert.NotNull(FindNamedControl<Control>(page, "MonitorRightStatusPanel"));
+
+            var bitmap = window.CaptureRenderedFrame();
+            Assert.NotNull(bitmap);
+
+            var screenshotPath = Path.Combine(outputRoot, "monitor-refactor-1366x768.png");
+            bitmap!.Save(screenshotPath);
+
+            var screenshot = new FileInfo(screenshotPath);
+            Assert.True(screenshot.Exists, $"Monitor screenshot was not written to {screenshotPath}");
+            Assert.True(screenshot.Length > 0, $"Monitor screenshot is empty: {screenshotPath}");
+        }
+        finally
+        {
+            window.Content = null;
+            window.Close();
         }
     }
 
@@ -748,12 +1033,182 @@ public sealed class AvaloniaShellBehaviorTests
         return service;
     }
 
+    private static TView CreatePage<TView, TViewModel>(
+        IServiceProvider provider,
+        string viewId,
+        string titleResourceKey,
+        string titleFallback)
+        where TView : Control, new()
+        where TViewModel : NavigationPageViewModelBase
+    {
+        return new TView
+        {
+            DataContext = ActivatorUtilities.CreateInstance<TViewModel>(
+                provider,
+                viewId,
+                titleResourceKey,
+                titleFallback)
+        };
+    }
+
+    private static HostPageVisualCase[] CreateHostPageVisualCases()
+    {
+        var ids = StandardAvaloniaModuleViewIds.Create("Homogenization");
+
+        return
+        [
+            new HostPageVisualCase(
+                "CapacityViewPage",
+                "capacity",
+                sp => CreatePage<CapacityViewPage, CapacityViewModel>(sp, ids.CapacityView, "Navigation_Menu_Capacity", "Capacity"),
+                "CapacityPageRoot",
+                ["CapacityToolbar", "CapacityRecordsGrid"]),
+            new HostPageVisualCase(
+                "DataViewPage",
+                "data",
+                sp => CreatePage<DataViewPage, DataViewModel>(sp, ids.DataView, "Navigation_Menu_Data", "Data"),
+                "DataPageRoot",
+                ["DataToolbar", "DataRecordsGrid"]),
+            new HostPageVisualCase(
+                "RecipeViewPage",
+                "recipe",
+                sp => CreatePage<RecipeViewPage, RecipeViewModel>(sp, ids.RecipeView, "Navigation_Menu_Recipe", "Recipe"),
+                "RecipePageRoot",
+                ["RecipeSummaryPanel", "RecipeParamsGrid", "RecipeEmergencyEdit"]),
+            new HostPageVisualCase(
+                "ParamViewPage",
+                "param",
+                sp => CreatePage<ParamViewPage, ParamViewModel>(sp, ids.ParamView, "Navigation_Menu_ParamConfig", "Parameters"),
+                "ParamPageRoot",
+                ["ParamTabs"]),
+            new HostPageVisualCase(
+                "PlcTaskBindingPage",
+                "plc-task-binding",
+                sp => CreatePage<PlcTaskBindingPage, PlcTaskBindingViewModel>(sp, ids.PlcTaskBindingView, "Navigation_Menu_PlcTaskBinding", "PLC Tasks"),
+                "PlcTaskBindingPageRoot",
+                ["PlcDeviceToolbar", "PlcTaskBindingGrid"])
+        ];
+    }
+
+    private static void AssertHostPageKeyRegions(HostPageVisualCase pageCase, Control page)
+    {
+        var availableNames = $"{page.GetType().FullName}; {DescribeContent(page)}; {GetControlNames(page)}";
+        var root = FindNamedControl<Control>(page, pageCase.RootName);
+        Assert.True(root is not null, $"{pageCase.Name} missing {pageCase.RootName}; names: {availableNames}");
+        Assert.True(root!.Bounds.Width > 0);
+        Assert.True(root.Bounds.Height > 0);
+
+        foreach (var controlName in pageCase.RequiredControls)
+        {
+            Assert.True(
+                FindNamedControl<Control>(page, controlName) is not null,
+                $"{pageCase.Name} missing {controlName}; names: {availableNames}");
+        }
+    }
+
     private static string CreateTempDirectory()
     {
         var path = Path.Combine(Path.GetTempPath(), "iiot-edge-avalonia-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(path);
         return path;
     }
+
+    private static T? FindNamedControl<T>(Control root, string name)
+        where T : Control
+    {
+        if (root.Name == name && root is T typedRoot)
+        {
+            return typedRoot;
+        }
+
+        var field = root.GetType().GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        if (field?.GetValue(root) is T namedField)
+        {
+            return namedField;
+        }
+
+        if (root is ContentControl { Content: Control content })
+        {
+            var foundInContent = FindNamedControl<T>(content, name);
+            if (foundInContent is not null)
+            {
+                return foundInContent;
+            }
+        }
+
+        if (root is ContentPresenter { Content: Control presentedContent })
+        {
+            var foundInPresentedContent = FindNamedControl<T>(presentedContent, name);
+            if (foundInPresentedContent is not null)
+            {
+                return foundInPresentedContent;
+            }
+        }
+
+        return root.GetVisualDescendants()
+            .OfType<T>()
+            .Concat(root.GetLogicalDescendants().OfType<T>())
+            .FirstOrDefault(control => control.Name == name);
+    }
+
+    private static string GetControlNames(Control root)
+    {
+        var names = EnumerateControls(root)
+            .Select(control => control.Name)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(name => name, StringComparer.Ordinal);
+
+        return string.Join(", ", names);
+    }
+
+    private static string DescribeContent(Control root)
+    {
+        return root switch
+        {
+            ContentControl { Content: not null } contentControl => $"content={contentControl.Content.GetType().FullName}",
+            ContentPresenter { Content: not null } presenter => $"presented={presenter.Content.GetType().FullName}",
+            _ => "content=<none>"
+        };
+    }
+
+    private static IEnumerable<Control> EnumerateControls(Control root)
+    {
+        yield return root;
+
+        if (root is ContentControl { Content: Control content })
+        {
+            foreach (var child in EnumerateControls(content))
+            {
+                yield return child;
+            }
+        }
+
+        if (root is ContentPresenter { Content: Control presentedContent })
+        {
+            foreach (var child in EnumerateControls(presentedContent))
+            {
+                yield return child;
+            }
+        }
+
+        foreach (var child in root.GetVisualDescendants().OfType<Control>())
+        {
+            yield return child;
+        }
+
+        foreach (var child in root.GetLogicalDescendants().OfType<Control>())
+        {
+            yield return child;
+        }
+    }
+
+    private sealed record HostPageVisualCase(
+        string Name,
+        string Slug,
+        Func<IServiceProvider, Control> CreatePage,
+        string RootName,
+        string[] RequiredControls);
 
     private static string FindRepositoryRoot()
     {

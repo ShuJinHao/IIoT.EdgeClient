@@ -105,12 +105,12 @@ public sealed class LauncherMainViewModelTests
 
         var group = Assert.Single(viewModel.ProfileGroups);
         Assert.Equal("HomogenizationLine", group.MachineProfile);
-        Assert.Same(uiOnlyProfile, group.PrimaryProfile);
+        Assert.Same(runtimeProfile, group.PrimaryProfile);
         Assert.Equal("共 1 个工序", viewModel.ProfileSummaryText);
 
         await viewModel.ProfileViewModel.LaunchProfileCommand.ExecuteAsync(group);
 
-        Assert.Same(uiOnlyProfile, launchService.LastProfile);
+        Assert.Same(runtimeProfile, launchService.LastProfile);
     }
 
     [Fact]

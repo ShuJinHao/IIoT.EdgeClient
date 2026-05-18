@@ -5,7 +5,7 @@
   <Border Background="Transparent" Padding="0">
     <Border Classes="edge-right-panel chromeless">
       <DockPanel>
-        <Grid DockPanel.Dock="Top" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="10" Margin="0,0,0,12">
+        <Grid DockPanel.Dock="Top" RowDefinitions="Auto,Auto,Auto" RowSpacing="10" Margin="0,0,0,12">
           <StackPanel Spacing="3">
             <TextBlock Classes="section-title" Text="{DynamicResource Panels_Title_RuntimeLog}" />
             <TextBlock Classes="caption" Text="{DynamicResource Panels_Log_Hint}" />
@@ -41,40 +41,20 @@
             </Border>
           </Grid>
 
-          <Grid Grid.Row="2" RowDefinitions="Auto,Auto" RowSpacing="8">
-            <ComboBox ItemsSource="{Binding LogFiles}"
-                      SelectedItem="{Binding SelectedLogFile}"
-                      HorizontalAlignment="Stretch">
-              <ComboBox.ItemTemplate>
-                <DataTemplate>
-                  <TextBlock Text="{Binding DisplayText}" />
-                </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
-            <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-              <Button Classes="chip" Command="{Binding RefreshCommand}" Content="{DynamicResource Shell_Action_Refresh}" />
-              <Button Classes="chip" Command="{Binding ClearCommand}" Content="{DynamicResource Shell_Action_Clear}" />
-            </StackPanel>
-          </Grid>
-
-          <Border Grid.Row="3" Classes="edge-inline-note">
-            <StackPanel Spacing="4">
-              <TextBlock FontSize="12"
-                         FontWeight="SemiBold"
-                         Foreground="{DynamicResource Edge.Text.Secondary}"
-                         Text="{DynamicResource Panels_Log_Latest}" />
-              <TextBlock Text="{Binding LatestLogSummary}"
-                         TextWrapping="Wrap"
-                         MaxHeight="58"
-                         Foreground="{DynamicResource Edge.Text.Secondary}" />
-            </StackPanel>
-          </Border>
+          <StackPanel x:Name="LogActions"
+                      Grid.Row="2"
+                      Orientation="Horizontal"
+                      HorizontalAlignment="Right"
+                      Spacing="8">
+            <Button Classes="chip" Command="{Binding RefreshCommand}" Content="{DynamicResource Shell_Action_Refresh}" />
+            <Button Classes="chip" Command="{Binding ClearCommand}" Content="{DynamicResource Shell_Action_Clear}" />
+          </StackPanel>
         </Grid>
 
         <Border Classes="edge-log-empty"
                 IsVisible="{Binding IsLogEmpty}"
                 Margin="0,0,0,12">
-          <TextBlock Text="{Binding LatestLogSummary}"
+          <TextBlock Text="{DynamicResource Panels_Log_NoEntries}"
                      TextWrapping="Wrap"
                      Foreground="{DynamicResource Edge.Text.Secondary}" />
         </Border>
@@ -108,7 +88,7 @@
                     </Border>
                     <TextBlock FontSize="12"
                                Foreground="{DynamicResource Edge.Text.Muted}"
-                               Text="{Binding Time, StringFormat='{}{0:HH:mm:ss}'}" />
+                               Text="{Binding TimeText}" />
                   </StackPanel>
                   <TextBlock Foreground="{DynamicResource Edge.Text.Primary}"
                              Text="{Binding Message}"
