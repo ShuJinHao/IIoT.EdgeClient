@@ -50,7 +50,7 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
     /// <summary>
     /// 配方上传任务名称，用于运行日志和任务诊断。
     /// </summary>
-    public override string TaskName => HomogenizationTaskKeys.Recipe;
+    public override string TaskName => "Homogenization.Recipe";
 
     protected override async Task DoCoreAsync()
     {

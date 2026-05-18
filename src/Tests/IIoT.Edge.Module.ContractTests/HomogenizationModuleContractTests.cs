@@ -7,6 +7,7 @@ using IIoT.Edge.Module.Homogenization;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Parameters;
 using IIoT.Edge.Module.Homogenization.Integration;
+using IIoT.Edge.Module.Homogenization.Integration.Cloud;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using IIoT.Edge.Module.Homogenization.Samples;
@@ -15,7 +16,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using HomogenizationCloudUploadChannel = IIoT.Edge.Application.Modules.Cloud.ICloudUploadChannel<
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationProcessRecordsCloudPayload>;
+    object>;
 using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesScenarioChannel<
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
     string,
@@ -59,18 +60,18 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
     }
 
     [Fact]
-    public void PluginManifest_ShouldMatchHomogenizationIdentityConstants()
+    public void PluginManifest_ShouldMatchHomogenizationModuleEntry()
     {
         var manifestPath = Path.Combine(
-            ContractTestPathHelper.GetModuleSourceDirectory(HomogenizationModuleIdentity.ModuleId),
+            ContractTestPathHelper.GetModuleSourceDirectory("Homogenization"),
             "plugin.json");
 
         using var document = JsonDocument.Parse(File.ReadAllText(manifestPath));
         var root = document.RootElement;
 
-        Assert.Equal(HomogenizationModuleIdentity.ModuleId, root.GetProperty("moduleId").GetString());
-        Assert.Equal(HomogenizationModuleIdentity.ProcessType, root.GetProperty("supportedProcessType").GetString());
-        Assert.Equal(HomogenizationModuleIdentity.EntryType, root.GetProperty("entryType").GetString());
+        Assert.Equal("Homogenization", root.GetProperty("moduleId").GetString());
+        Assert.Equal("Homogenization", root.GetProperty("supportedProcessType").GetString());
+        Assert.Equal("IIoT.Edge.Module.Homogenization.DependencyInjection", root.GetProperty("entryType").GetString());
     }
 
     [Fact]
@@ -117,7 +118,7 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
         var configuration = new ConfigurationBuilder()
             .AddJsonFile(
                 Path.Combine(
-                    ContractTestPathHelper.GetModuleSourceDirectory(HomogenizationModuleIdentity.ModuleId),
+                    ContractTestPathHelper.GetModuleSourceDirectory("Homogenization"),
                     "Config",
                     "homogenization.module.json"),
                 optional: false,
@@ -137,7 +138,7 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
     public void HomogenizationLanguageDictionaries_ShouldContainSameNonEmptyKeys()
     {
         var resourceDirectory = Path.Combine(
-            ContractTestPathHelper.GetModuleSourceDirectory(HomogenizationModuleIdentity.ModuleId),
+            ContractTestPathHelper.GetModuleSourceDirectory("Homogenization"),
             "Resources",
             "Languages");
         var zhKeys = ReadLanguageDictionary(resourceDirectory, "zh-CN.xaml");
@@ -210,23 +211,23 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
         public Task<ModuleParamSnapshot<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>> GetAsync(
             CancellationToken cancellationToken = default)
             => Task.FromResult(new ModuleParamSnapshot<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>(
-                HomogenizationModuleIdentity.ModuleId,
+                "Homogenization",
                 new ModuleParamGroup<HomogenizationParams.Mes>(
-                    HomogenizationModuleIdentity.ModuleId,
+                    "Homogenization",
                     ModuleParamCategory.Mes,
                     new Dictionary<HomogenizationParams.Mes, string>(),
                     new Dictionary<HomogenizationParams.Mes, string?>(),
                     new Dictionary<HomogenizationParams.Mes, ParamValueKind>(),
                     warn: null),
                 new ModuleParamGroup<HomogenizationParams.Cloud>(
-                    HomogenizationModuleIdentity.ModuleId,
+                    "Homogenization",
                     ModuleParamCategory.Cloud,
                     new Dictionary<HomogenizationParams.Cloud, string>(),
                     new Dictionary<HomogenizationParams.Cloud, string?>(),
                     new Dictionary<HomogenizationParams.Cloud, ParamValueKind>(),
                     warn: null),
                 new ModuleParamGroup<HomogenizationParams.Business>(
-                    HomogenizationModuleIdentity.ModuleId,
+                    "Homogenization",
                     ModuleParamCategory.Business,
                     new Dictionary<HomogenizationParams.Business, string>(),
                     new Dictionary<HomogenizationParams.Business, string?>
@@ -242,7 +243,7 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
 
     private sealed class ContractHomogenizationMesChannel : HomogenizationMesScenarioChannel
     {
-        public string ProcessType => HomogenizationModuleIdentity.ProcessType;
+        public string ProcessType => "Homogenization";
         public MesUploadMode UploadMode => MesUploadMode.Single;
 
         public Task<MesCallResult> UploadAsync(

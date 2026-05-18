@@ -1,12 +1,12 @@
 using System.Text.Json.Serialization;
 using IIoT.Edge.Module.Homogenization.Payload;
 
-namespace IIoT.Edge.Module.Homogenization.Integration;
+namespace IIoT.Edge.Module.Homogenization.Integration.Cloud;
 
 /// <summary>
-/// 匀浆工序上传到 Cloud process-records 入口的批量 payload。
+/// 匀浆工序上传到 Cloud process-records 入口的批量 payload 草案；云端契约确认前不接入运行时发送。
 /// </summary>
-public sealed record HomogenizationProcessRecordsCloudPayload(
+internal sealed record HomogenizationProcessRecordsCloudPayload(
     [property: JsonPropertyName("typeKey")] string TypeKey,
     [property: JsonPropertyName("processType")] string ProcessType,
     [property: JsonPropertyName("schemaVersion")] int SchemaVersion,
@@ -16,7 +16,7 @@ public sealed record HomogenizationProcessRecordsCloudPayload(
 /// <summary>
 /// 单条匀浆过站记录的 Cloud payload。
 /// </summary>
-public sealed record HomogenizationProcessRecordCloudPayload(
+internal sealed record HomogenizationProcessRecordCloudPayload(
     [property: JsonPropertyName("typeKey")] string TypeKey,
     [property: JsonPropertyName("processType")] string ProcessType,
     [property: JsonPropertyName("schemaVersion")] int SchemaVersion,
@@ -29,7 +29,7 @@ public sealed record HomogenizationProcessRecordCloudPayload(
 /// <summary>
 /// 匀浆插件自有业务字段，作为 Cloud process-records 的 payload 扩展段。
 /// </summary>
-public sealed record HomogenizationProcessRecordBusinessCloudPayload(
+internal sealed record HomogenizationProcessRecordBusinessCloudPayload(
     [property: JsonPropertyName("plcName")] string PlcName,
     [property: JsonPropertyName("deviceCode")] string DeviceCode,
     [property: JsonPropertyName("inboundTime")] DateTime? InboundTime,

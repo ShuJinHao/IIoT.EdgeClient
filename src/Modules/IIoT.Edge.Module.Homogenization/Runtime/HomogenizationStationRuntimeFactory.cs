@@ -30,6 +30,13 @@ namespace IIoT.Edge.Module.Homogenization.Runtime;
 /// </summary>
 public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
 {
+    private const string HeartbeatTaskKey = "Homogenization.Heartbeat";
+    private const string InboundTaskKey = "Homogenization.Inbound";
+    private const string OutboundTaskKey = "Homogenization.Outbound";
+    private const string RecipeTaskKey = "Homogenization.Recipe";
+    private const string EquipmentStatusTaskKey = "Homogenization.EquipmentStatus";
+    private const string RealtimeTaskKey = "Homogenization.Realtime";
+
     private static readonly HomogenizationPlcSignals.SingleRead[] RealtimeSignals =
     [
         HomogenizationPlcSignals.SingleRead.实时搅拌转速,
@@ -72,30 +79,30 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
 
     private static readonly IReadOnlyCollection<TaskCandidate> TaskCandidates =
     [
-        PlcTaskCandidateBuilder.Create(HomogenizationTaskKeys.Heartbeat, "心跳")
+        PlcTaskCandidateBuilder.Create(HeartbeatTaskKey, "心跳")
             .HeartbeatLike()
             .RequiresInteraction(HomogenizationPlcSignals.Interaction.心跳)
             .Build(),
-        PlcTaskCandidateBuilder.Create(HomogenizationTaskKeys.Inbound, "扫码进站")
+        PlcTaskCandidateBuilder.Create(InboundTaskKey, "扫码进站")
             .RequiresInteraction(HomogenizationPlcSignals.Interaction.扫码进站)
             .RequiresRead(HomogenizationPlcSignals.ContinuousRead.托盘码)
             .Build(),
-        PlcTaskCandidateBuilder.Create(HomogenizationTaskKeys.Outbound, "出料上传")
+        PlcTaskCandidateBuilder.Create(OutboundTaskKey, "出料上传")
             .RequiresInteraction(HomogenizationPlcSignals.Interaction.出料上传)
             .RequiresRead(HomogenizationPlcSignals.ContinuousRead.托盘码)
             .RequiresRead(RealtimeSignals)
             .RequiresRead(OutboundSignals)
             .RequiresRead(HomogenizationPlcSignals.SingleRead.设备状态值)
             .Build(),
-        PlcTaskCandidateBuilder.Create(HomogenizationTaskKeys.Recipe, "工艺参数上传")
+        PlcTaskCandidateBuilder.Create(RecipeTaskKey, "工艺参数上传")
             .RequiresInteraction(HomogenizationPlcSignals.Interaction.工艺参数上传)
             .RequiresRead(RecipeSignals)
             .Build(),
-        PlcTaskCandidateBuilder.Create(HomogenizationTaskKeys.EquipmentStatus, "设备状态上传")
+        PlcTaskCandidateBuilder.Create(EquipmentStatusTaskKey, "设备状态上传")
             .RequiresInteraction(HomogenizationPlcSignals.Interaction.设备状态上传)
             .RequiresRead(HomogenizationPlcSignals.SingleRead.设备状态值)
             .Build(),
-        PlcTaskCandidateBuilder.Create(HomogenizationTaskKeys.Realtime, "实时数据上传")
+        PlcTaskCandidateBuilder.Create(RealtimeTaskKey, "实时数据上传")
             .RequiresRead(RealtimeSignals)
             .Build()
     ];
@@ -103,7 +110,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
     /// <summary>
     /// 工厂归属的匀浆模块标识。
     /// </summary>
-    public string ModuleId => HomogenizationModuleIdentity.ModuleId;
+    public string ModuleId => DependencyInjection.ModuleKey;
 
     public IReadOnlyCollection<TaskCandidate> GetTaskCandidates()
         => TaskCandidates;
@@ -160,7 +167,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
         var codec = new HomogenizationSignalCodec(singleReadSignals, continuousReadSignals, productionTime);
         var tasks = new List<IPlcTask>();
 
-        if (enabledTaskKeys.Contains(HomogenizationTaskKeys.Inbound))
+        if (enabledTaskKeys.Contains(InboundTaskKey))
         {
             tasks.Add(new HomogenizationInboundTask(
                 buffer,
@@ -177,7 +184,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 codeOptions));
         }
 
-        if (enabledTaskKeys.Contains(HomogenizationTaskKeys.Outbound))
+        if (enabledTaskKeys.Contains(OutboundTaskKey))
         {
             tasks.Add(new HomogenizationOutboundTask(
                 buffer,
@@ -195,7 +202,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 codeOptions));
         }
 
-        if (enabledTaskKeys.Contains(HomogenizationTaskKeys.Recipe))
+        if (enabledTaskKeys.Contains(RecipeTaskKey))
         {
             tasks.Add(new HomogenizationRecipeTask(
                 buffer,
@@ -211,7 +218,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 codeOptions));
         }
 
-        if (enabledTaskKeys.Contains(HomogenizationTaskKeys.EquipmentStatus))
+        if (enabledTaskKeys.Contains(EquipmentStatusTaskKey))
         {
             tasks.Add(new HomogenizationEquipmentStatusTask(
                 buffer,
@@ -227,7 +234,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 codeOptions));
         }
 
-        if (enabledTaskKeys.Contains(HomogenizationTaskKeys.Heartbeat))
+        if (enabledTaskKeys.Contains(HeartbeatTaskKey))
         {
             tasks.Add(new HomogenizationHeartbeatTask(
                 buffer,
@@ -238,7 +245,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 moduleOptions));
         }
 
-        if (enabledTaskKeys.Contains(HomogenizationTaskKeys.Realtime))
+        if (enabledTaskKeys.Contains(RealtimeTaskKey))
         {
             tasks.Add(new HomogenizationRealtimeTask(
                 buffer,

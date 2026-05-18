@@ -2,11 +2,13 @@
 
 本目录只存放匀浆插件自己的业务配置。共享层不能在这里替插件决定 MES 字段、PLC 点位、设备状态文本或样本数据。
 
-## 插件身份与任务 Key
+## 插件身份、任务 Key 与外部链路
 
-匀浆插件身份统一维护在 `HomogenizationModuleIdentity`，包括 `ModuleId`、`ProcessType`、配置 Section、开发样本 Section 和 `plugin.json` 的入口类型。`plugin.json` 是宿主加载程序集前必须读取的 manifest，里面的字符串保留不改，但必须通过契约测试和代码常量保持一致。
+匀浆插件身份由模块入口 `DependencyInjection` 持有，`ModuleId`、`ProcessType` 和配置 Section 继续使用 `Homogenization`，不再为这些字符串单独建立公开常量类。`plugin.json` 是宿主加载程序集前必须读取的 manifest，里面的字符串保留不改，并通过契约测试与模块入口保持一致。
 
-匀浆任务 Key 统一维护在 `HomogenizationTaskKeys`。运行时工厂、PLC 任务、任务绑定测试和上下文步骤都只能引用这些常量，不允许散落手写 `Homogenization.*` 任务 Key。后续新插件也必须建立自己的身份常量类和任务 Key 常量类；运行配置只放参数、开关、路径和码表，不承载模块身份或任务持久化 Key。
+匀浆 PLC 任务 Key 只在运行时工厂和任务类自身使用，字符串值保持 `Homogenization.*` 不变，用于任务绑定表和运行上下文步骤持久化。运行配置只放参数、开关、路径和码表，不承载模块身份或任务持久化 Key。
+
+Cloud 上传相关类型放在 `Integration/Cloud`。当前云端匀浆过站契约尚未单独确认，`HomogenizationCloudUploader` 只负责显式跳过真实上传并避免进入 Cloud retry；Cloud DTO 仅作为契约草案随 Cloud 链路归档，不代表运行时已启用真实上传。后续如 MES 需要显式 DTO，再按 `Integration/Mes` 单独归位，不建立通用 DTO 杂项目录。
 
 ## homogenization.module.json
 

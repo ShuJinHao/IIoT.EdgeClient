@@ -10,7 +10,7 @@ public sealed class HomogenizationCellData : CellDataBase
     /// <summary>
     /// 工序类型固定为匀浆模块，用于 DataPipeline 路由和补偿反序列化。
     /// </summary>
-    public override string ProcessType => HomogenizationModuleIdentity.ProcessType;
+    public override string ProcessType => DependencyInjection.ModuleKey;
 
     /// <summary>
     /// UI、日志和补偿诊断中展示的记录名，匀浆以托盘码作为主标识。

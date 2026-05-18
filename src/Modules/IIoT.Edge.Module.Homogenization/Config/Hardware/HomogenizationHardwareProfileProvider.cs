@@ -17,11 +17,11 @@ public sealed class HomogenizationHardwareProfileProvider
 {
     public HomogenizationHardwareProfileProvider()
         : this(
-            new EnumInteractionSignalProfile<HomogenizationPlcSignals.Interaction>(HomogenizationModuleIdentity.ModuleId),
-            new EnumReadSignalProfile<HomogenizationPlcSignals.SingleRead>(HomogenizationModuleIdentity.ModuleId, "单点读数据"),
-            new EnumReadSignalProfile<HomogenizationPlcSignals.ContinuousRead>(HomogenizationModuleIdentity.ModuleId, "连续读数据"),
-            new EnumWriteSignalProfile<HomogenizationPlcSignals.SingleWrite>(HomogenizationModuleIdentity.ModuleId, "单点写数据"),
-            new EnumWriteSignalProfile<HomogenizationPlcSignals.ContinuousWrite>(HomogenizationModuleIdentity.ModuleId, "连续写数据"))
+            new EnumInteractionSignalProfile<HomogenizationPlcSignals.Interaction>(DependencyInjection.ModuleKey),
+            new EnumReadSignalProfile<HomogenizationPlcSignals.SingleRead>(DependencyInjection.ModuleKey, "单点读数据"),
+            new EnumReadSignalProfile<HomogenizationPlcSignals.ContinuousRead>(DependencyInjection.ModuleKey, "连续读数据"),
+            new EnumWriteSignalProfile<HomogenizationPlcSignals.SingleWrite>(DependencyInjection.ModuleKey, "单点写数据"),
+            new EnumWriteSignalProfile<HomogenizationPlcSignals.ContinuousWrite>(DependencyInjection.ModuleKey, "连续写数据"))
     {
     }
 

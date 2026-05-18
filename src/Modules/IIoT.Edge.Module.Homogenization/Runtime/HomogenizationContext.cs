@@ -181,7 +181,7 @@ internal sealed class HomogenizationContextFactory : IProductionContextFactory
     /// <summary>
     /// 当前工厂所属匀浆模块标识。
     /// </summary>
-    public string ModuleId => HomogenizationModuleIdentity.ModuleId;
+    public string ModuleId => DependencyInjection.ModuleKey;
 
     /// <summary>
     /// 宿主可创建的匀浆上下文类型。

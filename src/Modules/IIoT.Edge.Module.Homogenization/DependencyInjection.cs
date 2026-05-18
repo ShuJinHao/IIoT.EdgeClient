@@ -5,6 +5,7 @@ using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
 using IIoT.Edge.Module.Homogenization.Config.Parameters;
 using IIoT.Edge.Module.Homogenization.Integration;
+using IIoT.Edge.Module.Homogenization.Integration.Cloud;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Presentation;
 using IIoT.Edge.Module.Homogenization.Resources;
@@ -15,7 +16,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using HomogenizationCloudUploadChannel = IIoT.Edge.Application.Modules.Cloud.ICloudUploadChannel<
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationProcessRecordsCloudPayload>;
+    object>;
 using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesScenarioChannel<
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
     string,
@@ -30,13 +31,15 @@ namespace IIoT.Edge.Module.Homogenization;
 /// </summary>
 public sealed class DependencyInjection : EdgeProcessModuleBase<HomogenizationCellData>
 {
-    public override string ModuleId => HomogenizationModuleIdentity.ModuleId;
+    public const string ModuleKey = "Homogenization";
 
-    public override string ProcessType => HomogenizationModuleIdentity.ProcessType;
+    public override string ModuleId => ModuleKey;
+
+    public override string ProcessType => ModuleKey;
 
     public override string DisplayName => HomogenizationText.Get(
         "Homogenization_DisplayName",
-        HomogenizationModuleIdentity.DisplayNameFallback);
+        "匀浆");
 
     protected override ProcessUploadMode CloudUploadMode => ProcessUploadMode.Batch;
 
@@ -53,7 +56,7 @@ public sealed class DependencyInjection : EdgeProcessModuleBase<HomogenizationCe
     {
         builder.RegisterParameters<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>();
 
-        var section = builder.Configuration.GetSection(HomogenizationModuleIdentity.ConfigurationSection);
+        var section = builder.Configuration.GetSection($"Modules:{ModuleKey}");
         builder.Services.AddOptions<HomogenizationModuleOptions>()
             .Bind(section.GetSection("Module"));
         builder.Services.AddOptions<HomogenizationMesOptions>()

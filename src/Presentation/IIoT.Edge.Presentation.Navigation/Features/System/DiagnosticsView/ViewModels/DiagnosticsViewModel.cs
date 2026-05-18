@@ -25,6 +25,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
     private readonly AsyncCommand<DeadLetterRow> _requeueDeadLetterCommand;
     private readonly AsyncCommand<DeadLetterRow> _deleteDeadLetterCommand;
     private readonly DispatcherTimer _refreshTimer;
+    private bool _isObserving;
 
     public ObservableCollection<ModuleRegistrationRow> ModuleRegistrations { get; } = [];
     public ObservableCollection<PluginLifecycleRow> PluginStates { get; } = [];
@@ -326,10 +327,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         {
             Interval = TimeSpan.FromSeconds(1)
         };
-        _refreshTimer.Tick += OnRefreshTimerTick;
-        _permissionService.PermissionStateChanged += HandlePermissionStateChanged;
         ApplyInitialSummaries();
-        _refreshTimer.Start();
     }
 
     protected override void RefreshLocalization()
@@ -338,7 +336,43 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         _ = SafeRefreshAsync();
     }
 
-    public override Task OnActivatedAsync() => RefreshAsync();
+    public override async Task OnActivatedAsync()
+    {
+        StartObserving();
+        await RefreshAsync();
+    }
+
+    public override Task OnDeactivatedAsync()
+    {
+        StopObserving();
+        return Task.CompletedTask;
+    }
+
+    private void StartObserving()
+    {
+        if (_isObserving)
+        {
+            return;
+        }
+
+        _refreshTimer.Tick += OnRefreshTimerTick;
+        _permissionService.PermissionStateChanged += HandlePermissionStateChanged;
+        _refreshTimer.Start();
+        _isObserving = true;
+    }
+
+    private void StopObserving()
+    {
+        if (!_isObserving)
+        {
+            return;
+        }
+
+        _refreshTimer.Stop();
+        _refreshTimer.Tick -= OnRefreshTimerTick;
+        _permissionService.PermissionStateChanged -= HandlePermissionStateChanged;
+        _isObserving = false;
+    }
 
     internal Task RefreshAsync(CancellationToken ct = default)
         => _refreshCoordinator.RunIfIdleAsync(RefreshCoreAsync, ct);

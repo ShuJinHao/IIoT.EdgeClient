@@ -1,9 +1,7 @@
-using System.Text.Json;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.Module.Homogenization;
 using IIoT.Edge.Module.Homogenization.Config;
-using IIoT.Edge.Module.Homogenization.Integration;
+using IIoT.Edge.Module.Homogenization.Integration.Cloud;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.SharedKernel.DataPipeline;
 
@@ -38,11 +36,11 @@ public sealed class HomogenizationCloudUploaderBehaviorTests
     }
 
     [Fact]
-    public async Task HomogenizationCloudUploader_ShouldUploadProcessPayloadWithCloudDeviceId()
+    public async Task HomogenizationCloudUploader_WhenCloudContractUnconfirmed_ShouldSkipWithoutPosting()
     {
         var cloudHttp = new FakeCloudHttpClient();
         var logger = new FakeLogService();
-        var uploader = new HomogenizationCloudUploader(new FakeCloudApiEndpointProvider(), cloudHttp, logger);
+        var uploader = new HomogenizationCloudUploader(cloudHttp, logger);
         var completedTime = new DateTime(2026, 4, 30, 8, 0, 0, DateTimeKind.Utc);
         var device = new DeviceSession
         {
@@ -68,31 +66,12 @@ public sealed class HomogenizationCloudUploaderBehaviorTests
             ]);
 
         Assert.True(result.IsSuccess);
-        Assert.Equal(1, cloudHttp.PostCallCount);
-        Assert.Equal("/api/v1/edge/process-records", cloudHttp.LastPostUrl);
-        Assert.False(string.IsNullOrWhiteSpace(cloudHttp.LastPostOptions?.IdempotencyKey));
-        Assert.IsType<HomogenizationProcessRecordsCloudPayload>(cloudHttp.LastPayload);
-
-        var json = JsonSerializer.SerializeToElement(cloudHttp.LastPayload);
-        Assert.Equal(HomogenizationModuleIdentity.ProcessType, json.GetProperty("typeKey").GetString());
-        Assert.Equal(HomogenizationModuleIdentity.ProcessType, json.GetProperty("processType").GetString());
-        Assert.Equal(1, json.GetProperty("schemaVersion").GetInt32());
-        Assert.Equal(device.DeviceId, json.GetProperty("deviceId").GetGuid());
-
-        var records = json.GetProperty("records");
-        Assert.Equal(JsonValueKind.Array, records.ValueKind);
-        var record = records.EnumerateArray().Single();
-        Assert.Equal(HomogenizationModuleIdentity.ProcessType, record.GetProperty("typeKey").GetString());
-        Assert.Equal(HomogenizationModuleIdentity.ProcessType, record.GetProperty("processType").GetString());
-        Assert.Equal(1, record.GetProperty("schemaVersion").GetInt32());
-        Assert.Equal(device.DeviceId, record.GetProperty("deviceId").GetGuid());
-        Assert.Equal("TRAY-H-001", record.GetProperty("barcode").GetString());
-        Assert.True(record.GetProperty("cellResult").GetBoolean());
-        Assert.Equal(completedTime, record.GetProperty("completedTime").GetDateTime());
-
-        var payload = record.GetProperty("payload");
-        Assert.Equal("PLC-H", payload.GetProperty("plcName").GetString());
-        Assert.Equal(12.5d, payload.GetProperty("cntActualKg").GetDouble());
-        Assert.False(payload.TryGetProperty("plcDeviceId", out _));
+        Assert.Equal(0, cloudHttp.PostCallCount);
+        Assert.Null(cloudHttp.LastPostUrl);
+        Assert.Null(cloudHttp.LastPayload);
+        Assert.Contains(
+            logger.Entries,
+            entry => entry.Level == "Warn"
+                     && entry.Message.Contains("匀浆云端上传未启用", StringComparison.Ordinal));
     }
 }

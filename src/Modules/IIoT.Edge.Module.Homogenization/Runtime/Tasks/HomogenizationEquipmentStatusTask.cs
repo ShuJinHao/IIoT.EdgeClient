@@ -51,7 +51,7 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
     /// <summary>
     /// 设备状态上传任务名称，用于运行日志和任务诊断。
     /// </summary>
-    public override string TaskName => HomogenizationTaskKeys.EquipmentStatus;
+    public override string TaskName => "Homogenization.EquipmentStatus";
 
     protected override async Task DoCoreAsync()
     {
@@ -135,7 +135,7 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
             ? string.Empty
             : $"，消息={string.Join("；", snapshot.Messages)}";
         var message =
-            $"设备状态采集：状态码={snapshot.StatusCode}，状态={snapshot.StatusText}，工序={HomogenizationModuleIdentity.ProcessType}，PLC/设备={ModuleContext.DeviceName}，采集时间={snapshot.CapturedAt:yyyy-MM-dd HH:mm:ss}{extraMessages}。";
+            $"设备状态采集：状态码={snapshot.StatusCode}，状态={snapshot.StatusText}，工序={DependencyInjection.ModuleKey}，PLC/设备={ModuleContext.DeviceName}，采集时间={snapshot.CapturedAt:yyyy-MM-dd HH:mm:ss}{extraMessages}。";
 
         switch (level)
         {
