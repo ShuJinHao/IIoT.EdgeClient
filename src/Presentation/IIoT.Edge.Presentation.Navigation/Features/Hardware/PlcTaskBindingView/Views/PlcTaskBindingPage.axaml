@@ -1,0 +1,91 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Navigation.Features.Hardware.PlcTaskBindingView.PlcTaskBindingPage"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:sharedViews="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared">
+
+    <Grid RowDefinitions="Auto,*" Margin="20">
+        <Grid ColumnDefinitions="*,Auto">
+            <StackPanel Spacing="4">
+                <TextBlock
+                    FontSize="24"
+                    FontWeight="SemiBold"
+                    Foreground="{DynamicResource Edge.Text.Primary}"
+                    Text="{Binding ViewTitle}" />
+                <TextBlock
+                    Foreground="{DynamicResource Edge.Text.Muted}"
+                    Text="{Binding StatusMessage}"
+                    TextWrapping="Wrap" />
+            </StackPanel>
+
+            <StackPanel
+                Grid.Column="1"
+                Orientation="Horizontal"
+                Spacing="10"
+                VerticalAlignment="Top">
+                <ComboBox
+                    Width="260"
+                    ItemsSource="{Binding Devices}"
+                    PlaceholderText="{DynamicResource Navigation_Hint_SelectDevice}"
+                    SelectedItem="{Binding SelectedDevice}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding DeviceName}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+                <Button
+                    MinWidth="92"
+                    Padding="14,8"
+                    Command="{Binding RefreshCommand}">
+                    <TextBlock Text="{DynamicResource Navigation_Button_Refresh}" />
+                </Button>
+                <Button
+                    MinWidth="92"
+                    Padding="14,8"
+                    Command="{Binding SaveCommand}">
+                    <TextBlock Text="{DynamicResource Navigation_Button_Save}" />
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <Border
+            Grid.Row="1"
+            Margin="0,16,0,0"
+            Padding="14"
+            Background="{DynamicResource Edge.Surface.Main}"
+            BorderBrush="{DynamicResource Edge.Border.Subtle}"
+            BorderThickness="1"
+            CornerRadius="8">
+            <StackPanel Spacing="12">
+                <TextBlock
+                    Foreground="{DynamicResource Edge.Text.Muted}"
+                    Text="{Binding SelectedDevice.DeviceStateText}" />
+
+                <DataGrid
+                    Classes="edge-grid"
+                    AutoGenerateColumns="False"
+                    CanUserReorderColumns="False"
+                    CanUserResizeColumns="True"
+                    CanUserSortColumns="False"
+                    IsReadOnly="False"
+                    ItemsSource="{Binding SelectedDeviceTasks}">
+                    <DataGrid.Columns>
+                        <DataGridCheckBoxColumn Binding="{Binding Enabled}" Header="{DynamicResource Navigation_Column_Enable}" Width="80" />
+                        <DataGridTextColumn Binding="{Binding DisplayName}" Header="{DynamicResource Navigation_Column_TaskName}" IsReadOnly="True" Width="180" />
+                        <DataGridTextColumn Binding="{Binding TaskTypeText}" Header="{DynamicResource Navigation_Column_TaskType}" IsReadOnly="True" Width="130" />
+                        <DataGridTextColumn Binding="{Binding SourceText}" Header="{DynamicResource Navigation_Column_TaskBindingSource}" IsReadOnly="True" Width="120" />
+                        <DataGridTextColumn Binding="{Binding AvailabilityText}" Header="{DynamicResource Navigation_Column_TaskAvailability}" IsReadOnly="True" Width="180" />
+                        <DataGridTextColumn Binding="{Binding RequiredSignalsText}" Header="{DynamicResource Navigation_Column_RequiredSignals}" IsReadOnly="True" Width="2*" />
+                        <DataGridTextColumn Binding="{Binding Key}" Header="{DynamicResource Navigation_Column_TaskKey}" IsReadOnly="True" Width="*" />
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <sharedViews:EmptyStateView
+                    IsVisible="{Binding !HasDevices}"
+                    Message="{DynamicResource Navigation_PlcTaskBinding_NoDevices}"
+                    Title="{DynamicResource Navigation_Title_PlcTaskBinding}" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

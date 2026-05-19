@@ -1,0 +1,13 @@
+<ResourceDictionary
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:sys="using:System">
+    <sys:String x:Key="Shell_HeaderStatus">启动完成</sys:String>
+    <sys:String x:Key="Shell_HeaderProfile">本地模式</sys:String>
+    <sys:String x:Key="Shell_ContentTitle">功能开发中</sys:String>
+    <sys:String x:Key="Shell_ContentMessage">当前 Phase 仅迁移启动壳和五区骨架，业务页面将在后续阶段按原项目原名迁移。</sys:String>
+    <sys:String x:Key="Shell_EquipmentEmpty">设备状态组件尚未进入本阶段迁移，当前不展示模拟设备数据。</sys:String>
+    <sys:String x:Key="Shell_LogEmpty">日志面板尚未进入本阶段迁移，当前不展示模拟日志。</sys:String>
+    <sys:String x:Key="Shell_FooterPhase1">Phase 1 启动壳 | 本地时间 {0:yyyy-MM-dd HH:mm:ss}</sys:String>
+    <sys:String x:Key="Shell_FooterPhase3">Phase 3 导航首页 | 本地时间 {0:yyyy-MM-dd HH:mm:ss}</sys:String>
+</ResourceDictionary>

@@ -1,0 +1,52 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Panels.Features.SysLog.LogView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:converters="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Converters;assembly=IIoT.Edge.UI.Shared"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
+    xmlns:sharedViews="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared">
+    <UserControl.Resources>
+        <converters:LogLevelToEdgeVisualStatusConverter x:Key="LogLevelToEdgeVisualStatusConverter" />
+    </UserControl.Resources>
+
+    <edge:EdgeCard CardPadding="{DynamicResource Edge.Thickness.Panel}">
+        <edge:EdgeCard.Header>
+            <edge:EdgeSectionHeader
+                Title="{DynamicResource Panels_Title_SystemLog}"
+                Subtitle="{DynamicResource Panels_Subtitle_SystemLog}">
+                <edge:EdgeSectionHeader.ActionContent>
+                    <Button
+                        MinWidth="64"
+                        Padding="{DynamicResource Edge.Thickness.Card.Compact}"
+                        Command="{Binding ClearCommand}">
+                        <TextBlock
+                            FontSize="{DynamicResource Edge.FontSize.Caption}"
+                            Text="{DynamicResource Panels_Button_Clear}" />
+                    </Button>
+                </edge:EdgeSectionHeader.ActionContent>
+            </edge:EdgeSectionHeader>
+        </edge:EdgeCard.Header>
+
+        <Grid>
+            <ScrollViewer IsVisible="{Binding HasEntries}" VerticalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding Entries}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <edge:EdgeStatusListItem
+                                Margin="{DynamicResource Edge.Thickness.4}"
+                                Description="{Binding Message}"
+                                Detail="{Binding Time, StringFormat='{}{0:MM-dd HH:mm:ss.fff}'}"
+                                Status="{Binding Level, Converter={StaticResource LogLevelToEdgeVisualStatusConverter}}"
+                                StatusText="{Binding Level}"
+                                Title="{Binding Time, StringFormat='{}{0:HH:mm:ss}'}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+            <sharedViews:EmptyStateView
+                IsVisible="{Binding IsLogEmpty}"
+                Message="{DynamicResource Panels_Empty_NoLog_Message}"
+                Title="{DynamicResource Panels_Empty_NoLog_Title}" />
+        </Grid>
+    </edge:EdgeCard>
+</UserControl>

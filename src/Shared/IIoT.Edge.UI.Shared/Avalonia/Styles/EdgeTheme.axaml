@@ -1,0 +1,122 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml" />
+
+    <Styles.Resources>
+        <Color x:Key="Edge.Color.Gray50">#F7F8F2</Color>
+        <Color x:Key="Edge.Color.Gray100">#EEF0EA</Color>
+        <Color x:Key="Edge.Color.Gray200">#E3E7DA</Color>
+        <Color x:Key="Edge.Color.Gray300">#DADFD3</Color>
+        <Color x:Key="Edge.Color.Gray500">#667063</Color>
+        <Color x:Key="Edge.Color.Gray700">#334033</Color>
+        <Color x:Key="Edge.Color.Gray900">#18201A</Color>
+        <Color x:Key="Edge.Color.White">#FFFFFF</Color>
+
+        <Color x:Key="Edge.Color.Lime100">#EFFBC9</Color>
+        <Color x:Key="Edge.Color.Lime500">#C6F432</Color>
+        <Color x:Key="Edge.Color.Lime700">#75A600</Color>
+        <Color x:Key="Edge.Color.Blue500">#3B82F6</Color>
+        <Color x:Key="Edge.Color.Purple500">#8B5CF6</Color>
+        <Color x:Key="Edge.Color.Orange500">#F59E0B</Color>
+        <Color x:Key="Edge.Color.Red500">#E5484D</Color>
+        <Color x:Key="Edge.Color.Green700">#1F7A3A</Color>
+
+        <SolidColorBrush x:Key="Edge.Brush.App.Background" Color="{StaticResource Edge.Color.Gray100}" />
+        <SolidColorBrush x:Key="Edge.Brush.Surface.Card" Color="{StaticResource Edge.Color.White}" />
+        <SolidColorBrush x:Key="Edge.Brush.Surface.Panel" Color="{StaticResource Edge.Color.Gray50}" />
+        <SolidColorBrush x:Key="Edge.Brush.Surface.Subtle" Color="{StaticResource Edge.Color.Lime100}" />
+        <SolidColorBrush x:Key="Edge.Brush.Border.Subtle" Color="{StaticResource Edge.Color.Gray300}" />
+        <SolidColorBrush x:Key="Edge.Brush.Border.Focus" Color="{StaticResource Edge.Color.Lime500}" />
+        <SolidColorBrush x:Key="Edge.Brush.Text.Primary" Color="{StaticResource Edge.Color.Gray900}" />
+        <SolidColorBrush x:Key="Edge.Brush.Text.Secondary" Color="{StaticResource Edge.Color.Gray700}" />
+        <SolidColorBrush x:Key="Edge.Brush.Text.Muted" Color="{StaticResource Edge.Color.Gray500}" />
+        <SolidColorBrush x:Key="Edge.Brush.Text.OnAccent" Color="{StaticResource Edge.Color.Gray900}" />
+        <SolidColorBrush x:Key="Edge.Brush.Text.OnDanger" Color="{StaticResource Edge.Color.White}" />
+        <SolidColorBrush x:Key="Edge.Brush.Accent.Primary" Color="{StaticResource Edge.Color.Lime500}" />
+
+        <SolidColorBrush x:Key="Edge.Brush.Status.Running" Color="{StaticResource Edge.Color.Lime500}" />
+        <SolidColorBrush x:Key="Edge.Brush.Status.Idle" Color="{StaticResource Edge.Color.Orange500}" />
+        <SolidColorBrush x:Key="Edge.Brush.Status.Stopped" Color="{StaticResource Edge.Color.Red500}" />
+        <SolidColorBrush x:Key="Edge.Brush.Status.Offline" Color="{StaticResource Edge.Color.Gray500}" />
+        <SolidColorBrush x:Key="Edge.Brush.Status.Info" Color="{StaticResource Edge.Color.Blue500}" />
+        <SolidColorBrush x:Key="Edge.Brush.Status.Cache" Color="{StaticResource Edge.Color.Purple500}" />
+        <SolidColorBrush x:Key="Edge.Brush.Status.Warning" Color="{StaticResource Edge.Color.Orange500}" />
+        <SolidColorBrush x:Key="Edge.Brush.Status.Error" Color="{StaticResource Edge.Color.Red500}" />
+        <SolidColorBrush x:Key="Edge.Brush.Overlay.Modal" Color="#66000000" />
+
+        <SolidColorBrush x:Key="Edge.Background.App" Color="{StaticResource Edge.Color.Gray100}" />
+        <SolidColorBrush x:Key="Edge.Surface.Main" Color="{StaticResource Edge.Color.White}" />
+        <SolidColorBrush x:Key="Edge.Surface.Panel" Color="{StaticResource Edge.Color.Gray50}" />
+        <SolidColorBrush x:Key="Edge.Border.Subtle" Color="{StaticResource Edge.Color.Gray300}" />
+        <SolidColorBrush x:Key="Edge.Text.Primary" Color="{StaticResource Edge.Color.Gray900}" />
+        <SolidColorBrush x:Key="Edge.Text.Muted" Color="{StaticResource Edge.Color.Gray500}" />
+        <SolidColorBrush x:Key="Edge.Text.OnAccent" Color="{StaticResource Edge.Color.Gray900}" />
+        <SolidColorBrush x:Key="Edge.Accent" Color="{StaticResource Edge.Color.Lime500}" />
+        <SolidColorBrush x:Key="Edge.Danger" Color="{StaticResource Edge.Color.Red500}" />
+        <SolidColorBrush x:Key="Edge.Success" Color="{StaticResource Edge.Color.Green700}" />
+        <SolidColorBrush x:Key="Edge.Warning" Color="{StaticResource Edge.Color.Orange500}" />
+
+        <CornerRadius x:Key="Edge.CornerRadius.Small">6</CornerRadius>
+        <CornerRadius x:Key="Edge.CornerRadius.Medium">8</CornerRadius>
+        <CornerRadius x:Key="Edge.CornerRadius.Large">14</CornerRadius>
+        <CornerRadius x:Key="Edge.CornerRadius.Pill">999</CornerRadius>
+        <CornerRadius x:Key="Edge.CornerRadius.Circle">999</CornerRadius>
+        <CornerRadius x:Key="Edge.CornerRadius.NavRail">8,0,0,8</CornerRadius>
+
+        <Thickness x:Key="Edge.Thickness.Zero">0</Thickness>
+        <Thickness x:Key="Edge.Thickness.4">4</Thickness>
+        <Thickness x:Key="Edge.Thickness.8">8</Thickness>
+        <Thickness x:Key="Edge.Thickness.12">12</Thickness>
+        <Thickness x:Key="Edge.Thickness.16">16</Thickness>
+        <Thickness x:Key="Edge.Thickness.20">20</Thickness>
+        <Thickness x:Key="Edge.Thickness.24">24</Thickness>
+        <Thickness x:Key="Edge.Thickness.32">32</Thickness>
+        <Thickness x:Key="Edge.Thickness.Panel">12</Thickness>
+        <Thickness x:Key="Edge.Thickness.Card.Default">16</Thickness>
+        <Thickness x:Key="Edge.Thickness.Card.Compact">10,8</Thickness>
+        <Thickness x:Key="Edge.Thickness.Chip">8,2</Thickness>
+        <Thickness x:Key="Edge.Thickness.Chip.Comfortable">10,4</Thickness>
+        <Thickness x:Key="Edge.Thickness.Frame">12</Thickness>
+        <Thickness x:Key="Edge.Thickness.Header">18,0</Thickness>
+        <Thickness x:Key="Edge.Thickness.HeaderTitle">16,0,14,0</Thickness>
+        <Thickness x:Key="Edge.Thickness.Footer">18,0</Thickness>
+        <Thickness x:Key="Edge.Thickness.FooterItem">16,0</Thickness>
+        <Thickness x:Key="Edge.Thickness.RightRail">0,12,12,12</Thickness>
+        <Thickness x:Key="Edge.Thickness.Border.Subtle">1</Thickness>
+
+        <x:Double x:Key="Edge.Size.Spacing4">4</x:Double>
+        <x:Double x:Key="Edge.Size.Spacing6">6</x:Double>
+        <x:Double x:Key="Edge.Size.Spacing8">8</x:Double>
+        <x:Double x:Key="Edge.Size.Spacing10">10</x:Double>
+        <x:Double x:Key="Edge.Size.Spacing12">12</x:Double>
+        <x:Double x:Key="Edge.Size.NavRailWidth">64</x:Double>
+        <x:Double x:Key="Edge.Size.RightRailWidth">320</x:Double>
+        <x:Double x:Key="Edge.Size.HeaderHeight">64</x:Double>
+        <x:Double x:Key="Edge.Size.FooterHeight">34</x:Double>
+        <x:Double x:Key="Edge.Size.PanelGap">12</x:Double>
+        <x:Double x:Key="Edge.Size.BrandMark">40</x:Double>
+        <x:Double x:Key="Edge.Size.BrandIcon">20</x:Double>
+        <x:Double x:Key="Edge.Size.NavButtonWidth">48</x:Double>
+        <x:Double x:Key="Edge.Size.NavButtonMinHeight">52</x:Double>
+        <x:Double x:Key="Edge.Size.NavTileWidth">38</x:Double>
+        <x:Double x:Key="Edge.Size.NavTileHeight">34</x:Double>
+        <x:Double x:Key="Edge.Size.NavIcon">18</x:Double>
+        <x:Double x:Key="Edge.Size.HeaderIconButton">40</x:Double>
+        <x:Double x:Key="Edge.Size.HeaderIcon">20</x:Double>
+        <x:Double x:Key="Edge.Size.OperatorAvatar">36</x:Double>
+
+        <x:Double x:Key="Edge.FontSize.Caption">11</x:Double>
+        <x:Double x:Key="Edge.FontSize.Body">13</x:Double>
+        <x:Double x:Key="Edge.FontSize.BodyStrong">14</x:Double>
+        <x:Double x:Key="Edge.FontSize.Section">16</x:Double>
+        <x:Double x:Key="Edge.FontSize.Title">20</x:Double>
+        <x:Double x:Key="Edge.FontSize.Display">28</x:Double>
+
+        <FontFamily x:Key="Edge.FontFamily.Default">Microsoft YaHei UI, Segoe UI, PingFang SC, sans-serif</FontFamily>
+        <FontFamily x:Key="Edge.FontFamily.Mono">Consolas, JetBrains Mono, monospace</FontFamily>
+        <FontFamily x:Key="Edge.FontFamily.Display">Microsoft YaHei UI, Segoe UI, PingFang SC, sans-serif</FontFamily>
+
+    </Styles.Resources>
+
+    <StyleInclude Source="avares://IIoT.Edge.UI.Shared/Avalonia/Styles/EdgeControls.axaml" />
+</Styles>

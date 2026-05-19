@@ -1,0 +1,10 @@
+<Application
+    x:Class="IIoT.Edge.Shell.App"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    RequestedThemeVariant="Light">
+    <Application.Styles>
+        <FluentTheme />
+        <StyleInclude Source="avares://IIoT.Edge.UI.Shared/Avalonia/Styles/EdgeTheme.axaml" />
+    </Application.Styles>
+</Application>

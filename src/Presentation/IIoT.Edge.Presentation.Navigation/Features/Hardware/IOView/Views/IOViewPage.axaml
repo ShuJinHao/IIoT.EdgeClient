@@ -1,0 +1,243 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView.IOViewPage"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:sharedViews="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared">
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="20" Spacing="16">
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Spacing="4">
+                    <TextBlock
+                        FontSize="24"
+                        FontWeight="SemiBold"
+                        Foreground="{DynamicResource Edge.Text.Primary}"
+                        Text="{Binding ViewTitle}" />
+                    <TextBlock
+                        Foreground="{DynamicResource Edge.Text.Muted}"
+                        Text="{Binding StatusMessage}"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+
+                <StackPanel
+                    Grid.Column="1"
+                    Orientation="Horizontal"
+                    Spacing="10"
+                    VerticalAlignment="Top">
+                    <ComboBox
+                        Width="260"
+                        ItemsSource="{Binding Devices}"
+                        PlaceholderText="{DynamicResource Navigation_Hint_SelectDevice}"
+                        SelectedItem="{Binding SelectedDevice}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding DeviceName}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <Button
+                        MinWidth="92"
+                        Padding="14,8"
+                        Command="{Binding RefreshDevicesCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <PathIcon
+                                Width="16"
+                                Height="16"
+                                Data="M5,12 A7,7 0 0 1 17,7 L19,7 L19,3 M19,7 L15,7 M19,12 A7,7 0 0 1 7,17 L5,17 L5,21 M5,17 L9,17" />
+                            <TextBlock Text="{DynamicResource Navigation_Button_Refresh}" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <Border
+                Padding="12,8"
+                Background="{DynamicResource Edge.Surface.Panel}"
+                BorderBrush="{DynamicResource Edge.Border.Subtle}"
+                BorderThickness="1"
+                CornerRadius="8">
+                <TextBlock
+                    Foreground="{DynamicResource Edge.Text.Muted}"
+                    Text="{Binding ConnectionStateText}" />
+            </Border>
+
+            <Border
+                Padding="14"
+                Background="{DynamicResource Edge.Surface.Main}"
+                BorderBrush="{DynamicResource Edge.Border.Subtle}"
+                BorderThickness="1"
+                CornerRadius="8"
+                IsVisible="{Binding HasInteractionRows}">
+                <StackPanel Spacing="12">
+                    <TextBlock
+                        FontSize="16"
+                        FontWeight="SemiBold"
+                        Foreground="{DynamicResource Edge.Text.Primary}"
+                        Text="{DynamicResource Navigation_Title_IoInteractionGroup}" />
+                    <DataGrid
+                        Classes="edge-grid"
+                        AutoGenerateColumns="False"
+                        CanUserReorderColumns="False"
+                        CanUserResizeColumns="True"
+                        CanUserSortColumns="False"
+                        HeadersVisibility="Column"
+                        IsReadOnly="False"
+                        ItemsSource="{Binding InteractionRows}">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Binding="{Binding BusinessGroup}" Header="{DynamicResource Navigation_Column_InteractionItem}" IsReadOnly="True" Width="130" />
+                            <DataGridTextColumn Binding="{Binding PlcAddressSummary}" Header="{DynamicResource Navigation_Column_PlcSignal}" IsReadOnly="True" Width="2*" />
+                            <DataGridTextColumn Binding="{Binding PlcValueText}" Header="{DynamicResource Navigation_Column_PlcValue}" IsReadOnly="True" Width="90" />
+                            <DataGridTextColumn Binding="{Binding HostReplyAddressText}" Header="{DynamicResource Navigation_Column_CurrentReply}" IsReadOnly="True" Width="2*" />
+                            <DataGridTextColumn Binding="{Binding HostReplyValueText}" Header="{DynamicResource Navigation_Column_CurrentValue}" IsReadOnly="True" Width="100" />
+                            <DataGridTemplateColumn Header="{DynamicResource Navigation_Column_PendingWriteOperation}" Width="170">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Grid ColumnDefinitions="*,8,Auto">
+                                            <TextBox
+                                                MinWidth="70"
+                                                HorizontalContentAlignment="Right"
+                                                IsEnabled="{Binding CanWrite}"
+                                                Text="{Binding WriteValue, Mode=TwoWay}" />
+                                            <Button
+                                                Grid.Column="2"
+                                                MinWidth="62"
+                                                Padding="10,4"
+                                                Command="{Binding WriteCommand}"
+                                                IsEnabled="{Binding CanWrite}">
+                                                <TextBlock Text="{DynamicResource Navigation_Button_Write}" />
+                                            </Button>
+                                        </Grid>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </StackPanel>
+            </Border>
+
+            <ItemsControl ItemsSource="{Binding DataSections}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border
+                            Margin="0,0,0,14"
+                            Padding="14"
+                            Background="{DynamicResource Edge.Surface.Main}"
+                            BorderBrush="{DynamicResource Edge.Border.Subtle}"
+                            BorderThickness="1"
+                            CornerRadius="8">
+                            <StackPanel Spacing="12">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock
+                                        FontSize="16"
+                                        FontWeight="SemiBold"
+                                        Foreground="{DynamicResource Edge.Text.Primary}"
+                                        Text="{Binding Title}" />
+                                    <Button
+                                        Grid.Column="1"
+                                        Padding="12,6"
+                                        Command="{Binding DataContext.ManualReadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        IsVisible="{Binding CanManualRead}">
+                                        <TextBlock Text="{DynamicResource Navigation_Button_ReadIoData}" />
+                                    </Button>
+                                </Grid>
+                                <DataGrid
+                                    Classes="edge-grid"
+                                    AutoGenerateColumns="False"
+                                    CanUserReorderColumns="False"
+                                    CanUserResizeColumns="True"
+                                    CanUserSortColumns="False"
+                                    IsReadOnly="True"
+                                    ItemsSource="{Binding Signals}">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Binding="{Binding SignalName}" Header="{DynamicResource Navigation_Column_SignalName}" Width="2*" />
+                                        <DataGridTextColumn Binding="{Binding PlcAddress}" Header="{DynamicResource Navigation_Column_Address}" Width="120" />
+                                        <DataGridTextColumn Binding="{Binding DataType}" Header="{DynamicResource Navigation_Column_Type}" Width="100" />
+                                        <DataGridTextColumn Binding="{Binding LengthText}" Header="{DynamicResource Navigation_Column_Length}" Width="80" />
+                                        <DataGridTextColumn Binding="{Binding PreviewValue}" Header="{DynamicResource Navigation_Column_CurrentValue}" Width="*" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <ItemsControl ItemsSource="{Binding ArraySections}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border
+                            Margin="0,0,0,14"
+                            Padding="14"
+                            Background="{DynamicResource Edge.Surface.Main}"
+                            BorderBrush="{DynamicResource Edge.Border.Subtle}"
+                            BorderThickness="1"
+                            CornerRadius="8">
+                            <StackPanel Spacing="12">
+                                <Grid ColumnDefinitions="*,Auto,Auto">
+                                    <TextBlock
+                                        FontSize="16"
+                                        FontWeight="SemiBold"
+                                        Foreground="{DynamicResource Edge.Text.Primary}"
+                                        Text="{Binding Title}" />
+                                    <Button
+                                        Grid.Column="1"
+                                        Margin="0,0,8,0"
+                                        Padding="12,6"
+                                        Command="{Binding DataContext.ManualReadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        IsVisible="{Binding CanManualRead}">
+                                        <TextBlock Text="{DynamicResource Navigation_Button_ReadIoData}" />
+                                    </Button>
+                                    <Button
+                                        Grid.Column="2"
+                                        Padding="12,6"
+                                        Command="{Binding ToggleExpandedCommand}">
+                                        <TextBlock Text="{Binding ToggleText}" />
+                                    </Button>
+                                </Grid>
+                                <TextBlock
+                                    Foreground="{DynamicResource Edge.Warning}"
+                                    Text="{Binding Summary}"
+                                    TextWrapping="Wrap" />
+                                <ScrollViewer
+                                    HorizontalScrollBarVisibility="Auto"
+                                    VerticalScrollBarVisibility="Disabled"
+                                    IsVisible="{Binding IsExpanded}">
+                                    <ItemsControl ItemsSource="{Binding Rows}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Border Width="64" Padding="8" BorderBrush="{DynamicResource Edge.Border.Subtle}" BorderThickness="0,0,1,1">
+                                                        <TextBlock Foreground="{DynamicResource Edge.Text.Muted}" Text="{Binding Index}" />
+                                                    </Border>
+                                                    <ItemsControl ItemsSource="{Binding Values}">
+                                                        <ItemsControl.ItemsPanel>
+                                                            <ItemsPanelTemplate>
+                                                                <StackPanel Orientation="Horizontal" />
+                                                            </ItemsPanelTemplate>
+                                                        </ItemsControl.ItemsPanel>
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Border Width="130" Padding="8" BorderBrush="{DynamicResource Edge.Border.Subtle}" BorderThickness="0,0,1,1">
+                                                                    <TextBlock Foreground="{DynamicResource Edge.Text.Primary}" Text="{Binding Value}" TextTrimming="CharacterEllipsis" />
+                                                                </Border>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <sharedViews:EmptyStateView
+                IsVisible="{Binding HasNoSignals}"
+                Message="{DynamicResource Navigation_Empty_IoMappings}"
+                Title="{DynamicResource Navigation_Title_IoInteractionGroup}" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

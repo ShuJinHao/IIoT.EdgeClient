@@ -1,0 +1,12 @@
+<Application
+    x:Class="IIoT.Edge.Launcher.App"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    RequestedThemeVariant="Dark">
+    <Application.Styles>
+        <FluentTheme />
+        <StyleInclude Source="avares://IIoT.Edge.Launcher/Resources/Icons/Icons.axaml" />
+        <StyleInclude Source="avares://IIoT.Edge.Launcher/Styles/LauncherTheme.axaml" />
+        <StyleInclude Source="avares://IIoT.Edge.Launcher/Styles/LauncherControls.axaml" />
+    </Application.Styles>
+</Application>

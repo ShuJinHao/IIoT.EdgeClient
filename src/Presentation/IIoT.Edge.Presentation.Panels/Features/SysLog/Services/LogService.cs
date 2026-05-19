@@ -1,15 +1,13 @@
+using System.Collections.ObjectModel;
+using Avalonia.Threading;
+using AvaloniaDispatcher = Avalonia.Threading.Dispatcher;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Common.Models;
-using System.Collections.ObjectModel;
-using System.Windows;
-using System.Windows.Threading;
 
 namespace IIoT.Edge.Presentation.Panels.Features.SysLog;
 
 /// <summary>
-/// 日志展示服务（装饰器）。
-/// 包装 ILogService，订阅其 EntryAdded 事件将日志同步到 UI 集合。
-/// 仅由 Presentation 层的 ViewModel 通过 ILogDisplayService 依赖。
+/// 日志展示服务，负责把真实日志事件同步到 Avalonia UI 集合。
 /// </summary>
 public class LogDisplayService : ILogDisplayService
 {
@@ -33,16 +31,23 @@ public class LogDisplayService : ILogDisplayService
 
     private void OnInnerEntryAdded(LogEntry entry)
     {
-        if (System.Windows.Application.Current?.Dispatcher is { } dispatcher)
+        void ApplyEntry()
         {
-            dispatcher.Invoke(() =>
+            Entries.Insert(0, entry);
+            if (Entries.Count > 200)
             {
-                Entries.Insert(0, entry);
-                if (Entries.Count > 200)
-                    Entries.RemoveAt(Entries.Count - 1);
-            }, DispatcherPriority.Background);
+                Entries.RemoveAt(Entries.Count - 1);
+            }
+
+            EntryAdded?.Invoke(entry);
         }
 
-        EntryAdded?.Invoke(entry);
+        if (AvaloniaDispatcher.UIThread.CheckAccess())
+        {
+            ApplyEntry();
+            return;
+        }
+
+        AvaloniaDispatcher.UIThread.Post(ApplyEntry, DispatcherPriority.Background);
     }
 }

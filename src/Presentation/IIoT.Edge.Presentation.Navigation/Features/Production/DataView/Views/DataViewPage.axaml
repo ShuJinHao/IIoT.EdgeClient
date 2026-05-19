@@ -1,0 +1,130 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Navigation.Features.Production.DataView.DataViewPage"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:sharedViews="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared">
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="20" Spacing="16">
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Spacing="4">
+                    <TextBlock
+                        FontSize="24"
+                        FontWeight="SemiBold"
+                        Foreground="{DynamicResource Edge.Text.Primary}"
+                        Text="{Binding ViewTitle}" />
+                    <TextBlock
+                        Foreground="{DynamicResource Edge.Text.Muted}"
+                        Text="{Binding StatusMessage}"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+
+                <Button
+                    Grid.Column="1"
+                    MinWidth="118"
+                    Padding="14,8"
+                    VerticalAlignment="Top"
+                    Command="{Binding ExportCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon
+                            Width="16"
+                            Height="16"
+                            Data="M6,3 L16,3 L20,7 L20,21 L6,21 Z M15,3 L15,8 L20,8 M9,11 L17,11 M9,14 L17,14 M9,17 L14,17" />
+                        <TextBlock Text="{DynamicResource Navigation_Button_ExportExcel}" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+
+            <Border
+                Padding="14"
+                Background="{DynamicResource Edge.Surface.Panel}"
+                BorderBrush="{DynamicResource Edge.Border.Subtle}"
+                BorderThickness="1"
+                CornerRadius="8">
+                <WrapPanel>
+                    <DatePicker
+                        Width="150"
+                        Margin="0,0,8,0"
+                        SelectedDate="{Binding DateFrom}" />
+                    <TextBlock
+                        Margin="0,0,8,0"
+                        VerticalAlignment="Center"
+                        Foreground="{DynamicResource Edge.Text.Muted}"
+                        Text="{DynamicResource Navigation_Label_To}" />
+                    <DatePicker
+                        Width="150"
+                        Margin="0,0,12,0"
+                        SelectedDate="{Binding DateTo}" />
+                    <Button
+                        MinWidth="86"
+                        Padding="16,8"
+                        Command="{Binding QueryCommand}">
+                        <TextBlock Text="{DynamicResource Navigation_Button_Query}" />
+                    </Button>
+                </WrapPanel>
+            </Border>
+
+            <UniformGrid Columns="4" Rows="1">
+                <Border Margin="0,0,8,0" Padding="14,12" Background="{DynamicResource Edge.Surface.Main}" BorderBrush="{DynamicResource Edge.Border.Subtle}" BorderThickness="1" CornerRadius="8">
+                    <StackPanel Spacing="5">
+                        <TextBlock FontSize="12" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Navigation_Label_TodayOutput}" />
+                        <TextBlock FontSize="25" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Text.Primary}" Text="{Binding TodayTotal}" />
+                    </StackPanel>
+                </Border>
+                <Border Margin="4,0" Padding="14,12" Background="{DynamicResource Edge.Surface.Main}" BorderBrush="{DynamicResource Edge.Border.Subtle}" BorderThickness="1" CornerRadius="8">
+                    <StackPanel Spacing="5">
+                        <TextBlock FontSize="12" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Navigation_Label_GoodCount}" />
+                        <TextBlock FontSize="25" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Success}" Text="{Binding TodayOk}" />
+                    </StackPanel>
+                </Border>
+                <Border Margin="4,0" Padding="14,12" Background="{DynamicResource Edge.Surface.Main}" BorderBrush="{DynamicResource Edge.Border.Subtle}" BorderThickness="1" CornerRadius="8">
+                    <StackPanel Spacing="5">
+                        <TextBlock FontSize="12" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Navigation_Label_BadCount}" />
+                        <TextBlock FontSize="25" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Danger}" Text="{Binding TodayNg}" />
+                    </StackPanel>
+                </Border>
+                <Border Margin="8,0,0,0" Padding="14,12" Background="{DynamicResource Edge.Surface.Main}" BorderBrush="{DynamicResource Edge.Border.Subtle}" BorderThickness="1" CornerRadius="8">
+                    <StackPanel Spacing="5">
+                        <TextBlock FontSize="12" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Navigation_Label_Yield}" />
+                        <TextBlock FontSize="25" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Warning}" Text="{Binding TodayYield}" />
+                    </StackPanel>
+                </Border>
+            </UniformGrid>
+
+            <Border
+                Padding="14"
+                Background="{DynamicResource Edge.Surface.Main}"
+                BorderBrush="{DynamicResource Edge.Border.Subtle}"
+                BorderThickness="1"
+                CornerRadius="8">
+                <StackPanel Spacing="12">
+                    <DataGrid
+                        Classes="edge-grid"
+                        AutoGenerateColumns="False"
+                        CanUserReorderColumns="False"
+                        CanUserResizeColumns="True"
+                        CanUserSortColumns="False"
+                        GridLinesVisibility="Horizontal"
+                        HeadersVisibility="Column"
+                        IsReadOnly="True"
+                        IsVisible="{Binding HasRecords}"
+                        ItemsSource="{Binding Records}">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Binding="{Binding Time}" Header="{DynamicResource Navigation_Column_Time}" Width="90" />
+                            <DataGridTextColumn Binding="{Binding BatchNo}" Header="{DynamicResource Navigation_Column_BatchNumber}" Width="2*" />
+                            <DataGridTextColumn Binding="{Binding Total}" Header="{DynamicResource Navigation_Column_Total}" Width="*" />
+                            <DataGridTextColumn Binding="{Binding OkCount}" Header="{DynamicResource Navigation_Column_Good}" Width="*" />
+                            <DataGridTextColumn Binding="{Binding NgCount}" Header="{DynamicResource Navigation_Column_Bad}" Width="*" />
+                            <DataGridTextColumn Binding="{Binding Yield}" Header="{DynamicResource Navigation_Column_Yield}" Width="*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <sharedViews:EmptyStateView
+                        IsVisible="{Binding IsRecordsEmpty}"
+                        Message="{DynamicResource Navigation_Data_EmptyMessage}"
+                        Title="{DynamicResource Navigation_Data_EmptyTitle}" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

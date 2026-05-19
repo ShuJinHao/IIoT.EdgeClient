@@ -115,14 +115,13 @@ public class ParamViewModel : LocalizedCrudPageViewModelBase
 
     private void HandlePermissionStateChanged()
     {
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher is null || dispatcher.CheckAccess())
+        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
         {
             RefreshPermissionState();
             return;
         }
 
-        dispatcher.Invoke(RefreshPermissionState);
+        Avalonia.Threading.Dispatcher.UIThread.Post(RefreshPermissionState);
     }
 
     private void RefreshPermissionState()

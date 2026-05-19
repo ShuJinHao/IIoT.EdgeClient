@@ -85,15 +85,16 @@ Phase 0 结论：不在本阶段新增图标依赖。后续 Phase 如选择 `Mat
 
 对应 `AppLanguageService.cs:17-38`、`AppLanguageService.cs:43-99`、`AppLanguageService.cs:101-165`、`AppLanguageService.cs:181-223`。
 
-建议 Avalonia 落点：
+Phase 1 Avalonia 落点：
 
-`src/Shared/IIoT.Edge.UI.Avalonia/Localization/AppLanguageService.cs`
+`src/Presentation/IIoT.Edge.Presentation.Shell/Localization/AppLanguageService.cs`
 
 理由：
 
 - `IAppLanguageService` 的语言枚举、当前语言、切换事件和 `GetString` 语义可以保持框架无关。
 - WPF ResourceDictionary 和 pack URI 逻辑必须替换为 Avalonia 资源加载逻辑。
-- 落在共享 Avalonia UI 项目可供 Launcher、Shell、Presentation 和模块 UI 复用，避免把语言切换绑定到单一 Shell Presentation 项目。
+- Phase 1 不新建 `IIoT.Edge.UI.Avalonia` 或任何并行 UI 项目；语言实现保留在现有 `IIoT.Edge.Presentation.Shell` 内原位替换。
+- `IIoT.Edge.UI.Shared` 继续保存框架无关接口，并在上层 WPF 项目未迁完前保留 WPF 旧层；Avalonia 等价共享控件只在该项目内新增，不另开共享项目。
 
 ## PR #44 额外依赖对比结论
 

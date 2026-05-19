@@ -1,0 +1,137 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Navigation.Features.Dashboard.DashboardView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
+    xmlns:sharedViews="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared">
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="{DynamicResource Edge.Thickness.20}" Spacing="{DynamicResource Edge.Size.Spacing12}">
+            <edge:EdgeSectionHeader
+                Title="{DynamicResource Navigation_Dashboard_Title}"
+                Subtitle="{DynamicResource Navigation_Dashboard_Subtitle}">
+                <edge:EdgeSectionHeader.ActionContent>
+                    <edge:EdgeStatusChip Status="Info" Text="{Binding CurrentBatch}" />
+                </edge:EdgeSectionHeader.ActionContent>
+            </edge:EdgeSectionHeader>
+
+            <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing12}">
+                <edge:EdgeKpiCard
+                    Title="{DynamicResource Navigation_Dashboard_ConnectedDevices}"
+                    TrendStatus="Info"
+                    Value="{Binding ConnectedDevices}" />
+                <edge:EdgeKpiCard
+                    Grid.Column="1"
+                    Title="{DynamicResource Navigation_Dashboard_TodayOutput}"
+                    TrendStatus="Info"
+                    Value="{Binding TodayOutput}" />
+                <edge:EdgeKpiCard
+                    Grid.Column="2"
+                    Title="{DynamicResource Navigation_Dashboard_TodayYield}"
+                    TrendStatus="Running"
+                    Value="{Binding TodayYield}" />
+                <edge:EdgeKpiCard
+                    Grid.Column="3"
+                    Title="{DynamicResource Navigation_Dashboard_NgCount}"
+                    TrendStatus="Error"
+                    Value="{Binding NgCount}" />
+            </Grid>
+
+            <Grid ColumnDefinitions="1.3*,0.7*" ColumnSpacing="{DynamicResource Edge.Size.Spacing12}">
+                <edge:EdgeCard>
+                    <edge:EdgeCard.Header>
+                        <edge:EdgeSectionHeader
+                            Title="{DynamicResource Navigation_Dashboard_Devices}"
+                            Subtitle="{DynamicResource Navigation_Dashboard_DevicesSubtitle}">
+                            <edge:EdgeSectionHeader.ActionContent>
+                                <edge:EdgeStatusChip Status="Info" Text="{Binding ConnectedDevices}" />
+                            </edge:EdgeSectionHeader.ActionContent>
+                        </edge:EdgeSectionHeader>
+                    </edge:EdgeCard.Header>
+
+                    <Grid>
+                        <ItemsControl
+                            IsVisible="{Binding HasDevices}"
+                            ItemsSource="{Binding Devices}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="{DynamicResource Edge.Thickness.4}">
+                                        <edge:EdgeStatusListItem
+                                            Description="{Binding Address}"
+                                            Detail="{Binding DeviceType}"
+                                            IsVisible="{Binding IsConnected}"
+                                            Status="Running"
+                                            StatusText="{DynamicResource Panels_Status_Connected}"
+                                            Title="{Binding Name}" />
+                                        <edge:EdgeStatusListItem
+                                            Description="{Binding Address}"
+                                            Detail="{Binding DeviceType}"
+                                            IsVisible="{Binding !IsConnected}"
+                                            Status="Stopped"
+                                            StatusText="{DynamicResource Panels_Status_Disconnected}"
+                                            Title="{Binding Name}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <sharedViews:EmptyStateView
+                            IsVisible="{Binding IsDeviceEmpty}"
+                            Message="{DynamicResource Navigation_Dashboard_DeviceEmptyMessage}"
+                            Title="{DynamicResource Navigation_Dashboard_DeviceEmptyTitle}" />
+                    </Grid>
+                </edge:EdgeCard>
+
+                <StackPanel Grid.Column="1" Spacing="{DynamicResource Edge.Size.Spacing12}">
+                    <edge:EdgeCard>
+                        <edge:EdgeCard.Header>
+                            <edge:EdgeSectionHeader Title="{DynamicResource Navigation_Dashboard_Recipe}" />
+                        </edge:EdgeCard.Header>
+                        <StackPanel Spacing="{DynamicResource Edge.Size.Spacing8}">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
+                                <TextBlock
+                                    Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                    Text="{DynamicResource Navigation_Dashboard_RecipeName}" />
+                                <TextBlock
+                                    Grid.Column="1"
+                                    FontWeight="SemiBold"
+                                    Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                    Text="{Binding RecipeName}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
+                                <TextBlock
+                                    Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                    Text="{DynamicResource Navigation_Dashboard_RecipeStatusLabel}" />
+                                <TextBlock
+                                    Grid.Column="1"
+                                    FontWeight="SemiBold"
+                                    Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                    Text="{Binding RecipeStatus}" />
+                            </Grid>
+                        </StackPanel>
+                    </edge:EdgeCard>
+
+                    <edge:EdgeCard>
+                        <edge:EdgeCard.Header>
+                            <edge:EdgeSectionHeader Title="{DynamicResource Navigation_Dashboard_Takt}" />
+                        </edge:EdgeCard.Header>
+                        <TextBlock
+                            FontSize="{DynamicResource Edge.FontSize.Body}"
+                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                            Text="{Binding TaktStatus}"
+                            TextWrapping="Wrap" />
+                    </edge:EdgeCard>
+
+                    <edge:EdgeCard>
+                        <edge:EdgeCard.Header>
+                            <edge:EdgeSectionHeader Title="{DynamicResource Navigation_Dashboard_Trend}" />
+                        </edge:EdgeCard.Header>
+                        <TextBlock
+                            FontSize="{DynamicResource Edge.FontSize.Body}"
+                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                            Text="{Binding TrendStatus}"
+                            TextWrapping="Wrap" />
+                    </edge:EdgeCard>
+                </StackPanel>
+            </Grid>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

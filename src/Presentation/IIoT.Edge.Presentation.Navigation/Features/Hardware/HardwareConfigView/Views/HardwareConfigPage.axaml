@@ -1,0 +1,52 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView.HardwareConfigPage"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:pages="clr-namespace:IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView">
+
+    <Grid RowDefinitions="Auto,*" Margin="20">
+        <Grid ColumnDefinitions="*,Auto">
+            <StackPanel Spacing="4">
+                <TextBlock
+                    FontSize="24"
+                    FontWeight="SemiBold"
+                    Foreground="{DynamicResource Edge.Text.Primary}"
+                    Text="{Binding ViewTitle}" />
+                <TextBlock
+                    Foreground="{DynamicResource Edge.Text.Muted}"
+                    Text="{Binding StatusMessage}"
+                    TextWrapping="Wrap" />
+            </StackPanel>
+
+            <Button
+                Grid.Column="1"
+                MinWidth="96"
+                Padding="16,8"
+                VerticalAlignment="Top"
+                Command="{Binding SaveCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <PathIcon
+                        Width="16"
+                        Height="16"
+                        Data="M5,4 L17,4 L20,7 L20,20 L4,20 L4,4 Z M8,4 L8,10 L16,10 L16,4 M8,15 L16,15 L16,20 L8,20 Z" />
+                    <TextBlock Text="{DynamicResource Navigation_Button_Save}" />
+                </StackPanel>
+            </Button>
+        </Grid>
+
+        <TabControl
+            Grid.Row="1"
+            Margin="0,16,0,0"
+            SelectedIndex="{Binding SelectedTabIndex}">
+            <TabItem Header="{DynamicResource Navigation_Tab_NetworkDevice}">
+                <pages:NetworkDevicePage />
+            </TabItem>
+            <TabItem Header="{DynamicResource Navigation_Tab_SerialDevice}">
+                <pages:SerialDevicePage />
+            </TabItem>
+            <TabItem Header="{DynamicResource Navigation_Tab_IoMapping}">
+                <pages:IoMappingPage />
+            </TabItem>
+        </TabControl>
+    </Grid>
+</UserControl>

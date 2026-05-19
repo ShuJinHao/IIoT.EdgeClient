@@ -1,0 +1,357 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
+    <Style Selector="TextBlock">
+        <Setter Property="FontFamily" Value="{DynamicResource Edge.FontFamily.Default}" />
+    </Style>
+
+    <Style Selector="Button">
+        <Setter Property="FontFamily" Value="{DynamicResource Edge.FontFamily.Default}" />
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Body}" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Medium}" />
+    </Style>
+
+    <Style Selector="Button:focus-visible">
+        <Setter Property="BorderBrush" Value="{DynamicResource Edge.Brush.Border.Focus}" />
+        <Setter Property="BorderThickness" Value="1" />
+    </Style>
+
+    <Style Selector="Button.edge-icon">
+        <Setter Property="Width" Value="{DynamicResource Edge.Size.HeaderIconButton}" />
+        <Setter Property="Height" Value="{DynamicResource Edge.Size.HeaderIconButton}" />
+        <Setter Property="Padding" Value="{DynamicResource Edge.Thickness.Zero}" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Medium}" />
+    </Style>
+
+    <Style Selector="Button.edge-nav-button">
+        <Setter Property="Width" Value="{DynamicResource Edge.Size.NavButtonWidth}" />
+        <Setter Property="MinHeight" Value="{DynamicResource Edge.Size.NavButtonMinHeight}" />
+        <Setter Property="Padding" Value="{DynamicResource Edge.Thickness.Zero}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Medium}" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Top" />
+    </Style>
+
+    <Style Selector="Button.edge-nav-button:pointerover">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+
+    <Style Selector="Border.edge-nav-tile">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Surface.Card}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Edge.Brush.Border.Subtle}" />
+        <Setter Property="BorderThickness" Value="{DynamicResource Edge.Thickness.Border.Subtle}" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Medium}" />
+    </Style>
+
+    <Style Selector="Border.edge-nav-tile.selected">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Accent.Primary}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Edge.Brush.Accent.Primary}" />
+    </Style>
+
+    <Style Selector="PathIcon.edge-nav-icon">
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Muted}" />
+    </Style>
+
+    <Style Selector="PathIcon.edge-nav-icon.selected">
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.OnAccent}" />
+    </Style>
+
+    <Style Selector="PathIcon.edge-nav-icon.disabled">
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Status.Offline}" />
+    </Style>
+
+    <Style Selector="TextBlock.edge-nav-title">
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Caption}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Muted}" />
+    </Style>
+
+    <Style Selector="TextBlock.edge-nav-title.selected">
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.OnAccent}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style Selector="TextBlock.edge-nav-title.disabled">
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Status.Offline}" />
+    </Style>
+
+    <Style Selector="TextBox">
+        <Setter Property="FontFamily" Value="{DynamicResource Edge.FontFamily.Default}" />
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Body}" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Medium}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Edge.Brush.Border.Subtle}" />
+    </Style>
+
+    <Style Selector="TextBox:focus">
+        <Setter Property="BorderBrush" Value="{DynamicResource Edge.Brush.Border.Focus}" />
+    </Style>
+
+    <Style Selector="ComboBox">
+        <Setter Property="FontFamily" Value="{DynamicResource Edge.FontFamily.Default}" />
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Body}" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Medium}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Edge.Brush.Border.Subtle}" />
+    </Style>
+
+    <Style Selector="ComboBox:focus">
+        <Setter Property="BorderBrush" Value="{DynamicResource Edge.Brush.Border.Focus}" />
+    </Style>
+
+    <Style Selector="TabControl">
+        <Setter Property="FontFamily" Value="{DynamicResource Edge.FontFamily.Default}" />
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Body}" />
+    </Style>
+
+    <Style Selector="ScrollViewer">
+        <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="ToolTip">
+        <Setter Property="FontFamily" Value="{DynamicResource Edge.FontFamily.Default}" />
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Caption}" />
+    </Style>
+
+    <Style Selector="DataGrid.edge-grid">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Edge.Brush.Border.Subtle}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="GridLinesVisibility" Value="Horizontal" />
+        <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource Edge.Brush.Border.Subtle}" />
+        <Setter Property="RowBackground" Value="{DynamicResource Edge.Brush.Surface.Card}" />
+        <Setter Property="CanUserReorderColumns" Value="False" />
+        <Setter Property="IsReadOnly" Value="True" />
+        <Setter Property="HeadersVisibility" Value="Column" />
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Caption}" />
+        <Setter Property="FontFamily" Value="{DynamicResource Edge.FontFamily.Default}" />
+    </Style>
+
+    <Style Selector="controls|EdgeCard">
+        <Setter Property="CardBackground" Value="{DynamicResource Edge.Brush.Surface.Card}" />
+        <Setter Property="CardBorderBrush" Value="{DynamicResource Edge.Brush.Border.Subtle}" />
+        <Setter Property="CardBorderThickness" Value="1" />
+        <Setter Property="CardCornerRadius" Value="{DynamicResource Edge.CornerRadius.Medium}" />
+        <Setter Property="CardPadding" Value="{DynamicResource Edge.Thickness.Card.Default}" />
+        <Setter Property="CardShadow" Value="0 8 24 0 #14000000" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border
+                    Padding="{TemplateBinding CardPadding}"
+                    Background="{TemplateBinding CardBackground}"
+                    BorderBrush="{TemplateBinding CardBorderBrush}"
+                    BorderThickness="{TemplateBinding CardBorderThickness}"
+                    BoxShadow="{TemplateBinding CardShadow}"
+                    CornerRadius="{TemplateBinding CardCornerRadius}">
+                    <Grid RowDefinitions="Auto,*,Auto">
+                        <ContentPresenter Content="{TemplateBinding Header}" />
+                        <ContentPresenter Grid.Row="1" Content="{TemplateBinding Content}" />
+                        <ContentPresenter Grid.Row="2" Content="{TemplateBinding Footer}" />
+                    </Grid>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="controls|EdgeCard.emphasis">
+        <Setter Property="CardBackground" Value="{DynamicResource Edge.Brush.Surface.Subtle}" />
+        <Setter Property="CardBorderBrush" Value="{DynamicResource Edge.Brush.Accent.Primary}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusDot">
+        <Setter Property="Size" Value="8" />
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Info}" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border
+                    Width="{TemplateBinding Size}"
+                    Height="{TemplateBinding Size}"
+                    Background="{TemplateBinding Fill}"
+                    CornerRadius="{DynamicResource Edge.CornerRadius.Circle}" />
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="controls|EdgeStatusDot.default">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Offline}" />
+    </Style>
+    <Style Selector="controls|EdgeStatusDot.running">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Running}" />
+    </Style>
+    <Style Selector="controls|EdgeStatusDot.idle">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Idle}" />
+    </Style>
+    <Style Selector="controls|EdgeStatusDot.stopped">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Stopped}" />
+    </Style>
+    <Style Selector="controls|EdgeStatusDot.offline">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Offline}" />
+    </Style>
+    <Style Selector="controls|EdgeStatusDot.info">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Info}" />
+    </Style>
+    <Style Selector="controls|EdgeStatusDot.cache">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Cache}" />
+    </Style>
+    <Style Selector="controls|EdgeStatusDot.warning">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Warning}" />
+    </Style>
+    <Style Selector="controls|EdgeStatusDot.error">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Error}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusChip">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Info}" />
+        <Setter Property="TextBrush" Value="{DynamicResource Edge.Brush.Text.OnDanger}" />
+        <Setter Property="ChipPadding" Value="{DynamicResource Edge.Thickness.Chip}" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border
+                    Padding="{TemplateBinding ChipPadding}"
+                    Background="{TemplateBinding Fill}"
+                    CornerRadius="{DynamicResource Edge.CornerRadius.Pill}">
+                    <TextBlock
+                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                        FontWeight="SemiBold"
+                        Foreground="{TemplateBinding TextBrush}"
+                        Text="{TemplateBinding Text}" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="controls|EdgeStatusChip.default">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Surface.Panel}" />
+        <Setter Property="TextBrush" Value="{DynamicResource Edge.Brush.Text.Muted}" />
+    </Style>
+    <Style Selector="controls|EdgeStatusChip.running">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Running}" />
+        <Setter Property="TextBrush" Value="{DynamicResource Edge.Brush.Text.OnAccent}" />
+    </Style>
+    <Style Selector="controls|EdgeStatusChip.idle">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Idle}" />
+    </Style>
+    <Style Selector="controls|EdgeStatusChip.stopped">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Stopped}" />
+    </Style>
+    <Style Selector="controls|EdgeStatusChip.offline">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Offline}" />
+    </Style>
+    <Style Selector="controls|EdgeStatusChip.info">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Info}" />
+    </Style>
+    <Style Selector="controls|EdgeStatusChip.cache">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Cache}" />
+    </Style>
+    <Style Selector="controls|EdgeStatusChip.warning">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Warning}" />
+    </Style>
+    <Style Selector="controls|EdgeStatusChip.error">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Error}" />
+    </Style>
+
+    <Style Selector="controls|EdgeSectionHeader">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" Margin="0,0,0,12">
+                    <TextBlock
+                        FontSize="{DynamicResource Edge.FontSize.Section}"
+                        FontWeight="SemiBold"
+                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                        Text="{TemplateBinding Title}" />
+                    <ContentPresenter Grid.Column="1" Grid.RowSpan="2" Content="{TemplateBinding ActionContent}" />
+                    <TextBlock
+                        Grid.Row="1"
+                        Margin="0,2,0,0"
+                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                        Text="{TemplateBinding Subtitle}" />
+                </Grid>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="controls|EdgeKpiCard">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <controls:EdgeCard CardPadding="{DynamicResource Edge.Thickness.Card.Compact}">
+                    <StackPanel Spacing="4">
+                        <TextBlock
+                            FontSize="{DynamicResource Edge.FontSize.Caption}"
+                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                            Text="{TemplateBinding Title}" />
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <TextBlock
+                                FontFamily="{DynamicResource Edge.FontFamily.Display}"
+                                FontSize="{DynamicResource Edge.FontSize.Title}"
+                                FontWeight="SemiBold"
+                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                Text="{TemplateBinding Value}" />
+                            <TextBlock
+                                VerticalAlignment="Bottom"
+                                FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                Text="{TemplateBinding Unit}" />
+                        </StackPanel>
+                        <TextBlock
+                            FontSize="{DynamicResource Edge.FontSize.Caption}"
+                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                            Text="{TemplateBinding TrendText}" />
+                    </StackPanel>
+                </controls:EdgeCard>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="controls|EdgeStatusListItem">
+        <Setter Property="ItemBackground" Value="{DynamicResource Edge.Brush.Surface.Panel}" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border
+                    Padding="{DynamicResource Edge.Thickness.12}"
+                    Background="{TemplateBinding ItemBackground}"
+                    CornerRadius="{DynamicResource Edge.CornerRadius.Medium}">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="{DynamicResource Edge.Size.Spacing10}">
+                        <controls:EdgeStatusDot
+                            VerticalAlignment="Center"
+                            Status="{TemplateBinding Status}" />
+                        <StackPanel Grid.Column="1" Spacing="{DynamicResource Edge.Size.Spacing4}">
+                            <TextBlock
+                                FontSize="{DynamicResource Edge.FontSize.Body}"
+                                FontWeight="SemiBold"
+                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                Text="{TemplateBinding Title}"
+                                TextTrimming="CharacterEllipsis" />
+                            <TextBlock
+                                FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                Text="{TemplateBinding Description}"
+                                TextWrapping="Wrap" />
+                            <TextBlock
+                                FontFamily="{DynamicResource Edge.FontFamily.Mono}"
+                                FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                Text="{TemplateBinding Detail}"
+                                TextWrapping="Wrap" />
+                        </StackPanel>
+                        <StackPanel
+                            Grid.Column="2"
+                            VerticalAlignment="Center"
+                            Spacing="{DynamicResource Edge.Size.Spacing6}">
+                            <controls:EdgeStatusChip
+                                HorizontalAlignment="Right"
+                                Status="{TemplateBinding Status}"
+                                Text="{TemplateBinding StatusText}" />
+                            <ContentPresenter Content="{TemplateBinding ActionContent}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="controls|EdgeStatusListItem:pointerover">
+        <Setter Property="ItemBackground" Value="{DynamicResource Edge.Brush.Surface.Card}" />
+    </Style>
+</Styles>

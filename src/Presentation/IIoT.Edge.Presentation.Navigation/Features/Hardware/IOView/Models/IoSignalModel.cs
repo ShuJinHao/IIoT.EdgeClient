@@ -5,6 +5,8 @@ namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
 
 public class IoSignalModel : BaseNotifyPropertyChanged
 {
+    private Func<string, string, string>? _textProvider;
+
     public string SignalKey { get; set; } = "";
     public string PlcAddress { get; set; } = "";
     public string Direction { get; set; } = "Read";
@@ -26,6 +28,12 @@ public class IoSignalModel : BaseNotifyPropertyChanged
     public bool HasExpandedValues => ExpandedValues.Count > 0;
 
     public ObservableCollection<IoSignalValueModel> ExpandedValues { get; } = [];
+
+    public void SetTextProvider(Func<string, string, string> textProvider)
+    {
+        _textProvider = textProvider;
+        NotifyLocalizationChanged();
+    }
 
     public void NotifyLocalizationChanged()
         => OnPropertyChanged(nameof(DirectionText));
@@ -78,8 +86,8 @@ public class IoSignalModel : BaseNotifyPropertyChanged
         }
     }
 
-    private static string GetText(string key, string fallback)
-        => System.Windows.Application.Current?.TryFindResource(key) as string ?? fallback;
+    private string GetText(string key, string fallback)
+        => _textProvider?.Invoke(key, fallback) ?? fallback;
 }
 
 public sealed class IoSignalValueModel

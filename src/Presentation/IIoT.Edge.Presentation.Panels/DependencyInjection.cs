@@ -17,8 +17,8 @@ public static class DependencyInjection
 
         services.AddSingleton<EquipmentViewModel>();
         services.AddSingleton<LogViewModel>();
-        services.AddTransient<EquipmentView>();
-        services.AddTransient<LogView>();
+        services.AddTransient(sp => new EquipmentView(sp.GetRequiredService<EquipmentViewModel>()));
+        services.AddTransient(sp => new LogView(sp.GetRequiredService<LogViewModel>()));
         return services;
     }
 

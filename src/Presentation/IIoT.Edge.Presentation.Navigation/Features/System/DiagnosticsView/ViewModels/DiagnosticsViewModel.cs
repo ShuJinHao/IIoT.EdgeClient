@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Threading;
 using System.Windows.Input;
-using System.Windows.Threading;
 using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Presentation.Navigation.Localization;
@@ -24,7 +23,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
     private readonly IClientPermissionService _permissionService;
     private readonly AsyncCommand<DeadLetterRow> _requeueDeadLetterCommand;
     private readonly AsyncCommand<DeadLetterRow> _deleteDeadLetterCommand;
-    private readonly DispatcherTimer _refreshTimer;
+    private readonly Avalonia.Threading.DispatcherTimer _refreshTimer;
     private bool _isObserving;
 
     public ObservableCollection<ModuleRegistrationRow> ModuleRegistrations { get; } = [];
@@ -323,7 +322,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         _deleteDeadLetterCommand = new AsyncCommand<DeadLetterRow>(DeleteDeadLetterAsync, CanOperateDeadLetter);
         RequeueDeadLetterCommand = _requeueDeadLetterCommand;
         DeleteDeadLetterCommand = _deleteDeadLetterCommand;
-        _refreshTimer = new DispatcherTimer
+        _refreshTimer = new Avalonia.Threading.DispatcherTimer
         {
             Interval = TimeSpan.FromSeconds(1)
         };
@@ -462,7 +461,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
                 return;
             }
 
-            if (!_deadLetterConfirmationService.ConfirmRequeue(row))
+            if (!await _deadLetterConfirmationService.ConfirmRequeueAsync(row))
             {
                 SetStatus(GetText("Navigation_Diagnostics_RequeueCanceled", "已取消死信重新入队。"));
                 return;
@@ -496,7 +495,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
                 return;
             }
 
-            if (!_deadLetterConfirmationService.ConfirmDelete(row))
+            if (!await _deadLetterConfirmationService.ConfirmDeleteAsync(row))
             {
                 SetStatus(GetText("Navigation_Diagnostics_DeleteCanceled", "已取消死信删除。"));
                 return;
@@ -536,14 +535,13 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
 
     private void HandlePermissionStateChanged()
     {
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher is null || dispatcher.CheckAccess())
+        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
         {
             RefreshPermissionState();
             return;
         }
 
-        dispatcher.Invoke(RefreshPermissionState);
+        Avalonia.Threading.Dispatcher.UIThread.Post(RefreshPermissionState);
     }
 
     private void RefreshPermissionState()

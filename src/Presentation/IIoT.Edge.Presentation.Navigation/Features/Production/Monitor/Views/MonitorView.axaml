@@ -1,0 +1,159 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Navigation.Features.Production.Monitor.MonitorViewPage"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:sharedViews="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared">
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="20" Spacing="16">
+            <StackPanel Spacing="4">
+                <TextBlock
+                    FontSize="24"
+                    FontWeight="SemiBold"
+                    Foreground="{DynamicResource Edge.Text.Primary}"
+                    Text="{Binding ViewTitle}" />
+                <TextBlock
+                    Foreground="{DynamicResource Edge.Text.Muted}"
+                    Text="{Binding StatusMessage}"
+                    TextWrapping="Wrap" />
+            </StackPanel>
+
+            <sharedViews:EmptyStateView
+                IsVisible="{Binding IsDeviceTabsEmpty}"
+                Message="{DynamicResource Navigation_Monitor_EmptyMessage}"
+                Title="{DynamicResource Navigation_Monitor_EmptyTitle}" />
+
+            <TabControl
+                IsVisible="{Binding HasDeviceTabs}"
+                ItemsSource="{Binding DeviceTabs}"
+                SelectedIndex="{Binding SelectedTabIndex}">
+                <TabControl.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Padding="12,6" Text="{Binding DeviceName}" />
+                    </DataTemplate>
+                </TabControl.ItemTemplate>
+
+                <TabControl.ContentTemplate>
+                    <DataTemplate>
+                        <StackPanel Margin="0,14,0,0" Spacing="12">
+                            <UniformGrid Columns="3" Rows="1">
+                                <Border Margin="0,0,8,0" Padding="14,12" Background="{DynamicResource Edge.Surface.Main}" BorderBrush="{DynamicResource Edge.Border.Subtle}" BorderThickness="1" CornerRadius="8">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Warning}" Text="{DynamicResource Navigation_Monitor_DayShift}" />
+                                        <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="10">
+                                            <StackPanel>
+                                                <TextBlock FontSize="11" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Navigation_Monitor_Total}" />
+                                                <TextBlock FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Text.Primary}" Text="{Binding DayShiftTotal}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1">
+                                                <TextBlock FontSize="11" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Navigation_Capacity_Good}" />
+                                                <TextBlock FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Success}" Text="{Binding DayShiftOk}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock FontSize="11" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Navigation_Capacity_Bad}" />
+                                                <TextBlock FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Danger}" Text="{Binding DayShiftNg}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="3">
+                                                <TextBlock FontSize="11" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Navigation_Monitor_Yield}" />
+                                                <TextBlock FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Warning}" Text="{Binding DayShiftYield}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Margin="4,0" Padding="14,12" Background="{DynamicResource Edge.Surface.Main}" BorderBrush="{DynamicResource Edge.Border.Subtle}" BorderThickness="1" CornerRadius="8">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Text.Primary}" Text="{DynamicResource Navigation_Monitor_NightShift}" />
+                                        <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="10">
+                                            <StackPanel>
+                                                <TextBlock FontSize="11" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Navigation_Monitor_Total}" />
+                                                <TextBlock FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Text.Primary}" Text="{Binding NightShiftTotal}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1">
+                                                <TextBlock FontSize="11" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Navigation_Capacity_Good}" />
+                                                <TextBlock FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Success}" Text="{Binding NightShiftOk}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock FontSize="11" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Navigation_Capacity_Bad}" />
+                                                <TextBlock FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Danger}" Text="{Binding NightShiftNg}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="3">
+                                                <TextBlock FontSize="11" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Navigation_Monitor_Yield}" />
+                                                <TextBlock FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Warning}" Text="{Binding NightShiftYield}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Margin="8,0,0,0" Padding="14,12" Background="{DynamicResource Edge.Surface.Main}" BorderBrush="{DynamicResource Edge.Border.Subtle}" BorderThickness="1" CornerRadius="8">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Text.Primary}" Text="{DynamicResource Navigation_Monitor_TodaySummary}" />
+                                        <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="10">
+                                            <StackPanel>
+                                                <TextBlock FontSize="11" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Navigation_Monitor_Total}" />
+                                                <TextBlock FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Text.Primary}" Text="{Binding TotalAll}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1">
+                                                <TextBlock FontSize="11" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Navigation_Capacity_Good}" />
+                                                <TextBlock FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Success}" Text="{Binding OkAll}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock FontSize="11" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Navigation_Capacity_Bad}" />
+                                                <TextBlock FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Danger}" Text="{Binding NgAll}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="3">
+                                                <TextBlock FontSize="11" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Navigation_Monitor_Yield}" />
+                                                <TextBlock FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Warning}" Text="{Binding YieldAll}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                            </UniformGrid>
+
+                            <Border Padding="12" Background="{DynamicResource Edge.Surface.Panel}" BorderBrush="{DynamicResource Edge.Border.Subtle}" BorderThickness="1" CornerRadius="8">
+                                <StackPanel Spacing="7">
+                                    <TextBlock Foreground="{DynamicResource Edge.Text.Primary}" TextWrapping="Wrap">
+                                        <Run Text="{DynamicResource Navigation_Monitor_StateMachinePrefix}" />
+                                        <Run Text="{Binding StepSummary}" />
+                                    </TextBlock>
+                                    <TextBlock Foreground="{DynamicResource Edge.Text.Primary}" TextWrapping="Wrap">
+                                        <Run Text="{DynamicResource Navigation_Monitor_DeviceDataPrefix}" />
+                                        <Run Text="{Binding DeviceDataSummary}" />
+                                    </TextBlock>
+                                    <TextBlock Foreground="{DynamicResource Edge.Text.Primary}" TextWrapping="Wrap">
+                                        <Run Text="{DynamicResource Navigation_Monitor_CloudSyncPrefix}" />
+                                        <Run Text="{Binding CloudSyncStatus}" />
+                                    </TextBlock>
+                                    <TextBlock Foreground="{DynamicResource Edge.Text.Primary}" TextWrapping="Wrap">
+                                        <Run Text="{DynamicResource Navigation_Monitor_MesSyncPrefix}" />
+                                        <Run Text="{Binding MesSyncStatus}" />
+                                    </TextBlock>
+                                    <TextBlock Foreground="{DynamicResource Edge.Text.Primary}" TextWrapping="Wrap">
+                                        <Run Text="{DynamicResource Navigation_Monitor_ContextPersistencePrefix}" />
+                                        <Run Text="{Binding ContextPersistenceStatus}" />
+                                    </TextBlock>
+                                    <TextBlock Foreground="{DynamicResource Edge.Text.Muted}" TextWrapping="Wrap">
+                                        <Run Text="{DynamicResource Navigation_Monitor_WipPrefix}" />
+                                        <Run Text="{Binding CellCount}" />
+                                        <Run Text="{DynamicResource Navigation_Monitor_WipSuffix}" />
+                                    </TextBlock>
+                                </StackPanel>
+                            </Border>
+
+                            <DataGrid
+                                Classes="edge-grid"
+                                AutoGenerateColumns="True"
+                                CanUserReorderColumns="False"
+                                CanUserResizeColumns="True"
+                                CanUserSortColumns="False"
+                                GridLinesVisibility="Horizontal"
+                                HeadersVisibility="Column"
+                                IsReadOnly="True"
+                                ItemsSource="{Binding CellRows}" />
+                        </StackPanel>
+                    </DataTemplate>
+                </TabControl.ContentTemplate>
+            </TabControl>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

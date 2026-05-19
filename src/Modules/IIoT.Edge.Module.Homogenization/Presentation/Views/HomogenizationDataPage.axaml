@@ -1,0 +1,50 @@
+<UserControl
+    x:Class="IIoT.Edge.Module.Homogenization.Presentation.Views.HomogenizationDataPage"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="20" Spacing="16">
+            <StackPanel Spacing="4">
+                <TextBlock
+                    FontSize="24"
+                    FontWeight="SemiBold"
+                    Foreground="{DynamicResource Edge.Text.Primary}"
+                    Text="{Binding ViewTitle}" />
+                <TextBlock
+                    Foreground="{DynamicResource Edge.Text.Muted}"
+                    Text="{Binding StatusMessage}"
+                    TextWrapping="Wrap" />
+            </StackPanel>
+
+            <Border
+                Padding="14"
+                Background="{DynamicResource Edge.Surface.Main}"
+                BorderBrush="{DynamicResource Edge.Border.Subtle}"
+                BorderThickness="1"
+                CornerRadius="8">
+                <DataGrid
+                    Classes="edge-grid"
+                    AutoGenerateColumns="False"
+                    CanUserReorderColumns="False"
+                    CanUserResizeColumns="True"
+                    CanUserSortColumns="False"
+                    GridLinesVisibility="Horizontal"
+                    HeadersVisibility="Column"
+                    IsReadOnly="True"
+                    ItemsSource="{Binding Records}">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Width="2*" Binding="{Binding TrayCode}" Header="{DynamicResource Homogenization_Column_TrayCode}" />
+                        <DataGridTextColumn Width="150" Binding="{Binding InboundTime}" Header="{DynamicResource Homogenization_Column_InboundTime}" />
+                        <DataGridTextColumn Width="150" Binding="{Binding OutboundTime}" Header="{DynamicResource Homogenization_Column_OutboundTime}" />
+                        <DataGridTextColumn Width="120" Binding="{Binding Status}" Header="{DynamicResource Homogenization_Column_Status}" />
+                        <DataGridTextColumn Width="120" Binding="{Binding StirringSpeed}" Header="{DynamicResource Homogenization_Column_StirringSpeed}" />
+                        <DataGridTextColumn Width="120" Binding="{Binding Temperature}" Header="{DynamicResource Homogenization_Column_Temperature}" />
+                        <DataGridTextColumn Width="120" Binding="{Binding Vacuum}" Header="{DynamicResource Homogenization_Column_Vacuum}" />
+                        <DataGridTextColumn Width="120" Binding="{Binding CntActual}" Header="{DynamicResource Homogenization_Column_CntActual}" />
+                        <DataGridTextColumn Width="120" Binding="{Binding NmpActual}" Header="{DynamicResource Homogenization_Column_NmpActual}" />
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

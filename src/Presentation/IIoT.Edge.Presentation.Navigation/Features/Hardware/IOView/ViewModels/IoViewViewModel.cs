@@ -56,6 +56,7 @@ public class IoViewViewModel : NavigationViewModelBase
             _selectedDevice = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(HasSelectedDevice));
+            OnPropertyChanged(nameof(ConnectionStateText));
             _manualReadCommand.RaiseCanExecuteChanged();
             _ = LoadMappingsAsync();
         }
@@ -76,6 +77,22 @@ public class IoViewViewModel : NavigationViewModelBase
 
             _isConnected = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(ConnectionStateText));
+        }
+    }
+
+    public string ConnectionStateText
+    {
+        get
+        {
+            if (SelectedDevice is null)
+            {
+                return GetText("Navigation_Status_NoDevice", "未选择设备");
+            }
+
+            return IsConnected
+                ? GetText("Navigation_Status_Connected", "已连接")
+                : GetText("Navigation_Status_Disconnected", "未连接");
         }
     }
 
@@ -224,6 +241,7 @@ public class IoViewViewModel : NavigationViewModelBase
         }
 
         var mappedSignals = _mappingBuilder.Build(result.Value.Items);
+        ApplyTextProvider(mappedSignals);
         foreach (var row in mappedSignals.InteractionRows)
         {
             row.WriteCommand ??= new BaseCommand(_ => WriteInteractionRow(row), _ => row.CanWrite);
@@ -342,6 +360,27 @@ public class IoViewViewModel : NavigationViewModelBase
         OnPropertyChanged(nameof(HasNoSignals));
     }
 
+    private void ApplyTextProvider(IoViewMappingBuildResult mappedSignals)
+    {
+        foreach (var row in mappedSignals.InteractionRows)
+        {
+            row.SetTextProvider(GetText);
+        }
+
+        foreach (var section in mappedSignals.DataSections)
+        {
+            foreach (var signal in section.Signals)
+            {
+                signal.SetTextProvider(GetText);
+            }
+        }
+
+        foreach (var section in mappedSignals.ArraySections)
+        {
+            section.SetTextProvider(GetText);
+        }
+    }
+
     protected override void RefreshLocalization()
     {
         base.RefreshLocalization();
@@ -371,6 +410,8 @@ public class IoViewViewModel : NavigationViewModelBase
                 signal.NotifyLocalizationChanged();
             }
         }
+
+        OnPropertyChanged(nameof(ConnectionStateText));
     }
 
     public override async Task OnActivatedAsync()

@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Windows;
 using System.Windows.Input;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Features.Production.CapacityView;
@@ -14,6 +13,7 @@ public class CapacityViewModel : NavigationViewModelBase
     private readonly ICapacityViewService _capacityViewService;
     private string _selectedDeviceName = string.Empty;
     private string _selectedQueryMode = CapacityQueryModes.Day;
+    private CapacityQueryModeOption? _selectedQueryModeOption;
     private DateTime _queryDate = DateTime.Today;
     private bool _isOnline;
     private int _periodTotal;
@@ -23,8 +23,11 @@ public class CapacityViewModel : NavigationViewModelBase
     private string _avgDaily = "0";
 
     public ObservableCollection<string> DeviceNames { get; } = [];
+    public ObservableCollection<CapacityQueryModeOption> QueryModes { get; } = [];
     public ObservableCollection<DailyCapacityVm> DailyRecords { get; } = [];
     public ObservableCollection<CapacityChartBarVm> ChartBars { get; } = [];
+    public bool HasDailyRecords => DailyRecords.Count > 0;
+    public bool IsDailyRecordsEmpty => DailyRecords.Count == 0;
 
     public string SelectedDeviceName
     {
@@ -42,8 +45,26 @@ public class CapacityViewModel : NavigationViewModelBase
         get => _selectedQueryMode;
         set
         {
-            _selectedQueryMode = value;
+            SetSelectedQueryMode(value, true);
+        }
+    }
+
+    public CapacityQueryModeOption? SelectedQueryModeOption
+    {
+        get => _selectedQueryModeOption;
+        set
+        {
+            if (ReferenceEquals(_selectedQueryModeOption, value))
+            {
+                return;
+            }
+
+            _selectedQueryModeOption = value;
             OnPropertyChanged();
+            if (value is not null)
+            {
+                SetSelectedQueryMode(value.Value, false);
+            }
         }
     }
 
@@ -145,6 +166,8 @@ public class CapacityViewModel : NavigationViewModelBase
 
         QueryCommand = new AsyncCommand(() => RunViewTaskAsync(QueryHistoryAsync, GetText("Navigation_Capacity_QueryFailed", "产能查询失败。")));
         ExportCommand = new BaseCommand(_ => { });
+        RefreshQueryModes();
+        SetSelectedQueryMode(_selectedQueryMode, true);
 
         _capacityViewService.UploadGateChanged += OnUploadGateChanged;
     }
@@ -186,7 +209,7 @@ public class CapacityViewModel : NavigationViewModelBase
     {
         if (!CanQueryCloud)
         {
-            ReplaceItems(DailyRecords, Array.Empty<DailyCapacityVm>());
+            SetDailyRecords(Array.Empty<DailyCapacityVm>());
             ClearSummary();
             RefreshChart();
             return;
@@ -200,13 +223,9 @@ public class CapacityViewModel : NavigationViewModelBase
     {
         if (!CanQueryCloud)
         {
-            MessageBox.Show(
-                GetText("Navigation_Capacity_OfflineHint", "设备上传鉴权尚未就绪，暂时无法查询云端产能。"),
-                GetText("Navigation_Title_CapacityQuery", "产能查询"),
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+            SetStatus(GetText("Navigation_Capacity_OfflineHint", "设备上传授权尚未就绪，暂时无法查询云端产能。"));
             ClearSummary();
-            ReplaceItems(DailyRecords, Array.Empty<DailyCapacityVm>());
+            SetDailyRecords(Array.Empty<DailyCapacityVm>());
             RefreshChart();
             return;
         }
@@ -221,13 +240,20 @@ public class CapacityViewModel : NavigationViewModelBase
 
     private void ApplyResult(CapacityViewResult result)
     {
-        ReplaceItems(DailyRecords, result.Rows);
+        SetDailyRecords(result.Rows);
         PeriodTotal = result.PeriodTotal;
         PeriodOk = result.PeriodOk;
         PeriodNg = result.PeriodNg;
         PeriodYield = result.PeriodYield;
         AvgDaily = result.AvgDaily;
         RefreshChart();
+    }
+
+    private void SetDailyRecords(IEnumerable<DailyCapacityVm> records)
+    {
+        ReplaceItems(DailyRecords, records);
+        OnPropertyChanged(nameof(HasDailyRecords));
+        OnPropertyChanged(nameof(IsDailyRecordsEmpty));
     }
 
     private void RefreshChart()
@@ -258,15 +284,61 @@ public class CapacityViewModel : NavigationViewModelBase
         AvgDaily = "0";
     }
 
+    protected override void RefreshLocalization()
+    {
+        base.RefreshLocalization();
+        RefreshQueryModes();
+        SetSelectedQueryMode(_selectedQueryMode, true);
+    }
+
+    private void RefreshQueryModes()
+    {
+        ReplaceItems(
+            QueryModes,
+            [
+                new(CapacityQueryModes.Day, GetText("Navigation_Capacity_ByDay", "按日查询")),
+                new(CapacityQueryModes.Month, GetText("Navigation_Capacity_ByMonth", "按月查询")),
+                new(CapacityQueryModes.Year, GetText("Navigation_Capacity_ByYear", "按年查询"))
+            ]);
+    }
+
+    private void SetSelectedQueryMode(string value, bool updateOption)
+    {
+        if (_selectedQueryMode != value)
+        {
+            _selectedQueryMode = value;
+            OnPropertyChanged(nameof(SelectedQueryMode));
+        }
+
+        if (!updateOption)
+        {
+            return;
+        }
+
+        var option = QueryModes.FirstOrDefault(x => x.Value == _selectedQueryMode);
+        if (ReferenceEquals(_selectedQueryModeOption, option))
+        {
+            return;
+        }
+
+        _selectedQueryModeOption = option;
+        OnPropertyChanged(nameof(SelectedQueryModeOption));
+    }
+
     private static void RunOnUiThread(Action action)
     {
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher is null || dispatcher.CheckAccess())
+        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
         {
             action();
             return;
         }
 
-        _ = dispatcher.InvokeAsync(action);
+        Avalonia.Threading.Dispatcher.UIThread.Post(action);
     }
+}
+
+public sealed class CapacityQueryModeOption(string value, string displayName)
+{
+    public string Value { get; } = value;
+    public string DisplayName { get; } = displayName;
 }

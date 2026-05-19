@@ -1,5 +1,13 @@
 # 05. 设备 bootstrap 与播种链路基线
 
+## 强红线
+
+`ClientCode` 是云端生成并由客户端只读使用的设备寻址码，Avalonia 迁移不得修改其语义、来源、持久化方式或 UI 编辑入口。
+
+`ClientCode` 与 `DeviceId` 不可混用：`ClientCode` 用于 bootstrap 寻址，`DeviceId` 是云端正式设备身份，UI 展示、上传 payload 和缓存状态中不得互换。
+
+MES 链路与云端链路必须保持独立，接口、重试、缓冲、补偿和 SQLite 表不可合并；本地样例设备播种不可替代云端设备身份链路。
+
 本文把两个容易混淆的链路分开记录：
 
 - 云端设备 bootstrap：用 `CloudApi:ClientCode` 和 `BootstrapSecret` 获取设备会话、上传 token 和设备身份。

@@ -1,0 +1,13 @@
+<ResourceDictionary
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:sys="using:System">
+    <sys:String x:Key="Shell_HeaderStatus">Startup complete</sys:String>
+    <sys:String x:Key="Shell_HeaderProfile">Local mode</sys:String>
+    <sys:String x:Key="Shell_ContentTitle">Feature in progress</sys:String>
+    <sys:String x:Key="Shell_ContentMessage">This phase only migrates the startup shell and five-zone frame. Business pages will be migrated in later phases in their original projects.</sys:String>
+    <sys:String x:Key="Shell_EquipmentEmpty">The equipment status component is not part of this phase, so no simulated equipment data is shown.</sys:String>
+    <sys:String x:Key="Shell_LogEmpty">The log panel is not part of this phase, so no simulated logs are shown.</sys:String>
+    <sys:String x:Key="Shell_FooterPhase1">Phase 1 shell | Local time {0:yyyy-MM-dd HH:mm:ss}</sys:String>
+    <sys:String x:Key="Shell_FooterPhase3">Phase 3 navigation dashboard | Local time {0:yyyy-MM-dd HH:mm:ss}</sys:String>
+</ResourceDictionary>

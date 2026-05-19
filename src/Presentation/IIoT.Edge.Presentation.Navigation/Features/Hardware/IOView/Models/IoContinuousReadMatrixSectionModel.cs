@@ -10,6 +10,7 @@ namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
 /// </summary>
 public sealed class IoContinuousReadMatrixSectionModel : BaseNotifyPropertyChanged
 {
+    private Func<string, string, string>? _textProvider;
     private bool _isExpanded;
 
     public IoContinuousReadMatrixSectionModel()
@@ -78,6 +79,17 @@ public sealed class IoContinuousReadMatrixSectionModel : BaseNotifyPropertyChang
         ? GetText("Navigation_Io_CollapseDetails", "收起明细")
         : GetText("Navigation_Io_ViewDetails", "查看明细");
 
+    public void SetTextProvider(Func<string, string, string> textProvider)
+    {
+        _textProvider = textProvider;
+        foreach (var column in Columns)
+        {
+            column.SetTextProvider(textProvider);
+        }
+
+        NotifyLocalizationChanged();
+    }
+
     public void NotifyLocalizationChanged()
     {
         OnPropertyChanged(nameof(Title));
@@ -117,8 +129,8 @@ public sealed class IoContinuousReadMatrixSectionModel : BaseNotifyPropertyChang
         OnPropertyChanged(nameof(Summary));
     }
 
-    private static string GetText(string key, string fallback)
-        => System.Windows.Application.Current?.TryFindResource(key) as string ?? fallback;
+    private string GetText(string key, string fallback)
+        => _textProvider?.Invoke(key, fallback) ?? fallback;
 }
 
 public sealed class IoContinuousReadMatrixRowModel

@@ -1,0 +1,63 @@
+<Window
+    x:Class="IIoT.Edge.Shell.ShellCrashDialog"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
+    Title="IIoT Edge Client - 启动失败"
+    Width="620"
+    Height="360"
+    Background="{DynamicResource Edge.Brush.Overlay.Modal}"
+    CanResize="False"
+    WindowDecorations="None"
+    WindowStartupLocation="CenterScreen">
+    <Grid PointerPressed="OnDialogPointerPressed">
+        <edge:EdgeCard
+            Width="460"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            CardPadding="{DynamicResource Edge.Thickness.24}">
+            <StackPanel Spacing="{DynamicResource Edge.Size.Spacing12}">
+                <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Edge.Size.Spacing10}">
+                    <Border
+                        Width="{DynamicResource Edge.Size.HeaderIconButton}"
+                        Height="{DynamicResource Edge.Size.HeaderIconButton}"
+                        Background="{DynamicResource Edge.Brush.Status.Error}"
+                        CornerRadius="{DynamicResource Edge.CornerRadius.Circle}">
+                        <TextBlock
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            FontSize="{DynamicResource Edge.FontSize.Title}"
+                            FontWeight="SemiBold"
+                            Foreground="{DynamicResource Edge.Brush.Text.OnDanger}"
+                            Text="!" />
+                    </Border>
+                    <StackPanel VerticalAlignment="Center" Spacing="{DynamicResource Edge.Size.Spacing4}">
+                        <TextBlock
+                            FontSize="{DynamicResource Edge.FontSize.Section}"
+                            FontWeight="SemiBold"
+                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                            Text="启动失败" />
+                        <TextBlock
+                            FontSize="{DynamicResource Edge.FontSize.Caption}"
+                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                            Text="启动链路返回错误，详细信息如下。" />
+                    </StackPanel>
+                </StackPanel>
+
+                <ScrollViewer MaxHeight="150" VerticalScrollBarVisibility="Auto">
+                    <TextBlock
+                        FontSize="{DynamicResource Edge.FontSize.Body}"
+                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                        Text="{Binding Message}"
+                        TextWrapping="Wrap" />
+                </ScrollViewer>
+
+                <Button
+                    HorizontalAlignment="Right"
+                    Padding="{DynamicResource Edge.Thickness.Card.Compact}"
+                    Click="OnCloseClick"
+                    Content="关闭" />
+            </StackPanel>
+        </edge:EdgeCard>
+    </Grid>
+</Window>

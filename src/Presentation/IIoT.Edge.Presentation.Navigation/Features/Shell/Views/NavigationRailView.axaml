@@ -1,0 +1,78 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Navigation.Features.Shell.NavigationRailView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    x:Name="Root">
+    <Border
+        Background="{DynamicResource Edge.Surface.Panel}"
+        BorderBrush="{DynamicResource Edge.Border.Subtle}"
+        BorderThickness="0,0,1,0"
+        CornerRadius="{DynamicResource Edge.CornerRadius.NavRail}">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="{DynamicResource Edge.Thickness.8}" Spacing="{DynamicResource Edge.Size.Spacing4}">
+                <Border
+                    Width="{DynamicResource Edge.Size.BrandMark}"
+                    Height="{DynamicResource Edge.Size.BrandMark}"
+                    HorizontalAlignment="Center"
+                    Background="{DynamicResource Edge.Accent}"
+                    CornerRadius="{DynamicResource Edge.CornerRadius.Medium}">
+                    <PathIcon
+                        Width="{DynamicResource Edge.Size.BrandIcon}"
+                        Height="{DynamicResource Edge.Size.BrandIcon}"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Data="M4,4 L20,4 L20,20 L4,20 Z M7,7 L17,7 L17,17 L7,17 Z"
+                        Foreground="{DynamicResource Edge.Brush.Text.OnAccent}" />
+                </Border>
+                <ItemsControl ItemsSource="{Binding Items}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Button
+                                Classes="edge-nav-button"
+                                Command="{Binding DataContext.SelectCommand, ElementName=Root}"
+                                CommandParameter="{Binding}"
+                                IsEnabled="{Binding IsEnabled}">
+                                <Grid RowDefinitions="Auto,Auto,Auto" HorizontalAlignment="Center">
+                                    <Border
+                                        Classes="edge-nav-tile"
+                                        Classes.selected="{Binding IsSelected}"
+                                        Width="{DynamicResource Edge.Size.NavTileWidth}"
+                                        Height="{DynamicResource Edge.Size.NavTileHeight}">
+                                        <PathIcon
+                                            Classes="edge-nav-icon"
+                                            Classes.disabled="{Binding !IsEnabled}"
+                                            Classes.selected="{Binding IsSelected}"
+                                            Width="{DynamicResource Edge.Size.NavIcon}"
+                                            Height="{DynamicResource Edge.Size.NavIcon}"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            Data="{Binding IconData}" />
+                                    </Border>
+                                    <TextBlock
+                                        Grid.Row="1"
+                                        Classes="edge-nav-title"
+                                        Classes.disabled="{Binding !IsEnabled}"
+                                        Classes.selected="{Binding IsSelected}"
+                                        Margin="{DynamicResource Edge.Thickness.4}"
+                                        HorizontalAlignment="Center"
+                                        Text="{Binding Title}"
+                                        TextAlignment="Center"
+                                        TextWrapping="Wrap" />
+                                    <TextBlock
+                                        Grid.Row="2"
+                                        HorizontalAlignment="Center"
+                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                        IsVisible="{Binding !IsEnabled}"
+                                        Text="{Binding StatusText}"
+                                        TextAlignment="Center"
+                                        TextWrapping="Wrap" />
+                                </Grid>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </ScrollViewer>
+    </Border>
+</UserControl>

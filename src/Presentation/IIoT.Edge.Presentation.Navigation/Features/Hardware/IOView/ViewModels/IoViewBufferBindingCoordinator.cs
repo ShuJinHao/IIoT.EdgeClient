@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Abstractions.Plc.Store;
+using Avalonia.Threading;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
 
@@ -44,13 +45,12 @@ public sealed class IoViewBufferBindingCoordinator(IPlcDataStore dataStore) : II
             return;
         }
 
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher is null || dispatcher.CheckAccess())
+        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
         {
             refresh();
             return;
         }
 
-        dispatcher.BeginInvoke(refresh);
+        Avalonia.Threading.Dispatcher.UIThread.Post(refresh);
     }
 }

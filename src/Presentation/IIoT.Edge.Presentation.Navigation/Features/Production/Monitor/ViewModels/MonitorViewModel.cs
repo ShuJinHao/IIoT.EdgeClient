@@ -2,9 +2,9 @@ using IIoT.Edge.Application.Features.Production.Monitor;
 using IIoT.Edge.Presentation.Navigation.Localization;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
+using Avalonia.Threading;
 using System.Collections.ObjectModel;
 using System.Data;
-using System.Windows.Threading;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Production.Monitor;
 
@@ -15,6 +15,8 @@ public class MonitorViewModel : NavigationViewModelBase
     private readonly LocalizedSyncDiagnosticsText _diagnosticsText;
 
     public ObservableCollection<DeviceTabVm> DeviceTabs { get; } = new();
+    public bool HasDeviceTabs => DeviceTabs.Count > 0;
+    public bool IsDeviceTabsEmpty => DeviceTabs.Count == 0;
 
     private int _selectedTabIndex;
     public int SelectedTabIndex
@@ -103,6 +105,8 @@ public class MonitorViewModel : NavigationViewModelBase
                 tab.CellCount = snapshot.CellCount;
                 tab.CellTable = snapshot.CellTable;
             });
+        OnPropertyChanged(nameof(HasDeviceTabs));
+        OnPropertyChanged(nameof(IsDeviceTabsEmpty));
     }
 
     protected override void RefreshLocalization()
@@ -254,8 +258,15 @@ public class DeviceTabVm : BaseNotifyPropertyChanged
     public DataTable? CellTable
     {
         get => _cellTable;
-        set { _cellTable = value; OnPropertyChanged(); }
+        set
+        {
+            _cellTable = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(CellRows));
+        }
     }
+
+    public System.Data.DataView? CellRows => _cellTable?.DefaultView;
 
     public void RefreshFallbackText(MonitorViewModel owner)
     {

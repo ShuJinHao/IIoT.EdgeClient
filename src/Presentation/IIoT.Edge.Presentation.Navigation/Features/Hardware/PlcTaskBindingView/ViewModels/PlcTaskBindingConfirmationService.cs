@@ -1,16 +1,19 @@
-using System.Windows;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Threading;
+using IIoT.Edge.Presentation.Navigation.Features.Hardware;
 using IIoT.Edge.UI.Shared.Localization;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.PlcTaskBindingView;
 
 public interface IPlcTaskBindingConfirmationService
 {
-    bool ConfirmDisableHeartbeat(string deviceName, IReadOnlyCollection<string> taskNames);
+    Task<bool> ConfirmDisableHeartbeatAsync(string deviceName, IReadOnlyCollection<string> taskNames);
 }
 
-public sealed class PlcTaskBindingConfirmationService(IAppLanguageService languageService) : IPlcTaskBindingConfirmationService
+public sealed class PlcTaskBindingConfirmationService(IAppLanguageService languageService)
+    : IPlcTaskBindingConfirmationService
 {
-    public bool ConfirmDisableHeartbeat(string deviceName, IReadOnlyCollection<string> taskNames)
+    public Task<bool> ConfirmDisableHeartbeatAsync(string deviceName, IReadOnlyCollection<string> taskNames)
     {
         var separator = languageService.GetString("Navigation_ListSeparator", "、");
         var message = languageService.Format(
@@ -22,10 +25,46 @@ public sealed class PlcTaskBindingConfirmationService(IAppLanguageService langua
             "Navigation_PlcTaskBinding_DisableHeartbeatConfirmTitle",
             "确认关闭心跳任务");
 
-        return MessageBox.Show(
-            message,
-            title,
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning) == MessageBoxResult.Yes;
+        return ConfirmAsync(title, message);
+    }
+
+    private static async Task<bool> ConfirmAsync(string title, string message)
+    {
+        if (!Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+        {
+            var result = new TaskCompletionSource<bool>();
+            Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
+            {
+                try
+                {
+                    result.SetResult(await ConfirmOnUiThreadAsync(title, message));
+                }
+                catch (Exception ex)
+                {
+                    result.SetException(ex);
+                }
+            });
+            return await result.Task;
+        }
+
+        return await ConfirmOnUiThreadAsync(title, message);
+    }
+
+    private static async Task<bool> ConfirmOnUiThreadAsync(string title, string message)
+    {
+        if (Avalonia.Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime lifetime)
+        {
+            return false;
+        }
+
+        var owner = lifetime.Windows.FirstOrDefault(static window => window.IsActive)
+                    ?? lifetime.MainWindow;
+        if (owner is null)
+        {
+            return false;
+        }
+
+        var dialog = new HardwareConfirmationDialog(title, message);
+        return await dialog.ShowDialog<bool>(owner);
     }
 }

@@ -1,7 +1,11 @@
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Threading;
 using IIoT.Edge.Application.Common.Crud;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Models;
 using IIoT.Edge.Application.Features.Hardware.IoMappings;
+using IIoT.Edge.Presentation.Navigation.Features.Hardware;
+using IIoT.Edge.UI.Shared.Localization;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView;
 
@@ -23,15 +27,18 @@ public sealed class HardwareConfigLoadSaveCoordinator : IHardwareConfigLoadSaveC
     private readonly IHardwareConfigCrudService _crudService;
     private readonly IHardwareConfigValidationPresenter _validationPresenter;
     private readonly IHardwareConfigEditSession _editSession;
+    private readonly IAppLanguageService _languageService;
 
     public HardwareConfigLoadSaveCoordinator(
         IHardwareConfigCrudService crudService,
         IHardwareConfigValidationPresenter validationPresenter,
-        IHardwareConfigEditSession editSession)
+        IHardwareConfigEditSession editSession,
+        IAppLanguageService languageService)
     {
         _crudService = crudService;
         _validationPresenter = validationPresenter;
         _editSession = editSession;
+        _languageService = languageService;
     }
 
     public async Task LoadAllAsync(HardwareConfigViewModel viewModel)
@@ -49,6 +56,7 @@ public sealed class HardwareConfigLoadSaveCoordinator : IHardwareConfigLoadSaveC
         {
             viewModel.SetModuleTemplateAvailable(false);
             HardwareConfigViewModel.ReplaceCollection(viewModel.IoMappings, Array.Empty<IoMappingVm>());
+            viewModel.RefreshIoMappingGroups();
         }
     }
 
@@ -94,7 +102,7 @@ public sealed class HardwareConfigLoadSaveCoordinator : IHardwareConfigLoadSaveC
 
     public async Task<CrudOperationResult> ApplyModuleTemplateAsync(HardwareConfigViewModel viewModel)
     {
-        if (!ConfirmResetModuleTemplate())
+        if (!await ConfirmResetModuleTemplateAsync())
         {
             return CrudOperationResult.Success("已取消重置标准点位。");
         }
@@ -141,30 +149,65 @@ public sealed class HardwareConfigLoadSaveCoordinator : IHardwareConfigLoadSaveC
         {
             HardwareConfigViewModel.ReplaceCollection(viewModel.IoMappings, Array.Empty<IoMappingVm>());
             viewModel.SelectedIoMapping = null;
-            viewModel.IoMappingsView.Refresh();
+            viewModel.RefreshIoMappingGroups();
             return;
         }
 
         var result = await _crudService.LoadIoMappingsAsync(viewModel.SelectedNetworkDevice.Id);
         HardwareConfigViewModel.ReplaceCollection(viewModel.IoMappings, result.Items);
         viewModel.SelectedIoMapping = null;
-        viewModel.IoMappingsView.Refresh();
+        viewModel.RefreshIoMappingGroups();
     }
 
-    private static bool ConfirmResetModuleTemplate()
+    private Task<bool> ConfirmResetModuleTemplateAsync()
     {
-        var app = System.Windows.Application.Current;
-        if (app is null)
+        var title = _languageService.GetString(
+            "Navigation_Hardware_ResetStandardIoConfirmTitle",
+            "重置标准点位");
+        var message = _languageService.GetString(
+            "Navigation_Hardware_ResetStandardIoConfirmMessage",
+            "重置标准点位会清空当前 PLC 已有 IO 映射，并按插件标准模板重新生成。是否继续？");
+
+        return ConfirmAsync(title, message);
+    }
+
+    private static async Task<bool> ConfirmAsync(string title, string message)
+    {
+        if (!Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
         {
-            return true;
+            var result = new TaskCompletionSource<bool>();
+            Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
+            {
+                try
+                {
+                    result.SetResult(await ConfirmOnUiThreadAsync(title, message));
+                }
+                catch (Exception ex)
+                {
+                    result.SetException(ex);
+                }
+            });
+            return await result.Task;
         }
 
-        var result = System.Windows.MessageBox.Show(
-            "重置标准点位会清空当前 PLC 已有 IO 映射，并按插件标准模板重新生成。是否继续？",
-            "重置标准点位",
-            System.Windows.MessageBoxButton.OKCancel,
-            System.Windows.MessageBoxImage.Warning);
+        return await ConfirmOnUiThreadAsync(title, message);
+    }
 
-        return result == System.Windows.MessageBoxResult.OK;
+    private static async Task<bool> ConfirmOnUiThreadAsync(string title, string message)
+    {
+        if (Avalonia.Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime lifetime)
+        {
+            return false;
+        }
+
+        var owner = lifetime.Windows.FirstOrDefault(static window => window.IsActive)
+                    ?? lifetime.MainWindow;
+        if (owner is null)
+        {
+            return false;
+        }
+
+        var dialog = new HardwareConfirmationDialog(title, message);
+        return await dialog.ShowDialog<bool>(owner);
     }
 }

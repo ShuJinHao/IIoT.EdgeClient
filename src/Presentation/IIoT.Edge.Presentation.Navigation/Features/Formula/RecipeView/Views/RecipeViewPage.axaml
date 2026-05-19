@@ -1,0 +1,170 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Navigation.Features.Formula.RecipeView.RecipeViewPage"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="20" Spacing="16">
+            <Grid ColumnDefinitions="*,Auto,Auto">
+                <StackPanel Spacing="4">
+                    <TextBlock
+                        FontSize="24"
+                        FontWeight="SemiBold"
+                        Foreground="{DynamicResource Edge.Text.Primary}"
+                        Text="{Binding ViewTitle}" />
+                    <TextBlock
+                        Foreground="{DynamicResource Edge.Text.Muted}"
+                        Text="{Binding SourceLabel}" />
+                </StackPanel>
+
+                <Button
+                    Grid.Column="1"
+                    Margin="0,0,8,0"
+                    Padding="16,8"
+                    Command="{Binding SwitchSourceCommand}"
+                    IsVisible="{Binding IsLocalAdmin}">
+                    <TextBlock Text="{DynamicResource Navigation_Button_SwitchDataSource}" />
+                </Button>
+
+                <Button
+                    Grid.Column="2"
+                    Padding="16,8"
+                    Command="{Binding SyncCloudCommand}">
+                    <TextBlock Text="{DynamicResource Navigation_Button_SyncCloud}" />
+                </Button>
+            </Grid>
+
+            <Border
+                Padding="16"
+                Background="{DynamicResource Edge.Surface.Panel}"
+                BorderBrush="{DynamicResource Edge.Border.Subtle}"
+                BorderThickness="1"
+                CornerRadius="6">
+                <Grid ColumnDefinitions="2*,*,*,*" RowDefinitions="Auto,Auto">
+                    <TextBlock
+                        FontSize="18"
+                        FontWeight="SemiBold"
+                        Foreground="{DynamicResource Edge.Text.Primary}"
+                        Text="{Binding RecipeName}" />
+
+                    <StackPanel Grid.Column="1" Spacing="2">
+                        <TextBlock
+                            FontSize="12"
+                            Foreground="{DynamicResource Edge.Text.Muted}"
+                            Text="{DynamicResource Navigation_Label_Version}" />
+                        <TextBlock
+                            Foreground="{DynamicResource Edge.Text.Primary}"
+                            Text="{Binding RecipeVersion}" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2" Spacing="2">
+                        <TextBlock
+                            FontSize="12"
+                            Foreground="{DynamicResource Edge.Text.Muted}"
+                            Text="{DynamicResource Navigation_Label_Process}" />
+                        <TextBlock
+                            Foreground="{DynamicResource Edge.Text.Primary}"
+                            Text="{Binding ProcessName}" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="3" Spacing="2">
+                        <TextBlock
+                            FontSize="12"
+                            Foreground="{DynamicResource Edge.Text.Muted}"
+                            Text="{DynamicResource Navigation_Label_Update}" />
+                        <TextBlock
+                            Foreground="{DynamicResource Edge.Text.Primary}"
+                            Text="{Binding UpdatedAt}" />
+                    </StackPanel>
+
+                    <TextBlock
+                        Grid.Row="1"
+                        Grid.ColumnSpan="4"
+                        Margin="0,12,0,0"
+                        Foreground="{DynamicResource Edge.Danger}"
+                        IsVisible="{Binding HasError}"
+                        Text="{Binding ErrorMessage}"
+                        TextWrapping="Wrap" />
+                </Grid>
+            </Border>
+
+            <DataGrid
+                Classes="edge-grid"
+                AutoGenerateColumns="False"
+                CanUserReorderColumns="False"
+                CanUserResizeColumns="True"
+                CanUserSortColumns="False"
+                GridLinesVisibility="Horizontal"
+                HeadersVisibility="Column"
+                ItemsSource="{Binding Params}">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Binding="{Binding Name}" Header="{DynamicResource Navigation_Column_ParamName}" Width="2*" />
+                    <DataGridTextColumn Binding="{Binding Min}" Header="{DynamicResource Navigation_Column_LowerLimit}" Width="*" />
+                    <DataGridTextColumn Binding="{Binding Max}" Header="{DynamicResource Navigation_Column_UpperLimit}" Width="*" />
+                    <DataGridTextColumn Binding="{Binding Unit}" Header="{DynamicResource Navigation_Column_Unit}" Width="*" />
+                    <DataGridTemplateColumn Header="" Width="96">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Button
+                                    HorizontalAlignment="Right"
+                                    Padding="10,4"
+                                    Command="{Binding $parent[UserControl].DataContext.DeleteLocalParamCommand}"
+                                    CommandParameter="{Binding Name}"
+                                    IsVisible="{Binding $parent[UserControl].DataContext.IsLocalAdmin}"
+                                    ToolTip.Tip="{DynamicResource Navigation_Tooltip_DeleteParam}">
+                                    <TextBlock Text="×" />
+                                </Button>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <Border
+                Padding="16"
+                Background="{DynamicResource Edge.Surface.Panel}"
+                BorderBrush="{DynamicResource Edge.Border.Subtle}"
+                BorderThickness="1"
+                CornerRadius="6"
+                IsVisible="{Binding IsLocalAdmin}">
+                <StackPanel Spacing="12">
+                    <TextBlock
+                        FontSize="16"
+                        FontWeight="SemiBold"
+                        Foreground="{DynamicResource Edge.Text.Primary}"
+                        Text="{DynamicResource Navigation_Label_EmergencyEdit}" />
+
+                    <Grid ColumnDefinitions="2*,*,*,*,Auto">
+                        <TextBox
+                            Grid.Column="0"
+                            Margin="0,0,8,0"
+                            PlaceholderText="{DynamicResource Navigation_Hint_ParamName}"
+                            Text="{Binding EditKey, Mode=TwoWay}" />
+                        <TextBox
+                            Grid.Column="1"
+                            Margin="0,0,8,0"
+                            PlaceholderText="{DynamicResource Navigation_Hint_LowerLimit}"
+                            Text="{Binding EditMin, Mode=TwoWay}" />
+                        <TextBox
+                            Grid.Column="2"
+                            Margin="0,0,8,0"
+                            PlaceholderText="{DynamicResource Navigation_Hint_UpperLimit}"
+                            Text="{Binding EditMax, Mode=TwoWay}" />
+                        <TextBox
+                            Grid.Column="3"
+                            Margin="0,0,8,0"
+                            PlaceholderText="{DynamicResource Navigation_Hint_Unit}"
+                            Text="{Binding EditUnit, Mode=TwoWay}" />
+                        <Button
+                            Grid.Column="4"
+                            MinWidth="88"
+                            Padding="16,8"
+                            Command="{Binding SaveLocalParamCommand}">
+                            <TextBlock Text="{DynamicResource Navigation_Button_Save}" />
+                        </Button>
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

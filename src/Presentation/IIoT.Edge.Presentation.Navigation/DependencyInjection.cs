@@ -1,4 +1,5 @@
 using IIoT.Edge.Presentation.Navigation.Features.Config.ParamView;
+using IIoT.Edge.Presentation.Navigation.Features.Dashboard;
 using IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
 using IIoT.Edge.Presentation.Navigation.Features.Formula.RecipeView;
 using IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView;
@@ -7,6 +8,7 @@ using IIoT.Edge.Presentation.Navigation.Features.Hardware.PlcTaskBindingView;
 using IIoT.Edge.Presentation.Navigation.Features.Production.CapacityView;
 using IIoT.Edge.Presentation.Navigation.Features.Production.DataView;
 using IIoT.Edge.Presentation.Navigation.Features.Production.Monitor;
+using IIoT.Edge.Presentation.Navigation.Features.Shell;
 using IIoT.Edge.Presentation.Navigation.Localization;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -17,6 +19,8 @@ public static class DependencyInjection
     public static IServiceCollection AddNavigationPresentation(this IServiceCollection services)
     {
         services.AddSingleton<LocalizedSyncDiagnosticsText>();
+        services.AddSingleton<NavigationRailViewModel>();
+        services.AddSingleton<DashboardViewModel>();
         services.AddSingleton<ParamViewModel>();
         services.AddSingleton<IIoViewMappingBuilder, IoViewMappingBuilder>();
         services.AddSingleton<IIoViewSignalValueUpdater, IoViewSignalValueUpdater>();
@@ -46,6 +50,9 @@ public static class DependencyInjection
         services.AddSingleton<IDiagnosticsDeadLetterConfirmationService, DiagnosticsDeadLetterConfirmationService>();
         services.AddSingleton<DiagnosticsViewModel>();
 
+        services.AddTransient<NavigationRailView>();
+        services.AddTransient<NavigationHostView>();
+        services.AddTransient<DashboardView>();
         services.AddTransient<ParamViewPage>();
         services.AddTransient<IOViewPage>();
         services.AddTransient<HardwareConfigPage>();

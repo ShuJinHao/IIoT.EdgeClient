@@ -1,0 +1,81 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView.NetworkDevicePage"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid RowDefinitions="Auto,*" Margin="0,12,0,0">
+        <Grid ColumnDefinitions="*,Auto">
+            <TextBlock
+                FontSize="16"
+                FontWeight="SemiBold"
+                Foreground="{DynamicResource Edge.Text.Primary}"
+                Text="{DynamicResource Navigation_Tab_NetworkDevice}" />
+
+            <StackPanel
+                Grid.Column="1"
+                Orientation="Horizontal"
+                Spacing="8">
+                <Button
+                    Padding="12,6"
+                    Command="{Binding AddNetworkDeviceCommand}">
+                    <TextBlock Text="{DynamicResource Navigation_Button_Add}" />
+                </Button>
+                <Button
+                    Padding="12,6"
+                    Command="{Binding DeleteNetworkDeviceCommand}"
+                    CommandParameter="{Binding SelectedItem, ElementName=NetworkGrid}">
+                    <TextBlock Text="{DynamicResource Navigation_Button_Delete}" />
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <DataGrid
+            x:Name="NetworkGrid"
+            Grid.Row="1"
+            Margin="0,12,0,0"
+            Classes="edge-grid"
+            AutoGenerateColumns="False"
+            CanUserReorderColumns="False"
+            CanUserResizeColumns="True"
+            CanUserSortColumns="False"
+            IsReadOnly="{Binding !CanEdit}"
+            ItemsSource="{Binding NetworkDevices}">
+            <DataGrid.Columns>
+                <DataGridTextColumn Binding="{Binding DeviceName}" Header="{DynamicResource Navigation_Column_DeviceName}" Width="130" />
+                <DataGridTemplateColumn Header="{DynamicResource Navigation_Column_DeviceType}" Width="120">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding DeviceType}" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                    <DataGridTemplateColumn.CellEditingTemplate>
+                        <DataTemplate>
+                            <ComboBox ItemsSource="{Binding DataContext.DeviceTypes, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedItem="{Binding DeviceType}" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellEditingTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="{DynamicResource Navigation_Column_DeviceModel}" Width="130">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding DeviceModel}" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                    <DataGridTemplateColumn.CellEditingTemplate>
+                        <DataTemplate>
+                            <ComboBox ItemsSource="{Binding AvailableModels}" SelectedItem="{Binding DeviceModel}" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellEditingTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTextColumn Binding="{Binding ModuleId}" Header="{DynamicResource Navigation_Column_ModuleId}" Width="120" />
+                <DataGridTextColumn Binding="{Binding IpAddress}" Header="{DynamicResource Navigation_Column_IpAddress}" Width="130" />
+                <DataGridTextColumn Binding="{Binding Port1}" Header="{DynamicResource Navigation_Column_Port1}" Width="80" />
+                <DataGridTextColumn Binding="{Binding Port2}" Header="{DynamicResource Navigation_Column_Port2}" Width="80" />
+                <DataGridTextColumn Binding="{Binding SendCmd1}" Header="{DynamicResource Navigation_Column_Command1}" Width="100" />
+                <DataGridTextColumn Binding="{Binding SendCmd2}" Header="{DynamicResource Navigation_Column_Command2}" Width="100" />
+                <DataGridTextColumn Binding="{Binding ConnectTimeout}" Header="{DynamicResource Navigation_Column_TimeoutMs}" Width="100" />
+                <DataGridCheckBoxColumn Binding="{Binding IsEnabled}" Header="{DynamicResource Navigation_Column_Enable}" Width="80" />
+                <DataGridTextColumn Binding="{Binding Remark}" Header="{DynamicResource Navigation_Column_Remark}" Width="*" />
+            </DataGrid.Columns>
+        </DataGrid>
+    </Grid>
+</UserControl>

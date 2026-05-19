@@ -1,0 +1,47 @@
+<Window
+    x:Class="IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView.DiagnosticsConfirmationDialog"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Width="520"
+    Height="260"
+    CanResize="False"
+    WindowStartupLocation="CenterOwner">
+    <Border
+        Padding="22"
+        Background="{DynamicResource Edge.Surface.Main}">
+        <Grid RowDefinitions="Auto,*,Auto">
+            <TextBlock
+                FontSize="18"
+                FontWeight="SemiBold"
+                Foreground="{DynamicResource Edge.Text.Primary}"
+                Text="{Binding Title}"
+                TextWrapping="Wrap" />
+
+            <TextBlock
+                Grid.Row="1"
+                Margin="0,16,0,18"
+                Foreground="{DynamicResource Edge.Text.Primary}"
+                Text="{Binding Message}"
+                TextWrapping="Wrap" />
+
+            <StackPanel
+                Grid.Row="2"
+                HorizontalAlignment="Right"
+                Orientation="Horizontal"
+                Spacing="10">
+                <Button
+                    MinWidth="88"
+                    Padding="16,8"
+                    Click="OnCancelClick">
+                    <TextBlock Text="{DynamicResource Navigation_Button_Cancel}" />
+                </Button>
+                <Button
+                    MinWidth="88"
+                    Padding="16,8"
+                    Click="OnConfirmClick">
+                    <TextBlock Text="{DynamicResource Navigation_Button_Confirm}" />
+                </Button>
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

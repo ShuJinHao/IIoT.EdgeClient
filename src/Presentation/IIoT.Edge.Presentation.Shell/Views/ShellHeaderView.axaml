@@ -1,0 +1,114 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Shell.Views.ShellHeaderView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
+    <Border
+        x:Name="HeaderDragSurface"
+        Padding="{DynamicResource Edge.Thickness.Header}"
+        BorderBrush="{DynamicResource Edge.Border.Subtle}"
+        BorderThickness="0,0,0,1"
+        PointerPressed="OnHeaderPointerPressed">
+        <Grid
+            ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto"
+            VerticalAlignment="Center">
+            <Button
+                Classes="edge-icon"
+                Focusable="False"
+                IsHitTestVisible="False">
+                <PathIcon
+                    Width="{DynamicResource Edge.Size.HeaderIcon}"
+                    Height="{DynamicResource Edge.Size.HeaderIcon}"
+                    Data="M4,7 L20,7 M4,12 L20,12 M4,17 L20,17"
+                    Foreground="{DynamicResource Edge.Brush.Text.Primary}" />
+            </Button>
+
+            <TextBlock
+                Grid.Column="1"
+                Margin="{DynamicResource Edge.Thickness.HeaderTitle}"
+                VerticalAlignment="Center"
+                FontSize="{DynamicResource Edge.FontSize.Title}"
+                FontWeight="SemiBold"
+                Foreground="{DynamicResource Edge.Text.Primary}"
+                Text="{Binding AppTitle}" />
+
+            <edge:EdgeStatusChip
+                Grid.Column="2"
+                VerticalAlignment="Center"
+                ChipPadding="{DynamicResource Edge.Thickness.Chip.Comfortable}"
+                Status="Running"
+                Text="{Binding HeaderStatus}" />
+
+            <edge:EdgeStatusChip
+                Grid.Column="3"
+                Margin="{DynamicResource Edge.Thickness.8}"
+                VerticalAlignment="Center"
+                ChipPadding="{DynamicResource Edge.Thickness.Chip.Comfortable}"
+                Fill="{DynamicResource Edge.Brush.Surface.Panel}"
+                Status="Info"
+                Text="{Binding HeaderMode}"
+                TextBrush="{DynamicResource Edge.Brush.Text.Secondary}" />
+
+            <edge:EdgeStatusChip
+                Grid.Column="4"
+                VerticalAlignment="Center"
+                ChipPadding="{DynamicResource Edge.Thickness.Chip.Comfortable}"
+                Fill="{DynamicResource Edge.Brush.Surface.Panel}"
+                Status="Info"
+                Text="{Binding HeaderProfile}"
+                TextBrush="{DynamicResource Edge.Brush.Text.Secondary}" />
+
+            <StackPanel
+                Grid.Column="6"
+                Orientation="Horizontal"
+                Spacing="{DynamicResource Edge.Size.Spacing12}">
+                <Border
+                    Width="{DynamicResource Edge.Size.HeaderIconButton}"
+                    Height="{DynamicResource Edge.Size.HeaderIconButton}"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Background="{DynamicResource Edge.Brush.Surface.Panel}"
+                    CornerRadius="{DynamicResource Edge.CornerRadius.Circle}"
+                    IsHitTestVisible="False">
+                    <PathIcon
+                        Width="{DynamicResource Edge.Size.HeaderIcon}"
+                        Height="{DynamicResource Edge.Size.HeaderIcon}"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Data="M12,4 A4,4 0 0 0 8,8 L8,11 C8,13 7,14 6,15 L18,15 C17,14 16,13 16,11 L16,8 A4,4 0 0 0 12,4 Z M10,18 L14,18"
+                        Foreground="{DynamicResource Edge.Brush.Text.Primary}" />
+                </Border>
+
+                <StackPanel
+                    VerticalAlignment="Center"
+                    Orientation="Horizontal"
+                    Spacing="{DynamicResource Edge.Size.Spacing8}">
+                    <Border
+                        Width="{DynamicResource Edge.Size.OperatorAvatar}"
+                        Height="{DynamicResource Edge.Size.OperatorAvatar}"
+                        Background="{DynamicResource Edge.Brush.Surface.Panel}"
+                        CornerRadius="{DynamicResource Edge.CornerRadius.Circle}">
+                        <TextBlock
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                            FontWeight="SemiBold"
+                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                            Text="OP" />
+                    </Border>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock
+                            FontSize="{DynamicResource Edge.FontSize.Body}"
+                            FontWeight="SemiBold"
+                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                            Text="{Binding OperatorName}" />
+                        <TextBlock
+                            FontSize="{DynamicResource Edge.FontSize.Caption}"
+                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                            Text="{Binding OperatorCode}" />
+                    </StackPanel>
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

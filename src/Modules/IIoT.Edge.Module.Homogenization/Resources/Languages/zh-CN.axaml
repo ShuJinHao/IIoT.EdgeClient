@@ -1,0 +1,42 @@
+<ResourceDictionary
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+    <sys:String x:Key="Homogenization_DisplayName">匀浆</sys:String>
+    <sys:String x:Key="Homogenization_Menu_Data">数据</sys:String>
+    <sys:String x:Key="Homogenization_Title_Data">匀浆出料数据</sys:String>
+    <sys:String x:Key="Homogenization_Empty_OutboundRecords">暂无匀浆出料记录。</sys:String>
+    <sys:String x:Key="Homogenization_RecordCountFormat">共 {0} 条出料记录。</sys:String>
+    <sys:String x:Key="Homogenization_Error_PalletCodeRequired">托盘码不能为空。</sys:String>
+    <sys:String x:Key="Homogenization_Outbound_OverflowReceived">出料已接收，数据已进入溢出持久化。</sys:String>
+    <sys:String x:Key="Homogenization_Outbound_Received">出料已接收。</sys:String>
+    <sys:String x:Key="Homogenization_Outbound_PendingUpload">出料待上传</sys:String>
+    <sys:String x:Key="Homogenization_EquipmentStatus_Unknown">未知</sys:String>
+    <sys:String x:Key="Homogenization_Validate_RequiredFormat">{0} 必须大于 0。</sys:String>
+    <sys:String x:Key="Homogenization_Validate_StringRequiredFormat">{0} 不能为空。</sys:String>
+    <sys:String x:Key="Homogenization_Validate_MesSignTokenRequired">匀浆 MES 签名令牌不能为空。</sys:String>
+    <sys:String x:Key="Homogenization_Validate_PlcResetAndTriggerCannotEqual">PLC 复位信号不能与触发信号相同。</sys:String>
+    <sys:String x:Key="Homogenization_Validate_MesItemMissingFormat">{0} 缺少 {1} 编码配置。</sys:String>
+    <sys:String x:Key="Homogenization_Validate_MesItemCodeNameRequiredFormat">{0}.{1} 的编码和名称不能为空。</sys:String>
+    <sys:String x:Key="Homogenization_Param_MesEnabled_DisplayName">MES上传启用</sys:String>
+    <sys:String x:Key="Homogenization_Param_MesEnabled_Description">关闭后不探测 MES 心跳、不调用 MES 业务接口、不写 MES 补传；本地 PLC、Excel、产能和 UI 刷新继续运行。</sys:String>
+    <sys:String x:Key="Homogenization_Param_MesBaseUrl_DisplayName">MES服务地址</sys:String>
+    <sys:String x:Key="Homogenization_Param_MesBaseUrl_Description">MES 接口基础地址，用于进站、出料、配方、设备状态和实时数据上传。</sys:String>
+    <sys:String x:Key="Homogenization_Param_MesStationNo_DisplayName">MES工站编号</sys:String>
+    <sys:String x:Key="Homogenization_Param_MesStationNo_Description">MES 侧识别当前工站的编号，随 MES 业务请求一起发送。</sys:String>
+    <sys:String x:Key="Homogenization_Param_MesSignToken_DisplayName">MES签名令牌</sys:String>
+    <sys:String x:Key="Homogenization_Param_MesSignToken_Description">MES 接口签名令牌，用于生成 MES 请求签名。</sys:String>
+    <sys:String x:Key="Homogenization_Param_CloudEnabled_DisplayName">云端上传启用</sys:String>
+    <sys:String x:Key="Homogenization_Param_CloudEnabled_Description">关闭后不访问 Cloud bootstrap、refresh 和同步接口、不写 Cloud 补传；本地 PLC、Excel、产能和 UI 刷新继续运行。</sys:String>
+    <sys:String x:Key="Homogenization_Param_DuplicateTrayCheck_DisplayName">托盘码重码验证启用</sys:String>
+    <sys:String x:Key="Homogenization_Param_DuplicateTrayCheck_Description">启用后，同一托盘码在进站或出料阶段重复触发时会被拦截。</sys:String>
+    <sys:String x:Key="Homogenization_Column_TrayCode">托盘码</sys:String>
+    <sys:String x:Key="Homogenization_Column_InboundTime">进站时间</sys:String>
+    <sys:String x:Key="Homogenization_Column_OutboundTime">出料时间</sys:String>
+    <sys:String x:Key="Homogenization_Column_Status">运行状态</sys:String>
+    <sys:String x:Key="Homogenization_Column_StirringSpeed">搅拌转速</sys:String>
+    <sys:String x:Key="Homogenization_Column_Temperature">温度</sys:String>
+    <sys:String x:Key="Homogenization_Column_Vacuum">真空度</sys:String>
+    <sys:String x:Key="Homogenization_Column_CntActual">CNT实际值</sys:String>
+    <sys:String x:Key="Homogenization_Column_NmpActual">NMP实际值</sys:String>
+</ResourceDictionary>

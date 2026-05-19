@@ -5,6 +5,10 @@
 
   <ItemGroup>
     <PackageVersion Include="AutoMapper" Version="16.1.1" />
+    <PackageVersion Include="Avalonia" Version="12.0.3" />
+    <PackageVersion Include="Avalonia.Controls.DataGrid" Version="12.0.0" />
+    <PackageVersion Include="Avalonia.Desktop" Version="12.0.3" />
+    <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.0.3" />
     <PackageVersion Include="ClosedXML" Version="0.105.0" />
     <PackageVersion Include="Dapper" Version="2.1.72" />
     <PackageVersion Include="Dirkster.AvalonDock" Version="4.72.1" />
