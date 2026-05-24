@@ -10,4 +10,8 @@
     <sys:String x:Key="Shell_LogEmpty">日志面板尚未进入本阶段迁移，当前不展示模拟日志。</sys:String>
     <sys:String x:Key="Shell_FooterPhase1">Phase 1 启动壳 | 本地时间 {0:yyyy-MM-dd HH:mm:ss}</sys:String>
     <sys:String x:Key="Shell_FooterPhase3">Phase 3 导航首页 | 本地时间 {0:yyyy-MM-dd HH:mm:ss}</sys:String>
+    <sys:String x:Key="Shell_Footer_Executing">正在执行</sys:String>
+    <sys:String x:Key="Shell_Footer_RunTime">系统运行时间：</sys:String>
+    <sys:String x:Key="Shell_Footer_DefaultProgram">示例程序</sys:String>
+    <sys:String x:Key="Shell_Footer_RunMinutesFormat">{0} 分钟</sys:String>
 </ResourceDictionary>

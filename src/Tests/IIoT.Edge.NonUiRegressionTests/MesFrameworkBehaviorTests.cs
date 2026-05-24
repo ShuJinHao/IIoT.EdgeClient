@@ -193,6 +193,30 @@ public sealed class MesFrameworkBehaviorTests
     }
 
     [Fact]
+    public async Task MesEndpointProvider_WhenAbsoluteHttpUrlProvided_ShouldKeepUrl()
+    {
+        var provider = new MesEndpointProvider(
+            new FakeModuleParamRoleProvider("https://local-mes.test"),
+            new TestOptionsMonitor<MesApiConfig>(new MesApiConfig()));
+
+        var url = await provider.BuildUrlAsync("Homogenization", "https://override-mes.test/api/mes/outbound");
+
+        Assert.Equal("https://override-mes.test/api/mes/outbound", url);
+    }
+
+    [Fact]
+    public async Task MesEndpointProvider_WhenBaseUrlIsNotHttp_ShouldReportNotConfigured()
+    {
+        var provider = new MesEndpointProvider(
+            new FakeModuleParamRoleProvider("ftp://local-mes.test"),
+            new TestOptionsMonitor<MesApiConfig>(new MesApiConfig()));
+
+        Assert.False(await provider.IsConfiguredAsync("Homogenization"));
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => provider.BuildUrlAsync("Homogenization", "/api/mes/outbound"));
+    }
+
+    [Fact]
     public async Task MesEndpointProvider_WhenModuleMesUrlMissing_ShouldReportNotConfigured()
     {
         var provider = new MesEndpointProvider(
@@ -210,7 +234,7 @@ public sealed class MesFrameworkBehaviorTests
             new FakeHttpClientFactory(new HttpClient(handler)),
             new FakeMesEndpointProvider(),
             new FakeProcessIntegrationRegistry(["Homogenization"]),
-            new TestOptionsMonitor<MesApiConfig>(new MesApiConfig { HeartbeatPath = "/api/mes/heartbeat" }),
+            new FakeModuleParamRoleProvider("https://local-mes.test", "/heath"),
             new FakeLogService());
 
         var snapshot = await probe.ProbeAsync();
@@ -218,7 +242,7 @@ public sealed class MesFrameworkBehaviorTests
         Assert.True(snapshot.IsReady);
         Assert.NotNull(handler.LastRequest);
         Assert.Equal(HttpMethod.Get, handler.LastRequest!.Method);
-        Assert.Equal("https://mes.test/api/mes/heartbeat", handler.LastRequest.RequestUri!.ToString());
+        Assert.Equal("https://mes.test/heath", handler.LastRequest.RequestUri!.ToString());
     }
 
     [Fact]
@@ -229,7 +253,7 @@ public sealed class MesFrameworkBehaviorTests
             new FakeHttpClientFactory(new HttpClient(handler)),
             new FakeMesEndpointProvider(),
             new FakeProcessIntegrationRegistry(["Homogenization"]),
-            new TestOptionsMonitor<MesApiConfig>(new MesApiConfig { HeartbeatPath = "" }),
+            new FakeModuleParamRoleProvider("https://local-mes.test", null),
             new FakeLogService());
 
         var snapshot = await probe.ProbeAsync();
@@ -248,7 +272,7 @@ public sealed class MesFrameworkBehaviorTests
             new FakeHttpClientFactory(httpClient),
             new FakeMesEndpointProvider(),
             new FakeProcessIntegrationRegistry(["Homogenization"]),
-            new TestOptionsMonitor<MesApiConfig>(new MesApiConfig { HeartbeatPath = "/api/mes/heartbeat" }),
+            new FakeModuleParamRoleProvider("https://local-mes.test", "/heath"),
             new FakeLogService());
 
         var snapshot = await probe.ProbeAsync();
@@ -321,7 +345,7 @@ public sealed class MesFrameworkBehaviorTests
             };
     }
 
-    private sealed class FakeModuleParamRoleProvider(string? mesBaseUrl) : IModuleParamRoleProvider
+    private sealed class FakeModuleParamRoleProvider(string? mesBaseUrl, string? mesHealthPath = "/heath") : IModuleParamRoleProvider
     {
         public Task<ModuleParamRoleValue?> GetAsync(
             string moduleId,
@@ -343,14 +367,24 @@ public sealed class MesFrameworkBehaviorTests
             ModuleParamRole role,
             string? defaultValue = null,
             CancellationToken cancellationToken = default)
-            => Task.FromResult(role == ModuleParamRole.MesBaseUrl ? mesBaseUrl : defaultValue);
+            => Task.FromResult(role switch
+            {
+                ModuleParamRole.MesBaseUrl => mesBaseUrl,
+                ModuleParamRole.MesHealthPath => mesHealthPath,
+                _ => defaultValue
+            });
 
         public Task<string?> FirstStringAsync(
             ModuleParamCategory category,
             ModuleParamRole role,
             IReadOnlyCollection<string>? moduleIds = null,
             CancellationToken cancellationToken = default)
-            => Task.FromResult(role == ModuleParamRole.MesBaseUrl ? mesBaseUrl : null);
+            => Task.FromResult(role switch
+            {
+                ModuleParamRole.MesBaseUrl => mesBaseUrl,
+                ModuleParamRole.MesHealthPath => mesHealthPath,
+                _ => null
+            });
 
         public Task<bool> GetBoolAsync(
             string moduleId,

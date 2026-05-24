@@ -1,7 +1,6 @@
 using IIoT.Edge.Application.Context;
 using IIoT.Edge.Application.Modules.Diagnostics;
 using System.Globalization;
-using System.Windows.Threading;
 using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
@@ -139,18 +138,14 @@ public sealed class DiagnosticsViewModelBehaviorTests
         });
 
     [Fact]
-    public Task DiagnosticsViewModel_WhenLanguageChanges_ShouldRefreshVisibleSummaries()
-        => WpfTestDispatcher.RunAsync(async () =>
+    public async Task DiagnosticsViewModel_WhenLanguageChanges_ShouldRefreshVisibleSummaries()
         {
             var originalCulture = CultureInfo.CurrentCulture;
             var originalUiCulture = CultureInfo.CurrentUICulture;
-            var tempFile = Path.Combine(Path.GetTempPath(), "edge-language-tests", Guid.NewGuid().ToString("N"), "language.json");
 
             try
             {
-                WpfTestDispatcher.EnsureApplication();
-                var languageService = new AppLanguageService(tempFile);
-                languageService.Initialize();
+                var languageService = new BilingualDiagnosticsLanguageService();
 
                 var startupStore = new FakeStartupDiagnosticsStore();
                 startupStore.Update(new StartupDiagnosticsReport(
@@ -233,9 +228,8 @@ public sealed class DiagnosticsViewModelBehaviorTests
                 CultureInfo.CurrentUICulture = originalUiCulture;
                 CultureInfo.DefaultThreadCurrentCulture = originalCulture;
                 CultureInfo.DefaultThreadCurrentUICulture = originalUiCulture;
-                TryDeleteDirectory(Path.GetDirectoryName(tempFile));
             }
-        });
+        }
 
     [Fact]
     public Task RequeueDeadLetterCommand_WhenConfirmationCanceled_ShouldNotCallOperator()
@@ -452,41 +446,7 @@ public sealed class DiagnosticsViewModelBehaviorTests
             Assert.False(viewModel.HasStatus);
         });
 
-    private static Task RunOnStaThreadAsync(Func<Task> testBody)
-    {
-        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        var thread = new Thread(() =>
-        {
-            var dispatcher = Dispatcher.CurrentDispatcher;
-            SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(dispatcher));
-
-            _ = dispatcher.InvokeAsync(async () =>
-            {
-                try
-                {
-                    await testBody();
-                    completion.SetResult();
-                }
-                catch (Exception ex)
-                {
-                    completion.SetException(ex);
-                }
-                finally
-                {
-                    dispatcher.BeginInvokeShutdown(DispatcherPriority.Background);
-                }
-            });
-
-            Dispatcher.Run();
-        });
-
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.IsBackground = true;
-        thread.Start();
-
-        return completion.Task;
-    }
+    private static Task RunOnStaThreadAsync(Func<Task> testBody) => testBody();
 
     private static void TryDeleteDirectory(string? directory)
     {
@@ -575,17 +535,65 @@ public sealed class DiagnosticsViewModelBehaviorTests
 
         public int DeleteCallCount { get; private set; }
 
-        public bool ConfirmRequeue(DeadLetterRow row)
+        public Task<bool> ConfirmRequeueAsync(DeadLetterRow row)
         {
             RequeueCallCount++;
-            return RequeueResult;
+            return Task.FromResult(RequeueResult);
         }
 
-        public bool ConfirmDelete(DeadLetterRow row)
+        public Task<bool> ConfirmDeleteAsync(DeadLetterRow row)
         {
             DeleteCallCount++;
-            return DeleteResult;
+            return Task.FromResult(DeleteResult);
         }
+    }
+
+    private sealed class BilingualDiagnosticsLanguageService : IAppLanguageService
+    {
+        private readonly Dictionary<string, Dictionary<string, string>> _values = new(StringComparer.Ordinal)
+        {
+            ["en-US"] = new(StringComparer.Ordinal)
+            {
+                ["Navigation_Sync_UploadGateFormat"] = "Upload gate: {0}",
+                ["Navigation_Sync_StatusReady"] = "Ready",
+                ["Navigation_Diagnostics_DeviceFormat"] = "Device: {0}",
+                ["Navigation_Diagnostics_ProfileWithMachineFormat"] = "Environment: {0} / Machine: {1} / Profile: {2} / Runtime: {3}"
+            }
+        };
+
+        public CultureInfo Current { get; private set; } = CultureInfo.GetCultureInfo("zh-CN");
+
+        public LanguageOption CurrentOption => SupportedLanguages.First(x => x.Culture.Name == Current.Name);
+
+        public IReadOnlyList<LanguageOption> SupportedLanguages { get; } =
+        [
+            new(CultureInfo.GetCultureInfo("zh-CN"), "中文"),
+            new(CultureInfo.GetCultureInfo("en-US"), "English")
+        ];
+
+        public event EventHandler? LanguageChanged;
+
+        public void Initialize()
+        {
+        }
+
+        public void Change(CultureInfo culture)
+        {
+            Current = culture;
+            CultureInfo.CurrentCulture = culture;
+            CultureInfo.CurrentUICulture = culture;
+            CultureInfo.DefaultThreadCurrentCulture = culture;
+            CultureInfo.DefaultThreadCurrentUICulture = culture;
+            LanguageChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        public string GetString(string key, string fallback = "")
+            => _values.TryGetValue(Current.Name, out var values) && values.TryGetValue(key, out var value)
+                ? value
+                : fallback;
+
+        public string Format(string key, string fallback, params object[] args)
+            => string.Format(CultureInfo.CurrentCulture, GetString(key, fallback), args);
     }
 
     private sealed class FakeDiagnosticsDeadLetterOperator : IDiagnosticsDeadLetterOperator

@@ -3,60 +3,47 @@
     x:Name="IoMappingRoot"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
     xmlns:sharedViews="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared">
 
     <Grid RowDefinitions="Auto,*" Margin="0,12,0,0">
-        <Grid ColumnDefinitions="*,Auto">
-            <TextBlock
-                FontSize="16"
-                FontWeight="SemiBold"
-                Foreground="{DynamicResource Edge.Text.Primary}"
-                Text="{DynamicResource Navigation_Tab_IoMapping}" />
-
-            <StackPanel
-                Grid.Column="1"
-                Orientation="Horizontal"
-                Spacing="8">
-                <Button
-                    Padding="12,6"
-                    Command="{Binding ApplyModuleTemplateCommand}"
-                    ToolTip.Tip="{Binding ModuleTemplateHint}">
-                    <TextBlock Text="{DynamicResource Navigation_Button_ApplyTemplate}" />
-                </Button>
-                <Button
-                    Padding="12,6"
-                    Command="{Binding OpenAddInteractionMappingDialogCommand}">
-                    <TextBlock Text="{DynamicResource Navigation_Button_AddInteraction}" />
-                </Button>
-                <Button
-                    Padding="12,6"
-                    Command="{Binding OpenAddDataPointMappingDialogCommand}">
-                    <TextBlock Text="{DynamicResource Navigation_Button_AddDataPoint}" />
-                </Button>
-                <Button
-                    Padding="12,6"
-                    Command="{Binding DeleteIoMappingCommand}">
-                    <TextBlock Text="{DynamicResource Navigation_Button_Delete}" />
-                </Button>
-            </StackPanel>
-        </Grid>
+        <edge:EdgeSectionHeader Title="{DynamicResource Navigation_Tab_IoMapping}">
+            <edge:EdgeSectionHeader.ActionContent>
+                <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Edge.Size.Spacing8}">
+                    <Button
+                        Padding="12,6"
+                        Command="{Binding ApplyModuleTemplateCommand}"
+                        ToolTip.Tip="{Binding ModuleTemplateHint}">
+                        <TextBlock Text="{DynamicResource Navigation_Button_ApplyTemplate}" />
+                    </Button>
+                    <Button
+                        Padding="12,6"
+                        Command="{Binding OpenAddInteractionMappingDialogCommand}">
+                        <TextBlock Text="{DynamicResource Navigation_Button_AddInteraction}" />
+                    </Button>
+                    <Button
+                        Padding="12,6"
+                        Command="{Binding OpenAddDataPointMappingDialogCommand}">
+                        <TextBlock Text="{DynamicResource Navigation_Button_AddDataPoint}" />
+                    </Button>
+                    <Button
+                        Padding="12,6"
+                        Command="{Binding DeleteIoMappingCommand}">
+                        <TextBlock Text="{DynamicResource Navigation_Button_Delete}" />
+                    </Button>
+                </StackPanel>
+            </edge:EdgeSectionHeader.ActionContent>
+        </edge:EdgeSectionHeader>
 
         <Grid Grid.Row="1" Margin="0,12,0,0" ColumnDefinitions="190,*">
-            <Border
+            <edge:EdgeCard
                 Margin="0,0,12,0"
-                Padding="10"
-                Background="{DynamicResource Edge.Surface.Panel}"
-                BorderBrush="{DynamicResource Edge.Border.Subtle}"
-                BorderThickness="1"
-                CornerRadius="8">
+                CardPadding="{DynamicResource Edge.Thickness.Card.Compact}">
+                <edge:EdgeCard.Header>
+                    <edge:EdgeSectionHeader Title="{DynamicResource Navigation_Tab_NetworkDevice}" />
+                </edge:EdgeCard.Header>
                 <Grid RowDefinitions="Auto,*">
-                    <TextBlock
-                        Margin="0,0,0,8"
-                        FontWeight="SemiBold"
-                        Foreground="{DynamicResource Edge.Text.Primary}"
-                        Text="{DynamicResource Navigation_Tab_NetworkDevice}" />
                     <ListBox
-                        Grid.Row="1"
                         Background="Transparent"
                         BorderThickness="0"
                         ItemsSource="{Binding NetworkDevices}"
@@ -71,7 +58,7 @@
                         </ListBox.ItemTemplate>
                     </ListBox>
                 </Grid>
-            </Border>
+            </edge:EdgeCard>
 
             <ScrollViewer
                 Grid.Column="1"
@@ -81,18 +68,13 @@
                     <ItemsControl ItemsSource="{Binding IoMappingGroups}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Border
+                                <edge:EdgeCard
                                     Margin="0,0,0,12"
-                                    Padding="14"
-                                    Background="{DynamicResource Edge.Surface.Main}"
-                                    BorderBrush="{DynamicResource Edge.Border.Subtle}"
-                                    BorderThickness="1"
-                                    CornerRadius="8">
+                                    CardPadding="{DynamicResource Edge.Thickness.Card.Default}">
+                                    <edge:EdgeCard.Header>
+                                        <edge:EdgeSectionHeader Title="{Binding Title}" />
+                                    </edge:EdgeCard.Header>
                                     <StackPanel Spacing="10">
-                                        <TextBlock
-                                            FontWeight="SemiBold"
-                                            Foreground="{DynamicResource Edge.Text.Primary}"
-                                            Text="{Binding Title}" />
                                         <DataGrid
                                             Classes="edge-grid"
                                             AutoGenerateColumns="False"
@@ -124,7 +106,7 @@
                                             </DataGrid.Columns>
                                         </DataGrid>
                                     </StackPanel>
-                                </Border>
+                                </edge:EdgeCard>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
@@ -138,17 +120,13 @@
 
             <Border
                 Grid.ColumnSpan="2"
-                Background="#99000000"
+                Background="{DynamicResource Edge.Brush.Overlay.Modal}"
                 IsVisible="{Binding IsAddIoMappingDialogOpen}">
-                <Border
+                <edge:EdgeCard
                     Width="560"
-                    Padding="20"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
-                    Background="{DynamicResource Edge.Surface.Main}"
-                    BorderBrush="{DynamicResource Edge.Border.Subtle}"
-                    BorderThickness="1"
-                    CornerRadius="8">
+                    CardPadding="{DynamicResource Edge.Thickness.20}">
                     <Grid RowDefinitions="Auto,Auto,Auto">
                         <TextBlock
                             Margin="0,0,0,16"
@@ -250,7 +228,7 @@
                             </Button>
                         </StackPanel>
                     </Grid>
-                </Border>
+                </edge:EdgeCard>
             </Border>
         </Grid>
     </Grid>

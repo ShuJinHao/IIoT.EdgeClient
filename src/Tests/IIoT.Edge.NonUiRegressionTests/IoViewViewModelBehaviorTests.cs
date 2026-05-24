@@ -16,7 +16,7 @@ namespace IIoT.Edge.NonUiRegressionTests;
 
 public sealed class IoViewViewModelBehaviorTests
 {
-    [Fact]
+    [AvaloniaFact]
     public Task LoadDevicesAsync_WhenModuleFilterSet_ShouldOnlyShowMatchingPlcs()
         => RunOnStaThreadAsync(async () =>
         {
@@ -37,7 +37,7 @@ public sealed class IoViewViewModelBehaviorTests
                 viewModel.Devices.Select(static x => x.DeviceName).ToArray());
         });
 
-    [Fact]
+    [AvaloniaFact]
     public Task LoadMappingsAsync_WhenInteractionUsesSameBusinessGroup_ShouldMergeReadAndWriteIntoOneRow()
         => RunOnStaThreadAsync(async () =>
         {
@@ -75,7 +75,7 @@ public sealed class IoViewViewModelBehaviorTests
             Assert.Equal("实时数据", section.Title);
         });
 
-    [Fact]
+    [AvaloniaFact]
     public Task LoadMappingsAsync_WhenInteractionGroupHasMultipleSignals_ShouldUseSingleLineSummary()
         => RunOnStaThreadAsync(async () =>
         {
@@ -106,7 +106,7 @@ public sealed class IoViewViewModelBehaviorTests
             Assert.Contains("应答A", row.HostReplyToolTip);
         });
 
-    [Fact]
+    [AvaloniaFact]
     public Task RefreshCurrentValues_WhenSwitchingDevice_ShouldReadSelectedDeviceBufferOnly()
         => RunOnStaThreadAsync(async () =>
         {
@@ -133,7 +133,7 @@ public sealed class IoViewViewModelBehaviorTests
             Assert.Equal("22", viewModel.DataSections.Single().Signals.Single().DisplayValue);
         });
 
-    [Fact]
+    [AvaloniaFact]
     public Task LoadMappingsAsync_WhenSameSignalConfiguredOnMultiplePlcs_ShouldUseSelectedPlcSavedAddress()
         => RunOnStaThreadAsync(async () =>
         {
@@ -183,7 +183,7 @@ public sealed class IoViewViewModelBehaviorTests
             Assert.NotEqual(signal.DefaultAddress, Assert.Single(viewModel.InteractionRows).PlcAddressSummary);
         });
 
-    [Fact]
+    [AvaloniaFact]
     public Task RefreshCurrentValues_ShouldDecodeCommonSignalTypes()
         => RunOnStaThreadAsync(async () =>
         {
@@ -226,7 +226,7 @@ public sealed class IoViewViewModelBehaviorTests
             Assert.Equal("12.5", matrix.Rows.Single().Values.Single().Value);
         });
 
-    [Fact]
+    [AvaloniaFact]
     public Task LoadMappingsAsync_WhenContinuousSignalsShareGroup_ShouldBuildMatrixSection()
         => RunOnStaThreadAsync(async () =>
         {
@@ -258,7 +258,7 @@ public sealed class IoViewViewModelBehaviorTests
             Assert.Equal("26", matrix.Rows[2].Values[1].Value);
         });
 
-    [Fact]
+    [AvaloniaFact]
     public Task RefreshCurrentValues_WhenWriteDataConfigured_ShouldUseWriteBufferAndDisableManualRead()
         => RunOnStaThreadAsync(async () =>
         {
@@ -292,7 +292,7 @@ public sealed class IoViewViewModelBehaviorTests
             Assert.Equal("30", continuousWrite.Rows[2].Values.Single().Value);
         });
 
-    [Fact]
+    [AvaloniaFact]
     public Task WriteInteractionRow_ShouldOnlyWriteCurrentRowOutputIndex()
         => RunOnStaThreadAsync(async () =>
         {
@@ -375,26 +375,7 @@ public sealed class IoViewViewModelBehaviorTests
         return entity;
     }
 
-    private static Task RunOnStaThreadAsync(Func<Task> action)
-    {
-        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var thread = new Thread(() =>
-        {
-            try
-            {
-                action().GetAwaiter().GetResult();
-                completion.SetResult();
-            }
-            catch (Exception ex)
-            {
-                completion.SetException(ex);
-            }
-        });
-
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        return completion.Task;
-    }
+    private static Task RunOnStaThreadAsync(Func<Task> action) => action();
 
     private sealed class TestIoViewModel(
         IPlcDataStore dataStore,

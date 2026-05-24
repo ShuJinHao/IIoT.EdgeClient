@@ -1,50 +1,149 @@
 <UserControl
     x:Class="IIoT.Edge.Module.Homogenization.Presentation.Views.HomogenizationDataPage"
     xmlns="https://github.com/avaloniaui"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="20" Spacing="16">
-            <StackPanel Spacing="4">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
+    <edge:EdgeTablePanel
+        Margin="18,14,22,22"
+        EmptyMessage="{Binding EmptyMessage}"
+        EmptyTitle="{Binding EmptyTitle}"
+        IsEmpty="{Binding IsRecordsEmpty}"
+        MinHeight="620"
+        ShowContentWhenEmpty="True"
+        Title="{Binding ViewTitle}">
+        <edge:EdgeTablePanel.StatusContent>
+            <Border
+                Padding="14,8"
+                Background="{DynamicResource Edge.Brush.Surface.Wash}"
+                CornerRadius="{DynamicResource Edge.CornerRadius.Control}">
                 <TextBlock
-                    FontSize="24"
-                    FontWeight="SemiBold"
-                    Foreground="{DynamicResource Edge.Text.Primary}"
-                    Text="{Binding ViewTitle}" />
-                <TextBlock
-                    Foreground="{DynamicResource Edge.Text.Muted}"
+                    FontSize="{DynamicResource Edge.FontSize.Caption}"
+                    Foreground="{DynamicResource Edge.Brush.Text.Muted}"
                     Text="{Binding StatusMessage}"
                     TextWrapping="Wrap" />
-            </StackPanel>
-
-            <Border
-                Padding="14"
-                Background="{DynamicResource Edge.Surface.Main}"
-                BorderBrush="{DynamicResource Edge.Border.Subtle}"
-                BorderThickness="1"
-                CornerRadius="8">
-                <DataGrid
-                    Classes="edge-grid"
-                    AutoGenerateColumns="False"
-                    CanUserReorderColumns="False"
-                    CanUserResizeColumns="True"
-                    CanUserSortColumns="False"
-                    GridLinesVisibility="Horizontal"
-                    HeadersVisibility="Column"
-                    IsReadOnly="True"
-                    ItemsSource="{Binding Records}">
-                    <DataGrid.Columns>
-                        <DataGridTextColumn Width="2*" Binding="{Binding TrayCode}" Header="{DynamicResource Homogenization_Column_TrayCode}" />
-                        <DataGridTextColumn Width="150" Binding="{Binding InboundTime}" Header="{DynamicResource Homogenization_Column_InboundTime}" />
-                        <DataGridTextColumn Width="150" Binding="{Binding OutboundTime}" Header="{DynamicResource Homogenization_Column_OutboundTime}" />
-                        <DataGridTextColumn Width="120" Binding="{Binding Status}" Header="{DynamicResource Homogenization_Column_Status}" />
-                        <DataGridTextColumn Width="120" Binding="{Binding StirringSpeed}" Header="{DynamicResource Homogenization_Column_StirringSpeed}" />
-                        <DataGridTextColumn Width="120" Binding="{Binding Temperature}" Header="{DynamicResource Homogenization_Column_Temperature}" />
-                        <DataGridTextColumn Width="120" Binding="{Binding Vacuum}" Header="{DynamicResource Homogenization_Column_Vacuum}" />
-                        <DataGridTextColumn Width="120" Binding="{Binding CntActual}" Header="{DynamicResource Homogenization_Column_CntActual}" />
-                        <DataGridTextColumn Width="120" Binding="{Binding NmpActual}" Header="{DynamicResource Homogenization_Column_NmpActual}" />
-                    </DataGrid.Columns>
-                </DataGrid>
             </Border>
-        </StackPanel>
-    </ScrollViewer>
+        </edge:EdgeTablePanel.StatusContent>
+
+        <edge:EdgeDataGrid
+                AutoGenerateColumns="False"
+                CanUserResizeColumns="True"
+                Density="Compact"
+                HorizontalScrollBarVisibility="Auto"
+                ItemsSource="{Binding Records}"
+                MinHeight="520"
+                VerticalScrollBarVisibility="Auto">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Width="150" Binding="{Binding TrayCode}">
+                        <DataGridTextColumn.Header>
+                            <TextBlock Text="{Binding DataContext.TrayCodeHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                        </DataGridTextColumn.Header>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Width="130" Binding="{Binding DeviceCode}">
+                        <DataGridTextColumn.Header>
+                            <TextBlock Text="{Binding DataContext.DeviceCodeHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                        </DataGridTextColumn.Header>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Width="150" Binding="{Binding DeviceName}">
+                        <DataGridTextColumn.Header>
+                            <TextBlock Text="{Binding DataContext.DeviceNameHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                        </DataGridTextColumn.Header>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Width="170" Binding="{Binding InboundTime}">
+                        <DataGridTextColumn.Header>
+                            <TextBlock Text="{Binding DataContext.InboundTimeHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                        </DataGridTextColumn.Header>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Width="170" Binding="{Binding OutboundTime}">
+                        <DataGridTextColumn.Header>
+                            <TextBlock Text="{Binding DataContext.OutboundTimeHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                        </DataGridTextColumn.Header>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Width="130" Binding="{Binding Status}">
+                        <DataGridTextColumn.Header>
+                            <TextBlock Text="{Binding DataContext.StatusHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                        </DataGridTextColumn.Header>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Width="120" Binding="{Binding StirringSpeed}">
+                        <DataGridTextColumn.Header>
+                            <TextBlock Text="{Binding DataContext.StirringSpeedHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                        </DataGridTextColumn.Header>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Width="110" Binding="{Binding Temperature}">
+                        <DataGridTextColumn.Header>
+                            <TextBlock Text="{Binding DataContext.TemperatureHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                        </DataGridTextColumn.Header>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Width="115" Binding="{Binding Vacuum}">
+                        <DataGridTextColumn.Header>
+                            <TextBlock Text="{Binding DataContext.VacuumHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                        </DataGridTextColumn.Header>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Width="120" Binding="{Binding CntActual}">
+                        <DataGridTextColumn.Header>
+                            <TextBlock Text="{Binding DataContext.CntActualHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                        </DataGridTextColumn.Header>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Width="120" Binding="{Binding CntTarget}">
+                        <DataGridTextColumn.Header>
+                            <TextBlock Text="{Binding DataContext.CntTargetHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                        </DataGridTextColumn.Header>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Width="135" Binding="{Binding CntTankAWeight}">
+                        <DataGridTextColumn.Header>
+                            <TextBlock Text="{Binding DataContext.CntTankAWeightHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                        </DataGridTextColumn.Header>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Width="135" Binding="{Binding CntTankBWeight}">
+                        <DataGridTextColumn.Header>
+                            <TextBlock Text="{Binding DataContext.CntTankBWeightHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                        </DataGridTextColumn.Header>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Width="120" Binding="{Binding NmpActual}">
+                        <DataGridTextColumn.Header>
+                            <TextBlock Text="{Binding DataContext.NmpActualHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                        </DataGridTextColumn.Header>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Width="120" Binding="{Binding NmpTarget}">
+                        <DataGridTextColumn.Header>
+                            <TextBlock Text="{Binding DataContext.NmpTargetHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                        </DataGridTextColumn.Header>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Width="125" Binding="{Binding GlueActual}">
+                        <DataGridTextColumn.Header>
+                            <TextBlock Text="{Binding DataContext.GlueActualHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                        </DataGridTextColumn.Header>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Width="135" Binding="{Binding SetStirringTime}">
+                        <DataGridTextColumn.Header>
+                            <TextBlock Text="{Binding DataContext.SetStirringTimeHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                        </DataGridTextColumn.Header>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Width="135" Binding="{Binding RemainingStirringTime}">
+                        <DataGridTextColumn.Header>
+                            <TextBlock Text="{Binding DataContext.RemainingStirringTimeHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                        </DataGridTextColumn.Header>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Width="135" Binding="{Binding SetDispersionTime}">
+                        <DataGridTextColumn.Header>
+                            <TextBlock Text="{Binding DataContext.SetDispersionTimeHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                        </DataGridTextColumn.Header>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Width="135" Binding="{Binding RemainingDispersionTime}">
+                        <DataGridTextColumn.Header>
+                            <TextBlock Text="{Binding DataContext.RemainingDispersionTimeHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                        </DataGridTextColumn.Header>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Width="150" Binding="{Binding MainBatchPlan}">
+                        <DataGridTextColumn.Header>
+                            <TextBlock Text="{Binding DataContext.MainBatchPlanHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                        </DataGridTextColumn.Header>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Width="150" Binding="{Binding BatchNumber}">
+                        <DataGridTextColumn.Header>
+                            <TextBlock Text="{Binding DataContext.BatchNumberHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                        </DataGridTextColumn.Header>
+                    </DataGridTextColumn>
+                </DataGrid.Columns>
+        </edge:EdgeDataGrid>
+    </edge:EdgeTablePanel>
 </UserControl>

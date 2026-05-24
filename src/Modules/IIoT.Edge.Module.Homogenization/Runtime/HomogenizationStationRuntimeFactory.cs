@@ -1,4 +1,4 @@
-﻿using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
@@ -21,7 +21,11 @@ using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesS
     string,
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationRealtimeSnapshot,
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationRecipeSnapshot,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot>;
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlanRequest,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlan,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchRequest,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchResult>;
 
 namespace IIoT.Edge.Module.Homogenization.Runtime;
 
@@ -166,6 +170,10 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
         var interaction = new HomogenizationPlcHandshakeAccessor(interactionSignals, codeOptions.Value.Plc);
         var codec = new HomogenizationSignalCodec(singleReadSignals, continuousReadSignals, productionTime);
         var tasks = new List<IPlcTask>();
+        IHomogenizationProductionGate? productionGate = null;
+
+        IHomogenizationProductionGate GetProductionGate()
+            => productionGate ??= serviceProvider.GetRequiredService<IHomogenizationProductionGate>();
 
         if (enabledTaskKeys.Contains(InboundTaskKey))
         {
@@ -178,6 +186,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 serviceProvider.GetRequiredService<HomogenizationMesScenarioChannel>(),
                 serviceProvider.GetRequiredService<IMesUploadDiagnosticsStore>(),
                 serviceProvider.GetRequiredService<IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>>(),
+                GetProductionGate(),
                 logger,
                 productionTime,
                 moduleOptions,
@@ -196,6 +205,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 validator,
                 serviceProvider.GetRequiredService<IMesUploadDiagnosticsStore>(),
                 serviceProvider.GetRequiredService<IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>>(),
+                GetProductionGate(),
                 logger,
                 productionTime,
                 moduleOptions,
@@ -212,6 +222,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 serviceProvider.GetRequiredService<IDeviceService>(),
                 serviceProvider.GetRequiredService<HomogenizationMesScenarioChannel>(),
                 serviceProvider.GetRequiredService<IMesUploadDiagnosticsStore>(),
+                GetProductionGate(),
                 logger,
                 productionTime,
                 moduleOptions,
@@ -228,6 +239,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 serviceProvider.GetRequiredService<IDeviceService>(),
                 serviceProvider.GetRequiredService<HomogenizationMesScenarioChannel>(),
                 serviceProvider.GetRequiredService<IMesUploadDiagnosticsStore>(),
+                GetProductionGate(),
                 logger,
                 productionTime,
                 moduleOptions,
@@ -254,6 +266,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 serviceProvider.GetRequiredService<IDeviceService>(),
                 serviceProvider.GetRequiredService<HomogenizationMesScenarioChannel>(),
                 serviceProvider.GetRequiredService<IMesUploadDiagnosticsStore>(),
+                GetProductionGate(),
                 logger,
                 moduleOptions,
                 codeOptions));

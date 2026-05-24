@@ -2,45 +2,31 @@
     x:Class="IIoT.Edge.Presentation.Navigation.Features.Production.CapacityView.CapacityViewPage"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
     xmlns:sharedViews="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared">
 
     <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="20" Spacing="16">
-            <Grid ColumnDefinitions="*,Auto">
-                <StackPanel Spacing="4">
-                    <TextBlock
-                        FontSize="24"
-                        FontWeight="SemiBold"
-                        Foreground="{DynamicResource Edge.Text.Primary}"
-                        Text="{Binding ViewTitle}" />
-                    <TextBlock
-                        Foreground="{DynamicResource Edge.Text.Muted}"
-                        Text="{Binding StatusMessage}"
-                        TextWrapping="Wrap" />
-                </StackPanel>
+        <StackPanel Margin="{DynamicResource Edge.Thickness.20}" Spacing="{DynamicResource Edge.Size.Spacing12}">
+            <edge:EdgeSectionHeader
+                Title="{Binding ViewTitle}"
+                Subtitle="{Binding StatusMessage}">
+                <edge:EdgeSectionHeader.ActionContent>
+                    <Button
+                        MinWidth="118"
+                        Padding="{DynamicResource Edge.Thickness.8}"
+                        Command="{Binding ExportCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Edge.Size.Spacing6}">
+                            <PathIcon
+                                Width="16"
+                                Height="16"
+                                Data="M6,3 L16,3 L20,7 L20,21 L6,21 Z M15,3 L15,8 L20,8 M9,11 L17,11 M9,14 L17,14 M9,17 L14,17" />
+                            <TextBlock Text="{DynamicResource Navigation_Button_ExportExcel}" />
+                        </StackPanel>
+                    </Button>
+                </edge:EdgeSectionHeader.ActionContent>
+            </edge:EdgeSectionHeader>
 
-                <Button
-                    Grid.Column="1"
-                    MinWidth="118"
-                    Padding="14,8"
-                    VerticalAlignment="Top"
-                    Command="{Binding ExportCommand}">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <PathIcon
-                            Width="16"
-                            Height="16"
-                            Data="M6,3 L16,3 L20,7 L20,21 L6,21 Z M15,3 L15,8 L20,8 M9,11 L17,11 M9,14 L17,14 M9,17 L14,17" />
-                        <TextBlock Text="{DynamicResource Navigation_Button_ExportExcel}" />
-                    </StackPanel>
-                </Button>
-            </Grid>
-
-            <Border
-                Padding="14"
-                Background="{DynamicResource Edge.Surface.Panel}"
-                BorderBrush="{DynamicResource Edge.Border.Subtle}"
-                BorderThickness="1"
-                CornerRadius="8">
+            <edge:EdgeCard CardPadding="{DynamicResource Edge.Thickness.Card.Compact}">
                 <WrapPanel>
                     <ComboBox
                         Width="190"
@@ -63,7 +49,7 @@
                     <DatePicker
                         Width="150"
                         Margin="0,0,12,0"
-                        SelectedDate="{Binding QueryDate}" />
+                        SelectedDate="{Binding QueryDateOffset}" />
                     <Button
                         MinWidth="86"
                         Padding="16,8"
@@ -71,55 +57,38 @@
                         <TextBlock Text="{DynamicResource Navigation_Button_Query}" />
                     </Button>
                 </WrapPanel>
-            </Border>
+            </edge:EdgeCard>
 
-            <Border
-                Padding="12,8"
-                Background="{DynamicResource Edge.Surface.Panel}"
-                BorderBrush="{DynamicResource Edge.Border.Subtle}"
-                BorderThickness="1"
-                CornerRadius="8"
-                IsVisible="{Binding !CanQueryCloud}">
-                <TextBlock
-                    Foreground="{DynamicResource Edge.Warning}"
-                    Text="{DynamicResource Navigation_Capacity_OfflineHint}"
-                    TextWrapping="Wrap" />
-            </Border>
+            <edge:EdgeStatusListItem
+                IsVisible="{Binding !CanQueryCloud}"
+                Status="Warning"
+                StatusText="{DynamicResource Navigation_Capacity_OfflineHint}"
+                Title="{DynamicResource Navigation_Capacity_OfflineHint}" />
 
-            <UniformGrid Columns="4" Rows="1">
-                <Border Margin="0,0,8,0" Padding="14,12" Background="{DynamicResource Edge.Surface.Main}" BorderBrush="{DynamicResource Edge.Border.Subtle}" BorderThickness="1" CornerRadius="8">
-                    <StackPanel Spacing="5">
-                        <TextBlock FontSize="12" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Navigation_Capacity_TotalOutput}" />
-                        <TextBlock FontSize="25" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Text.Primary}" Text="{Binding PeriodTotal}" />
-                    </StackPanel>
-                </Border>
-                <Border Margin="4,0" Padding="14,12" Background="{DynamicResource Edge.Surface.Main}" BorderBrush="{DynamicResource Edge.Border.Subtle}" BorderThickness="1" CornerRadius="8">
-                    <StackPanel Spacing="5">
-                        <TextBlock FontSize="12" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Navigation_Capacity_Good}" />
-                        <TextBlock FontSize="25" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Success}" Text="{Binding PeriodOk}" />
-                    </StackPanel>
-                </Border>
-                <Border Margin="4,0" Padding="14,12" Background="{DynamicResource Edge.Surface.Main}" BorderBrush="{DynamicResource Edge.Border.Subtle}" BorderThickness="1" CornerRadius="8">
-                    <StackPanel Spacing="5">
-                        <TextBlock FontSize="12" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Navigation_Capacity_Bad}" />
-                        <TextBlock FontSize="25" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Danger}" Text="{Binding PeriodNg}" />
-                    </StackPanel>
-                </Border>
-                <Border Margin="8,0,0,0" Padding="14,12" Background="{DynamicResource Edge.Surface.Main}" BorderBrush="{DynamicResource Edge.Border.Subtle}" BorderThickness="1" CornerRadius="8">
-                    <StackPanel Spacing="5">
-                        <TextBlock FontSize="12" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Navigation_Capacity_AvgPerDay}" />
-                        <TextBlock FontSize="25" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Warning}" Text="{Binding AvgDaily}" />
-                    </StackPanel>
-                </Border>
-            </UniformGrid>
+            <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing12}">
+                <edge:EdgeKpiCard
+                    Title="{DynamicResource Navigation_Capacity_TotalOutput}"
+                    TrendStatus="Info"
+                    Value="{Binding PeriodTotal}" />
+                <edge:EdgeKpiCard
+                    Grid.Column="1"
+                    Title="{DynamicResource Navigation_Capacity_Good}"
+                    TrendStatus="Running"
+                    Value="{Binding PeriodOk}" />
+                <edge:EdgeKpiCard
+                    Grid.Column="2"
+                    Title="{DynamicResource Navigation_Capacity_Bad}"
+                    TrendStatus="Error"
+                    Value="{Binding PeriodNg}" />
+                <edge:EdgeKpiCard
+                    Grid.Column="3"
+                    Title="{DynamicResource Navigation_Capacity_AvgPerDay}"
+                    TrendStatus="Warning"
+                    Value="{Binding AvgDaily}" />
+            </Grid>
 
-            <Border
-                Padding="14"
-                Background="{DynamicResource Edge.Surface.Main}"
-                BorderBrush="{DynamicResource Edge.Border.Subtle}"
-                BorderThickness="1"
-                CornerRadius="8">
-                <StackPanel Spacing="12">
+            <edge:EdgeCard>
+                <StackPanel Spacing="{DynamicResource Edge.Size.Spacing12}">
                     <DataGrid
                         Classes="edge-grid"
                         AutoGenerateColumns="False"
@@ -149,56 +118,47 @@
                         Message="{DynamicResource Navigation_Capacity_EmptyMessage}"
                         Title="{DynamicResource Navigation_Capacity_EmptyTitle}" />
                 </StackPanel>
-            </Border>
+            </edge:EdgeCard>
 
-            <Border
-                Padding="14"
-                Background="{DynamicResource Edge.Surface.Main}"
-                BorderBrush="{DynamicResource Edge.Border.Subtle}"
-                BorderThickness="1"
-                CornerRadius="8">
-                <StackPanel Spacing="10">
-                    <TextBlock
-                        FontSize="16"
-                        FontWeight="SemiBold"
-                        Foreground="{DynamicResource Edge.Text.Primary}"
-                        Text="{DynamicResource Navigation_Capacity_ChartTitle}" />
-                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                        <ItemsControl ItemsSource="{Binding ChartBars}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <StackPanel Orientation="Horizontal" />
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <StackPanel Width="54" Margin="0,0,8,0" HorizontalAlignment="Center" VerticalAlignment="Bottom">
-                                        <TextBlock
-                                            Margin="0,0,0,4"
-                                            FontSize="11"
-                                            Foreground="{DynamicResource Edge.Text.Muted}"
-                                            Text="{Binding Value}"
-                                            TextAlignment="Center" />
-                                        <Border
-                                            Width="28"
-                                            Height="{Binding ChartHeight}"
-                                            HorizontalAlignment="Center"
-                                            Background="{DynamicResource Edge.Success}"
-                                            CornerRadius="6,6,0,0" />
-                                        <TextBlock
-                                            Margin="0,6,0,0"
-                                            FontSize="10"
-                                            Foreground="{DynamicResource Edge.Text.Muted}"
-                                            Text="{Binding Label}"
-                                            TextAlignment="Center"
-                                            TextWrapping="Wrap" />
-                                    </StackPanel>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
-                </StackPanel>
-            </Border>
+            <edge:EdgeCard>
+                <edge:EdgeCard.Header>
+                    <edge:EdgeSectionHeader Title="{DynamicResource Navigation_Capacity_ChartTitle}" />
+                </edge:EdgeCard.Header>
+                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                    <ItemsControl ItemsSource="{Binding ChartBars}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Width="54" Margin="0,0,8,0" HorizontalAlignment="Center" VerticalAlignment="Bottom">
+                                    <TextBlock
+                                        Margin="0,0,0,4"
+                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                        Text="{Binding Value}"
+                                        TextAlignment="Center" />
+                                    <Border
+                                        Width="28"
+                                        Height="{Binding ChartHeight}"
+                                        HorizontalAlignment="Center"
+                                        Background="{DynamicResource Edge.Brush.Status.Running}"
+                                        CornerRadius="{DynamicResource Edge.CornerRadius.Small}" />
+                                    <TextBlock
+                                        Margin="0,6,0,0"
+                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                        Text="{Binding Label}"
+                                        TextAlignment="Center"
+                                        TextWrapping="Wrap" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </edge:EdgeCard>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

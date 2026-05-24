@@ -206,7 +206,6 @@ public static class DependencyInjection
             new LongRunningBackgroundTaskService(
                 sp.GetRequiredService<RecipeSyncTask>()));
 
-        services.AddSingleton<INavigationService, NavigationService>();
         services.AddSingleton<IAppStartupInitializer, AppStartupInitializer>();
         services.AddSingleton<IStartupPluginLifecycleSnapshotBuilder, StartupPluginLifecycleSnapshotBuilder>();
         services.AddSingleton<IStartupDiagnosticsReportBuilder, StartupDiagnosticsReportBuilder>();

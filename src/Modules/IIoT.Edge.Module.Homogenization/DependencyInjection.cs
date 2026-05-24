@@ -1,5 +1,6 @@
-﻿using IIoT.Edge.Application.Abstractions.Context;
+using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Features.Production.Planning;
 using IIoT.Edge.Application.Modules.Mes;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
@@ -22,7 +23,11 @@ using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesS
     string,
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationRealtimeSnapshot,
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationRecipeSnapshot,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot>;
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlanRequest,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlan,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchRequest,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchResult>;
 
 namespace IIoT.Edge.Module.Homogenization;
 
@@ -77,6 +82,8 @@ public sealed class DependencyInjection : EdgeProcessModuleBase<HomogenizationCe
             sp.GetRequiredService<HomogenizationMesChannel>());
         builder.Services.AddSingleton<IProcessMesUploader>(sp =>
             sp.GetRequiredService<HomogenizationMesChannel>());
+        builder.Services.AddSingleton<IProductionPlanSelectionService, HomogenizationProductionPlanSelectionService>();
+        builder.Services.AddSingleton<IHomogenizationProductionGate, HomogenizationProductionGate>();
         builder.Services.AddSingleton<IProductionContextFactory, HomogenizationContextFactory>();
         builder.RegisterStandardPlcSignalProfiles<
             HomogenizationPlcSignals.Interaction,

@@ -1,6 +1,7 @@
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Features.Production.Planning;
 using IIoT.Edge.Application.Modules.Mes;
 using System.Text.Json;
 using IIoT.Edge.Module.Homogenization;
@@ -22,7 +23,11 @@ using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesS
     string,
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationRealtimeSnapshot,
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationRecipeSnapshot,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot>;
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlanRequest,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlan,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchRequest,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchResult>;
 
 namespace IIoT.Edge.Module.ContractTests;
 
@@ -44,6 +49,8 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
         services.AddSingleton<HomogenizationMesScenarioChannel, ContractHomogenizationMesChannel>();
         services.AddSingleton<HomogenizationCellDataValidator>();
         services.AddSingleton<IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>, ContractHomogenizationModuleParamProvider>();
+        services.AddSingleton<IProductionPlanSelectionService, ContractProductionPlanSelectionService>();
+        services.AddSingleton<IHomogenizationProductionGate, HomogenizationProductionGate>();
         services.AddSingleton(Options.Create(new HomogenizationModuleOptions()));
         services.AddSingleton(Options.Create(new HomogenizationCodeOptions()));
     }
@@ -141,8 +148,8 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
             ContractTestPathHelper.GetModuleSourceDirectory("Homogenization"),
             "Resources",
             "Languages");
-        var zhKeys = ReadLanguageDictionary(resourceDirectory, "zh-CN.xaml");
-        var enKeys = ReadLanguageDictionary(resourceDirectory, "en-US.xaml");
+        var zhKeys = ReadLanguageDictionary(resourceDirectory, "zh-CN.axaml");
+        var enKeys = ReadLanguageDictionary(resourceDirectory, "en-US.axaml");
 
         Assert.NotEmpty(zhKeys);
         Assert.Equal(zhKeys.Keys.Order(), enKeys.Keys.Order());
@@ -281,5 +288,31 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
             HomogenizationEquipmentStatusSnapshot snapshot,
             CancellationToken cancellationToken = default)
             => Task.FromResult(MesCallResult.Success());
+
+        public Task<MesCallResult<HomogenizationMainPlan>> GetMainPlanAsync(
+            HomogenizationMainPlanRequest request,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(MesCallResult<HomogenizationMainPlan>.Success(new HomogenizationMainPlan([])));
+
+        public Task<MesCallResult<HomogenizationTraceBatchResult>> GenerateTraceBatchNumberAsync(
+            HomogenizationTraceBatchRequest request,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(MesCallResult<HomogenizationTraceBatchResult>.Success(null));
+    }
+
+    private sealed class ContractProductionPlanSelectionService : IProductionPlanSelectionService
+    {
+        public string ProcessType => DependencyInjection.ModuleKey;
+
+        public ProductionPlanOption? CurrentPlan => null;
+
+        public Task<ProductionPlanSelectionState> GetStateAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(new ProductionPlanSelectionState(false, false, null, string.Empty));
+
+        public Task<IReadOnlyList<ProductionPlanOption>> LoadPlansAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<ProductionPlanOption>>([]);
+
+        public Task SelectPlanAsync(ProductionPlanOption option, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
     }
 }

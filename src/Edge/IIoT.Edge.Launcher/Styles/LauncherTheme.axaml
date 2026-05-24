@@ -1,41 +1,31 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Styles.Resources>
-        <Color x:Key="Launcher.Color.Window">#0F1518</Color>
-        <Color x:Key="Launcher.Color.Surface">#161E22</Color>
-        <Color x:Key="Launcher.Color.SurfaceAlt">#1D272C</Color>
-        <Color x:Key="Launcher.Color.Chip">#202B31</Color>
-        <Color x:Key="Launcher.Color.Border">#344148</Color>
-        <Color x:Key="Launcher.Color.TextPrimary">#F7FAFC</Color>
-        <Color x:Key="Launcher.Color.TextSecondary">#B6C2CC</Color>
-        <Color x:Key="Launcher.Color.TextMuted">#81909A</Color>
-        <Color x:Key="Launcher.Color.Error">#F87171</Color>
-        <Color x:Key="Launcher.Color.Accent">#0F766E</Color>
-        <Color x:Key="Launcher.Color.AccentLight">#5EEAD4</Color>
-
-        <SolidColorBrush x:Key="Launcher.Bg.Window" Color="{StaticResource Launcher.Color.Window}" />
-        <SolidColorBrush x:Key="Launcher.Bg.Surface" Color="{StaticResource Launcher.Color.Surface}" />
-        <SolidColorBrush x:Key="Launcher.Bg.SurfaceAlt" Color="{StaticResource Launcher.Color.SurfaceAlt}" />
-        <SolidColorBrush x:Key="Launcher.Bg.Chip" Color="{StaticResource Launcher.Color.Chip}" />
-        <SolidColorBrush x:Key="Launcher.Border" Color="{StaticResource Launcher.Color.Border}" />
-        <SolidColorBrush x:Key="Launcher.Text.Primary" Color="{StaticResource Launcher.Color.TextPrimary}" />
-        <SolidColorBrush x:Key="Launcher.Text.Secondary" Color="{StaticResource Launcher.Color.TextSecondary}" />
-        <SolidColorBrush x:Key="Launcher.Text.Muted" Color="{StaticResource Launcher.Color.TextMuted}" />
-        <SolidColorBrush x:Key="Launcher.Text.Error" Color="{StaticResource Launcher.Color.Error}" />
-        <SolidColorBrush x:Key="Launcher.Accent.Default" Color="{StaticResource Launcher.Color.Accent}" />
-        <SolidColorBrush x:Key="Launcher.Accent.Light" Color="{StaticResource Launcher.Color.AccentLight}" />
-        <SolidColorBrush x:Key="Launcher.Bg.ProfileIcon" Color="#33FFFFFF" />
+        <SolidColorBrush x:Key="Launcher.Bg.Window" Color="{StaticResource Edge.Color.Gray100}" />
+        <SolidColorBrush x:Key="Launcher.Bg.Surface" Color="{StaticResource Edge.Color.White}" />
+        <SolidColorBrush x:Key="Launcher.Bg.SurfaceAlt" Color="{StaticResource Edge.Color.Gray50}" />
+        <SolidColorBrush x:Key="Launcher.Bg.Chip" Color="{StaticResource Edge.Color.Lime100}" />
+        <SolidColorBrush x:Key="Launcher.Border" Color="{StaticResource Edge.Color.Gray300}" />
+        <SolidColorBrush x:Key="Launcher.Text.Primary" Color="{StaticResource Edge.Color.Gray900}" />
+        <SolidColorBrush x:Key="Launcher.Text.Secondary" Color="{StaticResource Edge.Color.Gray700}" />
+        <SolidColorBrush x:Key="Launcher.Text.Muted" Color="{StaticResource Edge.Color.Gray500}" />
+        <SolidColorBrush x:Key="Launcher.Text.Error" Color="{StaticResource Edge.Color.Red500}" />
+        <SolidColorBrush x:Key="Launcher.Accent.Default" Color="{StaticResource Edge.Color.Lime500}" />
+        <SolidColorBrush x:Key="Launcher.Accent.Light" Color="{StaticResource Edge.Color.Lime500}" />
+        <SolidColorBrush x:Key="Launcher.Text.OnAccent" Color="{StaticResource Edge.Color.Gray900}" />
+        <SolidColorBrush x:Key="Launcher.Text.OnProfileAccent" Color="{StaticResource Edge.Color.White}" />
+        <SolidColorBrush x:Key="Launcher.Bg.ProfileIcon" Color="{StaticResource Edge.Color.White}" Opacity="0.76" />
 
         <LinearGradientBrush x:Key="Launcher.WindowGradient" StartPoint="0%,0%" EndPoint="100%,100%">
-            <GradientStop Color="#0B1013" Offset="0" />
-            <GradientStop Color="#131C21" Offset="0.55" />
-            <GradientStop Color="#0E151A" Offset="1" />
+            <GradientStop Color="{StaticResource Edge.Color.Gray100}" Offset="0" />
+            <GradientStop Color="{StaticResource Edge.Color.Gray50}" Offset="0.52" />
+            <GradientStop Color="{StaticResource Edge.Color.White}" Offset="1" />
         </LinearGradientBrush>
 
         <LinearGradientBrush x:Key="Launcher.HeroGradient" StartPoint="0%,0%" EndPoint="100%,100%">
-            <GradientStop Color="#102129" Offset="0" />
-            <GradientStop Color="#133B3A" Offset="0.55" />
-            <GradientStop Color="#10171C" Offset="1" />
+            <GradientStop Color="{StaticResource Edge.Color.White}" Offset="0" />
+            <GradientStop Color="{StaticResource Edge.Color.Lime100}" Offset="0.58" />
+            <GradientStop Color="{StaticResource Edge.Color.Gray50}" Offset="1" />
         </LinearGradientBrush>
     </Styles.Resources>
 </Styles>

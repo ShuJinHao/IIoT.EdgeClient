@@ -9,6 +9,7 @@ using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Recipe;
 using IIoT.Edge.Application.Abstractions.Time;
+using IIoT.Edge.Application.Auth.LocalAccounts;
 using IIoT.Edge.Infrastructure.Integration.Auth;
 using IIoT.Edge.Infrastructure.Integration.Capacity;
 using IIoT.Edge.Infrastructure.Integration.Config;
@@ -62,6 +63,10 @@ public static class DependencyInjection
                 ?? configuration["LocalAdmin:PasswordHash"]?.Trim()
                 ?? string.Empty
         });
+        var localAccountDirectory = ResolveLocalAccountDirectory(runtimePaths.BaseDirectory);
+        services.AddSingleton<ILocalAccountCatalog>(
+            _ => new LocalAccountCatalog(localAccountDirectory));
+        services.AddSingleton<ILocalAccountAuthService, LocalAccountAuthService>();
 
         services.AddHttpClient(AuthService.HttpClientName, client => client.Timeout = timeout);
         services.AddSingleton<IAuthService, AuthService>();
@@ -133,5 +138,17 @@ public static class DependencyInjection
             sp.GetRequiredService<IExcelConsumer>());
 
         return services;
+    }
+
+    private static string ResolveLocalAccountDirectory(string baseDirectory)
+    {
+        var shellDirectory = Path.GetFullPath(baseDirectory);
+        if (File.Exists(LocalAccountCatalog.GetCatalogPath(shellDirectory))
+            || File.Exists(LocalAccountCatalog.GetCatalogPath(shellDirectory, LocalAccountCatalog.SampleCatalogFileName)))
+        {
+            return shellDirectory;
+        }
+
+        return Path.GetFullPath(Path.Combine(shellDirectory, "..", "launcher"));
     }
 }

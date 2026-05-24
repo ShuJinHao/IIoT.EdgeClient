@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using AvaloniaDispatcher = Avalonia.Threading.Dispatcher;
 using IIoT.Edge.Application.Features.Production.Equipment;
 using IIoT.Edge.Presentation.Navigation.Localization;
+using IIoT.Edge.UI.Shared.Avalonia.Controls;
 using IIoT.Edge.UI.Shared.Localization;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Dashboard;
@@ -37,7 +38,12 @@ public sealed class DashboardViewModel : NavigationViewModelBase
     public string RecipeName
     {
         get => _recipeName;
-        private set { _recipeName = value; OnPropertyChanged(); }
+        private set
+        {
+            _recipeName = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ProductionSummaryItems));
+        }
     }
 
     public string RecipeStatus => string.IsNullOrWhiteSpace(_recipeStatusResourceKey)
@@ -65,8 +71,32 @@ public sealed class DashboardViewModel : NavigationViewModelBase
     public string CurrentBatch
     {
         get => _currentBatch;
-        private set { _currentBatch = value; OnPropertyChanged(); }
+        private set
+        {
+            _currentBatch = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ProductionSummaryItems));
+        }
     }
+
+    public IReadOnlyList<EdgeSummaryItem> ProductionSummaryItems =>
+    [
+        new()
+        {
+            Label = GetText("Navigation_DashboardPreview_CurrentBatch", "当前批次"),
+            Value = NormalizeSummaryValue(CurrentBatch)
+        },
+        new()
+        {
+            Label = GetText("Navigation_DashboardPreview_Recipe", "配方"),
+            Value = NormalizeSummaryValue(RecipeName)
+        },
+        new()
+        {
+            Label = GetText("Navigation_DashboardPreview_RecipeStatus", "配方状态"),
+            Value = NormalizeSummaryValue(RecipeStatus)
+        }
+    ];
 
     public bool HasDevices => Devices.Count > 0;
 
@@ -130,10 +160,11 @@ public sealed class DashboardViewModel : NavigationViewModelBase
             TodayOutput = capacity.TodayOutput.ToString();
             TodayYield = capacity.TodayYield;
             NgCount = capacity.NgCount.ToString();
-            CurrentBatch = capacity.CurrentBatch;
+            CurrentBatch = capacity.CurrentBatch ?? "--";
 
             OnPropertyChanged(nameof(HasDevices));
             OnPropertyChanged(nameof(IsDeviceEmpty));
+            OnPropertyChanged(nameof(ProductionSummaryItems));
         });
     }
 
@@ -142,6 +173,7 @@ public sealed class DashboardViewModel : NavigationViewModelBase
         OnPropertyChanged(nameof(TaktStatus));
         OnPropertyChanged(nameof(TrendStatus));
         OnPropertyChanged(nameof(RecipeStatus));
+        OnPropertyChanged(nameof(ProductionSummaryItems));
     }
 
     private void SetRecipeStatus(string resourceKey, string fallback)
@@ -149,5 +181,13 @@ public sealed class DashboardViewModel : NavigationViewModelBase
         _recipeStatusResourceKey = resourceKey;
         _recipeStatusFallback = fallback;
         OnPropertyChanged(nameof(RecipeStatus));
+        OnPropertyChanged(nameof(ProductionSummaryItems));
+    }
+
+    private static string NormalizeSummaryValue(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) || value == "--"
+            ? "—"
+            : value;
     }
 }

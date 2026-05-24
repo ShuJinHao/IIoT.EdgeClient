@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Auth.LocalAccounts;
 using IIoT.Edge.Launcher.Services;
 using IIoT.Edge.Launcher.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,13 +14,13 @@ public static class LauncherDependencyInjection
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
 
-        services.AddSingleton<ILauncherAccountCatalogInitializer>(
-            provider => ActivatorUtilities.CreateInstance<LauncherAccountCatalogInitializer>(provider, baseDirectory));
-        services.AddSingleton<ILauncherAccountCatalog>(
-            provider => ActivatorUtilities.CreateInstance<LauncherAccountCatalog>(provider, baseDirectory));
+        services.AddSingleton<ILocalAccountCatalogInitializer>(
+            _ => new LocalAccountCatalogInitializer(baseDirectory));
+        services.AddSingleton<ILocalAccountCatalog>(
+            _ => new LocalAccountCatalog(baseDirectory));
+        services.AddSingleton<ILocalAccountAuthService, LocalAccountAuthService>();
         services.AddSingleton<ILauncherProfileCatalog>(
             provider => ActivatorUtilities.CreateInstance<LauncherProfileCatalog>(provider, baseDirectory));
-        services.AddSingleton<ILocalLauncherAuthService, LocalLauncherAuthService>();
         services.AddSingleton<IProcessStarter, ProcessStarter>();
         services.AddSingleton<IShellLaunchService, ShellLaunchService>();
         services.AddSingleton<LauncherMainViewModel>();

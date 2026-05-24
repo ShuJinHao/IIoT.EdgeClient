@@ -36,7 +36,7 @@ public sealed class ShellRuntimePathResolverBehaviorTests
     }
 
     [Fact]
-    public void Resolve_WhenRuntimeDataRootIsConfigured_ShouldResolveRelativeRootAgainstBaseDirectory()
+    public void Resolve_WhenRuntimeDataRootUsesWindowsSeparators_ShouldResolveRelativeRootAgainstBaseDirectory()
     {
         var baseDirectory = Path.Combine(Path.GetTempPath(), "edge-runtime-resolver-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(baseDirectory);
@@ -87,6 +87,8 @@ public sealed class ShellRuntimePathResolverBehaviorTests
         var result = new ShellRuntimePathResolver().Resolve(shellOutputDirectory, configuration);
 
         Assert.DoesNotContain("%LocalAppData%", profileText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("../data/profiles/HomogenizationLine", profileText, StringComparison.Ordinal);
+        Assert.DoesNotContain(@"..\\data\\profiles", profileText, StringComparison.Ordinal);
         Assert.Equal(expectedRuntimeRoot, result.RuntimeDataRoot);
         Assert.Equal(Path.Combine(expectedRuntimeRoot, "db"), result.DatabaseDirectory);
     }

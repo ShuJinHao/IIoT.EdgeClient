@@ -1,6 +1,5 @@
 using IIoT.Edge.Launcher.Models;
 using System.Diagnostics;
-using System.IO;
 
 namespace IIoT.Edge.Launcher.Services;
 
@@ -17,18 +16,17 @@ public sealed class ShellLaunchService : IShellLaunchService
     {
         ArgumentNullException.ThrowIfNull(profile);
 
-        if (!File.Exists(profile.ExecutablePath))
-        {
-            throw new FileNotFoundException(
-                $"未找到目标客户端可执行文件：{profile.ExecutablePath}。请先确认目标工序运行目录已生成，或检查 launcher.profiles.json 中的 ExecutablePath 配置。",
-                profile.ExecutablePath);
-        }
-
-        var startInfo = new ProcessStartInfo(profile.ExecutablePath)
+        var launchTarget = ShellLaunchTargetResolver.Resolve(profile.ExecutablePath);
+        var startInfo = new ProcessStartInfo(launchTarget.FileName)
         {
             UseShellExecute = false,
-            WorkingDirectory = Path.GetDirectoryName(profile.ExecutablePath) ?? AppContext.BaseDirectory
+            WorkingDirectory = launchTarget.WorkingDirectory
         };
+
+        foreach (var argument in launchTarget.Arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
 
         startInfo.EnvironmentVariables["Shell__MachineProfile"] = profile.MachineProfile;
 

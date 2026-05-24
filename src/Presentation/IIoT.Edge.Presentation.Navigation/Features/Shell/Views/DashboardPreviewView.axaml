@@ -1,0 +1,252 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Navigation.Features.Shell.DashboardPreviewView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
+    <Grid Margin="12,4,18,8" RowDefinitions="Auto,220,*" RowSpacing="8">
+        <Grid ColumnDefinitions="*,Auto">
+            <StackPanel Spacing="2">
+                <TextBlock
+                    FontSize="{DynamicResource Edge.FontSize.Title24}"
+                    FontWeight="Bold"
+                    Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                    Text="{DynamicResource Navigation_DashboardPreview_Title}" />
+                <TextBlock
+                    FontSize="{DynamicResource Edge.FontSize.Body}"
+                    Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                    Text="{DynamicResource Navigation_DashboardPreview_Subtitle}" />
+            </StackPanel>
+
+            <edge:EdgeStatusPill
+                Grid.Column="1"
+                VerticalAlignment="Center"
+                Status="Info"
+                Text="{Binding CurrentBatch, FallbackValue=—, TargetNullValue=—}" />
+        </Grid>
+
+        <Grid
+            Grid.Row="1"
+            ColumnDefinitions="1.08*,0.82*,0.72*"
+            ColumnSpacing="12">
+            <edge:EdgeMetricCard
+                Description="{DynamicResource Navigation_DashboardPreview_FromCapacitySnapshot}"
+                MinHeight="0"
+                Status="Info"
+                Title="{DynamicResource Navigation_DashboardPreview_OutputOverview}"
+                Unit="{DynamicResource Navigation_DashboardPreview_UnitPiece}"
+                Value="{Binding TodayOutput}">
+                <edge:EdgeMetricCard.Icon>
+                    <PathIcon
+                        Width="18"
+                        Height="18"
+                        Data="M5,18 L5,12 L9,12 L9,18 Z M11,18 L11,7 L15,7 L15,18 Z M17,18 L17,10 L21,10 L21,18 Z"
+                        Foreground="{DynamicResource Edge.Brush.Text.Primary}" />
+                </edge:EdgeMetricCard.Icon>
+            </edge:EdgeMetricCard>
+
+            <edge:EdgeSummaryCard
+                Grid.Column="1"
+                MinHeight="0"
+                ItemsSource="{Binding ProductionSummaryItems}"
+                Title="{DynamicResource Navigation_DashboardPreview_TaskSummary}" />
+
+            <edge:EdgeCard
+                Grid.Column="2"
+                Elevation="Flat"
+                PaddingMode="Compact"
+                Surface="Card">
+                <Grid
+                    ColumnDefinitions="*,*"
+                    RowDefinitions="*,*"
+                    ColumnSpacing="10"
+                    RowSpacing="10">
+                    <Grid>
+                        <StackPanel Spacing="4">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock
+                                    FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                                    FontWeight="SemiBold"
+                                    Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                    Text="{DynamicResource Navigation_DashboardPreview_DeviceLinks}" />
+                                <edge:EdgeStatusDot VerticalAlignment="Center" Status="Info" />
+                            </StackPanel>
+                            <TextBlock
+                                FontFamily="{DynamicResource Edge.FontFamily.Display}"
+                                FontSize="{DynamicResource Edge.FontSize.Title24}"
+                                FontWeight="SemiBold"
+                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                Text="{Binding ConnectedDevices}" />
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid Grid.Column="1">
+                        <StackPanel Spacing="4">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock
+                                    FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                                    FontWeight="SemiBold"
+                                    Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                    Text="{DynamicResource Navigation_DashboardPreview_Yield}" />
+                                <edge:EdgeStatusDot VerticalAlignment="Center" Status="Running" />
+                            </StackPanel>
+                            <TextBlock
+                                FontFamily="{DynamicResource Edge.FontFamily.Display}"
+                                FontSize="{DynamicResource Edge.FontSize.Title24}"
+                                FontWeight="SemiBold"
+                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                Text="{Binding TodayYield}" />
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid Grid.Row="1">
+                        <StackPanel Spacing="4">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock
+                                    FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                                    FontWeight="SemiBold"
+                                    Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                    Text="{DynamicResource Navigation_DashboardPreview_OkCount}" />
+                                <edge:EdgeStatusDot VerticalAlignment="Center" Status="Info" />
+                            </StackPanel>
+                            <TextBlock
+                                FontFamily="{DynamicResource Edge.FontFamily.Display}"
+                                FontSize="{DynamicResource Edge.FontSize.Title24}"
+                                FontWeight="SemiBold"
+                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                Text="{Binding OkCount}" />
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid Grid.Row="1" Grid.Column="1">
+                        <StackPanel Spacing="4">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock
+                                    FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                                    FontWeight="SemiBold"
+                                    Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                    Text="{DynamicResource Navigation_DashboardPreview_NgCount}" />
+                                <edge:EdgeStatusDot VerticalAlignment="Center" Status="Warning" />
+                            </StackPanel>
+                            <TextBlock
+                                FontFamily="{DynamicResource Edge.FontFamily.Display}"
+                                FontSize="{DynamicResource Edge.FontSize.Title24}"
+                                FontWeight="SemiBold"
+                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                Text="{Binding NgCount}" />
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+            </edge:EdgeCard>
+        </Grid>
+
+        <Grid
+            Grid.Row="2"
+            ColumnDefinitions="1.85*,*"
+            ColumnSpacing="12">
+            <edge:EdgeDataPanel
+                EmptyMessage="{DynamicResource Navigation_DashboardPreview_NoAlertSource}"
+                EmptyTitle="{DynamicResource Navigation_DashboardPreview_NoAlertTitle}"
+                IsEmpty="{Binding IsAlertEmpty}"
+                ItemsSource="{Binding AlertItems}"
+                MinHeight="0"
+                Title="{DynamicResource Navigation_DashboardPreview_AlertSummary}">
+                <edge:EdgeDataPanel.HeaderContent>
+                    <Border
+                        Padding="10,6"
+                        Background="{DynamicResource Edge.Brush.Surface.Wash}"
+                        CornerRadius="{DynamicResource Edge.CornerRadius.Control}">
+                        <Grid ColumnDefinitions="58,58,*" ColumnSpacing="10">
+                            <TextBlock
+                                FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                Text="{DynamicResource Navigation_DashboardPreview_AlertTime}" />
+                            <TextBlock
+                                Grid.Column="1"
+                                FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                Text="{DynamicResource Navigation_DashboardPreview_AlertLevel}" />
+                            <TextBlock
+                                Grid.Column="2"
+                                FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                Text="{DynamicResource Navigation_DashboardPreview_AlertMessage}" />
+                        </Grid>
+                    </Border>
+                </edge:EdgeDataPanel.HeaderContent>
+                <edge:EdgeDataPanel.ItemTemplate>
+                    <DataTemplate>
+                        <Border
+                            Padding="10,5"
+                            BorderBrush="{DynamicResource Edge.Brush.Border.Subtle}"
+                            BorderThickness="0,0,0,1">
+                            <Grid ColumnDefinitions="58,58,*" ColumnSpacing="10">
+                                <TextBlock
+                                    VerticalAlignment="Center"
+                                    FontFamily="{DynamicResource Edge.FontFamily.Mono}"
+                                    FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                    Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
+                                    Text="{Binding Time}" />
+                                <StackPanel
+                                    Grid.Column="1"
+                                    VerticalAlignment="Center"
+                                    Orientation="Horizontal"
+                                    Spacing="6">
+                                    <edge:EdgeStatusDot Status="{Binding Status}" />
+                                    <TextBlock
+                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                        Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
+                                        Text="{Binding Level}" />
+                                </StackPanel>
+                                <TextBlock
+                                    Grid.Column="2"
+                                    FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                    Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                    Text="{Binding Message}"
+                                    TextWrapping="Wrap" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </edge:EdgeDataPanel.ItemTemplate>
+            </edge:EdgeDataPanel>
+
+            <edge:EdgeDataPanel
+                Grid.Column="1"
+                EmptyMessage="{DynamicResource Navigation_DashboardPreview_NoTrendSource}"
+                EmptyTitle="{DynamicResource Navigation_DashboardPreview_NoTrendTitle}"
+                IsEmpty="{Binding IsTrendEmpty}"
+                MinHeight="0"
+                Title="{DynamicResource Navigation_DashboardPreview_Trend}">
+                <ItemsControl ItemsSource="{Binding TrendPoints}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <UniformGrid Rows="1" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid
+                                Margin="2,0"
+                                RowDefinitions="*,Auto"
+                                RowSpacing="2">
+                                <Border
+                                    Grid.Row="0"
+                                    Width="14"
+                                    Height="{Binding BarHeight}"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Bottom"
+                                    Background="{DynamicResource Edge.Brush.Accent.Primary}"
+                                    CornerRadius="{DynamicResource Edge.CornerRadius.Pill}" />
+                                <TextBlock
+                                    Grid.Row="1"
+                                    HorizontalAlignment="Center"
+                                    FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                    Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                    Text="{Binding Label}" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </edge:EdgeDataPanel>
+        </Grid>
+    </Grid>
+</UserControl>

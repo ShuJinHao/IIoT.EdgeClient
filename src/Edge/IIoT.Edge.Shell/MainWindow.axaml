@@ -4,52 +4,67 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:shellViews="clr-namespace:IIoT.Edge.Presentation.Shell.Views;assembly=IIoT.Edge.Presentation.Shell"
     Title="{Binding AppTitle}"
-    Width="1280"
-    Height="768"
+    Width="1440"
+    Height="900"
     MinWidth="1280"
     MinHeight="720"
-    Background="{DynamicResource Edge.Background.App}"
+    Background="Transparent"
+    CanResize="True"
     ExtendClientAreaToDecorationsHint="True"
-    WindowState="Maximized"
+    TransparencyLevelHint="Transparent"
+    WindowDecorations="None"
     WindowStartupLocation="CenterScreen">
     <Border
-        Margin="{DynamicResource Edge.Thickness.Frame}"
-        Background="{DynamicResource Edge.Surface.Main}"
-        BorderBrush="{DynamicResource Edge.Border.Subtle}"
-        BorderThickness="{DynamicResource Edge.Thickness.Border.Subtle}"
-        CornerRadius="{DynamicResource Edge.CornerRadius.Large}">
-        <Grid ColumnDefinitions="64,*,320" RowDefinitions="64,*,34">
-            <ContentControl
-                x:Name="NavigationRailHost"
-                Grid.RowSpan="3" />
+        x:Name="ShellFrame"
+        Margin="0"
+        Background="{DynamicResource Edge.Brush.App.Container}"
+        BoxShadow="{DynamicResource Edge.Shadow.App}"
+        ClipToBounds="True"
+        CornerRadius="{DynamicResource Edge.CornerRadius.Stage}">
+        <Grid RowDefinitions="50,*,30">
             <shellViews:ShellHeaderView
-                Grid.Column="1"
-                Grid.ColumnSpan="2"
+                x:Name="ShellHeader"
+                HorizontalAlignment="Stretch"
+                Width="{Binding Bounds.Width, ElementName=ShellFrame}"
                 DataContext="{Binding}" />
-            <ContentControl
-                x:Name="NavigationContentHost"
-                Grid.Row="1"
-                Grid.Column="1"
-                ClipToBounds="True"
-                ZIndex="0" />
+
             <Grid
                 Grid.Row="1"
-                Grid.Column="2"
-                Margin="{DynamicResource Edge.Thickness.RightRail}"
-                RowDefinitions="*,Auto,*"
-                ZIndex="2">
-                <ContentControl x:Name="EquipmentPanelHost" />
-                <Border
-                    Grid.Row="1"
-                    Height="{DynamicResource Edge.Size.PanelGap}" />
+                ClipToBounds="True"
+                ColumnDefinitions="56,*,360"
+                Margin="0,6,16,0">
                 <ContentControl
-                    x:Name="LogPanelHost"
-                    Grid.Row="2" />
+                    x:Name="NavigationRailHost"
+                    Grid.Column="0"
+                    ClipToBounds="True"
+                    HorizontalContentAlignment="Stretch"
+                    HorizontalAlignment="Stretch"
+                    VerticalContentAlignment="Stretch"
+                    VerticalAlignment="Stretch" />
+                <ContentControl
+                    x:Name="NavigationContentHost"
+                    Grid.Column="1"
+                    ClipToBounds="True"
+                    HorizontalContentAlignment="Stretch"
+                    VerticalContentAlignment="Stretch" />
+                <Grid
+                    Grid.Column="2"
+                    ClipToBounds="True"
+                    RowDefinitions="220,12,*">
+                    <ContentControl
+                        x:Name="EquipmentPanelHost"
+                        Grid.Row="0"
+                        ClipToBounds="True" />
+                    <ContentControl
+                        x:Name="LogPanelHost"
+                        Grid.Row="2"
+                        ClipToBounds="True" />
+                </Grid>
             </Grid>
+
             <shellViews:ShellFooterView
+                x:Name="ShellFooter"
                 Grid.Row="2"
-                Grid.Column="1"
-                Grid.ColumnSpan="2"
                 DataContext="{Binding}" />
         </Grid>
     </Border>

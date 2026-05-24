@@ -2,27 +2,15 @@
     x:Class="IIoT.Edge.Presentation.Navigation.Features.Hardware.PlcTaskBindingView.PlcTaskBindingPage"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
     xmlns:sharedViews="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared">
 
     <Grid RowDefinitions="Auto,*" Margin="20">
-        <Grid ColumnDefinitions="*,Auto">
-            <StackPanel Spacing="4">
-                <TextBlock
-                    FontSize="24"
-                    FontWeight="SemiBold"
-                    Foreground="{DynamicResource Edge.Text.Primary}"
-                    Text="{Binding ViewTitle}" />
-                <TextBlock
-                    Foreground="{DynamicResource Edge.Text.Muted}"
-                    Text="{Binding StatusMessage}"
-                    TextWrapping="Wrap" />
-            </StackPanel>
-
-            <StackPanel
-                Grid.Column="1"
-                Orientation="Horizontal"
-                Spacing="10"
-                VerticalAlignment="Top">
+        <edge:EdgeSectionHeader
+            Title="{Binding ViewTitle}"
+            Subtitle="{Binding StatusMessage}">
+            <edge:EdgeSectionHeader.ActionContent>
+                <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Edge.Size.Spacing10}">
                 <ComboBox
                     Width="260"
                     ItemsSource="{Binding Devices}"
@@ -46,21 +34,18 @@
                     Command="{Binding SaveCommand}">
                     <TextBlock Text="{DynamicResource Navigation_Button_Save}" />
                 </Button>
-            </StackPanel>
-        </Grid>
+                </StackPanel>
+            </edge:EdgeSectionHeader.ActionContent>
+        </edge:EdgeSectionHeader>
 
-        <Border
+        <edge:EdgeCard
             Grid.Row="1"
-            Margin="0,16,0,0"
-            Padding="14"
-            Background="{DynamicResource Edge.Surface.Main}"
-            BorderBrush="{DynamicResource Edge.Border.Subtle}"
-            BorderThickness="1"
-            CornerRadius="8">
+            Margin="0,16,0,0">
             <StackPanel Spacing="12">
-                <TextBlock
-                    Foreground="{DynamicResource Edge.Text.Muted}"
-                    Text="{Binding SelectedDevice.DeviceStateText}" />
+                <edge:EdgeStatusListItem
+                    Status="Info"
+                    StatusText="{DynamicResource Navigation_Hint_SelectDevice}"
+                    Title="{Binding SelectedDevice.DeviceStateText}" />
 
                 <DataGrid
                     Classes="edge-grid"
@@ -86,6 +71,6 @@
                     Message="{DynamicResource Navigation_PlcTaskBinding_NoDevices}"
                     Title="{DynamicResource Navigation_Title_PlcTaskBinding}" />
             </StackPanel>
-        </Border>
+        </edge:EdgeCard>
     </Grid>
 </UserControl>

@@ -3,7 +3,7 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
-    Title="IIoT Edge Client - 启动失败"
+    Title="{DynamicResource Shell_CrashDialogWindowTitle}"
     Width="620"
     Height="360"
     Background="{DynamicResource Edge.Brush.Overlay.Modal}"
@@ -36,11 +36,11 @@
                             FontSize="{DynamicResource Edge.FontSize.Section}"
                             FontWeight="SemiBold"
                             Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                            Text="启动失败" />
+                            Text="{DynamicResource Shell_CrashDialogTitle}" />
                         <TextBlock
                             FontSize="{DynamicResource Edge.FontSize.Caption}"
                             Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                            Text="启动链路返回错误，详细信息如下。" />
+                            Text="{DynamicResource Shell_CrashDialogDescription}" />
                     </StackPanel>
                 </StackPanel>
 
@@ -56,7 +56,7 @@
                     HorizontalAlignment="Right"
                     Padding="{DynamicResource Edge.Thickness.Card.Compact}"
                     Click="OnCloseClick"
-                    Content="关闭" />
+                    Content="{DynamicResource Shell_CrashDialogClose}" />
             </StackPanel>
         </edge:EdgeCard>
     </Grid>

@@ -26,6 +26,7 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
     private readonly HomogenizationCellDataValidator _validator;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
     private readonly IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> _parameters;
+    private readonly IHomogenizationProductionGate _productionGate;
 
     /// <summary>
     /// 创建匀浆出料握手任务。
@@ -40,6 +41,7 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
         HomogenizationCellDataValidator validator,
         IMesUploadDiagnosticsStore diagnosticsStore,
         IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> parameters,
+        IHomogenizationProductionGate productionGate,
         ILogService logger,
         IProductionTimeProvider productionTime,
         IOptions<HomogenizationModuleOptions> moduleOptions,
@@ -51,6 +53,7 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
         _validator = validator;
         _diagnosticsStore = diagnosticsStore;
         _parameters = parameters;
+        _productionGate = productionGate;
     }
 
     /// <summary>
@@ -129,6 +132,15 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
             Interaction.ReplyMesNg(trigger);
             RecordOutbound(cellData, message);
             _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Outbound, message);
+            return;
+        }
+
+        var gateResult = await _productionGate.EnsureReadyAsync(ModuleContext, cancellationToken).ConfigureAwait(false);
+        if (!gateResult.IsSuccess)
+        {
+            RecordOutbound(cellData, gateResult.Message);
+            _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Outbound, gateResult.Message);
+            Interaction.ReplyResult(trigger, gateResult);
             return;
         }
 

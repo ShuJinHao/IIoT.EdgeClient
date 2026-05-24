@@ -1,0 +1,41 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Navigation.Features.Shell.OverviewWorkspaceView"
+    x:Name="Root"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
+    <Grid RowDefinitions="Auto,*">
+        <edge:EdgeCard
+            Margin="20,10,30,0"
+            HorizontalAlignment="Left"
+            Width="330"
+            Height="42"
+            Elevation="Flat"
+            PaddingMode="None"
+            Surface="Wash">
+            <edge:EdgeSegmentedNav
+                x:Name="OverviewTabsHost"
+                ItemCommand="{Binding SelectTabCommand}"
+                ItemsSource="{Binding Tabs}"
+                SelectedItem="{Binding SelectedTab, Mode=TwoWay}"
+                SelectionMode="Single">
+                <edge:EdgeSegmentedNav.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                </edge:EdgeSegmentedNav.ItemsPanel>
+                <edge:EdgeSegmentedNav.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock
+                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                            Text="{Binding Title}" />
+                    </DataTemplate>
+                </edge:EdgeSegmentedNav.ItemTemplate>
+            </edge:EdgeSegmentedNav>
+        </edge:EdgeCard>
+
+        <ContentControl
+            x:Name="OverviewContentHost"
+            Grid.Row="1" />
+    </Grid>
+</UserControl>

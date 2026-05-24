@@ -94,7 +94,7 @@ internal static class ContractTestPathHelper
 
     public static string GetModuleRuntimeDirectory(string moduleId)
     {
-        var runtimeDirectory = Path.Combine(GetModuleSourceDirectory(moduleId), "bin", "Debug", "net10.0-windows");
+        var runtimeDirectory = Path.Combine(GetModuleSourceDirectory(moduleId), "bin", "Debug", "net10.0");
         if (!Directory.Exists(runtimeDirectory))
         {
             throw new DirectoryNotFoundException($"Module runtime directory was not found: '{runtimeDirectory}'.");

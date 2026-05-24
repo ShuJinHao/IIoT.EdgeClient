@@ -4,6 +4,7 @@
 .codex-temp/
 .dotnet/
 .vs/
+.DS_Store
 %EDGE_SHARED_NUGET_FEED%/
 IIoT.EdgeClient.DevTools.slnx
 

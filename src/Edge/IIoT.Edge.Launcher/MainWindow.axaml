@@ -3,10 +3,10 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="IIoT Edge Launcher"
-    Width="1440"
-    Height="860"
-    MinWidth="1200"
-    MinHeight="760"
+    Width="1280"
+    Height="760"
+    MinWidth="1100"
+    MinHeight="700"
     Background="{DynamicResource Launcher.Bg.Window}"
     CanResize="True"
     WindowDecorations="None"
@@ -64,9 +64,9 @@
                 </Grid>
             </Border>
 
-            <Grid Grid.Row="1" Margin="36,28,36,36">
-                <Grid x:Name="LoginPageRoot" ColumnDefinitions="480,36,*">
-                    <Border Grid.Column="0" Classes="launcher-surface" Padding="36">
+            <Grid Grid.Row="1" Margin="{DynamicResource Edge.Thickness.32}">
+                <Grid x:Name="LoginPageRoot" ColumnDefinitions="380,24,*">
+                    <Border Grid.Column="0" Classes="launcher-surface" Padding="{DynamicResource Edge.Thickness.32}">
                         <Grid RowDefinitions="Auto,*,Auto">
                             <StackPanel Spacing="12">
                                 <Border Classes="launcher-chip" HorizontalAlignment="Left">
@@ -86,6 +86,7 @@
 
                                 <TextBlock
                                     Classes="launcher-title"
+                                    TextWrapping="Wrap"
                                     Text="先登录，再选择要启动的工序" />
                                 <TextBlock
                                     Classes="launcher-body"
@@ -155,7 +156,7 @@
                                         Width="74"
                                         Height="74"
                                         Background="{DynamicResource Launcher.Bg.Chip}"
-                                        CornerRadius="18">
+                                        CornerRadius="{DynamicResource Edge.CornerRadius.Large}">
                                         <PathIcon
                                             Width="34"
                                             Height="34"
@@ -187,32 +188,32 @@
                                         Foreground="{DynamicResource Launcher.Text.Primary}"
                                         Text="标准工序启动平台" />
                                     <TextBlock
-                                        Width="620"
+                                        MaxWidth="540"
                                         HorizontalAlignment="Left"
                                         FontSize="16"
                                         Foreground="{DynamicResource Launcher.Text.Secondary}"
                                         Text="Launcher 负责现场本地登录与工序切换，真正的上位机仍然由 IIoT.Edge.Shell.exe 承载。"
                                         TextWrapping="Wrap" />
-                                    <WrapPanel>
-                                        <Border Classes="launcher-chip" Width="240" Margin="0,0,12,12">
+                                    <StackPanel MaxWidth="360" HorizontalAlignment="Left" Spacing="10">
+                                        <Border Classes="launcher-chip" Width="150" Margin="0,0,12,12">
                                             <StackPanel>
                                                 <TextBlock FontSize="12" Foreground="{DynamicResource Launcher.Accent.Light}" Text="平台定位" />
                                                 <TextBlock Margin="0,8,0,0" FontWeight="SemiBold" Foreground="{DynamicResource Launcher.Text.Primary}" Text="{Binding PlatformMetaText}" TextWrapping="Wrap" />
                                             </StackPanel>
                                         </Border>
-                                        <Border Classes="launcher-chip" Width="240" Margin="0,0,12,12">
+                                        <Border Classes="launcher-chip" Width="150" Margin="0,0,12,12">
                                             <StackPanel>
                                                 <TextBlock FontSize="12" Foreground="{DynamicResource Launcher.Accent.Light}" Text="运行架构" />
                                                 <TextBlock Margin="0,8,0,0" FontWeight="SemiBold" Foreground="{DynamicResource Launcher.Text.Primary}" Text="{Binding ArchitectureText}" TextWrapping="Wrap" />
                                             </StackPanel>
                                         </Border>
-                                        <Border Classes="launcher-chip" Width="200" Margin="0,0,12,12">
+                                        <Border Classes="launcher-chip" Width="130" Margin="0,0,12,12">
                                             <StackPanel>
                                                 <TextBlock FontSize="12" Foreground="{DynamicResource Launcher.Accent.Light}" Text="维护信息" />
                                                 <TextBlock Margin="0,8,0,0" FontWeight="SemiBold" Foreground="{DynamicResource Launcher.Text.Primary}" Text="{Binding MaintainerText}" TextWrapping="Wrap" />
                                             </StackPanel>
                                         </Border>
-                                    </WrapPanel>
+                                    </StackPanel>
                                 </StackPanel>
 
                                 <Border Grid.Row="2" Classes="launcher-chip" HorizontalAlignment="Left">
@@ -227,13 +228,13 @@
                 </Grid>
 
                 <Grid x:Name="SelectionPageRoot" IsVisible="False" RowDefinitions="Auto,Auto,*,Auto">
-                    <Border Classes="launcher-surface" Padding="24">
+                    <Border Classes="launcher-surface" Padding="{DynamicResource Edge.Thickness.24}">
                         <Grid ColumnDefinitions="Auto,*,Auto">
                             <Border
                                 Width="56"
                                 Height="56"
                                 Background="{DynamicResource Launcher.Bg.Chip}"
-                                CornerRadius="14">
+                                CornerRadius="{DynamicResource Edge.CornerRadius.Large}">
                                 <PathIcon
                                     Width="28"
                                     Height="28"
@@ -265,7 +266,7 @@
                         </Grid>
                     </Border>
 
-                    <Border Grid.Row="1" Classes="launcher-surface" Margin="0,18,0,18" Padding="16">
+                    <Border Grid.Row="1" Classes="launcher-surface" Margin="0,18,0,18" Padding="{DynamicResource Edge.Thickness.16}">
                         <Grid ColumnDefinitions="320,16,Auto,*">
                             <TextBox
                                 Grid.Column="0"
@@ -309,12 +310,12 @@
                                         Background="{DynamicResource Launcher.Bg.Surface}"
                                         BorderBrush="{DynamicResource Launcher.Border}"
                                         BorderThickness="1"
-                                        CornerRadius="18">
+                                        CornerRadius="{DynamicResource Edge.CornerRadius.Large}">
                                         <Grid RowDefinitions="132,*,Auto">
                                             <Border
                                                 Grid.Row="0"
                                                 Background="{Binding AccentColor}"
-                                                CornerRadius="18,18,0,0">
+                                                CornerRadius="{DynamicResource Edge.CornerRadius.Large}">
                                                 <Grid Margin="20">
                                                     <Border
                                                         Width="54"
@@ -322,24 +323,24 @@
                                                         HorizontalAlignment="Left"
                                                         VerticalAlignment="Top"
                                                         Background="{DynamicResource Launcher.Bg.ProfileIcon}"
-                                                        CornerRadius="27">
+                                                        CornerRadius="{DynamicResource Edge.CornerRadius.Circle}">
                                                         <PathIcon
                                                             Width="28"
                                                             Height="28"
                                                             HorizontalAlignment="Center"
                                                             VerticalAlignment="Center"
                                                             Data="{Binding IconKind, Converter={StaticResource Launcher.ProfileIconConverter}}"
-                                                            Foreground="White" />
+                                                            Foreground="{DynamicResource Launcher.Text.OnProfileAccent}" />
                                                     </Border>
-                                                    <StackPanel VerticalAlignment="Bottom" Spacing="6">
+                                                    <StackPanel Margin="70,0,0,0" VerticalAlignment="Bottom" Spacing="6">
                                                         <TextBlock
                                                             FontSize="23"
                                                             FontWeight="Bold"
-                                                            Foreground="White"
+                                                            Foreground="{DynamicResource Launcher.Text.OnProfileAccent}"
                                                             Text="{Binding DisplayName}" />
                                                         <TextBlock
                                                             FontSize="12"
-                                                            Foreground="White"
+                                                            Foreground="{DynamicResource Launcher.Text.OnProfileAccent}"
                                                             Opacity="0.86"
                                                             Text="{Binding MachineProfile}" />
                                                     </StackPanel>
@@ -374,6 +375,7 @@
                                                     Background="{Binding AccentColor}"
                                                     BorderBrush="{Binding AccentColor}"
                                                     Click="LaunchProfileButton_Click"
+                                                    Foreground="{DynamicResource Launcher.Text.OnProfileAccent}"
                                                     HorizontalAlignment="Stretch">
                                                     <TextBlock Text="启动工序" />
                                                 </Button>
@@ -385,7 +387,7 @@
                         </ItemsControl>
                     </ScrollViewer>
 
-                    <Border Grid.Row="3" Classes="launcher-surface" Padding="18,14">
+                    <Border Grid.Row="3" Classes="launcher-surface" Padding="{DynamicResource Edge.Thickness.16}">
                         <StackPanel Spacing="8">
                             <StackPanel Orientation="Horizontal" Spacing="10">
                                 <PathIcon Width="16" Height="16" Data="{StaticResource Launcher.Icon.Info}" Foreground="{DynamicResource Launcher.Accent.Light}" />

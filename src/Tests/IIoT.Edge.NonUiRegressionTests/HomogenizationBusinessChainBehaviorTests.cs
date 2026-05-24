@@ -11,6 +11,7 @@ using IIoT.Edge.Module.Homogenization;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
 using IIoT.Edge.Module.Homogenization.Config.Parameters;
+using IIoT.Edge.Module.Homogenization.Integration;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using IIoT.Edge.Runtime.Signals;
@@ -23,7 +24,11 @@ using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesS
     string,
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationRealtimeSnapshot,
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationRecipeSnapshot,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot>;
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlanRequest,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlan,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchRequest,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchResult>;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 
@@ -628,6 +633,7 @@ public sealed class HomogenizationBusinessChainBehaviorTests
             services.AddSingleton<IProductionTimeProvider>(productionTime);
             services.AddSingleton<IProductionContextSignalBindingStore>(signalBindingStore);
             services.AddSingleton<IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>>(parameters);
+            services.AddSingleton<IHomogenizationProductionGate, AllowAllHomogenizationProductionGate>();
             services.AddSingleton(new HomogenizationCellDataValidator());
             services.AddSingleton(Options.Create(new HomogenizationModuleOptions
             {
@@ -843,6 +849,16 @@ public sealed class HomogenizationBusinessChainBehaviorTests
             CancellationToken cancellationToken = default)
             => Task.FromResult(EquipmentStatusResult);
 
+        public Task<MesCallResult<HomogenizationMainPlan>> GetMainPlanAsync(
+            HomogenizationMainPlanRequest request,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(MesCallResult<HomogenizationMainPlan>.Success(new HomogenizationMainPlan([])));
+
+        public Task<MesCallResult<HomogenizationTraceBatchResult>> GenerateTraceBatchNumberAsync(
+            HomogenizationTraceBatchRequest request,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(MesCallResult<HomogenizationTraceBatchResult>.Success(null));
+
         public Task<MesCallResult> UploadAsync(
             ProcessMesUploadContext context,
             IReadOnlyList<CellCompletedRecord> records,
@@ -891,5 +907,13 @@ public sealed class HomogenizationBusinessChainBehaviorTests
 
         public ValueTask<bool> WaitToReadAsync(CancellationToken cancellationToken = default)
             => ValueTask.FromResult(Records.Count > 0);
+    }
+
+    private sealed class AllowAllHomogenizationProductionGate : IHomogenizationProductionGate
+    {
+        public Task<MesCallResult> EnsureReadyAsync(
+            HomogenizationContext context,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(MesCallResult.Success("测试门禁通过。"));
     }
 }

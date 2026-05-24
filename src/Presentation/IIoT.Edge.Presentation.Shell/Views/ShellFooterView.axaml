@@ -1,51 +1,51 @@
 <UserControl
     x:Class="IIoT.Edge.Presentation.Shell.Views.ShellFooterView"
     xmlns="https://github.com/avaloniaui"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Border
-        Padding="{DynamicResource Edge.Thickness.Footer}"
-        BorderBrush="{DynamicResource Edge.Border.Subtle}"
+        BorderBrush="{DynamicResource Edge.Brush.Footer.Divider}"
         BorderThickness="0,1,0,0">
-        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" VerticalAlignment="Center">
+        <Grid
+            Margin="20,0"
+            VerticalAlignment="Center"
+            ColumnDefinitions="Auto,*,Auto">
             <StackPanel
+                Grid.Column="0"
                 Orientation="Horizontal"
-                Spacing="{DynamicResource Edge.Size.Spacing6}">
-                <edge:EdgeStatusDot
+                Spacing="10">
+                <TextBlock
                     VerticalAlignment="Center"
-                    Status="Running" />
+                    FontSize="{DynamicResource Edge.FontSize.Caption}"
+                    Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                    Text="{DynamicResource Shell_Footer_Executing}" />
                 <TextBlock
                     VerticalAlignment="Center"
                     FontSize="{DynamicResource Edge.FontSize.Caption}"
                     Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
-                    Text="{Binding SystemStatusText}" />
+                    Text="{Binding FooterProgramName, FallbackValue=—, TargetNullValue=—}" />
             </StackPanel>
 
-            <TextBlock
+            <StackPanel
                 Grid.Column="2"
-                Margin="{DynamicResource Edge.Thickness.FooterItem}"
-                VerticalAlignment="Center"
-                FontFamily="{DynamicResource Edge.FontFamily.Mono}"
-                FontSize="{DynamicResource Edge.FontSize.Caption}"
-                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                Text="{Binding VersionText}" />
-
-            <TextBlock
-                Grid.Column="3"
-                Margin="{DynamicResource Edge.Thickness.FooterItem}"
-                VerticalAlignment="Center"
-                FontFamily="{DynamicResource Edge.FontFamily.Mono}"
-                FontSize="{DynamicResource Edge.FontSize.Caption}"
-                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                Text="{Binding EdgeIdText}" />
-
-            <TextBlock
-                Grid.Column="4"
-                VerticalAlignment="Center"
-                FontFamily="{DynamicResource Edge.FontFamily.Mono}"
-                FontSize="{DynamicResource Edge.FontSize.Caption}"
-                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                Text="{Binding LocalTimeText}" />
+                HorizontalAlignment="Right"
+                Orientation="Horizontal"
+                Spacing="10">
+                <TextBlock
+                    VerticalAlignment="Center"
+                    FontSize="{DynamicResource Edge.FontSize.Caption}"
+                    Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                    Text="{DynamicResource Shell_Footer_RunTime}" />
+                <TextBlock
+                    VerticalAlignment="Center"
+                    FontSize="{DynamicResource Edge.FontSize.Caption}"
+                    Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
+                    Text="{Binding SoftwareRunDate, FallbackValue=—, TargetNullValue=—}" />
+                <TextBlock
+                    VerticalAlignment="Center"
+                    FontSize="{DynamicResource Edge.FontSize.Caption}"
+                    Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
+                    Text="{Binding FooterTimeAndDateText, FallbackValue=—, TargetNullValue=—}" />
+            </StackPanel>
         </Grid>
     </Border>
 </UserControl>

@@ -2,157 +2,179 @@
     x:Class="IIoT.Edge.Presentation.Panels.Features.Equipment.EquipmentView"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
-    xmlns:sharedViews="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared">
-    <edge:EdgeCard CardPadding="{DynamicResource Edge.Thickness.Panel}">
-        <edge:EdgeCard.Header>
-            <edge:EdgeSectionHeader
-                Title="{DynamicResource Panels_Title_Equipment}"
-                Subtitle="{DynamicResource Panels_Subtitle_Equipment}">
-                <edge:EdgeSectionHeader.ActionContent>
-                    <edge:EdgeStatusChip Status="Info" Text="{Binding CurrentBatch}" />
-                </edge:EdgeSectionHeader.ActionContent>
-            </edge:EdgeSectionHeader>
-        </edge:EdgeCard.Header>
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
+    <edge:EdgeCard
+        Elevation="Flat"
+        PaddingMode="Compact"
+        Surface="Card">
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="{DynamicResource Edge.Size.Spacing8}">
+            <TextBlock
+                VerticalAlignment="Center"
+                FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                FontWeight="SemiBold"
+                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                Text="{DynamicResource Panels_Title_Equipment}" />
 
-        <TabControl
-            FontSize="{DynamicResource Edge.FontSize.Body}"
-            Padding="{DynamicResource Edge.Thickness.Zero}"
-            SelectedIndex="{Binding SelectedTabIndex}">
-            <TabItem>
-                <TabItem.Header>
-                    <TextBlock FontSize="{DynamicResource Edge.FontSize.Body}" Text="{DynamicResource Panels_Tab_HardwareStatus}" />
-                </TabItem.Header>
-                <Grid>
-                    <ScrollViewer IsVisible="{Binding HasHardwareItems}" VerticalScrollBarVisibility="Auto">
-                        <ItemsControl ItemsSource="{Binding HardwareItems}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Grid Margin="{DynamicResource Edge.Thickness.4}">
-                                        <edge:EdgeStatusListItem
-                                            Description="{Binding Address}"
-                                            Detail="{Binding DeviceType}"
-                                            IsVisible="{Binding IsConnected}"
-                                            Status="Running"
-                                            StatusText="{DynamicResource Panels_Status_Connected}"
-                                            Title="{Binding Name}" />
-                                        <edge:EdgeStatusListItem
-                                            Description="{Binding Address}"
-                                            Detail="{Binding DeviceType}"
-                                            IsVisible="{Binding !IsConnected}"
-                                            Status="Stopped"
-                                            StatusText="{DynamicResource Panels_Status_Disconnected}"
-                                            Title="{Binding Name}" />
-                                    </Grid>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
-                    <sharedViews:EmptyStateView
-                        IsVisible="{Binding IsHardwareEmpty}"
-                        Message="{DynamicResource Panels_Empty_NoHardware_Message}"
-                        Title="{DynamicResource Panels_Empty_NoHardware_Title}" />
-                </Grid>
-            </TabItem>
-
-            <TabItem>
-                <TabItem.Header>
-                    <TextBlock FontSize="{DynamicResource Edge.FontSize.Body}" Text="{DynamicResource Panels_Tab_RecipeInfo}" />
-                </TabItem.Header>
-                <Grid RowDefinitions="Auto,*" RowSpacing="{DynamicResource Edge.Size.Spacing10}">
-                    <edge:EdgeCard CardPadding="{DynamicResource Edge.Thickness.Card.Compact}">
-                        <StackPanel Spacing="{DynamicResource Edge.Size.Spacing8}">
-                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
-                                <TextBlock Foreground="{DynamicResource Edge.Brush.Text.Muted}" Text="{DynamicResource Panels_Label_Recipe}" />
-                                <TextBlock Grid.Column="1" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Brush.Text.Primary}" Text="{Binding RecipeName}" TextTrimming="CharacterEllipsis" />
-                            </Grid>
-                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
-                                <TextBlock Foreground="{DynamicResource Edge.Brush.Text.Muted}" Text="{DynamicResource Panels_Label_Version}" />
-                                <TextBlock Grid.Column="1" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Brush.Text.Primary}" Text="{Binding RecipeVersion}" />
-                            </Grid>
-                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
-                                <TextBlock Foreground="{DynamicResource Edge.Brush.Text.Muted}" Text="{DynamicResource Panels_Label_Process}" />
-                                <TextBlock Grid.Column="1" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Brush.Text.Primary}" Text="{Binding ProcessName}" TextTrimming="CharacterEllipsis" />
-                            </Grid>
-                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
-                                <TextBlock Foreground="{DynamicResource Edge.Brush.Text.Muted}" Text="{DynamicResource Panels_Label_Status}" />
-                                <Grid Grid.Column="1">
-                                    <edge:EdgeStatusChip
-                                        IsVisible="{Binding IsRecipeActive}"
-                                        Status="Running"
-                                        Text="{DynamicResource Panels_Status_Active}" />
-                                    <edge:EdgeStatusChip
-                                        IsVisible="{Binding !IsRecipeActive}"
-                                        Status="Stopped"
-                                        Text="{DynamicResource Panels_Status_Inactive}" />
-                                </Grid>
-                            </Grid>
+            <Border
+                Grid.Row="1"
+                Background="{DynamicResource Edge.Brush.Surface.Wash}"
+                CornerRadius="{DynamicResource Edge.CornerRadius.Control}"
+                Padding="{DynamicResource Edge.Thickness.8}">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                        Text="{DynamicResource Panels_Label_EquipmentStatus}" />
+                    <Grid Grid.Column="1" VerticalAlignment="Center">
+                        <StackPanel
+                            IsVisible="{Binding IsRecipeActive}"
+                            Orientation="Horizontal"
+                            Spacing="{DynamicResource Edge.Size.Spacing4}">
+                            <edge:EdgeStatusDot Status="Running" />
+                            <TextBlock
+                                FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
+                                Text="{DynamicResource Panels_Status_Running}" />
                         </StackPanel>
-                    </edge:EdgeCard>
-
-                    <Grid Grid.Row="1">
-                        <ScrollViewer IsVisible="{Binding HasRecipeParameters}" VerticalScrollBarVisibility="Auto">
-                            <ItemsControl ItemsSource="{Binding Parameters}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <edge:EdgeCard
-                                            Margin="{DynamicResource Edge.Thickness.4}"
-                                            CardPadding="{DynamicResource Edge.Thickness.Card.Compact}">
-                                            <StackPanel Spacing="{DynamicResource Edge.Size.Spacing6}">
-                                                <TextBlock
-                                                    FontSize="{DynamicResource Edge.FontSize.Body}"
-                                                    FontWeight="SemiBold"
-                                                    Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                                                    Text="{Binding ParamName}"
-                                                    TextWrapping="Wrap" />
-                                                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="{DynamicResource Edge.Size.Spacing8}" RowSpacing="{DynamicResource Edge.Size.Spacing4}">
-                                                    <TextBlock Foreground="{DynamicResource Edge.Brush.Text.Muted}" Text="{DynamicResource Panels_Column_CurrentValue}" />
-                                                    <TextBlock Grid.Column="1" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Brush.Text.Primary}" Text="{Binding CurrentValue}" />
-                                                    <TextBlock Grid.Row="1" Foreground="{DynamicResource Edge.Brush.Text.Muted}" Text="{DynamicResource Panels_Column_Min}" />
-                                                    <TextBlock Grid.Row="1" Grid.Column="1" Foreground="{DynamicResource Edge.Brush.Text.Primary}" Text="{Binding MinValue}" />
-                                                    <TextBlock Grid.Row="2" Foreground="{DynamicResource Edge.Brush.Text.Muted}" Text="{DynamicResource Panels_Column_Max}" />
-                                                    <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Spacing="{DynamicResource Edge.Size.Spacing6}">
-                                                        <TextBlock Foreground="{DynamicResource Edge.Brush.Text.Primary}" Text="{Binding MaxValue}" />
-                                                        <TextBlock Foreground="{DynamicResource Edge.Brush.Text.Muted}" Text="{Binding Unit}" />
-                                                    </StackPanel>
-                                                </Grid>
-                                            </StackPanel>
-                                        </edge:EdgeCard>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
-                        <sharedViews:EmptyStateView
-                            IsVisible="{Binding IsRecipeParametersEmpty}"
-                            Message="{DynamicResource Panels_Empty_NoRecipeParams_Message}"
-                            Title="{DynamicResource Panels_Empty_NoRecipeParams_Title}" />
+                        <StackPanel
+                            IsVisible="{Binding !IsRecipeActive}"
+                            Orientation="Horizontal"
+                            Spacing="{DynamicResource Edge.Size.Spacing4}">
+                            <edge:EdgeStatusDot Status="Offline" />
+                            <TextBlock
+                                FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
+                                Text="{DynamicResource Panels_Status_Inactive}" />
+                        </StackPanel>
                     </Grid>
                 </Grid>
-            </TabItem>
+            </Border>
 
-            <TabItem>
-                <TabItem.Header>
-                    <TextBlock FontSize="{DynamicResource Edge.FontSize.Body}" Text="{DynamicResource Panels_Tab_RealtimeData}" />
-                </TabItem.Header>
-                <StackPanel Spacing="{DynamicResource Edge.Size.Spacing10}">
-                    <edge:EdgeKpiCard
-                        Title="{DynamicResource Panels_Label_TodayOutput}"
-                        Value="{Binding TodayOutput}" />
-                    <edge:EdgeKpiCard
-                        Title="{DynamicResource Panels_Label_TodayYield}"
-                        TrendStatus="Running"
-                        Value="{Binding TodayYield}" />
-                    <edge:EdgeKpiCard
-                        Title="{DynamicResource Panels_Label_NgCount}"
-                        TrendStatus="Error"
-                        Value="{Binding NgCount}" />
-                    <edge:EdgeStatusListItem
-                        Description="{Binding CurrentBatch}"
-                        Status="Info"
-                        StatusText="{DynamicResource Panels_Label_CurrentBatch}"
-                        Title="{DynamicResource Panels_Label_CurrentBatch}" />
+            <Border
+                Grid.Row="2"
+                Background="{DynamicResource Edge.Brush.Surface.Wash}"
+                CornerRadius="{DynamicResource Edge.CornerRadius.Control}"
+                MinHeight="96"
+                Padding="10,8">
+                <Grid
+                    RowDefinitions="Auto,Auto"
+                    RowSpacing="{DynamicResource Edge.Size.Spacing4}">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
+                            <TextBlock
+                                FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                Text="{DynamicResource Panels_Label_MesPlanSelection}" />
+                            <Button
+                                Grid.Column="1"
+                                Classes="edge-soft-button"
+                                Command="{Binding SelectProductionPlanCommand}"
+                                Content="{DynamicResource Panels_Button_SelectProductionPlan}" />
+                        </Grid>
+
+                        <Grid Grid.Row="1">
+                            <StackPanel
+                                IsVisible="{Binding !HasSelectedProductionPlan}"
+                                VerticalAlignment="Top"
+                                Spacing="{DynamicResource Edge.Size.Spacing4}">
+                                <TextBlock
+                                    FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                                    FontWeight="SemiBold"
+                                    Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                    Text="{DynamicResource Panels_Status_MesPlanRequired}" />
+                                <TextBlock
+                                    FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                    Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                    Text="{DynamicResource Panels_Hint_SelectMainPlanBeforeProduction}" />
+                            </StackPanel>
+
+                            <Grid
+                                IsVisible="{Binding HasSelectedProductionPlan}"
+                                RowDefinitions="Auto,Auto,Auto,Auto"
+                                RowSpacing="1">
+                                <TextBlock
+                                    FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                                    FontWeight="SemiBold"
+                                    Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                    Text="{Binding SelectedPlanCode}"
+                                    TextTrimming="CharacterEllipsis" />
+                                <TextBlock
+                                    Grid.Row="1"
+                                    FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                    Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                    Text="{Binding SelectedPlanProductSummary}"
+                                    TextTrimming="CharacterEllipsis" />
+                                <Grid
+                                    Grid.Row="2"
+                                    ColumnDefinitions="64,*"
+                                    ColumnSpacing="{DynamicResource Edge.Size.Spacing6}">
+                                    <TextBlock
+                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                        Text="{DynamicResource Panels_Label_TraceBatchNumber}" />
+                                    <TextBlock
+                                        Grid.Column="1"
+                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                        FontWeight="SemiBold"
+                                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                        Text="{Binding TraceBatchNumber}"
+                                        TextTrimming="CharacterEllipsis" />
+                                </Grid>
+                                <TextBlock
+                                    Grid.Row="3"
+                                    FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                    Foreground="{DynamicResource Edge.Brush.Status.Error}"
+                                    IsVisible="{Binding HasTraceBatchError}"
+                                    Text="{Binding TraceBatchError}"
+                                    TextTrimming="CharacterEllipsis" />
+                            </Grid>
+                        </Grid>
+
+                </Grid>
+            </Border>
+
+            <Grid
+                Grid.Row="3"
+                ColumnDefinitions="*,*,*"
+                ColumnSpacing="{DynamicResource Edge.Size.Spacing8}"
+                Height="46"
+                VerticalAlignment="Top">
+                <StackPanel>
+                    <TextBlock
+                        FontSize="{DynamicResource Edge.FontSize.SubData18}"
+                        FontWeight="Bold"
+                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                        Text="{Binding TodayOutput}" />
+                    <TextBlock
+                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                        Text="{DynamicResource Panels_Label_Output}" />
                 </StackPanel>
-            </TabItem>
-        </TabControl>
+
+                <StackPanel Grid.Column="1">
+                    <TextBlock
+                        FontSize="{DynamicResource Edge.FontSize.SubData18}"
+                        FontWeight="Bold"
+                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                        Text="{Binding TodayYield}" />
+                    <TextBlock
+                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                        Text="{DynamicResource Panels_Label_Yield}" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="2">
+                    <TextBlock
+                        FontSize="{DynamicResource Edge.FontSize.SubData18}"
+                        FontWeight="Bold"
+                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                        Text="{Binding NgCount}" />
+                    <TextBlock
+                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                        Text="{DynamicResource Panels_Label_NgShort}" />
+                </StackPanel>
+            </Grid>
+        </Grid>
     </edge:EdgeCard>
 </UserControl>

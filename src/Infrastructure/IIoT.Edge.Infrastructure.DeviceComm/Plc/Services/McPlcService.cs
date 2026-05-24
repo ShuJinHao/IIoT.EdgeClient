@@ -1,20 +1,31 @@
 using IIoT.Edge.Application.Abstractions.Plc;
-using MCProtocol;
-using static MCProtocol.Mitsubishi;
+using McpXLib;
+using McpXLib.Enums;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Plc.Services;
 
 public sealed class McPlcService : IPlcService, IDisposable
 {
     private static readonly TimeSpan OperationTimeout = TimeSpan.FromSeconds(3);
+    private static readonly HashSet<Prefix> HexAddressPrefixes =
+    [
+        Prefix.X,
+        Prefix.Y,
+        Prefix.B,
+        Prefix.W,
+        Prefix.SB,
+        Prefix.SW,
+        Prefix.DX,
+        Prefix.DY
+    ];
 
-    private McProtocolTcp? _mcProtocol;
+    private McpX? _mcProtocol;
     private TcpPlcEndpoint? _endpoint;
     private int _port;
-    private readonly McFrame _frameType = McFrame.MC3E;
+    private bool _isConnected;
     private readonly SemaphoreSlim _semaphore = new(1, 1);
 
-    public bool IsConnected => _mcProtocol?.Connected ?? false;
+    public bool IsConnected => _isConnected && _mcProtocol is not null;
 
     public void Init(PlcEndpoint endpoint)
     {
@@ -27,59 +38,101 @@ public sealed class McPlcService : IPlcService, IDisposable
     {
         EnsureInitialized();
 
-        if (_mcProtocol?.Connected == true)
+        if (IsConnected)
         {
             return true;
         }
 
-        _mcProtocol?.Dispose();
-        _mcProtocol = new McProtocolTcp(_endpoint!.Host, _port, _frameType);
+        Disconnect();
 
         try
         {
-            await _mcProtocol.Open().WaitAsync(_endpoint.ConnectTimeout).ConfigureAwait(false);
-            if (!_mcProtocol.Connected)
-            {
-                throw new InvalidOperationException($"MC PLC {_endpoint.Host}:{_port} reported success but is still disconnected.");
-            }
-
+            _mcProtocol = await Task.Run(CreateProtocol).ConfigureAwait(false);
+            _isConnected = true;
             return true;
         }
         catch (TimeoutException ex)
         {
-            _mcProtocol.Dispose();
-            _mcProtocol = null;
-            throw new TimeoutException($"Connect to MC PLC {_endpoint.Host}:{_port} timed out after {_endpoint.ConnectTimeout.TotalSeconds:0}s.", ex);
+            Disconnect();
+            throw new TimeoutException($"Connect to MC PLC {_endpoint!.Host}:{_port} timed out after {_endpoint.ConnectTimeout.TotalSeconds:0}s.", ex);
         }
         catch
         {
-            _mcProtocol.Dispose();
-            _mcProtocol = null;
+            Disconnect();
             throw;
         }
     }
 
-    public void Disconnect() => _mcProtocol?.Close();
+    public void Disconnect()
+    {
+        _isConnected = false;
+        _mcProtocol?.Dispose();
+        _mcProtocol = null;
+    }
 
     public async Task<List<T>> ReadDataAsync<T>(string address, ushort length)
     {
         var protocol = EnsureConnected();
+        var parsedAddress = ParseAddress(address);
 
         await _semaphore.WaitAsync().ConfigureAwait(false);
         try
         {
             if (typeof(T) == typeof(bool))
             {
-                var data = new int[length];
-                await protocol.GetBitDevice(address, length, data).WaitAsync(OperationTimeout).ConfigureAwait(false);
-                return data.Select(x => (T)(object)(x != 0)).ToList();
+                var data = await protocol
+                    .BatchReadAsync<bool>(parsedAddress.Prefix, parsedAddress.Address, length)
+                    .WaitAsync(OperationTimeout)
+                    .ConfigureAwait(false);
+                return ((T[])(object)data).ToList();
             }
 
-            var wordSize = GetWordSize(typeof(T));
-            var totalWords = length * wordSize;
-            var dataBuffer = new int[totalWords];
-            await protocol.ReadDeviceBlock(address, totalWords, dataBuffer).WaitAsync(OperationTimeout).ConfigureAwait(false);
-            return ConvertToTypeList<T>(dataBuffer, length);
+            if (typeof(T) == typeof(short))
+            {
+                var data = await protocol
+                    .BatchReadAsync<short>(parsedAddress.Prefix, parsedAddress.Address, length)
+                    .WaitAsync(OperationTimeout)
+                    .ConfigureAwait(false);
+                return ((T[])(object)data).ToList();
+            }
+
+            if (typeof(T) == typeof(ushort))
+            {
+                var data = await protocol
+                    .BatchReadAsync<ushort>(parsedAddress.Prefix, parsedAddress.Address, length)
+                    .WaitAsync(OperationTimeout)
+                    .ConfigureAwait(false);
+                return ((T[])(object)data).ToList();
+            }
+
+            if (typeof(T) == typeof(int))
+            {
+                var data = await protocol
+                    .BatchReadAsync<int>(parsedAddress.Prefix, parsedAddress.Address, length)
+                    .WaitAsync(OperationTimeout)
+                    .ConfigureAwait(false);
+                return ((T[])(object)data).ToList();
+            }
+
+            if (typeof(T) == typeof(uint))
+            {
+                var data = await protocol
+                    .BatchReadAsync<uint>(parsedAddress.Prefix, parsedAddress.Address, length)
+                    .WaitAsync(OperationTimeout)
+                    .ConfigureAwait(false);
+                return ((T[])(object)data).ToList();
+            }
+
+            if (typeof(T) == typeof(float))
+            {
+                var data = await protocol
+                    .BatchReadAsync<float>(parsedAddress.Prefix, parsedAddress.Address, length)
+                    .WaitAsync(OperationTimeout)
+                    .ConfigureAwait(false);
+                return ((T[])(object)data).ToList();
+            }
+
+            throw UnsupportedType<T>();
         }
         catch (TimeoutException ex)
         {
@@ -98,20 +151,66 @@ public sealed class McPlcService : IPlcService, IDisposable
     public async Task WriteDataAsync<T>(string address, List<T> data)
     {
         var protocol = EnsureConnected();
+        var parsedAddress = ParseAddress(address);
 
         await _semaphore.WaitAsync().ConfigureAwait(false);
         try
         {
             if (typeof(T) == typeof(bool))
             {
-                var intData = data.Select(x => Convert.ToInt32(x)).ToArray();
-                await protocol.SetBitDevice(address, data.Count, intData).WaitAsync(OperationTimeout).ConfigureAwait(false);
+                await protocol
+                    .BatchWriteAsync(parsedAddress.Prefix, parsedAddress.Address, (bool[])(object)data.ToArray())
+                    .WaitAsync(OperationTimeout)
+                    .ConfigureAwait(false);
                 return;
             }
 
-            var wordSize = GetWordSize(typeof(T));
-            var intDataArray = ConvertToIntArray(data, wordSize);
-            await protocol.WriteDeviceBlock(address, intDataArray.Length, intDataArray).WaitAsync(OperationTimeout).ConfigureAwait(false);
+            if (typeof(T) == typeof(short))
+            {
+                await protocol
+                    .BatchWriteAsync(parsedAddress.Prefix, parsedAddress.Address, (short[])(object)data.ToArray())
+                    .WaitAsync(OperationTimeout)
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            if (typeof(T) == typeof(ushort))
+            {
+                await protocol
+                    .BatchWriteAsync(parsedAddress.Prefix, parsedAddress.Address, (ushort[])(object)data.ToArray())
+                    .WaitAsync(OperationTimeout)
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            if (typeof(T) == typeof(int))
+            {
+                await protocol
+                    .BatchWriteAsync(parsedAddress.Prefix, parsedAddress.Address, (int[])(object)data.ToArray())
+                    .WaitAsync(OperationTimeout)
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            if (typeof(T) == typeof(uint))
+            {
+                await protocol
+                    .BatchWriteAsync(parsedAddress.Prefix, parsedAddress.Address, (uint[])(object)data.ToArray())
+                    .WaitAsync(OperationTimeout)
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            if (typeof(T) == typeof(float))
+            {
+                await protocol
+                    .BatchWriteAsync(parsedAddress.Prefix, parsedAddress.Address, (float[])(object)data.ToArray())
+                    .WaitAsync(OperationTimeout)
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            throw UnsupportedType<T>();
         }
         catch (TimeoutException ex)
         {
@@ -130,9 +229,58 @@ public sealed class McPlcService : IPlcService, IDisposable
     public void Dispose()
     {
         Disconnect();
-        _mcProtocol?.Dispose();
-        _mcProtocol = null;
         _semaphore.Dispose();
+    }
+
+    internal static McDeviceAddress ParseAddress(string address)
+    {
+        if (string.IsNullOrWhiteSpace(address))
+        {
+            throw new FormatException("MC PLC 地址不能为空。");
+        }
+
+        var trimmed = address.Trim();
+        var splitIndex = 0;
+        while (splitIndex < trimmed.Length && char.IsLetter(trimmed[splitIndex]))
+        {
+            splitIndex++;
+        }
+
+        if (splitIndex == 0 || splitIndex == trimmed.Length)
+        {
+            throw new FormatException($"MC PLC 地址格式无效：{address}");
+        }
+
+        var prefixText = trimmed[..splitIndex].ToUpperInvariant();
+        var deviceAddress = trimmed[splitIndex..].ToUpperInvariant();
+        if (!Enum.TryParse(prefixText, ignoreCase: true, out Prefix prefix))
+        {
+            throw new FormatException($"MC PLC 地址前缀不支持：{prefixText}");
+        }
+
+        var isValidAddress = HexAddressPrefixes.Contains(prefix)
+            ? deviceAddress.All(Uri.IsHexDigit)
+            : deviceAddress.All(char.IsDigit);
+        if (!isValidAddress)
+        {
+            throw new FormatException($"MC PLC 地址编号无效：{address}");
+        }
+
+        return new McDeviceAddress(prefix, deviceAddress);
+    }
+
+    private McpX CreateProtocol()
+    {
+        EnsureInitialized();
+
+        return new McpX(
+            _endpoint!.Host,
+            _port,
+            password: null,
+            isAscii: false,
+            isUdp: false,
+            requestFrame: RequestFrame.E3,
+            timeoutMilliseconds: ResolveTimeoutMilliseconds(_endpoint.ConnectTimeout));
     }
 
     private void EnsureInitialized()
@@ -143,9 +291,9 @@ public sealed class McPlcService : IPlcService, IDisposable
         }
     }
 
-    private McProtocolTcp EnsureConnected()
+    private McpX EnsureConnected()
     {
-        if (_mcProtocol is null || !_mcProtocol.Connected)
+        if (!IsConnected || _mcProtocol is null)
         {
             throw new InvalidOperationException("PLC is not connected.");
         }
@@ -153,111 +301,19 @@ public sealed class McPlcService : IPlcService, IDisposable
         return _mcProtocol;
     }
 
-    private static int GetWordSize(Type type)
+    private static ushort ResolveTimeoutMilliseconds(TimeSpan timeout)
     {
-        if (type == typeof(bool)) return 1;
-        if (type == typeof(short) || type == typeof(ushort)) return 1;
-        if (type == typeof(int) || type == typeof(uint) || type == typeof(float)) return 2;
-        throw new NotSupportedException($"Unsupported type: {type.Name}");
-    }
-
-    private static List<T> ConvertToTypeList<T>(int[] source, int elementCount)
-    {
-        var result = new List<T>();
-        var wordSize = GetWordSize(typeof(T));
-
-        for (var i = 0; i < elementCount; i++)
+        var milliseconds = timeout.TotalMilliseconds;
+        if (milliseconds <= 0)
         {
-            var idx = i * wordSize;
-            object value = Type.GetTypeCode(typeof(T)) switch
-            {
-                TypeCode.Int16 => (short)(ushort)source[idx],
-                TypeCode.UInt16 => (ushort)source[idx],
-                TypeCode.Int32 => CombineToInt32(source[idx + 1], source[idx]),
-                TypeCode.UInt32 => CombineToUInt32(source[idx + 1], source[idx]),
-                TypeCode.Single => CombineToFloat(source[idx + 1], source[idx]),
-                _ => throw new NotSupportedException($"Unsupported type: {typeof(T).Name}")
-            };
-            result.Add((T)value);
+            return 3000;
         }
 
-        return result;
+        return (ushort)Math.Min(milliseconds, ushort.MaxValue);
     }
 
-    private static int[] ConvertToIntArray<T>(List<T> data, int wordSize)
-    {
-        var result = new int[data.Count * wordSize];
-        for (var i = 0; i < data.Count; i++)
-        {
-            var idx = i * wordSize;
-            switch (Type.GetTypeCode(typeof(T)))
-            {
-                case TypeCode.Int16:
-                case TypeCode.UInt16:
-                    result[idx] = Convert.ToInt32(data[i]);
-                    break;
-                case TypeCode.Int32:
-                    SplitInt32(Convert.ToInt32(data[i]), out result[idx + 1], out result[idx]);
-                    break;
-                case TypeCode.UInt32:
-                    SplitUInt32(Convert.ToUInt32(data[i]), out result[idx + 1], out result[idx]);
-                    break;
-                case TypeCode.Single:
-                    SplitFloat(Convert.ToSingle(data[i]), out result[idx + 1], out result[idx]);
-                    break;
-                default:
-                    throw new NotSupportedException($"Unsupported type: {typeof(T).Name}");
-            }
-        }
-
-        return result;
-    }
-
-    private static int CombineToInt32(int high, int low)
-        => ((ushort)high << 16) | (ushort)low;
-
-    private static uint CombineToUInt32(int high, int low)
-        => ((uint)(ushort)high << 16) | (ushort)low;
-
-    private static float CombineToFloat(int high, int low)
-    {
-        byte[] bytes =
-        [
-            (byte)((ushort)high >> 8),
-            (byte)(ushort)high,
-            (byte)((ushort)low >> 8),
-            (byte)(ushort)low
-        ];
-
-        if (BitConverter.IsLittleEndian)
-        {
-            Array.Reverse(bytes);
-        }
-
-        return BitConverter.ToSingle(bytes, 0);
-    }
-
-    private static void SplitInt32(int value, out int high, out int low)
-    {
-        high = (value >> 16) & 0xFFFF;
-        low = value & 0xFFFF;
-    }
-
-    private static void SplitUInt32(uint value, out int high, out int low)
-    {
-        high = (int)((value >> 16) & 0xFFFF);
-        low = (int)(value & 0xFFFF);
-    }
-
-    private static void SplitFloat(float value, out int high, out int low)
-    {
-        var bytes = BitConverter.GetBytes(value);
-        if (BitConverter.IsLittleEndian)
-        {
-            Array.Reverse(bytes);
-        }
-
-        high = (bytes[0] << 8) | bytes[1];
-        low = (bytes[2] << 8) | bytes[3];
-    }
+    private static NotSupportedException UnsupportedType<T>()
+        => new($"Unsupported type: {typeof(T).Name}");
 }
+
+internal readonly record struct McDeviceAddress(Prefix Prefix, string Address);

@@ -1,8 +1,7 @@
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.Infrastructure.Integration.Config;
-using Microsoft.Extensions.Options;
 
 namespace IIoT.Edge.Infrastructure.Integration.Mes;
 
@@ -11,36 +10,42 @@ public sealed class MesHeartbeatProbe : IMesHeartbeatProbe
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IMesEndpointProvider _endpointProvider;
     private readonly IProcessIntegrationRegistry _processIntegrationRegistry;
-    private readonly IOptionsMonitor<MesApiConfig> _options;
+    private readonly IModuleParamRoleProvider _moduleParamRoleProvider;
     private readonly ILogService _logger;
 
     public MesHeartbeatProbe(
         IHttpClientFactory httpClientFactory,
         IMesEndpointProvider endpointProvider,
         IProcessIntegrationRegistry processIntegrationRegistry,
-        IOptionsMonitor<MesApiConfig> options,
+        IModuleParamRoleProvider moduleParamRoleProvider,
         ILogService logger)
     {
         _httpClientFactory = httpClientFactory;
         _endpointProvider = endpointProvider;
         _processIntegrationRegistry = processIntegrationRegistry;
-        _options = options;
+        _moduleParamRoleProvider = moduleParamRoleProvider;
         _logger = logger;
     }
 
     public async Task<ExternalHeartbeatSnapshot> ProbeAsync(CancellationToken cancellationToken = default)
     {
         var attemptedAt = DateTime.UtcNow;
-        var heartbeatPath = _options.CurrentValue.HeartbeatPath?.Trim();
-        if (string.IsNullOrWhiteSpace(heartbeatPath))
-        {
-            return NotReady("mes_heartbeat_path_missing", "MES 心跳路径未配置。", attemptedAt);
-        }
-
         var mesProcessTypes = _processIntegrationRegistry.GetMesUploaders().Keys.ToArray();
         if (mesProcessTypes.Length == 0)
         {
             return NotReady("mes_module_missing", "当前运行配置未启用 MES 工序。", attemptedAt);
+        }
+
+        var heartbeatPath = await _moduleParamRoleProvider
+            .FirstStringAsync(
+                ModuleParamCategory.Mes,
+                ModuleParamRole.MesHealthPath,
+                mesProcessTypes,
+                cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(heartbeatPath))
+        {
+            return NotReady("mes_heartbeat_path_missing", "MES 心跳路径未配置。", attemptedAt);
         }
 
         var requestUrl = heartbeatPath;

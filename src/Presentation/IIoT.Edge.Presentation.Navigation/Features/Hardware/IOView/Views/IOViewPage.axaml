@@ -2,6 +2,7 @@
     x:Class="IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView.IOViewPage"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
     xmlns:sharedViews="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared">
 
     <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
@@ -50,30 +51,16 @@
                 </StackPanel>
             </Grid>
 
-            <Border
-                Padding="12,8"
-                Background="{DynamicResource Edge.Surface.Panel}"
-                BorderBrush="{DynamicResource Edge.Border.Subtle}"
-                BorderThickness="1"
-                CornerRadius="8">
-                <TextBlock
-                    Foreground="{DynamicResource Edge.Text.Muted}"
-                    Text="{Binding ConnectionStateText}" />
-            </Border>
+            <edge:EdgeStatusListItem
+                Status="Info"
+                StatusText="{DynamicResource Navigation_Hint_SelectDevice}"
+                Title="{Binding ConnectionStateText}" />
 
-            <Border
-                Padding="14"
-                Background="{DynamicResource Edge.Surface.Main}"
-                BorderBrush="{DynamicResource Edge.Border.Subtle}"
-                BorderThickness="1"
-                CornerRadius="8"
-                IsVisible="{Binding HasInteractionRows}">
-                <StackPanel Spacing="12">
-                    <TextBlock
-                        FontSize="16"
-                        FontWeight="SemiBold"
-                        Foreground="{DynamicResource Edge.Text.Primary}"
-                        Text="{DynamicResource Navigation_Title_IoInteractionGroup}" />
+            <edge:EdgeCard IsVisible="{Binding HasInteractionRows}">
+                <edge:EdgeCard.Header>
+                    <edge:EdgeSectionHeader Title="{DynamicResource Navigation_Title_IoInteractionGroup}" />
+                </edge:EdgeCard.Header>
+                <StackPanel Spacing="{DynamicResource Edge.Size.Spacing12}">
                     <DataGrid
                         Classes="edge-grid"
                         AutoGenerateColumns="False"
@@ -113,33 +100,27 @@
                         </DataGrid.Columns>
                     </DataGrid>
                 </StackPanel>
-            </Border>
+            </edge:EdgeCard>
 
             <ItemsControl ItemsSource="{Binding DataSections}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Border
+                        <edge:EdgeCard
                             Margin="0,0,0,14"
-                            Padding="14"
-                            Background="{DynamicResource Edge.Surface.Main}"
-                            BorderBrush="{DynamicResource Edge.Border.Subtle}"
-                            BorderThickness="1"
-                            CornerRadius="8">
+                            CardPadding="{DynamicResource Edge.Thickness.Card.Default}">
+                            <edge:EdgeCard.Header>
+                                <edge:EdgeSectionHeader Title="{Binding Title}">
+                                    <edge:EdgeSectionHeader.ActionContent>
+                                        <Button
+                                            Padding="12,6"
+                                            Command="{Binding DataContext.ManualReadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            IsVisible="{Binding CanManualRead}">
+                                            <TextBlock Text="{DynamicResource Navigation_Button_ReadIoData}" />
+                                        </Button>
+                                    </edge:EdgeSectionHeader.ActionContent>
+                                </edge:EdgeSectionHeader>
+                            </edge:EdgeCard.Header>
                             <StackPanel Spacing="12">
-                                <Grid ColumnDefinitions="*,Auto">
-                                    <TextBlock
-                                        FontSize="16"
-                                        FontWeight="SemiBold"
-                                        Foreground="{DynamicResource Edge.Text.Primary}"
-                                        Text="{Binding Title}" />
-                                    <Button
-                                        Grid.Column="1"
-                                        Padding="12,6"
-                                        Command="{Binding DataContext.ManualReadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                        IsVisible="{Binding CanManualRead}">
-                                        <TextBlock Text="{DynamicResource Navigation_Button_ReadIoData}" />
-                                    </Button>
-                                </Grid>
                                 <DataGrid
                                     Classes="edge-grid"
                                     AutoGenerateColumns="False"
@@ -157,7 +138,7 @@
                                     </DataGrid.Columns>
                                 </DataGrid>
                             </StackPanel>
-                        </Border>
+                        </edge:EdgeCard>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
@@ -165,37 +146,31 @@
             <ItemsControl ItemsSource="{Binding ArraySections}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Border
+                        <edge:EdgeCard
                             Margin="0,0,0,14"
-                            Padding="14"
-                            Background="{DynamicResource Edge.Surface.Main}"
-                            BorderBrush="{DynamicResource Edge.Border.Subtle}"
-                            BorderThickness="1"
-                            CornerRadius="8">
+                            CardPadding="{DynamicResource Edge.Thickness.Card.Default}">
+                            <edge:EdgeCard.Header>
+                                <edge:EdgeSectionHeader Title="{Binding Title}">
+                                    <edge:EdgeSectionHeader.ActionContent>
+                                        <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Edge.Size.Spacing8}">
+                                            <Button
+                                                Padding="12,6"
+                                                Command="{Binding DataContext.ManualReadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                IsVisible="{Binding CanManualRead}">
+                                                <TextBlock Text="{DynamicResource Navigation_Button_ReadIoData}" />
+                                            </Button>
+                                            <Button
+                                                Padding="12,6"
+                                                Command="{Binding ToggleExpandedCommand}">
+                                                <TextBlock Text="{Binding ToggleText}" />
+                                            </Button>
+                                        </StackPanel>
+                                    </edge:EdgeSectionHeader.ActionContent>
+                                </edge:EdgeSectionHeader>
+                            </edge:EdgeCard.Header>
                             <StackPanel Spacing="12">
-                                <Grid ColumnDefinitions="*,Auto,Auto">
-                                    <TextBlock
-                                        FontSize="16"
-                                        FontWeight="SemiBold"
-                                        Foreground="{DynamicResource Edge.Text.Primary}"
-                                        Text="{Binding Title}" />
-                                    <Button
-                                        Grid.Column="1"
-                                        Margin="0,0,8,0"
-                                        Padding="12,6"
-                                        Command="{Binding DataContext.ManualReadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                        IsVisible="{Binding CanManualRead}">
-                                        <TextBlock Text="{DynamicResource Navigation_Button_ReadIoData}" />
-                                    </Button>
-                                    <Button
-                                        Grid.Column="2"
-                                        Padding="12,6"
-                                        Command="{Binding ToggleExpandedCommand}">
-                                        <TextBlock Text="{Binding ToggleText}" />
-                                    </Button>
-                                </Grid>
                                 <TextBlock
-                                    Foreground="{DynamicResource Edge.Warning}"
+                                    Foreground="{DynamicResource Edge.Brush.Status.Warning}"
                                     Text="{Binding Summary}"
                                     TextWrapping="Wrap" />
                                 <ScrollViewer
@@ -229,7 +204,7 @@
                                     </ItemsControl>
                                 </ScrollViewer>
                             </StackPanel>
-                        </Border>
+                        </edge:EdgeCard>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>

@@ -8,6 +8,9 @@ public enum ModuleParamRole
     None,
     MesEnabled,
     MesBaseUrl,
+    MesHealthPath,
+    MesUpperComputerNo,
+    MesOperationCode,
     StationNo,
     CloudEnabled
 }

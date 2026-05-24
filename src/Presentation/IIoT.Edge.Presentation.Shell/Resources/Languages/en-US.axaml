@@ -10,4 +10,8 @@
     <sys:String x:Key="Shell_LogEmpty">The log panel is not part of this phase, so no simulated logs are shown.</sys:String>
     <sys:String x:Key="Shell_FooterPhase1">Phase 1 shell | Local time {0:yyyy-MM-dd HH:mm:ss}</sys:String>
     <sys:String x:Key="Shell_FooterPhase3">Phase 3 navigation dashboard | Local time {0:yyyy-MM-dd HH:mm:ss}</sys:String>
+    <sys:String x:Key="Shell_Footer_Executing">Executing</sys:String>
+    <sys:String x:Key="Shell_Footer_RunTime">Runtime: </sys:String>
+    <sys:String x:Key="Shell_Footer_DefaultProgram">Sample Program</sys:String>
+    <sys:String x:Key="Shell_Footer_RunMinutesFormat">{0} min</sys:String>
 </ResourceDictionary>

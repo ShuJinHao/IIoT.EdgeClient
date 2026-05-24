@@ -13,7 +13,11 @@ using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesS
     string,
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationRealtimeSnapshot,
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationRecipeSnapshot,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot>;
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlanRequest,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlan,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchRequest,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchResult>;
 
 namespace IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 
@@ -25,6 +29,7 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
     private readonly IDeviceService _deviceService;
     private readonly HomogenizationMesScenarioChannel _mesChannel;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
+    private readonly IHomogenizationProductionGate _productionGate;
 
     /// <summary>
     /// 创建匀浆设备状态上传握手任务。
@@ -37,6 +42,7 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
         IDeviceService deviceService,
         HomogenizationMesScenarioChannel mesChannel,
         IMesUploadDiagnosticsStore diagnosticsStore,
+        IHomogenizationProductionGate productionGate,
         ILogService logger,
         IProductionTimeProvider productionTime,
         IOptions<HomogenizationModuleOptions> moduleOptions,
@@ -46,6 +52,7 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
         _deviceService = deviceService;
         _mesChannel = mesChannel;
         _diagnosticsStore = diagnosticsStore;
+        _productionGate = productionGate;
     }
 
     /// <summary>
@@ -106,6 +113,16 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
     private async Task ProcessTriggerAsync(CancellationToken cancellationToken)
     {
         const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.设备状态上传;
+        var gateResult = await _productionGate.EnsureReadyAsync(ModuleContext, cancellationToken).ConfigureAwait(false);
+        if (!gateResult.IsSuccess)
+        {
+            _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.EquipmentStatus, gateResult.Message);
+            ModuleContext.LastEquipmentStatusAt = ProductionTime.BusinessNow;
+            ModuleContext.LastEquipmentStatusResult = gateResult.Message;
+            Interaction.ReplyResult(trigger, gateResult);
+            return;
+        }
+
         var snapshot = Codec.CaptureEquipmentStatusSnapshot(CodeOptions.Mes);
         WriteCloudDeviceStatusLog(snapshot);
         var result = await _mesChannel

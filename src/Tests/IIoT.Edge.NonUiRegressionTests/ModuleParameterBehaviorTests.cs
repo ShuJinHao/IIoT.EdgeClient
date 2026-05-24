@@ -20,6 +20,19 @@ public sealed class ModuleParameterBehaviorTests
             x.ModuleId == "Homogenization"
             && x.Name == nameof(HomogenizationMesParam.启用)
             && x.ValueKind == ParamValueKind.Bool);
+        Assert.Contains(registry.GetDescriptors(ModuleParamCategory.Mes), x =>
+            x.ModuleId == "Homogenization"
+            && x.Name == nameof(HomogenizationMesParam.MesHealthPath)
+            && x.Role == ModuleParamRole.MesHealthPath
+            && x.DefaultValue == "/heath");
+        Assert.Contains(registry.GetDescriptors(ModuleParamCategory.Mes), x =>
+            x.ModuleId == "Homogenization"
+            && x.Name == nameof(HomogenizationMesParam.OrderPath)
+            && x.DefaultValue == "/dev/dev/get/order");
+        Assert.Contains(registry.GetDescriptors(ModuleParamCategory.Mes), x =>
+            x.ModuleId == "Homogenization"
+            && x.Name == nameof(HomogenizationMesParam.BatchNumberPath)
+            && x.DefaultValue == "/dev/dev/get/batchNumber");
         Assert.Contains(registry.GetDescriptors(ModuleParamCategory.Cloud), x =>
             x.Name == nameof(HomogenizationCloudParam.启用)
             && x.Role == ModuleParamRole.CloudEnabled);
@@ -90,6 +103,9 @@ public sealed class ModuleParameterBehaviorTests
         var second = await provider.GetAsync();
 
         Assert.True(first.Mes<bool>(HomogenizationMesParam.启用));
+        Assert.Equal("/heath", first.Mes<string>(HomogenizationMesParam.MesHealthPath));
+        Assert.Equal("/dev/dev/get/order", first.Mes<string>(HomogenizationMesParam.OrderPath));
+        Assert.Equal("/dev/dev/get/batchNumber", first.Mes<string>(HomogenizationMesParam.BatchNumberPath));
         Assert.False(first.Cloud<bool>(HomogenizationCloudParam.启用));
         Assert.False(first.Business<bool>(HomogenizationBusinessParam.启用托盘码重码验证));
         Assert.Equal(first.ModuleId, second.ModuleId);

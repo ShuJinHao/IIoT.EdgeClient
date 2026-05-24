@@ -239,9 +239,15 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
             return;
         }
 
-        if (Uri.TryCreate(configured, UriKind.Absolute, out _))
+        if (HasExplicitScheme(configured))
         {
             issues.Add(CreateIssue("CONFIG_INVALID", $"{key} 只能填写相对 API 路径，不能填写完整地址。"));
+            return;
+        }
+
+        if (configured.StartsWith("//", StringComparison.Ordinal))
+        {
+            issues.Add(CreateIssue("CONFIG_INVALID", $"{key} 必须是以单个 / 开头的相对 API 路径。"));
             return;
         }
 
@@ -249,6 +255,19 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
         {
             issues.Add(CreateIssue("CONFIG_INVALID", $"{key} 必须以 / 开头。"));
         }
+    }
+
+    private static bool HasExplicitScheme(string value)
+    {
+        var colonIndex = value.IndexOf(':');
+        if (colonIndex <= 0)
+        {
+            return false;
+        }
+
+        var boundaryIndex = value.IndexOfAny(['/', '\\', '?', '#']);
+        return (boundaryIndex < 0 || colonIndex < boundaryIndex)
+            && Uri.CheckSchemeName(value[..colonIndex]);
     }
 
     private void ValidateModuleConfiguration(List<StartupDiagnosticIssue> issues)

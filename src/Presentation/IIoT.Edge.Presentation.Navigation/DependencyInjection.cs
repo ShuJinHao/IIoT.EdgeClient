@@ -20,6 +20,7 @@ public static class DependencyInjection
     {
         services.AddSingleton<LocalizedSyncDiagnosticsText>();
         services.AddSingleton<NavigationRailViewModel>();
+        services.AddSingleton<OverviewWorkspaceViewModel>();
         services.AddSingleton<DashboardViewModel>();
         services.AddSingleton<ParamViewModel>();
         services.AddSingleton<IIoViewMappingBuilder, IoViewMappingBuilder>();
@@ -52,6 +53,8 @@ public static class DependencyInjection
 
         services.AddTransient<NavigationRailView>();
         services.AddTransient<NavigationHostView>();
+        services.AddTransient<OverviewWorkspaceView>();
+        services.AddTransient<DashboardPreviewView>();
         services.AddTransient<DashboardView>();
         services.AddTransient<ParamViewPage>();
         services.AddTransient<IOViewPage>();

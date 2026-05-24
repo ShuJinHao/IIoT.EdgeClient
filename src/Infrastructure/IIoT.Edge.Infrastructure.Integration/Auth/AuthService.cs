@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using IIoT.Edge.Application.Abstractions.Auth;
+using IIoT.Edge.Application.Auth.LocalAccounts;
 using IIoT.Edge.Application.Common.Models;
 using IIoT.Edge.Infrastructure.Integration.Config;
 using IIoT.Edge.Infrastructure.Integration.Http;
@@ -16,6 +17,7 @@ public class AuthService : IAuthService
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ICloudApiEndpointProvider _endpointProvider;
     private readonly LocalAdminConfig _localAdminConfig;
+    private readonly ILocalAccountAuthService _localAccountAuthService;
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
     private UserSession? _currentUser;
     private int _backgroundRefreshStarted;
@@ -27,11 +29,13 @@ public class AuthService : IAuthService
     public AuthService(
         IHttpClientFactory httpClientFactory,
         ICloudApiEndpointProvider endpointProvider,
-        LocalAdminConfig localAdminConfig)
+        LocalAdminConfig localAdminConfig,
+        ILocalAccountAuthService localAccountAuthService)
     {
         _httpClientFactory = httpClientFactory;
         _endpointProvider = endpointProvider;
         _localAdminConfig = localAdminConfig;
+        _localAccountAuthService = localAccountAuthService;
     }
 
     public bool HasPermission(string permission)
@@ -83,6 +87,30 @@ public class AuthService : IAuthService
 
         SetSession(session);
         return Task.FromResult(AuthResult.Ok("本地管理员登录成功。"));
+    }
+
+    public Task<AuthResult> LoginLocalAccountAsync(string userName, string password)
+    {
+        var result = _localAccountAuthService.Authenticate(userName, password);
+        if (!result.Success)
+        {
+            return Task.FromResult(AuthResult.Fail(result.ErrorMessage ?? "本地账号登录失败。"));
+        }
+
+        var session = new UserSession
+        {
+            DisplayName = result.DisplayName ?? result.UserName ?? "本地账号",
+            EmployeeNo = result.UserName,
+            IsLocalAdmin = true,
+            Permissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+            ExpiresAtUtc = null,
+            AccessToken = null,
+            RefreshToken = null,
+            RefreshTokenExpiresAtUtc = null
+        };
+
+        SetSession(session);
+        return Task.FromResult(AuthResult.Ok($"欢迎：{session.DisplayName}"));
     }
 
     public async Task<AuthResult> LoginCloudAsync(string employeeNo, string password, Guid deviceId)

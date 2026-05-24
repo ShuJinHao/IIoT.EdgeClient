@@ -18,17 +18,17 @@ public class CloudApiEndpointProvider : ICloudApiEndpointProvider
 
     public string BuildUrl(string relativeOrAbsoluteUrl)
     {
-        if (Uri.TryCreate(relativeOrAbsoluteUrl, UriKind.Absolute, out var absoluteUri))
+        if (HttpUrl.TryCreateAbsoluteHttpUri(relativeOrAbsoluteUrl, out var absoluteUri))
             return absoluteUri.ToString();
 
         var baseUrl = _cloudApiOptions.CurrentValue.BaseUrl?.Trim();
         if (string.IsNullOrWhiteSpace(baseUrl))
             throw new InvalidOperationException("Missing config: CloudApi:BaseUrl");
 
-        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri))
+        if (!HttpUrl.TryCreateHttpBaseUri(baseUrl, out var baseUri))
             throw new InvalidOperationException($"Invalid config: CloudApi:BaseUrl = '{baseUrl}'");
 
-        return new Uri(baseUri, relativeOrAbsoluteUrl).ToString();
+        return HttpUrl.Build(baseUri, relativeOrAbsoluteUrl).ToString();
     }
 
     public string GetClientCode()
@@ -93,11 +93,11 @@ public class CloudApiEndpointProvider : ICloudApiEndpointProvider
         if (string.IsNullOrWhiteSpace(value))
             throw new InvalidOperationException($"Missing config: {key}");
 
-        if (Uri.TryCreate(value, UriKind.Absolute, out _))
-            throw new InvalidOperationException($"Invalid config: {key} must be a relative API path");
-
         if (!value.StartsWith('/'))
             throw new InvalidOperationException($"Invalid config: {key} must start with '/'");
+
+        if (value.StartsWith("//", StringComparison.Ordinal))
+            throw new InvalidOperationException($"Invalid config: {key} must be a relative API path");
 
         return value;
     }

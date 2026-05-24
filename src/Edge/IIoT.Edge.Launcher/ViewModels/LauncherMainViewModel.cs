@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using IIoT.Edge.Application.Auth.LocalAccounts;
 using IIoT.Edge.Launcher.Models;
 using IIoT.Edge.Launcher.Services;
 using IIoT.Edge.UI.Shared.Mvvm;
@@ -10,7 +11,7 @@ namespace IIoT.Edge.Launcher.ViewModels;
 public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged
 {
     private readonly ILauncherProfileCatalog _profileCatalog;
-    private readonly ILocalLauncherAuthService _authService;
+    private readonly ILocalAccountAuthService _authService;
     private readonly IShellLaunchService _launchService;
     private readonly List<LauncherProfileDefinition> _allProfiles = [];
 
@@ -24,7 +25,7 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged
 
     public LauncherMainViewModel(
         ILauncherProfileCatalog profileCatalog,
-        ILocalLauncherAuthService authService,
+        ILocalAccountAuthService authService,
         IShellLaunchService launchService)
     {
         _profileCatalog = profileCatalog ?? throw new ArgumentNullException(nameof(profileCatalog));

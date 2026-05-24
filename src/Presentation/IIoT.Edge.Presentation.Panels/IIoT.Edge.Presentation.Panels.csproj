@@ -1,15 +1,11 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
-    <UseWPF>true</UseWPF>
+    <UseWPF>false</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(SKIP_EDGE_WPF_PROJECTS)' == 'true'">
-    <ExcludeFromBuild>true</ExcludeFromBuild>
   </PropertyGroup>
 
   <ItemGroup>
@@ -22,13 +18,6 @@
     <PackageReference Include="log4net" />
     <PackageReference Include="MediatR" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Page Remove="Features\Equipment\Views\EquipmentView.xaml" />
-    <Page Remove="Features\SysLog\Views\LogView.xaml" />
-    <Compile Remove="Features\Equipment\Views\EquipmentView.xaml.cs" />
-    <Compile Remove="Features\SysLog\Views\LogView.xaml.cs" />
   </ItemGroup>
 
 </Project>

@@ -12,6 +12,7 @@ using IIoT.Edge.Module.Homogenization;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
 using IIoT.Edge.Module.Homogenization.Config.Parameters;
+using IIoT.Edge.Module.Homogenization.Integration;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using IIoT.Edge.Module.Homogenization.Samples;
@@ -30,7 +31,11 @@ using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesS
     string,
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationRealtimeSnapshot,
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationRecipeSnapshot,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot>;
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlanRequest,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlan,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchRequest,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchResult>;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 
@@ -260,7 +265,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
         otherMapping.UpdateSortOrder(1);
         ioMappings.Add(otherMapping);
 
-        var legacyHomogenizationMapping = IoMappingEntity.Create(oldHomogenizationDevice.Id, "Homogenization.Legacy", "D0", 1, "Int16", "Read");
+        var legacyHomogenizationMapping = IoMappingEntity.Create(oldHomogenizationDevice.Id, "Homogenization.Obsolete", "D0", 1, "Int16", "Read");
         legacyHomogenizationMapping.UpdateSortOrder(1);
         ioMappings.Add(legacyHomogenizationMapping);
 
@@ -282,7 +287,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
 
         Assert.Single(homogenizationDevices);
         Assert.Equal("PLC-Homogenization-01", homogenizationDevices[0].DeviceName);
-        Assert.DoesNotContain(ioMappings.Items, static mapping => mapping.SignalKey == "Homogenization.Legacy");
+        Assert.DoesNotContain(ioMappings.Items, static mapping => mapping.SignalKey == "Homogenization.Obsolete");
         Assert.Equal(
             SeedableSignals().Count + 1,
             ioMappings.Items.Count);
@@ -316,6 +321,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
         services.AddSingleton<IProductionTimeProvider>(new FakeProductionTimeProvider());
         services.AddSingleton<IProductionContextSignalBindingStore, ProductionContextSignalBindingStore>();
         services.AddSingleton<IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>>(new RuntimeFakeModuleParamProvider());
+        services.AddSingleton<IHomogenizationProductionGate, AllowAllHomogenizationProductionGate>();
         services.AddSingleton(new HomogenizationCellDataValidator());
         services.AddSingleton(Options.Create(new HomogenizationModuleOptions()));
         services.AddSingleton(Options.Create(TestCodeOptions));
@@ -474,6 +480,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
         services.AddSingleton<IProductionTimeProvider>(new FakeProductionTimeProvider());
         services.AddSingleton<IProductionContextSignalBindingStore, ProductionContextSignalBindingStore>();
         services.AddSingleton<IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>>(new RuntimeFakeModuleParamProvider());
+        services.AddSingleton<IHomogenizationProductionGate, AllowAllHomogenizationProductionGate>();
         services.AddSingleton(new HomogenizationCellDataValidator());
         services.AddSingleton(Options.Create(new HomogenizationModuleOptions()));
         services.AddSingleton(Options.Create(TestCodeOptions));
@@ -852,6 +859,16 @@ public sealed class HomogenizationRuntimeBehaviorTests
             return CompleteAfterGateAsync(EquipmentStatusGate, cancellationToken);
         }
 
+        public Task<MesCallResult<HomogenizationMainPlan>> GetMainPlanAsync(
+            HomogenizationMainPlanRequest request,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(MesCallResult<HomogenizationMainPlan>.Success(new HomogenizationMainPlan([])));
+
+        public Task<MesCallResult<HomogenizationTraceBatchResult>> GenerateTraceBatchNumberAsync(
+            HomogenizationTraceBatchRequest request,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(MesCallResult<HomogenizationTraceBatchResult>.Success(null));
+
         public Task<MesCallResult> UploadAsync(
             ProcessMesUploadContext context,
             IReadOnlyList<CellCompletedRecord> records,
@@ -1001,5 +1018,13 @@ public sealed class HomogenizationRuntimeBehaviorTests
             ISpecification<T>? specification = null,
             CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
+    }
+
+    private sealed class AllowAllHomogenizationProductionGate : IHomogenizationProductionGate
+    {
+        public Task<MesCallResult> EnsureReadyAsync(
+            HomogenizationContext context,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(MesCallResult.Success("测试门禁通过。"));
     }
 }

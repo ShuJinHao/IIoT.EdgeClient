@@ -391,10 +391,10 @@ public class CloudHttpClient : ICloudHttpClient
         => $"http_status_{(int)statusCode}";
 
     private static string GetRequestRoute(string requestUrl)
-        => GetRequestRoute(new Uri(requestUrl, UriKind.Absolute));
+        => HttpUrl.GetRoutePath(requestUrl);
 
     private static string GetRequestRoute(Uri? requestUri)
-        => requestUri?.AbsolutePath ?? "unknown";
+        => requestUri is null ? "unknown" : HttpUrl.GetRoutePath(requestUri.AbsolutePath);
 
     private static string FormatTimestamp(DateTimeOffset? value)
         => value?.ToString("O") ?? "null";
@@ -406,9 +406,8 @@ public class CloudHttpClient : ICloudHttpClient
             return false;
         }
 
-        var requestPath = GetRequestRoute(requestUrl);
-        return string.Equals(requestPath, _endpointProvider.GetDeviceInstancePath(), StringComparison.OrdinalIgnoreCase)
-            || string.Equals(requestPath, _endpointProvider.GetIdentityDeviceLoginPath(), StringComparison.OrdinalIgnoreCase);
+        return HttpUrl.SamePath(requestUrl, _endpointProvider.GetDeviceInstancePath())
+            || HttpUrl.SamePath(requestUrl, _endpointProvider.GetIdentityDeviceLoginPath());
     }
 
     private sealed class SendWithRetryResult

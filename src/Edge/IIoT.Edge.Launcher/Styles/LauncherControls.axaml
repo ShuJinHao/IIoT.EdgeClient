@@ -3,67 +3,69 @@
     <Style Selector="Border.launcher-surface">
         <Setter Property="Background" Value="{DynamicResource Launcher.Bg.Surface}" />
         <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Border}" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="16" />
+        <Setter Property="BorderThickness" Value="{DynamicResource Edge.Thickness.Border.Subtle}" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Large}" />
     </Style>
 
     <Style Selector="Border.launcher-chip">
-        <Setter Property="Padding" Value="12,7" />
+        <Setter Property="Padding" Value="{DynamicResource Edge.Thickness.Chip.Comfortable}" />
         <Setter Property="Background" Value="{DynamicResource Launcher.Bg.Chip}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Border}" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="999" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Edge.Brush.Border.Focus}" />
+        <Setter Property="BorderThickness" Value="{DynamicResource Edge.Thickness.Border.Subtle}" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Pill}" />
     </Style>
 
     <Style Selector="TextBlock.launcher-title">
-        <Setter Property="FontSize" Value="26" />
+        <Setter Property="FontFamily" Value="{DynamicResource Edge.FontFamily.Display}" />
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Display}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{DynamicResource Launcher.Text.Primary}" />
     </Style>
 
     <Style Selector="TextBlock.launcher-body">
-        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontFamily" Value="{DynamicResource Edge.FontFamily.Default}" />
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.BodyStrong}" />
         <Setter Property="Foreground" Value="{DynamicResource Launcher.Text.Secondary}" />
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
     <Style Selector="TextBox.launcher-input">
         <Setter Property="MinHeight" Value="42" />
-        <Setter Property="Padding" Value="12,8" />
+        <Setter Property="Padding" Value="{DynamicResource Edge.Thickness.12}" />
         <Setter Property="Background" Value="{DynamicResource Launcher.Bg.SurfaceAlt}" />
         <Setter Property="Foreground" Value="{DynamicResource Launcher.Text.Primary}" />
         <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Border}" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="BorderThickness" Value="{DynamicResource Edge.Thickness.Border.Subtle}" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Medium}" />
     </Style>
 
     <Style Selector="Button.launcher-primary">
         <Setter Property="MinHeight" Value="42" />
-        <Setter Property="Padding" Value="18,8" />
+        <Setter Property="Padding" Value="{DynamicResource Edge.Thickness.12}" />
         <Setter Property="Background" Value="{DynamicResource Launcher.Accent.Default}" />
         <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Accent.Default}" />
-        <Setter Property="Foreground" Value="White" />
+        <Setter Property="Foreground" Value="{DynamicResource Launcher.Text.OnAccent}" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Medium}" />
     </Style>
 
     <Style Selector="Button.launcher-ghost">
         <Setter Property="MinHeight" Value="38" />
-        <Setter Property="Padding" Value="16,7" />
+        <Setter Property="Padding" Value="{DynamicResource Edge.Thickness.12}" />
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderBrush" Value="{DynamicResource Launcher.Border}" />
-        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="BorderThickness" Value="{DynamicResource Edge.Thickness.Border.Subtle}" />
         <Setter Property="Foreground" Value="{DynamicResource Launcher.Text.Secondary}" />
-        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Medium}" />
     </Style>
 
     <Style Selector="Button.launcher-window-button">
-        <Setter Property="Width" Value="44" />
-        <Setter Property="Height" Value="40" />
-        <Setter Property="Padding" Value="0" />
+        <Setter Property="Width" Value="{DynamicResource Edge.Size.HeaderIconButton}" />
+        <Setter Property="Height" Value="{DynamicResource Edge.Size.HeaderIconButton}" />
+        <Setter Property="Padding" Value="{DynamicResource Edge.Thickness.Zero}" />
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="Foreground" Value="{DynamicResource Launcher.Text.Secondary}" />
-        <Setter Property="CornerRadius" Value="0" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Small}" />
     </Style>
 </Styles>

@@ -215,6 +215,104 @@ function Copy-EdgeLauncherProfileCatalog {
     return $targetPath
 }
 
+function Test-EdgeIsWindowsPlatform {
+    return [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+        [System.Runtime.InteropServices.OSPlatform]::Windows)
+}
+
+function Get-EdgeExecutableCandidates {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$BasePath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$PathValue
+    )
+
+    $resolvedPath = Resolve-EdgeAbsolutePath -BasePath $BasePath -PathValue $PathValue
+    $directory = Split-Path -Parent $resolvedPath
+    $leaf = Split-Path -Leaf $resolvedPath
+    $baseLeaf = $leaf
+    if ($leaf.EndsWith('.exe', [System.StringComparison]::OrdinalIgnoreCase)) {
+        $baseLeaf = $leaf.Substring(0, $leaf.Length - 4)
+    }
+    elseif ($leaf.EndsWith('.dll', [System.StringComparison]::OrdinalIgnoreCase)) {
+        $baseLeaf = $leaf.Substring(0, $leaf.Length - 4)
+    }
+
+    $isWindows = Test-EdgeIsWindowsPlatform
+    $hasExeExtension = $leaf.EndsWith('.exe', [System.StringComparison]::OrdinalIgnoreCase)
+    $hasDllExtension = $leaf.EndsWith('.dll', [System.StringComparison]::OrdinalIgnoreCase)
+    $candidates = [System.Collections.Generic.List[string]]::new()
+
+    if ($isWindows -and -not $hasExeExtension -and -not $hasDllExtension) {
+        Add-EdgeExecutableCandidate -Candidates $candidates -PathValue (Join-Path $directory "$baseLeaf.exe")
+    }
+    elseif (-not $isWindows -and $hasExeExtension) {
+        Add-EdgeExecutableCandidate -Candidates $candidates -PathValue (Join-Path $directory $baseLeaf)
+    }
+
+    if (-not $hasDllExtension) {
+        Add-EdgeExecutableCandidate -Candidates $candidates -PathValue $resolvedPath
+    }
+
+    Add-EdgeExecutableCandidate -Candidates $candidates -PathValue (Join-Path $directory "$baseLeaf.dll")
+    return $candidates
+}
+
+function Add-EdgeExecutableCandidate {
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.Collections.Generic.List[string]]$Candidates,
+
+        [Parameter(Mandatory = $true)]
+        [string]$PathValue
+    )
+
+    if (-not $Candidates.Contains($PathValue)) {
+        $Candidates.Add($PathValue)
+    }
+}
+
+function Resolve-EdgeExecutablePath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$BasePath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$PathValue
+    )
+
+    foreach ($candidate in (Get-EdgeExecutableCandidates -BasePath $BasePath -PathValue $PathValue)) {
+        if (Test-Path $candidate) {
+            return $candidate
+        }
+    }
+
+    return $null
+}
+
+function Assert-EdgeExecutablePath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$BasePath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$PathValue,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Message
+    )
+
+    $resolvedPath = Resolve-EdgeExecutablePath -BasePath $BasePath -PathValue $PathValue
+    if ([string]::IsNullOrWhiteSpace($resolvedPath)) {
+        $candidates = Get-EdgeExecutableCandidates -BasePath $BasePath -PathValue $PathValue
+        throw "$Message Candidates: $($candidates -join ', ')"
+    }
+
+    return $resolvedPath
+}
+
 function Test-EdgeLauncherProfilesMatchManifest {
     param(
         [Parameter(Mandatory = $true)]
@@ -247,10 +345,10 @@ function Test-EdgeLauncherProfilesMatchManifest {
         }
 
         if ($CheckExecutablePath) {
-            $resolvedExecutablePath = Resolve-EdgeAbsolutePath -BasePath $LauncherRuntimeRoot -PathValue $profile.ExecutablePath
-            if (-not (Test-Path $resolvedExecutablePath)) {
-                throw "Launcher profile '$($profile.ProfileId)' points to a missing executable: $resolvedExecutablePath"
-            }
+            Assert-EdgeExecutablePath `
+                -BasePath $LauncherRuntimeRoot `
+                -PathValue $profile.ExecutablePath `
+                -Message "Launcher profile '$($profile.ProfileId)' points to a missing executable." | Out-Null
         }
     }
 
@@ -275,6 +373,7 @@ function Remove-EdgeLauncherShellArtifacts {
         Remove-Item -Force
 
     foreach ($fileName in @(
+        'IIoT.Edge.Shell',
         'IIoT.Edge.Shell.exe',
         'IIoT.Edge.Shell.dll',
         'IIoT.Edge.Shell.deps.json',
@@ -423,8 +522,8 @@ function Sync-EdgeProcessRuntime {
         -TargetModulesRoot $modulesRoot `
         -CleanModulesDirectory
 
-    $shellExecutable = Join-Path $runtimeRoot 'IIoT.Edge.Shell.exe'
-    if (-not (Test-Path $shellExecutable)) {
-        throw "Shell executable was not found in runtime directory: $shellExecutable"
-    }
+    Assert-EdgeExecutablePath `
+        -BasePath $runtimeRoot `
+        -PathValue 'IIoT.Edge.Shell' `
+        -Message "Shell executable was not found in runtime directory '$runtimeRoot'." | Out-Null
 }

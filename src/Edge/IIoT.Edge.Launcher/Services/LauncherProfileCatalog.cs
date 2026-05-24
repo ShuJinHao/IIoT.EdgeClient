@@ -6,7 +6,7 @@ namespace IIoT.Edge.Launcher.Services;
 
 public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
 {
-    private const string DefaultExecutableFileName = "IIoT.Edge.Shell.exe";
+    private const string DefaultExecutableFileName = "IIoT.Edge.Shell";
     private const string DefaultIconKind = "Cog";
     private const string DefaultAccentColor = "#0F766E";
 
@@ -83,12 +83,15 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
 
     private string ResolvePath(string path)
     {
-        var expanded = Environment.ExpandEnvironmentVariables(path);
+        var expanded = NormalizePathSeparators(Environment.ExpandEnvironmentVariables(path.Trim()));
         return Path.GetFullPath(
             Path.IsPathRooted(expanded)
                 ? expanded
                 : Path.Combine(_baseDirectory, expanded));
     }
+
+    private static string NormalizePathSeparators(string path)
+        => path.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
 
     private static JsonSerializerOptions JsonOptions()
         => new()

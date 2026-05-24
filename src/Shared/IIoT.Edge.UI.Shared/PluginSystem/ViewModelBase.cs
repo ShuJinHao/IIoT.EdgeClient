@@ -6,7 +6,7 @@ namespace IIoT.Edge.UI.Shared.PluginSystem;
 /// 视图模型基础类。
 /// 为所有页面视图模型提供布局属性和激活生命周期默认实现。
 /// </summary>
-public abstract class ViewModelBase : BaseControlNotifyPropertyChanged, IViewModelContract
+public abstract class ViewModelBase : BaseNotifyPropertyChanged, IViewModelContract
 {
     public abstract string ViewId { get; }
     public abstract string ViewTitle { get; }
@@ -24,7 +24,7 @@ public abstract class ViewModelBase : BaseControlNotifyPropertyChanged, IViewMod
     public int ColumnSpan { get => _colSpan; set { _colSpan = value; OnPropertyChanged(); } }
 
     private bool _isVisible = true;
-    public new bool IsVisible { get => _isVisible; set { _isVisible = value; OnPropertyChanged(); } }
+    public bool IsVisible { get => _isVisible; set { _isVisible = value; OnPropertyChanged(); } }
 
     public virtual Task OnActivatedAsync() => Task.CompletedTask;
 

@@ -75,6 +75,21 @@ public class CapacityViewModel : NavigationViewModelBase
         {
             _queryDate = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(QueryDateOffset));
+        }
+    }
+
+    public DateTimeOffset? QueryDateOffset
+    {
+        get => new(_queryDate.Date);
+        set
+        {
+            if (value is null)
+            {
+                return;
+            }
+
+            QueryDate = value.Value.Date;
         }
     }
 

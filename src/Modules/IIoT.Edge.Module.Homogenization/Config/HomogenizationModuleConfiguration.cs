@@ -490,7 +490,6 @@ public sealed class HomogenizationMesOptionsValidator : IValidateOptions<Homogen
                 "匀浆 MES 签名令牌不能为空。"));
         }
 
-        options.Paths.AppendValidationErrors(errors);
         return errors.Count == 0
             ? ValidateOptionsResult.Success
             : ValidateOptionsResult.Fail(errors);

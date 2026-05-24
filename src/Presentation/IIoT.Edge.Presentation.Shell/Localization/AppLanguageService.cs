@@ -3,6 +3,7 @@ using System.IO;
 using System.Text.Json;
 using System.Threading;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Markup.Xaml.Styling;
 using Avalonia.Platform;
 using Avalonia.Styling;
@@ -17,6 +18,14 @@ public sealed class AppLanguageService : IAppLanguageService
 {
     private const string DefaultCultureName = "zh-CN";
     private const string LanguageFileName = "language.json";
+    private static readonly HashSet<string> RequiredResourceAssemblyNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "IIoT.Edge.Shell",
+        "IIoT.Edge.Presentation.Shell",
+        "IIoT.Edge.Presentation.Navigation",
+        "IIoT.Edge.Presentation.Panels"
+    };
+
     private readonly string _storagePath;
     private CultureInfo _current;
 
@@ -103,10 +112,17 @@ public sealed class AppLanguageService : IAppLanguageService
 
     private static void ReplaceLanguageDictionaries(string cultureName)
     {
-        var resources = global::Avalonia.Application.Current?.Resources;
-        if (resources is null)
+        var application = global::Avalonia.Application.Current;
+        if (application is null)
         {
             return;
+        }
+
+        var resources = application.Resources;
+        if (resources is null)
+        {
+            resources = new ResourceDictionary();
+            application.Resources = resources;
         }
 
         var oldDictionaries = resources.MergedDictionaries
@@ -164,7 +180,7 @@ public sealed class AppLanguageService : IAppLanguageService
         try
         {
             var source = new Uri($"avares://{assemblyName}/Resources/Languages/{cultureName}.axaml");
-            if (!AssetLoader.Exists(source))
+            if (!RequiredResourceAssemblyNames.Contains(assemblyName) && !AssetLoader.Exists(source))
             {
                 return null;
             }
@@ -174,9 +190,11 @@ public sealed class AppLanguageService : IAppLanguageService
                 Source = source
             };
         }
-        catch
+        catch (Exception ex)
         {
-            return null;
+            throw new InvalidOperationException(
+                $"无法加载界面语言资源：{assemblyName}/{cultureName}。",
+                ex);
         }
     }
 

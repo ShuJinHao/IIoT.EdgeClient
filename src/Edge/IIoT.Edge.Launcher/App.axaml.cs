@@ -4,12 +4,12 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
-using IIoT.Edge.Launcher.Services;
+using IIoT.Edge.Application.Auth.LocalAccounts;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace IIoT.Edge.Launcher;
 
-public partial class App : Application
+public partial class App : Avalonia.Application
 {
     private ServiceProvider? _serviceProvider;
 
@@ -36,7 +36,7 @@ public partial class App : Application
             _serviceProvider = new ServiceCollection()
                 .AddLauncherServices(AppDomain.CurrentDomain.BaseDirectory)
                 .BuildServiceProvider();
-            _serviceProvider.GetRequiredService<ILauncherAccountCatalogInitializer>()
+            _serviceProvider.GetRequiredService<ILocalAccountCatalogInitializer>()
                 .EnsureCatalogExists();
 
             var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();

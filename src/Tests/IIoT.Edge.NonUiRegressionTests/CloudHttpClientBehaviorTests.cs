@@ -60,11 +60,13 @@ public sealed class CloudHttpClientBehaviorTests
     public async Task GetAsync_WhenRequestTargetsBootstrap_ShouldNotAttachBearerHeader()
     {
         AuthenticationHeaderValue? authHeader = null;
+        Uri? requestUri = null;
         var deviceService = CreateOnlineDeviceService();
         var client = new CloudHttpClient(
             new StubHttpClientFactory(request =>
             {
                 authHeader = request.Headers.Authorization;
+                requestUri = request.RequestUri;
                 return new HttpResponseMessage(HttpStatusCode.OK)
                 {
                     Content = new StringContent("{}")
@@ -79,6 +81,7 @@ public sealed class CloudHttpClientBehaviorTests
 
         Assert.True(result.IsSuccess);
         Assert.Equal("{}", result.Payload);
+        Assert.Equal("https://cloud.test/api/v1/bootstrap/device-instance?clientCode=LINE-01", requestUri!.ToString());
         Assert.Null(authHeader);
     }
 

@@ -21,8 +21,12 @@ $resolvedOutputRoot = Resolve-EdgeAbsolutePath -BasePath $repoRoot -PathValue $O
     -CleanOutput
 
 $launcherRoot = Join-Path $resolvedOutputRoot $manifest.launcherDirectory
+Assert-EdgeExecutablePath `
+    -BasePath $launcherRoot `
+    -PathValue 'IIoT.Edge.Launcher' `
+    -Message "Required launcher executable was not found in '$launcherRoot'." | Out-Null
+
 $launcherRequiredFiles = @(
-    'IIoT.Edge.Launcher.exe',
     'launcher.profiles.json',
     'launcher.accounts.sample.json',
     'Assets\Profiles\homogenization.png'
@@ -44,16 +48,20 @@ if ($launcherProfiles.Count -ne $manifest.runtimes.Count) {
 Test-EdgeLauncherProfilesMatchManifest -Manifest $manifest -Profiles @($launcherProfiles) -LauncherRuntimeRoot $launcherRoot -CheckExecutablePath
 
 foreach ($profile in $launcherProfiles) {
-    $resolvedExecutablePath = Resolve-EdgeAbsolutePath -BasePath $launcherRoot -PathValue $profile.ExecutablePath
-    if (-not (Test-Path $resolvedExecutablePath)) {
-        throw "Launcher profile '$($profile.ProfileId)' points to a missing executable: $resolvedExecutablePath"
-    }
+    Assert-EdgeExecutablePath `
+        -BasePath $launcherRoot `
+        -PathValue $profile.ExecutablePath `
+        -Message "Launcher profile '$($profile.ProfileId)' points to a missing executable." | Out-Null
 }
 
 foreach ($runtime in $manifest.runtimes) {
     $runtimeRoot = Join-Path $resolvedOutputRoot $runtime.outputDirectory
+    Assert-EdgeExecutablePath `
+        -BasePath $runtimeRoot `
+        -PathValue 'IIoT.Edge.Shell' `
+        -Message "Required Shell executable was not found in runtime '$($runtime.runtimeId)'." | Out-Null
+
     $requiredFiles = @(
-        'IIoT.Edge.Shell.exe',
         'appsettings.json',
         'appsettings.Production.json',
         (Split-Path -Leaf $runtime.machineConfig)

@@ -1,4 +1,8 @@
 using Avalonia.Threading;
+using IIoT.Edge.Application.Abstractions.Auth;
+using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Common.Models;
+using IIoT.Edge.Presentation.Shell.Services;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
 using Microsoft.Extensions.Configuration;
@@ -8,17 +12,29 @@ namespace IIoT.Edge.Shell.ViewModels;
 /// <summary>
 /// Shell 主窗口外框展示模型，仅承载窗口标题、头部和底部状态文本。
 /// </summary>
-public sealed class MainWindowViewModel : BaseNotifyPropertyChanged, IDisposable
+public sealed class MainWindowViewModel : BaseNotifyPropertyChanged, IShellAuthContext, IDisposable
 {
     private readonly IAppLanguageService _languageService;
     private readonly IConfiguration _configuration;
+    private readonly IAuthService _authService;
+    private readonly IDeviceService _deviceService;
     private readonly DispatcherTimer _clockTimer;
+    private readonly DateTime _softwareStartedAt;
 
-    public MainWindowViewModel(IAppLanguageService languageService, IConfiguration configuration)
+    public MainWindowViewModel(
+        IAppLanguageService languageService,
+        IConfiguration configuration,
+        IAuthService authService,
+        IDeviceService deviceService)
     {
         _languageService = languageService;
         _configuration = configuration;
+        _authService = authService;
+        _deviceService = deviceService;
         _languageService.LanguageChanged += OnLanguageChanged;
+        _authService.AuthStateChanged += OnAuthStateChanged;
+        _deviceService.DeviceIdentified += OnDeviceIdentified;
+        _softwareStartedAt = DateTime.Now;
 
         _clockTimer = new DispatcherTimer
         {
@@ -39,9 +55,17 @@ public sealed class MainWindowViewModel : BaseNotifyPropertyChanged, IDisposable
         "产线: {0}",
         ResolveMachineProfile());
 
-    public string OperatorName => _languageService.GetString("Shell_FrameOperatorName", "本地会话");
+    public string OperatorName => _authService.CurrentUser?.DisplayName
+        ?? _languageService.GetString("Shell_FrameOperatorNotLoggedIn", "\u672A\u767B\u5F55");
 
-    public string OperatorCode => _languageService.GetString("Shell_FrameOperatorCode", "--");
+    public string OperatorCode => _authService.CurrentUser?.EmployeeNo ?? "--";
+
+    public UserSession? CurrentUser => _authService.CurrentUser;
+
+    public bool IsAuthenticated => _authService.IsAuthenticated;
+
+    public bool HasCloudDeviceIdentity
+        => _deviceService.CurrentDevice is not null && _deviceService.CurrentDevice.DeviceId != Guid.Empty;
 
     public string SystemStatusText => _languageService.GetString("Shell_FrameSystemStatus", "系统运行正常");
 
@@ -78,14 +102,57 @@ public sealed class MainWindowViewModel : BaseNotifyPropertyChanged, IDisposable
         "Shell_LogEmpty",
         "日志面板尚未进入本阶段迁移，当前不展示模拟日志。");
 
-    public string FooterText => LocalTimeText;
+    public string FooterProgramName => _languageService.GetString("Shell_Footer_DefaultProgram", "—");
+
+    public string SoftwareRunDate
+    {
+        get
+        {
+            var minutes = Math.Max(0, (int)Math.Floor((DateTime.Now - _softwareStartedAt).TotalMinutes));
+            return _languageService.Format("Shell_Footer_RunMinutesFormat", "{0} min", minutes);
+        }
+    }
+
+    public string FooterTimeAndDateText => DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss");
+
+    public string FooterText => FooterTimeAndDateText;
 
     public void Dispose()
     {
         _clockTimer.Stop();
         _clockTimer.Tick -= OnClockTick;
         _languageService.LanguageChanged -= OnLanguageChanged;
+        _authService.AuthStateChanged -= OnAuthStateChanged;
+        _deviceService.DeviceIdentified -= OnDeviceIdentified;
     }
+
+    public Task<AuthResult> LoginLocalEmergencyAsync(string? password)
+        => _authService.LoginLocalAsync(password ?? string.Empty);
+
+    public Task<AuthResult> LoginCloudEmployeeAsync(string? employeeNo, string? password)
+    {
+        var device = _deviceService.CurrentDevice;
+        if (device is null || device.DeviceId == Guid.Empty)
+        {
+            return Task.FromResult(AuthResult.Fail("设备尚未完成云端身份初始化，无法进行云端员工登录。"));
+        }
+
+        return _authService.LoginCloudAsync(employeeNo?.Trim() ?? string.Empty, password ?? string.Empty, device.DeviceId);
+    }
+
+    public void Logout()
+        => _authService.Logout();
+
+    private void OnAuthStateChanged(UserSession? session)
+    {
+        OnPropertyChanged(nameof(OperatorName));
+        OnPropertyChanged(nameof(OperatorCode));
+        OnPropertyChanged(nameof(CurrentUser));
+        OnPropertyChanged(nameof(IsAuthenticated));
+    }
+
+    private void OnDeviceIdentified(DeviceSession? session)
+        => OnPropertyChanged(nameof(HasCloudDeviceIdentity));
 
     private void OnLanguageChanged(object? sender, EventArgs e)
     {
@@ -95,6 +162,8 @@ public sealed class MainWindowViewModel : BaseNotifyPropertyChanged, IDisposable
     private void OnClockTick(object? sender, EventArgs e)
     {
         OnPropertyChanged(nameof(LocalTimeText));
+        OnPropertyChanged(nameof(SoftwareRunDate));
+        OnPropertyChanged(nameof(FooterTimeAndDateText));
         OnPropertyChanged(nameof(FooterText));
     }
 
@@ -116,6 +185,9 @@ public sealed class MainWindowViewModel : BaseNotifyPropertyChanged, IDisposable
         OnPropertyChanged(nameof(EquipmentMessage));
         OnPropertyChanged(nameof(LogTitle));
         OnPropertyChanged(nameof(LogMessage));
+        OnPropertyChanged(nameof(FooterProgramName));
+        OnPropertyChanged(nameof(SoftwareRunDate));
+        OnPropertyChanged(nameof(FooterTimeAndDateText));
         OnPropertyChanged(nameof(FooterText));
     }
 
