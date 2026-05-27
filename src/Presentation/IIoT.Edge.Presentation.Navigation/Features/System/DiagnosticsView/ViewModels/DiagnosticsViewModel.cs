@@ -25,12 +25,27 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
     private readonly AsyncCommand<DeadLetterRow> _deleteDeadLetterCommand;
     private readonly Avalonia.Threading.DispatcherTimer _refreshTimer;
     private bool _isObserving;
+    private DiagnosticsTabItemViewModel _selectedTab = null!;
+
+    public ObservableCollection<DiagnosticsTabItemViewModel> Tabs { get; } = [];
+    public ICommand SelectTabCommand { get; private set; } = null!;
+
+    public DiagnosticsTabItemViewModel SelectedTab
+    {
+        get => _selectedTab;
+        set => SelectTab(value);
+    }
+
+    public bool IsOverviewTabSelected => _selectedTab?.Key == "Diag.Overview";
+    public bool IsSyncOpsTabSelected => _selectedTab?.Key == "Diag.SyncOps";
+    public bool IsStartupTabSelected => _selectedTab?.Key == "Diag.Startup";
 
     public ObservableCollection<ModuleRegistrationRow> ModuleRegistrations { get; } = [];
     public ObservableCollection<PluginLifecycleRow> PluginStates { get; } = [];
     public ObservableCollection<DeviceModuleBindingRow> DeviceBindings { get; } = [];
     public ObservableCollection<StartupDiagnosticIssueRow> Issues { get; } = [];
     public ObservableCollection<MesChannelDiagnosticsRow> MesUploadDiagnostics { get; } = [];
+    public ObservableCollection<SyncChannelRow> SyncChannels { get; } = [];
     public ObservableCollection<DeadLetterRow> CloudDeadLetters { get; } = [];
     public ObservableCollection<DeadLetterRow> MesDeadLetters { get; } = [];
 
@@ -38,6 +53,72 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
     public ICommand DeleteDeadLetterCommand { get; }
 
     public bool CanOperateDeadLetters => _permissionService.IsLocalAdmin;
+
+    private int _cloudDeadLetterCount;
+    public int CloudDeadLetterCount
+    {
+        get => _cloudDeadLetterCount;
+        private set
+        {
+            _cloudDeadLetterCount = value;
+            OnPropertyChanged();
+        }
+    }
+
+    private int _mesDeadLetterCount;
+    public int MesDeadLetterCount
+    {
+        get => _mesDeadLetterCount;
+        private set
+        {
+            _mesDeadLetterCount = value;
+            OnPropertyChanged();
+        }
+    }
+
+    private int _totalIssueCount;
+    public int TotalIssueCount
+    {
+        get => _totalIssueCount;
+        private set
+        {
+            _totalIssueCount = value;
+            OnPropertyChanged();
+        }
+    }
+
+    private int _discoveredModuleCount;
+    public int DiscoveredModuleCount
+    {
+        get => _discoveredModuleCount;
+        private set
+        {
+            _discoveredModuleCount = value;
+            OnPropertyChanged();
+        }
+    }
+
+    private int _enabledModuleCount;
+    public int EnabledModuleCount
+    {
+        get => _enabledModuleCount;
+        private set
+        {
+            _enabledModuleCount = value;
+            OnPropertyChanged();
+        }
+    }
+
+    private int _activatedModuleCount;
+    public int ActivatedModuleCount
+    {
+        get => _activatedModuleCount;
+        private set
+        {
+            _activatedModuleCount = value;
+            OnPropertyChanged();
+        }
+    }
 
     private string _discoveredModulesSummary = string.Empty;
     public string DiscoveredModulesSummary
@@ -326,12 +407,58 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         {
             Interval = TimeSpan.FromSeconds(1)
         };
+
+        SelectTabCommand = new BaseCommand(parameter =>
+        {
+            if (parameter is DiagnosticsTabItemViewModel tab)
+            {
+                SelectTab(tab);
+            }
+        });
+        InitializeTabs(languageService);
+
         ApplyInitialSummaries();
+    }
+
+    private void InitializeTabs(IAppLanguageService languageService)
+    {
+        Tabs.Add(new(languageService, "Diag.Overview", "Navigation_Diagnostics_TabOverview", "系统概况"));
+        Tabs.Add(new(languageService, "Diag.SyncOps", "Navigation_Diagnostics_TabSyncOps", "同步运维"));
+        Tabs.Add(new(languageService, "Diag.Startup", "Navigation_Diagnostics_TabStartup", "启动诊断"));
+        SelectTab(Tabs[0]);
+    }
+
+    private void SelectTab(DiagnosticsTabItemViewModel? tab)
+    {
+        if (tab is null)
+        {
+            return;
+        }
+
+        foreach (var item in Tabs)
+        {
+            item.IsSelected = ReferenceEquals(item, tab);
+        }
+
+        if (ReferenceEquals(_selectedTab, tab))
+        {
+            return;
+        }
+
+        _selectedTab = tab;
+        OnPropertyChanged(nameof(SelectedTab));
+        OnPropertyChanged(nameof(IsOverviewTabSelected));
+        OnPropertyChanged(nameof(IsSyncOpsTabSelected));
+        OnPropertyChanged(nameof(IsStartupTabSelected));
     }
 
     protected override void RefreshLocalization()
     {
         base.RefreshLocalization();
+        foreach (var tab in Tabs)
+        {
+            tab.RefreshLanguage();
+        }
         _ = SafeRefreshAsync();
     }
 
@@ -401,6 +528,10 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
 
         ApplySummary(_summaryBuilder.Build(report, syncDiagnostics, moduleNameMap));
         ApplyRows(_rowsBuilder.Build(report, syncDiagnostics, moduleNameMap));
+
+        DiscoveredModuleCount = report.DiscoveredModules.Count;
+        EnabledModuleCount = report.EnabledModules.Count;
+        ActivatedModuleCount = report.ActivatedModules.Count;
     }
 
     private void ApplyInitialSummaries()
@@ -445,8 +576,13 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         ReplaceItems(DeviceBindings, rows.DeviceBindings);
         ReplaceItems(Issues, rows.Issues);
         ReplaceItems(MesUploadDiagnostics, rows.MesUploadDiagnostics);
+        ReplaceItems(SyncChannels, rows.SyncChannels);
         ReplaceItems(CloudDeadLetters, rows.CloudDeadLetters);
         ReplaceItems(MesDeadLetters, rows.MesDeadLetters);
+
+        CloudDeadLetterCount = CloudDeadLetters.Count;
+        MesDeadLetterCount = MesDeadLetters.Count;
+        TotalIssueCount = Issues.Count;
     }
 
     private bool CanOperateDeadLetter(DeadLetterRow? row)
@@ -550,4 +686,51 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase
         _requeueDeadLetterCommand.RaiseCanExecuteChanged();
         _deleteDeadLetterCommand.RaiseCanExecuteChanged();
     }
+}
+
+public sealed class DiagnosticsTabItemViewModel : BaseNotifyPropertyChanged
+{
+    private readonly IAppLanguageService _languageService;
+    private bool _isSelected;
+
+    public DiagnosticsTabItemViewModel(
+        IAppLanguageService languageService,
+        string key,
+        string titleResourceKey,
+        string titleFallback)
+    {
+        _languageService = languageService;
+        Key = key;
+        TitleResourceKey = titleResourceKey;
+        TitleFallback = titleFallback;
+    }
+
+    public string Key { get; }
+
+    public string TitleResourceKey { get; }
+
+    public string TitleFallback { get; }
+
+    public string Title => _languageService.GetString(TitleResourceKey, TitleFallback);
+
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set
+        {
+            if (_isSelected == value)
+            {
+                return;
+            }
+
+            _isSelected = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public void RefreshLanguage()
+        => OnPropertyChanged(nameof(Title));
+
+    public override string ToString()
+        => Title;
 }

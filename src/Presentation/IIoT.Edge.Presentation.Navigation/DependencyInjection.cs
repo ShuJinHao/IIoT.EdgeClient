@@ -1,4 +1,5 @@
 using IIoT.Edge.Presentation.Navigation.Features.Config.ParamView;
+using IIoT.Edge.Presentation.Navigation.Features.Configuration;
 using IIoT.Edge.Presentation.Navigation.Features.Dashboard;
 using IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
 using IIoT.Edge.Presentation.Navigation.Features.Formula.RecipeView;
@@ -21,6 +22,7 @@ public static class DependencyInjection
         services.AddSingleton<LocalizedSyncDiagnosticsText>();
         services.AddSingleton<NavigationRailViewModel>();
         services.AddSingleton<OverviewWorkspaceViewModel>();
+        services.AddSingleton<ConfigurationWorkspaceViewModel>();
         services.AddSingleton<DashboardViewModel>();
         services.AddSingleton<ParamViewModel>();
         services.AddSingleton<IIoViewMappingBuilder, IoViewMappingBuilder>();
@@ -54,6 +56,7 @@ public static class DependencyInjection
         services.AddTransient<NavigationRailView>();
         services.AddTransient<NavigationHostView>();
         services.AddTransient<OverviewWorkspaceView>();
+        services.AddTransient<ConfigurationWorkspaceView>();
         services.AddTransient<DashboardPreviewView>();
         services.AddTransient<DashboardView>();
         services.AddTransient<ParamViewPage>();

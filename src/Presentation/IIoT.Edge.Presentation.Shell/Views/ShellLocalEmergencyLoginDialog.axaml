@@ -2,59 +2,51 @@
     x:Class="IIoT.Edge.Presentation.Shell.Views.ShellLocalEmergencyLoginDialog"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="&#x672C;&#x5730;&#x7D27;&#x6025;&#x767B;&#x5F55;"
-    Width="360"
-    Height="270"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
+    Width="400"
+    Height="260"
+    Background="Transparent"
     CanResize="False"
+    ExtendClientAreaToDecorationsHint="True"
     ShowInTaskbar="False"
+    TransparencyLevelHint="Transparent"
+    WindowDecorations="None"
     WindowStartupLocation="CenterOwner">
-    <Border
-        Padding="26"
-        Background="{DynamicResource Edge.Brush.Surface.Card}"
-        CornerRadius="{DynamicResource Edge.CornerRadius.Card}">
-        <Grid RowDefinitions="Auto,8,Auto,18,Auto,12,Auto,22,Auto">
-            <TextBlock
-                FontSize="{DynamicResource Edge.FontSize.Title}"
-                FontWeight="SemiBold"
-                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                Text="&#x672C;&#x5730;&#x7D27;&#x6025;&#x767B;&#x5F55;" />
-
-            <TextBlock
-                Grid.Row="2"
-                FontSize="{DynamicResource Edge.FontSize.Caption}"
-                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                Text="&#x4F7F;&#x7528;&#x672C;&#x5730;&#x7D27;&#x6025;&#x5BC6;&#x7801;&#x8FDB;&#x884C;&#x771F;&#x5B9E;&#x6821;&#x9A8C;&#x3002;" />
-
+    <edge:EdgeDialogChrome
+        CloseTopLevelOnClose="True"
+        Subtitle="{DynamicResource Shell_Login_LocalDescription}"
+        Title="{DynamicResource Shell_Login_LocalTitle}">
+        <Grid RowDefinitions="Auto,12,Auto,*,Auto">
             <TextBox
                 x:Name="PasswordInput"
-                Grid.Row="4"
+                Grid.Row="0"
                 Height="40"
                 PasswordChar="*"
-                PlaceholderText="&#x7D27;&#x6025;&#x5BC6;&#x7801;" />
+                PlaceholderText="{DynamicResource Shell_Login_LocalPasswordHint}" />
 
             <TextBlock
                 x:Name="ErrorText"
-                Grid.Row="6"
+                Grid.Row="2"
                 MinHeight="18"
                 FontSize="{DynamicResource Edge.FontSize.Caption}"
                 Foreground="{DynamicResource Edge.Brush.Status.Error}"
                 TextWrapping="Wrap" />
 
-            <Grid Grid.Row="8" ColumnDefinitions="*,12,*">
+            <StackPanel
+                Grid.Row="4"
+                HorizontalAlignment="Right"
+                Orientation="Horizontal"
+                Spacing="{DynamicResource Edge.Size.Spacing8}">
                 <Button
-                    Grid.Column="0"
-                    Height="40"
-                    HorizontalContentAlignment="Center"
+                    Classes="edge-soft-button"
                     Click="OnCancelClick"
-                    Content="&#x53D6;&#x6D88;" />
+                    Content="{DynamicResource Shell_Login_Cancel}" />
                 <Button
                     x:Name="LoginButton"
-                    Grid.Column="2"
-                    Height="40"
-                    HorizontalContentAlignment="Center"
+                    Classes="edge-primary-button"
                     Click="OnLoginClick"
-                    Content="&#x767B;&#x5F55;" />
-            </Grid>
+                    Content="{DynamicResource Shell_Login_Submit}" />
+            </StackPanel>
         </Grid>
-    </Border>
+    </edge:EdgeDialogChrome>
 </Window>

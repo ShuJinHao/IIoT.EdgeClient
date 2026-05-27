@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using IIoT.Edge.Presentation.Navigation.Features.Config.ParamView;
+using IIoT.Edge.Presentation.Navigation.Features.Configuration;
 using IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
 using IIoT.Edge.Presentation.Navigation.Features.Formula.RecipeView;
 using IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView;
@@ -61,21 +62,9 @@ public partial class NavigationHostView : UserControl
         DashboardContentHost.Content = item.ViewId switch
         {
             CoreViewIds.Dashboard => _serviceProvider.GetRequiredService<OverviewWorkspaceView>(),
-            CoreViewIds.ShellMonitor => new PlaceholderPageView
-            {
-                Title = "监控功能建设中",
-                Description = "监控页将在后续批次按首屏母版接入真实页面。"
-            },
-            CoreViewIds.ShellOperations => new PlaceholderPageView
-            {
-                Title = "运维功能建设中",
-                Description = "运维页将在后续批次按首屏母版接入真实页面。"
-            },
-            CoreViewIds.ShellConfiguration => new PlaceholderPageView
-            {
-                Title = "配置功能建设中",
-                Description = "配置页将在后续批次按首屏母版接入真实页面。"
-            },
+            CoreViewIds.ShellMonitor => _serviceProvider.GetRequiredService<MonitorViewPage>(),
+            CoreViewIds.ShellOperations => _serviceProvider.GetRequiredService<DiagnosticsPage>(),
+            CoreViewIds.ShellConfiguration => _serviceProvider.GetRequiredService<ConfigurationWorkspaceView>(),
             "Formula.RecipeView" => _serviceProvider.GetRequiredService<RecipeViewPage>(),
             "Config.ParamView" => _serviceProvider.GetRequiredService<ParamViewPage>(),
             CoreViewIds.Diagnostics => _serviceProvider.GetRequiredService<DiagnosticsPage>(),

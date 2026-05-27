@@ -134,7 +134,7 @@ public sealed class MainWindowViewModel : BaseNotifyPropertyChanged, IShellAuthC
         var device = _deviceService.CurrentDevice;
         if (device is null || device.DeviceId == Guid.Empty)
         {
-            return Task.FromResult(AuthResult.Fail("设备尚未完成云端身份初始化，无法进行云端员工登录。"));
+            return Task.FromResult(AuthResult.Fail("当前设备未连接到云平台，无法使用云端登录。请检查网络连接或联系管理员配置设备。"));
         }
 
         return _authService.LoginCloudAsync(employeeNo?.Trim() ?? string.Empty, password ?? string.Empty, device.DeviceId);

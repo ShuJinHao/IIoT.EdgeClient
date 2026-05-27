@@ -2,6 +2,7 @@
     x:Class="IIoT.Edge.Presentation.Navigation.Features.Config.ParamView.ParamViewPage"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:dg="using:Avalonia.Controls"
     xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
 
     <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
@@ -25,13 +26,10 @@
                     <ItemsControl ItemsSource="{Binding MesParamGroups}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <edge:EdgeCard Margin="{DynamicResource Edge.Thickness.12}">
-                                    <edge:EdgeCard.Header>
-                                        <edge:EdgeSectionHeader Title="{Binding ModuleDisplayName}" />
-                                    </edge:EdgeCard.Header>
-
-                                    <DataGrid
-                                        Classes="edge-grid"
+                                <edge:EdgeTablePanel
+                                    Margin="{DynamicResource Edge.Thickness.12}"
+                                    Title="{Binding ModuleDisplayName}">
+                                    <edge:EdgeDataGrid
                                         AutoGenerateColumns="False"
                                         CanUserReorderColumns="False"
                                         CanUserResizeColumns="True"
@@ -39,9 +37,9 @@
                                         GridLinesVisibility="Horizontal"
                                         HeadersVisibility="Column"
                                         ItemsSource="{Binding Params}">
-                                        <DataGrid.Columns>
-                                            <DataGridTemplateColumn Header="{DynamicResource Navigation_Column_ParamName}" Width="2*">
-                                                <DataGridTemplateColumn.CellTemplate>
+                                        <edge:EdgeDataGrid.Columns>
+                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_ParamName}" Width="2*">
+                                                <dg:DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
                                                         <StackPanel Spacing="{DynamicResource Edge.Size.Spacing4}">
                                                             <TextBlock
@@ -55,11 +53,11 @@
                                                                 TextWrapping="Wrap" />
                                                         </StackPanel>
                                                     </DataTemplate>
-                                                </DataGridTemplateColumn.CellTemplate>
-                                            </DataGridTemplateColumn>
+                                                </dg:DataGridTemplateColumn.CellTemplate>
+                                            </dg:DataGridTemplateColumn>
 
-                                            <DataGridTemplateColumn Header="{DynamicResource Navigation_Column_ParamValue}" Width="2*">
-                                                <DataGridTemplateColumn.CellTemplate>
+                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_ParamValue}" Width="2*">
+                                                <dg:DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
                                                         <Grid>
                                                             <TextBox
@@ -75,14 +73,14 @@
                                                                 IsVisible="{Binding IsBool}" />
                                                         </Grid>
                                                     </DataTemplate>
-                                                </DataGridTemplateColumn.CellTemplate>
-                                            </DataGridTemplateColumn>
+                                                </dg:DataGridTemplateColumn.CellTemplate>
+                                            </dg:DataGridTemplateColumn>
 
-                                            <DataGridTextColumn Binding="{Binding Type}" Header="{DynamicResource Navigation_Column_ParamType}" Width="*" />
-                                            <DataGridTextColumn Binding="{Binding DefaultValue}" Header="{DynamicResource Navigation_Column_DefaultValue}" Width="*" />
-                                        </DataGrid.Columns>
-                                    </DataGrid>
-                                </edge:EdgeCard>
+                                            <dg:DataGridTextColumn Binding="{Binding Type}" Header="{DynamicResource Navigation_Column_ParamType}" Width="*" />
+                                            <dg:DataGridTextColumn Binding="{Binding DefaultValue}" Header="{DynamicResource Navigation_Column_DefaultValue}" Width="*" />
+                                        </edge:EdgeDataGrid.Columns>
+                                    </edge:EdgeDataGrid>
+                                </edge:EdgeTablePanel>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
@@ -92,13 +90,10 @@
                     <ItemsControl ItemsSource="{Binding CloudParamGroups}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <edge:EdgeCard Margin="{DynamicResource Edge.Thickness.12}">
-                                    <edge:EdgeCard.Header>
-                                        <edge:EdgeSectionHeader Title="{Binding ModuleDisplayName}" />
-                                    </edge:EdgeCard.Header>
-
-                                    <DataGrid
-                                        Classes="edge-grid"
+                                <edge:EdgeTablePanel
+                                    Margin="{DynamicResource Edge.Thickness.12}"
+                                    Title="{Binding ModuleDisplayName}">
+                                    <edge:EdgeDataGrid
                                         AutoGenerateColumns="False"
                                         CanUserReorderColumns="False"
                                         CanUserResizeColumns="True"
@@ -106,9 +101,9 @@
                                         GridLinesVisibility="Horizontal"
                                         HeadersVisibility="Column"
                                         ItemsSource="{Binding Params}">
-                                        <DataGrid.Columns>
-                                            <DataGridTemplateColumn Header="{DynamicResource Navigation_Column_ParamName}" Width="2*">
-                                                <DataGridTemplateColumn.CellTemplate>
+                                        <edge:EdgeDataGrid.Columns>
+                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_ParamName}" Width="2*">
+                                                <dg:DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
                                                         <StackPanel Spacing="{DynamicResource Edge.Size.Spacing4}">
                                                             <TextBlock
@@ -122,11 +117,11 @@
                                                                 TextWrapping="Wrap" />
                                                         </StackPanel>
                                                     </DataTemplate>
-                                                </DataGridTemplateColumn.CellTemplate>
-                                            </DataGridTemplateColumn>
+                                                </dg:DataGridTemplateColumn.CellTemplate>
+                                            </dg:DataGridTemplateColumn>
 
-                                            <DataGridTemplateColumn Header="{DynamicResource Navigation_Column_ParamValue}" Width="2*">
-                                                <DataGridTemplateColumn.CellTemplate>
+                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_ParamValue}" Width="2*">
+                                                <dg:DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
                                                         <Grid>
                                                             <TextBox
@@ -142,14 +137,14 @@
                                                                 IsVisible="{Binding IsBool}" />
                                                         </Grid>
                                                     </DataTemplate>
-                                                </DataGridTemplateColumn.CellTemplate>
-                                            </DataGridTemplateColumn>
+                                                </dg:DataGridTemplateColumn.CellTemplate>
+                                            </dg:DataGridTemplateColumn>
 
-                                            <DataGridTextColumn Binding="{Binding Type}" Header="{DynamicResource Navigation_Column_ParamType}" Width="*" />
-                                            <DataGridTextColumn Binding="{Binding DefaultValue}" Header="{DynamicResource Navigation_Column_DefaultValue}" Width="*" />
-                                        </DataGrid.Columns>
-                                    </DataGrid>
-                                </edge:EdgeCard>
+                                            <dg:DataGridTextColumn Binding="{Binding Type}" Header="{DynamicResource Navigation_Column_ParamType}" Width="*" />
+                                            <dg:DataGridTextColumn Binding="{Binding DefaultValue}" Header="{DynamicResource Navigation_Column_DefaultValue}" Width="*" />
+                                        </edge:EdgeDataGrid.Columns>
+                                    </edge:EdgeDataGrid>
+                                </edge:EdgeTablePanel>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
@@ -159,13 +154,10 @@
                     <ItemsControl ItemsSource="{Binding PluginParamGroups}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <edge:EdgeCard Margin="{DynamicResource Edge.Thickness.12}">
-                                    <edge:EdgeCard.Header>
-                                        <edge:EdgeSectionHeader Title="{Binding ModuleDisplayName}" />
-                                    </edge:EdgeCard.Header>
-
-                                    <DataGrid
-                                        Classes="edge-grid"
+                                <edge:EdgeTablePanel
+                                    Margin="{DynamicResource Edge.Thickness.12}"
+                                    Title="{Binding ModuleDisplayName}">
+                                    <edge:EdgeDataGrid
                                         AutoGenerateColumns="False"
                                         CanUserReorderColumns="False"
                                         CanUserResizeColumns="True"
@@ -173,9 +165,9 @@
                                         GridLinesVisibility="Horizontal"
                                         HeadersVisibility="Column"
                                         ItemsSource="{Binding Params}">
-                                        <DataGrid.Columns>
-                                            <DataGridTemplateColumn Header="{DynamicResource Navigation_Column_ParamName}" Width="2*">
-                                                <DataGridTemplateColumn.CellTemplate>
+                                        <edge:EdgeDataGrid.Columns>
+                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_ParamName}" Width="2*">
+                                                <dg:DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
                                                         <StackPanel Spacing="{DynamicResource Edge.Size.Spacing4}">
                                                             <TextBlock
@@ -189,11 +181,11 @@
                                                                 TextWrapping="Wrap" />
                                                         </StackPanel>
                                                     </DataTemplate>
-                                                </DataGridTemplateColumn.CellTemplate>
-                                            </DataGridTemplateColumn>
+                                                </dg:DataGridTemplateColumn.CellTemplate>
+                                            </dg:DataGridTemplateColumn>
 
-                                            <DataGridTemplateColumn Header="{DynamicResource Navigation_Column_ParamValue}" Width="2*">
-                                                <DataGridTemplateColumn.CellTemplate>
+                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_ParamValue}" Width="2*">
+                                                <dg:DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
                                                         <Grid>
                                                             <TextBox
@@ -209,14 +201,14 @@
                                                                 IsVisible="{Binding IsBool}" />
                                                         </Grid>
                                                     </DataTemplate>
-                                                </DataGridTemplateColumn.CellTemplate>
-                                            </DataGridTemplateColumn>
+                                                </dg:DataGridTemplateColumn.CellTemplate>
+                                            </dg:DataGridTemplateColumn>
 
-                                            <DataGridTextColumn Binding="{Binding Type}" Header="{DynamicResource Navigation_Column_ParamType}" Width="*" />
-                                            <DataGridTextColumn Binding="{Binding DefaultValue}" Header="{DynamicResource Navigation_Column_DefaultValue}" Width="*" />
-                                        </DataGrid.Columns>
-                                    </DataGrid>
-                                </edge:EdgeCard>
+                                            <dg:DataGridTextColumn Binding="{Binding Type}" Header="{DynamicResource Navigation_Column_ParamType}" Width="*" />
+                                            <dg:DataGridTextColumn Binding="{Binding DefaultValue}" Header="{DynamicResource Navigation_Column_DefaultValue}" Width="*" />
+                                        </edge:EdgeDataGrid.Columns>
+                                    </edge:EdgeDataGrid>
+                                </edge:EdgeTablePanel>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>

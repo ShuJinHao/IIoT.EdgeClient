@@ -9,6 +9,7 @@ using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
 using IIoT.Edge.Presentation.Navigation.Localization;
 using IIoT.Edge.Presentation.Shell.Localization;
+using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.UI.Shared.Localization;
 using Xunit;
 
@@ -19,7 +20,7 @@ public sealed class DiagnosticsViewModelBehaviorTests
     private static readonly DateTime TestNow = new(2026, 4, 18, 10, 30, 0, DateTimeKind.Utc);
 
     [Fact]
-    public Task DiagnosticsViewModel_ShouldExposeCloudAndMesDiagnosticsSections()
+    public Task DiagnosticsViewModel_ShouldExposeMergedSyncOperationsSection()
         => RunOnStaThreadAsync(async () =>
         {
             var startupStore = new FakeStartupDiagnosticsStore();
@@ -96,6 +97,16 @@ public sealed class DiagnosticsViewModelBehaviorTests
 
             var viewModel = CreateViewModel(startupStore, diagnosticsQuery, new TestAppLanguageService());
 
+            Assert.Collection(
+                viewModel.Tabs,
+                tab => Assert.Equal("Diag.Overview", tab.Key),
+                tab => Assert.Equal("Diag.SyncOps", tab.Key),
+                tab => Assert.Equal("Diag.Startup", tab.Key));
+            Assert.True(viewModel.IsOverviewTabSelected);
+
+            viewModel.SelectTabCommand.Execute(viewModel.Tabs[1]);
+            Assert.True(viewModel.IsSyncOpsTabSelected);
+
             await viewModel.RefreshAsync();
 
             Assert.Equal("上传门禁：存储故障", viewModel.CloudGateSummary);
@@ -111,6 +122,78 @@ public sealed class DiagnosticsViewModelBehaviorTests
             Assert.Single(viewModel.PluginStates);
             Assert.Single(viewModel.DeviceBindings);
             Assert.Single(viewModel.MesUploadDiagnostics);
+
+            Assert.Equal(2, viewModel.SyncChannels.Count);
+            var cloudRow = Assert.Single(viewModel.SyncChannels, x => x.Channel == "云端");
+            Assert.Equal("存储故障", cloudRow.Status);
+            Assert.Equal("过站=3，日志=4，产能=5", cloudRow.Pending);
+            Assert.Equal(0, cloudRow.DeadLetterCount);
+            Assert.Contains("重试后仍未授权", cloudRow.LastError, StringComparison.Ordinal);
+            Assert.Contains("存储故障：是", cloudRow.Note, StringComparison.Ordinal);
+
+            var mesRow = Assert.Single(viewModel.SyncChannels, x => x.Channel == "MES");
+            Assert.Equal("存储故障", mesRow.Status);
+            Assert.Equal("重试=2", mesRow.Pending);
+            Assert.Equal(0, mesRow.DeadLetterCount);
+            Assert.Equal("mes timeout", mesRow.LastError);
+            Assert.Contains("存储故障：是", mesRow.Note, StringComparison.Ordinal);
+        });
+
+    [Fact]
+    public Task DiagnosticsViewModel_WhenSyncChannelsAreNormal_ShouldNotExposeNormalNoiseInSyncOpsRows()
+        => RunOnStaThreadAsync(async () =>
+        {
+            var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery
+            {
+                Current = CreateReadySyncSnapshot()
+            };
+            var viewModel = CreateViewModel(new FakeStartupDiagnosticsStore(), diagnosticsQuery, new TestAppLanguageService());
+
+            await viewModel.RefreshAsync();
+
+            Assert.Equal(2, viewModel.SyncChannels.Count);
+            foreach (var row in viewModel.SyncChannels)
+            {
+                Assert.Equal("--", row.LastError);
+                Assert.Equal("--", row.Note);
+                Assert.DoesNotContain("否", row.LastError, StringComparison.Ordinal);
+                Assert.DoesNotContain("否", row.Note, StringComparison.Ordinal);
+            }
+        });
+
+    [Fact]
+    public Task DiagnosticsViewModel_ShouldKeepCloudAndMesDeadLettersSeparatedInOperationsTab()
+        => RunOnStaThreadAsync(async () =>
+        {
+            var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery
+            {
+                Current = CreateReadySyncSnapshot(
+                    cloudDeadLetters: new DeadLetterDiagnosticsSnapshot(
+                        1,
+                        [],
+                        [CreateDeadLetterRecord(101, "Cloud")],
+                        false,
+                        null,
+                        null),
+                    mesDeadLetters: new DeadLetterDiagnosticsSnapshot(
+                        1,
+                        [],
+                        [CreateDeadLetterRecord(202, "MES")],
+                        false,
+                        null,
+                        null))
+            };
+            var viewModel = CreateViewModel(new FakeStartupDiagnosticsStore(), diagnosticsQuery, new TestAppLanguageService());
+
+            await viewModel.RefreshAsync();
+
+            var cloudRow = Assert.Single(viewModel.CloudDeadLetters);
+            Assert.Equal(DataPipelineRetryChannel.Cloud, cloudRow.Channel);
+            Assert.Equal(101, cloudRow.Id);
+
+            var mesRow = Assert.Single(viewModel.MesDeadLetters);
+            Assert.Equal(DataPipelineRetryChannel.Mes, mesRow.Channel);
+            Assert.Equal(202, mesRow.Id);
         });
 
     [Fact]
@@ -478,13 +561,72 @@ public sealed class DiagnosticsViewModelBehaviorTests
             languageService,
             displayNameResolver,
             new DiagnosticsSummaryBuilder(languageService, diagnosticsText, displayNameResolver),
-            new DiagnosticsRowsBuilder(diagnosticsText, displayNameResolver),
+            new DiagnosticsRowsBuilder(languageService, diagnosticsText, displayNameResolver),
             new DiagnosticsInitialSummaryFactory(languageService, diagnosticsText),
             new DiagnosticsRefreshCoordinator(),
             deadLetterOperator ?? new DiagnosticsDeadLetterOperator(),
             deadLetterConfirmationService ?? new FakeDeadLetterConfirmationService(),
             permissionService ?? new FakeClientPermissionService());
     }
+
+    private static EdgeSyncDiagnosticsSnapshot CreateReadySyncSnapshot(
+        DeadLetterDiagnosticsSnapshot? cloudDeadLetters = null,
+        DeadLetterDiagnosticsSnapshot? mesDeadLetters = null)
+        => new(
+            "PLC-A",
+            new CloudSyncDiagnosticsSnapshot(
+                EdgeUploadGateState.Ready,
+                EdgeUploadBlockReason.None,
+                CloudRetryRuntimeState.Idle,
+                null,
+                null,
+                null,
+                CloudCallOutcome.Success,
+                "none",
+                null,
+                0,
+                0,
+                0,
+                false,
+                false,
+                null,
+                "none",
+                null,
+                false,
+                null,
+                null,
+                DeadLetters: cloudDeadLetters),
+            new MesSyncDiagnosticsSnapshot(
+                MesRetryRuntimeState.Idle,
+                null,
+                null,
+                null,
+                null,
+                0,
+                [],
+                false,
+                null,
+                "none",
+                null,
+                false,
+                null,
+                null,
+                DeadLetters: mesDeadLetters),
+            new ProductionContextPersistenceDiagnostics(0, null));
+
+    private static DeadLetterRecord CreateDeadLetterRecord(long id, string failedTarget)
+        => new()
+        {
+            Id = id,
+            ProcessType = "Homogenization",
+            CellDataJson = "{\"trayCode\":\"TRAY-10\"}",
+            FailedTarget = failedTarget,
+            SourceTable = "failed_records",
+            SourceRecordId = id,
+            FailureStage = "FallbackPersist",
+            FailureReason = $"{failedTarget} failed",
+            CreatedAt = TestNow
+        };
 
     private static DeadLetterRow CreateDeadLetterRow()
         => new(

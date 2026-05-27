@@ -2,6 +2,7 @@
     x:Class="IIoT.Edge.Presentation.Navigation.Features.Formula.RecipeView.RecipeViewPage"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:dg="using:Avalonia.Controls"
     xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
 
     <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
@@ -75,9 +76,8 @@
                 </Grid>
             </edge:EdgeCard>
 
-            <edge:EdgeCard>
-                <DataGrid
-                    Classes="edge-grid"
+            <edge:EdgeTablePanel Title="{DynamicResource Navigation_Title_ProductRecipe}">
+                <edge:EdgeDataGrid
                     AutoGenerateColumns="False"
                     CanUserReorderColumns="False"
                     CanUserResizeColumns="True"
@@ -85,13 +85,13 @@
                     GridLinesVisibility="Horizontal"
                     HeadersVisibility="Column"
                     ItemsSource="{Binding Params}">
-                    <DataGrid.Columns>
-                        <DataGridTextColumn Binding="{Binding Name}" Header="{DynamicResource Navigation_Column_ParamName}" Width="2*" />
-                        <DataGridTextColumn Binding="{Binding Min}" Header="{DynamicResource Navigation_Column_LowerLimit}" Width="*" />
-                        <DataGridTextColumn Binding="{Binding Max}" Header="{DynamicResource Navigation_Column_UpperLimit}" Width="*" />
-                        <DataGridTextColumn Binding="{Binding Unit}" Header="{DynamicResource Navigation_Column_Unit}" Width="*" />
-                        <DataGridTemplateColumn Header="" Width="96">
-                            <DataGridTemplateColumn.CellTemplate>
+                    <edge:EdgeDataGrid.Columns>
+                        <dg:DataGridTextColumn Binding="{Binding Name}" Header="{DynamicResource Navigation_Column_ParamName}" Width="2*" />
+                        <dg:DataGridTextColumn Binding="{Binding Min}" Header="{DynamicResource Navigation_Column_LowerLimit}" Width="*" />
+                        <dg:DataGridTextColumn Binding="{Binding Max}" Header="{DynamicResource Navigation_Column_UpperLimit}" Width="*" />
+                        <dg:DataGridTextColumn Binding="{Binding Unit}" Header="{DynamicResource Navigation_Column_Unit}" Width="*" />
+                        <dg:DataGridTemplateColumn Header="" Width="96">
+                            <dg:DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Button
                                         HorizontalAlignment="Right"
@@ -103,11 +103,11 @@
                                         <TextBlock Text="{DynamicResource Navigation_Button_Delete}" />
                                     </Button>
                                 </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-                    </DataGrid.Columns>
-                </DataGrid>
-            </edge:EdgeCard>
+                            </dg:DataGridTemplateColumn.CellTemplate>
+                        </dg:DataGridTemplateColumn>
+                    </edge:EdgeDataGrid.Columns>
+                </edge:EdgeDataGrid>
+            </edge:EdgeTablePanel>
 
             <edge:EdgeCard IsVisible="{Binding IsLocalAdmin}">
                 <edge:EdgeCard.Header>

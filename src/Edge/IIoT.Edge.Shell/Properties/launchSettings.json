@@ -4,7 +4,10 @@
     "IIoT.Edge.Shell": {
       "commandName": "Project",
       "environmentVariables": {
-        "DOTNET_ENVIRONMENT": "Development"
+        "DOTNET_ENVIRONMENT": "Development",
+        "Shell__MachineProfile": "HomogenizationLine",
+        "NO_PROXY": "10.98.101.247,localhost,127.0.0.1",
+        "no_proxy": "10.98.101.247,localhost,127.0.0.1"
       }
     }
   }

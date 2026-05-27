@@ -9,61 +9,53 @@
         <StackPanel Margin="{DynamicResource Edge.Thickness.20}" Spacing="{DynamicResource Edge.Size.Spacing12}">
             <edge:EdgeSectionHeader
                 Title="{Binding ViewTitle}"
-                Subtitle="{Binding StatusMessage}">
-                <edge:EdgeSectionHeader.ActionContent>
-                    <Button
-                        MinWidth="118"
-                        Padding="{DynamicResource Edge.Thickness.8}"
-                        Command="{Binding ExportCommand}">
-                        <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Edge.Size.Spacing6}">
-                            <PathIcon
-                                Width="16"
-                                Height="16"
-                                Data="M6,3 L16,3 L20,7 L20,21 L6,21 Z M15,3 L15,8 L20,8 M9,11 L17,11 M9,14 L17,14 M9,17 L14,17" />
-                            <TextBlock Text="{DynamicResource Navigation_Button_ExportExcel}" />
-                        </StackPanel>
-                    </Button>
-                </edge:EdgeSectionHeader.ActionContent>
-            </edge:EdgeSectionHeader>
+                Subtitle="{Binding StatusMessage}" />
 
-            <edge:EdgeCard CardPadding="{DynamicResource Edge.Thickness.Card.Compact}">
-                <WrapPanel>
-                    <ComboBox
-                        Width="190"
-                        Margin="0,0,8,0"
-                        ItemsSource="{Binding DeviceNames}"
-                        PlaceholderText="{DynamicResource Navigation_Hint_SelectDevice}"
-                        SelectedItem="{Binding SelectedDeviceName}" />
-                    <ComboBox
-                        Width="150"
-                        Margin="0,0,8,0"
-                        ItemsSource="{Binding QueryModes}"
-                        PlaceholderText="{DynamicResource Navigation_Hint_QueryDimension}"
-                        SelectedItem="{Binding SelectedQueryModeOption}">
-                        <ComboBox.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding DisplayName}" />
-                            </DataTemplate>
-                        </ComboBox.ItemTemplate>
-                    </ComboBox>
-                    <DatePicker
-                        Width="150"
-                        Margin="0,0,12,0"
-                        SelectedDate="{Binding QueryDateOffset}" />
-                    <Button
-                        MinWidth="86"
-                        Padding="16,8"
+            <edge:EdgeReportFilterBar>
+                <edge:EdgeReportFilterBar.FilterContent>
+                    <Grid ColumnDefinitions="220,170,190,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing10}">
+                        <edge:EdgeFilterComboBox
+                            ItemsSource="{Binding DeviceNames}"
+                            PlaceholderText="{DynamicResource Navigation_Hint_SelectDevice}"
+                            SelectedItem="{Binding SelectedDeviceName}" />
+                        <edge:EdgeFilterComboBox
+                            Grid.Column="1"
+                            ItemsSource="{Binding QueryModes}"
+                            PlaceholderText="{DynamicResource Navigation_Hint_QueryDimension}"
+                            SelectedItem="{Binding SelectedQueryModeOption}">
+                            <edge:EdgeFilterComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding DisplayName}" />
+                                </DataTemplate>
+                            </edge:EdgeFilterComboBox.ItemTemplate>
+                        </edge:EdgeFilterComboBox>
+                        <edge:EdgeFilterDatePicker
+                            Grid.Column="2"
+                            SelectedDateOffset="{Binding QueryDateOffset}" />
+                    </Grid>
+                </edge:EdgeReportFilterBar.FilterContent>
+                <edge:EdgeReportFilterBar.ActionContent>
+                    <edge:EdgeToolButton
+                        Classes="primary"
                         Command="{Binding QueryCommand}">
                         <TextBlock Text="{DynamicResource Navigation_Button_Query}" />
-                    </Button>
-                </WrapPanel>
-            </edge:EdgeCard>
+                    </edge:EdgeToolButton>
+                </edge:EdgeReportFilterBar.ActionContent>
+            </edge:EdgeReportFilterBar>
 
-            <edge:EdgeStatusListItem
+            <edge:EdgeNoticeBar
                 IsVisible="{Binding !CanQueryCloud}"
-                Status="Warning"
-                StatusText="{DynamicResource Navigation_Capacity_OfflineHint}"
-                Title="{DynamicResource Navigation_Capacity_OfflineHint}" />
+                Status="Warning">
+                <edge:EdgeNoticeBar.Icon>
+                    <edge:EdgeStatusDot Status="Warning" />
+                </edge:EdgeNoticeBar.Icon>
+                <TextBlock
+                    FontSize="{DynamicResource Edge.FontSize.Body}"
+                    FontWeight="SemiBold"
+                    Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                    Text="{DynamicResource Navigation_Capacity_OfflineHint}"
+                    TextWrapping="Wrap" />
+            </edge:EdgeNoticeBar>
 
             <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing12}">
                 <edge:EdgeKpiCard
@@ -89,18 +81,17 @@
 
             <edge:EdgeCard>
                 <StackPanel Spacing="{DynamicResource Edge.Size.Spacing12}">
-                    <DataGrid
-                        Classes="edge-grid"
+                    <edge:EdgeDataGrid
                         AutoGenerateColumns="False"
                         CanUserReorderColumns="False"
                         CanUserResizeColumns="True"
                         CanUserSortColumns="False"
+                        Density="Compact"
                         GridLinesVisibility="Horizontal"
                         HeadersVisibility="Column"
                         IsReadOnly="True"
-                        IsVisible="{Binding HasDailyRecords}"
                         ItemsSource="{Binding DailyRecords}">
-                        <DataGrid.Columns>
+                        <edge:EdgeDataGrid.Columns>
                             <DataGridTextColumn Binding="{Binding Date}" Header="{DynamicResource Navigation_Column_Date}" Width="90" />
                             <DataGridTextColumn Binding="{Binding DayOfWeek}" Header="{DynamicResource Navigation_Column_Weekday}" Width="90" />
                             <DataGridTextColumn Binding="{Binding Total}" Header="{DynamicResource Navigation_Column_Total}" Width="90" />
@@ -110,8 +101,8 @@
                             <DataGridTextColumn Binding="{Binding DayShiftTotal}" Header="{DynamicResource Navigation_Monitor_DayShift}" Width="100" />
                             <DataGridTextColumn Binding="{Binding NightShiftTotal}" Header="{DynamicResource Navigation_Monitor_NightShift}" Width="100" />
                             <DataGridTextColumn Binding="{Binding DateFull}" Header="{DynamicResource Navigation_Column_FullDate}" Width="120" />
-                        </DataGrid.Columns>
-                    </DataGrid>
+                        </edge:EdgeDataGrid.Columns>
+                    </edge:EdgeDataGrid>
 
                     <sharedViews:EmptyStateView
                         IsVisible="{Binding IsDailyRecordsEmpty}"
@@ -124,40 +115,19 @@
                 <edge:EdgeCard.Header>
                     <edge:EdgeSectionHeader Title="{DynamicResource Navigation_Capacity_ChartTitle}" />
                 </edge:EdgeCard.Header>
-                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                    <ItemsControl ItemsSource="{Binding ChartBars}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <StackPanel Orientation="Horizontal" />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <StackPanel Width="54" Margin="0,0,8,0" HorizontalAlignment="Center" VerticalAlignment="Bottom">
-                                    <TextBlock
-                                        Margin="0,0,0,4"
-                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                        Text="{Binding Value}"
-                                        TextAlignment="Center" />
-                                    <Border
-                                        Width="28"
-                                        Height="{Binding ChartHeight}"
-                                        HorizontalAlignment="Center"
-                                        Background="{DynamicResource Edge.Brush.Status.Running}"
-                                        CornerRadius="{DynamicResource Edge.CornerRadius.Small}" />
-                                    <TextBlock
-                                        Margin="0,6,0,0"
-                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                        Text="{Binding Label}"
-                                        TextAlignment="Center"
-                                        TextWrapping="Wrap" />
-                                </StackPanel>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </ScrollViewer>
+                <edge:EdgeBarLineChart
+                    ItemsSource="{Binding ChartPoints}"
+                    MinHeight="180"
+                    PrimaryValueFormat="0"
+                    SecondaryAxisMaximum="100"
+                    SecondaryValueFormat="0"
+                    Series="{Binding ChartSeries}">
+                    <edge:EdgeBarLineChart.EmptyContent>
+                        <sharedViews:EmptyStateView
+                            Message="{DynamicResource Navigation_Capacity_EmptyMessage}"
+                            Title="{DynamicResource Navigation_Capacity_EmptyTitle}" />
+                    </edge:EdgeBarLineChart.EmptyContent>
+                </edge:EdgeBarLineChart>
             </edge:EdgeCard>
         </StackPanel>
     </ScrollViewer>

@@ -2,6 +2,7 @@
     x:Class="IIoT.Edge.Presentation.Navigation.Features.Hardware.PlcTaskBindingView.PlcTaskBindingPage"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:dg="using:Avalonia.Controls"
     xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
     xmlns:sharedViews="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared">
 
@@ -38,39 +39,39 @@
             </edge:EdgeSectionHeader.ActionContent>
         </edge:EdgeSectionHeader>
 
-        <edge:EdgeCard
+        <StackPanel
             Grid.Row="1"
-            Margin="0,16,0,0">
-            <StackPanel Spacing="12">
-                <edge:EdgeStatusListItem
-                    Status="Info"
-                    StatusText="{DynamicResource Navigation_Hint_SelectDevice}"
-                    Title="{Binding SelectedDevice.DeviceStateText}" />
+            Margin="0,16,0,0"
+            Spacing="12">
+            <edge:EdgeStatusListItem
+                Status="Info"
+                StatusText="{DynamicResource Navigation_Hint_SelectDevice}"
+                Title="{Binding SelectedDevice.DeviceStateText}" />
 
-                <DataGrid
-                    Classes="edge-grid"
+            <edge:EdgeTablePanel Title="{DynamicResource Navigation_Title_PlcTaskBinding}">
+                <edge:EdgeDataGrid
                     AutoGenerateColumns="False"
                     CanUserReorderColumns="False"
                     CanUserResizeColumns="True"
                     CanUserSortColumns="False"
                     IsReadOnly="False"
                     ItemsSource="{Binding SelectedDeviceTasks}">
-                    <DataGrid.Columns>
-                        <DataGridCheckBoxColumn Binding="{Binding Enabled}" Header="{DynamicResource Navigation_Column_Enable}" Width="80" />
-                        <DataGridTextColumn Binding="{Binding DisplayName}" Header="{DynamicResource Navigation_Column_TaskName}" IsReadOnly="True" Width="180" />
-                        <DataGridTextColumn Binding="{Binding TaskTypeText}" Header="{DynamicResource Navigation_Column_TaskType}" IsReadOnly="True" Width="130" />
-                        <DataGridTextColumn Binding="{Binding SourceText}" Header="{DynamicResource Navigation_Column_TaskBindingSource}" IsReadOnly="True" Width="120" />
-                        <DataGridTextColumn Binding="{Binding AvailabilityText}" Header="{DynamicResource Navigation_Column_TaskAvailability}" IsReadOnly="True" Width="180" />
-                        <DataGridTextColumn Binding="{Binding RequiredSignalsText}" Header="{DynamicResource Navigation_Column_RequiredSignals}" IsReadOnly="True" Width="2*" />
-                        <DataGridTextColumn Binding="{Binding Key}" Header="{DynamicResource Navigation_Column_TaskKey}" IsReadOnly="True" Width="*" />
-                    </DataGrid.Columns>
-                </DataGrid>
+                    <edge:EdgeDataGrid.Columns>
+                        <dg:DataGridCheckBoxColumn Binding="{Binding Enabled}" Header="{DynamicResource Navigation_Column_Enable}" Width="80" />
+                        <dg:DataGridTextColumn Binding="{Binding DisplayName}" Header="{DynamicResource Navigation_Column_TaskName}" IsReadOnly="True" Width="180" />
+                        <dg:DataGridTextColumn Binding="{Binding TaskTypeText}" Header="{DynamicResource Navigation_Column_TaskType}" IsReadOnly="True" Width="130" />
+                        <dg:DataGridTextColumn Binding="{Binding SourceText}" Header="{DynamicResource Navigation_Column_TaskBindingSource}" IsReadOnly="True" Width="120" />
+                        <dg:DataGridTextColumn Binding="{Binding AvailabilityText}" Header="{DynamicResource Navigation_Column_TaskAvailability}" IsReadOnly="True" Width="180" />
+                        <dg:DataGridTextColumn Binding="{Binding RequiredSignalsText}" Header="{DynamicResource Navigation_Column_RequiredSignals}" IsReadOnly="True" Width="2*" />
+                        <dg:DataGridTextColumn Binding="{Binding Key}" Header="{DynamicResource Navigation_Column_TaskKey}" IsReadOnly="True" Width="*" />
+                    </edge:EdgeDataGrid.Columns>
+                </edge:EdgeDataGrid>
+            </edge:EdgeTablePanel>
 
-                <sharedViews:EmptyStateView
-                    IsVisible="{Binding !HasDevices}"
-                    Message="{DynamicResource Navigation_PlcTaskBinding_NoDevices}"
-                    Title="{DynamicResource Navigation_Title_PlcTaskBinding}" />
-            </StackPanel>
-        </edge:EdgeCard>
+            <sharedViews:EmptyStateView
+                IsVisible="{Binding !HasDevices}"
+                Message="{DynamicResource Navigation_PlcTaskBinding_NoDevices}"
+                Title="{DynamicResource Navigation_Title_PlcTaskBinding}" />
+        </StackPanel>
     </Grid>
 </UserControl>

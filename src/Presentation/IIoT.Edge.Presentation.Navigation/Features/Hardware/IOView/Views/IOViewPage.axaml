@@ -2,7 +2,9 @@
     x:Class="IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView.IOViewPage"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:dg="using:Avalonia.Controls"
     xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
+    xmlns:ioview="clr-namespace:IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView"
     xmlns:sharedViews="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared">
 
     <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
@@ -12,12 +14,20 @@
                     <TextBlock
                         FontSize="24"
                         FontWeight="SemiBold"
-                        Foreground="{DynamicResource Edge.Text.Primary}"
+                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
                         Text="{Binding ViewTitle}" />
-                    <TextBlock
-                        Foreground="{DynamicResource Edge.Text.Muted}"
-                        Text="{Binding StatusMessage}"
-                        TextWrapping="Wrap" />
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <TextBlock
+                            FontSize="{DynamicResource Edge.FontSize.Caption}"
+                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                            Text="{Binding ConnectionStateText}" />
+                        <TextBlock
+                            FontSize="{DynamicResource Edge.FontSize.Caption}"
+                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                            IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                            Text="{Binding StatusMessage}"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
                 </StackPanel>
 
                 <StackPanel
@@ -36,10 +46,7 @@
                             </DataTemplate>
                         </ComboBox.ItemTemplate>
                     </ComboBox>
-                    <Button
-                        MinWidth="92"
-                        Padding="14,8"
-                        Command="{Binding RefreshDevicesCommand}">
+                    <edge:EdgeToolButton Command="{Binding RefreshDevicesCommand}">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <PathIcon
                                 Width="16"
@@ -47,164 +54,117 @@
                                 Data="M5,12 A7,7 0 0 1 17,7 L19,7 L19,3 M19,7 L15,7 M19,12 A7,7 0 0 1 7,17 L5,17 L5,21 M5,17 L9,17" />
                             <TextBlock Text="{DynamicResource Navigation_Button_Refresh}" />
                         </StackPanel>
-                    </Button>
+                    </edge:EdgeToolButton>
                 </StackPanel>
             </Grid>
 
-            <edge:EdgeStatusListItem
-                Status="Info"
-                StatusText="{DynamicResource Navigation_Hint_SelectDevice}"
-                Title="{Binding ConnectionStateText}" />
-
-            <edge:EdgeCard IsVisible="{Binding HasInteractionRows}">
-                <edge:EdgeCard.Header>
-                    <edge:EdgeSectionHeader Title="{DynamicResource Navigation_Title_IoInteractionGroup}" />
-                </edge:EdgeCard.Header>
-                <StackPanel Spacing="{DynamicResource Edge.Size.Spacing12}">
-                    <DataGrid
-                        Classes="edge-grid"
-                        AutoGenerateColumns="False"
-                        CanUserReorderColumns="False"
-                        CanUserResizeColumns="True"
-                        CanUserSortColumns="False"
-                        HeadersVisibility="Column"
-                        IsReadOnly="False"
-                        ItemsSource="{Binding InteractionRows}">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Binding="{Binding BusinessGroup}" Header="{DynamicResource Navigation_Column_InteractionItem}" IsReadOnly="True" Width="130" />
-                            <DataGridTextColumn Binding="{Binding PlcAddressSummary}" Header="{DynamicResource Navigation_Column_PlcSignal}" IsReadOnly="True" Width="2*" />
-                            <DataGridTextColumn Binding="{Binding PlcValueText}" Header="{DynamicResource Navigation_Column_PlcValue}" IsReadOnly="True" Width="90" />
-                            <DataGridTextColumn Binding="{Binding HostReplyAddressText}" Header="{DynamicResource Navigation_Column_CurrentReply}" IsReadOnly="True" Width="2*" />
-                            <DataGridTextColumn Binding="{Binding HostReplyValueText}" Header="{DynamicResource Navigation_Column_CurrentValue}" IsReadOnly="True" Width="100" />
-                            <DataGridTemplateColumn Header="{DynamicResource Navigation_Column_PendingWriteOperation}" Width="170">
-                                <DataGridTemplateColumn.CellTemplate>
+            <edge:EdgeTablePanel
+                IsVisible="{Binding HasInteractionRows}"
+                Title="{DynamicResource Navigation_Title_IoInteractionGroup}">
+                <edge:EdgeDataGrid
+                    AutoGenerateColumns="False"
+                    CanUserReorderColumns="False"
+                    CanUserResizeColumns="True"
+                    CanUserSortColumns="False"
+                    HeadersVisibility="Column"
+                    IsReadOnly="False"
+                    ItemsSource="{Binding InteractionRows}">
+                    <edge:EdgeDataGrid.Columns>
+                        <dg:DataGridTextColumn Binding="{Binding BusinessGroup}" Header="{DynamicResource Navigation_Column_InteractionItem}" IsReadOnly="True" Width="130" />
+                        <dg:DataGridTextColumn Binding="{Binding PlcAddressSummary}" Header="{DynamicResource Navigation_Column_PlcSignal}" IsReadOnly="True" Width="2*" />
+                        <dg:DataGridTextColumn Binding="{Binding PlcValueText}" Header="{DynamicResource Navigation_Column_PlcValue}" IsReadOnly="True" Width="90" />
+                        <dg:DataGridTextColumn Binding="{Binding HostReplyAddressText}" Header="{DynamicResource Navigation_Column_CurrentReply}" IsReadOnly="True" Width="2*" />
+                        <dg:DataGridTextColumn Binding="{Binding HostReplyValueText}" Header="{DynamicResource Navigation_Column_CurrentValue}" IsReadOnly="True" Width="100" />
+                        <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_PendingWriteOperation}" Width="170">
+                            <dg:DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
-                                        <Grid ColumnDefinitions="*,8,Auto">
+                                        <Grid ColumnDefinitions="*,6,Auto">
                                             <TextBox
-                                                MinWidth="70"
+                                                MinWidth="60"
+                                                MinHeight="28"
+                                                Padding="6,3"
+                                                BorderThickness="0"
+                                                Background="Transparent"
                                                 HorizontalContentAlignment="Right"
                                                 IsEnabled="{Binding CanWrite}"
                                                 Text="{Binding WriteValue, Mode=TwoWay}" />
-                                            <Button
+                                            <edge:EdgeToolButton
                                                 Grid.Column="2"
-                                                MinWidth="62"
-                                                Padding="10,4"
+                                                MinWidth="50"
+                                                MinHeight="28"
+                                                Padding="10,0"
                                                 Command="{Binding WriteCommand}"
                                                 IsEnabled="{Binding CanWrite}">
                                                 <TextBlock Text="{DynamicResource Navigation_Button_Write}" />
-                                            </Button>
+                                            </edge:EdgeToolButton>
                                         </Grid>
                                     </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-                        </DataGrid.Columns>
-                    </DataGrid>
-                </StackPanel>
-            </edge:EdgeCard>
+                            </dg:DataGridTemplateColumn.CellTemplate>
+                        </dg:DataGridTemplateColumn>
+                    </edge:EdgeDataGrid.Columns>
+                </edge:EdgeDataGrid>
+            </edge:EdgeTablePanel>
 
             <ItemsControl ItemsSource="{Binding DataSections}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <edge:EdgeCard
+                        <edge:EdgeTablePanel
                             Margin="0,0,0,14"
-                            CardPadding="{DynamicResource Edge.Thickness.Card.Default}">
-                            <edge:EdgeCard.Header>
-                                <edge:EdgeSectionHeader Title="{Binding Title}">
-                                    <edge:EdgeSectionHeader.ActionContent>
-                                        <Button
-                                            Padding="12,6"
-                                            Command="{Binding DataContext.ManualReadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                            IsVisible="{Binding CanManualRead}">
-                                            <TextBlock Text="{DynamicResource Navigation_Button_ReadIoData}" />
-                                        </Button>
-                                    </edge:EdgeSectionHeader.ActionContent>
-                                </edge:EdgeSectionHeader>
-                            </edge:EdgeCard.Header>
-                            <StackPanel Spacing="12">
-                                <DataGrid
-                                    Classes="edge-grid"
-                                    AutoGenerateColumns="False"
-                                    CanUserReorderColumns="False"
-                                    CanUserResizeColumns="True"
-                                    CanUserSortColumns="False"
-                                    IsReadOnly="True"
-                                    ItemsSource="{Binding Signals}">
-                                    <DataGrid.Columns>
-                                        <DataGridTextColumn Binding="{Binding SignalName}" Header="{DynamicResource Navigation_Column_SignalName}" Width="2*" />
-                                        <DataGridTextColumn Binding="{Binding PlcAddress}" Header="{DynamicResource Navigation_Column_Address}" Width="120" />
-                                        <DataGridTextColumn Binding="{Binding DataType}" Header="{DynamicResource Navigation_Column_Type}" Width="100" />
-                                        <DataGridTextColumn Binding="{Binding LengthText}" Header="{DynamicResource Navigation_Column_Length}" Width="80" />
-                                        <DataGridTextColumn Binding="{Binding PreviewValue}" Header="{DynamicResource Navigation_Column_CurrentValue}" Width="*" />
-                                    </DataGrid.Columns>
-                                </DataGrid>
-                            </StackPanel>
-                        </edge:EdgeCard>
+                            Title="{Binding Title}">
+                            <edge:EdgeTablePanel.ActionContent>
+                                <edge:EdgeToolButton
+                                    Command="{Binding DataContext.ManualReadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    IsVisible="{Binding CanManualRead}">
+                                    <TextBlock Text="{DynamicResource Navigation_Button_ReadIoData}" />
+                                </edge:EdgeToolButton>
+                            </edge:EdgeTablePanel.ActionContent>
+                            <edge:EdgeDataGrid
+                                AutoGenerateColumns="False"
+                                CanUserReorderColumns="False"
+                                CanUserResizeColumns="True"
+                                CanUserSortColumns="False"
+                                IsReadOnly="True"
+                                ItemsSource="{Binding Signals}">
+                                <edge:EdgeDataGrid.Columns>
+                                    <dg:DataGridTextColumn Binding="{Binding SignalName}" Header="{DynamicResource Navigation_Column_SignalName}" Width="2*" />
+                                    <dg:DataGridTextColumn Binding="{Binding PlcAddress}" Header="{DynamicResource Navigation_Column_Address}" Width="120" />
+                                    <dg:DataGridTextColumn Binding="{Binding DataType}" Header="{DynamicResource Navigation_Column_Type}" Width="100" />
+                                    <dg:DataGridTextColumn Binding="{Binding LengthText}" Header="{DynamicResource Navigation_Column_Length}" Width="80" />
+                                    <dg:DataGridTextColumn Binding="{Binding PreviewValue}" Header="{DynamicResource Navigation_Column_CurrentValue}" Width="*" />
+                                </edge:EdgeDataGrid.Columns>
+                            </edge:EdgeDataGrid>
+                        </edge:EdgeTablePanel>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
-
             <ItemsControl ItemsSource="{Binding ArraySections}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <edge:EdgeCard
+                        <edge:EdgeTablePanel
                             Margin="0,0,0,14"
-                            CardPadding="{DynamicResource Edge.Thickness.Card.Default}">
-                            <edge:EdgeCard.Header>
-                                <edge:EdgeSectionHeader Title="{Binding Title}">
-                                    <edge:EdgeSectionHeader.ActionContent>
-                                        <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Edge.Size.Spacing8}">
-                                            <Button
-                                                Padding="12,6"
-                                                Command="{Binding DataContext.ManualReadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                IsVisible="{Binding CanManualRead}">
-                                                <TextBlock Text="{DynamicResource Navigation_Button_ReadIoData}" />
-                                            </Button>
-                                            <Button
-                                                Padding="12,6"
-                                                Command="{Binding ToggleExpandedCommand}">
-                                                <TextBlock Text="{Binding ToggleText}" />
-                                            </Button>
-                                        </StackPanel>
-                                    </edge:EdgeSectionHeader.ActionContent>
-                                </edge:EdgeSectionHeader>
-                            </edge:EdgeCard.Header>
-                            <StackPanel Spacing="12">
-                                <TextBlock
-                                    Foreground="{DynamicResource Edge.Brush.Status.Warning}"
-                                    Text="{Binding Summary}"
-                                    TextWrapping="Wrap" />
-                                <ScrollViewer
-                                    HorizontalScrollBarVisibility="Auto"
-                                    VerticalScrollBarVisibility="Disabled"
-                                    IsVisible="{Binding IsExpanded}">
-                                    <ItemsControl ItemsSource="{Binding Rows}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <StackPanel Orientation="Horizontal">
-                                                    <Border Width="64" Padding="8" BorderBrush="{DynamicResource Edge.Border.Subtle}" BorderThickness="0,0,1,1">
-                                                        <TextBlock Foreground="{DynamicResource Edge.Text.Muted}" Text="{Binding Index}" />
-                                                    </Border>
-                                                    <ItemsControl ItemsSource="{Binding Values}">
-                                                        <ItemsControl.ItemsPanel>
-                                                            <ItemsPanelTemplate>
-                                                                <StackPanel Orientation="Horizontal" />
-                                                            </ItemsPanelTemplate>
-                                                        </ItemsControl.ItemsPanel>
-                                                        <ItemsControl.ItemTemplate>
-                                                            <DataTemplate>
-                                                                <Border Width="130" Padding="8" BorderBrush="{DynamicResource Edge.Border.Subtle}" BorderThickness="0,0,1,1">
-                                                                    <TextBlock Foreground="{DynamicResource Edge.Text.Primary}" Text="{Binding Value}" TextTrimming="CharacterEllipsis" />
-                                                                </Border>
-                                                            </DataTemplate>
-                                                        </ItemsControl.ItemTemplate>
-                                                    </ItemsControl>
-                                                </StackPanel>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </ScrollViewer>
-                            </StackPanel>
-                        </edge:EdgeCard>
+                            Subtitle="{Binding Summary}"
+                            Title="{Binding Title}">
+                            <edge:EdgeTablePanel.ActionContent>
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <edge:EdgeToolButton
+                                        Command="{Binding DataContext.ManualReadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        IsVisible="{Binding CanManualRead}">
+                                        <TextBlock Text="{DynamicResource Navigation_Button_ReadIoData}" />
+                                    </edge:EdgeToolButton>
+                                    <edge:EdgeToolButton Command="{Binding ToggleExpandedCommand}">
+                                        <TextBlock Text="{Binding ToggleText}" />
+                                    </edge:EdgeToolButton>
+                                </StackPanel>
+                            </edge:EdgeTablePanel.ActionContent>
+                            <edge:EdgeDataGrid
+                                ioview:DataTableBindingBehavior.SourceTable="{Binding MatrixTable}"
+                                AutoGenerateColumns="False"
+                                CanUserReorderColumns="False"
+                                CanUserResizeColumns="True"
+                                CanUserSortColumns="False"
+                                IsReadOnly="True"
+                                IsVisible="{Binding IsExpanded}" />
+                        </edge:EdgeTablePanel>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>

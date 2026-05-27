@@ -1,0 +1,101 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Navigation.Features.Configuration.ConfigurationWorkspaceView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
+
+    <Grid RowDefinitions="Auto,*">
+        <edge:EdgeCard
+            Margin="20,10,30,0"
+            HorizontalAlignment="Left"
+            Height="42"
+            Elevation="Flat"
+            IsVisible="{Binding HasTabs}"
+            PaddingMode="None"
+            Surface="Wash">
+            <edge:EdgeSegmentedNav
+                x:Name="ConfigurationTabsHost"
+                ItemCommand="{Binding SelectTabCommand}"
+                ItemsSource="{Binding Tabs}"
+                SelectedItem="{Binding SelectedTab, Mode=TwoWay}"
+                SelectionMode="Single">
+                <edge:EdgeSegmentedNav.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                </edge:EdgeSegmentedNav.ItemsPanel>
+                <edge:EdgeSegmentedNav.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock
+                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                            Text="{Binding Title}" />
+                    </DataTemplate>
+                </edge:EdgeSegmentedNav.ItemTemplate>
+            </edge:EdgeSegmentedNav>
+        </edge:EdgeCard>
+
+        <Grid Grid.Row="1">
+            <ContentControl
+                x:Name="ConfigurationContentHost"
+                IsVisible="{Binding IsContentVisible}" />
+            <edge:EdgeCard
+                MinHeight="120"
+                MaxWidth="480"
+                Margin="20,40,20,20"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Top"
+                Elevation="Flat"
+                IsVisible="{Binding IsPermissionBlocked}"
+                PaddingMode="Normal"
+                Surface="Card">
+                <StackPanel
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Spacing="{DynamicResource Edge.Size.Spacing6}">
+                    <TextBlock
+                        HorizontalAlignment="Center"
+                        FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                        FontWeight="SemiBold"
+                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                        Text="{Binding NoPermissionTitle}" />
+                    <TextBlock
+                        HorizontalAlignment="Center"
+                        FontSize="{DynamicResource Edge.FontSize.Body}"
+                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                        Text="{Binding NoPermissionMessage}"
+                        TextAlignment="Center"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+            </edge:EdgeCard>
+            <edge:EdgeCard
+                MinHeight="120"
+                MaxWidth="480"
+                Margin="20,40,20,20"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Top"
+                Elevation="Flat"
+                IsVisible="{Binding !HasSelectedTab}"
+                PaddingMode="Normal"
+                Surface="Card">
+                <StackPanel
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Spacing="{DynamicResource Edge.Size.Spacing6}">
+                    <TextBlock
+                        HorizontalAlignment="Center"
+                        FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                        FontWeight="SemiBold"
+                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                        Text="{Binding EmptyTitle}" />
+                    <TextBlock
+                        HorizontalAlignment="Center"
+                        FontSize="{DynamicResource Edge.FontSize.Body}"
+                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                        Text="{Binding EmptyMessage}"
+                        TextAlignment="Center"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+            </edge:EdgeCard>
+        </Grid>
+    </Grid>
+</UserControl>

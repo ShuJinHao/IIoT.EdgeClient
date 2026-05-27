@@ -38,10 +38,11 @@
     <sys:String x:Key="Panels_Label_CurrentBatch">当前批次</sys:String>
     <sys:String x:Key="Panels_Label_CurrentRecipe">当前配方</sys:String>
     <sys:String x:Key="Panels_Label_MesPlanSelection">主批计划</sys:String>
-    <sys:String x:Key="Panels_Label_TraceBatchNumber">追溯批次</sys:String>
+    <sys:String x:Key="Panels_Label_TraceBatchNumber">追溯批次号</sys:String>
     <sys:String x:Key="Panels_Status_MesPlanRequired">待选择主批计划</sys:String>
     <sys:String x:Key="Panels_Status_MesPlanSelected">已选择</sys:String>
     <sys:String x:Key="Panels_Status_TraceBatchPending">待生成</sys:String>
+    <sys:String x:Key="Panels_Status_TraceBatchNotGenerated">MES未生成</sys:String>
     <sys:String x:Key="Panels_Hint_SelectMainPlanBeforeProduction">MES 上传启用后，生产前需要选择主批计划。</sys:String>
     <sys:String x:Key="Panels_Button_SelectProductionPlan">选择主批计划</sys:String>
     <sys:String x:Key="Panels_Label_RealtimeStatus">实时状态</sys:String>

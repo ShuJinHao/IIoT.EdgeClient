@@ -349,6 +349,12 @@ public class EquipmentViewModel : PresentationViewModelBase
             return NormalizeDisplayText(state.TraceBatchNumber);
         }
 
+        if (state.HasSelectedPlan
+            && state.TraceBatchError == ProductionPlanSelectionErrorCodes.TraceBatchNumberMissing)
+        {
+            return _languageService.GetString("Panels_Status_TraceBatchNotGenerated", "MES未生成");
+        }
+
         return state.HasSelectedPlan
             ? _languageService.GetString("Panels_Status_TraceBatchPending", "待生成")
             : EmptyDisplayText;

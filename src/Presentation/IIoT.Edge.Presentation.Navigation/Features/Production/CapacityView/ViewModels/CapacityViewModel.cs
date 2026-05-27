@@ -1,8 +1,11 @@
 using System.Collections.ObjectModel;
 using System.Windows.Input;
+using Avalonia.Controls;
+using Avalonia.Media;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Features.Production.CapacityView;
 using IIoT.Edge.Presentation.Navigation.Localization;
+using IIoT.Edge.UI.Shared.Avalonia.Controls;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
 
@@ -10,6 +13,11 @@ namespace IIoT.Edge.Presentation.Navigation.Features.Production.CapacityView;
 
 public class CapacityViewModel : NavigationViewModelBase
 {
+    private const string ChartTotalKey = "total";
+    private const string ChartGoodKey = "good";
+    private const string ChartBadKey = "bad";
+    private const string ChartYieldKey = "yield";
+
     private readonly ICapacityViewService _capacityViewService;
     private string _selectedDeviceName = string.Empty;
     private string _selectedQueryMode = CapacityQueryModes.Day;
@@ -25,9 +33,11 @@ public class CapacityViewModel : NavigationViewModelBase
     public ObservableCollection<string> DeviceNames { get; } = [];
     public ObservableCollection<CapacityQueryModeOption> QueryModes { get; } = [];
     public ObservableCollection<DailyCapacityVm> DailyRecords { get; } = [];
-    public ObservableCollection<CapacityChartBarVm> ChartBars { get; } = [];
+    public ObservableCollection<EdgeChartPoint> ChartPoints { get; } = [];
+    public ObservableCollection<EdgeChartSeries> ChartSeries { get; } = [];
     public bool HasDailyRecords => DailyRecords.Count > 0;
     public bool IsDailyRecordsEmpty => DailyRecords.Count == 0;
+    public bool HasChartRecords => ChartPoints.Count > 0;
 
     public string SelectedDeviceName
     {
@@ -182,6 +192,7 @@ public class CapacityViewModel : NavigationViewModelBase
         QueryCommand = new AsyncCommand(() => RunViewTaskAsync(QueryHistoryAsync, GetText("Navigation_Capacity_QueryFailed", "产能查询失败。")));
         ExportCommand = new BaseCommand(_ => { });
         RefreshQueryModes();
+        RefreshChartSeries();
         SetSelectedQueryMode(_selectedQueryMode, true);
 
         _capacityViewService.UploadGateChanged += OnUploadGateChanged;
@@ -273,21 +284,24 @@ public class CapacityViewModel : NavigationViewModelBase
 
     private void RefreshChart()
     {
-        ChartBars.Clear();
-        var max = DailyRecords.Count > 0 ? DailyRecords.Max(x => x.Total) : 0;
-        var safeMax = max <= 0 ? 1 : max;
+        ChartPoints.Clear();
 
         foreach (var row in DailyRecords)
         {
-            var ratio = row.Total * 1.0 / safeMax;
-            ChartBars.Add(new CapacityChartBarVm
+            ChartPoints.Add(new EdgeChartPoint
             {
-                Label = row.DateFull,
-                Value = row.Total,
-                HeightRatio = ratio,
-                ChartHeight = Math.Max(2, ratio * 190)
+                Label = string.IsNullOrWhiteSpace(row.Date) ? row.DateFull : row.Date,
+                Values = new Dictionary<string, double>(StringComparer.Ordinal)
+                {
+                    [ChartTotalKey] = row.Total,
+                    [ChartGoodKey] = row.OkCount,
+                    [ChartBadKey] = row.NgCount,
+                    [ChartYieldKey] = CalculateYieldPercent(row)
+                }
             });
         }
+
+        OnPropertyChanged(nameof(HasChartRecords));
     }
 
     private void ClearSummary()
@@ -303,7 +317,58 @@ public class CapacityViewModel : NavigationViewModelBase
     {
         base.RefreshLocalization();
         RefreshQueryModes();
+        RefreshChartSeries();
         SetSelectedQueryMode(_selectedQueryMode, true);
+    }
+
+    private void RefreshChartSeries()
+    {
+        ChartSeries.Clear();
+        ChartSeries.Add(new EdgeChartSeries
+        {
+            Key = ChartTotalKey,
+            Title = GetText("Navigation_Capacity_TotalOutput", "产量合计"),
+            Kind = EdgeChartSeriesKind.Bar,
+            Axis = EdgeChartAxis.Primary,
+            Brush = ResolveBrush("Edge.Brush.Chart.Accent")
+        });
+        ChartSeries.Add(new EdgeChartSeries
+        {
+            Key = ChartGoodKey,
+            Title = GetText("Navigation_Capacity_Good", "良品"),
+            Kind = EdgeChartSeriesKind.Bar,
+            Axis = EdgeChartAxis.Primary,
+            Brush = ResolveBrush("Edge.Brush.Status.Running")
+        });
+        ChartSeries.Add(new EdgeChartSeries
+        {
+            Key = ChartBadKey,
+            Title = GetText("Navigation_Capacity_Bad", "不良"),
+            Kind = EdgeChartSeriesKind.Bar,
+            Axis = EdgeChartAxis.Primary,
+            Brush = ResolveBrush("Edge.Brush.Status.Warning")
+        });
+        ChartSeries.Add(new EdgeChartSeries
+        {
+            Key = ChartYieldKey,
+            Title = GetText("Navigation_Column_Yield", "良率"),
+            Kind = EdgeChartSeriesKind.Line,
+            Axis = EdgeChartAxis.Secondary,
+            Brush = ResolveBrush("Edge.Brush.Chart.Secondary")
+        });
+    }
+
+    private static double CalculateYieldPercent(DailyCapacityVm row)
+    {
+        return row.Total <= 0 ? 0 : row.OkCount * 100d / row.Total;
+    }
+
+    private static IBrush? ResolveBrush(string resourceKey)
+    {
+        return global::Avalonia.Application.Current?.TryGetResource(resourceKey, null, out var value) == true
+            && value is IBrush brush
+                ? brush
+                : null;
     }
 
     private void RefreshQueryModes()

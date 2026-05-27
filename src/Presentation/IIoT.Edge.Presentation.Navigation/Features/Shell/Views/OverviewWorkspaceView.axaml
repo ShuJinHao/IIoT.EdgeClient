@@ -8,7 +8,6 @@
         <edge:EdgeCard
             Margin="20,10,30,0"
             HorizontalAlignment="Left"
-            Width="330"
             Height="42"
             Elevation="Flat"
             PaddingMode="None"

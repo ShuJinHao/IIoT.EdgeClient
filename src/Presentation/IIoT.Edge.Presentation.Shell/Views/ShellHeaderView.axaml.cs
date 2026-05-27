@@ -90,16 +90,16 @@ public partial class ShellHeaderView : UserControl
     private Window? GetWindow()
         => TopLevel.GetTopLevel(this) as Window;
 
-    private static Control CreateLoginChoiceMenu(
+    private Control CreateLoginChoiceMenu(
         IShellAuthContext authContext,
         Window owner,
         Flyout flyout)
     {
         var (shell, panel) = CreateAccountMenuShell();
-        panel.Children.Add(CreateMenuTitle("账号登录"));
-        panel.Children.Add(CreateMenuSubtitle("请选择真实登录方式"));
+        panel.Children.Add(CreateMenuTitle(Res("Shell_Login_Title", "账号登录")));
+        panel.Children.Add(CreateMenuSubtitle(Res("Shell_Login_Subtitle", "请选择登录方式")));
 
-        var localButton = CreateMenuButton("本地紧急登录");
+        var localButton = CreateMenuButton(Res("Shell_Login_LocalEmergency", "本地紧急登录"));
         localButton.Click += async (_, args) =>
         {
             args.Handled = true;
@@ -108,7 +108,7 @@ public partial class ShellHeaderView : UserControl
             await dialog.ShowDialog<bool>(owner);
         };
 
-        var cloudButton = CreateMenuButton("云端员工登录");
+        var cloudButton = CreateMenuButton(Res("Shell_Login_CloudEmployee", "云端员工登录"));
         cloudButton.Click += async (_, args) =>
         {
             args.Handled = true;
@@ -122,16 +122,16 @@ public partial class ShellHeaderView : UserControl
         return shell;
     }
 
-    private static Control CreateAuthenticatedAccountMenu(
+    private Control CreateAuthenticatedAccountMenu(
         IShellAuthContext authContext,
         Flyout flyout)
     {
         var (shell, panel) = CreateAccountMenuShell();
         var user = authContext.CurrentUser;
-        panel.Children.Add(CreateMenuTitle(user?.DisplayName ?? "已登录账号"));
-        panel.Children.Add(CreateMenuSubtitle(user?.EmployeeNo ?? (user?.IsLocalAdmin == true ? "本地紧急登录" : "--")));
+        panel.Children.Add(CreateMenuTitle(user?.DisplayName ?? Res("Shell_Login_LoggedInAs", "已登录")));
+        panel.Children.Add(CreateMenuSubtitle(user?.EmployeeNo ?? (user?.IsLocalAdmin == true ? Res("Shell_Login_LocalEmergency", "本地紧急登录") : "--")));
 
-        var logoutButton = CreateMenuButton("退出登录");
+        var logoutButton = CreateMenuButton(Res("Shell_Login_Logout", "退出登录"));
         logoutButton.Click += (_, args) =>
         {
             args.Handled = true;
@@ -142,6 +142,14 @@ public partial class ShellHeaderView : UserControl
         panel.Children.Add(logoutButton);
         return shell;
     }
+
+    /// <summary>
+    /// 从资源字典读取本地化字符串，找不到时返回 fallback。
+    /// </summary>
+    private string Res(string key, string fallback)
+        => this.TryFindResource(key, out var value) && value is string text
+            ? text
+            : fallback;
 
     private static (Border Shell, StackPanel Panel) CreateAccountMenuShell()
     {

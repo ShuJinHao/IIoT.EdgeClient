@@ -42,6 +42,14 @@ public sealed record MesChannelDiagnosticsRow(
     string LastSuccessAt,
     string LastFailureReason);
 
+public sealed record SyncChannelRow(
+    string Channel,
+    string Status,
+    string Pending,
+    int DeadLetterCount,
+    string LastError,
+    string Note);
+
 public sealed record DeadLetterRow(
     DataPipelineRetryChannel Channel,
     long Id,
@@ -76,5 +84,6 @@ public sealed record DiagnosticsRowsSnapshot(
     IReadOnlyList<DeviceModuleBindingRow> DeviceBindings,
     IReadOnlyList<StartupDiagnosticIssueRow> Issues,
     IReadOnlyList<MesChannelDiagnosticsRow> MesUploadDiagnostics,
+    IReadOnlyList<SyncChannelRow> SyncChannels,
     IReadOnlyList<DeadLetterRow> CloudDeadLetters,
     IReadOnlyList<DeadLetterRow> MesDeadLetters);

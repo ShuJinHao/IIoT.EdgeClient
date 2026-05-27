@@ -62,12 +62,12 @@
     </MSBuild>
   </Target>
 
-  <Target Name="CopyPluginModulesToBuildOutput" AfterTargets="Build" DependsOnTargets="ResolvePluginModuleArtifacts" Condition="'$(EnableLocalPluginModuleBuild)' == 'true' and '@(PluginModuleArtifact)' != ''">
+  <Target Name="CopyPluginModulesToBuildOutput" AfterTargets="Build" DependsOnTargets="ResolvePluginModuleArtifacts" Condition="'$(EnableLocalPluginModuleBuild)' == 'true'">
     <MakeDir Directories="@(PluginModuleArtifact -> '$(TargetDir)Modules\%(ModuleId)\%(RecursiveDir)')" />
     <Copy SourceFiles="@(PluginModuleArtifact)" DestinationFiles="@(PluginModuleArtifact -> '$(TargetDir)Modules\%(ModuleId)\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
 
-  <Target Name="CopyPluginModulesToPublishOutput" AfterTargets="Publish" DependsOnTargets="ResolvePluginModuleArtifacts" Condition="'$(EnableLocalPluginModuleBuild)' == 'true' and '$(PublishDir)' != '' and '@(PluginModuleArtifact)' != ''">
+  <Target Name="CopyPluginModulesToPublishOutput" AfterTargets="Publish" DependsOnTargets="ResolvePluginModuleArtifacts" Condition="'$(EnableLocalPluginModuleBuild)' == 'true' and '$(PublishDir)' != ''">
     <MakeDir Directories="@(PluginModuleArtifact -> '$(PublishDir)Modules\%(ModuleId)\%(RecursiveDir)')" />
     <Copy SourceFiles="@(PluginModuleArtifact)" DestinationFiles="@(PluginModuleArtifact -> '$(PublishDir)Modules\%(ModuleId)\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>

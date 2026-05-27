@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Specialized;
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
@@ -46,6 +47,9 @@ public sealed class EdgeChartPoint
 
 public class EdgeBarLineChart : TemplatedControl
 {
+    private INotifyCollectionChanged? _itemsSourceNotifications;
+    private INotifyCollectionChanged? _seriesNotifications;
+
     public static readonly StyledProperty<IEnumerable?> ItemsSourceProperty =
         AvaloniaProperty.Register<EdgeBarLineChart, IEnumerable?>(nameof(ItemsSource));
 
@@ -87,8 +91,8 @@ public class EdgeBarLineChart : TemplatedControl
 
     static EdgeBarLineChart()
     {
-        ItemsSourceProperty.Changed.AddClassHandler<EdgeBarLineChart>((chart, _) => chart.RefreshChart());
-        SeriesProperty.Changed.AddClassHandler<EdgeBarLineChart>((chart, _) => chart.RefreshChart());
+        ItemsSourceProperty.Changed.AddClassHandler<EdgeBarLineChart>((chart, args) => chart.OnItemsSourceChanged(args.GetNewValue<IEnumerable?>()));
+        SeriesProperty.Changed.AddClassHandler<EdgeBarLineChart>((chart, args) => chart.OnSeriesChanged(args.GetNewValue<IEnumerable?>()));
         PrimaryAxisMaximumProperty.Changed.AddClassHandler<EdgeBarLineChart>((chart, _) => chart.InvalidateVisual());
         SecondaryAxisMaximumProperty.Changed.AddClassHandler<EdgeBarLineChart>((chart, _) => chart.InvalidateVisual());
         PrimaryValueFormatProperty.Changed.AddClassHandler<EdgeBarLineChart>((chart, _) => chart.InvalidateVisual());
@@ -213,6 +217,36 @@ public class EdgeBarLineChart : TemplatedControl
         UpdatePseudoClasses();
         InvalidateVisual();
     }
+
+    private void OnItemsSourceChanged(IEnumerable? itemsSource)
+    {
+        UpdateCollectionSubscription(ref _itemsSourceNotifications, itemsSource);
+        RefreshChart();
+    }
+
+    private void OnSeriesChanged(IEnumerable? series)
+    {
+        UpdateCollectionSubscription(ref _seriesNotifications, series);
+        RefreshChart();
+    }
+
+    private void UpdateCollectionSubscription(ref INotifyCollectionChanged? current, IEnumerable? value)
+    {
+        if (current is not null)
+        {
+            current.CollectionChanged -= OnCollectionChanged;
+            current = null;
+        }
+
+        if (value is INotifyCollectionChanged next)
+        {
+            current = next;
+            current.CollectionChanged += OnCollectionChanged;
+        }
+    }
+
+    private void OnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        => RefreshChart();
 
     private void UpdatePseudoClasses()
     {

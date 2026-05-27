@@ -3,6 +3,7 @@
     x:Name="IoMappingRoot"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:dg="using:Avalonia.Controls"
     xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
     xmlns:sharedViews="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared">
 
@@ -68,45 +69,39 @@
                     <ItemsControl ItemsSource="{Binding IoMappingGroups}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <edge:EdgeCard
+                                <edge:EdgeTablePanel
                                     Margin="0,0,0,12"
-                                    CardPadding="{DynamicResource Edge.Thickness.Card.Default}">
-                                    <edge:EdgeCard.Header>
-                                        <edge:EdgeSectionHeader Title="{Binding Title}" />
-                                    </edge:EdgeCard.Header>
-                                    <StackPanel Spacing="10">
-                                        <DataGrid
-                                            Classes="edge-grid"
-                                            AutoGenerateColumns="False"
-                                            CanUserReorderColumns="False"
-                                            CanUserResizeColumns="True"
-                                            CanUserSortColumns="False"
-                                            IsReadOnly="{Binding !DataContext.CanEdit, ElementName=IoMappingRoot}"
-                                            ItemsSource="{Binding Mappings}"
-                                            SelectedItem="{Binding DataContext.SelectedIoMapping, ElementName=IoMappingRoot, Mode=TwoWay}">
-                                            <DataGrid.Columns>
-                                                <DataGridTextColumn Binding="{Binding PlcAddress}" Header="{DynamicResource Navigation_Column_PlcAddress}" Width="110" />
-                                                <DataGridTextColumn Binding="{Binding AddressCount}" Header="{DynamicResource Navigation_Column_Count}" Width="80" />
-                                                <DataGridTextColumn Binding="{Binding BusinessGroup}" Header="{DynamicResource Navigation_Column_BusinessGroup}" IsReadOnly="True" Width="150" />
-                                                <DataGridTextColumn Binding="{Binding SignalName}" Header="{DynamicResource Navigation_Column_SignalName}" Width="180" />
-                                                <DataGridTemplateColumn Header="{DynamicResource Navigation_Column_DataType}" Width="120">
-                                                    <DataGridTemplateColumn.CellTemplate>
-                                                        <DataTemplate>
-                                                            <TextBlock Text="{Binding DataType}" />
-                                                        </DataTemplate>
-                                                    </DataGridTemplateColumn.CellTemplate>
-                                                    <DataGridTemplateColumn.CellEditingTemplate>
-                                                        <DataTemplate>
-                                                            <ComboBox ItemsSource="{Binding DataContext.IoDataTypes, ElementName=IoMappingRoot}" SelectedItem="{Binding DataType}" />
-                                                        </DataTemplate>
-                                                    </DataGridTemplateColumn.CellEditingTemplate>
-                                                </DataGridTemplateColumn>
-                                                <DataGridTextColumn Binding="{Binding Direction}" Header="{DynamicResource Navigation_Column_Direction}" IsReadOnly="True" Width="100" />
-                                                <DataGridTextColumn Binding="{Binding Remark}" Header="{DynamicResource Navigation_Column_Remark}" Width="*" />
-                                            </DataGrid.Columns>
-                                        </DataGrid>
-                                    </StackPanel>
-                                </edge:EdgeCard>
+                                    Title="{Binding Title}">
+                                    <edge:EdgeDataGrid
+                                        AutoGenerateColumns="False"
+                                        CanUserReorderColumns="False"
+                                        CanUserResizeColumns="True"
+                                        CanUserSortColumns="False"
+                                        IsReadOnly="{Binding !DataContext.CanEdit, ElementName=IoMappingRoot}"
+                                        ItemsSource="{Binding Mappings}"
+                                        SelectedItem="{Binding DataContext.SelectedIoMapping, ElementName=IoMappingRoot, Mode=TwoWay}">
+                                        <edge:EdgeDataGrid.Columns>
+                                            <dg:DataGridTextColumn Binding="{Binding PlcAddress}" Header="{DynamicResource Navigation_Column_PlcAddress}" Width="110" />
+                                            <dg:DataGridTextColumn Binding="{Binding AddressCount}" Header="{DynamicResource Navigation_Column_Count}" Width="80" />
+                                            <dg:DataGridTextColumn Binding="{Binding BusinessGroup}" Header="{DynamicResource Navigation_Column_BusinessGroup}" IsReadOnly="True" Width="150" />
+                                            <dg:DataGridTextColumn Binding="{Binding SignalName}" Header="{DynamicResource Navigation_Column_SignalName}" Width="180" />
+                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_DataType}" Width="120">
+                                                <dg:DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Text="{Binding DataType}" />
+                                                    </DataTemplate>
+                                                </dg:DataGridTemplateColumn.CellTemplate>
+                                                <dg:DataGridTemplateColumn.CellEditingTemplate>
+                                                    <DataTemplate>
+                                                        <ComboBox ItemsSource="{Binding DataContext.IoDataTypes, ElementName=IoMappingRoot}" SelectedItem="{Binding DataType}" />
+                                                    </DataTemplate>
+                                                </dg:DataGridTemplateColumn.CellEditingTemplate>
+                                            </dg:DataGridTemplateColumn>
+                                            <dg:DataGridTextColumn Binding="{Binding Direction}" Header="{DynamicResource Navigation_Column_Direction}" IsReadOnly="True" Width="100" />
+                                            <dg:DataGridTextColumn Binding="{Binding Remark}" Header="{DynamicResource Navigation_Column_Remark}" Width="*" />
+                                        </edge:EdgeDataGrid.Columns>
+                                    </edge:EdgeDataGrid>
+                                </edge:EdgeTablePanel>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>

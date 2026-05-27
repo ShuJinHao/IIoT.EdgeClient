@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Data;
 using System.Windows.Input;
 using IIoT.Edge.Application.Features.Hardware.IoMappings;
 using IIoT.Edge.UI.Shared.Mvvm;
@@ -12,6 +13,7 @@ public sealed class IoContinuousReadMatrixSectionModel : BaseNotifyPropertyChang
 {
     private Func<string, string, string>? _textProvider;
     private bool _isExpanded;
+    private DataTable _matrixTable = new();
 
     public IoContinuousReadMatrixSectionModel()
     {
@@ -29,6 +31,11 @@ public sealed class IoContinuousReadMatrixSectionModel : BaseNotifyPropertyChang
     public ObservableCollection<IoSignalModel> Columns { get; } = [];
 
     public ObservableCollection<IoContinuousReadMatrixRowModel> Rows { get; } = [];
+
+    /// <summary>
+    /// 矩阵数据表，供 DataTableBindingBehavior 自动生成 DataGrid 列。
+    /// </summary>
+    public DataTable MatrixTable => _matrixTable;
 
     public ICommand ToggleExpandedCommand { get; }
 
@@ -126,7 +133,44 @@ public sealed class IoContinuousReadMatrixSectionModel : BaseNotifyPropertyChang
             Rows.Add(row);
         }
 
+        RebuildMatrixTable();
         OnPropertyChanged(nameof(Summary));
+    }
+
+    /// <summary>
+    /// 将 Columns + Rows 转换为 DataTable，供 DataTableBindingBehavior 自动生成列。
+    /// ColumnName 用于绑定索引路径，Caption 用于显示表头。
+    /// </summary>
+    private void RebuildMatrixTable()
+    {
+        var table = new DataTable();
+
+        // 行号列：内部名 _Index，表头显示 #
+        var indexCol = table.Columns.Add("_Index", typeof(string));
+        indexCol.Caption = "#";
+
+        for (var i = 0; i < Columns.Count; i++)
+        {
+            // 用 _Col{i} 作为内部列名，避免特殊字符和重复问题
+            var col = table.Columns.Add($"_Col{i}", typeof(string));
+            col.Caption = Columns[i].MatrixColumnTitle;
+        }
+
+        foreach (var row in Rows)
+        {
+            var dataRow = table.NewRow();
+            dataRow[0] = row.Index.ToString(System.Globalization.CultureInfo.CurrentCulture);
+
+            for (var i = 0; i < row.Values.Count && i + 1 < table.Columns.Count; i++)
+            {
+                dataRow[i + 1] = row.Values[i].Value;
+            }
+
+            table.Rows.Add(dataRow);
+        }
+
+        _matrixTable = table;
+        OnPropertyChanged(nameof(MatrixTable));
     }
 
     private string GetText(string key, string fallback)

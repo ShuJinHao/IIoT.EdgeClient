@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
@@ -36,6 +37,8 @@ public partial class App : global::Avalonia.Application
     private readonly CancellationTokenSource _appCts = new();
     private readonly SingleInstanceMutexHandle _instanceLock = new();
     private int _fatalDialogShown;
+    private int _shutdownStarted;
+    private bool _shutdownCompleted;
 
     public override void Initialize()
     {
@@ -57,62 +60,133 @@ public partial class App : global::Avalonia.Application
 
     private async Task StartShellAsync(IClassicDesktopStyleApplicationLifetime desktop)
     {
-        _startupServiceProvider = new ServiceCollection()
-            .AddShellStartupServices()
-            .BuildServiceProvider();
-        _crashLogWriter = _startupServiceProvider.GetRequiredService<ICrashLogWriter>();
-        _configurationLoader = _startupServiceProvider.GetRequiredService<IShellConfigurationLoader>();
-        _runtimePathResolver = _startupServiceProvider.GetRequiredService<IShellRuntimePathResolver>();
-        _moduleCatalog = _startupServiceProvider.GetRequiredService<IShellModuleCatalog>();
-
-        var configurationResult = _configurationLoader.Load(AppDomain.CurrentDomain.BaseDirectory);
-        var configuration = configurationResult.Configuration;
-        var runtimePaths = _runtimePathResolver.Resolve(AppDomain.CurrentDomain.BaseDirectory, configuration);
-        ConfigureCrashLogging(runtimePaths);
-
-        if (!TryAcquireInstanceLock(configuration, desktop))
-        {
-            return;
-        }
-
         try
         {
+            _startupServiceProvider = new ServiceCollection()
+                .AddShellStartupServices()
+                .BuildServiceProvider();
+            _crashLogWriter = _startupServiceProvider.GetRequiredService<ICrashLogWriter>();
+            _configurationLoader = _startupServiceProvider.GetRequiredService<IShellConfigurationLoader>();
+            _runtimePathResolver = _startupServiceProvider.GetRequiredService<IShellRuntimePathResolver>();
+            _moduleCatalog = _startupServiceProvider.GetRequiredService<IShellModuleCatalog>();
+
+            var configurationResult = _configurationLoader.Load(AppDomain.CurrentDomain.BaseDirectory);
+            var configuration = configurationResult.Configuration;
+            var runtimePaths = _runtimePathResolver.Resolve(AppDomain.CurrentDomain.BaseDirectory, configuration);
+            ConfigureCrashLogging(runtimePaths);
+
+            if (!TryAcquireInstanceLock(configuration, desktop))
+            {
+                return;
+            }
+
             _serviceProvider = ConfigureServices(
                 configuration,
                 runtimePaths,
                 configurationResult.EnvironmentName).BuildServiceProvider();
             _serviceProvider.GetRequiredService<IAppLanguageService>().Initialize();
+
+            var lifecycle = _serviceProvider.GetRequiredService<IAppLifecycleCoordinator>();
+            var startupResult = await lifecycle.StartAsync(_appCts.Token).ConfigureAwait(true);
+            if (!startupResult.Success)
+            {
+                ShowStartupError(desktop, startupResult.Message ?? "应用启动失败。");
+                return;
+            }
+
+            var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
+            mainWindow.Closing += OnMainWindowClosing;
+            desktop.MainWindow = mainWindow;
+            mainWindow.Show();
         }
         catch (Exception ex)
         {
+            _crashLogWriter?.Write("Shell 启动失败。", ex);
             ShowStartupError(desktop, $"启动服务配置失败：{ex.Message}");
-            return;
         }
-
-        var lifecycle = _serviceProvider.GetRequiredService<IAppLifecycleCoordinator>();
-        var startupResult = await lifecycle.StartAsync(_appCts.Token).ConfigureAwait(true);
-        if (!startupResult.Success)
-        {
-            ShowStartupError(desktop, startupResult.Message ?? "应用启动失败。");
-            return;
-        }
-
-        var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
-        desktop.MainWindow = mainWindow;
-        mainWindow.Show();
     }
 
     private void OnShutdownRequested(object? sender, ShutdownRequestedEventArgs e)
+    {
+        if (_shutdownCompleted)
+        {
+            return;
+        }
+
+        e.Cancel = true;
+
+        if (Interlocked.Exchange(ref _shutdownStarted, 1) != 0)
+        {
+            return;
+        }
+
+        var desktop = sender as IClassicDesktopStyleApplicationLifetime
+            ?? ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
+        StartShutdownWatchdog();
+        _ = ShutdownGracefullyAsync(desktop);
+    }
+
+    private void OnMainWindowClosing(object? sender, WindowClosingEventArgs e)
+    {
+        if (_shutdownCompleted)
+        {
+            return;
+        }
+
+        e.Cancel = true;
+
+        if (Interlocked.Exchange(ref _shutdownStarted, 1) != 0)
+        {
+            return;
+        }
+
+        if (sender is Window window)
+        {
+            window.Hide();
+        }
+
+        var desktop = ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
+        StartShutdownWatchdog();
+        _ = ShutdownGracefullyAsync(desktop);
+    }
+
+    private void StartShutdownWatchdog()
+    {
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(TimeSpan.FromSeconds(ShutdownTimeoutSeconds)).ConfigureAwait(false);
+            if (Environment.HasShutdownStarted)
+            {
+                return;
+            }
+
+            try
+            {
+                _crashLogWriter?.Write(
+                    "应用关闭超时。",
+                    details: $"关闭请求超过 {ShutdownTimeoutSeconds} 秒仍未退出，已强制结束残留进程。");
+            }
+            catch
+            {
+                // 关闭兜底阶段不能因为日志失败而留下后台进程。
+            }
+
+            ForceKillCurrentProcess();
+        });
+    }
+
+    private async Task ShutdownGracefullyAsync(IClassicDesktopStyleApplicationLifetime? desktop)
     {
         var forceKill = false;
 
         try
         {
+            desktop?.MainWindow?.Hide();
             _appCts.Cancel();
 
             if (_serviceProvider is not null)
             {
-                forceKill = !StopServicesWithinTimeout();
+                forceKill = !await StopServicesWithinTimeoutAsync().ConfigureAwait(false);
             }
         }
         catch (Exception ex)
@@ -131,9 +205,23 @@ public partial class App : global::Avalonia.Application
                 ForceKillCurrentProcess();
             }
         }
+
+        if (forceKill)
+        {
+            return;
+        }
+
+        _shutdownCompleted = true;
+        if (desktop is null)
+        {
+            Environment.Exit(0);
+            return;
+        }
+
+        await Dispatcher.UIThread.InvokeAsync(() => desktop.Shutdown(0));
     }
 
-    private bool StopServicesWithinTimeout()
+    private async Task<bool> StopServicesWithinTimeoutAsync()
     {
         var provider = _serviceProvider;
         if (provider is null)
@@ -151,8 +239,9 @@ public partial class App : global::Avalonia.Application
             await provider.DisposeAsync().AsTask().ConfigureAwait(false);
             _serviceProvider = null;
         });
+        var timeoutTask = Task.Delay(TimeSpan.FromSeconds(ShutdownTimeoutSeconds));
 
-        if (!shutdownTask.Wait(TimeSpan.FromSeconds(ShutdownTimeoutSeconds)))
+        if (await Task.WhenAny(shutdownTask, timeoutTask).ConfigureAwait(false) != shutdownTask)
         {
             _crashLogWriter?.Write(
                 "应用关闭超时。",
@@ -160,11 +249,15 @@ public partial class App : global::Avalonia.Application
             return false;
         }
 
-        if (shutdownTask.IsFaulted)
+        try
+        {
+            await shutdownTask.ConfigureAwait(false);
+        }
+        catch (Exception ex)
         {
             _crashLogWriter?.Write(
                 "应用关闭失败。",
-                shutdownTask.Exception?.GetBaseException() ?? new InvalidOperationException("关闭任务失败但未返回异常明细。"));
+                ex);
             return false;
         }
 

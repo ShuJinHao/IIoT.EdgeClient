@@ -139,40 +139,52 @@
                 ColumnSpacing="{DynamicResource Edge.Size.Spacing8}"
                 Height="46"
                 VerticalAlignment="Top">
-                <StackPanel>
+                <StackPanel HorizontalAlignment="Center">
                     <TextBlock
                         FontSize="{DynamicResource Edge.FontSize.SubData18}"
                         FontWeight="Bold"
                         Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                        Text="{Binding TodayOutput}" />
+                        HorizontalAlignment="Center"
+                        Text="{Binding TodayOutput}"
+                        TextAlignment="Center" />
                     <TextBlock
                         FontSize="{DynamicResource Edge.FontSize.Caption}"
                         Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                        Text="{DynamicResource Panels_Label_Output}" />
+                        HorizontalAlignment="Center"
+                        Text="{DynamicResource Panels_Label_Output}"
+                        TextAlignment="Center" />
                 </StackPanel>
 
-                <StackPanel Grid.Column="1">
+                <StackPanel Grid.Column="1" HorizontalAlignment="Center">
                     <TextBlock
                         FontSize="{DynamicResource Edge.FontSize.SubData18}"
                         FontWeight="Bold"
                         Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                        Text="{Binding TodayYield}" />
+                        HorizontalAlignment="Center"
+                        Text="{Binding TodayYield}"
+                        TextAlignment="Center" />
                     <TextBlock
                         FontSize="{DynamicResource Edge.FontSize.Caption}"
                         Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                        Text="{DynamicResource Panels_Label_Yield}" />
+                        HorizontalAlignment="Center"
+                        Text="{DynamicResource Panels_Label_Yield}"
+                        TextAlignment="Center" />
                 </StackPanel>
 
-                <StackPanel Grid.Column="2">
+                <StackPanel Grid.Column="2" HorizontalAlignment="Center">
                     <TextBlock
                         FontSize="{DynamicResource Edge.FontSize.SubData18}"
                         FontWeight="Bold"
                         Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                        Text="{Binding NgCount}" />
+                        HorizontalAlignment="Center"
+                        Text="{Binding NgCount}"
+                        TextAlignment="Center" />
                     <TextBlock
                         FontSize="{DynamicResource Edge.FontSize.Caption}"
                         Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                        Text="{DynamicResource Panels_Label_NgShort}" />
+                        HorizontalAlignment="Center"
+                        Text="{DynamicResource Panels_Label_NgShort}"
+                        TextAlignment="Center" />
                 </StackPanel>
             </Grid>
         </Grid>

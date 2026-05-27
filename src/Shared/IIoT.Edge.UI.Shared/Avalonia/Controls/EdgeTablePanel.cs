@@ -32,6 +32,10 @@ public class EdgeTablePanel : TemplatedControl
     public static readonly StyledProperty<object?> ContentProperty =
         AvaloniaProperty.Register<EdgeTablePanel, object?>(nameof(Content));
 
+    // 默认 0：表格高度自适应内容行数，与 EdgeDataPanel 保持一致
+    public static readonly StyledProperty<double> ContentMinHeightProperty =
+        AvaloniaProperty.Register<EdgeTablePanel, double>(nameof(ContentMinHeight), 0d);
+
     public static readonly StyledProperty<object?> FooterContentProperty =
         AvaloniaProperty.Register<EdgeTablePanel, object?>(nameof(FooterContent));
 
@@ -56,6 +60,8 @@ public class EdgeTablePanel : TemplatedControl
     static EdgeTablePanel()
     {
         SurfaceProperty.Changed.AddClassHandler<EdgeTablePanel>((panel, _) => panel.UpdateSurfaceClasses());
+        SubtitleProperty.Changed.AddClassHandler<EdgeTablePanel>((panel, _) => panel.UpdatePseudoClasses());
+        StatusContentProperty.Changed.AddClassHandler<EdgeTablePanel>((panel, _) => panel.UpdatePseudoClasses());
         ShowContentWhenEmptyProperty.Changed.AddClassHandler<EdgeTablePanel>((panel, _) => panel.UpdatePseudoClasses());
         IsEmptyProperty.Changed.AddClassHandler<EdgeTablePanel>((panel, _) => panel.UpdatePseudoClasses());
         HasErrorProperty.Changed.AddClassHandler<EdgeTablePanel>((panel, _) => panel.UpdatePseudoClasses());
@@ -104,6 +110,12 @@ public class EdgeTablePanel : TemplatedControl
         set => SetValue(ContentProperty, value);
     }
 
+    public double ContentMinHeight
+    {
+        get => GetValue(ContentMinHeightProperty);
+        set => SetValue(ContentMinHeightProperty, value);
+    }
+
     public object? FooterContent
     {
         get => GetValue(FooterContentProperty);
@@ -150,7 +162,21 @@ public class EdgeTablePanel : TemplatedControl
     {
         SetPseudoClass(":empty", IsEmpty && !ShowContentWhenEmpty);
         SetPseudoClass(":error", HasError);
+        SetPseudoClass(":has-subtitle", HasVisibleContent(Subtitle));
+        SetPseudoClass(":has-status", HasVisibleContent(StatusContent));
+        SetClass("has-subtitle", HasVisibleContent(Subtitle));
+        SetClass("has-status", HasVisibleContent(StatusContent));
         SetClass("empty-content-visible", ShowContentWhenEmpty && IsEmpty && !HasError);
+    }
+
+    private static bool HasVisibleContent(object? content)
+    {
+        return content switch
+        {
+            null => false,
+            string text => !string.IsNullOrWhiteSpace(text),
+            _ => true
+        };
     }
 
     private void UpdateSurfaceClasses()

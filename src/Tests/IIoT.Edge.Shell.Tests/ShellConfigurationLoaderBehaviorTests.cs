@@ -172,6 +172,47 @@ public sealed class ShellConfigurationLoaderBehaviorTests
         }
     }
 
+    [Fact]
+    public void Load_WhenPluginDefaultIsAtPublishedModuleRoot_ShouldApplyPluginDefaults()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            WriteText(
+                Path.Combine(tempDirectory, "appsettings.json"),
+                """
+                {
+                  "Modules": {
+                    "Enabled": [ "Homogenization" ]
+                  }
+                }
+                """);
+            var pluginDirectory = Path.Combine(tempDirectory, "Modules", "Homogenization");
+            Directory.CreateDirectory(pluginDirectory);
+            WriteText(
+                Path.Combine(pluginDirectory, "homogenization.module.json"),
+                """
+                {
+                  "Modules": {
+                    "Homogenization": {
+                      "Mes": {
+                        "SignToken": "hdc2023"
+                      }
+                    }
+                  }
+                }
+                """);
+
+            var result = new ShellConfigurationLoader().Load(tempDirectory);
+
+            Assert.Equal("hdc2023", result.Configuration["Modules:Homogenization:Mes:SignToken"]);
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
     private static string CreateTempDirectory()
     {
         var path = Path.Combine(Path.GetTempPath(), "edge-shell-config-tests", Guid.NewGuid().ToString("N"));

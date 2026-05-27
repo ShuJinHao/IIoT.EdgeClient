@@ -14,4 +14,22 @@
     <sys:String x:Key="Shell_Footer_RunTime">系统运行时间：</sys:String>
     <sys:String x:Key="Shell_Footer_DefaultProgram">示例程序</sys:String>
     <sys:String x:Key="Shell_Footer_RunMinutesFormat">{0} 分钟</sys:String>
+
+    <!-- 登录相关 -->
+    <sys:String x:Key="Shell_Login_Title">账号登录</sys:String>
+    <sys:String x:Key="Shell_Login_Subtitle">请选择登录方式</sys:String>
+    <sys:String x:Key="Shell_Login_LocalEmergency">本地紧急登录</sys:String>
+    <sys:String x:Key="Shell_Login_CloudEmployee">云端员工登录</sys:String>
+    <sys:String x:Key="Shell_Login_LocalTitle">本地紧急登录</sys:String>
+    <sys:String x:Key="Shell_Login_LocalDescription">使用本地紧急密码进行身份验证。</sys:String>
+    <sys:String x:Key="Shell_Login_LocalPasswordHint">紧急密码</sys:String>
+    <sys:String x:Key="Shell_Login_CloudTitle">云端员工登录</sys:String>
+    <sys:String x:Key="Shell_Login_CloudDescription">使用工号和密码登录当前设备。</sys:String>
+    <sys:String x:Key="Shell_Login_EmployeeNoHint">工号</sys:String>
+    <sys:String x:Key="Shell_Login_PasswordHint">密码</sys:String>
+    <sys:String x:Key="Shell_Login_CloudUnavailable">当前设备未连接到云平台，无法使用云端登录。请检查网络连接或联系管理员。</sys:String>
+    <sys:String x:Key="Shell_Login_Cancel">取消</sys:String>
+    <sys:String x:Key="Shell_Login_Submit">登录</sys:String>
+    <sys:String x:Key="Shell_Login_Logout">退出登录</sys:String>
+    <sys:String x:Key="Shell_Login_LoggedInAs">已登录</sys:String>
 </ResourceDictionary>
