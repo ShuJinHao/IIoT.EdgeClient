@@ -1,4 +1,7 @@
-using System.Windows;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Threading;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.UI.Shared.Localization;
 
@@ -6,15 +9,15 @@ namespace IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
 
 public interface IDiagnosticsDeadLetterConfirmationService
 {
-    bool ConfirmRequeue(DeadLetterRow row);
+    Task<bool> ConfirmRequeueAsync(DeadLetterRow row);
 
-    bool ConfirmDelete(DeadLetterRow row);
+    Task<bool> ConfirmDeleteAsync(DeadLetterRow row);
 }
 
 public sealed class DiagnosticsDeadLetterConfirmationService(IAppLanguageService languageService)
     : IDiagnosticsDeadLetterConfirmationService
 {
-    public bool ConfirmRequeue(DeadLetterRow row)
+    public Task<bool> ConfirmRequeueAsync(DeadLetterRow row)
     {
         var message = languageService.Format(
             "Navigation_Diagnostics_ConfirmRequeueMessageFormat",
@@ -27,14 +30,10 @@ public sealed class DiagnosticsDeadLetterConfirmationService(IAppLanguageService
             "Navigation_Diagnostics_ConfirmRequeueTitle",
             "确认重新入队");
 
-        return MessageBox.Show(
-            message,
-            title,
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning) == MessageBoxResult.Yes;
+        return ConfirmAsync(title, message);
     }
 
-    public bool ConfirmDelete(DeadLetterRow row)
+    public Task<bool> ConfirmDeleteAsync(DeadLetterRow row)
     {
         var message = languageService.Format(
             "Navigation_Diagnostics_ConfirmDeleteMessageFormat",
@@ -47,11 +46,47 @@ public sealed class DiagnosticsDeadLetterConfirmationService(IAppLanguageService
             "Navigation_Diagnostics_ConfirmDeleteTitle",
             "确认删除死信");
 
-        return MessageBox.Show(
-            message,
-            title,
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning) == MessageBoxResult.Yes;
+        return ConfirmAsync(title, message);
+    }
+
+    private async Task<bool> ConfirmAsync(string title, string message)
+    {
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            var result = new TaskCompletionSource<bool>();
+            Dispatcher.UIThread.Post(async () =>
+            {
+                try
+                {
+                    result.SetResult(await ConfirmOnUiThreadAsync(title, message));
+                }
+                catch (Exception ex)
+                {
+                    result.SetException(ex);
+                }
+            });
+            return await result.Task;
+        }
+
+        return await ConfirmOnUiThreadAsync(title, message);
+    }
+
+    private static async Task<bool> ConfirmOnUiThreadAsync(string title, string message)
+    {
+        if (Avalonia.Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime lifetime)
+        {
+            return false;
+        }
+
+        var owner = lifetime.Windows.FirstOrDefault(static window => window.IsActive)
+                    ?? lifetime.MainWindow;
+        if (owner is null)
+        {
+            return false;
+        }
+
+        var dialog = new DiagnosticsConfirmationDialog(title, message);
+        return await dialog.ShowDialog<bool>(owner);
     }
 
     private string FormatChannel(DataPipelineRetryChannel channel)

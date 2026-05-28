@@ -1,0 +1,23 @@
+<ResourceDictionary
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:sys="using:System">
+    <sys:String x:Key="Shell_AppTitle">IIoT 边缘客户端</sys:String>
+    <sys:String x:Key="Shell_MainWorkspace">主工作区</sys:String>
+    <sys:String x:Key="Shell_EquipmentInfo">设备信息</sys:String>
+    <sys:String x:Key="Shell_SystemLog">系统日志</sys:String>
+    <sys:String x:Key="Shell_FrameTitle">产线边缘控制台</sys:String>
+    <sys:String x:Key="Shell_FrameStatusRunning">运行中</sys:String>
+    <sys:String x:Key="Shell_FrameModeLocal">本地模式</sys:String>
+    <sys:String x:Key="Shell_FrameProfile">产线: {0}</sys:String>
+    <sys:String x:Key="Shell_FrameOperatorNotLoggedIn">未登录</sys:String>
+    <sys:String x:Key="Shell_FrameSystemStatus">系统运行正常</sys:String>
+    <sys:String x:Key="Shell_FrameVersion">版本 {0}</sys:String>
+    <sys:String x:Key="Shell_FrameEdgeId">Edge ID: {0}</sys:String>
+    <sys:String x:Key="Shell_FrameLocalTime">本地时间 {0:yyyy-MM-dd HH:mm:ss}</sys:String>
+    <sys:String x:Key="Shell_FrameDefaultProfile">默认配置</sys:String>
+    <sys:String x:Key="Shell_CrashDialogWindowTitle">IIoT Edge Client - 启动失败</sys:String>
+    <sys:String x:Key="Shell_CrashDialogTitle">启动失败</sys:String>
+    <sys:String x:Key="Shell_CrashDialogDescription">启动链路返回错误，详细信息如下。</sys:String>
+    <sys:String x:Key="Shell_CrashDialogClose">关闭</sys:String>
+</ResourceDictionary>

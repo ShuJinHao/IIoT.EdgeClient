@@ -1,0 +1,70 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Navigation.Features.Hardware.PlcTaskBindingView.PlcTaskBindingPage"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:dg="using:Avalonia.Controls"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
+    xmlns:sharedViews="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared">
+
+    <Grid RowDefinitions="Auto,*" Margin="20">
+        <edge:EdgeSectionHeader
+            Title="{Binding ViewTitle}"
+            Subtitle="{Binding StatusMessage}">
+            <edge:EdgeSectionHeader.ActionContent>
+                <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Edge.Size.Spacing10}">
+                <ComboBox
+                    Width="260"
+                    ItemsSource="{Binding Devices}"
+                    PlaceholderText="{DynamicResource Navigation_Hint_SelectDevice}"
+                    SelectedItem="{Binding SelectedDevice}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding DeviceName}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+                <edge:EdgeToolButton Command="{Binding RefreshCommand}">
+                    <TextBlock Text="{DynamicResource Navigation_Button_Refresh}" />
+                </edge:EdgeToolButton>
+                <edge:EdgeToolButton
+                    Classes="primary"
+                    Command="{Binding SaveCommand}">
+                    <TextBlock Text="{DynamicResource Navigation_Button_Save}" />
+                </edge:EdgeToolButton>
+                </StackPanel>
+            </edge:EdgeSectionHeader.ActionContent>
+        </edge:EdgeSectionHeader>
+
+        <StackPanel
+            Grid.Row="1"
+            Margin="0,16,0,0"
+            Spacing="12">
+            <edge:EdgeStatusListItem
+                Status="Info"
+                StatusText="{DynamicResource Navigation_Hint_SelectDevice}"
+                Title="{Binding SelectedDevice.DeviceStateText}" />
+
+            <edge:EdgeTablePanel Title="{DynamicResource Navigation_Title_PlcTaskBinding}">
+                <edge:EdgeDataGrid
+                    AutoGenerateColumns="False"
+                    CanUserReorderColumns="False"
+                    CanUserResizeColumns="True"
+                    CanUserSortColumns="False"
+                    IsReadOnly="False"
+                    ItemsSource="{Binding SelectedDeviceTasks}">
+                    <edge:EdgeDataGrid.Columns>
+                        <dg:DataGridCheckBoxColumn Binding="{Binding Enabled}" Header="{DynamicResource Navigation_Column_Enable}" MinWidth="80" Width="80" />
+                        <dg:DataGridTextColumn Binding="{Binding DisplayName}" Header="{DynamicResource Navigation_Column_TaskName}" IsReadOnly="True" MinWidth="200" Width="2*" />
+                        <dg:DataGridTextColumn Binding="{Binding AvailabilityText}" Header="{DynamicResource Navigation_Column_TaskAvailability}" IsReadOnly="True" MinWidth="180" Width="180" />
+                        <dg:DataGridTextColumn Binding="{Binding NoteText}" Header="{DynamicResource Navigation_Column_Note}" IsReadOnly="True" MinWidth="320" Width="3*" />
+                    </edge:EdgeDataGrid.Columns>
+                </edge:EdgeDataGrid>
+            </edge:EdgeTablePanel>
+
+            <sharedViews:EmptyStateView
+                IsVisible="{Binding !HasDevices}"
+                Message="{DynamicResource Navigation_PlcTaskBinding_NoDevices}"
+                Title="{DynamicResource Navigation_Title_PlcTaskBinding}" />
+        </StackPanel>
+    </Grid>
+</UserControl>

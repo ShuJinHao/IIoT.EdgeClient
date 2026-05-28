@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows.Input;
+using Avalonia.Threading;
 using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Common.Models;
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
@@ -114,7 +115,7 @@ public sealed class PlcTaskBindingViewModel : NavigationViewModelBase
                 .Select(static x => x.DisplayName)
                 .ToArray();
             if (disabledHeartbeatTasks.Length > 0
-                && !_confirmationService.ConfirmDisableHeartbeat(selected.DeviceName, disabledHeartbeatTasks))
+                && !await _confirmationService.ConfirmDisableHeartbeatAsync(selected.DeviceName, disabledHeartbeatTasks))
             {
                 SetStatus(GetText("Navigation_PlcTaskBinding_SaveCanceled", "已取消保存。"));
                 return;
@@ -152,14 +153,13 @@ public sealed class PlcTaskBindingViewModel : NavigationViewModelBase
 
     private static void RunOnUiThread(Action action)
     {
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher is null || dispatcher.CheckAccess())
+        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
         {
             action();
             return;
         }
 
-        _ = dispatcher.InvokeAsync(action);
+        Avalonia.Threading.Dispatcher.UIThread.Post(action);
     }
 }
 
@@ -259,6 +259,22 @@ public sealed class PlcTaskBindingTaskVm : ObservableModelBase
     public string MissingRequiredSignalsText { get; }
 
     public string AvailabilityText => CanRun ? "可运行" : UnavailableReason;
+
+    public string NoteText
+    {
+        get
+        {
+            var items = new[]
+                {
+                    !CanRun ? UnavailableReason : null,
+                    MissingRequiredSignalsText
+                }
+                .Where(static x => !string.IsNullOrWhiteSpace(x));
+
+            var text = string.Join("；", items);
+            return string.IsNullOrWhiteSpace(text) ? "--" : text;
+        }
+    }
 
     private static string FormatDirection(string direction)
         => string.Equals(direction, "Write", StringComparison.OrdinalIgnoreCase)

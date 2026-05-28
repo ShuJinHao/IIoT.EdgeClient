@@ -110,7 +110,7 @@ if ($LASTEXITCODE -ne 0) {
 $modulesRoot = Join-Path $publishRoot "Modules"
 if (-not (Test-Path -LiteralPath $modulesRoot)) {
     $shellProjectDirectory = Split-Path -Path $shellProjectPath -Parent
-    $buildModulesRoot = Resolve-NormalizedPath (Join-Path $shellProjectDirectory "..\..\..\..\publish\$Configuration\net10.0-windows\Modules")
+    $buildModulesRoot = Resolve-NormalizedPath (Join-Path $shellProjectDirectory "..\..\..\..\publish\$Configuration\net10.0\Modules")
     if (Test-Path -LiteralPath $buildModulesRoot) {
         Copy-DirectoryContents -SourceDirectory $buildModulesRoot -TargetDirectory $modulesRoot
     }

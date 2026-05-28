@@ -1,76 +1,70 @@
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Markup;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
+using Avalonia.Data;
+using Avalonia.Layout;
 
 namespace IIoT.Edge.UI.Shared.Views;
 
 /// <summary>
-/// 页面操作壳控件，统一承载页面头部、操作区和主体内容区。
+/// 页面操作壳控件。保留旧插件二进制引用的类型入口，内部使用 Avalonia 控件实现。
 /// </summary>
-[ContentProperty(nameof(PageContent))]
 public class PageActionShell : UserControl
 {
-    public static readonly DependencyProperty HeaderContentProperty = DependencyProperty.Register(
-        nameof(HeaderContent),
-        typeof(object),
-        typeof(PageActionShell),
-        new PropertyMetadata(null));
+    public static readonly StyledProperty<object?> HeaderContentProperty =
+        AvaloniaProperty.Register<PageActionShell, object?>(nameof(HeaderContent));
 
-    public static readonly DependencyProperty ActionContentProperty = DependencyProperty.Register(
-        nameof(ActionContent),
-        typeof(object),
-        typeof(PageActionShell),
-        new PropertyMetadata(null));
+    public static readonly StyledProperty<object?> ActionContentProperty =
+        AvaloniaProperty.Register<PageActionShell, object?>(nameof(ActionContent));
 
-    public static readonly DependencyProperty PageContentProperty = DependencyProperty.Register(
-        nameof(PageContent),
-        typeof(object),
-        typeof(PageActionShell),
-        new PropertyMetadata(null));
+    public static readonly StyledProperty<object?> PageContentProperty =
+        AvaloniaProperty.Register<PageActionShell, object?>(nameof(PageContent));
 
     public PageActionShell()
     {
-        var grid = new Grid();
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        var grid = new Grid
+        {
+            RowDefinitions =
+            {
+                new RowDefinition(GridLength.Auto),
+                new RowDefinition(GridLength.Star)
+            }
+        };
 
-        var border = new Border { Padding = new Thickness(16, 12, 16, 12) };
-        var headerGrid = new Grid();
+        var headerGrid = new Grid
+        {
+            Margin = new Thickness(16, 12),
+            ColumnDefinitions =
+            {
+                new ColumnDefinition(GridLength.Star),
+                new ColumnDefinition(GridLength.Auto)
+            }
+        };
 
-        var headerControl = new ContentControl
+        var header = new ContentControl
         {
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Center
         };
-        headerControl.SetBinding(ContentControl.ContentProperty,
-            new Binding(nameof(HeaderContent)) { Source = this });
+        header.Bind(ContentControl.ContentProperty, new Binding(nameof(HeaderContent)) { Source = this });
 
-        var actionControl = new ContentControl
+        var actions = new ContentControl
         {
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center
         };
-        actionControl.SetBinding(ContentControl.ContentProperty,
-            new Binding(nameof(ActionContent)) { Source = this });
+        actions.Bind(ContentControl.ContentProperty, new Binding(nameof(ActionContent)) { Source = this });
+        Grid.SetColumn(actions, 1);
 
-        headerGrid.Children.Add(headerControl);
-        headerGrid.Children.Add(actionControl);
-        border.Child = headerGrid;
-        Grid.SetRow(border, 0);
-        grid.Children.Add(border);
+        headerGrid.Children.Add(header);
+        headerGrid.Children.Add(actions);
 
-        var banner = new FeedbackBanner { Margin = new Thickness(16, 0, 16, 12) };
-        Grid.SetRow(banner, 1);
-        grid.Children.Add(banner);
+        var body = new ContentPresenter();
+        body.Bind(ContentPresenter.ContentProperty, new Binding(nameof(PageContent)) { Source = this });
+        Grid.SetRow(body, 1);
 
-        var contentPresenter = new ContentPresenter();
-        contentPresenter.SetBinding(ContentPresenter.ContentProperty,
-            new Binding(nameof(PageContent)) { Source = this });
-        Grid.SetRow(contentPresenter, 2);
-        grid.Children.Add(contentPresenter);
-
+        grid.Children.Add(headerGrid);
+        grid.Children.Add(body);
         Content = grid;
     }
 

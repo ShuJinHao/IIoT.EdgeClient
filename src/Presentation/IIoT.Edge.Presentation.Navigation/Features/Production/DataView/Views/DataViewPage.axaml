@@ -1,0 +1,101 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Navigation.Features.Production.DataView.DataViewPage"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:dg="using:Avalonia.Controls"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="{DynamicResource Edge.Thickness.20}" Spacing="{DynamicResource Edge.Size.Spacing12}">
+            <edge:EdgeSectionHeader
+                Title="{Binding ViewTitle}"
+                Subtitle="{Binding StatusMessage}">
+                <edge:EdgeSectionHeader.ActionContent>
+                    <Button
+                        MinWidth="118"
+                        Padding="{DynamicResource Edge.Thickness.8}"
+                        Command="{Binding ExportCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Edge.Size.Spacing6}">
+                            <PathIcon
+                                Width="16"
+                                Height="16"
+                                Data="M6,3 L16,3 L20,7 L20,21 L6,21 Z M15,3 L15,8 L20,8 M9,11 L17,11 M9,14 L17,14 M9,17 L14,17" />
+                            <TextBlock Text="{DynamicResource Navigation_Button_ExportExcel}" />
+                        </StackPanel>
+                    </Button>
+                </edge:EdgeSectionHeader.ActionContent>
+            </edge:EdgeSectionHeader>
+
+            <edge:EdgeCard CardPadding="{DynamicResource Edge.Thickness.Card.Compact}">
+                <WrapPanel>
+                    <DatePicker
+                        Width="150"
+                        Margin="0,0,8,0"
+                        SelectedDate="{Binding DateFrom}" />
+                    <TextBlock
+                        Margin="0,0,8,0"
+                        VerticalAlignment="Center"
+                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                        Text="{DynamicResource Navigation_Label_To}" />
+                    <DatePicker
+                        Width="150"
+                        Margin="0,0,12,0"
+                        SelectedDate="{Binding DateTo}" />
+                    <Button
+                        MinWidth="86"
+                        Padding="16,8"
+                        Command="{Binding QueryCommand}">
+                        <TextBlock Text="{DynamicResource Navigation_Button_Query}" />
+                    </Button>
+                </WrapPanel>
+            </edge:EdgeCard>
+
+            <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing12}">
+                <edge:EdgeKpiCard
+                    Title="{DynamicResource Navigation_Label_TodayOutput}"
+                    TrendStatus="Info"
+                    Value="{Binding TodayTotal}" />
+                <edge:EdgeKpiCard
+                    Grid.Column="1"
+                    Title="{DynamicResource Navigation_Label_GoodCount}"
+                    TrendStatus="Running"
+                    Value="{Binding TodayOk}" />
+                <edge:EdgeKpiCard
+                    Grid.Column="2"
+                    Title="{DynamicResource Navigation_Label_BadCount}"
+                    TrendStatus="Error"
+                    Value="{Binding TodayNg}" />
+                <edge:EdgeKpiCard
+                    Grid.Column="3"
+                    Title="{DynamicResource Navigation_Label_Yield}"
+                    TrendStatus="Warning"
+                    Value="{Binding TodayYield}" />
+            </Grid>
+
+            <edge:EdgeTablePanel
+                EmptyMessage="{DynamicResource Navigation_Data_EmptyMessage}"
+                EmptyTitle="{DynamicResource Navigation_Data_EmptyTitle}"
+                IsEmpty="{Binding IsRecordsEmpty}">
+                    <edge:EdgeDataGrid
+                        AutoGenerateColumns="False"
+                        CanUserReorderColumns="False"
+                        CanUserResizeColumns="True"
+                        CanUserSortColumns="False"
+                        Density="Compact"
+                        GridLinesVisibility="Horizontal"
+                        HeadersVisibility="Column"
+                        IsReadOnly="True"
+                        ItemsSource="{Binding Records}">
+                        <edge:EdgeDataGrid.Columns>
+                            <dg:DataGridTextColumn Binding="{Binding Time}" Header="{DynamicResource Navigation_Column_Time}" MinWidth="90" Width="90" />
+                            <dg:DataGridTextColumn Binding="{Binding BatchNo}" Header="{DynamicResource Navigation_Column_BatchNumber}" MinWidth="160" Width="2*" />
+                            <dg:DataGridTextColumn Binding="{Binding Total}" Header="{DynamicResource Navigation_Column_Total}" MinWidth="90" Width="*" />
+                            <dg:DataGridTextColumn Binding="{Binding OkCount}" Header="{DynamicResource Navigation_Column_Good}" MinWidth="90" Width="*" />
+                            <dg:DataGridTextColumn Binding="{Binding NgCount}" Header="{DynamicResource Navigation_Column_Bad}" MinWidth="90" Width="*" />
+                            <dg:DataGridTextColumn Binding="{Binding Yield}" Header="{DynamicResource Navigation_Column_Yield}" MinWidth="90" Width="*" />
+                        </edge:EdgeDataGrid.Columns>
+                    </edge:EdgeDataGrid>
+            </edge:EdgeTablePanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -15,7 +15,11 @@ using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesS
     string,
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationRealtimeSnapshot,
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationRecipeSnapshot,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot>;
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlanRequest,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlan,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchRequest,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchResult>;
 
 namespace IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 
@@ -28,6 +32,7 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
     private readonly HomogenizationMesScenarioChannel _mesChannel;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
     private readonly IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> _parameters;
+    private readonly IHomogenizationProductionGate _productionGate;
 
     /// <summary>
     /// 创建匀浆进站握手任务。
@@ -41,6 +46,7 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
         HomogenizationMesScenarioChannel mesChannel,
         IMesUploadDiagnosticsStore diagnosticsStore,
         IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> parameters,
+        IHomogenizationProductionGate productionGate,
         ILogService logger,
         IProductionTimeProvider productionTime,
         IOptions<HomogenizationModuleOptions> moduleOptions,
@@ -51,12 +57,13 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
         _mesChannel = mesChannel;
         _diagnosticsStore = diagnosticsStore;
         _parameters = parameters;
+        _productionGate = productionGate;
     }
 
     /// <summary>
     /// 进站握手任务名称，用于运行日志和任务诊断。
     /// </summary>
-    public override string TaskName => HomogenizationTaskKeys.Inbound;
+    public override string TaskName => "Homogenization.Inbound";
 
     protected override async Task DoCoreAsync()
     {
@@ -128,6 +135,15 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
             Interaction.ReplyMesNg(trigger);
             _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Inbound, message);
             RecordInboundResult(trayCode, message);
+            return;
+        }
+
+        var gateResult = await _productionGate.EnsureReadyAsync(ModuleContext, cancellationToken).ConfigureAwait(false);
+        if (!gateResult.IsSuccess)
+        {
+            _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Inbound, gateResult.Message);
+            RecordInboundResult(trayCode, gateResult.Message);
+            Interaction.ReplyResult(trigger, gateResult);
             return;
         }
 

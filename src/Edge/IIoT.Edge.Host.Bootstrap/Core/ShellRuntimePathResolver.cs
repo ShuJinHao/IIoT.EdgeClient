@@ -51,11 +51,17 @@ public sealed class ShellRuntimePathResolver : IShellRuntimePathResolver
     private string ResolvePath(string baseDirectory, string path)
     {
         var expanded = Environment.ExpandEnvironmentVariables(path);
+        var normalized = NormalizePathSeparators(expanded);
         return Path.GetFullPath(
-            Path.IsPathRooted(expanded)
-                ? expanded
-                : Path.Combine(baseDirectory, expanded));
+            Path.IsPathRooted(normalized)
+                ? normalized
+                : Path.Combine(baseDirectory, normalized));
     }
+
+    private static string NormalizePathSeparators(string path)
+        => path
+            .Replace('\\', Path.DirectorySeparatorChar)
+            .Replace('/', Path.DirectorySeparatorChar);
 
     private string SanitizePathSegment(string value)
     {

@@ -28,7 +28,7 @@ public sealed class LauncherProfileCatalogTests
             var catalog = new LauncherProfileCatalog(tempDirectory);
 
             var profile = Assert.Single(catalog.LoadProfiles());
-            Assert.Equal(Path.Combine(tempDirectory, "IIoT.Edge.Shell.exe"), profile.ExecutablePath);
+            Assert.Equal(Path.Combine(tempDirectory, "IIoT.Edge.Shell"), profile.ExecutablePath);
             Assert.Null(profile.ImagePath);
             Assert.Equal("HomogenizationLine", profile.MachineProfile);
             Assert.Equal("Cog", profile.IconKind);
@@ -58,7 +58,7 @@ public sealed class LauncherProfileCatalogTests
                     "IconKind": "BeakerOutline",
                     "AccentColor": "#4D7C0F",
                     "MachineProfile": "HomogenizationLine",
-                    "ExecutablePath": "..\\homogenization\\IIoT.Edge.Shell.exe"
+                    "ExecutablePath": "..\\homogenization\\IIoT.Edge.Shell"
                   }
                 ]
                 """);
@@ -67,7 +67,7 @@ public sealed class LauncherProfileCatalogTests
 
             var profile = Assert.Single(catalog.LoadProfiles());
             Assert.Equal(
-                Path.GetFullPath(Path.Combine(tempDirectory, @"..\homogenization\IIoT.Edge.Shell.exe")),
+                Path.GetFullPath(Path.Combine(tempDirectory, "..", "homogenization", "IIoT.Edge.Shell")),
                 profile.ExecutablePath);
             Assert.Equal(Path.Combine(tempDirectory, "Assets", "Profiles", "homogenization.png"), profile.ImagePath);
             Assert.Equal("BeakerOutline", profile.IconKind);
@@ -165,7 +165,7 @@ public sealed class LauncherProfileCatalogTests
         Assert.Equal("匀浆", profile.DisplayName);
         Assert.Equal("HomogenizationLine", profile.MachineProfile);
         Assert.EndsWith(
-            Path.Combine("homogenization", "IIoT.Edge.Shell.exe"),
+            Path.Combine("homogenization", "IIoT.Edge.Shell"),
             profile.ExecutablePath,
             StringComparison.OrdinalIgnoreCase);
     }

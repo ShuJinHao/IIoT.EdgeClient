@@ -93,12 +93,19 @@ public sealed class RepositoryHygieneTests
     }
 
     [Fact]
-    public void MainSolution_ShouldNotContainToolsOrSdkSamples()
+    public void MainSolution_ShouldContainOnlyApprovedRuntimeToolAndNoSdkSamples()
     {
         var root = FindRepositoryRoot();
         var solution = File.ReadAllText(Path.Combine(root, "IIoT.EdgeClient.slnx"));
 
-        Assert.DoesNotContain("src/Tools", solution, StringComparison.OrdinalIgnoreCase);
+        var toolProjects = Regex
+            .Matches(solution, @"src/Tools/[^""]+\.csproj", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
+            .Select(match => match.Value)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        Assert.Equal(
+            ["src/Tools/IIoT.Edge.RuntimeLayoutSync/IIoT.Edge.RuntimeLayoutSync.csproj"],
+            toolProjects);
         foreach (var deletedName in DeletedSdkArtifactNames)
         {
             Assert.DoesNotContain(deletedName, solution, StringComparison.OrdinalIgnoreCase);
@@ -118,7 +125,15 @@ public sealed class RepositoryHygieneTests
         Assert.False(File.Exists(Path.Combine(root, "scripts", "Pack" + "Edge" + "Packages.ps1")), "不再保留 NuGet 包化脚本。");
         Assert.False(File.Exists(Path.Combine(root, "scripts", "Run" + "Single" + "Repo" + "Release" + "Rehearsal.ps1")), "不再保留包化发布演练脚本。");
         Assert.False(Directory.Exists(Path.Combine(root, "tools")), "根目录不再保留 tools 目录，正式脚本统一放入 scripts。");
-        Assert.False(Directory.Exists(Path.Combine(root, "src", "Tools")), "生产源码树不再保留 Tools 目录。");
+        var approvedToolProjects = Directory.Exists(Path.Combine(root, "src", "Tools"))
+            ? EnumerateFiles(Path.Combine(root, "src", "Tools"), "*.csproj")
+                .Select(path => ToRepositoryPath(root, path))
+                .Order(StringComparer.OrdinalIgnoreCase)
+                .ToArray()
+            : Array.Empty<string>();
+        Assert.Equal(
+            ["src/Tools/IIoT.Edge.RuntimeLayoutSync/IIoT.Edge.RuntimeLayoutSync.csproj"],
+            approvedToolProjects);
         Assert.False(Directory.Exists(Path.Combine(root, "src", "Runtime", "IIoT.Edge.Runtime.DataPipeline")), "不再保留旧 DataPipeline 独立项目目录。");
         Assert.False(Directory.Exists(Path.Combine(root, "src", "Runtime", "IIoT.Edge.Runtime." + "Scan")), "不再保留旧 Scan 独立项目目录。");
         Assert.False(Directory.Exists(Path.Combine(root, "src", "Runtime", "IIoT.Edge.Runtime", "Stations")), "Runtime 不再保留旧站点示例目录。");
@@ -168,6 +183,29 @@ public sealed class RepositoryHygieneTests
         Assert.DoesNotContain("\"LicenseKey\"", appsettings, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("MediatR", appsettings, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotMatch(new Regex(@"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+", RegexOptions.CultureInvariant), appsettings);
+    }
+
+    [Fact]
+    public void LauncherDevelopmentLayout_ShouldUseCrossPlatformProfileAndDotnetSyncTool()
+    {
+        var root = FindRepositoryRoot();
+        var profileCatalog = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "Edge",
+            "IIoT.Edge.Launcher",
+            "launcher.profiles.json"));
+        var launcherProject = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "Edge",
+            "IIoT.Edge.Launcher",
+            "IIoT.Edge.Launcher.csproj"));
+
+        Assert.Contains("../homogenization/IIoT.Edge.Shell", profileCatalog, StringComparison.Ordinal);
+        Assert.DoesNotContain("IIoT.Edge.Shell.exe", profileCatalog, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("RuntimeLayoutSync", launcherProject, StringComparison.Ordinal);
+        Assert.DoesNotContain("powershell" + " -ExecutionPolicy", launcherProject, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -298,8 +336,8 @@ public sealed class RepositoryHygieneTests
             "Resources",
             "Languages");
 
-        var zhKeys = GetXamlResourceKeys(Path.Combine(languageRoot, "zh-CN.xaml"));
-        var enKeys = GetXamlResourceKeys(Path.Combine(languageRoot, "en-US.xaml"));
+        var zhKeys = GetXamlResourceKeys(Path.Combine(languageRoot, "zh-CN.axaml"));
+        var enKeys = GetXamlResourceKeys(Path.Combine(languageRoot, "en-US.axaml"));
 
         Assert.Empty(zhKeys.Except(enKeys, StringComparer.Ordinal).Order(StringComparer.Ordinal));
         Assert.Empty(enKeys.Except(zhKeys, StringComparer.Ordinal).Order(StringComparer.Ordinal));
@@ -317,8 +355,8 @@ public sealed class RepositoryHygieneTests
             "Resources",
             "Languages");
 
-        var processKeys = GetXamlResourceKeys(Path.Combine(languageRoot, "zh-CN.xaml"))
-            .Union(GetXamlResourceKeys(Path.Combine(languageRoot, "en-US.xaml")), StringComparer.Ordinal)
+        var processKeys = GetXamlResourceKeys(Path.Combine(languageRoot, "zh-CN.axaml"))
+            .Union(GetXamlResourceKeys(Path.Combine(languageRoot, "en-US.axaml")), StringComparer.Ordinal)
             .Where(key => key.StartsWith("Navigation_Process_", StringComparison.Ordinal))
             .Order(StringComparer.Ordinal)
             .ToArray();
@@ -332,8 +370,8 @@ public sealed class RepositoryHygieneTests
         var root = FindRepositoryRoot();
         var navigationRoot = Path.Combine(root, "src", "Presentation", "IIoT.Edge.Presentation.Navigation");
         var languageRoot = Path.Combine(navigationRoot, "Resources", "Languages");
-        var dictionaryKeys = GetXamlResourceKeys(Path.Combine(languageRoot, "zh-CN.xaml"))
-            .Union(GetXamlResourceKeys(Path.Combine(languageRoot, "en-US.xaml")), StringComparer.Ordinal)
+        var dictionaryKeys = GetXamlResourceKeys(Path.Combine(languageRoot, "zh-CN.axaml"))
+            .Union(GetXamlResourceKeys(Path.Combine(languageRoot, "en-US.axaml")), StringComparer.Ordinal)
             .ToHashSet(StringComparer.Ordinal);
 
         var missingKeys = EnumerateFiles(Path.Combine(navigationRoot, "Features"), "*.cs")
@@ -396,7 +434,7 @@ public sealed class RepositoryHygieneTests
 
         var matches = xamlRoots
             .Where(Directory.Exists)
-            .SelectMany(path => EnumerateFiles(path, "*.xaml"))
+            .SelectMany(path => EnumerateFiles(path, "*.axaml"))
             .Where(path => !ToRepositoryPath(root, path).Contains("/Resources/Languages/", StringComparison.OrdinalIgnoreCase))
             .Where(ContainsChineseText)
             .Select(path => ToRepositoryPath(root, path))
@@ -467,6 +505,7 @@ public sealed class RepositoryHygieneTests
             || extension.Equals(".ps1", StringComparison.OrdinalIgnoreCase)
             || extension.Equals(".json", StringComparison.OrdinalIgnoreCase)
             || extension.Equals(".xaml", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".axaml", StringComparison.OrdinalIgnoreCase)
             || extension.Equals(".md", StringComparison.OrdinalIgnoreCase)
             || extension.Equals(".yml", StringComparison.OrdinalIgnoreCase)
             || extension.Equals(".yaml", StringComparison.OrdinalIgnoreCase)

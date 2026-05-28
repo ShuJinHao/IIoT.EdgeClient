@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Abstractions.Context;
+using IIoT.Edge.Application.Features.Production.Planning;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.SharedKernel.Collections;
@@ -103,6 +104,26 @@ public sealed class HomogenizationContext : ProductionContext
     public HomogenizationEquipmentStatusSnapshot? LastEquipmentStatusSnapshot { get; set; }
 
     /// <summary>
+    /// 当前已确认的 MES 主批计划，由生产前选择流程写入，供运行门禁和 UI 摘要读取。
+    /// </summary>
+    public ProductionPlanOption? SelectedProductionPlan { get; set; }
+
+    /// <summary>
+    /// 当前主批计划生成得到的 MES 追溯批次号。没有该值时，MES 启用状态下不允许进入生产上传链路。
+    /// </summary>
+    public string? TraceBatchNumber { get; set; }
+
+    /// <summary>
+    /// 追溯批次号生成时间，用于现场追踪当前批次选择是否已经生效。
+    /// </summary>
+    public DateTime? TraceBatchGeneratedAt { get; set; }
+
+    /// <summary>
+    /// 最近一次追溯批次号生成失败原因，只用于 UI 和诊断展示，不参与 PLC 应答码设计。
+    /// </summary>
+    public string? TraceBatchError { get; set; }
+
+    /// <summary>
     /// 最近一次 PLC 心跳镜像时间，用于判断匀浆运行任务是否仍在循环。
     /// </summary>
     public DateTime LastHeartbeatAt { get; set; }
@@ -181,7 +202,7 @@ internal sealed class HomogenizationContextFactory : IProductionContextFactory
     /// <summary>
     /// 当前工厂所属匀浆模块标识。
     /// </summary>
-    public string ModuleId => HomogenizationModuleIdentity.ModuleId;
+    public string ModuleId => DependencyInjection.ModuleKey;
 
     /// <summary>
     /// 宿主可创建的匀浆上下文类型。

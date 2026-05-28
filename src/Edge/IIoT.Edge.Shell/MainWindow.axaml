@@ -1,0 +1,73 @@
+<Window
+    x:Class="IIoT.Edge.Shell.MainWindow"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:shellViews="clr-namespace:IIoT.Edge.Presentation.Shell.Views;assembly=IIoT.Edge.Presentation.Shell"
+    Title="{Binding AppTitle}"
+    Width="1440"
+    Height="900"
+    MinWidth="1280"
+    MinHeight="720"
+    Background="Transparent"
+    CanResize="True"
+    ExtendClientAreaToDecorationsHint="True"
+    TransparencyLevelHint="Transparent"
+    WindowDecorations="None"
+    WindowStartupLocation="CenterScreen">
+    <Border
+        x:Name="ShellFrame"
+        Margin="0"
+        Background="{DynamicResource Edge.Brush.App.Container}"
+        BoxShadow="{DynamicResource Edge.Shadow.App}"
+        ClipToBounds="True"
+        CornerRadius="{DynamicResource Edge.CornerRadius.Stage}">
+        <Grid RowDefinitions="50,*,30">
+            <shellViews:ShellHeaderView
+                x:Name="ShellHeader"
+                HorizontalAlignment="Stretch"
+                Width="{Binding Bounds.Width, ElementName=ShellFrame}"
+                DataContext="{Binding}" />
+
+            <Grid
+                Grid.Row="1"
+                ClipToBounds="True"
+                ColumnDefinitions="56,*,420"
+                Margin="0,6,16,0">
+                <ContentControl
+                    x:Name="NavigationRailHost"
+                    Grid.Column="0"
+                    ClipToBounds="True"
+                    HorizontalContentAlignment="Stretch"
+                    HorizontalAlignment="Stretch"
+                    VerticalContentAlignment="Stretch"
+                    VerticalAlignment="Stretch" />
+                <ContentControl
+                    x:Name="NavigationContentHost"
+                    Grid.Column="1"
+                    ClipToBounds="True"
+                    HorizontalContentAlignment="Stretch"
+                    VerticalContentAlignment="Stretch" />
+                <Grid
+                    Grid.Column="2"
+                    ClipToBounds="True"
+                    Margin="12,0,0,0"
+                    RowDefinitions="1*,12,2*">
+                    <ContentControl
+                        x:Name="EquipmentPanelHost"
+                        Grid.Row="0"
+                        ClipToBounds="True"
+                        MinHeight="260" />
+                    <ContentControl
+                        x:Name="LogPanelHost"
+                        Grid.Row="2"
+                        ClipToBounds="True" />
+                </Grid>
+            </Grid>
+
+            <shellViews:ShellFooterView
+                x:Name="ShellFooter"
+                Grid.Row="2"
+                DataContext="{Binding}" />
+        </Grid>
+    </Border>
+</Window>

@@ -201,6 +201,59 @@ public sealed class ModuleRuntimeRegistrationTests
     }
 
     [Fact]
+    public async Task AppLifecycleManager_WhenCloudApiPathStartsWithSlash_ShouldPassStartupValidation()
+    {
+        await using var harness = await AppLifecycleHarness.CreateAsync(
+            enabledModules: ["Homogenization"],
+            deviceModuleIds: ["Homogenization"],
+            deviceInstancePath: "/api/v1/bootstrap/device-instance");
+
+        var result = await harness.Manager.StartAsync();
+
+        Assert.True(result.Success, result.Message);
+        Assert.DoesNotContain(
+            harness.StartupDiagnosticsStore.Current.Issues,
+            issue => issue.Message.Contains("CloudApi:Paths:DeviceInstance", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("https://cloud.test/api/v1/bootstrap/device-instance")]
+    [InlineData("http://cloud.test/api/v1/bootstrap/device-instance")]
+    [InlineData("file://api/v1/bootstrap/device-instance")]
+    public async Task AppLifecycleManager_WhenCloudApiPathHasExplicitScheme_ShouldFailStartupValidation(string deviceInstancePath)
+    {
+        await using var harness = await AppLifecycleHarness.CreateAsync(
+            enabledModules: ["Homogenization"],
+            deviceModuleIds: ["Homogenization"],
+            deviceInstancePath: deviceInstancePath);
+
+        var result = await harness.Manager.StartAsync();
+
+        Assert.False(result.Success);
+        Assert.Contains("CloudApi:Paths:DeviceInstance", result.Message, StringComparison.Ordinal);
+        Assert.Contains("相对 API 路径", result.Message, StringComparison.Ordinal);
+        Assert.Contains(
+            harness.StartupDiagnosticsStore.Current.Issues,
+            issue => string.Equals(issue.Code, "CONFIG_INVALID", StringComparison.OrdinalIgnoreCase)
+                     && issue.Message.Contains("CloudApi:Paths:DeviceInstance", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AppLifecycleManager_WhenCloudApiPathStartsWithDoubleSlash_ShouldFailStartupValidation()
+    {
+        await using var harness = await AppLifecycleHarness.CreateAsync(
+            enabledModules: ["Homogenization"],
+            deviceModuleIds: ["Homogenization"],
+            deviceInstancePath: "//api/v1/bootstrap/device-instance");
+
+        var result = await harness.Manager.StartAsync();
+
+        Assert.False(result.Success);
+        Assert.Contains("CloudApi:Paths:DeviceInstance", result.Message, StringComparison.Ordinal);
+        Assert.Contains("单个 /", result.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task AppLifecycleManager_WhenRecipePathMissingDeviceIdPlaceholder_ShouldFailStartupValidation()
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
@@ -248,12 +301,12 @@ public sealed class ModuleRuntimeRegistrationTests
             "Homogenization",
             new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase)
             {
-                [HomogenizationTaskKeys.Heartbeat] = false,
-                [HomogenizationTaskKeys.Inbound] = true,
-                [HomogenizationTaskKeys.Outbound] = false,
-                [HomogenizationTaskKeys.Recipe] = false,
-                [HomogenizationTaskKeys.EquipmentStatus] = false,
-                [HomogenizationTaskKeys.Realtime] = false
+                ["Homogenization.Heartbeat"] = false,
+                ["Homogenization.Inbound"] = true,
+                ["Homogenization.Outbound"] = false,
+                ["Homogenization.Recipe"] = false,
+                ["Homogenization.EquipmentStatus"] = false,
+                ["Homogenization.Realtime"] = false
             });
         var mappings = await harness.GetIoMappingsAsync(device.Id);
         var incompleteMappings = mappings
@@ -269,7 +322,7 @@ public sealed class ModuleRuntimeRegistrationTests
         var fault = Assert.Single(harness.PlcManager.RuntimeFaults);
         Assert.Equal(device.Id, fault.NetworkDeviceId);
         Assert.Contains("任务绑定校验失败", fault.Error, StringComparison.Ordinal);
-        Assert.Contains(HomogenizationTaskKeys.Inbound, fault.Error, StringComparison.Ordinal);
+        Assert.Contains("Homogenization.Inbound", fault.Error, StringComparison.Ordinal);
         Assert.Contains("Homogenization.Interaction.Inbound/Write", fault.Error, StringComparison.Ordinal);
     }
 
@@ -336,49 +389,44 @@ public sealed class ModuleRuntimeRegistrationTests
     }
 
     [Fact]
-    public Task NavigationService_WhenViewModelFactoryIsRegistered_ShouldUseFactory()
-        => RunOnStaThreadAsync(() =>
-        {
-            var services = new ServiceCollection().BuildServiceProvider();
-            var registry = new ViewRegistry();
-            registry.RegisterRoute(
-                "Plugin.Factory",
-                typeof(TestNavigationView),
-                typeof(DefaultNavigationViewModel),
-                _ => new FactoryNavigationViewModel(),
-                cacheView: false);
+    public void ViewRegistry_WhenViewModelFactoryIsRegistered_ShouldKeepFactory()
+    {
+        var services = new ServiceCollection().BuildServiceProvider();
+        var registry = new ViewRegistry();
+        registry.RegisterRoute(
+            "Plugin.Factory",
+            typeof(TestNavigationView),
+            typeof(DefaultNavigationViewModel),
+            _ => new FactoryNavigationViewModel(),
+            cacheView: false);
 
-            var navigation = new NavigationService(services, registry, new SpyLogService());
+        var registration = registry.GetViewRegistration("Plugin.Factory");
 
-            navigation.NavigateTo("Plugin.Factory");
-
-            Assert.IsType<FactoryNavigationViewModel>(navigation.CurrentViewModel);
-            Assert.IsType<TestNavigationView>(navigation.CurrentView);
-            return Task.CompletedTask;
-        });
+        Assert.NotNull(registration);
+        Assert.Equal(typeof(TestNavigationView), registration.ViewType);
+        Assert.Equal(typeof(DefaultNavigationViewModel), registration.ViewModelType);
+        Assert.IsType<FactoryNavigationViewModel>(registration.ViewModelFactory!(services));
+        Assert.False(registration.CacheView);
+    }
 
     [Fact]
-    public Task NavigationService_WhenViewModelFactoryIsMissing_ShouldResolveViewModelFromContainer()
-        => RunOnStaThreadAsync(() =>
-        {
-            var services = new ServiceCollection()
-                .AddTransient<DefaultNavigationViewModel>()
-                .BuildServiceProvider();
-            var registry = new ViewRegistry();
-            registry.RegisterRoute(
-                "Plugin.Default",
-                typeof(TestNavigationView),
-                typeof(DefaultNavigationViewModel),
-                cacheView: false);
+    public void ViewRegistry_WhenViewModelFactoryIsMissing_ShouldKeepViewModelType()
+    {
+        var registry = new ViewRegistry();
+        registry.RegisterRoute(
+            "Plugin.Default",
+            typeof(TestNavigationView),
+            typeof(DefaultNavigationViewModel),
+            cacheView: false);
 
-            var navigation = new NavigationService(services, registry, new SpyLogService());
+        var registration = registry.GetViewRegistration("Plugin.Default");
 
-            navigation.NavigateTo("Plugin.Default");
-
-            Assert.IsType<DefaultNavigationViewModel>(navigation.CurrentViewModel);
-            Assert.IsType<TestNavigationView>(navigation.CurrentView);
-            return Task.CompletedTask;
-        });
+        Assert.NotNull(registration);
+        Assert.Equal(typeof(TestNavigationView), registration.ViewType);
+        Assert.Equal(typeof(DefaultNavigationViewModel), registration.ViewModelType);
+        Assert.Null(registration.ViewModelFactory);
+        Assert.False(registration.CacheView);
+    }
 
     [Fact]
     public void HostBootstrap_ShouldRegisterDiagnosticsCoreView()
@@ -427,13 +475,14 @@ public sealed class ModuleRuntimeRegistrationTests
         bool developmentSamplesEnabled = false,
         string? bootstrapSecret = "bootstrap-secret",
         string? omittedCloudPathKey = null,
-        string? recipeByDeviceTemplate = null)
+        string? recipeByDeviceTemplate = null,
+        string? deviceInstancePath = null)
     {
         var settings = new Dictionary<string, string?>
         {
             ["CloudApi:BaseUrl"] = "https://cloud.test",
             ["CloudApi:ClientCode"] = "CLIENT-01",
-            ["CloudApi:Paths:DeviceInstance"] = "/api/v1/bootstrap/device-instance",
+            ["CloudApi:Paths:DeviceInstance"] = deviceInstancePath ?? "/api/v1/bootstrap/device-instance",
             ["CloudApi:Paths:BootstrapRefresh"] = "/api/v1/bootstrap/edge-refresh",
             ["CloudApi:Paths:IdentityDeviceLogin"] = "/api/v1/bootstrap/edge-login",
             ["CloudApi:Paths:HumanIdentityRefresh"] = "/api/v1/human/identity/refresh",
@@ -528,7 +577,7 @@ public sealed class ModuleRuntimeRegistrationTests
 
     private static string GetModuleRuntimeDirectory(string moduleId)
     {
-        var runtimeDirectory = Path.Combine(GetModuleSourceDirectory(moduleId), "bin", "Debug", "net10.0-windows");
+        var runtimeDirectory = Path.Combine(GetModuleSourceDirectory(moduleId), "bin", "Debug", "net10.0");
         if (!Directory.Exists(runtimeDirectory))
         {
             throw new DirectoryNotFoundException($"Module runtime directory was not found: '{runtimeDirectory}'.");
@@ -601,27 +650,6 @@ public sealed class ModuleRuntimeRegistrationTests
         var entity = IoMappingEntity.Create(networkDeviceId, signalKey, plcAddress, addressCount, dataType, direction);
         entity.UpdateSortOrder(sortOrder);
         return entity;
-    }
-
-    private static Task RunOnStaThreadAsync(Func<Task> testBody)
-    {
-        var completion = new TaskCompletionSource<object?>();
-        var thread = new Thread(async () =>
-        {
-            try
-            {
-                await testBody().ConfigureAwait(false);
-                completion.SetResult(null);
-            }
-            catch (Exception ex)
-            {
-                completion.SetException(ex);
-            }
-        });
-
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        return completion.Task;
     }
 
     private sealed class AppLifecycleHarness : IAsyncDisposable
@@ -708,7 +736,8 @@ public sealed class ModuleRuntimeRegistrationTests
             bool developmentSamplesEnabled = false,
             string? bootstrapSecret = "bootstrap-secret",
             string? omittedCloudPathKey = null,
-            string? recipeByDeviceTemplate = null)
+            string? recipeByDeviceTemplate = null,
+            string? deviceInstancePath = null)
         {
             var tempDirectory = Path.Combine(Path.GetTempPath(), "edge-shell-tests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(tempDirectory);
@@ -719,7 +748,8 @@ public sealed class ModuleRuntimeRegistrationTests
                 developmentSamplesEnabled,
                 bootstrapSecret,
                 omittedCloudPathKey,
-                recipeByDeviceTemplate);
+                recipeByDeviceTemplate,
+                deviceInstancePath);
             var runtimePaths = CreateRuntimePaths(tempDirectory, configuration);
 
             var services = new ServiceCollection();
@@ -1064,7 +1094,7 @@ public sealed class ModuleRuntimeRegistrationTests
         }
     }
 
-    private sealed class TestNavigationView : System.Windows.Controls.ContentControl
+    private sealed class TestNavigationView
     {
     }
 

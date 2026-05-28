@@ -151,7 +151,7 @@ public sealed class HardwareConfigEditSession : IHardwareConfigEditSession
         }
 
         viewModel.SelectedIoMapping = null;
-        viewModel.IoMappingsView.Refresh();
+        viewModel.RefreshIoMappingGroups();
         viewModel.RaiseDeleteIoMappingCanExecuteChanged();
     }
 
@@ -282,7 +282,7 @@ public sealed class HardwareConfigEditSession : IHardwareConfigEditSession
             viewModel.NewInteractionPair.WriteDataType,
             viewModel.NewInteractionPair.WriteSignalName));
 
-        viewModel.IoMappingsView.Refresh();
+        viewModel.RefreshIoMappingGroups();
         CloseAddIoMappingDialog(viewModel);
         viewModel.ClearUserFeedback();
     }
@@ -321,7 +321,7 @@ public sealed class HardwareConfigEditSession : IHardwareConfigEditSession
             Remark = string.IsNullOrWhiteSpace(viewModel.NewIoMapping.Remark) ? null : viewModel.NewIoMapping.Remark.Trim()
         });
 
-        viewModel.IoMappingsView.Refresh();
+        viewModel.RefreshIoMappingGroups();
         CloseAddIoMappingDialog(viewModel);
         viewModel.ClearUserFeedback();
     }

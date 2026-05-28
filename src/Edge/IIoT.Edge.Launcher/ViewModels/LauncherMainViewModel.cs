@@ -1,14 +1,17 @@
-using IIoT.Edge.Launcher.Models;
-using IIoT.Edge.Launcher.Services;
 using System.Collections.ObjectModel;
 using System.Reflection;
+using System.Runtime.CompilerServices;
+using IIoT.Edge.Application.Auth.LocalAccounts;
+using IIoT.Edge.Launcher.Models;
+using IIoT.Edge.Launcher.Services;
+using IIoT.Edge.UI.Shared.Mvvm;
 
 namespace IIoT.Edge.Launcher.ViewModels;
 
-public sealed class LauncherMainViewModel : ObservableObject
+public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged
 {
     private readonly ILauncherProfileCatalog _profileCatalog;
-    private readonly ILocalLauncherAuthService _authService;
+    private readonly ILocalAccountAuthService _authService;
     private readonly IShellLaunchService _launchService;
     private readonly List<LauncherProfileDefinition> _allProfiles = [];
 
@@ -22,7 +25,7 @@ public sealed class LauncherMainViewModel : ObservableObject
 
     public LauncherMainViewModel(
         ILauncherProfileCatalog profileCatalog,
-        ILocalLauncherAuthService authService,
+        ILocalAccountAuthService authService,
         IShellLaunchService launchService)
     {
         _profileCatalog = profileCatalog ?? throw new ArgumentNullException(nameof(profileCatalog));
@@ -219,6 +222,18 @@ public sealed class LauncherMainViewModel : ObservableObject
         _allProfiles.Clear();
         Profiles.Clear();
         ProfileSummaryText = "共 0 个工序";
+    }
+
+    private bool SetProperty<T>(ref T field, T value, [CallerMemberName] string propertyName = "")
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value))
+        {
+            return false;
+        }
+
+        field = value;
+        OnPropertyChanged(propertyName);
+        return true;
     }
 
     private static bool Contains(string? source, string keyword)

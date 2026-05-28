@@ -1,9 +1,11 @@
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Features.Production.Planning;
 using IIoT.Edge.Application.Modules;
 using IIoT.Edge.Application.Modules.Mes;
 using IIoT.Edge.Module.Homogenization.Config;
+using IIoT.Edge.Module.Homogenization.Config.Parameters;
 using IIoT.Edge.Module.Homogenization.Integration;
 using IIoT.Edge.Module.Homogenization.Payload;
 using Microsoft.Extensions.Options;
@@ -13,7 +15,11 @@ using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesS
     string,
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationRealtimeSnapshot,
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationRecipeSnapshot,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot>;
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlanRequest,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlan,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchRequest,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchResult>;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 
@@ -187,26 +193,298 @@ public sealed class HomogenizationMesIntegrationTests
         Assert.All(httpClient.Requests, request => Assert.Equal("/dev/dev/electrode/exit/push", request.Url));
     }
 
+    [Fact]
+    public async Task UploadInboundAsync_WhenPathParameterOverridesDefault_ShouldUseConfiguredPath()
+    {
+        var httpClient = new CapturingMesHttpClient();
+        var channel = CreateChannel(
+            httpClient,
+            stationNo: "ST-H-07",
+            new Dictionary<HomogenizationParams.Mes, string>
+            {
+                [HomogenizationParams.Mes.InboundPath] = "/configured/inbound"
+            });
+
+        var result = await channel.UploadInboundAsync(CreateDevice(), "TRAY-007");
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("/configured/inbound", httpClient.LastUrl);
+    }
+
+    [Fact]
+    public async Task GetMainPlanAsync_ShouldUseOrderPathAndParseOrders()
+    {
+        var httpClient = new CapturingMesHttpClient
+        {
+            Response = """
+            {"code":200,"msg":"success","data":{"orders":[[{"code":"orderNo","name":"工单号","val":"MO-001"},{"code":"planStatus","name":"状态","val":"下发"}]]}}
+            """
+        };
+        var channel = CreateChannel(
+            httpClient,
+            stationNo: "ST-H-08",
+            new Dictionary<HomogenizationParams.Mes, string>
+            {
+                [HomogenizationParams.Mes.OrderPath] = "/configured/order"
+            });
+
+        var result = await channel.GetMainPlanAsync(
+            new HomogenizationMainPlanRequest("A1-STUC", new DateTime(2026, 4, 24, 12, 10, 11)));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("/configured/order?upperComputerNo=A1-STUC&timestamp=2026-04-24%2012%3A10%3A11", httpClient.LastGetUrl);
+        var order = Assert.Single(result.Data!.Orders);
+        Assert.Equal("orderNo", order[0].Code);
+        Assert.Equal("MO-001", order[0].Value);
+    }
+
+    [Fact]
+    public async Task GenerateTraceBatchNumberAsync_ShouldUseBatchNumberPathAndJsonPayload()
+    {
+        var httpClient = new CapturingMesHttpClient
+        {
+            Response = """{"code":200,"msg":"success","data":"ASG5NAB-CG0003"}"""
+        };
+        var channel = CreateChannel(
+            httpClient,
+            stationNo: "ST-H-09",
+            new Dictionary<HomogenizationParams.Mes, string>
+            {
+                [HomogenizationParams.Mes.BatchNumberPath] = "/configured/batch-number"
+            });
+
+        var result = await channel.GenerateTraceBatchNumberAsync(
+            new HomogenizationTraceBatchRequest("PLAN-001", "CG"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("/configured/batch-number", httpClient.LastUrl);
+        Assert.Equal("ASG5NAB-CG0003", result.Data!.BatchNumber);
+
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(httpClient.LastPayload));
+        var root = document.RootElement;
+        Assert.Equal("PLAN-001", root.GetProperty("masterPlanCode").GetString());
+        Assert.Equal("CG", root.GetProperty("operationCode").GetString());
+    }
+
+    [Fact]
+    public async Task ProductionPlanSelectionService_WhenPlanSelected_ShouldGenerateTraceBatchNumber()
+    {
+        var httpClient = new CapturingMesHttpClient
+        {
+            Response = """{"code":200,"msg":"success","data":"TRACE-001"}"""
+        };
+        var channel = CreateChannel(
+            httpClient,
+            stationNo: "ST-H-13",
+            new Dictionary<HomogenizationParams.Mes, string>
+            {
+                [HomogenizationParams.Mes.BatchNumberPath] = "/configured/batch-number"
+            });
+        var service = new HomogenizationProductionPlanSelectionService(
+            channel,
+            new FakeModuleParamRoleProvider("ST-H-13", operationCode: "CG"),
+            new FakeProductionTimeProvider());
+        var option = new ProductionPlanOption(
+            Id: "1",
+            MainPlanCode: "PLAN-001",
+            WorkOrderCode: "WO-001",
+            ErpOrderCode: string.Empty,
+            ProductCode: "P-001",
+            ProductName: "正极极片",
+            PlanStatus: "下发",
+            ProcessCode: "CG",
+            ProcessName: "正极制胶",
+            LineCode: string.Empty,
+            LineName: string.Empty,
+            PlannedQuantity: "10",
+            CompletedQuantity: string.Empty,
+            Unit: string.Empty,
+            ProductModel: string.Empty,
+            StartTime: string.Empty,
+            EndTime: string.Empty,
+            Fields: new Dictionary<string, string>());
+
+        await service.SelectPlanAsync(option);
+
+        var state = await service.GetStateAsync();
+        Assert.Same(option, state.CurrentPlan);
+        Assert.Equal("TRACE-001", state.TraceBatchNumber);
+        Assert.True(state.HasTraceBatchNumber);
+        Assert.Equal("/configured/batch-number", httpClient.LastUrl);
+
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(httpClient.LastPayload));
+        var root = document.RootElement;
+        Assert.Equal("PLAN-001", root.GetProperty("masterPlanCode").GetString());
+        Assert.Equal("CG", root.GetProperty("operationCode").GetString());
+    }
+
+    [Fact]
+    public async Task ProductionPlanSelectionService_WhenTraceBatchTimesOut_ShouldKeepPlanAndExposeTimeout()
+    {
+        var httpClient = new CapturingMesHttpClient
+        {
+            PostWithResponseException = new TaskCanceledException("The MES request timed out.")
+        };
+        var channel = CreateChannel(httpClient, stationNo: "ST-H-15");
+        var service = new HomogenizationProductionPlanSelectionService(
+            channel,
+            new FakeModuleParamRoleProvider("ST-H-15", operationCode: "CG"),
+            new FakeProductionTimeProvider());
+        var option = new ProductionPlanOption(
+            Id: "1",
+            MainPlanCode: "PLAN-001",
+            WorkOrderCode: "WO-001",
+            ErpOrderCode: string.Empty,
+            ProductCode: string.Empty,
+            ProductName: "P-001",
+            PlanStatus: string.Empty,
+            ProcessCode: string.Empty,
+            ProcessName: string.Empty,
+            LineCode: string.Empty,
+            LineName: string.Empty,
+            PlannedQuantity: string.Empty,
+            CompletedQuantity: string.Empty,
+            Unit: string.Empty,
+            ProductModel: string.Empty,
+            StartTime: string.Empty,
+            EndTime: string.Empty,
+            Fields: new Dictionary<string, string>());
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => service.SelectPlanAsync(option));
+
+        Assert.Equal(ProductionPlanSelectionErrorCodes.TraceBatchTimeout, error.Message);
+        var state = await service.GetStateAsync();
+        Assert.Same(option, state.CurrentPlan);
+        Assert.False(state.HasTraceBatchNumber);
+        Assert.Equal(ProductionPlanSelectionErrorCodes.TraceBatchTimeout, state.TraceBatchError);
+
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(httpClient.LastPayload));
+        var root = document.RootElement;
+        Assert.Equal("PLAN-001", root.GetProperty("masterPlanCode").GetString());
+        Assert.Equal("CG", root.GetProperty("operationCode").GetString());
+    }
+
+    [Fact]
+    public async Task ProductionPlanSelectionService_WhenOperationCodeMissing_ShouldRejectSelection()
+    {
+        var service = new HomogenizationProductionPlanSelectionService(
+            CreateChannel(new CapturingMesHttpClient(), stationNo: "ST-H-14"),
+            new FakeModuleParamRoleProvider("ST-H-14", operationCode: null),
+            new FakeProductionTimeProvider());
+        var option = new ProductionPlanOption(
+            Id: "1",
+            MainPlanCode: "PLAN-001",
+            WorkOrderCode: string.Empty,
+            ErpOrderCode: string.Empty,
+            ProductCode: string.Empty,
+            ProductName: string.Empty,
+            PlanStatus: string.Empty,
+            ProcessCode: string.Empty,
+            ProcessName: string.Empty,
+            LineCode: string.Empty,
+            LineName: string.Empty,
+            PlannedQuantity: string.Empty,
+            CompletedQuantity: string.Empty,
+            Unit: string.Empty,
+            ProductModel: string.Empty,
+            StartTime: string.Empty,
+            EndTime: string.Empty,
+            Fields: new Dictionary<string, string>());
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => service.SelectPlanAsync(option));
+
+        Assert.Equal(ProductionPlanSelectionErrorCodes.MissingOperationCode, error.Message);
+        var state = await service.GetStateAsync();
+        Assert.Same(option, state.CurrentPlan);
+        Assert.False(state.HasTraceBatchNumber);
+        Assert.Equal(ProductionPlanSelectionErrorCodes.MissingOperationCode, state.TraceBatchError);
+    }
+
+    [Fact]
+    public async Task ExecuteGetAsync_WhenMesRejects_ShouldReturnBusinessRejected()
+    {
+        var httpClient = new CapturingMesHttpClient
+        {
+            Response = """{"code":500,"msg":"业务拒绝","data":null}"""
+        };
+        var executor = CreateExecutor(httpClient, "ST-H-10");
+
+        var result = await executor.ExecuteGetAsync(
+            "Homogenization",
+            "/reject",
+            new Dictionary<string, string?>(),
+            static data => data.GetRawText());
+
+        Assert.Equal(MesCallOutcome.BusinessRejected, result.Outcome);
+        Assert.Equal("业务拒绝", result.Message);
+    }
+
+    [Fact]
+    public async Task ExecuteGetAsync_WhenMesReturnsEmptyResponse_ShouldReturnTransportFailure()
+    {
+        var httpClient = new CapturingMesHttpClient
+        {
+            Response = string.Empty
+        };
+        var executor = CreateExecutor(httpClient, "ST-H-11");
+
+        var result = await executor.ExecuteGetAsync(
+            "Homogenization",
+            "/empty",
+            new Dictionary<string, string?>(),
+            static data => data.GetRawText());
+
+        Assert.Equal(MesCallOutcome.TransportFailure, result.Outcome);
+    }
+
+    [Fact]
+    public async Task ExecutePostAsync_WhenDataParserThrows_ShouldReturnTransportFailure()
+    {
+        var httpClient = new CapturingMesHttpClient
+        {
+            Response = """{"code":200,"msg":"success","data":{"value":"abc"}}"""
+        };
+        var executor = CreateExecutor(httpClient, "ST-H-12");
+
+        var result = await executor.ExecutePostAsync<int>(
+            "Homogenization",
+            "/parse-failure",
+            new { value = 1 },
+            static data => data.GetProperty("value").GetInt32());
+
+        Assert.Equal(MesCallOutcome.TransportFailure, result.Outcome);
+    }
+
     private static HomogenizationMesChannel CreateChannel(
         CapturingMesHttpClient httpClient,
-        string stationNo)
+        string stationNo,
+        IReadOnlyDictionary<HomogenizationParams.Mes, string>? mesValues = null)
     {
         var logger = new FakeLogService();
         var roleProvider = new FakeModuleParamRoleProvider(stationNo);
-        var executor = new MesRequestExecutor(
-            httpClient,
-            new FakeMesEndpointProvider(),
-            roleProvider,
-            logger);
+        var parameters = new FakeModuleParamProvider(mesValues);
+        var executor = CreateExecutor(httpClient, stationNo, logger, roleProvider);
 
         return new HomogenizationMesChannel(
             executor,
             roleProvider,
+            parameters,
             logger,
             new FakeProductionTimeProvider(),
             Options.Create(CreateMesOptions()),
             Options.Create(CreateCodeOptions()));
     }
+
+    private static MesRequestExecutor CreateExecutor(
+        CapturingMesHttpClient httpClient,
+        string stationNo,
+        FakeLogService? logger = null,
+        FakeModuleParamRoleProvider? roleProvider = null)
+        => new(
+            httpClient,
+            new FakeMesEndpointProvider(),
+            roleProvider ?? new FakeModuleParamRoleProvider(stationNo),
+            logger ?? new FakeLogService());
 
     private static HomogenizationCellData CreateCellData(string trayCode)
         => new()
@@ -232,11 +510,11 @@ public sealed class HomogenizationMesIntegrationTests
             SignToken = "hdc2023",
             Paths = new HomogenizationMesPathOptions
             {
-                Inbound = "/dev/dev/getIn/check",
-                Outbound = "/dev/dev/electrode/exit/push",
-                Recipe = "/dev/dev/process/param",
-                Realtime = "/dev/dev/run/info",
-                EquipmentStatus = "/dev/dev/realTime/status"
+                Inbound = "/legacy/inbound",
+                Outbound = "/legacy/outbound",
+                Recipe = "/legacy/recipe",
+                Realtime = "/legacy/realtime",
+                EquipmentStatus = "/legacy/equipment-status"
             }
         };
 
@@ -317,9 +595,12 @@ public sealed class HomogenizationMesIntegrationTests
     private sealed class CapturingMesHttpClient : IMesHttpClient
     {
         public List<(string Url, object Payload)> Requests { get; } = [];
+        public List<string> GetUrls { get; } = [];
         public string? LastUrl => Requests.LastOrDefault().Url;
         public object? LastPayload => Requests.LastOrDefault().Payload;
+        public string? LastGetUrl => GetUrls.LastOrDefault();
         public string Response { get; set; } = """{"code":200,"msg":"OK"}""";
+        public Exception? PostWithResponseException { get; set; }
 
         public Task<bool> PostAsync(
             string processType,
@@ -337,6 +618,11 @@ public sealed class HomogenizationMesIntegrationTests
             CancellationToken cancellationToken = default)
         {
             Requests.Add((url, payload));
+            if (PostWithResponseException is not null)
+            {
+                return Task.FromException<string?>(PostWithResponseException);
+            }
+
             return Task.FromResult<string?>(Response);
         }
 
@@ -345,7 +631,10 @@ public sealed class HomogenizationMesIntegrationTests
             string url,
             IReadOnlyDictionary<string, string>? headers = null,
             CancellationToken cancellationToken = default)
-            => Task.FromResult<string?>(null);
+        {
+            GetUrls.Add(url);
+            return Task.FromResult<string?>(Response);
+        }
     }
 
     private sealed class FakeMesEndpointProvider : IMesEndpointProvider
@@ -368,7 +657,81 @@ public sealed class HomogenizationMesIntegrationTests
         public IReadOnlyDictionary<string, string> GetDefaultHeaders() => new Dictionary<string, string>();
     }
 
-    private sealed class FakeModuleParamRoleProvider(string stationNo) : IModuleParamRoleProvider
+    private sealed class FakeModuleParamProvider(
+        IReadOnlyDictionary<HomogenizationParams.Mes, string>? mesValues)
+        : IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>
+    {
+        public Task<ModuleParamSnapshot<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>> GetAsync(
+            CancellationToken cancellationToken = default)
+        {
+            var mesDefaults = new Dictionary<HomogenizationParams.Mes, string?>
+            {
+                [HomogenizationParams.Mes.启用] = "true",
+                [HomogenizationParams.Mes.服务地址] = "https://mes.local",
+                [HomogenizationParams.Mes.工站编号] = "ST-H-00",
+                [HomogenizationParams.Mes.MesHealthPath] = "/heath",
+                [HomogenizationParams.Mes.InboundPath] = "/dev/dev/getIn/check",
+                [HomogenizationParams.Mes.OutboundPath] = "/dev/dev/electrode/exit/push",
+                [HomogenizationParams.Mes.RecipePath] = "/dev/dev/process/param",
+                [HomogenizationParams.Mes.RealtimePath] = "/dev/dev/run/info",
+                [HomogenizationParams.Mes.EquipmentStatusPath] = "/dev/dev/realTime/status",
+                [HomogenizationParams.Mes.OrderPath] = "/dev/dev/get/order",
+                [HomogenizationParams.Mes.BatchNumberPath] = "/dev/dev/get/batchNumber",
+                [HomogenizationParams.Mes.签名令牌] = "hdc2023"
+            };
+            var mesKinds = Enum.GetValues<HomogenizationParams.Mes>()
+                .ToDictionary(static key => key, static key => ParamValueKind.String);
+            mesKinds[HomogenizationParams.Mes.启用] = ParamValueKind.Bool;
+
+            var mes = new ModuleParamGroup<HomogenizationParams.Mes>(
+                "Homogenization",
+                ModuleParamCategory.Mes,
+                mesValues ?? new Dictionary<HomogenizationParams.Mes, string>(),
+                mesDefaults,
+                mesKinds,
+                warn: null);
+
+            var cloud = new ModuleParamGroup<HomogenizationParams.Cloud>(
+                "Homogenization",
+                ModuleParamCategory.Cloud,
+                new Dictionary<HomogenizationParams.Cloud, string>(),
+                new Dictionary<HomogenizationParams.Cloud, string?>
+                {
+                    [HomogenizationParams.Cloud.启用] = "false"
+                },
+                new Dictionary<HomogenizationParams.Cloud, ParamValueKind>
+                {
+                    [HomogenizationParams.Cloud.启用] = ParamValueKind.Bool
+                },
+                warn: null);
+
+            var business = new ModuleParamGroup<HomogenizationParams.Business>(
+                "Homogenization",
+                ModuleParamCategory.Business,
+                new Dictionary<HomogenizationParams.Business, string>(),
+                new Dictionary<HomogenizationParams.Business, string?>
+                {
+                    [HomogenizationParams.Business.启用托盘码重码验证] = "false"
+                },
+                new Dictionary<HomogenizationParams.Business, ParamValueKind>
+                {
+                    [HomogenizationParams.Business.启用托盘码重码验证] = ParamValueKind.Bool
+                },
+                warn: null);
+
+            var snapshot = new ModuleParamSnapshot<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>(
+                "Homogenization",
+                mes,
+                cloud,
+                business);
+            return Task.FromResult(snapshot);
+        }
+    }
+
+    private sealed class FakeModuleParamRoleProvider(
+        string stationNo,
+        string upperComputerNo = "A1-STUC",
+        string? operationCode = "CG") : IModuleParamRoleProvider
     {
         public Task<ModuleParamRoleValue?> GetAsync(
             string moduleId,
@@ -437,6 +800,8 @@ public sealed class HomogenizationMesIntegrationTests
                 ModuleParamRole.MesEnabled => Build("启用", "true", ParamValueKind.Bool),
                 ModuleParamRole.MesBaseUrl => Build("服务地址", "https://mes.local", ParamValueKind.String),
                 ModuleParamRole.StationNo => Build("工站编号", stationNo, ParamValueKind.String),
+                ModuleParamRole.MesUpperComputerNo => Build("UpperComputerNo", upperComputerNo, ParamValueKind.String),
+                ModuleParamRole.MesOperationCode when operationCode is not null => Build("OperationCode", operationCode, ParamValueKind.String),
                 _ => null
             };
 

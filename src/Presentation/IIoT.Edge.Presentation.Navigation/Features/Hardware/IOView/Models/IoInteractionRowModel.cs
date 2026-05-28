@@ -7,6 +7,7 @@ namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
 
 public sealed class IoInteractionRowModel : BaseNotifyPropertyChanged
 {
+    private Func<string, string, string>? _textProvider;
     private bool _writeValueInitialized;
     private int _writeValue;
 
@@ -80,14 +81,27 @@ public sealed class IoInteractionRowModel : BaseNotifyPropertyChanged
 
     public void AddPlcSignal(IoSignalModel signal)
     {
+        ApplyTextProvider(signal);
         PlcSignals.Add(signal);
         NotifySignalLayoutChanged();
     }
 
     public void AddHostSignal(IoSignalModel signal)
     {
+        ApplyTextProvider(signal);
         HostSignals.Add(signal);
         NotifySignalLayoutChanged();
+    }
+
+    public void SetTextProvider(Func<string, string, string> textProvider)
+    {
+        _textProvider = textProvider;
+        foreach (var signal in PlcSignals.Concat(HostSignals))
+        {
+            signal.SetTextProvider(textProvider);
+        }
+
+        NotifyLocalizationChanged();
     }
 
     public void NotifyValuesChanged()
@@ -124,7 +138,7 @@ public sealed class IoInteractionRowModel : BaseNotifyPropertyChanged
             ? signal.SignalKey
             : signal.SignalName;
 
-    private static string FormatSignalToolTip(
+    private string FormatSignalToolTip(
         IReadOnlyCollection<IoSignalModel> signals,
         bool includeValue = false)
     {
@@ -152,18 +166,26 @@ public sealed class IoInteractionRowModel : BaseNotifyPropertyChanged
         }));
     }
 
-    private static string FormatJoined(
+    private string FormatJoined(
         IReadOnlyCollection<IoSignalModel> signals,
         Func<IoSignalModel, string> selector)
         => signals.Count == 0
             ? "-"
             : string.Join(GetText("Navigation_ListSeparator", "、"), signals.Select(selector));
 
-    private static string GetText(string key, string fallback)
-        => System.Windows.Application.Current?.TryFindResource(key) as string ?? fallback;
+    private string GetText(string key, string fallback)
+        => _textProvider?.Invoke(key, fallback) ?? fallback;
 
-    private static string FormatText(string key, string fallback, params object[] args)
+    private string FormatText(string key, string fallback, params object[] args)
         => string.Format(CultureInfo.CurrentUICulture, GetText(key, fallback), args);
+
+    private void ApplyTextProvider(IoSignalModel signal)
+    {
+        if (_textProvider is not null)
+        {
+            signal.SetTextProvider(_textProvider);
+        }
+    }
 
     private void ReplaceSignals(ObservableCollection<IoSignalModel> signals, IoSignalModel? signal)
     {

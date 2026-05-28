@@ -1,7 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Windows.Data;
 using System.Windows.Input;
+using Avalonia.Threading;
 using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Common.Crud;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Models;
@@ -34,6 +34,8 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
 
     public IEnumerable<DeviceType> DeviceTypes => Enum.GetValues<DeviceType>();
     public IEnumerable<PlcType> PlcTypes => Enum.GetValues<PlcType>();
+    public IReadOnlyList<string> StopBitOptions { get; } = ["One", "OnePointFive", "Two"];
+    public IReadOnlyList<string> ParityOptions { get; } = ["None", "Odd", "Even"];
 
     public bool CanEdit => _permissionService.CanEditHardware;
 
@@ -47,7 +49,8 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
     public ObservableCollection<NetworkDeviceVm> NetworkDevices { get; } = new();
     public ObservableCollection<SerialDeviceVm> SerialDevices { get; } = new();
     public ObservableCollection<IoMappingVm> IoMappings { get; } = new();
-    public ICollectionView IoMappingsView { get; }
+    public ObservableCollection<IoMappingGroupVm> IoMappingGroups { get; } = new();
+    public bool HasNoIoMappingGroups => IoMappingGroups.Count == 0;
 
     public IReadOnlyList<string> IoCategories => IoMappingOptionCatalog.Categories;
     public IReadOnlyList<string> IoDataPointCategories => IoMappingOptionCatalog.DataPointCategories;
@@ -269,10 +272,6 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         _loadSaveCoordinator = loadSaveCoordinator;
         _deviceSelectionCoordinator = deviceSelectionCoordinator;
         _editSession = editSession;
-        IoMappingsView = CollectionViewSource.GetDefaultView(IoMappings);
-        IoMappingsView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(IoMappingVm.GroupTitle)));
-        IoMappingsView.SortDescriptions.Add(new SortDescription(nameof(IoMappingVm.SortOrder), ListSortDirection.Ascending));
-
         _addNetworkDeviceCommand = (BaseCommand)CreateAddCommand(
             NetworkDevices,
             () => new NetworkDeviceVm { DeviceType = DeviceType.PLC, ModuleId = string.Empty },
@@ -346,14 +345,13 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
 
     private void HandlePermissionStateChanged()
     {
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher is null || dispatcher.CheckAccess())
+        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
         {
             RefreshPermissionState();
             return;
         }
 
-        dispatcher.Invoke(RefreshPermissionState);
+        Avalonia.Threading.Dispatcher.UIThread.Post(RefreshPermissionState);
     }
 
     private void RefreshPermissionState()
@@ -401,4 +399,30 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
 
     internal void ClearUserFeedback()
         => ClearFeedback();
+
+    internal void RefreshIoMappingGroups()
+    {
+        var groups = IoMappings
+            .OrderBy(static x => x.SortOrder)
+            .ThenBy(static x => x.PlcAddress, StringComparer.OrdinalIgnoreCase)
+            .GroupBy(static x => x.GroupTitle, StringComparer.OrdinalIgnoreCase)
+            .Select(static x => new IoMappingGroupVm(x.Key, x))
+            .ToArray();
+
+        ReplaceCollection(IoMappingGroups, groups);
+        OnPropertyChanged(nameof(HasNoIoMappingGroups));
+    }
+}
+
+public sealed class IoMappingGroupVm
+{
+    public IoMappingGroupVm(string title, IEnumerable<IoMappingVm> mappings)
+    {
+        Title = title;
+        Mappings = new ObservableCollection<IoMappingVm>(mappings);
+    }
+
+    public string Title { get; }
+
+    public ObservableCollection<IoMappingVm> Mappings { get; }
 }

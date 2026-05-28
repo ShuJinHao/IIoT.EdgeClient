@@ -1,0 +1,356 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView.DiagnosticsPage"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:dg="using:Avalonia.Controls"
+    xmlns:controls="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
+
+    <Grid RowDefinitions="Auto,*">
+        <controls:EdgeCard
+            Margin="20,10,30,0"
+            HorizontalAlignment="Left"
+            Height="42"
+            Elevation="Flat"
+            PaddingMode="None"
+            Surface="Wash">
+            <controls:EdgeSegmentedNav
+                ItemCommand="{Binding SelectTabCommand}"
+                ItemsSource="{Binding Tabs}"
+                SelectedItem="{Binding SelectedTab, Mode=TwoWay}"
+                SelectionMode="Single">
+                <controls:EdgeSegmentedNav.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                </controls:EdgeSegmentedNav.ItemsPanel>
+                <controls:EdgeSegmentedNav.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock
+                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                            Text="{Binding Title}" />
+                    </DataTemplate>
+                </controls:EdgeSegmentedNav.ItemTemplate>
+            </controls:EdgeSegmentedNav>
+        </controls:EdgeCard>
+        <ScrollViewer
+            Grid.Row="1"
+            HorizontalScrollBarVisibility="Disabled"
+            VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="20,12,20,20" Spacing="16">
+                <StackPanel IsVisible="{Binding IsOverviewTabSelected}" Spacing="16">
+                    <UniformGrid Columns="4" Rows="1">
+                        <controls:EdgeMetricCard
+                            Margin="0,0,8,0"
+                            Title="{DynamicResource Navigation_Diagnostics_DiscoveredLabel}"
+                            Value="{Binding DiscoveredModuleCount}" />
+                        <controls:EdgeMetricCard
+                            Margin="4,0"
+                            Title="{DynamicResource Navigation_Diagnostics_EnabledLabel}"
+                            Value="{Binding EnabledModuleCount}" />
+                        <controls:EdgeMetricCard
+                            Margin="4,0"
+                            Title="{DynamicResource Navigation_Diagnostics_ActivatedLabel}"
+                            Value="{Binding ActivatedModuleCount}" />
+                        <controls:EdgeMetricCard
+                            Margin="8,0,0,0"
+                            Title="{DynamicResource Navigation_Diagnostics_DeadLetterAndIssues}"
+                            Value="{Binding TotalIssueCount}" />
+                    </UniformGrid>
+                    <controls:EdgeCard Surface="Card" PaddingMode="Compact" Elevation="Flat">
+                        <StackPanel Spacing="4">
+                            <TextBlock
+                                FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                                FontWeight="SemiBold"
+                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                Text="{DynamicResource Navigation_Diagnostics_ModuleOverview}" />
+                            <TextBlock
+                                FontSize="{DynamicResource Edge.FontSize.Body}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                Text="{Binding DiscoveredModulesSummary}"
+                                TextWrapping="Wrap" />
+                            <TextBlock
+                                FontSize="{DynamicResource Edge.FontSize.Body}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                Text="{Binding EnabledModulesSummary}"
+                                TextWrapping="Wrap" />
+                            <TextBlock
+                                FontSize="{DynamicResource Edge.FontSize.Body}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                Text="{Binding ActivatedModulesSummary}"
+                                TextWrapping="Wrap" />
+                        </StackPanel>
+                    </controls:EdgeCard>
+                    <controls:EdgeCard Surface="Card" PaddingMode="Compact" Elevation="Flat">
+                        <StackPanel Spacing="4">
+                            <TextBlock
+                                FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                                FontWeight="SemiBold"
+                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                Text="{DynamicResource Navigation_Diagnostics_ConfigLabel}" />
+                            <TextBlock
+                                FontSize="{DynamicResource Edge.FontSize.Body}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                Text="{Binding ConfigurationProfileSummary}"
+                                TextWrapping="Wrap" />
+                        </StackPanel>
+                    </controls:EdgeCard>
+                    <controls:EdgeCard Surface="Card" PaddingMode="Compact" Elevation="Flat">
+                        <StackPanel Spacing="4">
+                            <TextBlock
+                                FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                                FontWeight="SemiBold"
+                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                Text="{DynamicResource Navigation_Diagnostics_Context}" />
+                            <TextBlock
+                                FontSize="{DynamicResource Edge.FontSize.Body}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                Text="{Binding ContextPersistenceSummary}"
+                                TextWrapping="Wrap" />
+                        </StackPanel>
+                    </controls:EdgeCard>
+                </StackPanel>
+                <StackPanel IsVisible="{Binding IsSyncOpsTabSelected}" Spacing="16">
+                    <controls:EdgeTablePanel
+                        Title="{DynamicResource Navigation_Diagnostics_SyncStatusTable}">
+                        <controls:EdgeDataGrid
+                            Density="Compact"
+                            AutoGenerateColumns="False"
+                            CanUserSortColumns="False"
+                            ItemsSource="{Binding SyncChannels}">
+                            <controls:EdgeDataGrid.Columns>
+                                <dg:DataGridTextColumn Binding="{Binding Channel}" Header="{DynamicResource Navigation_Column_Channel}" MinWidth="110" Width="110" />
+                                <dg:DataGridTextColumn Binding="{Binding Status}" Header="{DynamicResource Navigation_Column_State}" MinWidth="140" Width="140" />
+                                <dg:DataGridTextColumn Binding="{Binding Pending}" Header="{DynamicResource Navigation_Column_Pending}" MinWidth="100" Width="100" />
+                                <dg:DataGridTextColumn Binding="{Binding DeadLetterCount}" Header="{DynamicResource Navigation_Column_DeadLetters}" MinWidth="110" Width="110" />
+                                <dg:DataGridTextColumn Binding="{Binding LastError}" Header="{DynamicResource Navigation_Column_LastError}" MinWidth="260" Width="2*" />
+                                <dg:DataGridTextColumn Binding="{Binding Note}" Header="{DynamicResource Navigation_Column_Focus}" MinWidth="260" Width="2*" />
+                            </controls:EdgeDataGrid.Columns>
+                        </controls:EdgeDataGrid>
+                    </controls:EdgeTablePanel>
+
+                    <controls:EdgeTablePanel
+                        Title="{DynamicResource Navigation_Diagnostics_CloudDeadLetters}"
+                        IsEmpty="{Binding !CloudDeadLetters.Count}"
+                        EmptyTitle="{DynamicResource Navigation_Diagnostics_NoDeadLetters}"
+                        EmptyMessage="{DynamicResource Navigation_Diagnostics_NoDeadLettersMessage}">
+                        <controls:EdgeTablePanel.ActionContent>
+                            <controls:EdgeNoticeBar
+                                IsVisible="{Binding !CanOperateDeadLetters}">
+                                <controls:EdgeNoticeBar.Content>
+                                    <TextBlock
+                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                        Text="{DynamicResource Navigation_Diagnostics_AdminOnlyNotice}" />
+                                </controls:EdgeNoticeBar.Content>
+                            </controls:EdgeNoticeBar>
+                        </controls:EdgeTablePanel.ActionContent>
+                        <controls:EdgeDataGrid
+                            Density="Compact"
+                            AutoGenerateColumns="False"
+                            CanUserSortColumns="False"
+                            ItemsSource="{Binding CloudDeadLetters}">
+                            <controls:EdgeDataGrid.Columns>
+                                <dg:DataGridTextColumn Binding="{Binding Id}" Header="{DynamicResource Navigation_Column_Id}" MinWidth="70" Width="70" />
+                                <dg:DataGridTextColumn Binding="{Binding ProcessType}" Header="{DynamicResource Navigation_Column_Process}" MinWidth="130" Width="130" />
+                                <dg:DataGridTextColumn Binding="{Binding FailureStage}" Header="{DynamicResource Navigation_Column_Stage}" MinWidth="130" Width="130" />
+                                <dg:DataGridTextColumn Binding="{Binding FailureReason}" Header="{DynamicResource Navigation_Column_FailureReason}" MinWidth="300" Width="2*" />
+                                <dg:DataGridTextColumn Binding="{Binding CreatedAt}" Header="{DynamicResource Navigation_Column_Time}" MinWidth="150" Width="150" />
+                                <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_Action}" MinWidth="170" Width="170">
+                                    <dg:DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <StackPanel
+                                                Orientation="Horizontal"
+                                                Spacing="6"
+                                                VerticalAlignment="Center"
+                                                Margin="4,0">
+                                                <Button
+                                                    Classes="edge-soft-button"
+                                                    Command="{Binding $parent[UserControl].DataContext.RequeueDeadLetterCommand}"
+                                                    CommandParameter="{Binding}">
+                                                    <TextBlock Text="{DynamicResource Navigation_Button_Requeue}" />
+                                                </Button>
+                                                <Button
+                                                    Classes="edge-soft-button"
+                                                    Foreground="{DynamicResource Edge.Brush.Status.Error}"
+                                                    Command="{Binding $parent[UserControl].DataContext.DeleteDeadLetterCommand}"
+                                                    CommandParameter="{Binding}">
+                                                    <TextBlock Text="{DynamicResource Navigation_Button_Delete}" />
+                                                </Button>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </dg:DataGridTemplateColumn.CellTemplate>
+                                </dg:DataGridTemplateColumn>
+                            </controls:EdgeDataGrid.Columns>
+                        </controls:EdgeDataGrid>
+                    </controls:EdgeTablePanel>
+
+                    <controls:EdgeTablePanel
+                        Title="{DynamicResource Navigation_Diagnostics_MesDeadLetters}"
+                        IsEmpty="{Binding !MesDeadLetters.Count}"
+                        EmptyTitle="{DynamicResource Navigation_Diagnostics_NoDeadLetters}"
+                        EmptyMessage="{DynamicResource Navigation_Diagnostics_NoDeadLettersMessage}">
+                        <controls:EdgeTablePanel.ActionContent>
+                            <controls:EdgeNoticeBar
+                                IsVisible="{Binding !CanOperateDeadLetters}">
+                                <controls:EdgeNoticeBar.Content>
+                                    <TextBlock
+                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                        Text="{DynamicResource Navigation_Diagnostics_AdminOnlyNotice}" />
+                                </controls:EdgeNoticeBar.Content>
+                            </controls:EdgeNoticeBar>
+                        </controls:EdgeTablePanel.ActionContent>
+                        <controls:EdgeDataGrid
+                            Density="Compact"
+                            AutoGenerateColumns="False"
+                            CanUserSortColumns="False"
+                            ItemsSource="{Binding MesDeadLetters}">
+                            <controls:EdgeDataGrid.Columns>
+                                <dg:DataGridTextColumn Binding="{Binding Id}" Header="{DynamicResource Navigation_Column_Id}" MinWidth="70" Width="70" />
+                                <dg:DataGridTextColumn Binding="{Binding ProcessType}" Header="{DynamicResource Navigation_Column_Process}" MinWidth="130" Width="130" />
+                                <dg:DataGridTextColumn Binding="{Binding FailureStage}" Header="{DynamicResource Navigation_Column_Stage}" MinWidth="130" Width="130" />
+                                <dg:DataGridTextColumn Binding="{Binding FailureReason}" Header="{DynamicResource Navigation_Column_FailureReason}" MinWidth="300" Width="2*" />
+                                <dg:DataGridTextColumn Binding="{Binding CreatedAt}" Header="{DynamicResource Navigation_Column_Time}" MinWidth="150" Width="150" />
+                                <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_Action}" MinWidth="170" Width="170">
+                                    <dg:DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <StackPanel
+                                                Orientation="Horizontal"
+                                                Spacing="6"
+                                                VerticalAlignment="Center"
+                                                Margin="4,0">
+                                                <Button
+                                                    Classes="edge-soft-button"
+                                                    Command="{Binding $parent[UserControl].DataContext.RequeueDeadLetterCommand}"
+                                                    CommandParameter="{Binding}">
+                                                    <TextBlock Text="{DynamicResource Navigation_Button_Requeue}" />
+                                                </Button>
+                                                <Button
+                                                    Classes="edge-soft-button"
+                                                    Foreground="{DynamicResource Edge.Brush.Status.Error}"
+                                                    Command="{Binding $parent[UserControl].DataContext.DeleteDeadLetterCommand}"
+                                                    CommandParameter="{Binding}">
+                                                    <TextBlock Text="{DynamicResource Navigation_Button_Delete}" />
+                                                </Button>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </dg:DataGridTemplateColumn.CellTemplate>
+                                </dg:DataGridTemplateColumn>
+                            </controls:EdgeDataGrid.Columns>
+                        </controls:EdgeDataGrid>
+                    </controls:EdgeTablePanel>
+                </StackPanel>
+                <StackPanel IsVisible="{Binding IsStartupTabSelected}" Spacing="16">
+                    <TextBlock
+                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                        Text="{Binding LastUpdatedSummary}" />
+                    <controls:EdgeCard Surface="Card" PaddingMode="Compact" Elevation="Flat">
+                        <StackPanel Spacing="4">
+                            <TextBlock
+                                FontSize="{DynamicResource Edge.FontSize.Body}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                Text="{Binding DiscoveredModulesSummary}"
+                                TextWrapping="Wrap" />
+                            <TextBlock
+                                FontSize="{DynamicResource Edge.FontSize.Body}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                Text="{Binding EnabledModulesSummary}"
+                                TextWrapping="Wrap" />
+                            <TextBlock
+                                FontSize="{DynamicResource Edge.FontSize.Body}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                Text="{Binding ActivatedModulesSummary}"
+                                TextWrapping="Wrap" />
+                        </StackPanel>
+                    </controls:EdgeCard>
+                    <controls:EdgeTablePanel
+Title="{DynamicResource Navigation_Diagnostics_MesUpload}">
+                        <controls:EdgeDataGrid
+                            Density="Compact"
+                            AutoGenerateColumns="False"
+                            CanUserSortColumns="False"
+                            ItemsSource="{Binding MesUploadDiagnostics}">
+                            <controls:EdgeDataGrid.Columns>
+                                <dg:DataGridTextColumn Binding="{Binding ProcessType}" Header="{DynamicResource Navigation_Column_Process}" MinWidth="150" Width="150" />
+                                <dg:DataGridTextColumn Binding="{Binding LastResult}" Header="{DynamicResource Navigation_Column_LastResult}" MinWidth="150" Width="150" />
+                                <dg:DataGridTextColumn Binding="{Binding LastAttemptAt}" Header="{DynamicResource Navigation_Column_LastAttempt}" MinWidth="160" Width="160" />
+                                <dg:DataGridTextColumn Binding="{Binding LastSuccessAt}" Header="{DynamicResource Navigation_Column_LastSuccess}" MinWidth="160" Width="160" />
+                                <dg:DataGridTextColumn Binding="{Binding LastFailureReason}" Header="{DynamicResource Navigation_Column_FailureReason}" MinWidth="300" Width="2*" />
+                            </controls:EdgeDataGrid.Columns>
+                        </controls:EdgeDataGrid>
+                    </controls:EdgeTablePanel>
+                    <controls:EdgeTablePanel
+Title="{DynamicResource Navigation_Diagnostics_PluginLifecycle}">
+                        <controls:EdgeDataGrid
+                            Density="Compact"
+                            AutoGenerateColumns="False"
+                            CanUserSortColumns="False"
+                            ItemsSource="{Binding PluginStates}">
+                            <controls:EdgeDataGrid.Columns>
+                                <dg:DataGridTextColumn Binding="{Binding ModuleId}" Header="{DynamicResource Navigation_Column_ModuleId}" MinWidth="150" Width="150" />
+                                <dg:DataGridTextColumn Binding="{Binding DisplayName}" Header="{DynamicResource Navigation_Column_DisplayName}" MinWidth="150" Width="150" />
+                                <dg:DataGridTextColumn Binding="{Binding ProcessType}" Header="{DynamicResource Navigation_Column_Process}" MinWidth="150" Width="150" />
+                                <dg:DataGridTextColumn Binding="{Binding Version}" Header="{DynamicResource Navigation_Column_Version}" MinWidth="110" Width="110" />
+                                <dg:DataGridTextColumn Binding="{Binding State}" Header="{DynamicResource Navigation_Column_State}" MinWidth="120" Width="120" />
+                                <dg:DataGridTextColumn Binding="{Binding Message}" Header="{DynamicResource Navigation_Column_Message}" MinWidth="300" Width="2*" />
+                            </controls:EdgeDataGrid.Columns>
+                        </controls:EdgeDataGrid>
+                    </controls:EdgeTablePanel>
+                    <controls:EdgeTablePanel
+Title="{DynamicResource Navigation_Diagnostics_Modules}">
+                        <controls:EdgeDataGrid
+                            Density="Compact"
+                            AutoGenerateColumns="False"
+                            CanUserSortColumns="False"
+                            ItemsSource="{Binding ModuleRegistrations}">
+                            <controls:EdgeDataGrid.Columns>
+                                <dg:DataGridTextColumn Binding="{Binding ModuleId}" Header="{DynamicResource Navigation_Column_ModuleId}" MinWidth="150" Width="150" />
+                                <dg:DataGridTextColumn Binding="{Binding ProcessType}" Header="{DynamicResource Navigation_Column_Process}" MinWidth="150" Width="150" />
+                                <dg:DataGridTextColumn Binding="{Binding AssemblyName}" Header="{DynamicResource Navigation_Column_Assembly}" MinWidth="220" Width="220" />
+                                <dg:DataGridCheckBoxColumn Binding="{Binding IsEnabled}" Header="{DynamicResource Navigation_Column_Enabled}" MinWidth="80" Width="80" />
+                                <dg:DataGridCheckBoxColumn Binding="{Binding HasCellDataRegistration}" Header="{DynamicResource Navigation_Column_CellData}" MinWidth="90" Width="90" />
+                                <dg:DataGridCheckBoxColumn Binding="{Binding HasRuntimeFactory}" Header="{DynamicResource Navigation_Column_Runtime}" MinWidth="90" Width="90" />
+                                <dg:DataGridCheckBoxColumn Binding="{Binding HasCloudUploader}" Header="{DynamicResource Navigation_Column_CloudUpload}" MinWidth="90" Width="90" />
+                                <dg:DataGridCheckBoxColumn Binding="{Binding HasMesUploader}" Header="{DynamicResource Navigation_Column_MesUpload}" MinWidth="90" Width="90" />
+                                <dg:DataGridCheckBoxColumn Binding="{Binding HasHardwareProfile}" Header="{DynamicResource Navigation_Column_HardwareProfile}" MinWidth="110" Width="110" />
+                            </controls:EdgeDataGrid.Columns>
+                        </controls:EdgeDataGrid>
+                    </controls:EdgeTablePanel>
+                    <controls:EdgeTablePanel
+Title="{DynamicResource Navigation_Diagnostics_DeviceBinding}">
+                        <controls:EdgeDataGrid
+                            Density="Compact"
+                            AutoGenerateColumns="False"
+                            CanUserSortColumns="False"
+                            ItemsSource="{Binding DeviceBindings}">
+                            <controls:EdgeDataGrid.Columns>
+                                <dg:DataGridTextColumn Binding="{Binding DeviceName}" Header="{DynamicResource Navigation_Column_Device}" MinWidth="180" Width="180" />
+                                <dg:DataGridTextColumn Binding="{Binding ModuleId}" Header="{DynamicResource Navigation_Column_ModuleId}" MinWidth="160" Width="160" />
+                                <dg:DataGridCheckBoxColumn Binding="{Binding ModuleExists}" Header="{DynamicResource Navigation_Column_ModuleExists}" MinWidth="110" Width="110" />
+                                <dg:DataGridCheckBoxColumn Binding="{Binding ModuleEnabled}" Header="{DynamicResource Navigation_Column_ModuleEnabled}" MinWidth="110" Width="110" />
+                                <dg:DataGridCheckBoxColumn Binding="{Binding HasIoMappings}" Header="{DynamicResource Navigation_Column_HasIo}" MinWidth="110" Width="110" />
+                            </controls:EdgeDataGrid.Columns>
+                        </controls:EdgeDataGrid>
+                    </controls:EdgeTablePanel>
+                    <controls:EdgeTablePanel
+Title="{DynamicResource Navigation_Diagnostics_Issues}">
+                        <controls:EdgeDataGrid
+                            Density="Compact"
+                            AutoGenerateColumns="False"
+                            CanUserSortColumns="False"
+                            ItemsSource="{Binding Issues}">
+                            <controls:EdgeDataGrid.Columns>
+                                <dg:DataGridTextColumn Binding="{Binding Code}" Header="{DynamicResource Navigation_Column_Code}" MinWidth="180" Width="180" />
+                                <dg:DataGridTextColumn Binding="{Binding ModuleId}" Header="{DynamicResource Navigation_Column_ModuleId}" MinWidth="160" Width="160" />
+                                <dg:DataGridTextColumn Binding="{Binding DeviceName}" Header="{DynamicResource Navigation_Column_Device}" MinWidth="180" Width="180" />
+                                <dg:DataGridTextColumn Binding="{Binding Message}" Header="{DynamicResource Navigation_Column_Message}" MinWidth="360" Width="2*" />
+                            </controls:EdgeDataGrid.Columns>
+                        </controls:EdgeDataGrid>
+                    </controls:EdgeTablePanel>
+                </StackPanel>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

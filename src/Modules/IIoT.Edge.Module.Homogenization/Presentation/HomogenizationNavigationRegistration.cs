@@ -8,7 +8,7 @@ public static class HomogenizationNavigationRegistration
 {
     public static IEdgeProcessModuleBuilder RegisterHomogenizationViews(this IEdgeProcessModuleBuilder builder)
         => builder.RegisterStandardModuleViews(
-            HomogenizationModuleIdentity.ModuleId,
+            DependencyInjection.ModuleKey,
             "数据",
             "Homogenization_Menu_Data",
             customDataViewType: typeof(HomogenizationDataPage),

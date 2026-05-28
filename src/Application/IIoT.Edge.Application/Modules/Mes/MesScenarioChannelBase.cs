@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
@@ -14,8 +15,26 @@ namespace IIoT.Edge.Application.Modules.Mes;
 /// <summary>
 /// MES 多场景通道基类。负责类型校验、出料补传适配、工站号、信封、签名和请求执行，插件只实现场景字段映射。
 /// </summary>
-public abstract class MesScenarioChannelBase<TCellData, TInbound, TRealtime, TRecipe, TEquipmentStatus>
-    : IMesScenarioChannel<TCellData, TInbound, TRealtime, TRecipe, TEquipmentStatus>
+public abstract class MesScenarioChannelBase<
+        TCellData,
+        TInbound,
+        TRealtime,
+        TRecipe,
+        TEquipmentStatus,
+        TMainPlanRequest,
+        TMainPlanResult,
+        TTraceBatchRequest,
+        TTraceBatchResult>
+    : IMesScenarioChannel<
+        TCellData,
+        TInbound,
+        TRealtime,
+        TRecipe,
+        TEquipmentStatus,
+        TMainPlanRequest,
+        TMainPlanResult,
+        TTraceBatchRequest,
+        TTraceBatchResult>
     where TCellData : CellDataBase
 {
     private readonly MesRequestExecutor _requestExecutor;
@@ -77,6 +96,14 @@ public abstract class MesScenarioChannelBase<TCellData, TInbound, TRealtime, TRe
     public abstract Task<MesCallResult> UploadEquipmentStatusAsync(
         DeviceSession? device,
         TEquipmentStatus snapshot,
+        CancellationToken cancellationToken = default);
+
+    public abstract Task<MesCallResult<TMainPlanResult>> GetMainPlanAsync(
+        TMainPlanRequest request,
+        CancellationToken cancellationToken = default);
+
+    public abstract Task<MesCallResult<TTraceBatchResult>> GenerateTraceBatchNumberAsync(
+        TTraceBatchRequest request,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -141,6 +168,40 @@ public abstract class MesScenarioChannelBase<TCellData, TInbound, TRealtime, TRe
                 // payloadFactory 是插件侧字段映射边界，Application 不知道也不保存具体业务字段。
                 return payloadFactory(envelope);
             },
+            cancellationToken);
+    }
+
+    protected Task<MesCallResult<TData>> ExecuteMesGetAsync<TData>(
+        string relativePath,
+        IReadOnlyDictionary<string, string?> query,
+        Func<JsonElement, TData> dataParser,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        ArgumentNullException.ThrowIfNull(dataParser);
+
+        return _requestExecutor.ExecuteGetAsync(
+            ProcessType,
+            relativePath,
+            query,
+            dataParser,
+            cancellationToken);
+    }
+
+    protected Task<MesCallResult<TData>> ExecuteMesPostAsync<TData>(
+        string relativePath,
+        object payload,
+        Func<JsonElement, TData> dataParser,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+        ArgumentNullException.ThrowIfNull(dataParser);
+
+        return _requestExecutor.ExecutePostAsync(
+            ProcessType,
+            relativePath,
+            payload,
+            dataParser,
             cancellationToken);
     }
 

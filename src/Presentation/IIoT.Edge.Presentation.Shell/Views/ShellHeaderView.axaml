@@ -1,0 +1,74 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Shell.Views.ShellHeaderView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
+    HorizontalAlignment="Stretch">
+    <Border
+        x:Name="HeaderDragSurface"
+        Background="Transparent"
+        HorizontalAlignment="Stretch"
+        PointerPressed="OnHeaderPointerPressed">
+        <Grid
+            HorizontalAlignment="Stretch"
+            ColumnDefinitions="Auto,*,*,400">
+            <edge:EdgeHeaderBrand
+                Grid.ColumnSpan="2"
+                Title="&#x4EA7;&#x7EBF;&#x8FB9;&#x7F18;&#x63A7;&#x5236;&#x53F0;" />
+
+            <Grid
+                Grid.Column="3"
+                VerticalAlignment="Center"
+                ColumnDefinitions="*,Auto,120">
+                <StackPanel
+                    Grid.Column="1"
+                    VerticalAlignment="Center"
+                    Orientation="Horizontal">
+                    <edge:EdgeHeaderDivider />
+
+                    <edge:EdgeAccountChip
+                        Classes="one-line"
+                        MinWidth="128"
+                        MaxWidth="210"
+                        Margin="8,0,0,0"
+                        Click="OnAccountChipClick"
+                        DisplayName="{Binding OperatorName, FallbackValue=&#x672A;&#x767B;&#x5F55;, TargetNullValue=&#x672A;&#x767B;&#x5F55;}" />
+                </StackPanel>
+
+                <UniformGrid
+                    Grid.Column="2"
+                    Width="120"
+                    Height="40"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Columns="3">
+                    <edge:EdgeWindowButton
+                        Click="OnMinimizeClick"
+                        ToolTip.Tip="&#x6700;&#x5C0F;&#x5316;">
+                        <TextBlock
+                            Classes="edge-window-symbol"
+                            Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=edge:EdgeWindowButton}}"
+                            Text="─" />
+                    </edge:EdgeWindowButton>
+                    <edge:EdgeWindowButton
+                        Click="OnMaximizeRestoreClick"
+                        ToolTip.Tip="&#x6700;&#x5927;&#x5316; / &#x8FD8;&#x539F;">
+                        <TextBlock
+                            Classes="edge-window-symbol"
+                            Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=edge:EdgeWindowButton}}"
+                            Text="☐" />
+                    </edge:EdgeWindowButton>
+                    <edge:EdgeWindowButton
+                        Kind="Close"
+                        Click="OnCloseClick"
+                        ToolTip.Tip="&#x5173;&#x95ED;">
+                        <TextBlock
+                            Classes="edge-window-symbol"
+                            Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=edge:EdgeWindowButton}}"
+                            Text="✕" />
+                    </edge:EdgeWindowButton>
+                </UniformGrid>
+            </Grid>
+        </Grid>
+    </Border>
+</UserControl>

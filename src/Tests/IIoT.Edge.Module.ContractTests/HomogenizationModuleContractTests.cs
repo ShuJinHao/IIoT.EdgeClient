@@ -1,12 +1,14 @@
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Features.Production.Planning;
 using IIoT.Edge.Application.Modules.Mes;
 using System.Text.Json;
 using IIoT.Edge.Module.Homogenization;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Parameters;
 using IIoT.Edge.Module.Homogenization.Integration;
+using IIoT.Edge.Module.Homogenization.Integration.Cloud;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using IIoT.Edge.Module.Homogenization.Samples;
@@ -15,13 +17,17 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using HomogenizationCloudUploadChannel = IIoT.Edge.Application.Modules.Cloud.ICloudUploadChannel<
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationProcessRecordsCloudPayload>;
+    object>;
 using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesScenarioChannel<
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
     string,
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationRealtimeSnapshot,
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationRecipeSnapshot,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot>;
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlanRequest,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlan,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchRequest,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchResult>;
 
 namespace IIoT.Edge.Module.ContractTests;
 
@@ -43,6 +49,8 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
         services.AddSingleton<HomogenizationMesScenarioChannel, ContractHomogenizationMesChannel>();
         services.AddSingleton<HomogenizationCellDataValidator>();
         services.AddSingleton<IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>, ContractHomogenizationModuleParamProvider>();
+        services.AddSingleton<IProductionPlanSelectionService, ContractProductionPlanSelectionService>();
+        services.AddSingleton<IHomogenizationProductionGate, HomogenizationProductionGate>();
         services.AddSingleton(Options.Create(new HomogenizationModuleOptions()));
         services.AddSingleton(Options.Create(new HomogenizationCodeOptions()));
     }
@@ -59,18 +67,18 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
     }
 
     [Fact]
-    public void PluginManifest_ShouldMatchHomogenizationIdentityConstants()
+    public void PluginManifest_ShouldMatchHomogenizationModuleEntry()
     {
         var manifestPath = Path.Combine(
-            ContractTestPathHelper.GetModuleSourceDirectory(HomogenizationModuleIdentity.ModuleId),
+            ContractTestPathHelper.GetModuleSourceDirectory("Homogenization"),
             "plugin.json");
 
         using var document = JsonDocument.Parse(File.ReadAllText(manifestPath));
         var root = document.RootElement;
 
-        Assert.Equal(HomogenizationModuleIdentity.ModuleId, root.GetProperty("moduleId").GetString());
-        Assert.Equal(HomogenizationModuleIdentity.ProcessType, root.GetProperty("supportedProcessType").GetString());
-        Assert.Equal(HomogenizationModuleIdentity.EntryType, root.GetProperty("entryType").GetString());
+        Assert.Equal("Homogenization", root.GetProperty("moduleId").GetString());
+        Assert.Equal("Homogenization", root.GetProperty("supportedProcessType").GetString());
+        Assert.Equal("IIoT.Edge.Module.Homogenization.DependencyInjection", root.GetProperty("entryType").GetString());
     }
 
     [Fact]
@@ -117,7 +125,7 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
         var configuration = new ConfigurationBuilder()
             .AddJsonFile(
                 Path.Combine(
-                    ContractTestPathHelper.GetModuleSourceDirectory(HomogenizationModuleIdentity.ModuleId),
+                    ContractTestPathHelper.GetModuleSourceDirectory("Homogenization"),
                     "Config",
                     "homogenization.module.json"),
                 optional: false,
@@ -137,11 +145,11 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
     public void HomogenizationLanguageDictionaries_ShouldContainSameNonEmptyKeys()
     {
         var resourceDirectory = Path.Combine(
-            ContractTestPathHelper.GetModuleSourceDirectory(HomogenizationModuleIdentity.ModuleId),
+            ContractTestPathHelper.GetModuleSourceDirectory("Homogenization"),
             "Resources",
             "Languages");
-        var zhKeys = ReadLanguageDictionary(resourceDirectory, "zh-CN.xaml");
-        var enKeys = ReadLanguageDictionary(resourceDirectory, "en-US.xaml");
+        var zhKeys = ReadLanguageDictionary(resourceDirectory, "zh-CN.axaml");
+        var enKeys = ReadLanguageDictionary(resourceDirectory, "en-US.axaml");
 
         Assert.NotEmpty(zhKeys);
         Assert.Equal(zhKeys.Keys.Order(), enKeys.Keys.Order());
@@ -210,23 +218,23 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
         public Task<ModuleParamSnapshot<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>> GetAsync(
             CancellationToken cancellationToken = default)
             => Task.FromResult(new ModuleParamSnapshot<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>(
-                HomogenizationModuleIdentity.ModuleId,
+                "Homogenization",
                 new ModuleParamGroup<HomogenizationParams.Mes>(
-                    HomogenizationModuleIdentity.ModuleId,
+                    "Homogenization",
                     ModuleParamCategory.Mes,
                     new Dictionary<HomogenizationParams.Mes, string>(),
                     new Dictionary<HomogenizationParams.Mes, string?>(),
                     new Dictionary<HomogenizationParams.Mes, ParamValueKind>(),
                     warn: null),
                 new ModuleParamGroup<HomogenizationParams.Cloud>(
-                    HomogenizationModuleIdentity.ModuleId,
+                    "Homogenization",
                     ModuleParamCategory.Cloud,
                     new Dictionary<HomogenizationParams.Cloud, string>(),
                     new Dictionary<HomogenizationParams.Cloud, string?>(),
                     new Dictionary<HomogenizationParams.Cloud, ParamValueKind>(),
                     warn: null),
                 new ModuleParamGroup<HomogenizationParams.Business>(
-                    HomogenizationModuleIdentity.ModuleId,
+                    "Homogenization",
                     ModuleParamCategory.Business,
                     new Dictionary<HomogenizationParams.Business, string>(),
                     new Dictionary<HomogenizationParams.Business, string?>
@@ -242,7 +250,7 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
 
     private sealed class ContractHomogenizationMesChannel : HomogenizationMesScenarioChannel
     {
-        public string ProcessType => HomogenizationModuleIdentity.ProcessType;
+        public string ProcessType => "Homogenization";
         public MesUploadMode UploadMode => MesUploadMode.Single;
 
         public Task<MesCallResult> UploadAsync(
@@ -280,5 +288,31 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
             HomogenizationEquipmentStatusSnapshot snapshot,
             CancellationToken cancellationToken = default)
             => Task.FromResult(MesCallResult.Success());
+
+        public Task<MesCallResult<HomogenizationMainPlan>> GetMainPlanAsync(
+            HomogenizationMainPlanRequest request,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(MesCallResult<HomogenizationMainPlan>.Success(new HomogenizationMainPlan([])));
+
+        public Task<MesCallResult<HomogenizationTraceBatchResult>> GenerateTraceBatchNumberAsync(
+            HomogenizationTraceBatchRequest request,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(MesCallResult<HomogenizationTraceBatchResult>.Success(null));
+    }
+
+    private sealed class ContractProductionPlanSelectionService : IProductionPlanSelectionService
+    {
+        public string ProcessType => DependencyInjection.ModuleKey;
+
+        public ProductionPlanOption? CurrentPlan => null;
+
+        public Task<ProductionPlanSelectionState> GetStateAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(new ProductionPlanSelectionState(false, false, null, string.Empty));
+
+        public Task<IReadOnlyList<ProductionPlanOption>> LoadPlansAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<ProductionPlanOption>>([]);
+
+        public Task SelectPlanAsync(ProductionPlanOption option, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
     }
 }

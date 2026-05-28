@@ -1,0 +1,6 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Navigation.Features.Shell.NavigationHostView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ContentControl x:Name="DashboardContentHost" />
+</UserControl>

@@ -1,0 +1,410 @@
+<Window
+    x:Class="IIoT.Edge.Launcher.MainWindow"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="IIoT Edge Launcher"
+    Width="1280"
+    Height="760"
+    MinWidth="1100"
+    MinHeight="700"
+    Background="{DynamicResource Launcher.Bg.Window}"
+    CanResize="True"
+    WindowDecorations="None"
+    WindowStartupLocation="CenterScreen">
+    <Border
+        Background="{DynamicResource Launcher.WindowGradient}"
+        BorderBrush="{DynamicResource Launcher.Border}"
+        BorderThickness="1">
+        <Grid RowDefinitions="44,*">
+            <Border
+                Grid.Row="0"
+                Background="{DynamicResource Launcher.Bg.Window}"
+                BorderBrush="{DynamicResource Launcher.Border}"
+                BorderThickness="0,0,0,1"
+                PointerPressed="TitleBar_PointerPressed">
+                <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel
+                        Margin="16,0,0,0"
+                        VerticalAlignment="Center"
+                        Orientation="Horizontal"
+                        Spacing="10">
+                        <PathIcon
+                            Width="18"
+                            Height="18"
+                            Data="{StaticResource Launcher.Icon.Dashboard}"
+                            Foreground="{DynamicResource Launcher.Accent.Light}" />
+                        <TextBlock
+                            VerticalAlignment="Center"
+                            FontSize="14"
+                            FontWeight="SemiBold"
+                            Foreground="{DynamicResource Launcher.Text.Primary}"
+                            Text="IIoT Edge Launcher" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <Button
+                            Classes="launcher-window-button"
+                            Click="MinimizeWindowButton_Click"
+                            ToolTip.Tip="最小化">
+                            <PathIcon Width="18" Height="18" Data="{StaticResource Launcher.Icon.Minimize}" />
+                        </Button>
+                        <Button
+                            Classes="launcher-window-button"
+                            Click="ToggleWindowStateButton_Click"
+                            ToolTip.Tip="最大化/还原">
+                            <PathIcon Width="18" Height="18" Data="{StaticResource Launcher.Icon.Maximize}" />
+                        </Button>
+                        <Button
+                            Classes="launcher-window-button"
+                            Click="CloseWindowButton_Click"
+                            ToolTip.Tip="关闭">
+                            <PathIcon Width="18" Height="18" Data="{StaticResource Launcher.Icon.Close}" />
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Grid Grid.Row="1" Margin="{DynamicResource Edge.Thickness.32}">
+                <Grid x:Name="LoginPageRoot" ColumnDefinitions="380,24,*">
+                    <Border Grid.Column="0" Classes="launcher-surface" Padding="{DynamicResource Edge.Thickness.32}">
+                        <Grid RowDefinitions="Auto,*,Auto">
+                            <StackPanel Spacing="12">
+                                <Border Classes="launcher-chip" HorizontalAlignment="Left">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <PathIcon
+                                            Width="18"
+                                            Height="18"
+                                            Data="{StaticResource Launcher.Icon.Shield}"
+                                            Foreground="{DynamicResource Launcher.Accent.Light}" />
+                                        <TextBlock
+                                            VerticalAlignment="Center"
+                                            FontSize="12"
+                                            Foreground="{DynamicResource Launcher.Text.Secondary}"
+                                            Text="本地登录" />
+                                    </StackPanel>
+                                </Border>
+
+                                <TextBlock
+                                    Classes="launcher-title"
+                                    TextWrapping="Wrap"
+                                    Text="先登录，再选择要启动的工序" />
+                                <TextBlock
+                                    Classes="launcher-body"
+                                    Text="这里的账号只用于本地启动器，不和云端员工登录共用。登录成功后，再进入工序选择页启动对应客户端。" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="1" VerticalAlignment="Center" Spacing="14">
+                                <TextBox
+                                    x:Name="UserNameTextBox"
+                                    Classes="launcher-input"
+                                    PlaceholderText="账号" />
+                                <TextBox
+                                    x:Name="PasswordInput"
+                                    Classes="launcher-input"
+                                    PasswordChar="●"
+                                    PlaceholderText="密码" />
+
+                                <TextBlock
+                                    FontSize="12"
+                                    Foreground="{DynamicResource Launcher.Text.Error}"
+                                    Text="{Binding ErrorMessage}"
+                                    TextWrapping="Wrap" />
+                                <TextBlock
+                                    FontSize="12"
+                                    Foreground="{DynamicResource Launcher.Text.Secondary}"
+                                    Text="{Binding StatusMessage}"
+                                    TextWrapping="Wrap" />
+
+                                <Button
+                                    Classes="launcher-primary"
+                                    Click="LoginButton_Click"
+                                    IsEnabled="{Binding !IsBusy}">
+                                    <TextBlock Text="登录并进入工序选择" />
+                                </Button>
+
+                                <Button
+                                    Classes="launcher-ghost"
+                                    Click="ChangePasswordButton_Click"
+                                    IsEnabled="{Binding !IsBusy}">
+                                    <TextBlock Text="修改本地密码" />
+                                </Button>
+                            </StackPanel>
+
+                            <Border Grid.Row="2" Classes="launcher-chip">
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <PathIcon
+                                        Width="16"
+                                        Height="16"
+                                        Data="{StaticResource Launcher.Icon.Info}"
+                                        Foreground="{DynamicResource Launcher.Accent.Light}" />
+                                    <TextBlock
+                                        VerticalAlignment="Center"
+                                        FontSize="12"
+                                        Foreground="{DynamicResource Launcher.Text.Secondary}"
+                                        Text="Launcher 只负责本地登录、读取 profile 清单并启动 Shell。" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Column="2" Classes="launcher-surface" ClipToBounds="True">
+                        <Grid>
+                            <Border Background="{DynamicResource Launcher.HeroGradient}" />
+                            <Grid Margin="44" RowDefinitions="Auto,*,Auto">
+                                <StackPanel Orientation="Horizontal" Spacing="14">
+                                    <Border
+                                        Width="74"
+                                        Height="74"
+                                        Background="{DynamicResource Launcher.Bg.Chip}"
+                                        CornerRadius="{DynamicResource Edge.CornerRadius.Large}">
+                                        <PathIcon
+                                            Width="34"
+                                            Height="34"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            Data="{StaticResource Launcher.Icon.Launch}"
+                                            Foreground="{DynamicResource Launcher.Accent.Light}" />
+                                    </Border>
+                                    <Border Classes="launcher-chip" Width="180">
+                                        <StackPanel>
+                                            <TextBlock
+                                                FontSize="12"
+                                                Foreground="{DynamicResource Launcher.Text.Secondary}"
+                                                Text="软件版本" />
+                                            <TextBlock
+                                                Margin="0,6,0,0"
+                                                FontSize="22"
+                                                FontWeight="SemiBold"
+                                                Foreground="{DynamicResource Launcher.Text.Primary}"
+                                                Text="{Binding AppVersionText}" />
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="1" VerticalAlignment="Center" Spacing="18">
+                                    <TextBlock
+                                        FontSize="36"
+                                        FontWeight="SemiBold"
+                                        Foreground="{DynamicResource Launcher.Text.Primary}"
+                                        Text="标准工序启动平台" />
+                                    <TextBlock
+                                        MaxWidth="540"
+                                        HorizontalAlignment="Left"
+                                        FontSize="16"
+                                        Foreground="{DynamicResource Launcher.Text.Secondary}"
+                                        Text="Launcher 负责现场本地登录与工序切换，真正的上位机仍然由 IIoT.Edge.Shell.exe 承载。"
+                                        TextWrapping="Wrap" />
+                                    <StackPanel MaxWidth="360" HorizontalAlignment="Left" Spacing="10">
+                                        <Border Classes="launcher-chip" Width="150" Margin="0,0,12,12">
+                                            <StackPanel>
+                                                <TextBlock FontSize="12" Foreground="{DynamicResource Launcher.Accent.Light}" Text="平台定位" />
+                                                <TextBlock Margin="0,8,0,0" FontWeight="SemiBold" Foreground="{DynamicResource Launcher.Text.Primary}" Text="{Binding PlatformMetaText}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Classes="launcher-chip" Width="150" Margin="0,0,12,12">
+                                            <StackPanel>
+                                                <TextBlock FontSize="12" Foreground="{DynamicResource Launcher.Accent.Light}" Text="运行架构" />
+                                                <TextBlock Margin="0,8,0,0" FontWeight="SemiBold" Foreground="{DynamicResource Launcher.Text.Primary}" Text="{Binding ArchitectureText}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Classes="launcher-chip" Width="130" Margin="0,0,12,12">
+                                            <StackPanel>
+                                                <TextBlock FontSize="12" Foreground="{DynamicResource Launcher.Accent.Light}" Text="维护信息" />
+                                                <TextBlock Margin="0,8,0,0" FontWeight="SemiBold" Foreground="{DynamicResource Launcher.Text.Primary}" Text="{Binding MaintainerText}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <Border Grid.Row="2" Classes="launcher-chip" HorizontalAlignment="Left">
+                                    <TextBlock
+                                        FontSize="13"
+                                        Foreground="{DynamicResource Launcher.Text.Secondary}"
+                                        Text="支持单主程序、多 Profile 隔离与插件化工序扩展。" />
+                                </Border>
+                            </Grid>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <Grid x:Name="SelectionPageRoot" IsVisible="False" RowDefinitions="Auto,Auto,*,Auto">
+                    <Border Classes="launcher-surface" Padding="{DynamicResource Edge.Thickness.24}">
+                        <Grid ColumnDefinitions="Auto,*,Auto">
+                            <Border
+                                Width="56"
+                                Height="56"
+                                Background="{DynamicResource Launcher.Bg.Chip}"
+                                CornerRadius="{DynamicResource Edge.CornerRadius.Large}">
+                                <PathIcon
+                                    Width="28"
+                                    Height="28"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Data="{StaticResource Launcher.Icon.Dashboard}"
+                                    Foreground="{DynamicResource Launcher.Accent.Light}" />
+                            </Border>
+                            <StackPanel Grid.Column="1" Margin="20,0,0,0" Spacing="6">
+                                <TextBlock Classes="launcher-title" Text="选择要启动的工序客户端" />
+                                <TextBlock
+                                    Classes="launcher-body"
+                                    Text="工序卡片来自本地 profile 清单。新增工序时，只需要补插件、profile 配置和启动卡片。" />
+                            </StackPanel>
+                            <Border Grid.Column="2" Classes="launcher-chip" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <PathIcon
+                                        Width="18"
+                                        Height="18"
+                                        Data="{StaticResource Launcher.Icon.User}"
+                                        Foreground="{DynamicResource Launcher.Accent.Light}" />
+                                    <TextBlock
+                                        VerticalAlignment="Center"
+                                        FontSize="13"
+                                        Foreground="{DynamicResource Launcher.Text.Primary}"
+                                        Text="{Binding WelcomeText}" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Row="1" Classes="launcher-surface" Margin="0,18,0,18" Padding="{DynamicResource Edge.Thickness.16}">
+                        <Grid ColumnDefinitions="320,16,Auto,*">
+                            <TextBox
+                                Grid.Column="0"
+                                Classes="launcher-input"
+                                Text="{Binding ProfileSearchText, UpdateSourceTrigger=PropertyChanged}"
+                                PlaceholderText="搜索工序、Profile 或卡片标识" />
+                            <Border Grid.Column="2" Classes="launcher-chip">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <PathIcon
+                                        Width="16"
+                                        Height="16"
+                                        Data="{StaticResource Launcher.Icon.Search}"
+                                        Foreground="{DynamicResource Launcher.Accent.Light}" />
+                                    <TextBlock
+                                        VerticalAlignment="Center"
+                                        FontSize="12"
+                                        Foreground="{DynamicResource Launcher.Text.Secondary}"
+                                        Text="{Binding ProfileSummaryText}" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </Border>
+
+                    <ScrollViewer
+                        Grid.Row="2"
+                        Margin="0,0,0,20"
+                        HorizontalScrollBarVisibility="Disabled"
+                        VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding Profiles}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border
+                                        Width="304"
+                                        MinHeight="360"
+                                        Margin="0,0,20,20"
+                                        Background="{DynamicResource Launcher.Bg.Surface}"
+                                        BorderBrush="{DynamicResource Launcher.Border}"
+                                        BorderThickness="1"
+                                        CornerRadius="{DynamicResource Edge.CornerRadius.Large}">
+                                        <Grid RowDefinitions="132,*,Auto">
+                                            <Border
+                                                Grid.Row="0"
+                                                Background="{Binding AccentColor}"
+                                                CornerRadius="{DynamicResource Edge.CornerRadius.Large}">
+                                                <Grid Margin="20">
+                                                    <Border
+                                                        Width="54"
+                                                        Height="54"
+                                                        HorizontalAlignment="Left"
+                                                        VerticalAlignment="Top"
+                                                        Background="{DynamicResource Launcher.Bg.ProfileIcon}"
+                                                        CornerRadius="{DynamicResource Edge.CornerRadius.Circle}">
+                                                        <PathIcon
+                                                            Width="28"
+                                                            Height="28"
+                                                            HorizontalAlignment="Center"
+                                                            VerticalAlignment="Center"
+                                                            Data="{Binding IconKind, Converter={StaticResource Launcher.ProfileIconConverter}}"
+                                                            Foreground="{DynamicResource Launcher.Text.OnProfileAccent}" />
+                                                    </Border>
+                                                    <StackPanel Margin="70,0,0,0" VerticalAlignment="Bottom" Spacing="6">
+                                                        <TextBlock
+                                                            FontSize="23"
+                                                            FontWeight="Bold"
+                                                            Foreground="{DynamicResource Launcher.Text.OnProfileAccent}"
+                                                            Text="{Binding DisplayName}" />
+                                                        <TextBlock
+                                                            FontSize="12"
+                                                            Foreground="{DynamicResource Launcher.Text.OnProfileAccent}"
+                                                            Opacity="0.86"
+                                                            Text="{Binding MachineProfile}" />
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+
+                                            <StackPanel Grid.Row="1" Margin="20,18,20,14" Spacing="10">
+                                                <TextBlock
+                                                    FontSize="18"
+                                                    FontWeight="SemiBold"
+                                                    Foreground="{DynamicResource Launcher.Text.Primary}"
+                                                    Text="{Binding DisplayName}" />
+                                                <TextBlock
+                                                    MaxHeight="76"
+                                                    Foreground="{DynamicResource Launcher.Text.Secondary}"
+                                                    Text="{Binding Description}"
+                                                    TextTrimming="CharacterEllipsis"
+                                                    TextWrapping="Wrap" />
+                                                <WrapPanel>
+                                                    <Border Classes="launcher-chip" Margin="0,0,8,8">
+                                                        <TextBlock FontSize="12" Foreground="{DynamicResource Launcher.Text.Secondary}" Text="{Binding MachineProfile}" />
+                                                    </Border>
+                                                    <Border Classes="launcher-chip" Margin="0,0,8,8">
+                                                        <TextBlock FontSize="12" Foreground="{DynamicResource Launcher.Text.Secondary}" Text="{Binding ProfileId}" />
+                                                    </Border>
+                                                </WrapPanel>
+                                            </StackPanel>
+
+                                            <Border Grid.Row="2" Padding="20,0,20,20">
+                                                <Button
+                                                    Classes="launcher-primary"
+                                                    Background="{Binding AccentColor}"
+                                                    BorderBrush="{Binding AccentColor}"
+                                                    Click="LaunchProfileButton_Click"
+                                                    Foreground="{DynamicResource Launcher.Text.OnProfileAccent}"
+                                                    HorizontalAlignment="Stretch">
+                                                    <TextBlock Text="启动工序" />
+                                                </Button>
+                                            </Border>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <Border Grid.Row="3" Classes="launcher-surface" Padding="{DynamicResource Edge.Thickness.16}">
+                        <StackPanel Spacing="8">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <PathIcon Width="16" Height="16" Data="{StaticResource Launcher.Icon.Info}" Foreground="{DynamicResource Launcher.Accent.Light}" />
+                                <TextBlock
+                                    FontSize="13"
+                                    Foreground="{DynamicResource Launcher.Text.Secondary}"
+                                    Text="{Binding StatusMessage}" />
+                            </StackPanel>
+                            <TextBlock
+                                FontSize="13"
+                                Foreground="{DynamicResource Launcher.Text.Error}"
+                                Text="{Binding ErrorMessage}"
+                                TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

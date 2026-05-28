@@ -1,0 +1,37 @@
+<ResourceDictionary
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:sys="using:System">
+    <sys:String x:Key="Shell_HeaderStatus">Startup complete</sys:String>
+    <sys:String x:Key="Shell_HeaderProfile">Local mode</sys:String>
+    <sys:String x:Key="Shell_ContentTitle">Feature in progress</sys:String>
+    <sys:String x:Key="Shell_ContentMessage">This phase only migrates the startup shell and five-zone frame. Business pages will be migrated in later phases in their original projects.</sys:String>
+    <sys:String x:Key="Shell_EquipmentEmpty">The equipment status component is not part of this phase, so no simulated equipment data is shown.</sys:String>
+    <sys:String x:Key="Shell_LogEmpty">The log panel is not part of this phase, so no simulated logs are shown.</sys:String>
+    <sys:String x:Key="Shell_FooterPhase1">Phase 1 shell | Local time {0:yyyy-MM-dd HH:mm:ss}</sys:String>
+    <sys:String x:Key="Shell_FooterPhase3">Phase 3 navigation dashboard | Local time {0:yyyy-MM-dd HH:mm:ss}</sys:String>
+    <sys:String x:Key="Shell_Footer_Executing">Executing</sys:String>
+    <sys:String x:Key="Shell_Footer_RunTime">Runtime: </sys:String>
+    <sys:String x:Key="Shell_Footer_DefaultProgram">Sample Program</sys:String>
+    <sys:String x:Key="Shell_Footer_RunMinutesFormat">{0} min</sys:String>
+
+    <!-- Login -->
+    <sys:String x:Key="Shell_Login_Title">Account Login</sys:String>
+    <sys:String x:Key="Shell_Login_Subtitle">Choose login method</sys:String>
+    <sys:String x:Key="Shell_Login_LocalEmergency">Local Emergency Login</sys:String>
+    <sys:String x:Key="Shell_Login_CloudEmployee">Cloud Employee Login</sys:String>
+    <sys:String x:Key="Shell_Login_LocalTitle">Local Emergency Login</sys:String>
+    <sys:String x:Key="Shell_Login_LocalDescription">Verify with local emergency password.</sys:String>
+    <sys:String x:Key="Shell_Login_LocalPasswordHint">Emergency Password</sys:String>
+    <sys:String x:Key="Shell_Login_CloudTitle">Cloud Employee Login</sys:String>
+    <sys:String x:Key="Shell_Login_CloudDescription">Sign in with employee ID and password.</sys:String>
+    <sys:String x:Key="Shell_Login_EmployeeNoHint">Employee No</sys:String>
+    <sys:String x:Key="Shell_Login_PasswordHint">Password</sys:String>
+    <sys:String x:Key="Shell_Login_CloudUnavailable">Cloud device identity is not ready, so cloud employee login is unavailable.</sys:String>
+    <sys:String x:Key="Shell_Login_LocalFailed">Local emergency login failed.</sys:String>
+    <sys:String x:Key="Shell_Login_CloudFailed">Cloud employee login failed.</sys:String>
+    <sys:String x:Key="Shell_Login_Cancel">Cancel</sys:String>
+    <sys:String x:Key="Shell_Login_Submit">Sign In</sys:String>
+    <sys:String x:Key="Shell_Login_Logout">Sign Out</sys:String>
+    <sys:String x:Key="Shell_Login_LoggedInAs">Signed In</sys:String>
+</ResourceDictionary>

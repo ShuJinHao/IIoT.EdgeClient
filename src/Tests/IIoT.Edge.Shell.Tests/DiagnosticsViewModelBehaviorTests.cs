@@ -1,7 +1,6 @@
 using IIoT.Edge.Application.Context;
 using IIoT.Edge.Application.Modules.Diagnostics;
 using System.Globalization;
-using System.Windows.Threading;
 using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
@@ -10,6 +9,7 @@ using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
 using IIoT.Edge.Presentation.Navigation.Localization;
 using IIoT.Edge.Presentation.Shell.Localization;
+using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.UI.Shared.Localization;
 using Xunit;
 
@@ -20,7 +20,7 @@ public sealed class DiagnosticsViewModelBehaviorTests
     private static readonly DateTime TestNow = new(2026, 4, 18, 10, 30, 0, DateTimeKind.Utc);
 
     [Fact]
-    public Task DiagnosticsViewModel_ShouldExposeCloudAndMesDiagnosticsSections()
+    public Task DiagnosticsViewModel_ShouldExposeMergedSyncOperationsSection()
         => RunOnStaThreadAsync(async () =>
         {
             var startupStore = new FakeStartupDiagnosticsStore();
@@ -97,6 +97,16 @@ public sealed class DiagnosticsViewModelBehaviorTests
 
             var viewModel = CreateViewModel(startupStore, diagnosticsQuery, new TestAppLanguageService());
 
+            Assert.Collection(
+                viewModel.Tabs,
+                tab => Assert.Equal("Diag.Overview", tab.Key),
+                tab => Assert.Equal("Diag.SyncOps", tab.Key),
+                tab => Assert.Equal("Diag.Startup", tab.Key));
+            Assert.True(viewModel.IsOverviewTabSelected);
+
+            viewModel.SelectTabCommand.Execute(viewModel.Tabs[1]);
+            Assert.True(viewModel.IsSyncOpsTabSelected);
+
             await viewModel.RefreshAsync();
 
             Assert.Equal("上传门禁：存储故障", viewModel.CloudGateSummary);
@@ -112,6 +122,78 @@ public sealed class DiagnosticsViewModelBehaviorTests
             Assert.Single(viewModel.PluginStates);
             Assert.Single(viewModel.DeviceBindings);
             Assert.Single(viewModel.MesUploadDiagnostics);
+
+            Assert.Equal(2, viewModel.SyncChannels.Count);
+            var cloudRow = Assert.Single(viewModel.SyncChannels, x => x.Channel == "云端");
+            Assert.Equal("存储故障", cloudRow.Status);
+            Assert.Equal("过站=3，日志=4，产能=5", cloudRow.Pending);
+            Assert.Equal(0, cloudRow.DeadLetterCount);
+            Assert.Contains("重试后仍未授权", cloudRow.LastError, StringComparison.Ordinal);
+            Assert.Contains("存储故障：是", cloudRow.Note, StringComparison.Ordinal);
+
+            var mesRow = Assert.Single(viewModel.SyncChannels, x => x.Channel == "MES");
+            Assert.Equal("存储故障", mesRow.Status);
+            Assert.Equal("重试=2", mesRow.Pending);
+            Assert.Equal(0, mesRow.DeadLetterCount);
+            Assert.Equal("mes timeout", mesRow.LastError);
+            Assert.Contains("存储故障：是", mesRow.Note, StringComparison.Ordinal);
+        });
+
+    [Fact]
+    public Task DiagnosticsViewModel_WhenSyncChannelsAreNormal_ShouldNotExposeNormalNoiseInSyncOpsRows()
+        => RunOnStaThreadAsync(async () =>
+        {
+            var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery
+            {
+                Current = CreateReadySyncSnapshot()
+            };
+            var viewModel = CreateViewModel(new FakeStartupDiagnosticsStore(), diagnosticsQuery, new TestAppLanguageService());
+
+            await viewModel.RefreshAsync();
+
+            Assert.Equal(2, viewModel.SyncChannels.Count);
+            foreach (var row in viewModel.SyncChannels)
+            {
+                Assert.Equal("--", row.LastError);
+                Assert.Equal("--", row.Note);
+                Assert.DoesNotContain("否", row.LastError, StringComparison.Ordinal);
+                Assert.DoesNotContain("否", row.Note, StringComparison.Ordinal);
+            }
+        });
+
+    [Fact]
+    public Task DiagnosticsViewModel_ShouldKeepCloudAndMesDeadLettersSeparatedInOperationsTab()
+        => RunOnStaThreadAsync(async () =>
+        {
+            var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery
+            {
+                Current = CreateReadySyncSnapshot(
+                    cloudDeadLetters: new DeadLetterDiagnosticsSnapshot(
+                        1,
+                        [],
+                        [CreateDeadLetterRecord(101, "Cloud")],
+                        false,
+                        null,
+                        null),
+                    mesDeadLetters: new DeadLetterDiagnosticsSnapshot(
+                        1,
+                        [],
+                        [CreateDeadLetterRecord(202, "MES")],
+                        false,
+                        null,
+                        null))
+            };
+            var viewModel = CreateViewModel(new FakeStartupDiagnosticsStore(), diagnosticsQuery, new TestAppLanguageService());
+
+            await viewModel.RefreshAsync();
+
+            var cloudRow = Assert.Single(viewModel.CloudDeadLetters);
+            Assert.Equal(DataPipelineRetryChannel.Cloud, cloudRow.Channel);
+            Assert.Equal(101, cloudRow.Id);
+
+            var mesRow = Assert.Single(viewModel.MesDeadLetters);
+            Assert.Equal(DataPipelineRetryChannel.Mes, mesRow.Channel);
+            Assert.Equal(202, mesRow.Id);
         });
 
     [Fact]
@@ -139,18 +221,14 @@ public sealed class DiagnosticsViewModelBehaviorTests
         });
 
     [Fact]
-    public Task DiagnosticsViewModel_WhenLanguageChanges_ShouldRefreshVisibleSummaries()
-        => WpfTestDispatcher.RunAsync(async () =>
+    public async Task DiagnosticsViewModel_WhenLanguageChanges_ShouldRefreshVisibleSummaries()
         {
             var originalCulture = CultureInfo.CurrentCulture;
             var originalUiCulture = CultureInfo.CurrentUICulture;
-            var tempFile = Path.Combine(Path.GetTempPath(), "edge-language-tests", Guid.NewGuid().ToString("N"), "language.json");
 
             try
             {
-                WpfTestDispatcher.EnsureApplication();
-                var languageService = new AppLanguageService(tempFile);
-                languageService.Initialize();
+                var languageService = new BilingualDiagnosticsLanguageService();
 
                 var startupStore = new FakeStartupDiagnosticsStore();
                 startupStore.Update(new StartupDiagnosticsReport(
@@ -233,9 +311,8 @@ public sealed class DiagnosticsViewModelBehaviorTests
                 CultureInfo.CurrentUICulture = originalUiCulture;
                 CultureInfo.DefaultThreadCurrentCulture = originalCulture;
                 CultureInfo.DefaultThreadCurrentUICulture = originalUiCulture;
-                TryDeleteDirectory(Path.GetDirectoryName(tempFile));
             }
-        });
+        }
 
     [Fact]
     public Task RequeueDeadLetterCommand_WhenConfirmationCanceled_ShouldNotCallOperator()
@@ -326,6 +403,65 @@ public sealed class DiagnosticsViewModelBehaviorTests
         });
 
     [Fact]
+    public Task DiagnosticsViewModel_WhenActivatedRepeatedly_ShouldObservePermissionStateOnce()
+        => RunOnStaThreadAsync(async () =>
+        {
+            var permissionService = new FakeClientPermissionService(isLocalAdmin: false);
+            var viewModel = CreateViewModel(
+                new FakeStartupDiagnosticsStore(),
+                new FakeEdgeSyncDiagnosticsQuery(),
+                new TestAppLanguageService(),
+                deadLetterOperator: new FakeDiagnosticsDeadLetterOperator(),
+                permissionService: permissionService);
+
+            Assert.Equal(0, permissionService.SubscriberCount);
+
+            await viewModel.OnActivatedAsync();
+            Assert.Equal(1, permissionService.SubscriberCount);
+
+            await viewModel.OnActivatedAsync();
+            Assert.Equal(1, permissionService.SubscriberCount);
+
+            await viewModel.OnDeactivatedAsync();
+            Assert.Equal(0, permissionService.SubscriberCount);
+
+            await viewModel.OnDeactivatedAsync();
+            Assert.Equal(0, permissionService.SubscriberCount);
+        });
+
+    [Fact]
+    public Task DiagnosticsViewModel_WhenDeactivated_ShouldIgnorePermissionStateChanges()
+        => RunOnStaThreadAsync(async () =>
+        {
+            var permissionService = new FakeClientPermissionService(isLocalAdmin: false);
+            var viewModel = CreateViewModel(
+                new FakeStartupDiagnosticsStore(),
+                new FakeEdgeSyncDiagnosticsQuery(),
+                new TestAppLanguageService(),
+                deadLetterOperator: new FakeDiagnosticsDeadLetterOperator(),
+                permissionService: permissionService);
+            var permissionRefreshCount = 0;
+            viewModel.PropertyChanged += (_, args) =>
+            {
+                if (args.PropertyName == nameof(DiagnosticsViewModel.CanOperateDeadLetters))
+                {
+                    permissionRefreshCount++;
+                }
+            };
+
+            await viewModel.OnActivatedAsync();
+            permissionService.SetLocalAdmin(true);
+            await WaitUntilAsync(() => permissionRefreshCount == 1);
+
+            await viewModel.OnDeactivatedAsync();
+            permissionService.SetLocalAdmin(false);
+            await Task.Delay(50);
+
+            Assert.Equal(1, permissionRefreshCount);
+            Assert.Equal(0, permissionService.SubscriberCount);
+        });
+
+    [Fact]
     public Task DeadLetterCommandEntry_WhenCurrentUserIsNotLocalAdmin_ShouldNotCallConfirmationOrOperator()
         => RunOnStaThreadAsync(async () =>
         {
@@ -348,7 +484,7 @@ public sealed class DiagnosticsViewModelBehaviorTests
 
     [Fact]
     public Task DeadLetterCommands_WhenPermissionChangesToLocalAdmin_ShouldBecomeExecutable()
-        => RunOnStaThreadAsync(() =>
+        => RunOnStaThreadAsync(async () =>
         {
             var permissionService = new FakeClientPermissionService(isLocalAdmin: false);
             var viewModel = CreateViewModel(
@@ -362,12 +498,13 @@ public sealed class DiagnosticsViewModelBehaviorTests
             Assert.False(viewModel.RequeueDeadLetterCommand.CanExecute(row));
             Assert.False(viewModel.DeleteDeadLetterCommand.CanExecute(row));
 
+            await viewModel.OnActivatedAsync();
             permissionService.SetLocalAdmin(true);
 
             Assert.True(viewModel.CanOperateDeadLetters);
             Assert.True(viewModel.RequeueDeadLetterCommand.CanExecute(row));
             Assert.True(viewModel.DeleteDeadLetterCommand.CanExecute(row));
-            return Task.CompletedTask;
+            await viewModel.OnDeactivatedAsync();
         });
 
     [Fact]
@@ -392,41 +529,7 @@ public sealed class DiagnosticsViewModelBehaviorTests
             Assert.False(viewModel.HasStatus);
         });
 
-    private static Task RunOnStaThreadAsync(Func<Task> testBody)
-    {
-        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        var thread = new Thread(() =>
-        {
-            var dispatcher = Dispatcher.CurrentDispatcher;
-            SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(dispatcher));
-
-            _ = dispatcher.InvokeAsync(async () =>
-            {
-                try
-                {
-                    await testBody();
-                    completion.SetResult();
-                }
-                catch (Exception ex)
-                {
-                    completion.SetException(ex);
-                }
-                finally
-                {
-                    dispatcher.BeginInvokeShutdown(DispatcherPriority.Background);
-                }
-            });
-
-            Dispatcher.Run();
-        });
-
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.IsBackground = true;
-        thread.Start();
-
-        return completion.Task;
-    }
+    private static Task RunOnStaThreadAsync(Func<Task> testBody) => testBody();
 
     private static void TryDeleteDirectory(string? directory)
     {
@@ -458,13 +561,72 @@ public sealed class DiagnosticsViewModelBehaviorTests
             languageService,
             displayNameResolver,
             new DiagnosticsSummaryBuilder(languageService, diagnosticsText, displayNameResolver),
-            new DiagnosticsRowsBuilder(diagnosticsText, displayNameResolver),
+            new DiagnosticsRowsBuilder(languageService, diagnosticsText, displayNameResolver),
             new DiagnosticsInitialSummaryFactory(languageService, diagnosticsText),
             new DiagnosticsRefreshCoordinator(),
             deadLetterOperator ?? new DiagnosticsDeadLetterOperator(),
             deadLetterConfirmationService ?? new FakeDeadLetterConfirmationService(),
             permissionService ?? new FakeClientPermissionService());
     }
+
+    private static EdgeSyncDiagnosticsSnapshot CreateReadySyncSnapshot(
+        DeadLetterDiagnosticsSnapshot? cloudDeadLetters = null,
+        DeadLetterDiagnosticsSnapshot? mesDeadLetters = null)
+        => new(
+            "PLC-A",
+            new CloudSyncDiagnosticsSnapshot(
+                EdgeUploadGateState.Ready,
+                EdgeUploadBlockReason.None,
+                CloudRetryRuntimeState.Idle,
+                null,
+                null,
+                null,
+                CloudCallOutcome.Success,
+                "none",
+                null,
+                0,
+                0,
+                0,
+                false,
+                false,
+                null,
+                "none",
+                null,
+                false,
+                null,
+                null,
+                DeadLetters: cloudDeadLetters),
+            new MesSyncDiagnosticsSnapshot(
+                MesRetryRuntimeState.Idle,
+                null,
+                null,
+                null,
+                null,
+                0,
+                [],
+                false,
+                null,
+                "none",
+                null,
+                false,
+                null,
+                null,
+                DeadLetters: mesDeadLetters),
+            new ProductionContextPersistenceDiagnostics(0, null));
+
+    private static DeadLetterRecord CreateDeadLetterRecord(long id, string failedTarget)
+        => new()
+        {
+            Id = id,
+            ProcessType = "Homogenization",
+            CellDataJson = "{\"trayCode\":\"TRAY-10\"}",
+            FailedTarget = failedTarget,
+            SourceTable = "failed_records",
+            SourceRecordId = id,
+            FailureStage = "FallbackPersist",
+            FailureReason = $"{failedTarget} failed",
+            CreatedAt = TestNow
+        };
 
     private static DeadLetterRow CreateDeadLetterRow()
         => new(
@@ -515,17 +677,65 @@ public sealed class DiagnosticsViewModelBehaviorTests
 
         public int DeleteCallCount { get; private set; }
 
-        public bool ConfirmRequeue(DeadLetterRow row)
+        public Task<bool> ConfirmRequeueAsync(DeadLetterRow row)
         {
             RequeueCallCount++;
-            return RequeueResult;
+            return Task.FromResult(RequeueResult);
         }
 
-        public bool ConfirmDelete(DeadLetterRow row)
+        public Task<bool> ConfirmDeleteAsync(DeadLetterRow row)
         {
             DeleteCallCount++;
-            return DeleteResult;
+            return Task.FromResult(DeleteResult);
         }
+    }
+
+    private sealed class BilingualDiagnosticsLanguageService : IAppLanguageService
+    {
+        private readonly Dictionary<string, Dictionary<string, string>> _values = new(StringComparer.Ordinal)
+        {
+            ["en-US"] = new(StringComparer.Ordinal)
+            {
+                ["Navigation_Sync_UploadGateFormat"] = "Upload gate: {0}",
+                ["Navigation_Sync_StatusReady"] = "Ready",
+                ["Navigation_Diagnostics_DeviceFormat"] = "Device: {0}",
+                ["Navigation_Diagnostics_ProfileWithMachineFormat"] = "Environment: {0} / Machine: {1} / Profile: {2} / Runtime: {3}"
+            }
+        };
+
+        public CultureInfo Current { get; private set; } = CultureInfo.GetCultureInfo("zh-CN");
+
+        public LanguageOption CurrentOption => SupportedLanguages.First(x => x.Culture.Name == Current.Name);
+
+        public IReadOnlyList<LanguageOption> SupportedLanguages { get; } =
+        [
+            new(CultureInfo.GetCultureInfo("zh-CN"), "中文"),
+            new(CultureInfo.GetCultureInfo("en-US"), "English")
+        ];
+
+        public event EventHandler? LanguageChanged;
+
+        public void Initialize()
+        {
+        }
+
+        public void Change(CultureInfo culture)
+        {
+            Current = culture;
+            CultureInfo.CurrentCulture = culture;
+            CultureInfo.CurrentUICulture = culture;
+            CultureInfo.DefaultThreadCurrentCulture = culture;
+            CultureInfo.DefaultThreadCurrentUICulture = culture;
+            LanguageChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        public string GetString(string key, string fallback = "")
+            => _values.TryGetValue(Current.Name, out var values) && values.TryGetValue(key, out var value)
+                ? value
+                : fallback;
+
+        public string Format(string key, string fallback, params object[] args)
+            => string.Format(CultureInfo.CurrentCulture, GetString(key, fallback), args);
     }
 
     private sealed class FakeDiagnosticsDeadLetterOperator : IDiagnosticsDeadLetterOperator
@@ -555,20 +765,28 @@ public sealed class DiagnosticsViewModelBehaviorTests
 
     private sealed class FakeClientPermissionService(bool isLocalAdmin = true) : IClientPermissionService
     {
+        private event Action? PermissionStateChangedCore;
+
         public bool CanEditParams => IsLocalAdmin;
 
         public bool CanEditHardware => IsLocalAdmin;
 
         public bool IsLocalAdmin { get; private set; } = isLocalAdmin;
 
-        public event Action? PermissionStateChanged;
+        public int SubscriberCount => PermissionStateChangedCore?.GetInvocationList().Length ?? 0;
+
+        public event Action? PermissionStateChanged
+        {
+            add => PermissionStateChangedCore += value;
+            remove => PermissionStateChangedCore -= value;
+        }
 
         public bool HasPermission(string permission) => IsLocalAdmin;
 
         public void SetLocalAdmin(bool isLocalAdmin)
         {
             IsLocalAdmin = isLocalAdmin;
-            PermissionStateChanged?.Invoke();
+            PermissionStateChangedCore?.Invoke();
         }
     }
 

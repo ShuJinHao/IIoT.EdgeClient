@@ -1,0 +1,9 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Shell.Views.LogPlaceholderView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:sharedViews="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared">
+    <sharedViews:EmptyStateView
+        Message="{Binding LogMessage}"
+        Title="{Binding LogTitle}" />
+</UserControl>

@@ -1,4 +1,4 @@
-﻿using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
@@ -21,7 +21,11 @@ using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesS
     string,
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationRealtimeSnapshot,
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationRecipeSnapshot,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot>;
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlanRequest,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlan,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchRequest,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchResult>;
 
 namespace IIoT.Edge.Module.Homogenization.Runtime;
 
@@ -30,6 +34,13 @@ namespace IIoT.Edge.Module.Homogenization.Runtime;
 /// </summary>
 public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
 {
+    private const string HeartbeatTaskKey = "Homogenization.Heartbeat";
+    private const string InboundTaskKey = "Homogenization.Inbound";
+    private const string OutboundTaskKey = "Homogenization.Outbound";
+    private const string RecipeTaskKey = "Homogenization.Recipe";
+    private const string EquipmentStatusTaskKey = "Homogenization.EquipmentStatus";
+    private const string RealtimeTaskKey = "Homogenization.Realtime";
+
     private static readonly HomogenizationPlcSignals.SingleRead[] RealtimeSignals =
     [
         HomogenizationPlcSignals.SingleRead.实时搅拌转速,
@@ -72,30 +83,30 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
 
     private static readonly IReadOnlyCollection<TaskCandidate> TaskCandidates =
     [
-        PlcTaskCandidateBuilder.Create(HomogenizationTaskKeys.Heartbeat, "心跳")
+        PlcTaskCandidateBuilder.Create(HeartbeatTaskKey, "心跳")
             .HeartbeatLike()
             .RequiresInteraction(HomogenizationPlcSignals.Interaction.心跳)
             .Build(),
-        PlcTaskCandidateBuilder.Create(HomogenizationTaskKeys.Inbound, "扫码进站")
+        PlcTaskCandidateBuilder.Create(InboundTaskKey, "扫码进站")
             .RequiresInteraction(HomogenizationPlcSignals.Interaction.扫码进站)
             .RequiresRead(HomogenizationPlcSignals.ContinuousRead.托盘码)
             .Build(),
-        PlcTaskCandidateBuilder.Create(HomogenizationTaskKeys.Outbound, "出料上传")
+        PlcTaskCandidateBuilder.Create(OutboundTaskKey, "出料上传")
             .RequiresInteraction(HomogenizationPlcSignals.Interaction.出料上传)
             .RequiresRead(HomogenizationPlcSignals.ContinuousRead.托盘码)
             .RequiresRead(RealtimeSignals)
             .RequiresRead(OutboundSignals)
             .RequiresRead(HomogenizationPlcSignals.SingleRead.设备状态值)
             .Build(),
-        PlcTaskCandidateBuilder.Create(HomogenizationTaskKeys.Recipe, "工艺参数上传")
+        PlcTaskCandidateBuilder.Create(RecipeTaskKey, "工艺参数上传")
             .RequiresInteraction(HomogenizationPlcSignals.Interaction.工艺参数上传)
             .RequiresRead(RecipeSignals)
             .Build(),
-        PlcTaskCandidateBuilder.Create(HomogenizationTaskKeys.EquipmentStatus, "设备状态上传")
+        PlcTaskCandidateBuilder.Create(EquipmentStatusTaskKey, "设备状态上传")
             .RequiresInteraction(HomogenizationPlcSignals.Interaction.设备状态上传)
             .RequiresRead(HomogenizationPlcSignals.SingleRead.设备状态值)
             .Build(),
-        PlcTaskCandidateBuilder.Create(HomogenizationTaskKeys.Realtime, "实时数据上传")
+        PlcTaskCandidateBuilder.Create(RealtimeTaskKey, "实时数据上传")
             .RequiresRead(RealtimeSignals)
             .Build()
     ];
@@ -103,7 +114,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
     /// <summary>
     /// 工厂归属的匀浆模块标识。
     /// </summary>
-    public string ModuleId => HomogenizationModuleIdentity.ModuleId;
+    public string ModuleId => DependencyInjection.ModuleKey;
 
     public IReadOnlyCollection<TaskCandidate> GetTaskCandidates()
         => TaskCandidates;
@@ -159,8 +170,12 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
         var interaction = new HomogenizationPlcHandshakeAccessor(interactionSignals, codeOptions.Value.Plc);
         var codec = new HomogenizationSignalCodec(singleReadSignals, continuousReadSignals, productionTime);
         var tasks = new List<IPlcTask>();
+        IHomogenizationProductionGate? productionGate = null;
 
-        if (enabledTaskKeys.Contains(HomogenizationTaskKeys.Inbound))
+        IHomogenizationProductionGate GetProductionGate()
+            => productionGate ??= serviceProvider.GetRequiredService<IHomogenizationProductionGate>();
+
+        if (enabledTaskKeys.Contains(InboundTaskKey))
         {
             tasks.Add(new HomogenizationInboundTask(
                 buffer,
@@ -171,13 +186,14 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 serviceProvider.GetRequiredService<HomogenizationMesScenarioChannel>(),
                 serviceProvider.GetRequiredService<IMesUploadDiagnosticsStore>(),
                 serviceProvider.GetRequiredService<IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>>(),
+                GetProductionGate(),
                 logger,
                 productionTime,
                 moduleOptions,
                 codeOptions));
         }
 
-        if (enabledTaskKeys.Contains(HomogenizationTaskKeys.Outbound))
+        if (enabledTaskKeys.Contains(OutboundTaskKey))
         {
             tasks.Add(new HomogenizationOutboundTask(
                 buffer,
@@ -189,13 +205,14 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 validator,
                 serviceProvider.GetRequiredService<IMesUploadDiagnosticsStore>(),
                 serviceProvider.GetRequiredService<IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>>(),
+                GetProductionGate(),
                 logger,
                 productionTime,
                 moduleOptions,
                 codeOptions));
         }
 
-        if (enabledTaskKeys.Contains(HomogenizationTaskKeys.Recipe))
+        if (enabledTaskKeys.Contains(RecipeTaskKey))
         {
             tasks.Add(new HomogenizationRecipeTask(
                 buffer,
@@ -205,13 +222,14 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 serviceProvider.GetRequiredService<IDeviceService>(),
                 serviceProvider.GetRequiredService<HomogenizationMesScenarioChannel>(),
                 serviceProvider.GetRequiredService<IMesUploadDiagnosticsStore>(),
+                GetProductionGate(),
                 logger,
                 productionTime,
                 moduleOptions,
                 codeOptions));
         }
 
-        if (enabledTaskKeys.Contains(HomogenizationTaskKeys.EquipmentStatus))
+        if (enabledTaskKeys.Contains(EquipmentStatusTaskKey))
         {
             tasks.Add(new HomogenizationEquipmentStatusTask(
                 buffer,
@@ -221,13 +239,14 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 serviceProvider.GetRequiredService<IDeviceService>(),
                 serviceProvider.GetRequiredService<HomogenizationMesScenarioChannel>(),
                 serviceProvider.GetRequiredService<IMesUploadDiagnosticsStore>(),
+                GetProductionGate(),
                 logger,
                 productionTime,
                 moduleOptions,
                 codeOptions));
         }
 
-        if (enabledTaskKeys.Contains(HomogenizationTaskKeys.Heartbeat))
+        if (enabledTaskKeys.Contains(HeartbeatTaskKey))
         {
             tasks.Add(new HomogenizationHeartbeatTask(
                 buffer,
@@ -238,7 +257,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 moduleOptions));
         }
 
-        if (enabledTaskKeys.Contains(HomogenizationTaskKeys.Realtime))
+        if (enabledTaskKeys.Contains(RealtimeTaskKey))
         {
             tasks.Add(new HomogenizationRealtimeTask(
                 buffer,
@@ -247,6 +266,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 serviceProvider.GetRequiredService<IDeviceService>(),
                 serviceProvider.GetRequiredService<HomogenizationMesScenarioChannel>(),
                 serviceProvider.GetRequiredService<IMesUploadDiagnosticsStore>(),
+                GetProductionGate(),
                 logger,
                 moduleOptions,
                 codeOptions));

@@ -1,0 +1,135 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Navigation.Features.Production.CapacityView.CapacityViewPage"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:dg="using:Avalonia.Controls"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
+    xmlns:sharedViews="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared">
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="{DynamicResource Edge.Thickness.20}" Spacing="{DynamicResource Edge.Size.Spacing12}">
+            <edge:EdgeSectionHeader
+                Title="{Binding ViewTitle}"
+                Subtitle="{Binding StatusMessage}" />
+
+            <edge:EdgeReportFilterBar>
+                <edge:EdgeReportFilterBar.FilterContent>
+                    <Grid ColumnDefinitions="220,170,190,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing10}">
+                        <edge:EdgeFilterComboBox
+                            ItemsSource="{Binding DeviceNames}"
+                            PlaceholderText="{DynamicResource Navigation_Hint_SelectDevice}"
+                            SelectedItem="{Binding SelectedDeviceName}" />
+                        <edge:EdgeFilterComboBox
+                            Grid.Column="1"
+                            ItemsSource="{Binding QueryModes}"
+                            PlaceholderText="{DynamicResource Navigation_Hint_QueryDimension}"
+                            SelectedItem="{Binding SelectedQueryModeOption}">
+                            <edge:EdgeFilterComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding DisplayName}" />
+                                </DataTemplate>
+                            </edge:EdgeFilterComboBox.ItemTemplate>
+                        </edge:EdgeFilterComboBox>
+                        <edge:EdgeFilterDatePicker
+                            Grid.Column="2"
+                            SelectedDateOffset="{Binding QueryDateOffset}" />
+                    </Grid>
+                </edge:EdgeReportFilterBar.FilterContent>
+                <edge:EdgeReportFilterBar.ActionContent>
+                    <edge:EdgeToolButton
+                        Classes="primary"
+                        Command="{Binding QueryCommand}">
+                        <TextBlock Text="{DynamicResource Navigation_Button_Query}" />
+                    </edge:EdgeToolButton>
+                </edge:EdgeReportFilterBar.ActionContent>
+            </edge:EdgeReportFilterBar>
+
+            <edge:EdgeNoticeBar
+                IsVisible="{Binding !CanQueryCloud}"
+                Status="Warning">
+                <edge:EdgeNoticeBar.Icon>
+                    <edge:EdgeStatusDot Status="Warning" />
+                </edge:EdgeNoticeBar.Icon>
+                <TextBlock
+                    FontSize="{DynamicResource Edge.FontSize.Body}"
+                    FontWeight="SemiBold"
+                    Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                    Text="{DynamicResource Navigation_Capacity_OfflineHint}"
+                    TextWrapping="Wrap" />
+            </edge:EdgeNoticeBar>
+
+            <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing12}">
+                <edge:EdgeKpiCard
+                    Title="{DynamicResource Navigation_Capacity_TotalOutput}"
+                    TrendStatus="Info"
+                    Value="{Binding PeriodTotal}" />
+                <edge:EdgeKpiCard
+                    Grid.Column="1"
+                    Title="{DynamicResource Navigation_Capacity_Good}"
+                    TrendStatus="Running"
+                    Value="{Binding PeriodOk}" />
+                <edge:EdgeKpiCard
+                    Grid.Column="2"
+                    Title="{DynamicResource Navigation_Capacity_Bad}"
+                    TrendStatus="Error"
+                    Value="{Binding PeriodNg}" />
+                <edge:EdgeKpiCard
+                    Grid.Column="3"
+                    Title="{DynamicResource Navigation_Capacity_AvgPerDay}"
+                    TrendStatus="Warning"
+                    Value="{Binding AvgDaily}" />
+            </Grid>
+
+            <edge:EdgeCard>
+                <StackPanel Spacing="{DynamicResource Edge.Size.Spacing12}">
+                    <edge:EdgeDataGrid
+                        AutoGenerateColumns="False"
+                        CanUserReorderColumns="False"
+                        CanUserResizeColumns="True"
+                        CanUserSortColumns="False"
+                        Density="Compact"
+                        GridLinesVisibility="Horizontal"
+                        HeadersVisibility="Column"
+                        IsReadOnly="True"
+                        ItemsSource="{Binding DailyRecords}">
+                        <edge:EdgeDataGrid.Columns>
+                            <dg:DataGridTextColumn Binding="{Binding Date}" Header="{DynamicResource Navigation_Column_Date}" MinWidth="90" Width="90" />
+                            <dg:DataGridTextColumn Binding="{Binding DayOfWeek}" Header="{DynamicResource Navigation_Column_Weekday}" MinWidth="90" Width="90" />
+                            <dg:DataGridTextColumn Binding="{Binding Total}" Header="{DynamicResource Navigation_Column_Total}" MinWidth="90" Width="90" />
+                            <dg:DataGridTextColumn Binding="{Binding OkCount}" Header="{DynamicResource Navigation_Capacity_Good}" MinWidth="90" Width="90" />
+                            <dg:DataGridTextColumn Binding="{Binding NgCount}" Header="{DynamicResource Navigation_Capacity_Bad}" MinWidth="90" Width="90" />
+                            <dg:DataGridTextColumn Binding="{Binding Yield}" Header="{DynamicResource Navigation_Column_Yield}" MinWidth="90" Width="90" />
+                            <dg:DataGridTextColumn Binding="{Binding DayShiftTotal}" Header="{DynamicResource Navigation_Monitor_DayShift}" MinWidth="100" Width="100" />
+                            <dg:DataGridTextColumn Binding="{Binding NightShiftTotal}" Header="{DynamicResource Navigation_Monitor_NightShift}" MinWidth="100" Width="100" />
+                            <dg:DataGridTextColumn Binding="{Binding DateFull}" Header="{DynamicResource Navigation_Column_FullDate}" MinWidth="120" Width="120" />
+                        </edge:EdgeDataGrid.Columns>
+                    </edge:EdgeDataGrid>
+
+                    <sharedViews:EmptyStateView
+                        IsVisible="{Binding IsDailyRecordsEmpty}"
+                        Message="{DynamicResource Navigation_Capacity_EmptyMessage}"
+                        Title="{DynamicResource Navigation_Capacity_EmptyTitle}" />
+                </StackPanel>
+            </edge:EdgeCard>
+
+            <edge:EdgeCard>
+                <edge:EdgeCard.Header>
+                    <edge:EdgeSectionHeader Title="{DynamicResource Navigation_Capacity_ChartTitle}" />
+                </edge:EdgeCard.Header>
+                <edge:EdgeBarLineChart
+                    ItemsSource="{Binding ChartPoints}"
+                    MinHeight="180"
+                    PrimaryValueFormat="0"
+                    SecondaryAxisMaximum="100"
+                    SecondaryValueFormat="0"
+                    Series="{Binding ChartSeries}">
+                    <edge:EdgeBarLineChart.EmptyContent>
+                        <sharedViews:EmptyStateView
+                            Message="{DynamicResource Navigation_Capacity_EmptyMessage}"
+                            Title="{DynamicResource Navigation_Capacity_EmptyTitle}" />
+                    </edge:EdgeBarLineChart.EmptyContent>
+                </edge:EdgeBarLineChart>
+            </edge:EdgeCard>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

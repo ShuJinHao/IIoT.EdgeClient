@@ -11,9 +11,8 @@ public sealed class MesEndpointProvider(
     public async Task<bool> IsConfiguredAsync(
         string processType,
         CancellationToken cancellationToken = default)
-        => Uri.TryCreate(
+        => HttpUrl.TryCreateHttpBaseUri(
             await GetBaseUrlAsync(processType, cancellationToken).ConfigureAwait(false),
-            UriKind.Absolute,
             out _);
 
     public async Task<string> BuildUrlAsync(
@@ -21,19 +20,19 @@ public sealed class MesEndpointProvider(
         string relativeOrAbsoluteUrl,
         CancellationToken cancellationToken = default)
     {
-        if (Uri.TryCreate(relativeOrAbsoluteUrl, UriKind.Absolute, out var absoluteUri))
+        if (HttpUrl.TryCreateAbsoluteHttpUri(relativeOrAbsoluteUrl, out var absoluteUri))
         {
             return absoluteUri.ToString();
         }
 
         var baseUrl = await GetBaseUrlAsync(processType, cancellationToken).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(baseUrl)
-            || !Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri))
+            || !HttpUrl.TryCreateHttpBaseUri(baseUrl, out var baseUri))
         {
             throw new InvalidOperationException($"工序 {processType} 未配置 MES 服务地址。");
         }
 
-        return new Uri(baseUri, relativeOrAbsoluteUrl).ToString();
+        return HttpUrl.Build(baseUri, relativeOrAbsoluteUrl).ToString();
     }
 
     public async Task<string?> TryBuildFirstConfiguredUrlAsync(

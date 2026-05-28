@@ -1,0 +1,23 @@
+<ResourceDictionary
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:sys="using:System">
+    <sys:String x:Key="Shell_AppTitle">IIoT Edge Client</sys:String>
+    <sys:String x:Key="Shell_MainWorkspace">Main Workspace</sys:String>
+    <sys:String x:Key="Shell_EquipmentInfo">Equipment Info</sys:String>
+    <sys:String x:Key="Shell_SystemLog">System Log</sys:String>
+    <sys:String x:Key="Shell_FrameTitle">Production Edge Console</sys:String>
+    <sys:String x:Key="Shell_FrameStatusRunning">Running</sys:String>
+    <sys:String x:Key="Shell_FrameModeLocal">Local Mode</sys:String>
+    <sys:String x:Key="Shell_FrameProfile">Line: {0}</sys:String>
+    <sys:String x:Key="Shell_FrameOperatorNotLoggedIn">Not signed in</sys:String>
+    <sys:String x:Key="Shell_FrameSystemStatus">System running normally</sys:String>
+    <sys:String x:Key="Shell_FrameVersion">Version {0}</sys:String>
+    <sys:String x:Key="Shell_FrameEdgeId">Edge ID: {0}</sys:String>
+    <sys:String x:Key="Shell_FrameLocalTime">Local time {0:yyyy-MM-dd HH:mm:ss}</sys:String>
+    <sys:String x:Key="Shell_FrameDefaultProfile">Default Profile</sys:String>
+    <sys:String x:Key="Shell_CrashDialogWindowTitle">IIoT Edge Client - Startup Failed</sys:String>
+    <sys:String x:Key="Shell_CrashDialogTitle">Startup Failed</sys:String>
+    <sys:String x:Key="Shell_CrashDialogDescription">The startup chain returned an error. Details are shown below.</sys:String>
+    <sys:String x:Key="Shell_CrashDialogClose">Close</sys:String>
+</ResourceDictionary>

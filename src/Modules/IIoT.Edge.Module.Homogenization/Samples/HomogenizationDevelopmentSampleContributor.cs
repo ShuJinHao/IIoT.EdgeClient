@@ -47,13 +47,13 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
         _networkDevices = networkDevices;
         _ioMappings = ioMappings;
         _logger = logger;
-        _options = BindOptions<HomogenizationDeviceSeedOptions>(HomogenizationModuleIdentity.DeviceSeedSection);
+        _options = BindOptions<HomogenizationDeviceSeedOptions>($"Modules:{DependencyInjection.ModuleKey}:DeviceSeed");
     }
 
     /// <summary>
     /// 样本导入器归属的匀浆模块标识。
     /// </summary>
-    public override string ModuleId => HomogenizationModuleIdentity.ModuleId;
+    public override string ModuleId => DependencyInjection.ModuleKey;
 
     protected override bool ShouldEnsureConfigurationSamples()
         => _options.Enabled;
@@ -98,7 +98,7 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
     private async Task ResetHomogenizationConfigurationAsync(CancellationToken cancellationToken)
     {
         var existingDevices = await _networkDevices.GetListAsync(
-            x => x.ModuleId == HomogenizationModuleIdentity.ModuleId,
+            x => x.ModuleId == DependencyInjection.ModuleKey,
             cancellationToken).ConfigureAwait(false);
 
         if (existingDevices.Count == 0)
@@ -136,7 +136,7 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
         CancellationToken cancellationToken)
     {
         var existingDevice = await _networkDevices.GetAsync(
-            x => x.ModuleId == HomogenizationModuleIdentity.ModuleId
+            x => x.ModuleId == DependencyInjection.ModuleKey
                 && x.DeviceName == seedDevice.DeviceName,
             cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -163,7 +163,7 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
             string.IsNullOrWhiteSpace(seedDevice.IpAddress) ? "127.0.0.1" : seedDevice.IpAddress,
             seedDevice.Port1 > 0 ? seedDevice.Port1 : defaults.Port1 ?? 6000);
         device.AssignModule(
-            HomogenizationModuleIdentity.ModuleId,
+            DependencyInjection.ModuleKey,
             string.IsNullOrWhiteSpace(seedDevice.DeviceModel)
                 ? defaults.DeviceModel
                 : seedDevice.DeviceModel);
@@ -240,7 +240,7 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
 
 
     private IModuleHardwareProfileProvider GetHardwareProfile()
-        => GetHardwareProfile($"匀浆设备样本导入需要模块“{HomogenizationModuleIdentity.ModuleId}”的硬件模板提供器。");
+        => GetHardwareProfile($"匀浆设备样本导入需要模块“{DependencyInjection.ModuleKey}”的硬件模板提供器。");
 
     /// <summary>
     /// 匀浆开发设备样本导入开关。IO 点位不在 JSON 内维护，只由插件硬件模板导入。

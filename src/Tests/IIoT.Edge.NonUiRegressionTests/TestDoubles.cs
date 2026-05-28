@@ -1146,12 +1146,12 @@ internal sealed class FakeCloudApiEndpointProvider : ICloudApiEndpointProvider
 
     public string BuildUrl(string relativeOrAbsoluteUrl)
     {
-        if (Uri.TryCreate(relativeOrAbsoluteUrl, UriKind.Absolute, out var absoluteUri))
+        if (HttpUrl.TryCreateAbsoluteHttpUri(relativeOrAbsoluteUrl, out var absoluteUri))
         {
             return absoluteUri.ToString();
         }
 
-        return new Uri(BaseUri, relativeOrAbsoluteUrl).ToString();
+        return HttpUrl.Build(BaseUri, relativeOrAbsoluteUrl).ToString();
     }
 
     public string GetClientCode() => "TEST";

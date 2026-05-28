@@ -30,3 +30,29 @@ public sealed record MesCallResult(
     public static MesCallResult Disabled(string message = "MES 上传已关闭。")
         => new(MesCallOutcome.Disabled, message);
 }
+
+public sealed record MesCallResult<TData>(
+    MesCallOutcome Outcome,
+    string Message,
+    TData? Data)
+{
+    public bool IsSuccess => Outcome == MesCallOutcome.Success || Outcome == MesCallOutcome.Disabled;
+
+    public static MesCallResult<TData> Success(TData? data, string message = "MES 调用成功。")
+        => new(MesCallOutcome.Success, message, data);
+
+    public static MesCallResult<TData> BusinessRejected(string message)
+        => new(MesCallOutcome.BusinessRejected, message, default);
+
+    public static MesCallResult<TData> TransportFailure(string message)
+        => new(MesCallOutcome.TransportFailure, message, default);
+
+    public static MesCallResult<TData> InvalidContext(string message)
+        => new(MesCallOutcome.InvalidContext, message, default);
+
+    public static MesCallResult<TData> Disabled(string message = "MES 上传已关闭。")
+        => new(MesCallOutcome.Disabled, message, default);
+
+    public MesCallResult ToNonGeneric()
+        => new(Outcome, Message);
+}

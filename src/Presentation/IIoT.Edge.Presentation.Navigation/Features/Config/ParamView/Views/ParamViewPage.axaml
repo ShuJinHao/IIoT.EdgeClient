@@ -1,0 +1,224 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Navigation.Features.Config.ParamView.ParamViewPage"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:dg="using:Avalonia.Controls"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="{DynamicResource Edge.Thickness.20}" Spacing="{DynamicResource Edge.Size.Spacing12}">
+            <edge:EdgeSectionHeader
+                Title="{Binding ViewTitle}"
+                Subtitle="{DynamicResource Navigation_Tab_PluginBusinessParams}">
+                <edge:EdgeSectionHeader.ActionContent>
+                    <edge:EdgeToolButton
+                        Classes="primary"
+                        Command="{Binding SaveCommand}"
+                        IsEnabled="{Binding CanEdit}">
+                        <TextBlock Text="{DynamicResource Navigation_Button_Save}" />
+                    </edge:EdgeToolButton>
+                </edge:EdgeSectionHeader.ActionContent>
+            </edge:EdgeSectionHeader>
+
+            <TabControl>
+                <TabItem Header="{DynamicResource Navigation_Tab_MesParams}">
+                    <ItemsControl ItemsSource="{Binding MesParamGroups}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <edge:EdgeTablePanel
+                                    Margin="{DynamicResource Edge.Thickness.12}"
+                                    Title="{Binding ModuleDisplayName}">
+                                    <edge:EdgeDataGrid
+                                        AutoGenerateColumns="False"
+                                        CanUserReorderColumns="False"
+                                        CanUserResizeColumns="True"
+                                        CanUserSortColumns="False"
+                                        GridLinesVisibility="Horizontal"
+                                        HeadersVisibility="Column"
+                                        ItemsSource="{Binding Params}">
+                                        <edge:EdgeDataGrid.Columns>
+                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_ParamName}" MinWidth="200" Width="2*">
+                                                <dg:DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock
+                                                            FontWeight="SemiBold"
+                                                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                                            Text="{Binding DisplayName}" />
+                                                    </DataTemplate>
+                                                </dg:DataGridTemplateColumn.CellTemplate>
+                                            </dg:DataGridTemplateColumn>
+
+                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_ParamValue}" MinWidth="220" Width="2*">
+                                                <dg:DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <Grid>
+                                                            <TextBox
+                                                                MinWidth="140"
+                                                                IsEnabled="{Binding $parent[UserControl].DataContext.CanEdit}"
+                                                                IsVisible="{Binding !IsBool}"
+                                                                Text="{Binding Value, Mode=TwoWay}" />
+                                                            <CheckBox
+                                                                VerticalAlignment="Center"
+                                                                Content="{Binding Value}"
+                                                                IsChecked="{Binding BoolValue, Mode=TwoWay}"
+                                                                IsEnabled="{Binding $parent[UserControl].DataContext.CanEdit}"
+                                                                IsVisible="{Binding IsBool}" />
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </dg:DataGridTemplateColumn.CellTemplate>
+                                            </dg:DataGridTemplateColumn>
+
+                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_Remark}" MinWidth="320" Width="3*">
+                                                <dg:DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock
+                                                            FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                                            Text="{Binding Description}"
+                                                            TextWrapping="Wrap" />
+                                                    </DataTemplate>
+                                                </dg:DataGridTemplateColumn.CellTemplate>
+                                            </dg:DataGridTemplateColumn>
+                                        </edge:EdgeDataGrid.Columns>
+                                    </edge:EdgeDataGrid>
+                                </edge:EdgeTablePanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </TabItem>
+
+                <TabItem Header="{DynamicResource Navigation_Tab_CloudParams}">
+                    <ItemsControl ItemsSource="{Binding CloudParamGroups}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <edge:EdgeTablePanel
+                                    Margin="{DynamicResource Edge.Thickness.12}"
+                                    Title="{Binding ModuleDisplayName}">
+                                    <edge:EdgeDataGrid
+                                        AutoGenerateColumns="False"
+                                        CanUserReorderColumns="False"
+                                        CanUserResizeColumns="True"
+                                        CanUserSortColumns="False"
+                                        GridLinesVisibility="Horizontal"
+                                        HeadersVisibility="Column"
+                                        ItemsSource="{Binding Params}">
+                                        <edge:EdgeDataGrid.Columns>
+                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_ParamName}" MinWidth="200" Width="2*">
+                                                <dg:DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock
+                                                            FontWeight="SemiBold"
+                                                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                                            Text="{Binding DisplayName}" />
+                                                    </DataTemplate>
+                                                </dg:DataGridTemplateColumn.CellTemplate>
+                                            </dg:DataGridTemplateColumn>
+
+                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_ParamValue}" MinWidth="220" Width="2*">
+                                                <dg:DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <Grid>
+                                                            <TextBox
+                                                                MinWidth="140"
+                                                                IsEnabled="{Binding $parent[UserControl].DataContext.CanEdit}"
+                                                                IsVisible="{Binding !IsBool}"
+                                                                Text="{Binding Value, Mode=TwoWay}" />
+                                                            <CheckBox
+                                                                VerticalAlignment="Center"
+                                                                Content="{Binding Value}"
+                                                                IsChecked="{Binding BoolValue, Mode=TwoWay}"
+                                                                IsEnabled="{Binding $parent[UserControl].DataContext.CanEdit}"
+                                                                IsVisible="{Binding IsBool}" />
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </dg:DataGridTemplateColumn.CellTemplate>
+                                            </dg:DataGridTemplateColumn>
+
+                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_Remark}" MinWidth="320" Width="3*">
+                                                <dg:DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock
+                                                            FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                                            Text="{Binding Description}"
+                                                            TextWrapping="Wrap" />
+                                                    </DataTemplate>
+                                                </dg:DataGridTemplateColumn.CellTemplate>
+                                            </dg:DataGridTemplateColumn>
+                                        </edge:EdgeDataGrid.Columns>
+                                    </edge:EdgeDataGrid>
+                                </edge:EdgeTablePanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </TabItem>
+
+                <TabItem Header="{DynamicResource Navigation_Tab_PluginBusinessParams}">
+                    <ItemsControl ItemsSource="{Binding BusinessParamGroups}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <edge:EdgeTablePanel
+                                    Margin="{DynamicResource Edge.Thickness.12}"
+                                    Title="{Binding ModuleDisplayName}">
+                                    <edge:EdgeDataGrid
+                                        AutoGenerateColumns="False"
+                                        CanUserReorderColumns="False"
+                                        CanUserResizeColumns="True"
+                                        CanUserSortColumns="False"
+                                        GridLinesVisibility="Horizontal"
+                                        HeadersVisibility="Column"
+                                        ItemsSource="{Binding Params}">
+                                        <edge:EdgeDataGrid.Columns>
+                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_ParamName}" MinWidth="200" Width="2*">
+                                                <dg:DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock
+                                                            FontWeight="SemiBold"
+                                                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                                            Text="{Binding DisplayName}" />
+                                                    </DataTemplate>
+                                                </dg:DataGridTemplateColumn.CellTemplate>
+                                            </dg:DataGridTemplateColumn>
+
+                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_ParamValue}" MinWidth="220" Width="2*">
+                                                <dg:DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <Grid>
+                                                            <TextBox
+                                                                MinWidth="140"
+                                                                IsEnabled="{Binding $parent[UserControl].DataContext.CanEdit}"
+                                                                IsVisible="{Binding !IsBool}"
+                                                                Text="{Binding Value, Mode=TwoWay}" />
+                                                            <CheckBox
+                                                                VerticalAlignment="Center"
+                                                                Content="{Binding Value}"
+                                                                IsChecked="{Binding BoolValue, Mode=TwoWay}"
+                                                                IsEnabled="{Binding $parent[UserControl].DataContext.CanEdit}"
+                                                                IsVisible="{Binding IsBool}" />
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </dg:DataGridTemplateColumn.CellTemplate>
+                                            </dg:DataGridTemplateColumn>
+
+                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_Remark}" MinWidth="320" Width="3*">
+                                                <dg:DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock
+                                                            FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                                            Text="{Binding Description}"
+                                                            TextWrapping="Wrap" />
+                                                    </DataTemplate>
+                                                </dg:DataGridTemplateColumn.CellTemplate>
+                                            </dg:DataGridTemplateColumn>
+                                        </edge:EdgeDataGrid.Columns>
+                                    </edge:EdgeDataGrid>
+                                </edge:EdgeTablePanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </TabItem>
+            </TabControl>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

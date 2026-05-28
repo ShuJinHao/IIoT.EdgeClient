@@ -88,8 +88,6 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
         }
 
         return Directory.GetFiles(pluginRoot, "*.module.json", SearchOption.AllDirectories)
-            .Where(static path => path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-                .Any(static segment => string.Equals(segment, "Config", StringComparison.OrdinalIgnoreCase)))
             .OrderBy(static path => path, StringComparer.OrdinalIgnoreCase)
             .ToArray();
     }

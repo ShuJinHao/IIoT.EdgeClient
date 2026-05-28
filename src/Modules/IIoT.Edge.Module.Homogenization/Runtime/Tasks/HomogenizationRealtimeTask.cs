@@ -13,7 +13,11 @@ using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesS
     string,
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationRealtimeSnapshot,
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationRecipeSnapshot,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot>;
+    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlanRequest,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlan,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchRequest,
+    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchResult>;
 
 namespace IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 
@@ -26,6 +30,7 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
     private readonly IDeviceService _deviceService;
     private readonly HomogenizationMesScenarioChannel _mesChannel;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
+    private readonly IHomogenizationProductionGate _productionGate;
     private readonly HomogenizationCodeOptions _codeOptions;
     private readonly int _taskLoopInterval;
     private readonly HomogenizationSignalCodec _codec;
@@ -40,6 +45,7 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
         IDeviceService deviceService,
         HomogenizationMesScenarioChannel mesChannel,
         IMesUploadDiagnosticsStore diagnosticsStore,
+        IHomogenizationProductionGate productionGate,
         ILogService logger,
         IOptions<HomogenizationModuleOptions> moduleOptions,
         IOptions<HomogenizationCodeOptions> codeOptions)
@@ -49,6 +55,7 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
         _deviceService = deviceService;
         _mesChannel = mesChannel;
         _diagnosticsStore = diagnosticsStore;
+        _productionGate = productionGate;
         _codeOptions = codeOptions.Value;
         _codec = codec;
         var runtime = moduleOptions.Value.Runtime;
@@ -58,7 +65,7 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
     /// <summary>
     /// 实时上传任务名称，用于运行日志和任务诊断。
     /// </summary>
-    public override string TaskName => HomogenizationTaskKeys.Realtime;
+    public override string TaskName => "Homogenization.Realtime";
 
     /// <summary>
     /// 实时快照采集和上传循环间隔，按配置最小值保护。
@@ -71,7 +78,22 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
     protected override Task<MesCallResult> UploadSnapshotAsync(
         HomogenizationRealtimeSnapshot snapshot,
         CancellationToken cancellationToken)
-        => _mesChannel.UploadRealtimeAsync(_deviceService.CurrentDevice, snapshot, cancellationToken);
+        => UploadSnapshotWithGateAsync(snapshot, cancellationToken);
+
+    private async Task<MesCallResult> UploadSnapshotWithGateAsync(
+        HomogenizationRealtimeSnapshot snapshot,
+        CancellationToken cancellationToken)
+    {
+        var gateResult = await _productionGate.EnsureReadyAsync(_context, cancellationToken).ConfigureAwait(false);
+        if (!gateResult.IsSuccess)
+        {
+            return gateResult;
+        }
+
+        return await _mesChannel
+            .UploadRealtimeAsync(_deviceService.CurrentDevice, snapshot, cancellationToken)
+            .ConfigureAwait(false);
+    }
 
     protected override Task OnSnapshotUploadedAsync(
         HomogenizationRealtimeSnapshot snapshot,

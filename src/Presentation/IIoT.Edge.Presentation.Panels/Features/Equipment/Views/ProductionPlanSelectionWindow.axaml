@@ -1,0 +1,118 @@
+<Window
+    x:Class="IIoT.Edge.Presentation.Panels.Features.Equipment.ProductionPlanSelectionWindow"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:dg="using:Avalonia.Controls"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
+    Width="1040"
+    Height="640"
+    MinWidth="920"
+    MinHeight="560"
+    Background="Transparent"
+    CanResize="False"
+    ExtendClientAreaToDecorationsHint="True"
+    ShowInTaskbar="False"
+    TransparencyLevelHint="Transparent"
+    WindowDecorations="None"
+    WindowStartupLocation="CenterOwner">
+    <edge:EdgeDialogChrome
+        CloseTopLevelOnClose="True"
+        Subtitle="{DynamicResource Panels_PlanDialog_Subtitle}"
+        Title="{DynamicResource Panels_PlanDialog_Title}">
+        <edge:EdgeTablePanel
+            EmptyMessage="{DynamicResource Panels_Empty_NoProductionPlans_Message}"
+            EmptyTitle="{DynamicResource Panels_Empty_NoProductionPlans_Title}"
+            ErrorMessage="{Binding ErrorMessage}"
+            HasError="{Binding HasError}"
+            IsEmpty="{Binding IsEmpty}"
+            Subtitle="{DynamicResource Panels_PlanDialog_Subtitle}"
+            Surface="Transparent"
+            Title="{DynamicResource Panels_PlanDialog_Title}">
+            <edge:EdgeTablePanel.ActionContent>
+                <Button
+                    Classes="edge-soft-button"
+                    Command="{Binding RefreshCommand}"
+                    Content="{DynamicResource Panels_Button_Refresh}" />
+            </edge:EdgeTablePanel.ActionContent>
+
+            <edge:EdgeTablePanel.StatusContent>
+                <Border
+                    IsVisible="{Binding HasStatus}"
+                    Background="{DynamicResource Edge.Brush.Surface.Wash}"
+                    CornerRadius="{DynamicResource Edge.CornerRadius.Control}"
+                    Padding="12,8">
+                    <TextBlock
+                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                        Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
+                        Text="{Binding StatusMessage}"
+                        TextWrapping="Wrap" />
+                </Border>
+            </edge:EdgeTablePanel.StatusContent>
+
+            <edge:EdgeDataGrid
+                AutoGenerateColumns="False"
+                CanUserResizeColumns="False"
+                Density="Compact"
+                HorizontalScrollBarVisibility="Auto"
+                ItemsSource="{Binding Plans}"
+                SelectedItem="{Binding SelectedPlan, Mode=TwoWay}"
+                SelectionMode="Single"
+                VerticalScrollBarVisibility="Auto">
+                <edge:EdgeDataGrid.Columns>
+                    <dg:DataGridTextColumn
+                        Width="170"
+                        MinWidth="170"
+                        Binding="{Binding DisplayPlanCode}"
+                        Header="{DynamicResource Panels_Plan_Column_MainPlan}" />
+                    <dg:DataGridTextColumn
+                        Width="150"
+                        MinWidth="150"
+                        Binding="{Binding DisplayWorkOrder}"
+                        Header="{DynamicResource Panels_Plan_Column_WorkOrder}" />
+                    <dg:DataGridTextColumn
+                        Width="130"
+                        MinWidth="130"
+                        Binding="{Binding DisplayProduct}"
+                        Header="{DynamicResource Panels_Plan_Column_Product}" />
+                    <dg:DataGridTextColumn
+                        Width="90"
+                        MinWidth="90"
+                        Binding="{Binding PlanStatus}"
+                        Header="{DynamicResource Panels_Plan_Column_Status}" />
+                    <dg:DataGridTextColumn
+                        Width="105"
+                        MinWidth="105"
+                        Binding="{Binding DisplayQuantity}"
+                        Header="{DynamicResource Panels_Plan_Column_Quantity}" />
+                    <dg:DataGridTextColumn
+                        Width="130"
+                        MinWidth="130"
+                        Binding="{Binding StartTime}"
+                        Header="{DynamicResource Panels_Plan_Column_StartTime}" />
+                    <dg:DataGridTextColumn
+                        Width="130"
+                        MinWidth="130"
+                        Binding="{Binding EndTime}"
+                        Header="{DynamicResource Panels_Plan_Column_EndTime}" />
+                </edge:EdgeDataGrid.Columns>
+            </edge:EdgeDataGrid>
+
+            <edge:EdgeTablePanel.FooterContent>
+                <StackPanel
+                    HorizontalAlignment="Right"
+                    Orientation="Horizontal"
+                    Spacing="{DynamicResource Edge.Size.Spacing8}">
+                    <Button
+                        Classes="edge-soft-button"
+                        Click="OnCancelClick"
+                        Content="{DynamicResource Panels_Button_Cancel}" />
+                    <Button
+                        Classes="edge-primary-button"
+                        Click="OnConfirmClick"
+                        Content="{DynamicResource Panels_Button_Confirm}"
+                        IsEnabled="{Binding HasSelection}" />
+                </StackPanel>
+            </edge:EdgeTablePanel.FooterContent>
+        </edge:EdgeTablePanel>
+    </edge:EdgeDialogChrome>
+</Window>

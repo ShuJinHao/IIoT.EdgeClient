@@ -1,0 +1,192 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Panels.Features.Equipment.EquipmentView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
+    <edge:EdgeCard
+        Elevation="Flat"
+        PaddingMode="Compact"
+        Surface="Card">
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="{DynamicResource Edge.Size.Spacing8}">
+            <TextBlock
+                VerticalAlignment="Center"
+                FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                FontWeight="SemiBold"
+                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                Text="{DynamicResource Panels_Title_Equipment}" />
+
+            <Border
+                Grid.Row="1"
+                Background="{DynamicResource Edge.Brush.Surface.Wash}"
+                CornerRadius="{DynamicResource Edge.CornerRadius.Control}"
+                Padding="{DynamicResource Edge.Thickness.8}">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                        Text="{DynamicResource Panels_Label_EquipmentStatus}" />
+                    <Grid Grid.Column="1" VerticalAlignment="Center">
+                        <StackPanel
+                            IsVisible="{Binding IsRecipeActive}"
+                            Orientation="Horizontal"
+                            Spacing="{DynamicResource Edge.Size.Spacing4}">
+                            <edge:EdgeStatusDot Status="Running" />
+                            <TextBlock
+                                FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
+                                Text="{DynamicResource Panels_Status_Running}" />
+                        </StackPanel>
+                        <StackPanel
+                            IsVisible="{Binding !IsRecipeActive}"
+                            Orientation="Horizontal"
+                            Spacing="{DynamicResource Edge.Size.Spacing4}">
+                            <edge:EdgeStatusDot Status="Offline" />
+                            <TextBlock
+                                FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
+                                Text="{DynamicResource Panels_Status_Inactive}" />
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <Border
+                Grid.Row="2"
+                Background="{DynamicResource Edge.Brush.Surface.Wash}"
+                CornerRadius="{DynamicResource Edge.CornerRadius.Control}"
+                MinHeight="96"
+                Padding="10,8">
+                <Grid
+                    RowDefinitions="Auto,Auto"
+                    RowSpacing="{DynamicResource Edge.Size.Spacing4}">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
+                            <TextBlock
+                                FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                Text="{DynamicResource Panels_Label_MesPlanSelection}" />
+                            <Button
+                                Grid.Column="1"
+                                Classes="edge-soft-button"
+                                Command="{Binding SelectProductionPlanCommand}"
+                                Content="{DynamicResource Panels_Button_SelectProductionPlan}" />
+                        </Grid>
+
+                        <Grid Grid.Row="1">
+                            <StackPanel
+                                IsVisible="{Binding !HasSelectedProductionPlan}"
+                                VerticalAlignment="Top"
+                                Spacing="{DynamicResource Edge.Size.Spacing4}">
+                                <TextBlock
+                                    FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                                    FontWeight="SemiBold"
+                                    Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                    Text="{DynamicResource Panels_Status_MesPlanRequired}" />
+                                <TextBlock
+                                    FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                    Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                    Text="{DynamicResource Panels_Hint_SelectMainPlanBeforeProduction}" />
+                            </StackPanel>
+
+                            <Grid
+                                IsVisible="{Binding HasSelectedProductionPlan}"
+                                RowDefinitions="Auto,Auto,Auto,Auto"
+                                RowSpacing="1">
+                                <TextBlock
+                                    FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                                    FontWeight="SemiBold"
+                                    Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                    Text="{Binding SelectedPlanCode}"
+                                    TextTrimming="CharacterEllipsis" />
+                                <TextBlock
+                                    Grid.Row="1"
+                                    FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                    Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                    Text="{Binding SelectedPlanProductSummary}"
+                                    TextTrimming="CharacterEllipsis" />
+                                <Grid
+                                    Grid.Row="2"
+                                    ColumnDefinitions="64,*"
+                                    ColumnSpacing="{DynamicResource Edge.Size.Spacing6}">
+                                    <TextBlock
+                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                        Text="{DynamicResource Panels_Label_TraceBatchNumber}" />
+                                    <TextBlock
+                                        Grid.Column="1"
+                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                        FontWeight="SemiBold"
+                                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                        Text="{Binding TraceBatchNumber}"
+                                        TextTrimming="CharacterEllipsis" />
+                                </Grid>
+                                <TextBlock
+                                    Grid.Row="3"
+                                    FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                    Foreground="{DynamicResource Edge.Brush.Status.Error}"
+                                    IsVisible="{Binding HasTraceBatchError}"
+                                    Text="{Binding TraceBatchError}"
+                                    TextTrimming="CharacterEllipsis" />
+                            </Grid>
+                        </Grid>
+
+                </Grid>
+            </Border>
+
+            <Grid
+                Grid.Row="3"
+                ColumnDefinitions="*,*,*"
+                ColumnSpacing="{DynamicResource Edge.Size.Spacing8}"
+                Height="46"
+                VerticalAlignment="Top">
+                <StackPanel HorizontalAlignment="Center">
+                    <TextBlock
+                        FontSize="{DynamicResource Edge.FontSize.SubData18}"
+                        FontWeight="Bold"
+                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                        HorizontalAlignment="Center"
+                        Text="{Binding TodayOutput}"
+                        TextAlignment="Center" />
+                    <TextBlock
+                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                        HorizontalAlignment="Center"
+                        Text="{DynamicResource Panels_Label_Output}"
+                        TextAlignment="Center" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" HorizontalAlignment="Center">
+                    <TextBlock
+                        FontSize="{DynamicResource Edge.FontSize.SubData18}"
+                        FontWeight="Bold"
+                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                        HorizontalAlignment="Center"
+                        Text="{Binding TodayYield}"
+                        TextAlignment="Center" />
+                    <TextBlock
+                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                        HorizontalAlignment="Center"
+                        Text="{DynamicResource Panels_Label_Yield}"
+                        TextAlignment="Center" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                    <TextBlock
+                        FontSize="{DynamicResource Edge.FontSize.SubData18}"
+                        FontWeight="Bold"
+                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                        HorizontalAlignment="Center"
+                        Text="{Binding NgCount}"
+                        TextAlignment="Center" />
+                    <TextBlock
+                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                        HorizontalAlignment="Center"
+                        Text="{DynamicResource Panels_Label_NgShort}"
+                        TextAlignment="Center" />
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </edge:EdgeCard>
+</UserControl>

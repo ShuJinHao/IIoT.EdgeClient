@@ -1,14 +1,11 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
-    <UseWPF>true</UseWPF>
+    <UseWPF>false</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(SKIP_EDGE_WPF_PROJECTS)' == 'true'">
-    <ExcludeFromBuild>true</ExcludeFromBuild>
+    <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
   </PropertyGroup>
 
   <ItemGroup>
@@ -22,10 +19,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Dirkster.AvalonDock" />
-    <PackageReference Include="Dirkster.AvalonDock.Themes.Aero" />
-    <PackageReference Include="Dirkster.AvalonDock.Themes.Metro" />
-    <PackageReference Include="MaterialDesignThemes" ExcludeAssets="contentFiles" />
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Controls.DataGrid" />
   </ItemGroup>
 
   <ItemGroup>

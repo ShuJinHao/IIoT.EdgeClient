@@ -13,7 +13,7 @@ namespace IIoT.Edge.NonUiRegressionTests;
 
 public sealed class HardwareConfigViewModelBehaviorTests
 {
-    [Fact]
+    [AvaloniaFact]
     public Task AddInteraction_WhenStandardGroupSelected_ShouldAddReadAndWriteTogether()
         => RunOnStaThreadAsync(() =>
     {
@@ -60,7 +60,7 @@ public sealed class HardwareConfigViewModelBehaviorTests
         return Task.CompletedTask;
     });
 
-    [Fact]
+    [AvaloniaFact]
     public Task AddInteraction_WhenEnumCandidateHasNoSeedMetadata_ShouldRequireManualAddresses()
         => RunOnStaThreadAsync(() =>
     {
@@ -111,7 +111,7 @@ public sealed class HardwareConfigViewModelBehaviorTests
         return Task.CompletedTask;
     });
 
-    [Fact]
+    [AvaloniaFact]
     public Task AddDataPoint_WhenStandardDataPointSelected_ShouldGenerateSingleReadMapping()
         => RunOnStaThreadAsync(() =>
     {
@@ -148,7 +148,7 @@ public sealed class HardwareConfigViewModelBehaviorTests
         return Task.CompletedTask;
     });
 
-    [Fact]
+    [AvaloniaFact]
     public Task AddDataPoint_WhenSingleWriteSelected_ShouldGenerateWriteMappingAndForceCountOne()
         => RunOnStaThreadAsync(() =>
     {
@@ -179,7 +179,7 @@ public sealed class HardwareConfigViewModelBehaviorTests
         return Task.CompletedTask;
     });
 
-    [Fact]
+    [AvaloniaFact]
     public Task AddDataPoint_WhenContinuousWriteSelected_ShouldKeepEditableCount()
         => RunOnStaThreadAsync(() =>
     {
@@ -211,7 +211,7 @@ public sealed class HardwareConfigViewModelBehaviorTests
         return Task.CompletedTask;
     });
 
-    [Fact]
+    [AvaloniaFact]
     public Task AddDataPoint_WhenCategoryChanged_ShouldSwitchToSameCategoryStandardSignal()
         => RunOnStaThreadAsync(() =>
     {
@@ -247,7 +247,7 @@ public sealed class HardwareConfigViewModelBehaviorTests
         return Task.CompletedTask;
     });
 
-    [Fact]
+    [AvaloniaFact]
     public Task AddDataPoint_WhenSingleWriteHasNoCandidate_ShouldNotFallbackToReadTemplate()
         => RunOnStaThreadAsync(() =>
     {
@@ -281,7 +281,7 @@ public sealed class HardwareConfigViewModelBehaviorTests
         return Task.CompletedTask;
     });
 
-    [Fact]
+    [AvaloniaFact]
     public Task AddDataPoint_WhenContinuousWriteHasNoCandidate_ShouldNotFallbackToReadTemplate()
         => RunOnStaThreadAsync(() =>
     {
@@ -315,7 +315,7 @@ public sealed class HardwareConfigViewModelBehaviorTests
         return Task.CompletedTask;
     });
 
-    [Fact]
+    [AvaloniaFact]
     public Task Save_WhenCategoryDirectionMismatch_ShouldFailValidation()
         => RunOnStaThreadAsync(async () =>
     {
@@ -342,7 +342,7 @@ public sealed class HardwareConfigViewModelBehaviorTests
         Assert.Empty(service.SavedMappings);
     });
 
-    [Fact]
+    [AvaloniaFact]
     public Task DeleteIoPoint_WhenInteractionSelected_ShouldDeleteWholeBusinessGroup()
         => RunOnStaThreadAsync(() =>
     {
@@ -363,7 +363,7 @@ public sealed class HardwareConfigViewModelBehaviorTests
         return Task.CompletedTask;
     });
 
-    [Fact]
+    [AvaloniaFact]
     public Task DeleteIoPoint_WhenLegacyInteractionSelected_ShouldDeleteWholeLegacyGroup()
         => RunOnStaThreadAsync(() =>
     {
@@ -382,7 +382,7 @@ public sealed class HardwareConfigViewModelBehaviorTests
         return Task.CompletedTask;
     });
 
-    [Fact]
+    [AvaloniaFact]
     public Task Save_WhenInteractionDeleted_ShouldSubmitOnlyRemainingMappings()
         => RunOnStaThreadAsync(async () =>
     {
@@ -405,26 +405,7 @@ public sealed class HardwareConfigViewModelBehaviorTests
         Assert.Equal("Homogenization.RealtimeTemperature", saved.SignalKey);
     });
 
-    private static Task RunOnStaThreadAsync(Func<Task> action)
-    {
-        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var thread = new Thread(() =>
-        {
-            try
-            {
-                action().GetAwaiter().GetResult();
-                completion.SetResult();
-            }
-            catch (Exception ex)
-            {
-                completion.SetException(ex);
-            }
-        });
-
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        return completion.Task;
-    }
+    private static Task RunOnStaThreadAsync(Func<Task> action) => action();
 
     private static async Task WaitUntilAsync(Func<bool> predicate)
     {
@@ -449,7 +430,8 @@ public sealed class HardwareConfigViewModelBehaviorTests
             new HardwareConfigLoadSaveCoordinator(
                 service ?? new StubHardwareConfigCrudService(),
                 validationPresenter,
-                editSession),
+                editSession,
+                new TestLanguageService()),
             new HardwareConfigDeviceSelectionCoordinator(),
             editSession);
     }

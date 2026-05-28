@@ -110,7 +110,7 @@ public sealed class ArchitectureBoundaryContractTests
             .EnumerateFiles(Path.Combine(repoRoot, "src"), "*.*", SearchOption.AllDirectories)
             .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
             .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
-            .Where(path => path.EndsWith(".xaml", StringComparison.OrdinalIgnoreCase)
+            .Where(path => path.EndsWith(".axaml", StringComparison.OrdinalIgnoreCase)
                            || path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
             .Where(path => File.ReadAllText(path).Contains(logoFileName, StringComparison.OrdinalIgnoreCase))
             .Select(path => Path.GetRelativePath(repoRoot, path))

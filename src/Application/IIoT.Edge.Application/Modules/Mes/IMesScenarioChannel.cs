@@ -5,9 +5,18 @@ using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 namespace IIoT.Edge.Application.Modules.Mes;
 
 /// <summary>
-/// MES 多场景上传通道契约。Application 只定义场景形态，不持有任何插件业务字段或 MES code。
+/// MES 多场景通道契约。Application 只定义场景形态，不持有任何插件业务字段或 MES code。
 /// </summary>
-public interface IMesScenarioChannel<TCellData, TInbound, TRealtime, TRecipe, TEquipmentStatus> : IProcessMesUploader
+public interface IMesScenarioChannel<
+    TCellData,
+    TInbound,
+    TRealtime,
+    TRecipe,
+    TEquipmentStatus,
+    TMainPlanRequest,
+    TMainPlanResult,
+    TTraceBatchRequest,
+    TTraceBatchResult> : IProcessMesUploader
     where TCellData : CellDataBase
 {
     /// <summary>
@@ -48,5 +57,19 @@ public interface IMesScenarioChannel<TCellData, TInbound, TRealtime, TRecipe, TE
     Task<MesCallResult> UploadEquipmentStatusAsync(
         DeviceSession? device,
         TEquipmentStatus snapshot,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 获取 MES 主批计划。请求/响应字段由具体工序插件定义。
+    /// </summary>
+    Task<MesCallResult<TMainPlanResult>> GetMainPlanAsync(
+        TMainPlanRequest request,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 生成 MES 追溯批次号。请求/响应字段由具体工序插件定义。
+    /// </summary>
+    Task<MesCallResult<TTraceBatchResult>> GenerateTraceBatchNumberAsync(
+        TTraceBatchRequest request,
         CancellationToken cancellationToken = default);
 }

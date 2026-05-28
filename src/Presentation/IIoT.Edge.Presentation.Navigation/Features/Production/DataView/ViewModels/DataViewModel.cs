@@ -40,6 +40,8 @@ public class DataViewModel : NavigationViewModelBase
     }
 
     public ObservableCollection<ProductionRecordVm> Records { get; } = new();
+    public bool HasRecords => Records.Count > 0;
+    public bool IsRecordsEmpty => Records.Count == 0;
 
     private DateTime _dateFrom = DateTime.Today;
     public DateTime DateFrom
@@ -110,6 +112,8 @@ public class DataViewModel : NavigationViewModelBase
                 NgCount = record.NgCount,
                 Yield = record.Yield
             }));
+        OnPropertyChanged(nameof(HasRecords));
+        OnPropertyChanged(nameof(IsRecordsEmpty));
     }
 }
 

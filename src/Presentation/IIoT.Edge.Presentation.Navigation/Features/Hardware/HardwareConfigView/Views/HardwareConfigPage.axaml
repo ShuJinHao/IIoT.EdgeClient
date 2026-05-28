@@ -1,0 +1,46 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView.HardwareConfigPage"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
+    xmlns:pages="clr-namespace:IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView">
+
+    <Grid RowDefinitions="Auto,*" Margin="20">
+        <Grid ColumnDefinitions="*,Auto">
+            <StackPanel Spacing="4">
+                <TextBlock
+                    FontSize="24"
+                    FontWeight="SemiBold"
+                    Foreground="{DynamicResource Edge.Text.Primary}"
+                    Text="{Binding ViewTitle}" />
+                <TextBlock
+                    Foreground="{DynamicResource Edge.Text.Muted}"
+                    Text="{Binding StatusMessage}"
+                    TextWrapping="Wrap" />
+            </StackPanel>
+
+            <edge:EdgeToolButton
+                Grid.Column="1"
+                Classes="primary"
+                VerticalAlignment="Top"
+                Command="{Binding SaveCommand}">
+                <TextBlock Text="{DynamicResource Navigation_Button_Save}" />
+            </edge:EdgeToolButton>
+        </Grid>
+
+        <TabControl
+            Grid.Row="1"
+            Margin="0,16,0,0"
+            SelectedIndex="{Binding SelectedTabIndex}">
+            <TabItem Header="{DynamicResource Navigation_Tab_NetworkDevice}">
+                <pages:NetworkDevicePage />
+            </TabItem>
+            <TabItem Header="{DynamicResource Navigation_Tab_SerialDevice}">
+                <pages:SerialDevicePage />
+            </TabItem>
+            <TabItem Header="{DynamicResource Navigation_Tab_IoMapping}">
+                <pages:IoMappingPage />
+            </TabItem>
+        </TabControl>
+    </Grid>
+</UserControl>

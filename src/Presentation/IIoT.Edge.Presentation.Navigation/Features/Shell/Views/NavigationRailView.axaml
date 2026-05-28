@@ -1,0 +1,77 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Navigation.Features.Shell.NavigationRailView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    x:Name="Root"
+    HorizontalAlignment="Stretch"
+    VerticalAlignment="Stretch">
+    <Border
+        Width="56"
+        Padding="0,42,0,20"
+        HorizontalAlignment="Stretch"
+        VerticalAlignment="Stretch"
+        Background="{DynamicResource Edge.Brush.Sidebar.Background}"
+        BorderBrush="{DynamicResource Edge.Brush.Sidebar.Divider}"
+        BorderThickness="0">
+        <Grid RowDefinitions="Auto,*,Auto">
+            <ItemsControl
+                HorizontalAlignment="Center"
+                VerticalAlignment="Top"
+                ItemsSource="{Binding Items}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Spacing="16" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Button
+                            Classes="edge-nav-button"
+                            Classes.selected="{Binding IsSelected}"
+                            Command="{Binding DataContext.SelectCommand, ElementName=Root}"
+                            CommandParameter="{Binding}"
+                            IsEnabled="{Binding IsEnabled}"
+                            ToolTip.Tip="{Binding Title}">
+                            <Path
+                                Classes="edge-nav-icon"
+                                Classes.selected="{Binding IsSelected}"
+                                Width="20"
+                                Height="20"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Stretch="Uniform"
+                                Data="{Binding IconData}" />
+                        </Button>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <Button
+                Grid.Row="2"
+                Classes="edge-language-button"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Bottom"
+                Command="{Binding SwitchLanguageCommand}"
+                ToolTip.Tip="{Binding LanguageToolTip}">
+                <StackPanel
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Orientation="Horizontal"
+                    Spacing="3">
+                    <Path
+                        Classes="edge-language-icon"
+                        Width="13"
+                        Height="13"
+                        Stretch="Uniform"
+                        Data="{StaticResource Edge.Icon.Language}" />
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                        FontWeight="SemiBold"
+                        Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
+                        Text="{Binding LanguageButtonText}" />
+                </StackPanel>
+            </Button>
+        </Grid>
+    </Border>
+</UserControl>

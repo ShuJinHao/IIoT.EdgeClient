@@ -1,0 +1,59 @@
+<UserControl
+    x:Class="IIoT.Edge.Presentation.Panels.Features.SysLog.LogView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:converters="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Converters;assembly=IIoT.Edge.UI.Shared"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
+    <UserControl.Resources>
+        <converters:LogLevelToEdgeVisualStatusConverter x:Key="LogLevelToEdgeVisualStatusConverter" />
+    </UserControl.Resources>
+
+    <edge:EdgeLogList
+        Title="{DynamicResource Panels_Title_SystemLog}"
+        ItemsSource="{Binding Entries}"
+        IsEmpty="{Binding IsLogEmpty}"
+        EmptyTitle="{DynamicResource Panels_Empty_NoLog_Title}"
+        EmptyMessage="{DynamicResource Panels_Empty_NoLog_Message}"
+        ClearCommand="{Binding ClearCommand}"
+        ClearText="{DynamicResource Panels_Button_Clear}"
+        TimeHeader="{DynamicResource Panels_Column_Time}"
+        LevelHeader="{DynamicResource Panels_Column_Level}"
+        MessageHeader="{DynamicResource Panels_Column_Message}">
+        <edge:EdgeLogList.ItemTemplate>
+            <DataTemplate>
+                <Border
+                    MinHeight="30"
+                    BorderBrush="{DynamicResource Edge.Brush.Border.Subtle}"
+                    BorderThickness="0,0,0,1"
+                    Padding="8,7">
+                    <Grid ColumnDefinitions="72,54,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing4}">
+                        <TextBlock
+                            VerticalAlignment="Top"
+                            FontSize="{DynamicResource Edge.FontSize.Caption}"
+                            Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
+                            Text="{Binding Time, StringFormat='{}{0:HH:mm:ss}'}" />
+
+                        <StackPanel
+                            Grid.Column="1"
+                            VerticalAlignment="Top"
+                            Orientation="Horizontal"
+                            Spacing="{DynamicResource Edge.Size.Spacing4}">
+                            <edge:EdgeStatusDot Status="{Binding Level, Converter={StaticResource LogLevelToEdgeVisualStatusConverter}}" />
+                            <TextBlock
+                                FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                Text="{Binding Level}" />
+                        </StackPanel>
+
+                        <TextBlock
+                            Grid.Column="2"
+                            FontSize="{DynamicResource Edge.FontSize.Caption}"
+                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                            Text="{Binding Message}"
+                            TextWrapping="Wrap" />
+                    </Grid>
+                </Border>
+            </DataTemplate>
+        </edge:EdgeLogList.ItemTemplate>
+    </edge:EdgeLogList>
+</UserControl>

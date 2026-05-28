@@ -2,20 +2,30 @@ using System.Globalization;
 using System.IO;
 using System.Text.Json;
 using System.Threading;
-using System.Windows;
-using System.Windows.Markup;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Markup.Xaml.Styling;
+using Avalonia.Platform;
+using Avalonia.Styling;
 using IIoT.Edge.UI.Shared.Localization;
-using WpfApplication = System.Windows.Application;
 
 namespace IIoT.Edge.Presentation.Shell.Localization;
 
 /// <summary>
-/// 通过替换 Application 级 ResourceDictionary 实现 WPF 动态资源语言切换。
+/// 通过替换 Avalonia 应用级资源实现界面语言切换。
 /// </summary>
 public sealed class AppLanguageService : IAppLanguageService
 {
     private const string DefaultCultureName = "zh-CN";
     private const string LanguageFileName = "language.json";
+    private static readonly HashSet<string> RequiredResourceAssemblyNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "IIoT.Edge.Shell",
+        "IIoT.Edge.Presentation.Shell",
+        "IIoT.Edge.Presentation.Navigation",
+        "IIoT.Edge.Presentation.Panels"
+    };
+
     private readonly string _storagePath;
     private CultureInfo _current;
 
@@ -68,10 +78,13 @@ public sealed class AppLanguageService : IAppLanguageService
             return fallback;
         }
 
-        var value = WpfApplication.Current?.TryFindResource(key) as string;
-        return string.IsNullOrWhiteSpace(value)
-            ? (string.IsNullOrWhiteSpace(fallback) ? key : fallback)
-            : value;
+        var app = global::Avalonia.Application.Current;
+        if (app?.TryGetResource(key, null, out var value) == true && value is string text && !string.IsNullOrWhiteSpace(text))
+        {
+            return text;
+        }
+
+        return string.IsNullOrWhiteSpace(fallback) ? key : fallback;
     }
 
     public string Format(string key, string fallback, params object[] args)
@@ -88,7 +101,6 @@ public sealed class AppLanguageService : IAppLanguageService
         Thread.CurrentThread.CurrentUICulture = culture;
 
         ReplaceLanguageDictionaries(culture.Name);
-        DataGridColumnLocalization.RefreshOpenWindows();
 
         if (persist)
         {
@@ -100,14 +112,22 @@ public sealed class AppLanguageService : IAppLanguageService
 
     private static void ReplaceLanguageDictionaries(string cultureName)
     {
-        var resources = WpfApplication.Current?.Resources;
-        if (resources is null)
+        var application = global::Avalonia.Application.Current;
+        if (application is null)
         {
             return;
         }
 
+        var resources = application.Resources;
+        if (resources is null)
+        {
+            resources = new ResourceDictionary();
+            application.Resources = resources;
+        }
+
         var oldDictionaries = resources.MergedDictionaries
-            .Where(IsLanguageDictionary)
+            .OfType<ResourceInclude>()
+            .Where(include => include.Source?.OriginalString.Contains("/Resources/Languages/", StringComparison.OrdinalIgnoreCase) == true)
             .ToArray();
         foreach (var dictionary in oldDictionaries)
         {
@@ -124,57 +144,57 @@ public sealed class AppLanguageService : IAppLanguageService
         }
     }
 
-    private static bool IsLanguageDictionary(ResourceDictionary dictionary)
-    {
-        var source = dictionary.Source?.OriginalString;
-        return source is not null
-            && source.Contains("/Resources/Languages/", StringComparison.OrdinalIgnoreCase);
-    }
-
     private static IEnumerable<string> GetResourceAssemblyNames()
     {
-        var names = new List<string>
+        var yielded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var assemblyName in new[]
         {
             "IIoT.Edge.Shell",
             "IIoT.Edge.Presentation.Shell",
             "IIoT.Edge.Presentation.Navigation",
             "IIoT.Edge.Presentation.Panels"
-        };
+        })
+        {
+            if (yielded.Add(assemblyName))
+            {
+                yield return assemblyName;
+            }
+        }
 
-        names.AddRange(AppDomain.CurrentDomain.GetAssemblies()
-            .Select(x => x.GetName().Name)
-            .Where(x => x is not null
-                && x.StartsWith("IIoT.Edge.Module.", StringComparison.Ordinal)
-                && !x.EndsWith(".Abstractions", StringComparison.Ordinal)
-                && !x.EndsWith(".Contracts", StringComparison.Ordinal))
-            .Distinct(StringComparer.Ordinal)
-            .Select(x => x!));
-
-        return names.Distinct(StringComparer.Ordinal);
+        foreach (var assemblyName in AppDomain.CurrentDomain.GetAssemblies()
+            .Where(assembly => !assembly.IsDynamic)
+            .Select(assembly => assembly.GetName().Name)
+            .Where(name => !string.IsNullOrWhiteSpace(name)
+                && name.StartsWith("IIoT.Edge.Module.", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase))
+        {
+            if (assemblyName is not null && yielded.Add(assemblyName))
+            {
+                yield return assemblyName;
+            }
+        }
     }
 
-    private static ResourceDictionary? TryCreateLanguageDictionary(string assemblyName, string cultureName)
+    private static ResourceInclude? TryCreateLanguageDictionary(string assemblyName, string cultureName)
     {
         try
         {
-            return new ResourceDictionary
+            var source = new Uri($"avares://{assemblyName}/Resources/Languages/{cultureName}.axaml");
+            if (!RequiredResourceAssemblyNames.Contains(assemblyName) && !AssetLoader.Exists(source))
             {
-                Source = new Uri(
-                    $"pack://application:,,,/{assemblyName};component/Resources/Languages/{cultureName}.xaml",
-                    UriKind.Absolute)
+                return null;
+            }
+
+            return new ResourceInclude(source)
+            {
+                Source = source
             };
         }
-        catch (IOException)
+        catch (Exception ex)
         {
-            return null;
-        }
-        catch (InvalidOperationException)
-        {
-            return null;
-        }
-        catch (XamlParseException)
-        {
-            return null;
+            throw new InvalidOperationException(
+                $"无法加载界面语言资源：{assemblyName}/{cultureName}。",
+                ex);
         }
     }
 
