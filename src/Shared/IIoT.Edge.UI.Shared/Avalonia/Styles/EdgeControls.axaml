@@ -157,6 +157,50 @@
         <Setter Property="Background" Value="{DynamicResource Edge.Brush.Header.ChipHover}" />
     </Style>
 
+    <Style Selector="controls|EdgeAccountChip.one-line">
+        <Setter Property="MinWidth" Value="124" />
+        <Setter Property="Height" Value="38" />
+        <Setter Property="Padding" Value="7,0,12,0" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border
+                    Padding="{TemplateBinding Padding}"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="{TemplateBinding CornerRadius}">
+                    <Grid
+                        VerticalAlignment="Center"
+                        ColumnDefinitions="24,*">
+                        <Border
+                            Width="24"
+                            Height="24"
+                            VerticalAlignment="Center"
+                            Background="{DynamicResource Edge.Brush.Header.AvatarBackground}"
+                            CornerRadius="{DynamicResource Edge.CornerRadius.Circle}">
+                            <PathIcon
+                                Width="13"
+                                Height="13"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Data="{StaticResource Edge.Icon.User}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Primary}" />
+                        </Border>
+                        <TextBlock
+                            Grid.Column="1"
+                            Margin="8,0,0,0"
+                            VerticalAlignment="Center"
+                            FontSize="{DynamicResource Edge.FontSize.Body}"
+                            FontWeight="SemiBold"
+                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                            Text="{TemplateBinding DisplayName}"
+                            TextTrimming="CharacterEllipsis" />
+                    </Grid>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
     <Style Selector="controls|EdgeWindowButton">
         <Setter Property="Width" Value="{DynamicResource Edge.Size.HeaderIconButton}" />
         <Setter Property="Height" Value="{DynamicResource Edge.Size.HeaderIconButton}" />
@@ -266,6 +310,145 @@
                 </Border>
             </ControlTemplate>
         </Setter>
+    </Style>
+
+    <Style Selector="controls|EdgeDialogChrome.shell-login-dialog">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <controls:EdgeCard
+                    ClipToBounds="True"
+                    Elevation="Float"
+                    PaddingMode="None"
+                    Surface="Card"
+                    CardCornerRadius="{DynamicResource Edge.CornerRadius.Stage}">
+                    <Grid RowDefinitions="64,*">
+                        <Grid
+                            x:Name="PART_Header"
+                            Grid.Row="0"
+                            Background="Transparent"
+                            ColumnDefinitions="*,Auto"
+                            Margin="28,0,18,0">
+                            <StackPanel
+                                Grid.Column="0"
+                                VerticalAlignment="Center"
+                                Orientation="Horizontal"
+                                Spacing="{DynamicResource Edge.Size.Spacing10}">
+                                <Ellipse
+                                    Width="10"
+                                    Height="10"
+                                    VerticalAlignment="Center"
+                                    Fill="{DynamicResource Edge.Brush.Accent.Primary}" />
+                                <StackPanel Spacing="2">
+                                    <TextBlock
+                                        FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                                        FontWeight="Bold"
+                                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                        Text="{TemplateBinding Title}" />
+                                    <TextBlock
+                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                        Text="{TemplateBinding Subtitle}" />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <StackPanel
+                                Grid.Column="1"
+                                VerticalAlignment="Center"
+                                Orientation="Horizontal"
+                                Spacing="{DynamicResource Edge.Size.Spacing8}">
+                                <ContentPresenter
+                                    VerticalAlignment="Center"
+                                    Content="{TemplateBinding HeaderActionContent}" />
+                                <controls:EdgeWindowButton
+                                    x:Name="PART_CloseButton"
+                                    Kind="Close">
+                                    <TextBlock Classes="edge-window-symbol" Text="&#x2715;" />
+                                </controls:EdgeWindowButton>
+                            </StackPanel>
+                        </Grid>
+
+                        <ContentPresenter
+                            Grid.Row="1"
+                            Margin="28,0,28,28"
+                            Content="{TemplateBinding Content}" />
+                    </Grid>
+                </controls:EdgeCard>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="controls|EdgeCard.shell-login-panel">
+        <Setter Property="CardPadding" Value="0" />
+        <Setter Property="CardBorderBrush" Value="{DynamicResource Edge.Brush.Header.ChipBorder}" />
+        <Setter Property="CardBorderThickness" Value="1" />
+        <Setter Property="CardCornerRadius" Value="{DynamicResource Edge.CornerRadius.Stage}" />
+    </Style>
+
+    <Style Selector="TextBlock.shell-login-title">
+        <Setter Property="FontSize" Value="24" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Primary}" />
+    </Style>
+
+    <Style Selector="TextBlock.shell-login-subtitle">
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Body}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Muted}" />
+    </Style>
+
+    <Style Selector="TextBlock.shell-login-form-label">
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Body}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Secondary}" />
+    </Style>
+
+    <Style Selector="TextBlock.shell-login-error">
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Caption}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Status.Error}" />
+    </Style>
+
+    <Style Selector="Border.shell-login-notice">
+        <Setter Property="MinHeight" Value="44" />
+        <Setter Property="Padding" Value="14,10" />
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Surface.Wash}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Edge.Brush.Border.Subtle}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Control}" />
+    </Style>
+
+    <Style Selector="TextBlock.shell-login-notice-text">
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Caption}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Secondary}" />
+    </Style>
+
+    <Style Selector="controls|EdgeSegmentedNav.shell-login-mode-nav">
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+
+    <Style Selector="controls|EdgeSegmentedNav.shell-login-mode-nav ListBoxItem">
+        <Setter Property="Width" Value="218" />
+        <Setter Property="MinWidth" Value="218" />
+        <Setter Property="MinHeight" Value="36" />
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Body}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style Selector="Button.shell-login-submit">
+        <Setter Property="MinWidth" Value="108" />
+    </Style>
+
+    <Style Selector="FlyoutPresenter.shell-account-flyout">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="0" />
+        <Setter Property="Padding" Value="0" />
+    </Style>
+
+    <Style Selector="controls|EdgeCard.shell-account-menu">
+        <Setter Property="MinWidth" Value="198" />
+        <Setter Property="CardPadding" Value="16" />
+        <Setter Property="CardBorderBrush" Value="{DynamicResource Edge.Brush.Header.ChipBorder}" />
+        <Setter Property="CardBorderThickness" Value="1" />
+        <Setter Property="CardCornerRadius" Value="{DynamicResource Edge.CornerRadius.Card}" />
     </Style>
 
     <Style Selector="Border.shell-account-menu">
@@ -458,6 +641,65 @@
 
     <Style Selector="TextBox:focus">
         <Setter Property="BorderBrush" Value="{DynamicResource Edge.Brush.Border.Focus}" />
+    </Style>
+
+    <Style Selector="controls|EdgeLoginInput">
+        <Setter Property="MinHeight" Value="42" />
+        <Setter Property="Width" Value="360" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border
+                    x:Name="PART_Root"
+                    MinHeight="{TemplateBinding MinHeight}"
+                    Padding="14,0"
+                    Background="{DynamicResource Edge.Brush.Surface.Card}"
+                    BorderBrush="{DynamicResource Edge.Brush.Border.Subtle}"
+                    BorderThickness="1"
+                    CornerRadius="16">
+                    <TextBox
+                        x:Name="PART_Input"
+                        Classes="edge-login-input-editor"
+                        VerticalAlignment="Center"
+                        PasswordChar="{Binding PasswordChar, RelativeSource={RelativeSource TemplatedParent}}"
+                        PlaceholderText="{Binding PlaceholderText, RelativeSource={RelativeSource TemplatedParent}}"
+                        Text="{Binding Text, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                        />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="controls|EdgeLoginInput:focus-within /template/ Border#PART_Root">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Header.ChipBackground}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Edge.Brush.Header.ChipBorder}" />
+    </Style>
+
+    <Style Selector="TextBox.edge-login-input-editor">
+        <Setter Property="MinHeight" Value="28" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="0" />
+        <Setter Property="FocusAdorner" Value="{x:Null}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Primary}" />
+    </Style>
+
+    <Style Selector="TextBox.edge-login-input-editor:focus">
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <Style Selector="TextBox.edge-login-input-editor /template/ Border">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="0" />
+    </Style>
+
+    <Style Selector="TextBox.edge-login-input-editor:focus /template/ Border">
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
     </Style>
 
     <Style Selector="ComboBox">
@@ -708,7 +950,6 @@
                             x:Name="PART_EdgeColumnHeaderBackground"
                             Grid.Row="0"
                             Grid.Column="1"
-                            Grid.ColumnSpan="2"
                             Height="{TemplateBinding ColumnHeaderHeight}"
                             Background="{DynamicResource Edge.Brush.Table.HeaderBackground}"
                             CornerRadius="{DynamicResource Edge.CornerRadius.Control}"
@@ -719,8 +960,7 @@
                         <DataGridColumnHeadersPresenter
                             Name="PART_ColumnHeadersPresenter"
                             Grid.Row="0"
-                            Grid.Column="1"
-                            Grid.ColumnSpan="2" />
+                            Grid.Column="1" />
                         <Rectangle
                             Name="PART_ColumnHeadersAndRowsSeparator"
                             Grid.Row="0"
@@ -733,7 +973,7 @@
                         <DataGridRowsPresenter
                             Name="PART_RowsPresenter"
                             Grid.Row="1"
-                            Grid.Column="0"
+                            Grid.Column="1"
                             ScrollViewer.IsScrollInertiaEnabled="{TemplateBinding IsScrollInertiaEnabled}">
                             <DataGridRowsPresenter.GestureRecognizers>
                                 <ScrollGestureRecognizer

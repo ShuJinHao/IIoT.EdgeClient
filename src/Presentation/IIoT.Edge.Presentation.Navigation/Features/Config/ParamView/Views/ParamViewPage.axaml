@@ -11,13 +11,12 @@
                 Title="{Binding ViewTitle}"
                 Subtitle="{DynamicResource Navigation_Tab_PluginBusinessParams}">
                 <edge:EdgeSectionHeader.ActionContent>
-                    <Button
-                        MinWidth="96"
-                        Padding="16,8"
+                    <edge:EdgeToolButton
+                        Classes="primary"
                         Command="{Binding SaveCommand}"
                         IsEnabled="{Binding CanEdit}">
                         <TextBlock Text="{DynamicResource Navigation_Button_Save}" />
-                    </Button>
+                    </edge:EdgeToolButton>
                 </edge:EdgeSectionHeader.ActionContent>
             </edge:EdgeSectionHeader>
 
@@ -38,25 +37,18 @@
                                         HeadersVisibility="Column"
                                         ItemsSource="{Binding Params}">
                                         <edge:EdgeDataGrid.Columns>
-                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_ParamName}" Width="2*">
+                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_ParamName}" MinWidth="200" Width="2*">
                                                 <dg:DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
-                                                        <StackPanel Spacing="{DynamicResource Edge.Size.Spacing4}">
-                                                            <TextBlock
-                                                                FontWeight="SemiBold"
-                                                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                                                                Text="{Binding DisplayName}" />
-                                                            <TextBlock
-                                                                FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                                                Text="{Binding Description}"
-                                                                TextWrapping="Wrap" />
-                                                        </StackPanel>
+                                                        <TextBlock
+                                                            FontWeight="SemiBold"
+                                                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                                            Text="{Binding DisplayName}" />
                                                     </DataTemplate>
                                                 </dg:DataGridTemplateColumn.CellTemplate>
                                             </dg:DataGridTemplateColumn>
 
-                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_ParamValue}" Width="2*">
+                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_ParamValue}" MinWidth="220" Width="2*">
                                                 <dg:DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
                                                         <Grid>
@@ -76,8 +68,17 @@
                                                 </dg:DataGridTemplateColumn.CellTemplate>
                                             </dg:DataGridTemplateColumn>
 
-                                            <dg:DataGridTextColumn Binding="{Binding Type}" Header="{DynamicResource Navigation_Column_ParamType}" Width="*" />
-                                            <dg:DataGridTextColumn Binding="{Binding DefaultValue}" Header="{DynamicResource Navigation_Column_DefaultValue}" Width="*" />
+                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_Remark}" MinWidth="320" Width="3*">
+                                                <dg:DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock
+                                                            FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                                            Text="{Binding Description}"
+                                                            TextWrapping="Wrap" />
+                                                    </DataTemplate>
+                                                </dg:DataGridTemplateColumn.CellTemplate>
+                                            </dg:DataGridTemplateColumn>
                                         </edge:EdgeDataGrid.Columns>
                                     </edge:EdgeDataGrid>
                                 </edge:EdgeTablePanel>
@@ -102,25 +103,18 @@
                                         HeadersVisibility="Column"
                                         ItemsSource="{Binding Params}">
                                         <edge:EdgeDataGrid.Columns>
-                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_ParamName}" Width="2*">
+                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_ParamName}" MinWidth="200" Width="2*">
                                                 <dg:DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
-                                                        <StackPanel Spacing="{DynamicResource Edge.Size.Spacing4}">
-                                                            <TextBlock
-                                                                FontWeight="SemiBold"
-                                                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                                                                Text="{Binding DisplayName}" />
-                                                            <TextBlock
-                                                                FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                                                Text="{Binding Description}"
-                                                                TextWrapping="Wrap" />
-                                                        </StackPanel>
+                                                        <TextBlock
+                                                            FontWeight="SemiBold"
+                                                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                                            Text="{Binding DisplayName}" />
                                                     </DataTemplate>
                                                 </dg:DataGridTemplateColumn.CellTemplate>
                                             </dg:DataGridTemplateColumn>
 
-                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_ParamValue}" Width="2*">
+                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_ParamValue}" MinWidth="220" Width="2*">
                                                 <dg:DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
                                                         <Grid>
@@ -140,8 +134,17 @@
                                                 </dg:DataGridTemplateColumn.CellTemplate>
                                             </dg:DataGridTemplateColumn>
 
-                                            <dg:DataGridTextColumn Binding="{Binding Type}" Header="{DynamicResource Navigation_Column_ParamType}" Width="*" />
-                                            <dg:DataGridTextColumn Binding="{Binding DefaultValue}" Header="{DynamicResource Navigation_Column_DefaultValue}" Width="*" />
+                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_Remark}" MinWidth="320" Width="3*">
+                                                <dg:DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock
+                                                            FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                                            Text="{Binding Description}"
+                                                            TextWrapping="Wrap" />
+                                                    </DataTemplate>
+                                                </dg:DataGridTemplateColumn.CellTemplate>
+                                            </dg:DataGridTemplateColumn>
                                         </edge:EdgeDataGrid.Columns>
                                     </edge:EdgeDataGrid>
                                 </edge:EdgeTablePanel>
@@ -151,7 +154,7 @@
                 </TabItem>
 
                 <TabItem Header="{DynamicResource Navigation_Tab_PluginBusinessParams}">
-                    <ItemsControl ItemsSource="{Binding PluginParamGroups}">
+                    <ItemsControl ItemsSource="{Binding BusinessParamGroups}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <edge:EdgeTablePanel
@@ -166,25 +169,18 @@
                                         HeadersVisibility="Column"
                                         ItemsSource="{Binding Params}">
                                         <edge:EdgeDataGrid.Columns>
-                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_ParamName}" Width="2*">
+                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_ParamName}" MinWidth="200" Width="2*">
                                                 <dg:DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
-                                                        <StackPanel Spacing="{DynamicResource Edge.Size.Spacing4}">
-                                                            <TextBlock
-                                                                FontWeight="SemiBold"
-                                                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                                                                Text="{Binding DisplayName}" />
-                                                            <TextBlock
-                                                                FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                                                Text="{Binding Description}"
-                                                                TextWrapping="Wrap" />
-                                                        </StackPanel>
+                                                        <TextBlock
+                                                            FontWeight="SemiBold"
+                                                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                                            Text="{Binding DisplayName}" />
                                                     </DataTemplate>
                                                 </dg:DataGridTemplateColumn.CellTemplate>
                                             </dg:DataGridTemplateColumn>
 
-                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_ParamValue}" Width="2*">
+                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_ParamValue}" MinWidth="220" Width="2*">
                                                 <dg:DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
                                                         <Grid>
@@ -204,8 +200,17 @@
                                                 </dg:DataGridTemplateColumn.CellTemplate>
                                             </dg:DataGridTemplateColumn>
 
-                                            <dg:DataGridTextColumn Binding="{Binding Type}" Header="{DynamicResource Navigation_Column_ParamType}" Width="*" />
-                                            <dg:DataGridTextColumn Binding="{Binding DefaultValue}" Header="{DynamicResource Navigation_Column_DefaultValue}" Width="*" />
+                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_Remark}" MinWidth="320" Width="3*">
+                                                <dg:DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock
+                                                            FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                                            Text="{Binding Description}"
+                                                            TextWrapping="Wrap" />
+                                                    </DataTemplate>
+                                                </dg:DataGridTemplateColumn.CellTemplate>
+                                            </dg:DataGridTemplateColumn>
                                         </edge:EdgeDataGrid.Columns>
                                     </edge:EdgeDataGrid>
                                 </edge:EdgeTablePanel>

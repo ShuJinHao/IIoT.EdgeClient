@@ -11,27 +11,20 @@
         <edge:EdgeSectionHeader Title="{DynamicResource Navigation_Tab_IoMapping}">
             <edge:EdgeSectionHeader.ActionContent>
                 <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Edge.Size.Spacing8}">
-                    <Button
-                        Padding="12,6"
+                    <edge:EdgeToolButton
                         Command="{Binding ApplyModuleTemplateCommand}"
                         ToolTip.Tip="{Binding ModuleTemplateHint}">
                         <TextBlock Text="{DynamicResource Navigation_Button_ApplyTemplate}" />
-                    </Button>
-                    <Button
-                        Padding="12,6"
-                        Command="{Binding OpenAddInteractionMappingDialogCommand}">
+                    </edge:EdgeToolButton>
+                    <edge:EdgeToolButton Command="{Binding OpenAddInteractionMappingDialogCommand}">
                         <TextBlock Text="{DynamicResource Navigation_Button_AddInteraction}" />
-                    </Button>
-                    <Button
-                        Padding="12,6"
-                        Command="{Binding OpenAddDataPointMappingDialogCommand}">
+                    </edge:EdgeToolButton>
+                    <edge:EdgeToolButton Command="{Binding OpenAddDataPointMappingDialogCommand}">
                         <TextBlock Text="{DynamicResource Navigation_Button_AddDataPoint}" />
-                    </Button>
-                    <Button
-                        Padding="12,6"
-                        Command="{Binding DeleteIoMappingCommand}">
+                    </edge:EdgeToolButton>
+                    <edge:EdgeToolButton Command="{Binding DeleteIoMappingCommand}">
                         <TextBlock Text="{DynamicResource Navigation_Button_Delete}" />
-                    </Button>
+                    </edge:EdgeToolButton>
                 </StackPanel>
             </edge:EdgeSectionHeader.ActionContent>
         </edge:EdgeSectionHeader>
@@ -81,11 +74,11 @@
                                         ItemsSource="{Binding Mappings}"
                                         SelectedItem="{Binding DataContext.SelectedIoMapping, ElementName=IoMappingRoot, Mode=TwoWay}">
                                         <edge:EdgeDataGrid.Columns>
-                                            <dg:DataGridTextColumn Binding="{Binding PlcAddress}" Header="{DynamicResource Navigation_Column_PlcAddress}" Width="110" />
-                                            <dg:DataGridTextColumn Binding="{Binding AddressCount}" Header="{DynamicResource Navigation_Column_Count}" Width="80" />
-                                            <dg:DataGridTextColumn Binding="{Binding BusinessGroup}" Header="{DynamicResource Navigation_Column_BusinessGroup}" IsReadOnly="True" Width="150" />
-                                            <dg:DataGridTextColumn Binding="{Binding SignalName}" Header="{DynamicResource Navigation_Column_SignalName}" Width="180" />
-                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_DataType}" Width="120">
+                                            <dg:DataGridTextColumn Binding="{Binding PlcAddress}" Header="{DynamicResource Navigation_Column_PlcAddress}" MinWidth="120" Width="120" />
+                                            <dg:DataGridTextColumn Binding="{Binding AddressCount}" Header="{DynamicResource Navigation_Column_Count}" MinWidth="80" Width="80" />
+                                            <dg:DataGridTextColumn Binding="{Binding BusinessGroup}" Header="{DynamicResource Navigation_Column_BusinessGroup}" IsReadOnly="True" MinWidth="150" Width="150" />
+                                            <dg:DataGridTextColumn Binding="{Binding SignalName}" Header="{DynamicResource Navigation_Column_SignalName}" MinWidth="180" Width="180" />
+                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_DataType}" MinWidth="120" Width="120">
                                                 <dg:DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
                                                         <TextBlock Text="{Binding DataType}" />
@@ -97,8 +90,8 @@
                                                     </DataTemplate>
                                                 </dg:DataGridTemplateColumn.CellEditingTemplate>
                                             </dg:DataGridTemplateColumn>
-                                            <dg:DataGridTextColumn Binding="{Binding Direction}" Header="{DynamicResource Navigation_Column_Direction}" IsReadOnly="True" Width="100" />
-                                            <dg:DataGridTextColumn Binding="{Binding Remark}" Header="{DynamicResource Navigation_Column_Remark}" Width="*" />
+                                            <dg:DataGridTextColumn Binding="{Binding Direction}" Header="{DynamicResource Navigation_Column_Direction}" IsReadOnly="True" MinWidth="100" Width="100" />
+                                            <dg:DataGridTextColumn Binding="{Binding Remark}" Header="{DynamicResource Navigation_Column_Remark}" MinWidth="220" Width="220" />
                                         </edge:EdgeDataGrid.Columns>
                                     </edge:EdgeDataGrid>
                                 </edge:EdgeTablePanel>
@@ -211,16 +204,14 @@
                         </Grid>
 
                         <StackPanel Grid.Row="2" HorizontalAlignment="Right" Orientation="Horizontal" Spacing="8">
-                            <Button
-                                Padding="14,8"
-                                Command="{Binding CancelAddIoMappingDialogCommand}">
+                            <edge:EdgeToolButton Command="{Binding CancelAddIoMappingDialogCommand}">
                                 <TextBlock Text="{DynamicResource Navigation_Button_Cancel}" />
-                            </Button>
-                            <Button
-                                Padding="14,8"
+                            </edge:EdgeToolButton>
+                            <edge:EdgeToolButton
+                                Classes="primary"
                                 Command="{Binding ConfirmAddIoMappingCommand}">
                                 <TextBlock Text="{DynamicResource Navigation_Button_ConfirmAddIoPoint}" />
-                            </Button>
+                            </edge:EdgeToolButton>
                         </StackPanel>
                     </Grid>
                 </edge:EdgeCard>

@@ -10,17 +10,14 @@
         Title="{DynamicResource Navigation_Tab_SerialDevice}">
         <edge:EdgeTablePanel.ActionContent>
             <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button
-                    Padding="12,6"
-                    Command="{Binding AddSerialDeviceCommand}">
+                <edge:EdgeToolButton Command="{Binding AddSerialDeviceCommand}">
                     <TextBlock Text="{DynamicResource Navigation_Button_Add}" />
-                </Button>
-                <Button
-                    Padding="12,6"
+                </edge:EdgeToolButton>
+                <edge:EdgeToolButton
                     Command="{Binding DeleteSerialDeviceCommand}"
                     CommandParameter="{Binding SelectedItem, ElementName=SerialGrid}">
                     <TextBlock Text="{DynamicResource Navigation_Button_Delete}" />
-                </Button>
+                </edge:EdgeToolButton>
             </StackPanel>
         </edge:EdgeTablePanel.ActionContent>
 
@@ -33,12 +30,12 @@
             IsReadOnly="{Binding !CanEdit}"
             ItemsSource="{Binding SerialDevices}">
             <edge:EdgeDataGrid.Columns>
-                <dg:DataGridTextColumn Binding="{Binding DeviceName}" Header="{DynamicResource Navigation_Column_DeviceName}" Width="130" />
-                <dg:DataGridTextColumn Binding="{Binding DeviceType}" Header="{DynamicResource Navigation_Column_DeviceType}" Width="110" />
-                <dg:DataGridTextColumn Binding="{Binding PortName}" Header="{DynamicResource Navigation_Column_PortName}" Width="90" />
-                <dg:DataGridTextColumn Binding="{Binding BaudRate}" Header="{DynamicResource Navigation_Column_BaudRate}" Width="90" />
-                <dg:DataGridTextColumn Binding="{Binding DataBits}" Header="{DynamicResource Navigation_Column_DataBits}" Width="80" />
-                <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_StopBits}" Width="100">
+                <dg:DataGridTextColumn Binding="{Binding DeviceName}" Header="{DynamicResource Navigation_Column_DeviceName}" MinWidth="170" Width="170" />
+                <dg:DataGridTextColumn Binding="{Binding DeviceType}" Header="{DynamicResource Navigation_Column_DeviceType}" MinWidth="120" Width="120" />
+                <dg:DataGridTextColumn Binding="{Binding PortName}" Header="{DynamicResource Navigation_Column_PortName}" MinWidth="100" Width="100" />
+                <dg:DataGridTextColumn Binding="{Binding BaudRate}" Header="{DynamicResource Navigation_Column_BaudRate}" MinWidth="100" Width="100" />
+                <dg:DataGridTextColumn Binding="{Binding DataBits}" Header="{DynamicResource Navigation_Column_DataBits}" MinWidth="90" Width="90" />
+                <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_StopBits}" MinWidth="100" Width="100">
                     <dg:DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding StopBits}" />
@@ -50,7 +47,7 @@
                         </DataTemplate>
                     </dg:DataGridTemplateColumn.CellEditingTemplate>
                 </dg:DataGridTemplateColumn>
-                <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_Parity}" Width="90">
+                <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_Parity}" MinWidth="100" Width="100">
                     <dg:DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding Parity}" />
@@ -62,10 +59,10 @@
                         </DataTemplate>
                     </dg:DataGridTemplateColumn.CellEditingTemplate>
                 </dg:DataGridTemplateColumn>
-                <dg:DataGridTextColumn Binding="{Binding SendCmd1}" Header="{DynamicResource Navigation_Column_Command1}" Width="100" />
-                <dg:DataGridTextColumn Binding="{Binding SendCmd2}" Header="{DynamicResource Navigation_Column_Command2}" Width="100" />
-                <dg:DataGridCheckBoxColumn Binding="{Binding IsEnabled}" Header="{DynamicResource Navigation_Column_Enable}" Width="80" />
-                <dg:DataGridTextColumn Binding="{Binding Remark}" Header="{DynamicResource Navigation_Column_Remark}" Width="*" />
+                <dg:DataGridTextColumn Binding="{Binding SendCmd1}" Header="{DynamicResource Navigation_Column_Command1}" MinWidth="100" Width="100" />
+                <dg:DataGridTextColumn Binding="{Binding SendCmd2}" Header="{DynamicResource Navigation_Column_Command2}" MinWidth="100" Width="100" />
+                <dg:DataGridCheckBoxColumn Binding="{Binding IsEnabled}" Header="{DynamicResource Navigation_Column_Enable}" MinWidth="80" Width="80" />
+                <dg:DataGridTextColumn Binding="{Binding Remark}" Header="{DynamicResource Navigation_Column_Remark}" MinWidth="180" Width="180" />
             </edge:EdgeDataGrid.Columns>
         </edge:EdgeDataGrid>
     </edge:EdgeTablePanel>

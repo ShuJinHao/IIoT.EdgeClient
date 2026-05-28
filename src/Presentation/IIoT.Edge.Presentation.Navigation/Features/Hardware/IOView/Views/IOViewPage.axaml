@@ -70,12 +70,12 @@
                     IsReadOnly="False"
                     ItemsSource="{Binding InteractionRows}">
                     <edge:EdgeDataGrid.Columns>
-                        <dg:DataGridTextColumn Binding="{Binding BusinessGroup}" Header="{DynamicResource Navigation_Column_InteractionItem}" IsReadOnly="True" Width="130" />
-                        <dg:DataGridTextColumn Binding="{Binding PlcAddressSummary}" Header="{DynamicResource Navigation_Column_PlcSignal}" IsReadOnly="True" Width="2*" />
-                        <dg:DataGridTextColumn Binding="{Binding PlcValueText}" Header="{DynamicResource Navigation_Column_PlcValue}" IsReadOnly="True" Width="90" />
-                        <dg:DataGridTextColumn Binding="{Binding HostReplyAddressText}" Header="{DynamicResource Navigation_Column_CurrentReply}" IsReadOnly="True" Width="2*" />
-                        <dg:DataGridTextColumn Binding="{Binding HostReplyValueText}" Header="{DynamicResource Navigation_Column_CurrentValue}" IsReadOnly="True" Width="100" />
-                        <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_PendingWriteOperation}" Width="170">
+                        <dg:DataGridTextColumn Binding="{Binding BusinessGroup}" Header="{DynamicResource Navigation_Column_InteractionItem}" IsReadOnly="True" MinWidth="130" Width="130" />
+                        <dg:DataGridTextColumn Binding="{Binding PlcAddressSummary}" Header="{DynamicResource Navigation_Column_PlcSignal}" IsReadOnly="True" MinWidth="220" Width="2*" />
+                        <dg:DataGridTextColumn Binding="{Binding PlcValueText}" Header="{DynamicResource Navigation_Column_PlcValue}" IsReadOnly="True" MinWidth="90" Width="90" />
+                        <dg:DataGridTextColumn Binding="{Binding HostReplyAddressText}" Header="{DynamicResource Navigation_Column_CurrentReply}" IsReadOnly="True" MinWidth="220" Width="2*" />
+                        <dg:DataGridTextColumn Binding="{Binding HostReplyValueText}" Header="{DynamicResource Navigation_Column_CurrentValue}" IsReadOnly="True" MinWidth="100" Width="100" />
+                        <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_PendingWriteOperation}" MinWidth="180" Width="180">
                             <dg:DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <Grid ColumnDefinitions="*,6,Auto">
@@ -126,11 +126,11 @@
                                 IsReadOnly="True"
                                 ItemsSource="{Binding Signals}">
                                 <edge:EdgeDataGrid.Columns>
-                                    <dg:DataGridTextColumn Binding="{Binding SignalName}" Header="{DynamicResource Navigation_Column_SignalName}" Width="2*" />
-                                    <dg:DataGridTextColumn Binding="{Binding PlcAddress}" Header="{DynamicResource Navigation_Column_Address}" Width="120" />
-                                    <dg:DataGridTextColumn Binding="{Binding DataType}" Header="{DynamicResource Navigation_Column_Type}" Width="100" />
-                                    <dg:DataGridTextColumn Binding="{Binding LengthText}" Header="{DynamicResource Navigation_Column_Length}" Width="80" />
-                                    <dg:DataGridTextColumn Binding="{Binding PreviewValue}" Header="{DynamicResource Navigation_Column_CurrentValue}" Width="*" />
+                                    <dg:DataGridTextColumn Binding="{Binding SignalName}" Header="{DynamicResource Navigation_Column_SignalName}" MinWidth="220" Width="2*" />
+                                    <dg:DataGridTextColumn Binding="{Binding PlcAddress}" Header="{DynamicResource Navigation_Column_Address}" MinWidth="120" Width="120" />
+                                    <dg:DataGridTextColumn Binding="{Binding DataType}" Header="{DynamicResource Navigation_Column_Type}" MinWidth="100" Width="100" />
+                                    <dg:DataGridTextColumn Binding="{Binding LengthText}" Header="{DynamicResource Navigation_Column_Length}" MinWidth="80" Width="80" />
+                                    <dg:DataGridTextColumn Binding="{Binding PreviewValue}" Header="{DynamicResource Navigation_Column_CurrentValue}" MinWidth="160" Width="*" />
                                 </edge:EdgeDataGrid.Columns>
                             </edge:EdgeDataGrid>
                         </edge:EdgeTablePanel>

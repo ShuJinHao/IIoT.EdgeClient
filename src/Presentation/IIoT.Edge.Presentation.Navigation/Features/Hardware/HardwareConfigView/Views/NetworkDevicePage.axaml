@@ -10,17 +10,14 @@
         Title="{DynamicResource Navigation_Tab_NetworkDevice}">
         <edge:EdgeTablePanel.ActionContent>
             <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button
-                    Padding="12,6"
-                    Command="{Binding AddNetworkDeviceCommand}">
+                <edge:EdgeToolButton Command="{Binding AddNetworkDeviceCommand}">
                     <TextBlock Text="{DynamicResource Navigation_Button_Add}" />
-                </Button>
-                <Button
-                    Padding="12,6"
+                </edge:EdgeToolButton>
+                <edge:EdgeToolButton
                     Command="{Binding DeleteNetworkDeviceCommand}"
                     CommandParameter="{Binding SelectedItem, ElementName=NetworkGrid}">
                     <TextBlock Text="{DynamicResource Navigation_Button_Delete}" />
-                </Button>
+                </edge:EdgeToolButton>
             </StackPanel>
         </edge:EdgeTablePanel.ActionContent>
 
@@ -33,8 +30,8 @@
             IsReadOnly="{Binding !CanEdit}"
             ItemsSource="{Binding NetworkDevices}">
             <edge:EdgeDataGrid.Columns>
-                <dg:DataGridTextColumn Binding="{Binding DeviceName}" Header="{DynamicResource Navigation_Column_DeviceName}" Width="130" />
-                <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_DeviceType}" Width="120">
+                <dg:DataGridTextColumn Binding="{Binding DeviceName}" Header="{DynamicResource Navigation_Column_DeviceName}" MinWidth="170" Width="170" />
+                <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_DeviceType}" MinWidth="120" Width="120">
                     <dg:DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding DeviceType}" />
@@ -46,7 +43,7 @@
                         </DataTemplate>
                     </dg:DataGridTemplateColumn.CellEditingTemplate>
                 </dg:DataGridTemplateColumn>
-                <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_DeviceModel}" Width="130">
+                <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_DeviceModel}" MinWidth="130" Width="130">
                     <dg:DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding DeviceModel}" />
@@ -58,15 +55,15 @@
                         </DataTemplate>
                     </dg:DataGridTemplateColumn.CellEditingTemplate>
                 </dg:DataGridTemplateColumn>
-                <dg:DataGridTextColumn Binding="{Binding ModuleId}" Header="{DynamicResource Navigation_Column_ModuleId}" Width="120" />
-                <dg:DataGridTextColumn Binding="{Binding IpAddress}" Header="{DynamicResource Navigation_Column_IpAddress}" Width="130" />
-                <dg:DataGridTextColumn Binding="{Binding Port1}" Header="{DynamicResource Navigation_Column_Port1}" Width="80" />
-                <dg:DataGridTextColumn Binding="{Binding Port2}" Header="{DynamicResource Navigation_Column_Port2}" Width="80" />
-                <dg:DataGridTextColumn Binding="{Binding SendCmd1}" Header="{DynamicResource Navigation_Column_Command1}" Width="100" />
-                <dg:DataGridTextColumn Binding="{Binding SendCmd2}" Header="{DynamicResource Navigation_Column_Command2}" Width="100" />
-                <dg:DataGridTextColumn Binding="{Binding ConnectTimeout}" Header="{DynamicResource Navigation_Column_TimeoutMs}" Width="100" />
-                <dg:DataGridCheckBoxColumn Binding="{Binding IsEnabled}" Header="{DynamicResource Navigation_Column_Enable}" Width="80" />
-                <dg:DataGridTextColumn Binding="{Binding Remark}" Header="{DynamicResource Navigation_Column_Remark}" Width="*" />
+                <dg:DataGridTextColumn Binding="{Binding ModuleId}" Header="{DynamicResource Navigation_Column_ModuleId}" MinWidth="170" Width="170" />
+                <dg:DataGridTextColumn Binding="{Binding IpAddress}" Header="{DynamicResource Navigation_Column_IpAddress}" MinWidth="130" Width="130" />
+                <dg:DataGridTextColumn Binding="{Binding Port1}" Header="{DynamicResource Navigation_Column_Port1}" MinWidth="80" Width="80" />
+                <dg:DataGridTextColumn Binding="{Binding Port2}" Header="{DynamicResource Navigation_Column_Port2}" MinWidth="80" Width="80" />
+                <dg:DataGridTextColumn Binding="{Binding SendCmd1}" Header="{DynamicResource Navigation_Column_Command1}" MinWidth="100" Width="100" />
+                <dg:DataGridTextColumn Binding="{Binding SendCmd2}" Header="{DynamicResource Navigation_Column_Command2}" MinWidth="100" Width="100" />
+                <dg:DataGridTextColumn Binding="{Binding ConnectTimeout}" Header="{DynamicResource Navigation_Column_TimeoutMs}" MinWidth="110" Width="110" />
+                <dg:DataGridCheckBoxColumn Binding="{Binding IsEnabled}" Header="{DynamicResource Navigation_Column_Enable}" MinWidth="80" Width="80" />
+                <dg:DataGridTextColumn Binding="{Binding Remark}" Header="{DynamicResource Navigation_Column_Remark}" MinWidth="180" Width="180" />
             </edge:EdgeDataGrid.Columns>
         </edge:EdgeDataGrid>
     </edge:EdgeTablePanel>

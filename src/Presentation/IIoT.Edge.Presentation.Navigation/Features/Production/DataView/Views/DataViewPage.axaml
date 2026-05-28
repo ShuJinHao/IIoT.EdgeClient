@@ -2,8 +2,8 @@
     x:Class="IIoT.Edge.Presentation.Navigation.Features.Production.DataView.DataViewPage"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
-    xmlns:sharedViews="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared">
+    xmlns:dg="using:Avalonia.Controls"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
 
     <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="{DynamicResource Edge.Thickness.20}" Spacing="{DynamicResource Edge.Size.Spacing12}">
@@ -72,35 +72,30 @@
                     Value="{Binding TodayYield}" />
             </Grid>
 
-            <edge:EdgeCard>
-                <StackPanel Spacing="{DynamicResource Edge.Size.Spacing12}">
-                    <DataGrid
-                        Classes="edge-grid"
+            <edge:EdgeTablePanel
+                EmptyMessage="{DynamicResource Navigation_Data_EmptyMessage}"
+                EmptyTitle="{DynamicResource Navigation_Data_EmptyTitle}"
+                IsEmpty="{Binding IsRecordsEmpty}">
+                    <edge:EdgeDataGrid
                         AutoGenerateColumns="False"
                         CanUserReorderColumns="False"
                         CanUserResizeColumns="True"
                         CanUserSortColumns="False"
+                        Density="Compact"
                         GridLinesVisibility="Horizontal"
                         HeadersVisibility="Column"
                         IsReadOnly="True"
-                        IsVisible="{Binding HasRecords}"
                         ItemsSource="{Binding Records}">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Binding="{Binding Time}" Header="{DynamicResource Navigation_Column_Time}" Width="90" />
-                            <DataGridTextColumn Binding="{Binding BatchNo}" Header="{DynamicResource Navigation_Column_BatchNumber}" Width="2*" />
-                            <DataGridTextColumn Binding="{Binding Total}" Header="{DynamicResource Navigation_Column_Total}" Width="*" />
-                            <DataGridTextColumn Binding="{Binding OkCount}" Header="{DynamicResource Navigation_Column_Good}" Width="*" />
-                            <DataGridTextColumn Binding="{Binding NgCount}" Header="{DynamicResource Navigation_Column_Bad}" Width="*" />
-                            <DataGridTextColumn Binding="{Binding Yield}" Header="{DynamicResource Navigation_Column_Yield}" Width="*" />
-                        </DataGrid.Columns>
-                    </DataGrid>
-
-                    <sharedViews:EmptyStateView
-                        IsVisible="{Binding IsRecordsEmpty}"
-                        Message="{DynamicResource Navigation_Data_EmptyMessage}"
-                        Title="{DynamicResource Navigation_Data_EmptyTitle}" />
-                </StackPanel>
-            </edge:EdgeCard>
+                        <edge:EdgeDataGrid.Columns>
+                            <dg:DataGridTextColumn Binding="{Binding Time}" Header="{DynamicResource Navigation_Column_Time}" MinWidth="90" Width="90" />
+                            <dg:DataGridTextColumn Binding="{Binding BatchNo}" Header="{DynamicResource Navigation_Column_BatchNumber}" MinWidth="160" Width="2*" />
+                            <dg:DataGridTextColumn Binding="{Binding Total}" Header="{DynamicResource Navigation_Column_Total}" MinWidth="90" Width="*" />
+                            <dg:DataGridTextColumn Binding="{Binding OkCount}" Header="{DynamicResource Navigation_Column_Good}" MinWidth="90" Width="*" />
+                            <dg:DataGridTextColumn Binding="{Binding NgCount}" Header="{DynamicResource Navigation_Column_Bad}" MinWidth="90" Width="*" />
+                            <dg:DataGridTextColumn Binding="{Binding Yield}" Header="{DynamicResource Navigation_Column_Yield}" MinWidth="90" Width="*" />
+                        </edge:EdgeDataGrid.Columns>
+                    </edge:EdgeDataGrid>
+            </edge:EdgeTablePanel>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

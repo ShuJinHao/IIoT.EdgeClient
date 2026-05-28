@@ -260,6 +260,22 @@ public sealed class PlcTaskBindingTaskVm : ObservableModelBase
 
     public string AvailabilityText => CanRun ? "可运行" : UnavailableReason;
 
+    public string NoteText
+    {
+        get
+        {
+            var items = new[]
+                {
+                    !CanRun ? UnavailableReason : null,
+                    MissingRequiredSignalsText
+                }
+                .Where(static x => !string.IsNullOrWhiteSpace(x));
+
+            var text = string.Join("；", items);
+            return string.IsNullOrWhiteSpace(text) ? "--" : text;
+        }
+    }
+
     private static string FormatDirection(string direction)
         => string.Equals(direction, "Write", StringComparison.OrdinalIgnoreCase)
             ? "写"

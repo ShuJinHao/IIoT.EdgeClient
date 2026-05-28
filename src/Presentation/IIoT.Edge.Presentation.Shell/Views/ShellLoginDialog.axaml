@@ -1,0 +1,143 @@
+<Window
+    x:Class="IIoT.Edge.Presentation.Shell.Views.ShellLoginDialog"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
+    Width="960"
+    Height="640"
+    Background="Transparent"
+    CanResize="False"
+    ExtendClientAreaToDecorationsHint="True"
+    ShowInTaskbar="False"
+    Title="{DynamicResource Shell_Login_Title}"
+    TransparencyLevelHint="Transparent"
+    WindowDecorations="None"
+    WindowStartupLocation="Manual">
+    <Grid Background="{DynamicResource Edge.Brush.Overlay.Modal}">
+        <edge:EdgeCard
+            Width="520"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Classes="shell-login-panel"
+            Elevation="Float"
+            PaddingMode="None"
+            Surface="Card">
+            <Grid RowDefinitions="Auto,*">
+                <Grid
+                    Grid.Row="0"
+                    Margin="28,24,20,0"
+                    ColumnDefinitions="*,Auto">
+                    <StackPanel
+                        Grid.Column="0"
+                        Spacing="4">
+                        <TextBlock
+                            Classes="shell-login-title"
+                            Text="{DynamicResource Shell_Login_Title}" />
+                        <TextBlock
+                            Classes="shell-login-subtitle"
+                            Text="{DynamicResource Shell_Login_Subtitle}" />
+                    </StackPanel>
+
+                    <edge:EdgeWindowButton
+                        Grid.Column="1"
+                        Kind="Close"
+                        Click="OnCancelClick">
+                        <TextBlock
+                            Classes="edge-window-symbol"
+                            Text="&#x2715;" />
+                    </edge:EdgeWindowButton>
+                </Grid>
+
+                <Grid
+                    Grid.Row="1"
+                    Margin="28,18,28,24"
+                    RowDefinitions="Auto,18,Auto,12,Auto,18,Auto">
+                    <edge:EdgeSegmentedNav
+                        x:Name="LoginModeTabs"
+                        Grid.Row="0"
+                        Classes="shell-login-mode-nav"
+                        HorizontalAlignment="Stretch"
+                        SelectionChanged="OnModeSelectionChanged"
+                        SelectedIndex="0">
+                        <ListBoxItem Content="{DynamicResource Shell_Login_LocalEmergency}" />
+                        <ListBoxItem Content="{DynamicResource Shell_Login_CloudEmployee}" />
+                    </edge:EdgeSegmentedNav>
+
+                    <Grid
+                        x:Name="LocalForm"
+                        Grid.Row="2"
+                        RowDefinitions="Auto,10,Auto">
+                        <TextBlock
+                            Grid.Row="0"
+                            Classes="shell-login-form-label"
+                            Text="{DynamicResource Shell_Login_LocalDescription}" />
+                        <edge:EdgeLoginInput
+                            x:Name="LocalPasswordInput"
+                            Grid.Row="2"
+                            HorizontalAlignment="Left"
+                            PasswordChar="*"
+                            PlaceholderText="{DynamicResource Shell_Login_LocalPasswordHint}"
+                            KeyDown="OnInputKeyDown" />
+                    </Grid>
+
+                    <Grid
+                        x:Name="CloudForm"
+                        Grid.Row="2"
+                        IsVisible="False"
+                        RowDefinitions="Auto,10,Auto,10,Auto,10,Auto">
+                        <TextBlock
+                            Grid.Row="0"
+                            Classes="shell-login-form-label"
+                            Text="{DynamicResource Shell_Login_CloudDescription}" />
+                        <edge:EdgeLoginInput
+                            x:Name="EmployeeNoInput"
+                            Grid.Row="2"
+                            HorizontalAlignment="Left"
+                            PlaceholderText="{DynamicResource Shell_Login_EmployeeNoHint}"
+                            KeyDown="OnInputKeyDown" />
+                        <edge:EdgeLoginInput
+                            x:Name="CloudPasswordInput"
+                            Grid.Row="4"
+                            HorizontalAlignment="Left"
+                            PasswordChar="*"
+                            PlaceholderText="{DynamicResource Shell_Login_PasswordHint}"
+                            KeyDown="OnInputKeyDown" />
+                        <Border
+                            x:Name="CloudUnavailableNotice"
+                            Grid.Row="6"
+                            Classes="shell-login-notice"
+                            IsVisible="False">
+                            <TextBlock
+                                Classes="shell-login-notice-text"
+                                Text="{DynamicResource Shell_Login_CloudUnavailable}"
+                                TextWrapping="Wrap" />
+                        </Border>
+                    </Grid>
+
+                    <TextBlock
+                        x:Name="ErrorText"
+                        Grid.Row="4"
+                        MinHeight="20"
+                        Classes="shell-login-error"
+                        TextWrapping="Wrap" />
+
+                    <StackPanel
+                        Grid.Row="6"
+                        HorizontalAlignment="Right"
+                        Orientation="Horizontal"
+                        Spacing="{DynamicResource Edge.Size.Spacing8}">
+                        <Button
+                            Classes="edge-soft-button"
+                            Click="OnCancelClick"
+                            Content="{DynamicResource Shell_Login_Cancel}" />
+                        <Button
+                            x:Name="LoginButton"
+                            Classes="edge-primary-button shell-login-submit"
+                            Click="OnLoginClick"
+                            Content="{DynamicResource Shell_Login_Submit}" />
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </edge:EdgeCard>
+    </Grid>
+</Window>

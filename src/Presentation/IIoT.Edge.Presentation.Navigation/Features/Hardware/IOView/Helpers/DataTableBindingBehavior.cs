@@ -53,6 +53,7 @@ public static class DataTableBindingBehavior
                 Header = header,
                 Binding = new Binding($"[{col.ColumnName}]"),
                 IsReadOnly = true,
+                MinWidth = width.Value,
                 Width = width,
             });
         }

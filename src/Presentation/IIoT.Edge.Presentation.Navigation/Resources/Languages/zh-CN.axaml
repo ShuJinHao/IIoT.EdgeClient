@@ -534,6 +534,7 @@
     <sys:String x:Key="Navigation_Column_TaskType">任务类型</sys:String>
     <sys:String x:Key="Navigation_Column_TaskBindingSource">绑定来源</sys:String>
     <sys:String x:Key="Navigation_Column_TaskAvailability">可用性</sys:String>
+    <sys:String x:Key="Navigation_Column_Note">说明</sys:String>
     <sys:String x:Key="Navigation_Column_RequiredSignals">所需信号</sys:String>
     <sys:String x:Key="Navigation_Column_TaskKey">任务键</sys:String>
     <sys:String x:Key="Navigation_Label_InteractionGroup">交互组</sys:String>

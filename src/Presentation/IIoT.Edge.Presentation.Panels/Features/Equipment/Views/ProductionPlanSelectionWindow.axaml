@@ -2,6 +2,7 @@
     x:Class="IIoT.Edge.Presentation.Panels.Features.Equipment.ProductionPlanSelectionWindow"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:dg="using:Avalonia.Controls"
     xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
     Width="1040"
     Height="640"
@@ -57,36 +58,43 @@
                 SelectedItem="{Binding SelectedPlan, Mode=TwoWay}"
                 SelectionMode="Single"
                 VerticalScrollBarVisibility="Auto">
-                <DataGrid.Columns>
-                    <DataGridTextColumn
+                <edge:EdgeDataGrid.Columns>
+                    <dg:DataGridTextColumn
                         Width="170"
+                        MinWidth="170"
                         Binding="{Binding DisplayPlanCode}"
                         Header="{DynamicResource Panels_Plan_Column_MainPlan}" />
-                    <DataGridTextColumn
+                    <dg:DataGridTextColumn
                         Width="150"
+                        MinWidth="150"
                         Binding="{Binding DisplayWorkOrder}"
                         Header="{DynamicResource Panels_Plan_Column_WorkOrder}" />
-                    <DataGridTextColumn
+                    <dg:DataGridTextColumn
                         Width="130"
+                        MinWidth="130"
                         Binding="{Binding DisplayProduct}"
                         Header="{DynamicResource Panels_Plan_Column_Product}" />
-                    <DataGridTextColumn
+                    <dg:DataGridTextColumn
                         Width="90"
+                        MinWidth="90"
                         Binding="{Binding PlanStatus}"
                         Header="{DynamicResource Panels_Plan_Column_Status}" />
-                    <DataGridTextColumn
+                    <dg:DataGridTextColumn
                         Width="105"
+                        MinWidth="105"
                         Binding="{Binding DisplayQuantity}"
                         Header="{DynamicResource Panels_Plan_Column_Quantity}" />
-                    <DataGridTextColumn
+                    <dg:DataGridTextColumn
                         Width="130"
+                        MinWidth="130"
                         Binding="{Binding StartTime}"
                         Header="{DynamicResource Panels_Plan_Column_StartTime}" />
-                    <DataGridTextColumn
+                    <dg:DataGridTextColumn
                         Width="130"
+                        MinWidth="130"
                         Binding="{Binding EndTime}"
                         Header="{DynamicResource Panels_Plan_Column_EndTime}" />
-                </DataGrid.Columns>
+                </edge:EdgeDataGrid.Columns>
             </edge:EdgeDataGrid>
 
             <edge:EdgeTablePanel.FooterContent>

@@ -86,11 +86,11 @@
                     HeadersVisibility="Column"
                     ItemsSource="{Binding Params}">
                     <edge:EdgeDataGrid.Columns>
-                        <dg:DataGridTextColumn Binding="{Binding Name}" Header="{DynamicResource Navigation_Column_ParamName}" Width="2*" />
-                        <dg:DataGridTextColumn Binding="{Binding Min}" Header="{DynamicResource Navigation_Column_LowerLimit}" Width="*" />
-                        <dg:DataGridTextColumn Binding="{Binding Max}" Header="{DynamicResource Navigation_Column_UpperLimit}" Width="*" />
-                        <dg:DataGridTextColumn Binding="{Binding Unit}" Header="{DynamicResource Navigation_Column_Unit}" Width="*" />
-                        <dg:DataGridTemplateColumn Header="" Width="96">
+                        <dg:DataGridTextColumn Binding="{Binding Name}" Header="{DynamicResource Navigation_Column_ParamName}" MinWidth="220" Width="2*" />
+                        <dg:DataGridTextColumn Binding="{Binding Min}" Header="{DynamicResource Navigation_Column_LowerLimit}" MinWidth="120" Width="*" />
+                        <dg:DataGridTextColumn Binding="{Binding Max}" Header="{DynamicResource Navigation_Column_UpperLimit}" MinWidth="120" Width="*" />
+                        <dg:DataGridTextColumn Binding="{Binding Unit}" Header="{DynamicResource Navigation_Column_Unit}" MinWidth="100" Width="*" />
+                        <dg:DataGridTemplateColumn Header="" MinWidth="96" Width="96">
                             <dg:DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Button

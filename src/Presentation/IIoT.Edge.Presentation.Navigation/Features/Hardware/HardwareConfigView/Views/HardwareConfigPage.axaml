@@ -2,6 +2,7 @@
     x:Class="IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView.HardwareConfigPage"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
     xmlns:pages="clr-namespace:IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView">
 
     <Grid RowDefinitions="Auto,*" Margin="20">
@@ -18,20 +19,13 @@
                     TextWrapping="Wrap" />
             </StackPanel>
 
-            <Button
+            <edge:EdgeToolButton
                 Grid.Column="1"
-                MinWidth="96"
-                Padding="16,8"
+                Classes="primary"
                 VerticalAlignment="Top"
                 Command="{Binding SaveCommand}">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                    <PathIcon
-                        Width="16"
-                        Height="16"
-                        Data="M5,4 L17,4 L20,7 L20,20 L4,20 L4,4 Z M8,4 L8,10 L16,10 L16,4 M8,15 L16,15 L16,20 L8,20 Z" />
-                    <TextBlock Text="{DynamicResource Navigation_Button_Save}" />
-                </StackPanel>
-            </Button>
+                <TextBlock Text="{DynamicResource Navigation_Button_Save}" />
+            </edge:EdgeToolButton>
         </Grid>
 
         <TabControl

@@ -2,6 +2,7 @@
     x:Class="IIoT.Edge.Presentation.Navigation.Features.Production.CapacityView.CapacityViewPage"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:dg="using:Avalonia.Controls"
     xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
     xmlns:sharedViews="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared">
 
@@ -92,15 +93,15 @@
                         IsReadOnly="True"
                         ItemsSource="{Binding DailyRecords}">
                         <edge:EdgeDataGrid.Columns>
-                            <DataGridTextColumn Binding="{Binding Date}" Header="{DynamicResource Navigation_Column_Date}" Width="90" />
-                            <DataGridTextColumn Binding="{Binding DayOfWeek}" Header="{DynamicResource Navigation_Column_Weekday}" Width="90" />
-                            <DataGridTextColumn Binding="{Binding Total}" Header="{DynamicResource Navigation_Column_Total}" Width="90" />
-                            <DataGridTextColumn Binding="{Binding OkCount}" Header="{DynamicResource Navigation_Capacity_Good}" Width="90" />
-                            <DataGridTextColumn Binding="{Binding NgCount}" Header="{DynamicResource Navigation_Capacity_Bad}" Width="90" />
-                            <DataGridTextColumn Binding="{Binding Yield}" Header="{DynamicResource Navigation_Column_Yield}" Width="90" />
-                            <DataGridTextColumn Binding="{Binding DayShiftTotal}" Header="{DynamicResource Navigation_Monitor_DayShift}" Width="100" />
-                            <DataGridTextColumn Binding="{Binding NightShiftTotal}" Header="{DynamicResource Navigation_Monitor_NightShift}" Width="100" />
-                            <DataGridTextColumn Binding="{Binding DateFull}" Header="{DynamicResource Navigation_Column_FullDate}" Width="120" />
+                            <dg:DataGridTextColumn Binding="{Binding Date}" Header="{DynamicResource Navigation_Column_Date}" MinWidth="90" Width="90" />
+                            <dg:DataGridTextColumn Binding="{Binding DayOfWeek}" Header="{DynamicResource Navigation_Column_Weekday}" MinWidth="90" Width="90" />
+                            <dg:DataGridTextColumn Binding="{Binding Total}" Header="{DynamicResource Navigation_Column_Total}" MinWidth="90" Width="90" />
+                            <dg:DataGridTextColumn Binding="{Binding OkCount}" Header="{DynamicResource Navigation_Capacity_Good}" MinWidth="90" Width="90" />
+                            <dg:DataGridTextColumn Binding="{Binding NgCount}" Header="{DynamicResource Navigation_Capacity_Bad}" MinWidth="90" Width="90" />
+                            <dg:DataGridTextColumn Binding="{Binding Yield}" Header="{DynamicResource Navigation_Column_Yield}" MinWidth="90" Width="90" />
+                            <dg:DataGridTextColumn Binding="{Binding DayShiftTotal}" Header="{DynamicResource Navigation_Monitor_DayShift}" MinWidth="100" Width="100" />
+                            <dg:DataGridTextColumn Binding="{Binding NightShiftTotal}" Header="{DynamicResource Navigation_Monitor_NightShift}" MinWidth="100" Width="100" />
+                            <dg:DataGridTextColumn Binding="{Binding DateFull}" Header="{DynamicResource Navigation_Column_FullDate}" MinWidth="120" Width="120" />
                         </edge:EdgeDataGrid.Columns>
                     </edge:EdgeDataGrid>
 

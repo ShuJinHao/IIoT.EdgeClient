@@ -23,18 +23,14 @@
                         </DataTemplate>
                     </ComboBox.ItemTemplate>
                 </ComboBox>
-                <Button
-                    MinWidth="92"
-                    Padding="14,8"
-                    Command="{Binding RefreshCommand}">
+                <edge:EdgeToolButton Command="{Binding RefreshCommand}">
                     <TextBlock Text="{DynamicResource Navigation_Button_Refresh}" />
-                </Button>
-                <Button
-                    MinWidth="92"
-                    Padding="14,8"
+                </edge:EdgeToolButton>
+                <edge:EdgeToolButton
+                    Classes="primary"
                     Command="{Binding SaveCommand}">
                     <TextBlock Text="{DynamicResource Navigation_Button_Save}" />
-                </Button>
+                </edge:EdgeToolButton>
                 </StackPanel>
             </edge:EdgeSectionHeader.ActionContent>
         </edge:EdgeSectionHeader>
@@ -57,13 +53,10 @@
                     IsReadOnly="False"
                     ItemsSource="{Binding SelectedDeviceTasks}">
                     <edge:EdgeDataGrid.Columns>
-                        <dg:DataGridCheckBoxColumn Binding="{Binding Enabled}" Header="{DynamicResource Navigation_Column_Enable}" Width="80" />
-                        <dg:DataGridTextColumn Binding="{Binding DisplayName}" Header="{DynamicResource Navigation_Column_TaskName}" IsReadOnly="True" Width="180" />
-                        <dg:DataGridTextColumn Binding="{Binding TaskTypeText}" Header="{DynamicResource Navigation_Column_TaskType}" IsReadOnly="True" Width="130" />
-                        <dg:DataGridTextColumn Binding="{Binding SourceText}" Header="{DynamicResource Navigation_Column_TaskBindingSource}" IsReadOnly="True" Width="120" />
-                        <dg:DataGridTextColumn Binding="{Binding AvailabilityText}" Header="{DynamicResource Navigation_Column_TaskAvailability}" IsReadOnly="True" Width="180" />
-                        <dg:DataGridTextColumn Binding="{Binding RequiredSignalsText}" Header="{DynamicResource Navigation_Column_RequiredSignals}" IsReadOnly="True" Width="2*" />
-                        <dg:DataGridTextColumn Binding="{Binding Key}" Header="{DynamicResource Navigation_Column_TaskKey}" IsReadOnly="True" Width="*" />
+                        <dg:DataGridCheckBoxColumn Binding="{Binding Enabled}" Header="{DynamicResource Navigation_Column_Enable}" MinWidth="80" Width="80" />
+                        <dg:DataGridTextColumn Binding="{Binding DisplayName}" Header="{DynamicResource Navigation_Column_TaskName}" IsReadOnly="True" MinWidth="200" Width="2*" />
+                        <dg:DataGridTextColumn Binding="{Binding AvailabilityText}" Header="{DynamicResource Navigation_Column_TaskAvailability}" IsReadOnly="True" MinWidth="180" Width="180" />
+                        <dg:DataGridTextColumn Binding="{Binding NoteText}" Header="{DynamicResource Navigation_Column_Note}" IsReadOnly="True" MinWidth="320" Width="3*" />
                     </edge:EdgeDataGrid.Columns>
                 </edge:EdgeDataGrid>
             </edge:EdgeTablePanel>
