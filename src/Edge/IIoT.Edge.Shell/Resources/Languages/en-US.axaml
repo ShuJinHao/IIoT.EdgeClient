@@ -19,5 +19,6 @@
     <sys:String x:Key="Shell_CrashDialogWindowTitle">IIoT Edge Client - Startup Failed</sys:String>
     <sys:String x:Key="Shell_CrashDialogTitle">Startup Failed</sys:String>
     <sys:String x:Key="Shell_CrashDialogDescription">The startup chain returned an error. Details are shown below.</sys:String>
+    <sys:String x:Key="Shell_CrashDialogDefaultMessage">Application startup failed.</sys:String>
     <sys:String x:Key="Shell_CrashDialogClose">Close</sys:String>
 </ResourceDictionary>

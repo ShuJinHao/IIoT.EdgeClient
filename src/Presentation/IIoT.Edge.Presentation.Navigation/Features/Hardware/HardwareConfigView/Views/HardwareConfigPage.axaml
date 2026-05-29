@@ -19,16 +19,17 @@
                     TextWrapping="Wrap" />
             </StackPanel>
 
-            <edge:EdgeToolButton
+            <edge:EdgeActionButton
                 Grid.Column="1"
-                Classes="primary"
                 VerticalAlignment="Top"
-                Command="{Binding SaveCommand}">
-                <TextBlock Text="{DynamicResource Navigation_Button_Save}" />
-            </edge:EdgeToolButton>
+                Command="{Binding SaveCommand}"
+                Content="{DynamicResource Navigation_Button_Save}"
+                Icon="{StaticResource Edge.Icon.Save}"
+                Kind="Primary"
+                Size="Compact" />
         </Grid>
 
-        <TabControl
+        <edge:EdgeTabControl
             Grid.Row="1"
             Margin="0,16,0,0"
             SelectedIndex="{Binding SelectedTabIndex}">
@@ -41,6 +42,6 @@
             <TabItem Header="{DynamicResource Navigation_Tab_IoMapping}">
                 <pages:IoMappingPage />
             </TabItem>
-        </TabControl>
+        </edge:EdgeTabControl>
     </Grid>
 </UserControl>

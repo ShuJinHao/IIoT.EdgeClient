@@ -12,17 +12,19 @@
                 Subtitle="{Binding SourceLabel}">
                 <edge:EdgeSectionHeader.ActionContent>
                     <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Edge.Size.Spacing8}">
-                        <Button
-                            Padding="16,8"
+                        <edge:EdgeActionButton
                             Command="{Binding SwitchSourceCommand}"
-                            IsVisible="{Binding IsLocalAdmin}">
-                            <TextBlock Text="{DynamicResource Navigation_Button_SwitchDataSource}" />
-                        </Button>
-                        <Button
-                            Padding="16,8"
-                            Command="{Binding SyncCloudCommand}">
-                            <TextBlock Text="{DynamicResource Navigation_Button_SyncCloud}" />
-                        </Button>
+                            Content="{DynamicResource Navigation_Button_SwitchDataSource}"
+                            Icon="{StaticResource Edge.Icon.Switch}"
+                            IsVisible="{Binding IsLocalAdmin}"
+                            Kind="Primary"
+                            Size="Compact" />
+                        <edge:EdgeActionButton
+                            Command="{Binding SyncCloudCommand}"
+                            Content="{DynamicResource Navigation_Button_SyncCloud}"
+                            Icon="{StaticResource Edge.Icon.Sync}"
+                            Kind="Primary"
+                            Size="Compact" />
                     </StackPanel>
                 </edge:EdgeSectionHeader.ActionContent>
             </edge:EdgeSectionHeader>
@@ -93,15 +95,17 @@
                         <dg:DataGridTemplateColumn Header="" MinWidth="96" Width="96">
                             <dg:DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <Button
+                                    <edge:EdgeActionButton
                                         HorizontalAlignment="Right"
-                                        Padding="10,4"
+                                        Classes="cell"
                                         Command="{Binding $parent[UserControl].DataContext.DeleteLocalParamCommand}"
                                         CommandParameter="{Binding Name}"
+                                        Content="{DynamicResource Navigation_Button_Delete}"
+                                        Icon="{StaticResource Edge.Icon.Delete}"
                                         IsVisible="{Binding $parent[UserControl].DataContext.IsLocalAdmin}"
-                                        ToolTip.Tip="{DynamicResource Navigation_Tooltip_DeleteParam}">
-                                        <TextBlock Text="{DynamicResource Navigation_Button_Delete}" />
-                                    </Button>
+                                        Kind="Danger"
+                                        Size="Compact"
+                                        ToolTip.Tip="{DynamicResource Navigation_Tooltip_DeleteParam}" />
                                 </DataTemplate>
                             </dg:DataGridTemplateColumn.CellTemplate>
                         </dg:DataGridTemplateColumn>
@@ -115,33 +119,33 @@
                 </edge:EdgeCard.Header>
 
                 <Grid ColumnDefinitions="2*,*,*,*,Auto">
-                    <TextBox
+                    <edge:EdgeTextBox
                         Grid.Column="0"
                         Margin="0,0,8,0"
                         PlaceholderText="{DynamicResource Navigation_Hint_ParamName}"
                         Text="{Binding EditKey, Mode=TwoWay}" />
-                    <TextBox
+                    <edge:EdgeTextBox
                         Grid.Column="1"
                         Margin="0,0,8,0"
                         PlaceholderText="{DynamicResource Navigation_Hint_LowerLimit}"
                         Text="{Binding EditMin, Mode=TwoWay}" />
-                    <TextBox
+                    <edge:EdgeTextBox
                         Grid.Column="2"
                         Margin="0,0,8,0"
                         PlaceholderText="{DynamicResource Navigation_Hint_UpperLimit}"
                         Text="{Binding EditMax, Mode=TwoWay}" />
-                    <TextBox
+                    <edge:EdgeTextBox
                         Grid.Column="3"
                         Margin="0,0,8,0"
                         PlaceholderText="{DynamicResource Navigation_Hint_Unit}"
                         Text="{Binding EditUnit, Mode=TwoWay}" />
-                    <Button
+                    <edge:EdgeActionButton
                         Grid.Column="4"
-                        MinWidth="88"
-                        Padding="16,8"
-                        Command="{Binding SaveLocalParamCommand}">
-                        <TextBlock Text="{DynamicResource Navigation_Button_Save}" />
-                    </Button>
+                        Command="{Binding SaveLocalParamCommand}"
+                        Content="{DynamicResource Navigation_Button_Save}"
+                        Icon="{StaticResource Edge.Icon.Save}"
+                        Kind="Primary"
+                        Size="Compact" />
                 </Grid>
             </edge:EdgeCard>
         </StackPanel>

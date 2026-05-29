@@ -259,6 +259,41 @@ public sealed class IoViewViewModelBehaviorTests
         });
 
     [AvaloniaFact]
+    public Task RefreshCurrentValues_WhenContinuousSignalsUpdate_ShouldKeepMatrixRowsStable()
+        => RunOnStaThreadAsync(async () =>
+        {
+            var device = CreateDevice(37, "PLC-Homogenization-01", "Homogenization");
+            var mappings = new Dictionary<int, List<IoMappingEntity>>
+            {
+                [device.Id] =
+                [
+                    CreateMapping(device.Id, "配方时间", "ZR0", 3, "UInt16", "Read", "连续读数据", "配方数组", "时间", 1),
+                    CreateMapping(device.Id, "配方温度", "ZR100", 3, "UInt16", "Read", "连续读数据", "配方数组", "温度", 2)
+                ]
+            };
+            var dataStore = new PlcDataStore();
+            dataStore.Register(device.Id, readSize: 8, writeSize: 0);
+            dataStore.GetBuffer(device.Id)!.UpdateReadBuffer([10, 20, 30, 40, 50, 60]);
+            var viewModel = CreateViewModel([device], mappings, dataStore);
+
+            viewModel.SelectedDevice = device;
+            await viewModel.LoadMappingsAsync();
+
+            var matrix = Assert.Single(viewModel.ArraySections);
+            var firstRow = matrix.Rows[0];
+            var firstCell = firstRow.Values[0];
+
+            dataStore.GetBuffer(device.Id)!.UpdateReadBuffer([11, 22, 33, 44, 55, 66]);
+            viewModel.RefreshCurrentValues();
+
+            Assert.Same(matrix, Assert.Single(viewModel.ArraySections));
+            Assert.Same(firstRow, matrix.Rows[0]);
+            Assert.Same(firstCell, matrix.Rows[0].Values[0]);
+            Assert.Equal("11", firstCell.Value);
+            Assert.Equal("66", matrix.Rows[2].Values[1].Value);
+        });
+
+    [AvaloniaFact]
     public Task RefreshCurrentValues_WhenWriteDataConfigured_ShouldUseWriteBufferAndDisableManualRead()
         => RunOnStaThreadAsync(async () =>
         {
@@ -512,5 +547,4 @@ public sealed class IoViewViewModelBehaviorTests
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }
-
 

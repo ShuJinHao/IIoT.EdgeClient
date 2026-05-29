@@ -51,7 +51,7 @@ internal sealed class IoViewSignalValueUpdater : IIoViewSignalValueUpdater
                 UpdateSignal(signal, buffer);
             }
 
-            section.RebuildRows();
+            section.RefreshRows();
         }
     }
 

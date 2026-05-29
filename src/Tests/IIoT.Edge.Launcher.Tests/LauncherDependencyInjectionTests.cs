@@ -1,4 +1,3 @@
-using IIoT.Edge.Application.Auth.LocalAccounts;
 using IIoT.Edge.Launcher;
 using IIoT.Edge.Launcher.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,9 +27,10 @@ public sealed class LauncherDependencyInjectionTests
             Assert.IsType<LauncherProfileCatalog>(provider.GetRequiredService<ILauncherProfileCatalog>());
             Assert.IsType<ProcessStarter>(provider.GetRequiredService<IProcessStarter>());
             Assert.IsType<ShellLaunchService>(provider.GetRequiredService<IShellLaunchService>());
-            Assert.IsType<LocalAccountCatalogInitializer>(provider.GetRequiredService<ILocalAccountCatalogInitializer>());
-            Assert.IsType<LocalAccountCatalog>(provider.GetRequiredService<ILocalAccountCatalog>());
-            Assert.IsType<LocalAccountAuthService>(provider.GetRequiredService<ILocalAccountAuthService>());
+            Assert.IsType<LauncherAccountCatalogInitializer>(
+                provider.GetRequiredService<ILauncherAccountCatalogInitializer>());
+            Assert.IsType<LauncherAccountCatalog>(provider.GetRequiredService<ILauncherAccountCatalog>());
+            Assert.IsType<LocalLauncherAuthService>(provider.GetRequiredService<ILocalLauncherAuthService>());
         }
         finally
         {
@@ -42,7 +42,7 @@ public sealed class LauncherDependencyInjectionTests
     }
 
     [Fact]
-    public void LocalAccountCatalogInitializer_ShouldCreateDefaultAdminAccount()
+    public void LauncherAccountCatalogInitializer_ShouldCreateDefaultAdminAccount()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), $"iiot-launcher-test-{Guid.NewGuid():N}");
 
@@ -50,7 +50,7 @@ public sealed class LauncherDependencyInjectionTests
         {
             Directory.CreateDirectory(tempDirectory);
             File.WriteAllText(
-                LocalAccountCatalog.GetCatalogPath(tempDirectory, LocalAccountCatalog.SampleCatalogFileName),
+                LauncherAccountCatalog.GetCatalogPath(tempDirectory, LauncherAccountCatalog.SampleCatalogFileName),
                 """
                 [
                   {
@@ -62,8 +62,8 @@ public sealed class LauncherDependencyInjectionTests
                 ]
                 """);
 
-            var catalog = new LocalAccountCatalog(tempDirectory);
-            var initializer = new LocalAccountCatalogInitializer(tempDirectory);
+            var catalog = new LauncherAccountCatalog(tempDirectory);
+            var initializer = new LauncherAccountCatalogInitializer(tempDirectory);
 
             initializer.EnsureCatalogExists();
 
@@ -85,14 +85,14 @@ public sealed class LauncherDependencyInjectionTests
     }
 
     [Fact]
-    public async Task LocalAccountCatalog_ShouldRoundTripAccounts()
+    public async Task LauncherAccountCatalog_ShouldRoundTripAccounts()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), $"iiot-launcher-test-{Guid.NewGuid():N}");
 
         try
         {
             Directory.CreateDirectory(tempDirectory);
-            var path = LocalAccountCatalog.GetCatalogPath(tempDirectory);
+            var path = LauncherAccountCatalog.GetCatalogPath(tempDirectory);
             await File.WriteAllTextAsync(
                 path,
                 """
@@ -106,7 +106,7 @@ public sealed class LauncherDependencyInjectionTests
                 ]
                 """);
 
-            var catalog = new LocalAccountCatalog(tempDirectory);
+            var catalog = new LauncherAccountCatalog(tempDirectory);
             var loaded = catalog.LoadAccounts();
 
             var account = Assert.Single(loaded);

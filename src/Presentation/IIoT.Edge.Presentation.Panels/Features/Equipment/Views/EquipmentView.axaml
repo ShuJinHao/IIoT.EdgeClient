@@ -65,10 +65,12 @@
                                 FontSize="{DynamicResource Edge.FontSize.Caption}"
                                 Foreground="{DynamicResource Edge.Brush.Text.Muted}"
                                 Text="{DynamicResource Panels_Label_MesPlanSelection}" />
-                            <Button
+                            <edge:EdgeActionButton
                                 Grid.Column="1"
-                                Classes="edge-soft-button"
                                 Command="{Binding SelectProductionPlanCommand}"
+                                Icon="{StaticResource Edge.Icon.Plan}"
+                                Kind="Primary"
+                                Size="Compact"
                                 Content="{DynamicResource Panels_Button_SelectProductionPlan}" />
                         </Grid>
 

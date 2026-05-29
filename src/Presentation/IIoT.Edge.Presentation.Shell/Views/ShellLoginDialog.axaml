@@ -40,12 +40,8 @@
 
                     <edge:EdgeWindowButton
                         Grid.Column="1"
-                        Kind="Close"
-                        Click="OnCancelClick">
-                        <TextBlock
-                            Classes="edge-window-symbol"
-                            Text="&#x2715;" />
-                    </edge:EdgeWindowButton>
+                        Action="Close"
+                        Click="OnCancelClick" />
                 </Grid>
 
                 <Grid
@@ -126,14 +122,18 @@
                         HorizontalAlignment="Right"
                         Orientation="Horizontal"
                         Spacing="{DynamicResource Edge.Size.Spacing8}">
-                        <Button
-                            Classes="edge-soft-button"
+                        <edge:EdgeActionButton
                             Click="OnCancelClick"
+                            Icon="{StaticResource Edge.Icon.Close}"
+                            Kind="Soft"
+                            Size="Compact"
                             Content="{DynamicResource Shell_Login_Cancel}" />
-                        <Button
+                        <edge:EdgeActionButton
                             x:Name="LoginButton"
-                            Classes="edge-primary-button shell-login-submit"
                             Click="OnLoginClick"
+                            Icon="{StaticResource Edge.Icon.Login}"
+                            Kind="Primary"
+                            Size="Compact"
                             Content="{DynamicResource Shell_Login_Submit}" />
                     </StackPanel>
                 </Grid>

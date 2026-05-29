@@ -9,46 +9,7 @@
         <StackPanel Margin="{DynamicResource Edge.Thickness.20}" Spacing="{DynamicResource Edge.Size.Spacing12}">
             <edge:EdgeSectionHeader
                 Title="{Binding ViewTitle}"
-                Subtitle="{Binding StatusMessage}">
-                <edge:EdgeSectionHeader.ActionContent>
-                    <Button
-                        MinWidth="118"
-                        Padding="{DynamicResource Edge.Thickness.8}"
-                        Command="{Binding ExportCommand}">
-                        <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Edge.Size.Spacing6}">
-                            <PathIcon
-                                Width="16"
-                                Height="16"
-                                Data="M6,3 L16,3 L20,7 L20,21 L6,21 Z M15,3 L15,8 L20,8 M9,11 L17,11 M9,14 L17,14 M9,17 L14,17" />
-                            <TextBlock Text="{DynamicResource Navigation_Button_ExportExcel}" />
-                        </StackPanel>
-                    </Button>
-                </edge:EdgeSectionHeader.ActionContent>
-            </edge:EdgeSectionHeader>
-
-            <edge:EdgeCard CardPadding="{DynamicResource Edge.Thickness.Card.Compact}">
-                <WrapPanel>
-                    <DatePicker
-                        Width="150"
-                        Margin="0,0,8,0"
-                        SelectedDate="{Binding DateFrom}" />
-                    <TextBlock
-                        Margin="0,0,8,0"
-                        VerticalAlignment="Center"
-                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                        Text="{DynamicResource Navigation_Label_To}" />
-                    <DatePicker
-                        Width="150"
-                        Margin="0,0,12,0"
-                        SelectedDate="{Binding DateTo}" />
-                    <Button
-                        MinWidth="86"
-                        Padding="16,8"
-                        Command="{Binding QueryCommand}">
-                        <TextBlock Text="{DynamicResource Navigation_Button_Query}" />
-                    </Button>
-                </WrapPanel>
-            </edge:EdgeCard>
+                Subtitle="{Binding StatusMessage}" />
 
             <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing12}">
                 <edge:EdgeKpiCard
@@ -76,6 +37,38 @@
                 EmptyMessage="{DynamicResource Navigation_Data_EmptyMessage}"
                 EmptyTitle="{DynamicResource Navigation_Data_EmptyTitle}"
                 IsEmpty="{Binding IsRecordsEmpty}">
+                <edge:EdgeTablePanel.FilterContent>
+                    <WrapPanel>
+                        <DatePicker
+                            Width="150"
+                            Margin="0,0,8,0"
+                            SelectedDate="{Binding DateFrom}" />
+                        <TextBlock
+                            Margin="0,0,8,0"
+                            VerticalAlignment="Center"
+                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                            Text="{DynamicResource Navigation_Label_To}" />
+                        <DatePicker
+                            Width="150"
+                            SelectedDate="{Binding DateTo}" />
+                    </WrapPanel>
+                </edge:EdgeTablePanel.FilterContent>
+                <edge:EdgeTablePanel.ActionContent>
+                    <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Edge.Size.Spacing8}">
+                        <edge:EdgeActionButton
+                            Command="{Binding QueryCommand}"
+                            Content="{DynamicResource Navigation_Button_Query}"
+                            Icon="{StaticResource Edge.Icon.Search}"
+                            Kind="Primary"
+                            Size="Compact" />
+                        <edge:EdgeActionButton
+                            Command="{Binding ExportCommand}"
+                            Content="{DynamicResource Navigation_Button_ExportExcel}"
+                            Icon="{StaticResource Edge.Icon.Export}"
+                            Kind="Primary"
+                            Size="Compact" />
+                    </StackPanel>
+                </edge:EdgeTablePanel.ActionContent>
                     <edge:EdgeDataGrid
                         AutoGenerateColumns="False"
                         CanUserReorderColumns="False"

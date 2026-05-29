@@ -10,14 +10,19 @@
         Title="{DynamicResource Navigation_Tab_NetworkDevice}">
         <edge:EdgeTablePanel.ActionContent>
             <StackPanel Orientation="Horizontal" Spacing="8">
-                <edge:EdgeToolButton Command="{Binding AddNetworkDeviceCommand}">
-                    <TextBlock Text="{DynamicResource Navigation_Button_Add}" />
-                </edge:EdgeToolButton>
-                <edge:EdgeToolButton
+                <edge:EdgeActionButton
+                    Command="{Binding AddNetworkDeviceCommand}"
+                    Content="{DynamicResource Navigation_Button_Add}"
+                    Icon="{StaticResource Edge.Icon.Add}"
+                    Kind="Primary"
+                    Size="Compact" />
+                <edge:EdgeActionButton
                     Command="{Binding DeleteNetworkDeviceCommand}"
-                    CommandParameter="{Binding SelectedItem, ElementName=NetworkGrid}">
-                    <TextBlock Text="{DynamicResource Navigation_Button_Delete}" />
-                </edge:EdgeToolButton>
+                    CommandParameter="{Binding SelectedItem, ElementName=NetworkGrid}"
+                    Content="{DynamicResource Navigation_Button_Delete}"
+                    Icon="{StaticResource Edge.Icon.Delete}"
+                    Kind="Danger"
+                    Size="Compact" />
             </StackPanel>
         </edge:EdgeTablePanel.ActionContent>
 
@@ -39,7 +44,7 @@
                     </dg:DataGridTemplateColumn.CellTemplate>
                     <dg:DataGridTemplateColumn.CellEditingTemplate>
                         <DataTemplate>
-                            <ComboBox ItemsSource="{Binding DataContext.DeviceTypes, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedItem="{Binding DeviceType}" />
+                            <edge:EdgeFilterComboBox ItemsSource="{Binding DataContext.DeviceTypes, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedItem="{Binding DeviceType}" />
                         </DataTemplate>
                     </dg:DataGridTemplateColumn.CellEditingTemplate>
                 </dg:DataGridTemplateColumn>
@@ -51,7 +56,7 @@
                     </dg:DataGridTemplateColumn.CellTemplate>
                     <dg:DataGridTemplateColumn.CellEditingTemplate>
                         <DataTemplate>
-                            <ComboBox ItemsSource="{Binding AvailableModels}" SelectedItem="{Binding DeviceModel}" />
+                            <edge:EdgeFilterComboBox ItemsSource="{Binding AvailableModels}" SelectedItem="{Binding DeviceModel}" />
                         </DataTemplate>
                     </dg:DataGridTemplateColumn.CellEditingTemplate>
                 </dg:DataGridTemplateColumn>

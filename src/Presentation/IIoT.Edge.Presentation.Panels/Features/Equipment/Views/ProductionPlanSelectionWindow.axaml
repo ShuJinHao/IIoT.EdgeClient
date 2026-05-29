@@ -29,9 +29,11 @@
             Surface="Transparent"
             Title="{DynamicResource Panels_PlanDialog_Title}">
             <edge:EdgeTablePanel.ActionContent>
-                <Button
-                    Classes="edge-soft-button"
+                <edge:EdgeActionButton
                     Command="{Binding RefreshCommand}"
+                    Icon="{StaticResource Edge.Icon.Refresh}"
+                    Kind="Primary"
+                    Size="Compact"
                     Content="{DynamicResource Panels_Button_Refresh}" />
             </edge:EdgeTablePanel.ActionContent>
 
@@ -102,14 +104,18 @@
                     HorizontalAlignment="Right"
                     Orientation="Horizontal"
                     Spacing="{DynamicResource Edge.Size.Spacing8}">
-                    <Button
-                        Classes="edge-soft-button"
+                    <edge:EdgeActionButton
                         Click="OnCancelClick"
+                        Icon="{StaticResource Edge.Icon.Close}"
+                        Kind="Soft"
+                        Size="Compact"
                         Content="{DynamicResource Panels_Button_Cancel}" />
-                    <Button
-                        Classes="edge-primary-button"
+                    <edge:EdgeActionButton
                         Click="OnConfirmClick"
                         Content="{DynamicResource Panels_Button_Confirm}"
+                        Icon="{StaticResource Edge.Icon.Check}"
+                        Kind="Primary"
+                        Size="Compact"
                         IsEnabled="{Binding HasSelection}" />
                 </StackPanel>
             </edge:EdgeTablePanel.FooterContent>

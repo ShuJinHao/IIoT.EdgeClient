@@ -1,22 +1,23 @@
-using IIoT.Edge.Application.Auth.LocalAccounts;
+using IIoT.Edge.Launcher.Models;
+using IIoT.Edge.Launcher.Services;
 using Xunit;
 
 namespace IIoT.Edge.Launcher.Tests;
 
-public sealed class LocalAccountAuthServiceTests
+public sealed class LocalLauncherAuthServiceTests
 {
     [Fact]
     public void Authenticate_WhenPasswordMatches_ShouldSucceed()
     {
-        var accounts = new StubLocalAccountCatalog(
+        var accounts = new StubLauncherAccountCatalog(
         [
-            new LocalAccountRecord(
+            new LauncherAccountRecord(
                 "edge-admin",
                 "本地管理员",
-                LocalAccountPasswordHasher.ComputeSha256("ChangeMe123!"),
+                LauncherPasswordHasher.ComputeSha256("ChangeMe123!"),
                 true)
         ]);
-        var service = new LocalAccountAuthService(accounts);
+        var service = new LocalLauncherAuthService(accounts);
 
         var result = service.Authenticate("edge-admin", "ChangeMe123!");
 
@@ -27,15 +28,15 @@ public sealed class LocalAccountAuthServiceTests
     [Fact]
     public void ChangePassword_WhenOldPasswordMatches_ShouldUpdateStoredHash()
     {
-        var accounts = new StubLocalAccountCatalog(
+        var accounts = new StubLauncherAccountCatalog(
         [
-            new LocalAccountRecord(
+            new LauncherAccountRecord(
                 "edge-admin",
                 "本地管理员",
-                LocalAccountPasswordHasher.ComputeSha256("123456"),
+                LauncherPasswordHasher.ComputeSha256("123456"),
                 true)
         ]);
-        var service = new LocalAccountAuthService(accounts);
+        var service = new LocalLauncherAuthService(accounts);
 
         var result = service.ChangePassword("edge-admin", "123456", "new-pass");
 
@@ -47,15 +48,15 @@ public sealed class LocalAccountAuthServiceTests
     [Fact]
     public void ChangePassword_WhenNewPasswordIsEmpty_ShouldFail()
     {
-        var accounts = new StubLocalAccountCatalog(
+        var accounts = new StubLauncherAccountCatalog(
         [
-            new LocalAccountRecord(
+            new LauncherAccountRecord(
                 "edge-admin",
                 "本地管理员",
-                LocalAccountPasswordHasher.ComputeSha256("123456"),
+                LauncherPasswordHasher.ComputeSha256("123456"),
                 true)
         ]);
-        var service = new LocalAccountAuthService(accounts);
+        var service = new LocalLauncherAuthService(accounts);
 
         var result = service.ChangePassword("edge-admin", "123456", "");
 
@@ -66,15 +67,15 @@ public sealed class LocalAccountAuthServiceTests
     [Fact]
     public void Authenticate_WhenPasswordDoesNotMatch_ShouldFail()
     {
-        var accounts = new StubLocalAccountCatalog(
+        var accounts = new StubLauncherAccountCatalog(
         [
-            new LocalAccountRecord(
+            new LauncherAccountRecord(
                 "edge-admin",
                 "本地管理员",
-                LocalAccountPasswordHasher.ComputeSha256("ChangeMe123!"),
+                LauncherPasswordHasher.ComputeSha256("ChangeMe123!"),
                 true)
         ]);
-        var service = new LocalAccountAuthService(accounts);
+        var service = new LocalLauncherAuthService(accounts);
 
         var result = service.Authenticate("edge-admin", "wrong-password");
 
@@ -82,16 +83,16 @@ public sealed class LocalAccountAuthServiceTests
         Assert.Contains("不正确", result.ErrorMessage, StringComparison.Ordinal);
     }
 
-    private sealed class StubLocalAccountCatalog : ILocalAccountCatalog
+    private sealed class StubLauncherAccountCatalog : ILauncherAccountCatalog
     {
-        private readonly List<LocalAccountRecord> _accounts;
+        private readonly List<LauncherAccountRecord> _accounts;
 
-        public StubLocalAccountCatalog(IReadOnlyList<LocalAccountRecord> accounts)
+        public StubLauncherAccountCatalog(IReadOnlyList<LauncherAccountRecord> accounts)
         {
             _accounts = accounts.ToList();
         }
 
-        public IReadOnlyList<LocalAccountRecord> LoadAccounts() => _accounts;
+        public IReadOnlyList<LauncherAccountRecord> LoadAccounts() => _accounts;
 
         public void UpdatePasswordHash(string userName, string passwordHash)
         {

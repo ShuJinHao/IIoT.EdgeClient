@@ -295,8 +295,6 @@ public sealed class ConfigPermissionGuardBehaviorTests
 
         public Task<AuthResult> LoginLocalAsync(string password) => throw new NotSupportedException();
 
-        public Task<AuthResult> LoginLocalAccountAsync(string userName, string password) => throw new NotSupportedException();
-
         public Task<AuthResult> LoginCloudAsync(string employeeNo, string password, Guid deviceId) => throw new NotSupportedException();
 
         public void Logout() => SetSession(null);

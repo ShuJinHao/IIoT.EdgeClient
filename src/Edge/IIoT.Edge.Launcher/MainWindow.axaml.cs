@@ -1,20 +1,26 @@
+using System.Globalization;
 using System.ComponentModel;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using IIoT.Edge.Launcher.Models;
 using IIoT.Edge.Launcher.ViewModels;
+using IIoT.Edge.UI.Shared.Localization;
 
 namespace IIoT.Edge.Launcher;
 
 public partial class MainWindow : Window
 {
     private readonly LauncherMainViewModel _viewModel;
+    private readonly IAppLanguageService _languageService;
 
-    public MainWindow(LauncherMainViewModel viewModel)
+    public MainWindow(
+        LauncherMainViewModel viewModel,
+        IAppLanguageService languageService)
     {
         InitializeComponent();
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
+        _languageService = languageService ?? throw new ArgumentNullException(nameof(languageService));
         DataContext = _viewModel;
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
         Opened += OnOpened;
@@ -24,7 +30,7 @@ public partial class MainWindow : Window
 
     private void OnOpened(object? sender, EventArgs e)
     {
-        UserNameTextBox.Focus();
+        UserNameTextBox.FocusInput();
     }
 
     private void OnClosed(object? sender, EventArgs e)
@@ -77,7 +83,7 @@ public partial class MainWindow : Window
 
         if (!_viewModel.IsAuthenticated && IsVisible)
         {
-            UserNameTextBox.Focus();
+            UserNameTextBox.FocusInput();
         }
     }
 
@@ -110,6 +116,15 @@ public partial class MainWindow : Window
         WindowState = WindowState == WindowState.Maximized
             ? WindowState.Normal
             : WindowState.Maximized;
+    }
+
+    private void ToggleLanguageButton_Click(object? sender, RoutedEventArgs e)
+    {
+        var nextCultureName = string.Equals(_languageService.Current.Name, "zh-CN", StringComparison.OrdinalIgnoreCase)
+            ? "en-US"
+            : "zh-CN";
+
+        _languageService.Change(CultureInfo.GetCultureInfo(nextCultureName));
     }
 
     private void CloseWindowButton_Click(object? sender, RoutedEventArgs e)

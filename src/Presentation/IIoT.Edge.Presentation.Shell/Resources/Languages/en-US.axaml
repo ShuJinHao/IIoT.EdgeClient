@@ -14,6 +14,9 @@
     <sys:String x:Key="Shell_Footer_RunTime">Runtime: </sys:String>
     <sys:String x:Key="Shell_Footer_DefaultProgram">Sample Program</sys:String>
     <sys:String x:Key="Shell_Footer_RunMinutesFormat">{0} min</sys:String>
+    <sys:String x:Key="Shell_Window_Minimize">Minimize</sys:String>
+    <sys:String x:Key="Shell_Window_MaximizeRestore">Maximize / restore</sys:String>
+    <sys:String x:Key="Shell_Window_Close">Close</sys:String>
 
     <!-- Login -->
     <sys:String x:Key="Shell_Login_Title">Account Login</sys:String>

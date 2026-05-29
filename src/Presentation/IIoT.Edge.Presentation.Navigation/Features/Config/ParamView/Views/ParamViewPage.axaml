@@ -11,16 +11,17 @@
                 Title="{Binding ViewTitle}"
                 Subtitle="{DynamicResource Navigation_Tab_PluginBusinessParams}">
                 <edge:EdgeSectionHeader.ActionContent>
-                    <edge:EdgeToolButton
-                        Classes="primary"
+                    <edge:EdgeActionButton
                         Command="{Binding SaveCommand}"
-                        IsEnabled="{Binding CanEdit}">
-                        <TextBlock Text="{DynamicResource Navigation_Button_Save}" />
-                    </edge:EdgeToolButton>
+                        Content="{DynamicResource Navigation_Button_Save}"
+                        Icon="{StaticResource Edge.Icon.Save}"
+                        IsEnabled="{Binding CanEdit}"
+                        Kind="Primary"
+                        Size="Compact" />
                 </edge:EdgeSectionHeader.ActionContent>
             </edge:EdgeSectionHeader>
 
-            <TabControl>
+            <edge:EdgeTabControl>
                 <TabItem Header="{DynamicResource Navigation_Tab_MesParams}">
                     <ItemsControl ItemsSource="{Binding MesParamGroups}">
                         <ItemsControl.ItemTemplate>
@@ -52,7 +53,7 @@
                                                 <dg:DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
                                                         <Grid>
-                                                            <TextBox
+                                                            <edge:EdgeTextBox
                                                                 MinWidth="140"
                                                                 IsEnabled="{Binding $parent[UserControl].DataContext.CanEdit}"
                                                                 IsVisible="{Binding !IsBool}"
@@ -118,7 +119,7 @@
                                                 <dg:DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
                                                         <Grid>
-                                                            <TextBox
+                                                            <edge:EdgeTextBox
                                                                 MinWidth="140"
                                                                 IsEnabled="{Binding $parent[UserControl].DataContext.CanEdit}"
                                                                 IsVisible="{Binding !IsBool}"
@@ -184,7 +185,7 @@
                                                 <dg:DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
                                                         <Grid>
-                                                            <TextBox
+                                                            <edge:EdgeTextBox
                                                                 MinWidth="140"
                                                                 IsEnabled="{Binding $parent[UserControl].DataContext.CanEdit}"
                                                                 IsVisible="{Binding !IsBool}"
@@ -218,7 +219,7 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </TabItem>
-            </TabControl>
+            </edge:EdgeTabControl>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

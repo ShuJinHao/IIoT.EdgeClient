@@ -25,7 +25,6 @@
   <ItemGroup>
     <ProjectReference Include="..\IIoT.Edge.Shell\IIoT.Edge.Shell.csproj"
                       ReferenceOutputAssembly="false" />
-    <ProjectReference Include="..\..\Application\IIoT.Edge.Application\IIoT.Edge.Application.csproj" />
     <ProjectReference Include="..\..\Shared\IIoT.Edge.UI.Shared\IIoT.Edge.UI.Shared.csproj" />
   </ItemGroup>
 

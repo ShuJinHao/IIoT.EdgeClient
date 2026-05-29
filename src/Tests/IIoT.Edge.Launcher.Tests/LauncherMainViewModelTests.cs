@@ -1,4 +1,3 @@
-using IIoT.Edge.Application.Auth.LocalAccounts;
 using IIoT.Edge.Launcher.Models;
 using IIoT.Edge.Launcher.Services;
 using IIoT.Edge.Launcher.ViewModels;
@@ -19,7 +18,7 @@ public sealed class LauncherMainViewModelTests
         var viewModel = new LauncherMainViewModel(
             new StubLauncherProfileCatalog(profiles),
             new StubLocalAccountAuthService(
-                LocalAccountAuthenticationResult.Passed(Account("operator", "operator"))),
+                LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
             new StubShellLaunchService());
 
         await viewModel.LoginAsync("operator", "secret");
@@ -36,7 +35,7 @@ public sealed class LauncherMainViewModelTests
         var viewModel = new LauncherMainViewModel(
             new StubLauncherProfileCatalog(Array.Empty<LauncherProfileDefinition>()),
             new StubLocalAccountAuthService(
-                LocalAccountAuthenticationResult.Failed("账号或密码不正确。")),
+                LauncherAuthenticationResult.Failed("账号或密码不正确。")),
             new StubShellLaunchService());
 
         await viewModel.LoginAsync("operator", "bad");
@@ -57,7 +56,7 @@ public sealed class LauncherMainViewModelTests
         var viewModel = new LauncherMainViewModel(
             new StubLauncherProfileCatalog(profiles),
             new StubLocalAccountAuthService(
-                LocalAccountAuthenticationResult.Passed(Account("operator", "operator"))),
+                LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
             new StubShellLaunchService());
 
         await viewModel.LoginAsync("operator", "secret");
@@ -74,8 +73,8 @@ public sealed class LauncherMainViewModelTests
         var viewModel = new LauncherMainViewModel(
             new StubLauncherProfileCatalog(Array.Empty<LauncherProfileDefinition>()),
             new StubLocalAccountAuthService(
-                LocalAccountAuthenticationResult.Passed(Account("operator", "operator")),
-                LocalAccountPasswordChangeResult.Passed()),
+                LauncherAuthenticationResult.Passed(Account("operator", "operator")),
+                LauncherPasswordChangeResult.Passed()),
             new StubShellLaunchService());
 
         var changed = await viewModel.ChangePasswordAsync("operator", "old", "new-pass");
@@ -91,8 +90,8 @@ public sealed class LauncherMainViewModelTests
         var viewModel = new LauncherMainViewModel(
             new StubLauncherProfileCatalog(Array.Empty<LauncherProfileDefinition>()),
             new StubLocalAccountAuthService(
-                LocalAccountAuthenticationResult.Passed(Account("operator", "operator")),
-                LocalAccountPasswordChangeResult.Failed("旧密码不正确。")),
+                LauncherAuthenticationResult.Passed(Account("operator", "operator")),
+                LauncherPasswordChangeResult.Failed("旧密码不正确。")),
             new StubShellLaunchService());
 
         var changed = await viewModel.ChangePasswordAsync("operator", "bad", "new-pass");
@@ -102,7 +101,7 @@ public sealed class LauncherMainViewModelTests
         Assert.False(viewModel.IsBusy);
     }
 
-    private static LocalAccountRecord Account(string userName, string displayName) =>
+    private static LauncherAccountRecord Account(string userName, string displayName) =>
         new(userName, displayName, "hash", true);
 
     private static LauncherProfileDefinition Profile(string profileId, string displayName) =>
@@ -122,20 +121,20 @@ public sealed class LauncherMainViewModelTests
     }
 
     private sealed class StubLocalAccountAuthService(
-        LocalAccountAuthenticationResult loginResult,
-        LocalAccountPasswordChangeResult? passwordChangeResult = null) : ILocalAccountAuthService
+        LauncherAuthenticationResult loginResult,
+        LauncherPasswordChangeResult? passwordChangeResult = null) : ILocalLauncherAuthService
     {
-        public LocalAccountAuthenticationResult Authenticate(string? userName, string? password)
+        public LauncherAuthenticationResult Authenticate(string? userName, string? password)
         {
             return loginResult;
         }
 
-        public LocalAccountPasswordChangeResult ChangePassword(
+        public LauncherPasswordChangeResult ChangePassword(
             string? userName,
             string? oldPassword,
             string? newPassword)
         {
-            return passwordChangeResult ?? LocalAccountPasswordChangeResult.Passed();
+            return passwordChangeResult ?? LauncherPasswordChangeResult.Passed();
         }
     }
 }

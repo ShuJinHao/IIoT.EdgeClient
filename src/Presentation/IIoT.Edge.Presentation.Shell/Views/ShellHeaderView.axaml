@@ -14,12 +14,12 @@
             ColumnDefinitions="Auto,*,*,400">
             <edge:EdgeHeaderBrand
                 Grid.ColumnSpan="2"
-                Title="&#x4EA7;&#x7EBF;&#x8FB9;&#x7F18;&#x63A7;&#x5236;&#x53F0;" />
+                Title="{DynamicResource Shell_FrameTitle}" />
 
             <Grid
                 Grid.Column="3"
                 VerticalAlignment="Center"
-                ColumnDefinitions="*,Auto,120">
+                ColumnDefinitions="*,Auto,136">
                 <StackPanel
                     Grid.Column="1"
                     VerticalAlignment="Center"
@@ -32,42 +32,29 @@
                         MaxWidth="210"
                         Margin="8,0,0,0"
                         Click="OnAccountChipClick"
-                        DisplayName="{Binding OperatorName, FallbackValue=&#x672A;&#x767B;&#x5F55;, TargetNullValue=&#x672A;&#x767B;&#x5F55;}" />
+                        DisplayName="{Binding OperatorName}" />
                 </StackPanel>
 
-                <UniformGrid
+                <StackPanel
                     Grid.Column="2"
-                    Width="120"
                     Height="40"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
-                    Columns="3">
+                    Orientation="Horizontal"
+                    Spacing="6">
                     <edge:EdgeWindowButton
+                        Action="Minimize"
                         Click="OnMinimizeClick"
-                        ToolTip.Tip="&#x6700;&#x5C0F;&#x5316;">
-                        <TextBlock
-                            Classes="edge-window-symbol"
-                            Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=edge:EdgeWindowButton}}"
-                            Text="─" />
-                    </edge:EdgeWindowButton>
+                        ToolTip.Tip="{DynamicResource Shell_Window_Minimize}" />
                     <edge:EdgeWindowButton
+                        Action="MaximizeRestore"
                         Click="OnMaximizeRestoreClick"
-                        ToolTip.Tip="&#x6700;&#x5927;&#x5316; / &#x8FD8;&#x539F;">
-                        <TextBlock
-                            Classes="edge-window-symbol"
-                            Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=edge:EdgeWindowButton}}"
-                            Text="☐" />
-                    </edge:EdgeWindowButton>
+                        ToolTip.Tip="{DynamicResource Shell_Window_MaximizeRestore}" />
                     <edge:EdgeWindowButton
-                        Kind="Close"
+                        Action="Close"
                         Click="OnCloseClick"
-                        ToolTip.Tip="&#x5173;&#x95ED;">
-                        <TextBlock
-                            Classes="edge-window-symbol"
-                            Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=edge:EdgeWindowButton}}"
-                            Text="✕" />
-                    </edge:EdgeWindowButton>
-                </UniformGrid>
+                        ToolTip.Tip="{DynamicResource Shell_Window_Close}" />
+                </StackPanel>
             </Grid>
         </Grid>
     </Border>

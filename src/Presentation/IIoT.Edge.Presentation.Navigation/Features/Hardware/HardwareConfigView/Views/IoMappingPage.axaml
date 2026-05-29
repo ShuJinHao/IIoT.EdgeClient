@@ -11,20 +11,31 @@
         <edge:EdgeSectionHeader Title="{DynamicResource Navigation_Tab_IoMapping}">
             <edge:EdgeSectionHeader.ActionContent>
                 <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Edge.Size.Spacing8}">
-                    <edge:EdgeToolButton
+                    <edge:EdgeActionButton
                         Command="{Binding ApplyModuleTemplateCommand}"
-                        ToolTip.Tip="{Binding ModuleTemplateHint}">
-                        <TextBlock Text="{DynamicResource Navigation_Button_ApplyTemplate}" />
-                    </edge:EdgeToolButton>
-                    <edge:EdgeToolButton Command="{Binding OpenAddInteractionMappingDialogCommand}">
-                        <TextBlock Text="{DynamicResource Navigation_Button_AddInteraction}" />
-                    </edge:EdgeToolButton>
-                    <edge:EdgeToolButton Command="{Binding OpenAddDataPointMappingDialogCommand}">
-                        <TextBlock Text="{DynamicResource Navigation_Button_AddDataPoint}" />
-                    </edge:EdgeToolButton>
-                    <edge:EdgeToolButton Command="{Binding DeleteIoMappingCommand}">
-                        <TextBlock Text="{DynamicResource Navigation_Button_Delete}" />
-                    </edge:EdgeToolButton>
+                        Content="{DynamicResource Navigation_Button_ApplyTemplate}"
+                        Icon="{StaticResource Edge.Icon.Check}"
+                        Kind="Primary"
+                        Size="Compact"
+                        ToolTip.Tip="{Binding ModuleTemplateHint}" />
+                    <edge:EdgeActionButton
+                        Command="{Binding OpenAddInteractionMappingDialogCommand}"
+                        Content="{DynamicResource Navigation_Button_AddInteraction}"
+                        Icon="{StaticResource Edge.Icon.Add}"
+                        Kind="Primary"
+                        Size="Compact" />
+                    <edge:EdgeActionButton
+                        Command="{Binding OpenAddDataPointMappingDialogCommand}"
+                        Content="{DynamicResource Navigation_Button_AddDataPoint}"
+                        Icon="{StaticResource Edge.Icon.Add}"
+                        Kind="Primary"
+                        Size="Compact" />
+                    <edge:EdgeActionButton
+                        Command="{Binding DeleteIoMappingCommand}"
+                        Content="{DynamicResource Navigation_Button_Delete}"
+                        Icon="{StaticResource Edge.Icon.Delete}"
+                        Kind="Danger"
+                        Size="Compact" />
                 </StackPanel>
             </edge:EdgeSectionHeader.ActionContent>
         </edge:EdgeSectionHeader>
@@ -54,11 +65,9 @@
                 </Grid>
             </edge:EdgeCard>
 
-            <ScrollViewer
+            <StackPanel
                 Grid.Column="1"
-                HorizontalScrollBarVisibility="Disabled"
-                VerticalScrollBarVisibility="Auto">
-                <StackPanel Spacing="12">
+                Spacing="12">
                     <ItemsControl ItemsSource="{Binding IoMappingGroups}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
@@ -86,7 +95,7 @@
                                                 </dg:DataGridTemplateColumn.CellTemplate>
                                                 <dg:DataGridTemplateColumn.CellEditingTemplate>
                                                     <DataTemplate>
-                                                        <ComboBox ItemsSource="{Binding DataContext.IoDataTypes, ElementName=IoMappingRoot}" SelectedItem="{Binding DataType}" />
+                                                        <edge:EdgeFilterComboBox ItemsSource="{Binding DataContext.IoDataTypes, ElementName=IoMappingRoot}" SelectedItem="{Binding DataType}" />
                                                     </DataTemplate>
                                                 </dg:DataGridTemplateColumn.CellEditingTemplate>
                                             </dg:DataGridTemplateColumn>
@@ -103,8 +112,7 @@
                         IsVisible="{Binding HasNoIoMappingGroups}"
                         Message="{DynamicResource Navigation_Empty_IoMappings}"
                         Title="{DynamicResource Navigation_Tab_IoMapping}" />
-                </StackPanel>
-            </ScrollViewer>
+            </StackPanel>
 
             <Border
                 Grid.ColumnSpan="2"
@@ -126,92 +134,96 @@
                         <Grid Grid.Row="1" IsVisible="{Binding IsInteractionPairDialog}" ColumnDefinitions="*,16,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
                             <StackPanel Grid.ColumnSpan="3" Margin="0,0,0,12" IsVisible="{Binding NewInteractionPair.IsStandardSource}">
                                 <TextBlock Margin="0,0,0,4" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Navigation_Label_InteractionGroup}" />
-                                <ComboBox ItemsSource="{Binding StandardInteractionGroups}" SelectedItem="{Binding SelectedStandardInteractionGroup}">
-                                    <ComboBox.ItemTemplate>
+                                <edge:EdgeFilterComboBox ItemsSource="{Binding StandardInteractionGroups}" SelectedItem="{Binding SelectedStandardInteractionGroup}">
+                                    <edge:EdgeFilterComboBox.ItemTemplate>
                                         <DataTemplate>
                                             <TextBlock Text="{Binding DisplayText}" />
                                         </DataTemplate>
-                                    </ComboBox.ItemTemplate>
-                                </ComboBox>
+                                    </edge:EdgeFilterComboBox.ItemTemplate>
+                                </edge:EdgeFilterComboBox>
                             </StackPanel>
                             <StackPanel Grid.Row="1" Grid.ColumnSpan="3" Margin="0,0,0,12">
                                 <TextBlock Margin="0,0,0,4" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Navigation_Column_BusinessGroup}" />
-                                <TextBox IsReadOnly="{Binding NewInteractionPair.IsStandardSource}" Text="{Binding NewInteractionPair.BusinessGroup}" />
+                                <edge:EdgeTextBox IsReadOnly="{Binding NewInteractionPair.IsStandardSource}" Text="{Binding NewInteractionPair.BusinessGroup}" />
                             </StackPanel>
                             <TextBlock Grid.Row="2" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Text.Primary}" Text="{DynamicResource Navigation_Label_ReadSignal}" />
                             <TextBlock Grid.Row="2" Grid.Column="2" FontWeight="SemiBold" Foreground="{DynamicResource Edge.Text.Primary}" Text="{DynamicResource Navigation_Label_WriteSignal}" />
                             <Grid Grid.Row="3" RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="*,8,80">
-                                <TextBox Grid.ColumnSpan="3" Margin="0,6,0,8" Text="{Binding NewInteractionPair.ReadSignalName}" />
-                                <TextBox Grid.Row="1" Margin="0,0,0,8" Text="{Binding NewInteractionPair.ReadPlcAddress}" />
-                                <TextBox Grid.Row="1" Grid.Column="2" Margin="0,0,0,8" IsEnabled="False" Text="{Binding NewInteractionPair.ReadAddressCount}" />
-                                <ComboBox Grid.Row="2" Grid.ColumnSpan="3" ItemsSource="{Binding IoDataTypes}" SelectedItem="{Binding NewInteractionPair.ReadDataType}" />
+                                <edge:EdgeTextBox Grid.ColumnSpan="3" Margin="0,6,0,8" Text="{Binding NewInteractionPair.ReadSignalName}" />
+                                <edge:EdgeTextBox Grid.Row="1" Margin="0,0,0,8" Text="{Binding NewInteractionPair.ReadPlcAddress}" />
+                                <edge:EdgeTextBox Grid.Row="1" Grid.Column="2" Margin="0,0,0,8" IsEnabled="False" Text="{Binding NewInteractionPair.ReadAddressCount}" />
+                                <edge:EdgeFilterComboBox Grid.Row="2" Grid.ColumnSpan="3" ItemsSource="{Binding IoDataTypes}" SelectedItem="{Binding NewInteractionPair.ReadDataType}" />
                             </Grid>
                             <Grid Grid.Row="3" Grid.Column="2" RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="*,8,80">
-                                <TextBox Grid.ColumnSpan="3" Margin="0,6,0,8" Text="{Binding NewInteractionPair.WriteSignalName}" />
-                                <TextBox Grid.Row="1" Margin="0,0,0,8" Text="{Binding NewInteractionPair.WritePlcAddress}" />
-                                <TextBox Grid.Row="1" Grid.Column="2" Margin="0,0,0,8" IsEnabled="False" Text="{Binding NewInteractionPair.WriteAddressCount}" />
-                                <ComboBox Grid.Row="2" Grid.ColumnSpan="3" ItemsSource="{Binding IoDataTypes}" SelectedItem="{Binding NewInteractionPair.WriteDataType}" />
+                                <edge:EdgeTextBox Grid.ColumnSpan="3" Margin="0,6,0,8" Text="{Binding NewInteractionPair.WriteSignalName}" />
+                                <edge:EdgeTextBox Grid.Row="1" Margin="0,0,0,8" Text="{Binding NewInteractionPair.WritePlcAddress}" />
+                                <edge:EdgeTextBox Grid.Row="1" Grid.Column="2" Margin="0,0,0,8" IsEnabled="False" Text="{Binding NewInteractionPair.WriteAddressCount}" />
+                                <edge:EdgeFilterComboBox Grid.Row="2" Grid.ColumnSpan="3" ItemsSource="{Binding IoDataTypes}" SelectedItem="{Binding NewInteractionPair.WriteDataType}" />
                             </Grid>
                             <StackPanel Grid.Row="4" Grid.ColumnSpan="3" Margin="0,12,0,12">
                                 <TextBlock Margin="0,0,0,4" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Navigation_Column_Remark}" />
-                                <TextBox Text="{Binding NewInteractionPair.Remark}" />
+                                <edge:EdgeTextBox Text="{Binding NewInteractionPair.Remark}" />
                             </StackPanel>
                         </Grid>
 
                         <Grid Grid.Row="1" IsVisible="{Binding IsDataPointDialog}" ColumnDefinitions="*,16,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
                             <StackPanel Grid.ColumnSpan="3" Margin="0,0,0,12" IsVisible="{Binding NewIoMapping.IsStandardSource}">
                                 <TextBlock Margin="0,0,0,4" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Navigation_Label_StandardSignal}" />
-                                <ComboBox ItemsSource="{Binding FilteredStandardDataSignals}" SelectedItem="{Binding SelectedStandardIoSignal}">
-                                    <ComboBox.ItemTemplate>
+                                <edge:EdgeFilterComboBox ItemsSource="{Binding FilteredStandardDataSignals}" SelectedItem="{Binding SelectedStandardIoSignal}">
+                                    <edge:EdgeFilterComboBox.ItemTemplate>
                                         <DataTemplate>
                                             <TextBlock Text="{Binding DisplayText}" />
                                         </DataTemplate>
-                                    </ComboBox.ItemTemplate>
-                                </ComboBox>
+                                    </edge:EdgeFilterComboBox.ItemTemplate>
+                                </edge:EdgeFilterComboBox>
                             </StackPanel>
                             <StackPanel Grid.Row="1" Margin="0,0,0,12">
                                 <TextBlock Margin="0,0,0,4" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Navigation_Label_IoCategory}" />
-                                <ComboBox ItemsSource="{Binding IoDataPointCategories}" SelectedItem="{Binding NewIoMapping.Category}" />
+                                <edge:EdgeFilterComboBox ItemsSource="{Binding IoDataPointCategories}" SelectedItem="{Binding NewIoMapping.Category}" />
                             </StackPanel>
                             <StackPanel Grid.Row="1" Grid.Column="2" Margin="0,0,0,12">
                                 <TextBlock Margin="0,0,0,4" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Navigation_Column_Direction}" />
-                                <ComboBox IsEnabled="False" ItemsSource="{Binding IoDirections}" SelectedItem="{Binding NewIoMapping.Direction}" />
+                                <edge:EdgeFilterComboBox IsEnabled="False" ItemsSource="{Binding IoDirections}" SelectedItem="{Binding NewIoMapping.Direction}" />
                             </StackPanel>
                             <StackPanel Grid.Row="2" Margin="0,0,0,12">
                                 <TextBlock Margin="0,0,0,4" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Navigation_Column_PlcAddress}" />
-                                <TextBox Text="{Binding NewIoMapping.PlcAddress}" />
+                                <edge:EdgeTextBox Text="{Binding NewIoMapping.PlcAddress}" />
                             </StackPanel>
                             <StackPanel Grid.Row="2" Grid.Column="2" Margin="0,0,0,12">
                                 <TextBlock Margin="0,0,0,4" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Navigation_Column_Count}" />
-                                <TextBox IsEnabled="{Binding NewIoMapping.IsAddressCountEditable}" Text="{Binding NewIoMapping.AddressCount}" />
+                                <edge:EdgeTextBox IsEnabled="{Binding NewIoMapping.IsAddressCountEditable}" Text="{Binding NewIoMapping.AddressCount}" />
                             </StackPanel>
                             <StackPanel Grid.Row="3" Margin="0,0,0,12">
                                 <TextBlock Margin="0,0,0,4" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Navigation_Column_DataType}" />
-                                <ComboBox IsEnabled="{Binding NewIoMapping.IsCustomSource}" ItemsSource="{Binding IoDataTypes}" SelectedItem="{Binding NewIoMapping.DataType}" />
+                                <edge:EdgeFilterComboBox IsEnabled="{Binding NewIoMapping.IsCustomSource}" ItemsSource="{Binding IoDataTypes}" SelectedItem="{Binding NewIoMapping.DataType}" />
                             </StackPanel>
                             <StackPanel Grid.Row="3" Grid.Column="2" Margin="0,0,0,12">
                                 <TextBlock Margin="0,0,0,4" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Navigation_Column_BusinessGroup}" />
-                                <TextBox IsReadOnly="True" Text="{Binding NewIoMapping.BusinessGroup}" />
+                                <edge:EdgeTextBox IsReadOnly="True" Text="{Binding NewIoMapping.BusinessGroup}" />
                             </StackPanel>
                             <StackPanel Grid.Row="4" Margin="0,0,0,12">
                                 <TextBlock Margin="0,0,0,4" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Navigation_Column_SignalName}" />
-                                <TextBox IsEnabled="{Binding NewIoMapping.IsCustomSource}" Text="{Binding NewIoMapping.SignalName}" />
+                                <edge:EdgeTextBox IsEnabled="{Binding NewIoMapping.IsCustomSource}" Text="{Binding NewIoMapping.SignalName}" />
                             </StackPanel>
                             <StackPanel Grid.Row="4" Grid.Column="2" Margin="0,0,0,12">
                                 <TextBlock Margin="0,0,0,4" Foreground="{DynamicResource Edge.Text.Muted}" Text="{DynamicResource Navigation_Column_Remark}" />
-                                <TextBox Text="{Binding NewIoMapping.Remark}" />
+                                <edge:EdgeTextBox Text="{Binding NewIoMapping.Remark}" />
                             </StackPanel>
                         </Grid>
 
                         <StackPanel Grid.Row="2" HorizontalAlignment="Right" Orientation="Horizontal" Spacing="8">
-                            <edge:EdgeToolButton Command="{Binding CancelAddIoMappingDialogCommand}">
-                                <TextBlock Text="{DynamicResource Navigation_Button_Cancel}" />
-                            </edge:EdgeToolButton>
-                            <edge:EdgeToolButton
-                                Classes="primary"
-                                Command="{Binding ConfirmAddIoMappingCommand}">
-                                <TextBlock Text="{DynamicResource Navigation_Button_ConfirmAddIoPoint}" />
-                            </edge:EdgeToolButton>
+                            <edge:EdgeActionButton
+                                Command="{Binding CancelAddIoMappingDialogCommand}"
+                                Content="{DynamicResource Navigation_Button_Cancel}"
+                                Icon="{StaticResource Edge.Icon.Close}"
+                                Kind="Soft"
+                                Size="Compact" />
+                            <edge:EdgeActionButton
+                                Command="{Binding ConfirmAddIoMappingCommand}"
+                                Content="{DynamicResource Navigation_Button_ConfirmAddIoPoint}"
+                                Icon="{StaticResource Edge.Icon.Check}"
+                                Kind="Primary"
+                                Size="Compact" />
                         </StackPanel>
                     </Grid>
                 </edge:EdgeCard>

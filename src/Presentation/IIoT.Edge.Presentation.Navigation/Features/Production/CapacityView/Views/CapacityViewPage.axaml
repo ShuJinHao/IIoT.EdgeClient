@@ -12,38 +12,6 @@
                 Title="{Binding ViewTitle}"
                 Subtitle="{Binding StatusMessage}" />
 
-            <edge:EdgeReportFilterBar>
-                <edge:EdgeReportFilterBar.FilterContent>
-                    <Grid ColumnDefinitions="220,170,190,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing10}">
-                        <edge:EdgeFilterComboBox
-                            ItemsSource="{Binding DeviceNames}"
-                            PlaceholderText="{DynamicResource Navigation_Hint_SelectDevice}"
-                            SelectedItem="{Binding SelectedDeviceName}" />
-                        <edge:EdgeFilterComboBox
-                            Grid.Column="1"
-                            ItemsSource="{Binding QueryModes}"
-                            PlaceholderText="{DynamicResource Navigation_Hint_QueryDimension}"
-                            SelectedItem="{Binding SelectedQueryModeOption}">
-                            <edge:EdgeFilterComboBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding DisplayName}" />
-                                </DataTemplate>
-                            </edge:EdgeFilterComboBox.ItemTemplate>
-                        </edge:EdgeFilterComboBox>
-                        <edge:EdgeFilterDatePicker
-                            Grid.Column="2"
-                            SelectedDateOffset="{Binding QueryDateOffset}" />
-                    </Grid>
-                </edge:EdgeReportFilterBar.FilterContent>
-                <edge:EdgeReportFilterBar.ActionContent>
-                    <edge:EdgeToolButton
-                        Classes="primary"
-                        Command="{Binding QueryCommand}">
-                        <TextBlock Text="{DynamicResource Navigation_Button_Query}" />
-                    </edge:EdgeToolButton>
-                </edge:EdgeReportFilterBar.ActionContent>
-            </edge:EdgeReportFilterBar>
-
             <edge:EdgeNoticeBar
                 IsVisible="{Binding !CanQueryCloud}"
                 Status="Warning">
@@ -80,7 +48,37 @@
                     Value="{Binding AvgDaily}" />
             </Grid>
 
-            <edge:EdgeCard>
+            <edge:EdgeTablePanel>
+                <edge:EdgeTablePanel.FilterContent>
+                    <Grid ColumnDefinitions="220,170,190" ColumnSpacing="{DynamicResource Edge.Size.Spacing10}">
+                        <edge:EdgeFilterComboBox
+                            ItemsSource="{Binding DeviceNames}"
+                            PlaceholderText="{DynamicResource Navigation_Hint_SelectDevice}"
+                            SelectedItem="{Binding SelectedDeviceName}" />
+                        <edge:EdgeFilterComboBox
+                            Grid.Column="1"
+                            ItemsSource="{Binding QueryModes}"
+                            PlaceholderText="{DynamicResource Navigation_Hint_QueryDimension}"
+                            SelectedItem="{Binding SelectedQueryModeOption}">
+                            <edge:EdgeFilterComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding DisplayName}" />
+                                </DataTemplate>
+                            </edge:EdgeFilterComboBox.ItemTemplate>
+                        </edge:EdgeFilterComboBox>
+                        <edge:EdgeFilterDatePicker
+                            Grid.Column="2"
+                            SelectedDateOffset="{Binding QueryDateOffset}" />
+                    </Grid>
+                </edge:EdgeTablePanel.FilterContent>
+                <edge:EdgeTablePanel.ActionContent>
+                    <edge:EdgeActionButton
+                        Command="{Binding QueryCommand}"
+                        Content="{DynamicResource Navigation_Button_Query}"
+                        Icon="{StaticResource Edge.Icon.Search}"
+                        Kind="Primary"
+                        Size="Compact" />
+                </edge:EdgeTablePanel.ActionContent>
                 <StackPanel Spacing="{DynamicResource Edge.Size.Spacing12}">
                     <edge:EdgeDataGrid
                         AutoGenerateColumns="False"
@@ -110,7 +108,7 @@
                         Message="{DynamicResource Navigation_Capacity_EmptyMessage}"
                         Title="{DynamicResource Navigation_Capacity_EmptyTitle}" />
                 </StackPanel>
-            </edge:EdgeCard>
+            </edge:EdgeTablePanel>
 
             <edge:EdgeCard>
                 <edge:EdgeCard.Header>

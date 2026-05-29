@@ -14,6 +14,9 @@
     <sys:String x:Key="Shell_Footer_RunTime">系统运行时间：</sys:String>
     <sys:String x:Key="Shell_Footer_DefaultProgram">示例程序</sys:String>
     <sys:String x:Key="Shell_Footer_RunMinutesFormat">{0} 分钟</sys:String>
+    <sys:String x:Key="Shell_Window_Minimize">最小化</sys:String>
+    <sys:String x:Key="Shell_Window_MaximizeRestore">最大化 / 还原</sys:String>
+    <sys:String x:Key="Shell_Window_Close">关闭</sys:String>
 
     <!-- 登录相关 -->
     <sys:String x:Key="Shell_Login_Title">账号登录</sys:String>

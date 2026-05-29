@@ -12,25 +12,29 @@
             Subtitle="{Binding StatusMessage}">
             <edge:EdgeSectionHeader.ActionContent>
                 <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Edge.Size.Spacing10}">
-                <ComboBox
+                <edge:EdgeFilterComboBox
                     Width="260"
                     ItemsSource="{Binding Devices}"
                     PlaceholderText="{DynamicResource Navigation_Hint_SelectDevice}"
                     SelectedItem="{Binding SelectedDevice}">
-                    <ComboBox.ItemTemplate>
+                    <edge:EdgeFilterComboBox.ItemTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding DeviceName}" />
                         </DataTemplate>
-                    </ComboBox.ItemTemplate>
-                </ComboBox>
-                <edge:EdgeToolButton Command="{Binding RefreshCommand}">
-                    <TextBlock Text="{DynamicResource Navigation_Button_Refresh}" />
-                </edge:EdgeToolButton>
-                <edge:EdgeToolButton
-                    Classes="primary"
-                    Command="{Binding SaveCommand}">
-                    <TextBlock Text="{DynamicResource Navigation_Button_Save}" />
-                </edge:EdgeToolButton>
+                    </edge:EdgeFilterComboBox.ItemTemplate>
+                </edge:EdgeFilterComboBox>
+                <edge:EdgeActionButton
+                    Command="{Binding RefreshCommand}"
+                    Content="{DynamicResource Navigation_Button_Refresh}"
+                    Icon="{StaticResource Edge.Icon.Refresh}"
+                    Kind="Primary"
+                    Size="Compact" />
+                <edge:EdgeActionButton
+                    Command="{Binding SaveCommand}"
+                    Content="{DynamicResource Navigation_Button_Save}"
+                    Icon="{StaticResource Edge.Icon.Save}"
+                    Kind="Primary"
+                    Size="Compact" />
                 </StackPanel>
             </edge:EdgeSectionHeader.ActionContent>
         </edge:EdgeSectionHeader>

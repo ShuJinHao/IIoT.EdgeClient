@@ -20,8 +20,6 @@ public interface IAuthService
 
     Task<AuthResult> LoginLocalAsync(string password);
 
-    Task<AuthResult> LoginLocalAccountAsync(string userName, string password);
-
     /// <summary>
     /// 通过云端完成登录，并返回与当前设备绑定的认证结果。
     /// </summary>

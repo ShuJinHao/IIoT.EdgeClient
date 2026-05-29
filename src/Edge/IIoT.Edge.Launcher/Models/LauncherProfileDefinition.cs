@@ -8,4 +8,9 @@ public sealed record LauncherProfileDefinition(
     string MachineProfile,
     string ExecutablePath,
     string IconKind,
-    string AccentColor);
+    string AccentColor)
+{
+    public string PluginDisplayPath { get; init; } = string.Empty;
+
+    public string DataDisplayPath { get; init; } = string.Empty;
+}

@@ -2,7 +2,6 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
-using IIoT.Edge.Application.Auth.LocalAccounts;
 using IIoT.Edge.Infrastructure.Integration.Auth;
 using IIoT.Edge.Infrastructure.Integration.Config;
 using IIoT.Edge.Infrastructure.Integration.Http;
@@ -272,8 +271,7 @@ public sealed class AuthServiceBehaviorTests
         return new AuthService(
             new TestHttpClientFactory(new HttpClient(new StubMessageHandler(responseFactory))),
             new FakeCloudApiEndpointProvider(),
-            config,
-            new FakeLocalAccountAuthService());
+            config);
     }
 
     private static string CreateJwtToken(
@@ -302,14 +300,5 @@ public sealed class AuthServiceBehaviorTests
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             => Task.FromResult(responseFactory(request));
-    }
-
-    private sealed class FakeLocalAccountAuthService : ILocalAccountAuthService
-    {
-        public LocalAccountAuthenticationResult Authenticate(string? userName, string? password)
-            => LocalAccountAuthenticationResult.Failed("本测试不覆盖本地账号登录。");
-
-        public LocalAccountPasswordChangeResult ChangePassword(string? userName, string? oldPassword, string? newPassword)
-            => LocalAccountPasswordChangeResult.Failed("本测试不覆盖本地账号改密。");
     }
 }

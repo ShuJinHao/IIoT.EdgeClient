@@ -1,10 +1,10 @@
-namespace IIoT.Edge.Application.Auth.LocalAccounts;
+namespace IIoT.Edge.Launcher.Services;
 
-public sealed class LocalAccountCatalogInitializer : ILocalAccountCatalogInitializer
+public sealed class LauncherAccountCatalogInitializer : ILauncherAccountCatalogInitializer
 {
     private readonly string _baseDirectory;
 
-    public LocalAccountCatalogInitializer(string baseDirectory)
+    public LauncherAccountCatalogInitializer(string baseDirectory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
 
@@ -13,15 +13,15 @@ public sealed class LocalAccountCatalogInitializer : ILocalAccountCatalogInitial
 
     public void EnsureCatalogExists()
     {
-        var accountsPath = LocalAccountCatalog.GetCatalogPath(_baseDirectory);
+        var accountsPath = LauncherAccountCatalog.GetCatalogPath(_baseDirectory);
         if (File.Exists(accountsPath))
         {
             return;
         }
 
-        var samplePath = LocalAccountCatalog.GetCatalogPath(
+        var samplePath = LauncherAccountCatalog.GetCatalogPath(
             _baseDirectory,
-            LocalAccountCatalog.SampleCatalogFileName);
+            LauncherAccountCatalog.SampleCatalogFileName);
         if (!File.Exists(samplePath))
         {
             throw new FileNotFoundException(

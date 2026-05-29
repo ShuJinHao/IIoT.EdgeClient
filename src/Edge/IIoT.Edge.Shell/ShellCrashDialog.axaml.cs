@@ -9,7 +9,7 @@ namespace IIoT.Edge.Shell;
 public partial class ShellCrashDialog : Window
 {
     public ShellCrashDialog()
-        : this("应用启动失败。")
+        : this(ResourceText("Shell_CrashDialogDefaultMessage", string.Empty))
     {
     }
 
@@ -51,6 +51,16 @@ public partial class ShellCrashDialog : Window
         }
 
         return false;
+    }
+
+    private static string ResourceText(string key, string fallback)
+    {
+        var app = global::Avalonia.Application.Current;
+        return app?.TryGetResource(key, null, out var value) == true
+            && value is string text
+            && !string.IsNullOrWhiteSpace(text)
+                ? text
+                : fallback;
     }
 
     private sealed record ShellCrashDialogViewModel(string Message);

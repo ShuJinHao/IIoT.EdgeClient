@@ -1,9 +1,9 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace IIoT.Edge.Application.Auth.LocalAccounts;
+namespace IIoT.Edge.Launcher.Services;
 
-public static class LocalAccountPasswordHasher
+public static class LauncherPasswordHasher
 {
     public static string ComputeSha256(string password)
     {

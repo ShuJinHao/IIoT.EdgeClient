@@ -64,6 +64,8 @@
         <SolidColorBrush x:Key="Edge.Brush.Table.SelectedBackground" Color="{StaticResource Edge.Color.Ivory200}" />
         <SolidColorBrush x:Key="Edge.Brush.Table.SelectedForeground" Color="{StaticResource Edge.Color.Gray900}" />
         <SolidColorBrush x:Key="Edge.Brush.Table.SelectedBorder" Color="{StaticResource Edge.Color.Yellow500}" />
+        <SolidColorBrush x:Key="Edge.Brush.Scrollbar.Thumb" Color="{StaticResource Edge.Color.Gray700}" />
+        <SolidColorBrush x:Key="Edge.Brush.Scrollbar.Track" Color="Transparent" />
         <SolidColorBrush x:Key="Edge.Brush.Surface.Panel" Color="{StaticResource Edge.Color.PanelWarm}" />
         <SolidColorBrush x:Key="Edge.Brush.Surface.Subtle" Color="{StaticResource Edge.Color.Lime100}" />
         <SolidColorBrush x:Key="Edge.Brush.Border.Subtle" Color="{StaticResource Edge.Color.LineWarm}" />

@@ -104,10 +104,10 @@ public partial class ShellHeaderView : UserControl
     {
         var (shell, panel) = CreateAccountMenuShell();
         var user = authContext.CurrentUser;
-        panel.Children.Add(CreateMenuTitle(user?.DisplayName ?? Res("Shell_Login_LoggedInAs", "已登录")));
-        panel.Children.Add(CreateMenuSubtitle(user?.EmployeeNo ?? (user?.IsLocalAdmin == true ? Res("Shell_Login_LocalEmergency", "本地紧急登录") : "--")));
+        panel.Children.Add(CreateMenuTitle(user?.DisplayName ?? Res("Shell_Login_LoggedInAs", string.Empty)));
+        panel.Children.Add(CreateMenuSubtitle(user?.EmployeeNo ?? (user?.IsLocalAdmin == true ? Res("Shell_Login_LocalEmergency", string.Empty) : "--")));
 
-        var logoutButton = CreateMenuButton(Res("Shell_Login_Logout", "退出登录"));
+        var logoutButton = CreateMenuButton(Res("Shell_Login_Logout", string.Empty));
         logoutButton.Click += (_, args) =>
         {
             args.Handled = true;

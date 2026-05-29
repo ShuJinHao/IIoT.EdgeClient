@@ -52,10 +52,12 @@
                         TextWrapping="Wrap" />
                 </ScrollViewer>
 
-                <Button
+                <edge:EdgeActionButton
                     HorizontalAlignment="Right"
-                    Padding="{DynamicResource Edge.Thickness.Card.Compact}"
                     Click="OnCloseClick"
+                    Icon="{StaticResource Edge.Icon.Close}"
+                    Kind="Soft"
+                    Size="Compact"
                     Content="{DynamicResource Shell_CrashDialogClose}" />
             </StackPanel>
         </edge:EdgeCard>

@@ -1,6 +1,7 @@
 <Window
     x:Class="IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView.DiagnosticsConfirmationDialog"
     xmlns="https://github.com/avaloniaui"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Width="520"
     Height="260"
@@ -29,18 +30,18 @@
                 HorizontalAlignment="Right"
                 Orientation="Horizontal"
                 Spacing="10">
-                <Button
-                    MinWidth="88"
-                    Padding="16,8"
-                    Click="OnCancelClick">
-                    <TextBlock Text="{DynamicResource Navigation_Button_Cancel}" />
-                </Button>
-                <Button
-                    MinWidth="88"
-                    Padding="16,8"
-                    Click="OnConfirmClick">
-                    <TextBlock Text="{DynamicResource Navigation_Button_Confirm}" />
-                </Button>
+                <edge:EdgeActionButton
+                    Click="OnCancelClick"
+                    Content="{DynamicResource Navigation_Button_Cancel}"
+                    Icon="{StaticResource Edge.Icon.Close}"
+                    Kind="Soft"
+                    Size="Compact" />
+                <edge:EdgeActionButton
+                    Click="OnConfirmClick"
+                    Content="{DynamicResource Navigation_Button_Confirm}"
+                    Icon="{StaticResource Edge.Icon.Check}"
+                    Kind="Primary"
+                    Size="Compact" />
             </StackPanel>
         </Grid>
     </Border>

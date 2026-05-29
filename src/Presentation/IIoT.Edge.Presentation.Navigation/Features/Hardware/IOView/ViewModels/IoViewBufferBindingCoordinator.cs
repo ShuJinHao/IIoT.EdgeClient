@@ -12,8 +12,12 @@ public interface IIoViewBufferBindingCoordinator
 
 public sealed class IoViewBufferBindingCoordinator(IPlcDataStore dataStore) : IIoViewBufferBindingCoordinator
 {
+    private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(1);
+
     private IPlcBufferTransport? _selectedBuffer;
     private Action? _refreshValues;
+    private DispatcherTimer? _refreshTimer;
+    private bool _refreshPending;
 
     public void Bind(int networkDeviceId, Action refreshValues)
     {
@@ -34,23 +38,76 @@ public sealed class IoViewBufferBindingCoordinator(IPlcDataStore dataStore) : II
             _selectedBuffer = null;
         }
 
+        StopRefreshTimer();
+        _refreshPending = false;
         _refreshValues = null;
     }
 
     private void OnBufferSignalValuesChanged(object? sender, PlcSignalBufferChangedEventArgs e)
     {
-        var refresh = _refreshValues;
-        if (refresh is null)
+        if (_refreshValues is null)
         {
             return;
         }
 
-        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+        if (Dispatcher.UIThread.CheckAccess())
         {
-            refresh();
+            RequestRefresh();
             return;
         }
 
-        Avalonia.Threading.Dispatcher.UIThread.Post(refresh);
+        Dispatcher.UIThread.Post(RequestRefresh, DispatcherPriority.Background);
+    }
+
+    private void RequestRefresh()
+    {
+        if (_refreshValues is null)
+        {
+            return;
+        }
+
+        _refreshPending = true;
+        _refreshTimer ??= CreateRefreshTimer();
+        if (!_refreshTimer.IsEnabled)
+        {
+            _refreshTimer.Start();
+        }
+    }
+
+    private DispatcherTimer CreateRefreshTimer()
+    {
+        var timer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = RefreshInterval
+        };
+        timer.Tick += OnRefreshTimerTick;
+        return timer;
+    }
+
+    private void OnRefreshTimerTick(object? sender, EventArgs e)
+    {
+        if (!_refreshPending)
+        {
+            StopRefreshTimer();
+            return;
+        }
+
+        _refreshPending = false;
+        _refreshValues?.Invoke();
+
+        if (!_refreshPending)
+        {
+            StopRefreshTimer();
+        }
+    }
+
+    private void StopRefreshTimer()
+    {
+        if (_refreshTimer is null)
+        {
+            return;
+        }
+
+        _refreshTimer.Stop();
     }
 }

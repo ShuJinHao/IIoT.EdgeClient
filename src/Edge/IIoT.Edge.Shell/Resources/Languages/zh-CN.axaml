@@ -19,5 +19,6 @@
     <sys:String x:Key="Shell_CrashDialogWindowTitle">IIoT Edge Client - 启动失败</sys:String>
     <sys:String x:Key="Shell_CrashDialogTitle">启动失败</sys:String>
     <sys:String x:Key="Shell_CrashDialogDescription">启动链路返回错误，详细信息如下。</sys:String>
+    <sys:String x:Key="Shell_CrashDialogDefaultMessage">应用启动失败。</sys:String>
     <sys:String x:Key="Shell_CrashDialogClose">关闭</sys:String>
 </ResourceDictionary>

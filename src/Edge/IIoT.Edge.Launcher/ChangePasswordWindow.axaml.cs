@@ -23,11 +23,11 @@ public partial class ChangePasswordWindow : Window
     {
         if (string.IsNullOrWhiteSpace(UserNameInput.Text))
         {
-            UserNameInput.Focus();
+            UserNameInput.FocusInput();
             return;
         }
 
-        OldPasswordInput.Focus();
+        OldPasswordInput.FocusInput();
     }
 
     private void OnClosed(object? sender, EventArgs e)
@@ -79,41 +79,44 @@ public partial class ChangePasswordWindow : Window
     {
         if (string.IsNullOrWhiteSpace(UserNameInput.Text))
         {
-            DialogErrorText.Text = "账号不能为空。";
-            UserNameInput.Focus();
+            DialogErrorText.Text = Text("Launcher_ChangePassword_UserNameRequired");
+            UserNameInput.FocusInput();
             return false;
         }
 
         if (string.IsNullOrWhiteSpace(OldPasswordInput.Text))
         {
-            DialogErrorText.Text = "旧密码不能为空。";
-            OldPasswordInput.Focus();
+            DialogErrorText.Text = Text("Launcher_ChangePassword_OldPasswordRequired");
+            OldPasswordInput.FocusInput();
             return false;
         }
 
         if (string.IsNullOrWhiteSpace(NewPasswordInput.Text))
         {
-            DialogErrorText.Text = "新密码不能为空。";
-            NewPasswordInput.Focus();
+            DialogErrorText.Text = Text("Launcher_ChangePassword_NewPasswordRequired");
+            NewPasswordInput.FocusInput();
             return false;
         }
 
         if (NewPasswordInput.Text.Length < 6)
         {
-            DialogErrorText.Text = "新密码至少 6 位。";
-            NewPasswordInput.Focus();
+            DialogErrorText.Text = Text("Launcher_ChangePassword_NewPasswordMinLength");
+            NewPasswordInput.FocusInput();
             return false;
         }
 
         if (!string.Equals(NewPasswordInput.Text, ConfirmPasswordInput.Text, StringComparison.Ordinal))
         {
-            DialogErrorText.Text = "两次输入的新密码不一致。";
-            ConfirmPasswordInput.Focus();
+            DialogErrorText.Text = Text("Launcher_ChangePassword_ConfirmMismatch");
+            ConfirmPasswordInput.FocusInput();
             return false;
         }
 
         return true;
     }
+
+    private string Text(string key)
+        => _viewModel.GetText(key);
 
     private void ClearPasswordBoxes()
     {

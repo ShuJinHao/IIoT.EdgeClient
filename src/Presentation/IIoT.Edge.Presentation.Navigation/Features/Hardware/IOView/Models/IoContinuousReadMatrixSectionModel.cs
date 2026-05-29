@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Data;
 using System.Windows.Input;
 using IIoT.Edge.Application.Features.Hardware.IoMappings;
 using IIoT.Edge.UI.Shared.Mvvm;
@@ -13,7 +12,6 @@ public sealed class IoContinuousReadMatrixSectionModel : BaseNotifyPropertyChang
 {
     private Func<string, string, string>? _textProvider;
     private bool _isExpanded;
-    private DataTable _matrixTable = new();
 
     public IoContinuousReadMatrixSectionModel()
     {
@@ -31,11 +29,6 @@ public sealed class IoContinuousReadMatrixSectionModel : BaseNotifyPropertyChang
     public ObservableCollection<IoSignalModel> Columns { get; } = [];
 
     public ObservableCollection<IoContinuousReadMatrixRowModel> Rows { get; } = [];
-
-    /// <summary>
-    /// 矩阵数据表，供 DataTableBindingBehavior 自动生成 DataGrid 列。
-    /// </summary>
-    public DataTable MatrixTable => _matrixTable;
 
     public ICommand ToggleExpandedCommand { get; }
 
@@ -104,89 +97,112 @@ public sealed class IoContinuousReadMatrixSectionModel : BaseNotifyPropertyChang
         OnPropertyChanged(nameof(ToggleText));
     }
 
-    public void RebuildRows()
+    public void RefreshRows()
     {
-        Rows.Clear();
-
         var rowCount = Columns.Count == 0
             ? 0
             : Columns.Max(static column => column.ExpandedValues.Count);
 
+        while (Rows.Count < rowCount)
+        {
+            Rows.Add(new IoContinuousReadMatrixRowModel
+            {
+                Index = Rows.Count + 1
+            });
+        }
+
+        while (Rows.Count > rowCount)
+        {
+            Rows.RemoveAt(Rows.Count - 1);
+        }
+
         for (var rowIndex = 0; rowIndex < rowCount; rowIndex++)
         {
-            var row = new IoContinuousReadMatrixRowModel
-            {
-                Index = rowIndex + 1
-            };
+            var row = Rows[rowIndex];
+            row.Index = rowIndex + 1;
 
-            foreach (var column in Columns)
+            while (row.Values.Count < Columns.Count)
             {
-                row.Values.Add(new IoContinuousReadMatrixCellModel
-                {
-                    ColumnName = column.MatrixColumnTitle,
-                    Value = rowIndex < column.ExpandedValues.Count
-                        ? column.ExpandedValues[rowIndex].Value
-                        : "-"
-                });
+                row.Values.Add(new IoContinuousReadMatrixCellModel());
             }
 
-            Rows.Add(row);
+            while (row.Values.Count > Columns.Count)
+            {
+                row.Values.RemoveAt(row.Values.Count - 1);
+            }
+
+            for (var columnIndex = 0; columnIndex < Columns.Count; columnIndex++)
+            {
+                var column = Columns[columnIndex];
+                var cell = row.Values[columnIndex];
+                cell.ColumnName = column.MatrixColumnTitle;
+                cell.Value = rowIndex < column.ExpandedValues.Count
+                    ? column.ExpandedValues[rowIndex].Value
+                    : "-";
+            }
         }
 
-        RebuildMatrixTable();
         OnPropertyChanged(nameof(Summary));
-    }
-
-    /// <summary>
-    /// 将 Columns + Rows 转换为 DataTable，供 DataTableBindingBehavior 自动生成列。
-    /// ColumnName 用于绑定索引路径，Caption 用于显示表头。
-    /// </summary>
-    private void RebuildMatrixTable()
-    {
-        var table = new DataTable();
-
-        // 行号列：内部名 _Index，表头显示 #
-        var indexCol = table.Columns.Add("_Index", typeof(string));
-        indexCol.Caption = "#";
-
-        for (var i = 0; i < Columns.Count; i++)
-        {
-            // 用 _Col{i} 作为内部列名，避免特殊字符和重复问题
-            var col = table.Columns.Add($"_Col{i}", typeof(string));
-            col.Caption = Columns[i].MatrixColumnTitle;
-        }
-
-        foreach (var row in Rows)
-        {
-            var dataRow = table.NewRow();
-            dataRow[0] = row.Index.ToString(System.Globalization.CultureInfo.CurrentCulture);
-
-            for (var i = 0; i < row.Values.Count && i + 1 < table.Columns.Count; i++)
-            {
-                dataRow[i + 1] = row.Values[i].Value;
-            }
-
-            table.Rows.Add(dataRow);
-        }
-
-        _matrixTable = table;
-        OnPropertyChanged(nameof(MatrixTable));
     }
 
     private string GetText(string key, string fallback)
         => _textProvider?.Invoke(key, fallback) ?? fallback;
 }
 
-public sealed class IoContinuousReadMatrixRowModel
+public sealed class IoContinuousReadMatrixRowModel : BaseNotifyPropertyChanged
 {
-    public int Index { get; init; }
+    private int _index;
+
+    public int Index
+    {
+        get => _index;
+        set
+        {
+            if (_index == value)
+            {
+                return;
+            }
+
+            _index = value;
+            OnPropertyChanged();
+        }
+    }
 
     public ObservableCollection<IoContinuousReadMatrixCellModel> Values { get; } = [];
 }
 
-public sealed class IoContinuousReadMatrixCellModel
+public sealed class IoContinuousReadMatrixCellModel : BaseNotifyPropertyChanged
 {
-    public string ColumnName { get; init; } = string.Empty;
+    private string _columnName = string.Empty;
+    private string _value = string.Empty;
 
-    public string Value { get; init; } = string.Empty;
+    public string ColumnName
+    {
+        get => _columnName;
+        set
+        {
+            if (_columnName == value)
+            {
+                return;
+            }
+
+            _columnName = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public string Value
+    {
+        get => _value;
+        set
+        {
+            if (_value == value)
+            {
+                return;
+            }
+
+            _value = value;
+            OnPropertyChanged();
+        }
+    }
 }

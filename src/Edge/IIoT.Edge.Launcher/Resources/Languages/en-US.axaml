@@ -1,0 +1,86 @@
+<ResourceDictionary
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:sys="using:System">
+    <sys:String x:Key="Launcher_WindowTitle">IIoT Edge Launcher</sys:String>
+    <sys:String x:Key="Launcher_HeaderBrand">IIoT Edge Launcher</sys:String>
+    <sys:String x:Key="Launcher_ToolTip_Minimize">Minimize</sys:String>
+    <sys:String x:Key="Launcher_ToolTip_ToggleWindowState">Maximize / restore</sys:String>
+    <sys:String x:Key="Launcher_ToolTip_Close">Close</sys:String>
+    <sys:String x:Key="Launcher_ToolTip_SwitchLanguage">Switch to Chinese</sys:String>
+    <sys:String x:Key="Launcher_Language_ToggleTarget">中</sys:String>
+    <sys:String x:Key="Launcher_Startup_ErrorTitle">Startup failed</sys:String>
+    <sys:String x:Key="Launcher_Startup_ErrorFormat">Local launcher initialization failed: {0}</sys:String>
+
+    <sys:String x:Key="Launcher_Login_Badge">Local login</sys:String>
+    <sys:String x:Key="Launcher_Login_Title">Sign in before selecting a process</sys:String>
+    <sys:String x:Key="Launcher_Login_Description">This account is only for the local launcher and is not shared with cloud employee login. After login, select the process client to start.</sys:String>
+    <sys:String x:Key="Launcher_Login_UserNamePlaceholder">Account</sys:String>
+    <sys:String x:Key="Launcher_Login_PasswordPlaceholder">Password</sys:String>
+    <sys:String x:Key="Launcher_Button_Login">Sign in and select process</sys:String>
+    <sys:String x:Key="Launcher_Button_ChangePassword">Change local password</sys:String>
+    <sys:String x:Key="Launcher_Login_BoundaryNote">Launcher only handles local login, reads the profile list, and starts Shell.</sys:String>
+
+    <sys:String x:Key="Launcher_Hero_VersionLabel">Software version</sys:String>
+    <sys:String x:Key="Launcher_Hero_Title">Standard process launcher</sys:String>
+    <sys:String x:Key="Launcher_Hero_Description">Launcher handles local site login and process switching. The real HMI client is still hosted by IIoT.Edge.Shell.exe.</sys:String>
+    <sys:String x:Key="Launcher_Hero_PlatformLabel">Platform role</sys:String>
+    <sys:String x:Key="Launcher_Hero_ArchitectureLabel">Runtime architecture</sys:String>
+    <sys:String x:Key="Launcher_Hero_MaintainerLabel">Maintenance</sys:String>
+    <sys:String x:Key="Launcher_Hero_SupportNote">Supports one main client, isolated profiles, and plugin-based process extension.</sys:String>
+    <sys:String x:Key="Launcher_Hero_FlowLogin">Local login</sys:String>
+    <sys:String x:Key="Launcher_Hero_FlowProfile">Select profile</sys:String>
+    <sys:String x:Key="Launcher_Hero_FlowShell">Start Shell</sys:String>
+
+    <sys:String x:Key="Launcher_Selection_Title">Select the process client to start</sys:String>
+    <sys:String x:Key="Launcher_Selection_Description">Process cards come from the local profile list. New processes only require plugin deployment, profile configuration, and a launch card.</sys:String>
+    <sys:String x:Key="Launcher_Selection_SearchPlaceholder">Search process, profile, or card id</sys:String>
+    <sys:String x:Key="Launcher_Button_LaunchProfile">Start process</sys:String>
+    <sys:String x:Key="Launcher_Profile_PluginLabel">Plugin</sys:String>
+    <sys:String x:Key="Launcher_Profile_DataLabel">Data</sys:String>
+    <sys:String x:Key="Launcher_Profile_PluginMissing">Plugin manifest missing</sys:String>
+    <sys:String x:Key="Launcher_Profile_DataMissing">Data path missing</sys:String>
+
+    <sys:String x:Key="Launcher_ChangePassword_WindowTitle">Change local password</sys:String>
+    <sys:String x:Key="Launcher_ChangePassword_Badge">Local administrator</sys:String>
+    <sys:String x:Key="Launcher_ChangePassword_Title">Change local password</sys:String>
+    <sys:String x:Key="Launcher_ChangePassword_Description">Use the new password to sign in to Launcher again.</sys:String>
+    <sys:String x:Key="Launcher_ChangePassword_OldPasswordPlaceholder">Old password</sys:String>
+    <sys:String x:Key="Launcher_ChangePassword_NewPasswordPlaceholder">New password</sys:String>
+    <sys:String x:Key="Launcher_ChangePassword_ConfirmPasswordPlaceholder">Confirm new password</sys:String>
+    <sys:String x:Key="Launcher_Button_Cancel">Cancel</sys:String>
+    <sys:String x:Key="Launcher_Button_ConfirmChange">Confirm change</sys:String>
+    <sys:String x:Key="Launcher_ChangePassword_UserNameRequired">Account is required.</sys:String>
+    <sys:String x:Key="Launcher_ChangePassword_OldPasswordRequired">Old password is required.</sys:String>
+    <sys:String x:Key="Launcher_ChangePassword_NewPasswordRequired">New password is required.</sys:String>
+    <sys:String x:Key="Launcher_ChangePassword_NewPasswordMinLength">New password must be at least 6 characters.</sys:String>
+    <sys:String x:Key="Launcher_ChangePassword_ConfirmMismatch">The two new passwords do not match.</sys:String>
+
+    <sys:String x:Key="Launcher_Status_Initial">Please sign in with a local account first.</sys:String>
+    <sys:String x:Key="Launcher_Status_ValidatingLogin">Validating local account...</sys:String>
+    <sys:String x:Key="Launcher_Status_LoginRetry">Fix the account information and try again.</sys:String>
+    <sys:String x:Key="Launcher_Status_SelectProfile">Select the process client to start.</sys:String>
+    <sys:String x:Key="Launcher_Status_ProfileLoadFailed">Local login passed, but the process list failed to load.</sys:String>
+    <sys:String x:Key="Launcher_Status_ChangingPassword">Changing local password...</sys:String>
+    <sys:String x:Key="Launcher_Status_PasswordRetry">Fix the password information and try again.</sys:String>
+    <sys:String x:Key="Launcher_Status_PasswordChanged">Local password changed. Use the new password to sign in.</sys:String>
+    <sys:String x:Key="Launcher_Status_PasswordChangeFailed">Local password change failed.</sys:String>
+    <sys:String x:Key="Launcher_Status_LaunchSucceededFormat">Started {0}, MachineProfile = {1}.</sys:String>
+    <sys:String x:Key="Launcher_Status_LaunchFailedFormat">Failed to start {0}.</sys:String>
+    <sys:String x:Key="Launcher_Error_LoginFailed">Local login failed.</sys:String>
+    <sys:String x:Key="Launcher_Error_UserNameRequired">Enter an account.</sys:String>
+    <sys:String x:Key="Launcher_Error_PasswordRequired">Enter a password.</sys:String>
+    <sys:String x:Key="Launcher_Error_AccountDisabledOrMissing">The local account does not exist or is disabled.</sys:String>
+    <sys:String x:Key="Launcher_Error_InvalidCredentials">The account or password is incorrect.</sys:String>
+    <sys:String x:Key="Launcher_Error_NewPasswordRequired">New password is required.</sys:String>
+    <sys:String x:Key="Launcher_Error_NewPasswordMinLength">New password must be at least 6 characters.</sys:String>
+    <sys:String x:Key="Launcher_Error_OldPasswordInvalid">Old password verification failed.</sys:String>
+    <sys:String x:Key="Launcher_Welcome_Anonymous">Not signed in</sys:String>
+    <sys:String x:Key="Launcher_Welcome_Format">Signed in: {0}</sys:String>
+    <sys:String x:Key="Launcher_ProfileSummary_Zero">0 processes</sys:String>
+    <sys:String x:Key="Launcher_ProfileSummary_AllFormat">{0} processes</sys:String>
+    <sys:String x:Key="Launcher_ProfileSummary_FilteredFormat">Showing {0} / {1} processes</sys:String>
+    <sys:String x:Key="Launcher_Meta_Platform">Local login / plugin loading</sys:String>
+    <sys:String x:Key="Launcher_Meta_Maintainer">Edge Platform Team</sys:String>
+    <sys:String x:Key="Launcher_Meta_Architecture">Launcher / Shell / Profile</sys:String>
+</ResourceDictionary>

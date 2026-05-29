@@ -1,8 +1,9 @@
 using System.Text.Json;
+using IIoT.Edge.Launcher.Models;
 
-namespace IIoT.Edge.Application.Auth.LocalAccounts;
+namespace IIoT.Edge.Launcher.Services;
 
-public sealed class LocalAccountCatalog : ILocalAccountCatalog
+public sealed class LauncherAccountCatalog : ILauncherAccountCatalog
 {
     public const string DefaultCatalogFileName = "launcher.accounts.json";
 
@@ -10,7 +11,7 @@ public sealed class LocalAccountCatalog : ILocalAccountCatalog
 
     private readonly string _catalogPath;
 
-    public LocalAccountCatalog(string baseDirectory, string catalogFileName = DefaultCatalogFileName)
+    public LauncherAccountCatalog(string baseDirectory, string catalogFileName = DefaultCatalogFileName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
         ArgumentException.ThrowIfNullOrWhiteSpace(catalogFileName);
@@ -18,7 +19,7 @@ public sealed class LocalAccountCatalog : ILocalAccountCatalog
         _catalogPath = GetCatalogPath(baseDirectory, catalogFileName);
     }
 
-    public IReadOnlyList<LocalAccountRecord> LoadAccounts()
+    public IReadOnlyList<LauncherAccountRecord> LoadAccounts()
     {
         if (!File.Exists(_catalogPath))
         {
@@ -61,7 +62,7 @@ public sealed class LocalAccountCatalog : ILocalAccountCatalog
         return Path.Combine(baseDirectory, catalogFileName);
     }
 
-    private static LocalAccountRecord Map(LocalAccountFileEntry entry)
+    private static LauncherAccountRecord Map(LauncherAccountFileEntry entry)
     {
         if (string.IsNullOrWhiteSpace(entry.UserName))
         {
@@ -78,7 +79,7 @@ public sealed class LocalAccountCatalog : ILocalAccountCatalog
             throw new InvalidOperationException($"本地账号 '{entry.UserName}' 缺少密码哈希。");
         }
 
-        return new LocalAccountRecord(
+        return new LauncherAccountRecord(
             entry.UserName.Trim(),
             entry.DisplayName.Trim(),
             entry.PasswordHash.Trim(),
@@ -99,7 +100,7 @@ public sealed class LocalAccountCatalog : ILocalAccountCatalog
         return options;
     }
 
-    private List<LocalAccountFileEntry> LoadFileEntries()
+    private List<LauncherAccountFileEntry> LoadFileEntries()
     {
         if (!File.Exists(_catalogPath))
         {
@@ -107,11 +108,11 @@ public sealed class LocalAccountCatalog : ILocalAccountCatalog
         }
 
         var json = File.ReadAllText(_catalogPath);
-        return JsonSerializer.Deserialize<List<LocalAccountFileEntry>>(json, JsonOptions())
+        return JsonSerializer.Deserialize<List<LauncherAccountFileEntry>>(json, JsonOptions())
             ?? [];
     }
 
-    private sealed class LocalAccountFileEntry
+    private sealed class LauncherAccountFileEntry
     {
         public string? UserName { get; set; }
 

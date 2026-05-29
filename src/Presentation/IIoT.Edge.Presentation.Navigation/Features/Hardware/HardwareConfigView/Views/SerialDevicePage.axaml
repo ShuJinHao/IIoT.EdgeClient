@@ -10,14 +10,19 @@
         Title="{DynamicResource Navigation_Tab_SerialDevice}">
         <edge:EdgeTablePanel.ActionContent>
             <StackPanel Orientation="Horizontal" Spacing="8">
-                <edge:EdgeToolButton Command="{Binding AddSerialDeviceCommand}">
-                    <TextBlock Text="{DynamicResource Navigation_Button_Add}" />
-                </edge:EdgeToolButton>
-                <edge:EdgeToolButton
+                <edge:EdgeActionButton
+                    Command="{Binding AddSerialDeviceCommand}"
+                    Content="{DynamicResource Navigation_Button_Add}"
+                    Icon="{StaticResource Edge.Icon.Add}"
+                    Kind="Primary"
+                    Size="Compact" />
+                <edge:EdgeActionButton
                     Command="{Binding DeleteSerialDeviceCommand}"
-                    CommandParameter="{Binding SelectedItem, ElementName=SerialGrid}">
-                    <TextBlock Text="{DynamicResource Navigation_Button_Delete}" />
-                </edge:EdgeToolButton>
+                    CommandParameter="{Binding SelectedItem, ElementName=SerialGrid}"
+                    Content="{DynamicResource Navigation_Button_Delete}"
+                    Icon="{StaticResource Edge.Icon.Delete}"
+                    Kind="Danger"
+                    Size="Compact" />
             </StackPanel>
         </edge:EdgeTablePanel.ActionContent>
 
@@ -43,7 +48,7 @@
                     </dg:DataGridTemplateColumn.CellTemplate>
                     <dg:DataGridTemplateColumn.CellEditingTemplate>
                         <DataTemplate>
-                            <ComboBox ItemsSource="{Binding DataContext.StopBitOptions, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedItem="{Binding StopBits}" />
+                            <edge:EdgeFilterComboBox ItemsSource="{Binding DataContext.StopBitOptions, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedItem="{Binding StopBits}" />
                         </DataTemplate>
                     </dg:DataGridTemplateColumn.CellEditingTemplate>
                 </dg:DataGridTemplateColumn>
@@ -55,7 +60,7 @@
                     </dg:DataGridTemplateColumn.CellTemplate>
                     <dg:DataGridTemplateColumn.CellEditingTemplate>
                         <DataTemplate>
-                            <ComboBox ItemsSource="{Binding DataContext.ParityOptions, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedItem="{Binding Parity}" />
+                            <edge:EdgeFilterComboBox ItemsSource="{Binding DataContext.ParityOptions, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedItem="{Binding Parity}" />
                         </DataTemplate>
                     </dg:DataGridTemplateColumn.CellEditingTemplate>
                 </dg:DataGridTemplateColumn>

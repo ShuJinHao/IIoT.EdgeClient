@@ -9,6 +9,8 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
     private const string DefaultExecutableFileName = "IIoT.Edge.Shell";
     private const string DefaultIconKind = "Cog";
     private const string DefaultAccentColor = "#0F766E";
+    private const string ModulesDirectoryName = "Modules";
+    private const string PluginManifestFileName = "plugin.json";
 
     private readonly string _baseDirectory;
     private readonly string _catalogPath;
@@ -69,16 +71,22 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
         var accentColor = string.IsNullOrWhiteSpace(entry.AccentColor)
             ? DefaultAccentColor
             : entry.AccentColor.Trim();
+        var machineProfile = entry.MachineProfile.Trim();
+        var runtimeDirectory = Path.GetDirectoryName(executablePath) ?? _baseDirectory;
 
         return new LauncherProfileDefinition(
             entry.ProfileId.Trim(),
             entry.DisplayName.Trim(),
             entry.Description?.Trim() ?? string.Empty,
             imagePath,
-            entry.MachineProfile.Trim(),
+            machineProfile,
             executablePath,
             iconKind,
-            accentColor);
+            accentColor)
+        {
+            PluginDisplayPath = ResolvePluginDisplayPath(runtimeDirectory),
+            DataDisplayPath = ResolveDataDisplayPath(runtimeDirectory, machineProfile)
+        };
     }
 
     private string ResolvePath(string path)
@@ -92,6 +100,113 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
 
     private static string NormalizePathSeparators(string path)
         => path.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
+
+    private static string ResolvePluginDisplayPath(string runtimeDirectory)
+    {
+        var modulesDirectory = Path.Combine(runtimeDirectory, ModulesDirectoryName);
+        if (!Directory.Exists(modulesDirectory))
+        {
+            return string.Empty;
+        }
+
+        var manifestPath = Directory
+            .EnumerateFiles(modulesDirectory, PluginManifestFileName, SearchOption.AllDirectories)
+            .OrderBy(static path => path, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault();
+        if (manifestPath is null)
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(manifestPath));
+            var root = document.RootElement;
+            var moduleId = ReadString(root, "moduleId");
+            var entryAssembly = ReadString(root, "entryAssembly");
+            if (string.IsNullOrWhiteSpace(moduleId) || string.IsNullOrWhiteSpace(entryAssembly))
+            {
+                return NormalizeDisplayPath(Path.GetRelativePath(runtimeDirectory, manifestPath));
+            }
+
+            return Path.GetFileNameWithoutExtension(entryAssembly);
+        }
+        catch (JsonException)
+        {
+            return string.Empty;
+        }
+        catch (IOException)
+        {
+            return string.Empty;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return string.Empty;
+        }
+    }
+
+    private static string ResolveDataDisplayPath(string runtimeDirectory, string machineProfile)
+    {
+        var configPath = Path.Combine(runtimeDirectory, $"appsettings.machine.{machineProfile}.json");
+        var runtimeDataRoot = ReadRuntimeDataRoot(configPath);
+        if (string.IsNullOrWhiteSpace(runtimeDataRoot))
+        {
+            return NormalizeDisplayPath(Path.Combine("data", "profiles", machineProfile));
+        }
+
+        var normalizedRoot = NormalizePathSeparators(Environment.ExpandEnvironmentVariables(runtimeDataRoot));
+        var absoluteRoot = Path.GetFullPath(
+            Path.IsPathRooted(normalizedRoot)
+                ? normalizedRoot
+                : Path.Combine(runtimeDirectory, normalizedRoot));
+        var layoutRoot = Directory.GetParent(runtimeDirectory)?.FullName ?? runtimeDirectory;
+        return NormalizeDisplayPath(Path.GetRelativePath(layoutRoot, absoluteRoot));
+    }
+
+    private static string? ReadRuntimeDataRoot(string configPath)
+    {
+        if (!File.Exists(configPath))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(configPath));
+            if (!document.RootElement.TryGetProperty("Shell", out var shell))
+            {
+                return null;
+            }
+
+            return ReadString(shell, "RuntimeDataRoot");
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    private static string? ReadString(JsonElement element, string propertyName)
+    {
+        return element.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()?.Trim()
+            : null;
+    }
+
+    private static string NormalizeDisplayPath(string path)
+    {
+        return path
+            .Replace('\\', '/')
+            .TrimStart('.', '/');
+    }
 
     private static JsonSerializerOptions JsonOptions()
         => new()

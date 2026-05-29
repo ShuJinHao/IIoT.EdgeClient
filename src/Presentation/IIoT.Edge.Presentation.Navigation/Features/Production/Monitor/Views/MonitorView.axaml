@@ -106,7 +106,7 @@
                             </edge:EdgeCard.Header>
                             <Grid RowDefinitions="Auto,*" RowSpacing="{DynamicResource Edge.Size.Spacing10}">
                                 <Grid ColumnDefinitions="300,*,Auto" ColumnSpacing="{DynamicResource Edge.Size.Spacing10}">
-                                    <TextBox
+                                    <edge:EdgeTextBox
                                         MinHeight="38"
                                         PlaceholderText="{DynamicResource Navigation_Monitor_CellQueryWatermark}"
                                         Text="{Binding CellQueryText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
@@ -132,7 +132,7 @@
                                             FontWeight="SemiBold"
                                             Foreground="{DynamicResource Edge.Brush.Text.Primary}"
                                             Text="{DynamicResource Navigation_Monitor_CurrentCellsTableTitle}" />
-                                        <Grid MinHeight="150" MaxHeight="220">
+                                        <Grid MinHeight="150">
                                             <edge:EdgeDataGrid
                                                 AutoGenerateColumns="False"
                                                 CanUserReorderColumns="False"
@@ -143,7 +143,8 @@
                                                 HeadersVisibility="Column"
                                                 IsReadOnly="True"
                                                 ItemsSource="{Binding CellDebugItems}"
-                                                SelectedItem="{Binding SelectedCell, Mode=TwoWay}">
+                                                SelectedItem="{Binding SelectedCell, Mode=TwoWay}"
+                                                ViewportMaxHeight="220">
                                                 <edge:EdgeDataGrid.Columns>
                                                     <dg:DataGridTextColumn Binding="{Binding InternalKey}" Header="{DynamicResource Navigation_Monitor_ColumnInternalKey}" MinWidth="220" Width="2.2*" />
                                                     <dg:DataGridTextColumn Binding="{Binding DisplayLabel}" Header="{DynamicResource Navigation_Monitor_ColumnBusinessId}" MinWidth="150" Width="1.2*" />

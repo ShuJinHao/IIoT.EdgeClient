@@ -163,19 +163,22 @@
                                                 Spacing="6"
                                                 VerticalAlignment="Center"
                                                 Margin="4,0">
-                                                <Button
-                                                    Classes="edge-soft-button"
+                                                <controls:EdgeActionButton
+                                                    Classes="cell"
                                                     Command="{Binding $parent[UserControl].DataContext.RequeueDeadLetterCommand}"
-                                                    CommandParameter="{Binding}">
-                                                    <TextBlock Text="{DynamicResource Navigation_Button_Requeue}" />
-                                                </Button>
-                                                <Button
-                                                    Classes="edge-soft-button"
-                                                    Foreground="{DynamicResource Edge.Brush.Status.Error}"
+                                                    CommandParameter="{Binding}"
+                                                    Content="{DynamicResource Navigation_Button_Requeue}"
+                                                    Icon="{StaticResource Edge.Icon.Sync}"
+                                                    Kind="Primary"
+                                                    Size="Compact" />
+                                                <controls:EdgeActionButton
+                                                    Classes="cell"
                                                     Command="{Binding $parent[UserControl].DataContext.DeleteDeadLetterCommand}"
-                                                    CommandParameter="{Binding}">
-                                                    <TextBlock Text="{DynamicResource Navigation_Button_Delete}" />
-                                                </Button>
+                                                    CommandParameter="{Binding}"
+                                                    Content="{DynamicResource Navigation_Button_Delete}"
+                                                    Icon="{StaticResource Edge.Icon.Delete}"
+                                                    Kind="Danger"
+                                                    Size="Compact" />
                                             </StackPanel>
                                         </DataTemplate>
                                     </dg:DataGridTemplateColumn.CellTemplate>
@@ -219,19 +222,22 @@
                                                 Spacing="6"
                                                 VerticalAlignment="Center"
                                                 Margin="4,0">
-                                                <Button
-                                                    Classes="edge-soft-button"
+                                                <controls:EdgeActionButton
+                                                    Classes="cell"
                                                     Command="{Binding $parent[UserControl].DataContext.RequeueDeadLetterCommand}"
-                                                    CommandParameter="{Binding}">
-                                                    <TextBlock Text="{DynamicResource Navigation_Button_Requeue}" />
-                                                </Button>
-                                                <Button
-                                                    Classes="edge-soft-button"
-                                                    Foreground="{DynamicResource Edge.Brush.Status.Error}"
+                                                    CommandParameter="{Binding}"
+                                                    Content="{DynamicResource Navigation_Button_Requeue}"
+                                                    Icon="{StaticResource Edge.Icon.Sync}"
+                                                    Kind="Primary"
+                                                    Size="Compact" />
+                                                <controls:EdgeActionButton
+                                                    Classes="cell"
                                                     Command="{Binding $parent[UserControl].DataContext.DeleteDeadLetterCommand}"
-                                                    CommandParameter="{Binding}">
-                                                    <TextBlock Text="{DynamicResource Navigation_Button_Delete}" />
-                                                </Button>
+                                                    CommandParameter="{Binding}"
+                                                    Content="{DynamicResource Navigation_Button_Delete}"
+                                                    Icon="{StaticResource Edge.Icon.Delete}"
+                                                    Kind="Danger"
+                                                    Size="Compact" />
                                             </StackPanel>
                                         </DataTemplate>
                                     </dg:DataGridTemplateColumn.CellTemplate>

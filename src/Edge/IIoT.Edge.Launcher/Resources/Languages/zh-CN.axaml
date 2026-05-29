@@ -1,0 +1,86 @@
+<ResourceDictionary
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:sys="using:System">
+    <sys:String x:Key="Launcher_WindowTitle">IIoT Edge Launcher</sys:String>
+    <sys:String x:Key="Launcher_HeaderBrand">IIoT Edge Launcher</sys:String>
+    <sys:String x:Key="Launcher_ToolTip_Minimize">最小化</sys:String>
+    <sys:String x:Key="Launcher_ToolTip_ToggleWindowState">最大化/还原</sys:String>
+    <sys:String x:Key="Launcher_ToolTip_Close">关闭</sys:String>
+    <sys:String x:Key="Launcher_ToolTip_SwitchLanguage">切换为英文</sys:String>
+    <sys:String x:Key="Launcher_Language_ToggleTarget">EN</sys:String>
+    <sys:String x:Key="Launcher_Startup_ErrorTitle">启动失败</sys:String>
+    <sys:String x:Key="Launcher_Startup_ErrorFormat">本地启动器初始化失败：{0}</sys:String>
+
+    <sys:String x:Key="Launcher_Login_Badge">本地登录</sys:String>
+    <sys:String x:Key="Launcher_Login_Title">先登录，再选择要启动的工序</sys:String>
+    <sys:String x:Key="Launcher_Login_Description">这里的账号只用于本地启动器，不和云端员工登录共用。登录成功后，再进入工序选择页启动对应客户端。</sys:String>
+    <sys:String x:Key="Launcher_Login_UserNamePlaceholder">账号</sys:String>
+    <sys:String x:Key="Launcher_Login_PasswordPlaceholder">密码</sys:String>
+    <sys:String x:Key="Launcher_Button_Login">登录并进入工序选择</sys:String>
+    <sys:String x:Key="Launcher_Button_ChangePassword">修改本地密码</sys:String>
+    <sys:String x:Key="Launcher_Login_BoundaryNote">Launcher 只负责本地登录、读取 profile 清单并启动 Shell。</sys:String>
+
+    <sys:String x:Key="Launcher_Hero_VersionLabel">软件版本</sys:String>
+    <sys:String x:Key="Launcher_Hero_Title">标准工序启动平台</sys:String>
+    <sys:String x:Key="Launcher_Hero_Description">Launcher 负责现场本地登录与工序切换，真正的上位机仍然由 IIoT.Edge.Shell.exe 承载。</sys:String>
+    <sys:String x:Key="Launcher_Hero_PlatformLabel">平台定位</sys:String>
+    <sys:String x:Key="Launcher_Hero_ArchitectureLabel">运行架构</sys:String>
+    <sys:String x:Key="Launcher_Hero_MaintainerLabel">维护信息</sys:String>
+    <sys:String x:Key="Launcher_Hero_SupportNote">支持单主程序、多 Profile 隔离与插件化工序扩展。</sys:String>
+    <sys:String x:Key="Launcher_Hero_FlowLogin">本地登录</sys:String>
+    <sys:String x:Key="Launcher_Hero_FlowProfile">选择 Profile</sys:String>
+    <sys:String x:Key="Launcher_Hero_FlowShell">启动 Shell</sys:String>
+
+    <sys:String x:Key="Launcher_Selection_Title">选择要启动的工序客户端</sys:String>
+    <sys:String x:Key="Launcher_Selection_Description">工序卡片来自本地 profile 清单。新增工序时，只需要补插件、profile 配置和启动卡片。</sys:String>
+    <sys:String x:Key="Launcher_Selection_SearchPlaceholder">搜索工序、Profile 或卡片标识</sys:String>
+    <sys:String x:Key="Launcher_Button_LaunchProfile">启动工序</sys:String>
+    <sys:String x:Key="Launcher_Profile_PluginLabel">插件</sys:String>
+    <sys:String x:Key="Launcher_Profile_DataLabel">数据</sys:String>
+    <sys:String x:Key="Launcher_Profile_PluginMissing">未发现插件清单</sys:String>
+    <sys:String x:Key="Launcher_Profile_DataMissing">未发现数据目录配置</sys:String>
+
+    <sys:String x:Key="Launcher_ChangePassword_WindowTitle">修改本地密码</sys:String>
+    <sys:String x:Key="Launcher_ChangePassword_Badge">本地管理员</sys:String>
+    <sys:String x:Key="Launcher_ChangePassword_Title">修改本地密码</sys:String>
+    <sys:String x:Key="Launcher_ChangePassword_Description">修改后请使用新密码重新登录 Launcher。</sys:String>
+    <sys:String x:Key="Launcher_ChangePassword_OldPasswordPlaceholder">旧密码</sys:String>
+    <sys:String x:Key="Launcher_ChangePassword_NewPasswordPlaceholder">新密码</sys:String>
+    <sys:String x:Key="Launcher_ChangePassword_ConfirmPasswordPlaceholder">确认新密码</sys:String>
+    <sys:String x:Key="Launcher_Button_Cancel">取消</sys:String>
+    <sys:String x:Key="Launcher_Button_ConfirmChange">确认修改</sys:String>
+    <sys:String x:Key="Launcher_ChangePassword_UserNameRequired">账号不能为空。</sys:String>
+    <sys:String x:Key="Launcher_ChangePassword_OldPasswordRequired">旧密码不能为空。</sys:String>
+    <sys:String x:Key="Launcher_ChangePassword_NewPasswordRequired">新密码不能为空。</sys:String>
+    <sys:String x:Key="Launcher_ChangePassword_NewPasswordMinLength">新密码至少 6 位。</sys:String>
+    <sys:String x:Key="Launcher_ChangePassword_ConfirmMismatch">两次输入的新密码不一致。</sys:String>
+
+    <sys:String x:Key="Launcher_Status_Initial">请先使用本地账号登录。</sys:String>
+    <sys:String x:Key="Launcher_Status_ValidatingLogin">正在验证本地账号...</sys:String>
+    <sys:String x:Key="Launcher_Status_LoginRetry">请修正账号信息后重试。</sys:String>
+    <sys:String x:Key="Launcher_Status_SelectProfile">请选择要启动的工序客户端。</sys:String>
+    <sys:String x:Key="Launcher_Status_ProfileLoadFailed">本地登录通过，但工序清单加载失败。</sys:String>
+    <sys:String x:Key="Launcher_Status_ChangingPassword">正在修改本地密码...</sys:String>
+    <sys:String x:Key="Launcher_Status_PasswordRetry">请修正密码信息后重试。</sys:String>
+    <sys:String x:Key="Launcher_Status_PasswordChanged">本地密码已修改，请使用新密码登录。</sys:String>
+    <sys:String x:Key="Launcher_Status_PasswordChangeFailed">本地密码修改失败。</sys:String>
+    <sys:String x:Key="Launcher_Status_LaunchSucceededFormat">已启动 {0}，MachineProfile = {1}。</sys:String>
+    <sys:String x:Key="Launcher_Status_LaunchFailedFormat">启动 {0} 失败。</sys:String>
+    <sys:String x:Key="Launcher_Error_LoginFailed">本地登录失败。</sys:String>
+    <sys:String x:Key="Launcher_Error_UserNameRequired">请输入账号。</sys:String>
+    <sys:String x:Key="Launcher_Error_PasswordRequired">请输入密码。</sys:String>
+    <sys:String x:Key="Launcher_Error_AccountDisabledOrMissing">本地账号不存在，或已被禁用。</sys:String>
+    <sys:String x:Key="Launcher_Error_InvalidCredentials">账号或密码不正确。</sys:String>
+    <sys:String x:Key="Launcher_Error_NewPasswordRequired">新密码不能为空。</sys:String>
+    <sys:String x:Key="Launcher_Error_NewPasswordMinLength">新密码至少需要 6 位。</sys:String>
+    <sys:String x:Key="Launcher_Error_OldPasswordInvalid">旧密码校验失败。</sys:String>
+    <sys:String x:Key="Launcher_Welcome_Anonymous">未登录</sys:String>
+    <sys:String x:Key="Launcher_Welcome_Format">已登录：{0}</sys:String>
+    <sys:String x:Key="Launcher_ProfileSummary_Zero">共 0 个工序</sys:String>
+    <sys:String x:Key="Launcher_ProfileSummary_AllFormat">共 {0} 个工序</sys:String>
+    <sys:String x:Key="Launcher_ProfileSummary_FilteredFormat">显示 {0} / {1} 个工序</sys:String>
+    <sys:String x:Key="Launcher_Meta_Platform">本地登录 / 插件加载</sys:String>
+    <sys:String x:Key="Launcher_Meta_Maintainer">Edge Platform Team</sys:String>
+    <sys:String x:Key="Launcher_Meta_Architecture">Launcher / Shell / Profile</sys:String>
+</ResourceDictionary>

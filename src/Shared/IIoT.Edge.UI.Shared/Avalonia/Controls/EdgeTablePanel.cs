@@ -26,6 +26,9 @@ public class EdgeTablePanel : TemplatedControl
     public static readonly StyledProperty<object?> StatusContentProperty =
         AvaloniaProperty.Register<EdgeTablePanel, object?>(nameof(StatusContent));
 
+    public static readonly StyledProperty<object?> FilterContentProperty =
+        AvaloniaProperty.Register<EdgeTablePanel, object?>(nameof(FilterContent));
+
     public static readonly StyledProperty<object?> ActionContentProperty =
         AvaloniaProperty.Register<EdgeTablePanel, object?>(nameof(ActionContent));
 
@@ -62,6 +65,8 @@ public class EdgeTablePanel : TemplatedControl
         SurfaceProperty.Changed.AddClassHandler<EdgeTablePanel>((panel, _) => panel.UpdateSurfaceClasses());
         SubtitleProperty.Changed.AddClassHandler<EdgeTablePanel>((panel, _) => panel.UpdatePseudoClasses());
         StatusContentProperty.Changed.AddClassHandler<EdgeTablePanel>((panel, _) => panel.UpdatePseudoClasses());
+        FilterContentProperty.Changed.AddClassHandler<EdgeTablePanel>((panel, _) => panel.UpdatePseudoClasses());
+        ActionContentProperty.Changed.AddClassHandler<EdgeTablePanel>((panel, _) => panel.UpdatePseudoClasses());
         ShowContentWhenEmptyProperty.Changed.AddClassHandler<EdgeTablePanel>((panel, _) => panel.UpdatePseudoClasses());
         IsEmptyProperty.Changed.AddClassHandler<EdgeTablePanel>((panel, _) => panel.UpdatePseudoClasses());
         HasErrorProperty.Changed.AddClassHandler<EdgeTablePanel>((panel, _) => panel.UpdatePseudoClasses());
@@ -95,6 +100,12 @@ public class EdgeTablePanel : TemplatedControl
     {
         get => GetValue(StatusContentProperty);
         set => SetValue(StatusContentProperty, value);
+    }
+
+    public object? FilterContent
+    {
+        get => GetValue(FilterContentProperty);
+        set => SetValue(FilterContentProperty, value);
     }
 
     public object? ActionContent
@@ -164,8 +175,10 @@ public class EdgeTablePanel : TemplatedControl
         SetPseudoClass(":error", HasError);
         SetPseudoClass(":has-subtitle", HasVisibleContent(Subtitle));
         SetPseudoClass(":has-status", HasVisibleContent(StatusContent));
+        SetPseudoClass(":has-toolbar", HasVisibleContent(FilterContent) || HasVisibleContent(ActionContent));
         SetClass("has-subtitle", HasVisibleContent(Subtitle));
         SetClass("has-status", HasVisibleContent(StatusContent));
+        SetClass("has-toolbar", HasVisibleContent(FilterContent) || HasVisibleContent(ActionContent));
         SetClass("empty-content-visible", ShowContentWhenEmpty && IsEmpty && !HasError);
     }
 
