@@ -44,56 +44,23 @@
                         Orientation="Horizontal"
                         Spacing="6">
                         <edge:EdgeActionButton
+                            Content="{Binding LanguageToggleText}"
+                            Icon="{StaticResource Edge.Icon.Language}"
                             Kind="Language"
                             Click="ToggleLanguageButton_Click"
-                            ToolTip.Tip="{DynamicResource Launcher_ToolTip_SwitchLanguage}">
-                            <StackPanel
-                                HorizontalAlignment="Center"
-                                VerticalAlignment="Center"
-                                Orientation="Horizontal"
-                                Spacing="5">
-                                <Path
-                                    Width="15"
-                                    Height="15"
-                                    Classes="edge-language-icon"
-                                    Data="{StaticResource Edge.Icon.Language}"
-                                    Stretch="Uniform" />
-                                <TextBlock
-                                    VerticalAlignment="Center"
-                                    FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                    FontWeight="SemiBold"
-                                    Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
-                                    Text="{Binding LanguageToggleText}" />
-                            </StackPanel>
-                        </edge:EdgeActionButton>
+                            ToolTip.Tip="{DynamicResource Launcher_ToolTip_SwitchLanguage}" />
                         <edge:EdgeWindowButton
-                            Classes="soft-window-action"
+                            Action="Minimize"
                             Click="MinimizeWindowButton_Click"
-                            ToolTip.Tip="{DynamicResource Launcher_ToolTip_Minimize}">
-                            <TextBlock
-                                Classes="edge-window-symbol"
-                                Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=edge:EdgeWindowButton}}"
-                                Text="─" />
-                        </edge:EdgeWindowButton>
+                            ToolTip.Tip="{DynamicResource Launcher_ToolTip_Minimize}" />
                         <edge:EdgeWindowButton
-                            Classes="soft-window-action"
+                            Action="MaximizeRestore"
                             Click="ToggleWindowStateButton_Click"
-                            ToolTip.Tip="{DynamicResource Launcher_ToolTip_ToggleWindowState}">
-                            <TextBlock
-                                Classes="edge-window-symbol"
-                                Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=edge:EdgeWindowButton}}"
-                                Text="☐" />
-                        </edge:EdgeWindowButton>
+                            ToolTip.Tip="{DynamicResource Launcher_ToolTip_ToggleWindowState}" />
                         <edge:EdgeWindowButton
-                            Classes="soft-window-action"
+                            Action="Close"
                             Click="CloseWindowButton_Click"
-                            Kind="Close"
-                            ToolTip.Tip="{DynamicResource Launcher_ToolTip_Close}">
-                            <TextBlock
-                                Classes="edge-window-symbol"
-                                Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=edge:EdgeWindowButton}}"
-                                Text="✕" />
-                        </edge:EdgeWindowButton>
+                            ToolTip.Tip="{DynamicResource Launcher_ToolTip_Close}" />
                     </StackPanel>
                 </Grid>
             </Border>
@@ -363,7 +330,7 @@
                         </Grid>
                     </edge:EdgeCard>
 
-                    <ScrollViewer
+                    <edge:EdgeScrollHost
                         Grid.Row="2"
                         Margin="0,0,0,14"
                         HorizontalScrollBarVisibility="Disabled"
@@ -407,7 +374,7 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
-                    </ScrollViewer>
+                    </edge:EdgeScrollHost>
 
                     <edge:EdgeCard
                         Grid.Row="3"

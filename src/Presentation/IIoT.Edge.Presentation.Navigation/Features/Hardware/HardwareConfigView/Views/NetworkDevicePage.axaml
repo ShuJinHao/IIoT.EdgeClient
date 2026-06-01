@@ -2,8 +2,7 @@
     x:Class="IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView.NetworkDevicePage"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:dg="using:Avalonia.Controls"
-    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
+        xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
 
     <edge:EdgeTablePanel
         Margin="0,12,0,0"
@@ -35,40 +34,40 @@
             IsReadOnly="{Binding !CanEdit}"
             ItemsSource="{Binding NetworkDevices}">
             <edge:EdgeDataGrid.Columns>
-                <dg:DataGridTextColumn Binding="{Binding DeviceName}" Header="{DynamicResource Navigation_Column_DeviceName}" MinWidth="170" Width="170" />
-                <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_DeviceType}" MinWidth="120" Width="120">
-                    <dg:DataGridTemplateColumn.CellTemplate>
+                <edge:EdgeTextColumn Binding="{Binding DeviceName}" Header="{DynamicResource Navigation_Column_DeviceName}" MinWidth="170" Width="170" />
+                <edge:EdgeTemplateColumn Header="{DynamicResource Navigation_Column_DeviceType}" MinWidth="120" Width="120">
+                    <edge:EdgeTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding DeviceType}" />
                         </DataTemplate>
-                    </dg:DataGridTemplateColumn.CellTemplate>
-                    <dg:DataGridTemplateColumn.CellEditingTemplate>
+                    </edge:EdgeTemplateColumn.CellTemplate>
+                    <edge:EdgeTemplateColumn.CellEditingTemplate>
                         <DataTemplate>
                             <edge:EdgeFilterComboBox ItemsSource="{Binding DataContext.DeviceTypes, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedItem="{Binding DeviceType}" />
                         </DataTemplate>
-                    </dg:DataGridTemplateColumn.CellEditingTemplate>
-                </dg:DataGridTemplateColumn>
-                <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_DeviceModel}" MinWidth="130" Width="130">
-                    <dg:DataGridTemplateColumn.CellTemplate>
+                    </edge:EdgeTemplateColumn.CellEditingTemplate>
+                </edge:EdgeTemplateColumn>
+                <edge:EdgeTemplateColumn Header="{DynamicResource Navigation_Column_DeviceModel}" MinWidth="130" Width="130">
+                    <edge:EdgeTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding DeviceModel}" />
                         </DataTemplate>
-                    </dg:DataGridTemplateColumn.CellTemplate>
-                    <dg:DataGridTemplateColumn.CellEditingTemplate>
+                    </edge:EdgeTemplateColumn.CellTemplate>
+                    <edge:EdgeTemplateColumn.CellEditingTemplate>
                         <DataTemplate>
                             <edge:EdgeFilterComboBox ItemsSource="{Binding AvailableModels}" SelectedItem="{Binding DeviceModel}" />
                         </DataTemplate>
-                    </dg:DataGridTemplateColumn.CellEditingTemplate>
-                </dg:DataGridTemplateColumn>
-                <dg:DataGridTextColumn Binding="{Binding ModuleId}" Header="{DynamicResource Navigation_Column_ModuleId}" MinWidth="170" Width="170" />
-                <dg:DataGridTextColumn Binding="{Binding IpAddress}" Header="{DynamicResource Navigation_Column_IpAddress}" MinWidth="130" Width="130" />
-                <dg:DataGridTextColumn Binding="{Binding Port1}" Header="{DynamicResource Navigation_Column_Port1}" MinWidth="80" Width="80" />
-                <dg:DataGridTextColumn Binding="{Binding Port2}" Header="{DynamicResource Navigation_Column_Port2}" MinWidth="80" Width="80" />
-                <dg:DataGridTextColumn Binding="{Binding SendCmd1}" Header="{DynamicResource Navigation_Column_Command1}" MinWidth="100" Width="100" />
-                <dg:DataGridTextColumn Binding="{Binding SendCmd2}" Header="{DynamicResource Navigation_Column_Command2}" MinWidth="100" Width="100" />
-                <dg:DataGridTextColumn Binding="{Binding ConnectTimeout}" Header="{DynamicResource Navigation_Column_TimeoutMs}" MinWidth="110" Width="110" />
-                <dg:DataGridCheckBoxColumn Binding="{Binding IsEnabled}" Header="{DynamicResource Navigation_Column_Enable}" MinWidth="80" Width="80" />
-                <dg:DataGridTextColumn Binding="{Binding Remark}" Header="{DynamicResource Navigation_Column_Remark}" MinWidth="180" Width="180" />
+                    </edge:EdgeTemplateColumn.CellEditingTemplate>
+                </edge:EdgeTemplateColumn>
+                <edge:EdgeTextColumn Binding="{Binding ModuleId}" Header="{DynamicResource Navigation_Column_ModuleId}" MinWidth="170" Width="170" />
+                <edge:EdgeTextColumn Binding="{Binding IpAddress}" Header="{DynamicResource Navigation_Column_IpAddress}" MinWidth="130" Width="130" />
+                <edge:EdgeTextColumn Binding="{Binding Port1}" Header="{DynamicResource Navigation_Column_Port1}" MinWidth="80" Width="80" />
+                <edge:EdgeTextColumn Binding="{Binding Port2}" Header="{DynamicResource Navigation_Column_Port2}" MinWidth="80" Width="80" />
+                <edge:EdgeTextColumn Binding="{Binding SendCmd1}" Header="{DynamicResource Navigation_Column_Command1}" MinWidth="100" Width="100" />
+                <edge:EdgeTextColumn Binding="{Binding SendCmd2}" Header="{DynamicResource Navigation_Column_Command2}" MinWidth="100" Width="100" />
+                <edge:EdgeTextColumn Binding="{Binding ConnectTimeout}" Header="{DynamicResource Navigation_Column_TimeoutMs}" MinWidth="110" Width="110" />
+                <edge:EdgeCheckColumn Binding="{Binding IsEnabled}" Header="{DynamicResource Navigation_Column_Enable}" MinWidth="80" Width="80" />
+                <edge:EdgeTextColumn Binding="{Binding Remark}" Header="{DynamicResource Navigation_Column_Remark}" MinWidth="180" Width="180" />
             </edge:EdgeDataGrid.Columns>
         </edge:EdgeDataGrid>
     </edge:EdgeTablePanel>

@@ -1,6 +1,8 @@
+using IIoT.Edge.SharedKernel.Identity;
+
 namespace IIoT.Edge.Application.Abstractions.Plc;
 
-public sealed record PlcConnectionRuntimeSnapshot
+public sealed record PlcConnectionRuntimeSnapshot : IDeviceIdentifiable
 {
     public int NetworkDeviceId { get; init; }
 

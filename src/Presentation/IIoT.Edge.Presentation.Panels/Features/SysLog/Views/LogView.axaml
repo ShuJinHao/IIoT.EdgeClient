@@ -21,38 +21,11 @@
         MessageHeader="{DynamicResource Panels_Column_Message}">
         <edge:EdgeLogList.ItemTemplate>
             <DataTemplate>
-                <Border
-                    MinHeight="30"
-                    BorderBrush="{DynamicResource Edge.Brush.Border.Subtle}"
-                    BorderThickness="0,0,0,1"
-                    Padding="8,7">
-                    <Grid ColumnDefinitions="72,54,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing4}">
-                        <TextBlock
-                            VerticalAlignment="Top"
-                            FontSize="{DynamicResource Edge.FontSize.Caption}"
-                            Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
-                            Text="{Binding Time, StringFormat='{}{0:HH:mm:ss}'}" />
-
-                        <StackPanel
-                            Grid.Column="1"
-                            VerticalAlignment="Top"
-                            Orientation="Horizontal"
-                            Spacing="{DynamicResource Edge.Size.Spacing4}">
-                            <edge:EdgeStatusDot Status="{Binding Level, Converter={StaticResource LogLevelToEdgeVisualStatusConverter}}" />
-                            <TextBlock
-                                FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                Text="{Binding Level}" />
-                        </StackPanel>
-
-                        <TextBlock
-                            Grid.Column="2"
-                            FontSize="{DynamicResource Edge.FontSize.Caption}"
-                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                            Text="{Binding Message}"
-                            TextWrapping="Wrap" />
-                    </Grid>
-                </Border>
+                <edge:EdgeLogListItem
+                    TimeText="{Binding Time, StringFormat='{}{0:HH:mm:ss}'}"
+                    LevelText="{Binding Level}"
+                    Status="{Binding Level, Converter={StaticResource LogLevelToEdgeVisualStatusConverter}}"
+                    Message="{Binding Message}" />
             </DataTemplate>
         </edge:EdgeLogList.ItemTemplate>
     </edge:EdgeLogList>

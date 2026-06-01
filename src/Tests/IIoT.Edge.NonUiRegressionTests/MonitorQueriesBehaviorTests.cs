@@ -1,8 +1,11 @@
 using IIoT.Edge.Application.Common.Diagnostics;
+using IIoT.Edge.Application;
+using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 using IIoT.Edge.Application.Features.Hardware.Queries;
 using IIoT.Edge.Application.Features.Production.Monitor;
@@ -15,6 +18,7 @@ using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.SharedKernel.Result;
 using MediatR;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 
@@ -729,9 +733,10 @@ public sealed class MonitorQueriesBehaviorTests
         var effectiveTaskBindingService = taskBindingService
             ?? FakePlcTaskBindingService.FromDevices(devices, DefaultTaskCandidates);
 
-        return new GetMonitorSnapshotHandler(
-            contextStore,
-            new EdgeSyncDiagnosticsQuery(
+        var services = new ServiceCollection();
+        services.AddEdgeApplication();
+        services.AddSingleton<IProductionContextStore>(contextStore);
+        services.AddSingleton<IEdgeSyncDiagnosticsQuery>(new EdgeSyncDiagnosticsQuery(
                 contextStore,
                 deviceService,
                 cloudDiagnostics,
@@ -740,12 +745,15 @@ public sealed class MonitorQueriesBehaviorTests
                 cloudRetryStore,
                 mesRetryStore,
                 new FakeDeviceLogBufferStore(),
-                new FakeCapacityBufferStore()),
-            new FakeProductionTimeProvider(),
-            new FakePlcConnectionManager(runtimeSnapshots ?? []),
-            effectiveRuntimeRegistry,
-            effectiveTaskBindingService,
-            new MonitorHardwareSender(devices));
+                new FakeCapacityBufferStore()));
+        services.AddSingleton<IProductionTimeProvider>(new FakeProductionTimeProvider());
+        services.AddSingleton<IPlcConnectionManager>(new FakePlcConnectionManager(runtimeSnapshots ?? []));
+        services.AddSingleton(effectiveRuntimeRegistry);
+        services.AddSingleton(effectiveTaskBindingService);
+        services.AddSingleton<ISender>(new MonitorHardwareSender(devices));
+        services.AddTransient<GetMonitorSnapshotHandler>();
+
+        return services.BuildServiceProvider().GetRequiredService<GetMonitorSnapshotHandler>();
     }
 
     private static NetworkDeviceEntity CreatePlcDevice(

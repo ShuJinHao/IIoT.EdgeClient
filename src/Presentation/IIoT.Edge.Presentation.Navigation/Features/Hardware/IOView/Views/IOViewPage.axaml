@@ -2,8 +2,7 @@
     x:Class="IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView.IOViewPage"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:dg="using:Avalonia.Controls"
-    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
+        xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
     xmlns:ioview="clr-namespace:IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView"
     xmlns:sharedViews="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared">
 
@@ -65,13 +64,13 @@
                     ItemsSource="{Binding InteractionRows}"
                     ViewportMaxHeight="320">
                     <edge:EdgeDataGrid.Columns>
-                        <dg:DataGridTextColumn Binding="{Binding BusinessGroup}" Header="{DynamicResource Navigation_Column_InteractionItem}" IsReadOnly="True" MinWidth="90" Width="110" />
-                        <dg:DataGridTextColumn Binding="{Binding PlcAddressSummary}" Header="{DynamicResource Navigation_Column_PlcSignal}" IsReadOnly="True" MinWidth="140" Width="2*" />
-                        <dg:DataGridTextColumn Binding="{Binding PlcValueText}" Header="{DynamicResource Navigation_Column_PlcValue}" IsReadOnly="True" MinWidth="70" Width="70" />
-                        <dg:DataGridTextColumn Binding="{Binding HostReplyAddressText}" Header="{DynamicResource Navigation_Column_CurrentReply}" IsReadOnly="True" MinWidth="140" Width="2*" />
-                        <dg:DataGridTextColumn Binding="{Binding HostReplyValueText}" Header="{DynamicResource Navigation_Column_CurrentValue}" IsReadOnly="True" MinWidth="80" Width="80" />
-                        <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_PendingWriteOperation}" MinWidth="150" Width="150">
-                            <dg:DataGridTemplateColumn.CellTemplate>
+                        <edge:EdgeTextColumn Binding="{Binding BusinessGroup}" Header="{DynamicResource Navigation_Column_InteractionItem}" IsReadOnly="True" MinWidth="90" Width="110" />
+                        <edge:EdgeTextColumn Binding="{Binding PlcAddressSummary}" Header="{DynamicResource Navigation_Column_PlcSignal}" IsReadOnly="True" MinWidth="140" Width="2*" />
+                        <edge:EdgeTextColumn Binding="{Binding PlcValueText}" Header="{DynamicResource Navigation_Column_PlcValue}" IsReadOnly="True" MinWidth="70" Width="70" />
+                        <edge:EdgeTextColumn Binding="{Binding HostReplyAddressText}" Header="{DynamicResource Navigation_Column_CurrentReply}" IsReadOnly="True" MinWidth="140" Width="2*" />
+                        <edge:EdgeTextColumn Binding="{Binding HostReplyValueText}" Header="{DynamicResource Navigation_Column_CurrentValue}" IsReadOnly="True" MinWidth="80" Width="80" />
+                        <edge:EdgeActionColumn Header="{DynamicResource Navigation_Column_PendingWriteOperation}" MinWidth="150" Width="150">
+                            <edge:EdgeActionColumn.CellTemplate>
                                     <DataTemplate>
                                         <Grid ColumnDefinitions="*,6,Auto">
                                             <edge:EdgeTextBox
@@ -91,8 +90,8 @@
                                                 Size="Compact" />
                                         </Grid>
                                     </DataTemplate>
-                            </dg:DataGridTemplateColumn.CellTemplate>
-                        </dg:DataGridTemplateColumn>
+                            </edge:EdgeActionColumn.CellTemplate>
+                        </edge:EdgeActionColumn>
                     </edge:EdgeDataGrid.Columns>
                 </edge:EdgeDataGrid>
             </edge:EdgeTablePanel>
@@ -121,11 +120,11 @@
                                 ItemsSource="{Binding Signals}"
                                 ViewportMaxHeight="360">
                                 <edge:EdgeDataGrid.Columns>
-                                    <dg:DataGridTextColumn Binding="{Binding SignalName}" Header="{DynamicResource Navigation_Column_SignalName}" MinWidth="160" Width="2*" />
-                                    <dg:DataGridTextColumn Binding="{Binding PlcAddress}" Header="{DynamicResource Navigation_Column_Address}" MinWidth="120" Width="120" />
-                                    <dg:DataGridTextColumn Binding="{Binding DataType}" Header="{DynamicResource Navigation_Column_Type}" MinWidth="100" Width="100" />
-                                    <dg:DataGridTextColumn Binding="{Binding LengthText}" Header="{DynamicResource Navigation_Column_Length}" MinWidth="80" Width="80" />
-                                    <dg:DataGridTextColumn Binding="{Binding PreviewValue}" Header="{DynamicResource Navigation_Column_CurrentValue}" MinWidth="120" Width="*" />
+                                    <edge:EdgeTextColumn Binding="{Binding SignalName}" Header="{DynamicResource Navigation_Column_SignalName}" MinWidth="160" Width="2*" />
+                                    <edge:EdgeTextColumn Binding="{Binding PlcAddress}" Header="{DynamicResource Navigation_Column_Address}" MinWidth="120" Width="120" />
+                                    <edge:EdgeTextColumn Binding="{Binding DataType}" Header="{DynamicResource Navigation_Column_Type}" MinWidth="100" Width="100" />
+                                    <edge:EdgeTextColumn Binding="{Binding LengthText}" Header="{DynamicResource Navigation_Column_Length}" MinWidth="80" Width="80" />
+                                    <edge:EdgeTextColumn Binding="{Binding PreviewValue}" Header="{DynamicResource Navigation_Column_CurrentValue}" MinWidth="120" Width="*" />
                                 </edge:EdgeDataGrid.Columns>
                             </edge:EdgeDataGrid>
                         </edge:EdgeTablePanel>

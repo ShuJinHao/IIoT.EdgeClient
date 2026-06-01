@@ -46,14 +46,36 @@ public class EdgeStatusListItem : TemplatedControl
     public static readonly StyledProperty<IBrush?> ItemBackgroundProperty =
         AvaloniaProperty.Register<EdgeStatusListItem, IBrush?>(nameof(ItemBackground));
 
+    public static readonly DirectProperty<EdgeStatusListItem, bool> HasDescriptionProperty =
+        AvaloniaProperty.RegisterDirect<EdgeStatusListItem, bool>(nameof(HasDescription), item => item.HasDescription);
+
+    public static readonly DirectProperty<EdgeStatusListItem, bool> HasDetailProperty =
+        AvaloniaProperty.RegisterDirect<EdgeStatusListItem, bool>(nameof(HasDetail), item => item.HasDetail);
+
+    public static readonly DirectProperty<EdgeStatusListItem, bool> HasStatusTextProperty =
+        AvaloniaProperty.RegisterDirect<EdgeStatusListItem, bool>(nameof(HasStatusText), item => item.HasStatusText);
+
+    public static readonly DirectProperty<EdgeStatusListItem, bool> HasActionContentProperty =
+        AvaloniaProperty.RegisterDirect<EdgeStatusListItem, bool>(nameof(HasActionContent), item => item.HasActionContent);
+
+    private bool _hasDescription;
+    private bool _hasDetail;
+    private bool _hasStatusText;
+    private bool _hasActionContent;
+
     static EdgeStatusListItem()
     {
         StatusProperty.Changed.AddClassHandler<EdgeStatusListItem>((control, _) => control.UpdateStatusClass());
+        DescriptionProperty.Changed.AddClassHandler<EdgeStatusListItem>((control, _) => control.UpdateContentState());
+        DetailProperty.Changed.AddClassHandler<EdgeStatusListItem>((control, _) => control.UpdateContentState());
+        StatusTextProperty.Changed.AddClassHandler<EdgeStatusListItem>((control, _) => control.UpdateContentState());
+        ActionContentProperty.Changed.AddClassHandler<EdgeStatusListItem>((control, _) => control.UpdateContentState());
     }
 
     public EdgeStatusListItem()
     {
         UpdateStatusClass();
+        UpdateContentState();
     }
 
     public string? Title
@@ -104,6 +126,30 @@ public class EdgeStatusListItem : TemplatedControl
         set => SetValue(ItemBackgroundProperty, value);
     }
 
+    public bool HasDescription
+    {
+        get => _hasDescription;
+        private set => SetAndRaise(HasDescriptionProperty, ref _hasDescription, value);
+    }
+
+    public bool HasDetail
+    {
+        get => _hasDetail;
+        private set => SetAndRaise(HasDetailProperty, ref _hasDetail, value);
+    }
+
+    public bool HasStatusText
+    {
+        get => _hasStatusText;
+        private set => SetAndRaise(HasStatusTextProperty, ref _hasStatusText, value);
+    }
+
+    public bool HasActionContent
+    {
+        get => _hasActionContent;
+        private set => SetAndRaise(HasActionContentProperty, ref _hasActionContent, value);
+    }
+
     private void UpdateStatusClass()
     {
         foreach (var className in StatusClasses)
@@ -112,5 +158,35 @@ public class EdgeStatusListItem : TemplatedControl
         }
 
         Classes.Add(Status.ToString().ToLowerInvariant());
+    }
+
+    private void UpdateContentState()
+    {
+        HasDescription = HasVisibleContent(Description);
+        HasDetail = HasVisibleContent(Detail);
+        HasStatusText = HasVisibleContent(StatusText);
+        HasActionContent = ActionContent is not null;
+
+        SetClass("has-description", HasDescription);
+        SetClass("has-detail", HasDetail);
+        SetClass("has-status-text", HasStatusText);
+        SetClass("has-action", HasActionContent);
+    }
+
+    private static bool HasVisibleContent(string? value)
+    {
+        return !string.IsNullOrWhiteSpace(value);
+    }
+
+    private void SetClass(string className, bool enabled)
+    {
+        if (enabled)
+        {
+            Classes.Add(className);
+        }
+        else
+        {
+            Classes.Remove(className);
+        }
     }
 }

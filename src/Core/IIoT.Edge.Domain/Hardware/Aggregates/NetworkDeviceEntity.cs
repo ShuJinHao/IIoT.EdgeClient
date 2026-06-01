@@ -1,9 +1,10 @@
 ﻿using IIoT.Edge.SharedKernel.Domain;
 using IIoT.Edge.SharedKernel.Enums;
+using IIoT.Edge.SharedKernel.Identity;
 
 namespace IIoT.Edge.Domain.Hardware.Aggregates;
 
-public class NetworkDeviceEntity : BaseEntity<int>, IAggregateRoot
+public class NetworkDeviceEntity : BaseEntity<int>, IAggregateRoot, IDeviceIdentifiable
 {
     protected NetworkDeviceEntity() { }
 
@@ -33,6 +34,8 @@ public class NetworkDeviceEntity : BaseEntity<int>, IAggregateRoot
 
     public ICollection<IoMappingEntity> IoMappings { get; private set; } = new List<IoMappingEntity>();
     public ICollection<PlcTaskBindingEntity> PlcTaskBindings { get; private set; } = new List<PlcTaskBindingEntity>();
+
+    int IDeviceIdentifiable.NetworkDeviceId => Id;
 
     public static NetworkDeviceEntity Create(
         string deviceName,

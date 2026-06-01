@@ -555,6 +555,12 @@ public sealed class DiagnosticsViewModelBehaviorTests
     {
         var diagnosticsText = new LocalizedSyncDiagnosticsText(languageService);
         var displayNameResolver = new DiagnosticsModuleDisplayNameResolver(diagnosticsText);
+        var collaboratorFactory = new DiagnosticsViewModelCollaboratorFactory(
+            languageService,
+            deadLetterOperator ?? new DiagnosticsDeadLetterOperator(),
+            deadLetterConfirmationService ?? new FakeDeadLetterConfirmationService(),
+            permissionService ?? new FakeClientPermissionService());
+
         return new DiagnosticsViewModel(
             startupStore,
             diagnosticsQuery,
@@ -564,9 +570,7 @@ public sealed class DiagnosticsViewModelBehaviorTests
             new DiagnosticsRowsBuilder(languageService, diagnosticsText, displayNameResolver),
             new DiagnosticsInitialSummaryFactory(languageService, diagnosticsText),
             new DiagnosticsRefreshCoordinator(),
-            deadLetterOperator ?? new DiagnosticsDeadLetterOperator(),
-            deadLetterConfirmationService ?? new FakeDeadLetterConfirmationService(),
-            permissionService ?? new FakeClientPermissionService());
+            collaboratorFactory);
     }
 
     private static EdgeSyncDiagnosticsSnapshot CreateReadySyncSnapshot(

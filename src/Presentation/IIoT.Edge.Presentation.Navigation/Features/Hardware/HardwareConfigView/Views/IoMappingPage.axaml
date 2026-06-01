@@ -3,8 +3,7 @@
     x:Name="IoMappingRoot"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:dg="using:Avalonia.Controls"
-    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
+        xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
     xmlns:sharedViews="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared">
 
     <Grid RowDefinitions="Auto,*" Margin="0,12,0,0">
@@ -48,20 +47,20 @@
                     <edge:EdgeSectionHeader Title="{DynamicResource Navigation_Tab_NetworkDevice}" />
                 </edge:EdgeCard.Header>
                 <Grid RowDefinitions="Auto,*">
-                    <ListBox
+                    <edge:EdgeListBox
                         Background="Transparent"
                         BorderThickness="0"
                         ItemsSource="{Binding NetworkDevices}"
                         SelectedItem="{Binding SelectedNetworkDevice}">
-                        <ListBox.ItemTemplate>
+                        <edge:EdgeListBox.ItemTemplate>
                             <DataTemplate>
                                 <TextBlock
                                     Padding="4,6"
                                     Foreground="{DynamicResource Edge.Text.Primary}"
                                     Text="{Binding DeviceName}" />
                             </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
+                        </edge:EdgeListBox.ItemTemplate>
+                    </edge:EdgeListBox>
                 </Grid>
             </edge:EdgeCard>
 
@@ -83,24 +82,24 @@
                                         ItemsSource="{Binding Mappings}"
                                         SelectedItem="{Binding DataContext.SelectedIoMapping, ElementName=IoMappingRoot, Mode=TwoWay}">
                                         <edge:EdgeDataGrid.Columns>
-                                            <dg:DataGridTextColumn Binding="{Binding PlcAddress}" Header="{DynamicResource Navigation_Column_PlcAddress}" MinWidth="120" Width="120" />
-                                            <dg:DataGridTextColumn Binding="{Binding AddressCount}" Header="{DynamicResource Navigation_Column_Count}" MinWidth="80" Width="80" />
-                                            <dg:DataGridTextColumn Binding="{Binding BusinessGroup}" Header="{DynamicResource Navigation_Column_BusinessGroup}" IsReadOnly="True" MinWidth="150" Width="150" />
-                                            <dg:DataGridTextColumn Binding="{Binding SignalName}" Header="{DynamicResource Navigation_Column_SignalName}" MinWidth="180" Width="180" />
-                                            <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_DataType}" MinWidth="120" Width="120">
-                                                <dg:DataGridTemplateColumn.CellTemplate>
+                                            <edge:EdgeTextColumn Binding="{Binding PlcAddress}" Header="{DynamicResource Navigation_Column_PlcAddress}" MinWidth="120" Width="120" />
+                                            <edge:EdgeTextColumn Binding="{Binding AddressCount}" Header="{DynamicResource Navigation_Column_Count}" MinWidth="80" Width="80" />
+                                            <edge:EdgeTextColumn Binding="{Binding BusinessGroup}" Header="{DynamicResource Navigation_Column_BusinessGroup}" IsReadOnly="True" MinWidth="150" Width="150" />
+                                            <edge:EdgeTextColumn Binding="{Binding SignalName}" Header="{DynamicResource Navigation_Column_SignalName}" MinWidth="180" Width="180" />
+                                            <edge:EdgeTemplateColumn Header="{DynamicResource Navigation_Column_DataType}" MinWidth="120" Width="120">
+                                                <edge:EdgeTemplateColumn.CellTemplate>
                                                     <DataTemplate>
                                                         <TextBlock Text="{Binding DataType}" />
                                                     </DataTemplate>
-                                                </dg:DataGridTemplateColumn.CellTemplate>
-                                                <dg:DataGridTemplateColumn.CellEditingTemplate>
+                                                </edge:EdgeTemplateColumn.CellTemplate>
+                                                <edge:EdgeTemplateColumn.CellEditingTemplate>
                                                     <DataTemplate>
                                                         <edge:EdgeFilterComboBox ItemsSource="{Binding DataContext.IoDataTypes, ElementName=IoMappingRoot}" SelectedItem="{Binding DataType}" />
                                                     </DataTemplate>
-                                                </dg:DataGridTemplateColumn.CellEditingTemplate>
-                                            </dg:DataGridTemplateColumn>
-                                            <dg:DataGridTextColumn Binding="{Binding Direction}" Header="{DynamicResource Navigation_Column_Direction}" IsReadOnly="True" MinWidth="100" Width="100" />
-                                            <dg:DataGridTextColumn Binding="{Binding Remark}" Header="{DynamicResource Navigation_Column_Remark}" MinWidth="220" Width="220" />
+                                                </edge:EdgeTemplateColumn.CellEditingTemplate>
+                                            </edge:EdgeTemplateColumn>
+                                            <edge:EdgeTextColumn Binding="{Binding Direction}" Header="{DynamicResource Navigation_Column_Direction}" IsReadOnly="True" MinWidth="100" Width="100" />
+                                            <edge:EdgeTextColumn Binding="{Binding Remark}" Header="{DynamicResource Navigation_Column_Remark}" MinWidth="220" Width="220" />
                                         </edge:EdgeDataGrid.Columns>
                                     </edge:EdgeDataGrid>
                                 </edge:EdgeTablePanel>

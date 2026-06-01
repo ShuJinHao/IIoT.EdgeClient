@@ -208,6 +208,11 @@ public static class DependencyInjection
 
         services.AddSingleton<IAppStartupInitializer, AppStartupInitializer>();
         services.AddSingleton<IStartupPluginLifecycleSnapshotBuilder, StartupPluginLifecycleSnapshotBuilder>();
+        services.AddSingleton<IStartupConfigurationProfileBuilder, StartupConfigurationProfileBuilder>();
+        services.AddSingleton<IStartupModuleRegistrationSnapshotBuilder, StartupModuleRegistrationSnapshotBuilder>();
+        services.AddSingleton<IStartupDiagnosticValidator, StartupAppSettingsValidator>();
+        services.AddSingleton<IStartupDiagnosticValidator, StartupModuleRegistrationValidator>();
+        services.AddSingleton<IStartupAsyncDiagnosticValidator, StartupPlcConfigurationValidator>();
         services.AddSingleton<IStartupDiagnosticsReportBuilder, StartupDiagnosticsReportBuilder>();
         services.AddSingleton<IPlcRuntimeTaskBinder, PlcRuntimeTaskBinder>();
         services.AddSingleton<IAppRuntimeStateCoordinator, AppRuntimeStateCoordinator>();

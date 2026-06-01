@@ -25,18 +25,26 @@ public interface IHardwareConfigValidationPresenter
 
 public sealed class HardwareConfigValidationPresenter : IHardwareConfigValidationPresenter
 {
+    private readonly IEditorValidator<NetworkDeviceVm> _networkDeviceValidator;
+    private readonly IEditorValidator<SerialDeviceVm> _serialDeviceValidator;
+    private readonly IEditorValidator<IoMappingVm> _ioMappingValidator;
+
+    public HardwareConfigValidationPresenter(
+        IEditorValidator<NetworkDeviceVm> networkDeviceValidator,
+        IEditorValidator<SerialDeviceVm> serialDeviceValidator,
+        IEditorValidator<IoMappingVm> ioMappingValidator)
+    {
+        _networkDeviceValidator = networkDeviceValidator;
+        _serialDeviceValidator = serialDeviceValidator;
+        _ioMappingValidator = ioMappingValidator;
+    }
+
     public async Task<IReadOnlyCollection<ValidationIssue>> ValidateSaveAsync(HardwareConfigViewModel viewModel)
     {
         var issues = new List<ValidationIssue>();
-        issues.AddRange(await ValidateItemsAsync(
-            viewModel.NetworkDevices,
-            new NetworkDeviceValidator(viewModel.GetText, viewModel.FormatText)));
-        issues.AddRange(await ValidateItemsAsync(
-            viewModel.SerialDevices,
-            new SerialDeviceValidator(viewModel.GetText, viewModel.FormatText)));
-        issues.AddRange(await ValidateItemsAsync(
-            viewModel.IoMappings,
-            new IoMappingValidator(viewModel.GetText, viewModel.FormatText)));
+        issues.AddRange(await ValidateItemsAsync(viewModel.NetworkDevices, _networkDeviceValidator));
+        issues.AddRange(await ValidateItemsAsync(viewModel.SerialDevices, _serialDeviceValidator));
+        issues.AddRange(await ValidateItemsAsync(viewModel.IoMappings, _ioMappingValidator));
         issues.AddRange(ValidateInteractionPairs(viewModel.IoMappings));
 
         return issues;

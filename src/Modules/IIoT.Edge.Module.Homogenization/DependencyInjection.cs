@@ -77,6 +77,7 @@ public sealed class DependencyInjection : EdgeProcessModuleBase<HomogenizationCe
             sp.GetRequiredService<HomogenizationCloudUploader>());
         builder.Services.AddSingleton<IProcessCloudUploader>(sp =>
             sp.GetRequiredService<HomogenizationCloudUploader>());
+        builder.Services.AddSingleton<IHomogenizationMesItemPayloadBuilder, HomogenizationMesItemPayloadBuilder>();
         builder.Services.AddSingleton<HomogenizationMesChannel>();
         builder.Services.AddSingleton<HomogenizationMesScenarioChannel>(sp =>
             sp.GetRequiredService<HomogenizationMesChannel>());
@@ -100,5 +101,4 @@ public sealed class DependencyInjection : EdgeProcessModuleBase<HomogenizationCe
     protected override void RegisterModuleViews(IEdgeProcessModuleBuilder builder)
         => builder.RegisterHomogenizationViews();
 }
-
 

@@ -7,8 +7,11 @@ namespace IIoT.Edge.UI.Shared.Avalonia.Controls;
 public enum EdgeActionButtonKind
 {
     Primary,
+    Secondary,
     Soft,
     Danger,
+    Cell,
+    IconOnly,
     Language,
     Nav
 }
@@ -34,8 +37,11 @@ public class EdgeActionButton : Button
     private static readonly string[] KindClasses =
     [
         "primary",
+        "secondary",
         "soft",
         "danger",
+        "cell",
+        "icononly",
         "language",
         "nav"
     ];

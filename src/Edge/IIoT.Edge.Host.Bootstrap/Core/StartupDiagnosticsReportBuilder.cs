@@ -1,14 +1,10 @@
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.Application.Abstractions.Tasks;
 using IIoT.Edge.Application.Modules.Diagnostics;
-using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Host.Bootstrap.Modules;
-using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
 using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.SharedKernel.Repository;
-using Microsoft.Extensions.Configuration;
 
 namespace IIoT.Edge.Shell.Core;
 
@@ -23,48 +19,35 @@ public interface IStartupDiagnosticsReportBuilder
 
 public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportBuilder
 {
-    private readonly IConfiguration _configuration;
-    private readonly EdgeRuntimePaths _runtimePaths;
-    private readonly ShiftConfig _shiftConfig;
     private readonly IRepository<NetworkDeviceEntity> _networkDevices;
-    private readonly IRepository<IoMappingEntity> _ioMappings;
-    private readonly ICellDataRegistry _cellDataRegistry;
-    private readonly IStationRuntimeRegistry _runtimeRegistry;
-    private readonly IProcessIntegrationRegistry _integrationRegistry;
     private readonly ILocalSystemRuntimeConfigService? _runtimeConfigService;
     private readonly IStartupPluginLifecycleSnapshotBuilder _pluginLifecycleSnapshotBuilder;
-    private readonly Dictionary<string, IEdgeProcessModule> _modulesById;
-    private readonly Dictionary<string, ModulePluginDescriptor> _discoveredModulesById;
-    private readonly Dictionary<string, IModuleHardwareProfileProvider> _hardwareProfilesByModuleId;
+    private readonly IReadOnlyDictionary<string, IEdgeProcessModule> _modulesById;
+    private readonly IReadOnlyDictionary<string, ModulePluginDescriptor> _discoveredModulesById;
     private readonly IReadOnlyList<ModuleCatalogIssue> _moduleCatalogIssues;
+    private readonly IReadOnlyDictionary<string, IModuleHardwareProfileProvider> _hardwareProfilesByModuleId;
     private readonly string[] _configuredEnabledModuleIds;
     private readonly string[] _activatedModuleIds;
+    private readonly IReadOnlyList<IStartupDiagnosticValidator> _validators;
+    private readonly IReadOnlyList<IStartupAsyncDiagnosticValidator> _asyncValidators;
+    private readonly IStartupConfigurationProfileBuilder _configurationProfileBuilder;
+    private readonly IStartupModuleRegistrationSnapshotBuilder _moduleRegistrationSnapshotBuilder;
 
     public StartupDiagnosticsReportBuilder(
-        IConfiguration configuration,
-        EdgeRuntimePaths runtimePaths,
-        ShiftConfig shiftConfig,
         IRepository<NetworkDeviceEntity> networkDevices,
-        IRepository<IoMappingEntity> ioMappings,
-        ICellDataRegistry cellDataRegistry,
-        IStationRuntimeRegistry runtimeRegistry,
-        IProcessIntegrationRegistry integrationRegistry,
         IStartupPluginLifecycleSnapshotBuilder pluginLifecycleSnapshotBuilder,
         IReadOnlyCollection<ModulePluginDescriptor> discoveredModules,
         IReadOnlyCollection<ModuleCatalogIssue> moduleCatalogIssues,
         IReadOnlyCollection<string> configuredEnabledModuleIds,
         IEnumerable<IEdgeProcessModule> modules,
         IEnumerable<IModuleHardwareProfileProvider> hardwareProfiles,
+        IEnumerable<IStartupDiagnosticValidator> validators,
+        IEnumerable<IStartupAsyncDiagnosticValidator> asyncValidators,
+        IStartupConfigurationProfileBuilder configurationProfileBuilder,
+        IStartupModuleRegistrationSnapshotBuilder moduleRegistrationSnapshotBuilder,
         ILocalSystemRuntimeConfigService? runtimeConfigService = null)
     {
-        _configuration = configuration;
-        _runtimePaths = runtimePaths;
-        _shiftConfig = shiftConfig;
         _networkDevices = networkDevices;
-        _ioMappings = ioMappings;
-        _cellDataRegistry = cellDataRegistry;
-        _runtimeRegistry = runtimeRegistry;
-        _integrationRegistry = integrationRegistry;
         _runtimeConfigService = runtimeConfigService;
         _pluginLifecycleSnapshotBuilder = pluginLifecycleSnapshotBuilder;
         _modulesById = modules.ToDictionary(x => x.ModuleId, StringComparer.OrdinalIgnoreCase);
@@ -75,6 +58,10 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
             .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
             .ToArray();
         _activatedModuleIds = _modulesById.Keys.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray();
+        _validators = validators.ToArray();
+        _asyncValidators = asyncValidators.ToArray();
+        _configurationProfileBuilder = configurationProfileBuilder;
+        _moduleRegistrationSnapshotBuilder = moduleRegistrationSnapshotBuilder;
     }
 
     public async Task<StartupDiagnosticsReport> BuildAsync(CancellationToken cancellationToken = default)
@@ -86,22 +73,37 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
 
         var issues = new List<StartupDiagnosticIssue>();
         issues.AddRange(_moduleCatalogIssues.Select(static issue =>
-            new StartupDiagnosticIssue(
+            StartupDiagnosticIssueFactory.Create(
                 issue.Code,
                 issue.Message,
                 issue.ModuleId)));
 
-        ValidateAppSettings(issues, _runtimeConfigService?.Current.CloudUploadEnabled ?? true);
-        ValidateModuleConfiguration(issues);
-
         var plcDevices = await _networkDevices.GetListAsync(
             x => x.IsEnabled && x.DeviceType == DeviceType.PLC,
             cancellationToken).ConfigureAwait(false);
-        var deviceBindings = await ValidatePlcConfigurationAsync(plcDevices, issues, cancellationToken).ConfigureAwait(false);
+        var context = new StartupValidationContext
+        {
+            ConfigurationProfile = _configurationProfileBuilder.Build(),
+            CloudUploadEnabled = _runtimeConfigService?.Current.CloudUploadEnabled ?? true,
+            PlcDevices = plcDevices,
+            ModulesById = _modulesById,
+            DiscoveredModulesById = _discoveredModulesById,
+            HardwareProfilesByModuleId = _hardwareProfilesByModuleId
+        };
+
+        foreach (var validator in _validators)
+        {
+            validator.Validate(context, issues);
+        }
+
+        foreach (var validator in _asyncValidators)
+        {
+            await validator.ValidateAsync(context, issues, cancellationToken).ConfigureAwait(false);
+        }
 
         return new StartupDiagnosticsReport(
             DateTime.UtcNow,
-            BuildConfigurationProfile(),
+            context.ConfigurationProfile,
             _discoveredModulesById.Keys.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray(),
             _configuredEnabledModuleIds,
             _activatedModuleIds,
@@ -110,8 +112,8 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
                 _moduleCatalogIssues,
                 _configuredEnabledModuleIds,
                 _modulesById.Keys),
-            BuildModuleRegistrations(),
-            deviceBindings,
+            _moduleRegistrationSnapshotBuilder.Build(context),
+            context.DeviceBindings,
             issues.AsReadOnly());
     }
 
@@ -143,391 +145,4 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
                 return $"- [{x.Code}]{scopeText} {x.Message}";
             }));
     }
-
-    private void ValidateAppSettings(List<StartupDiagnosticIssue> issues, bool cloudUploadEnabled)
-    {
-        if (!cloudUploadEnabled)
-        {
-            return;
-        }
-
-        var baseUrl = _configuration["CloudApi:BaseUrl"]?.Trim();
-        if (string.IsNullOrWhiteSpace(baseUrl))
-        {
-            issues.Add(CreateIssue("CONFIG_INVALID", "CloudApi:BaseUrl 未配置。"));
-        }
-        else if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out _))
-        {
-            issues.Add(CreateIssue("CONFIG_INVALID", $"CloudApi:BaseUrl 无效：{baseUrl}。"));
-        }
-
-        var clientCode = _configuration["CloudApi:ClientCode"]?.Trim();
-        if (string.IsNullOrWhiteSpace(clientCode))
-        {
-            issues.Add(CreateIssue("CONFIG_INVALID", "CloudApi:ClientCode 未配置。"));
-        }
-
-        var bootstrapSecret = _configuration["CloudApi:BootstrapSecret"]?.Trim();
-        if (string.IsNullOrWhiteSpace(bootstrapSecret))
-        {
-            issues.Add(CreateIssue("CONFIG_INVALID", "CloudApi:BootstrapSecret 未配置。"));
-        }
-
-        foreach (var key in CloudApiPathKeys)
-        {
-            ValidateRequiredCloudPath(issues, key);
-        }
-
-        var recipePath = _configuration["CloudApi:Paths:RecipeByDeviceTemplate"]?.Trim();
-        if (!string.IsNullOrWhiteSpace(recipePath)
-            && !recipePath.Contains("{deviceId}", StringComparison.OrdinalIgnoreCase))
-        {
-            issues.Add(CreateIssue(
-                "CONFIG_INVALID",
-                "CloudApi:Paths:RecipeByDeviceTemplate 必须包含 {deviceId} 占位符。"));
-        }
-
-        if (!TimeSpan.TryParse(_shiftConfig.DayStart, out var dayStart))
-        {
-            issues.Add(CreateIssue("CONFIG_INVALID", $"Shift:DayStart 无效：{_shiftConfig.DayStart}。"));
-        }
-
-        if (!TimeSpan.TryParse(_shiftConfig.DayEnd, out var dayEnd))
-        {
-            issues.Add(CreateIssue("CONFIG_INVALID", $"Shift:DayEnd 无效：{_shiftConfig.DayEnd}。"));
-        }
-
-        if (TimeSpan.TryParse(_shiftConfig.DayStart, out dayStart)
-            && TimeSpan.TryParse(_shiftConfig.DayEnd, out dayEnd)
-            && dayStart == dayEnd)
-        {
-            issues.Add(CreateIssue("CONFIG_INVALID", "Shift:DayStart 和 Shift:DayEnd 不能相同。"));
-        }
-
-        var configurationProfile = BuildConfigurationProfile();
-        if (!string.IsNullOrWhiteSpace(configurationProfile.MachineProfile)
-            && !configurationProfile.IsMachineProfileLoaded)
-        {
-            issues.Add(CreateIssue(
-                "MACHINE_PROFILE_MISSING",
-                $"已请求机型配置“{configurationProfile.MachineProfile}”，但文件“{configurationProfile.MachineProfileFileName}”未加载。"));
-        }
-    }
-
-    private static readonly string[] CloudApiPathKeys =
-    [
-        "CloudApi:Paths:DeviceInstance",
-        "CloudApi:Paths:BootstrapRefresh",
-        "CloudApi:Paths:IdentityDeviceLogin",
-        "CloudApi:Paths:HumanIdentityRefresh",
-        "CloudApi:Paths:DeviceLog",
-        "CloudApi:Paths:ProcessUpload",
-        "CloudApi:Paths:CapacityHourly",
-        "CloudApi:Paths:CapacitySummary",
-        "CloudApi:Paths:CapacitySummaryRange",
-        "CloudApi:Paths:RecipeByDeviceTemplate"
-    ];
-
-    private void ValidateRequiredCloudPath(
-        List<StartupDiagnosticIssue> issues,
-        string key)
-    {
-        var configured = _configuration[key]?.Trim();
-        if (string.IsNullOrWhiteSpace(configured))
-        {
-            issues.Add(CreateIssue("CONFIG_INVALID", $"{key} 未配置。"));
-            return;
-        }
-
-        if (HasExplicitScheme(configured))
-        {
-            issues.Add(CreateIssue("CONFIG_INVALID", $"{key} 只能填写相对 API 路径，不能填写完整地址。"));
-            return;
-        }
-
-        if (configured.StartsWith("//", StringComparison.Ordinal))
-        {
-            issues.Add(CreateIssue("CONFIG_INVALID", $"{key} 必须是以单个 / 开头的相对 API 路径。"));
-            return;
-        }
-
-        if (!configured.StartsWith('/'))
-        {
-            issues.Add(CreateIssue("CONFIG_INVALID", $"{key} 必须以 / 开头。"));
-        }
-    }
-
-    private static bool HasExplicitScheme(string value)
-    {
-        var colonIndex = value.IndexOf(':');
-        if (colonIndex <= 0)
-        {
-            return false;
-        }
-
-        var boundaryIndex = value.IndexOfAny(['/', '\\', '?', '#']);
-        return (boundaryIndex < 0 || colonIndex < boundaryIndex)
-            && Uri.CheckSchemeName(value[..colonIndex]);
-    }
-
-    private void ValidateModuleConfiguration(List<StartupDiagnosticIssue> issues)
-    {
-        foreach (var module in _modulesById.Values)
-        {
-            if (!_cellDataRegistry.IsRegistered(module.ProcessType))
-            {
-                issues.Add(CreateIssue(
-                    "CELLDATA_REGISTRATION_MISSING",
-                    $"模块“{module.ModuleId}”缺少工序类型“{module.ProcessType}”的 CellData 注册。",
-                    module.ModuleId));
-            }
-
-            if (!_runtimeRegistry.HasFactory(module.ModuleId))
-            {
-                issues.Add(CreateIssue(
-                    "RUNTIME_FACTORY_MISSING",
-                    $"模块“{module.ModuleId}”缺少 PLC 运行时工厂注册。",
-                    module.ModuleId));
-            }
-
-            if (!_integrationRegistry.HasCloudUploader(module.ProcessType))
-            {
-                issues.Add(CreateIssue(
-                    "CLOUD_UPLOADER_MISSING",
-                    $"模块“{module.ModuleId}”缺少工序类型“{module.ProcessType}”的云端上传器注册。",
-                    module.ModuleId));
-            }
-        }
-    }
-
-    private async Task<IReadOnlyList<DeviceModuleBindingSnapshot>> ValidatePlcConfigurationAsync(
-        IReadOnlyCollection<NetworkDeviceEntity> plcDevices,
-        List<StartupDiagnosticIssue> issues,
-        CancellationToken cancellationToken)
-    {
-        var snapshots = new List<DeviceModuleBindingSnapshot>(plcDevices.Count);
-
-        foreach (var device in plcDevices)
-        {
-            var deviceName = string.IsNullOrWhiteSpace(device.DeviceName) ? $"Id={device.Id}" : device.DeviceName;
-            var mappings = await _ioMappings.GetListAsync(
-                x => x.NetworkDeviceId == device.Id,
-                cancellationToken).ConfigureAwait(false);
-            var moduleExists = !string.IsNullOrWhiteSpace(device.ModuleId)
-                && _discoveredModulesById.ContainsKey(device.ModuleId);
-            var moduleEnabled = !string.IsNullOrWhiteSpace(device.ModuleId)
-                && _modulesById.ContainsKey(device.ModuleId);
-
-            snapshots.Add(new DeviceModuleBindingSnapshot(
-                deviceName,
-                device.ModuleId,
-                moduleExists,
-                moduleEnabled,
-                mappings.Count > 0));
-
-            ValidateDeviceModuleBinding(device, deviceName, mappings, moduleExists, moduleEnabled, issues);
-            ValidateHardwareProfile(device, deviceName, mappings, issues);
-        }
-
-        return snapshots;
-    }
-
-    private void ValidateDeviceModuleBinding(
-        NetworkDeviceEntity device,
-        string deviceName,
-        IReadOnlyCollection<IoMappingEntity> mappings,
-        bool moduleExists,
-        bool moduleEnabled,
-        List<StartupDiagnosticIssue> issues)
-    {
-        if (string.IsNullOrWhiteSpace(device.DeviceName))
-        {
-            issues.Add(CreateIssue("DEVICE_MODULE_MISMATCH", "已启用的 PLC 设备缺少设备名称。", device.DeviceName, deviceName));
-        }
-
-        if (string.IsNullOrWhiteSpace(device.ModuleId))
-        {
-            issues.Add(CreateIssue("DEVICE_MODULE_MISMATCH", $"PLC“{deviceName}”缺少 ModuleId。", device.ModuleId, deviceName));
-        }
-        else if (!moduleExists)
-        {
-            issues.Add(CreateIssue("DEVICE_MODULE_MISMATCH", $"PLC“{deviceName}”引用了未知模块“{device.ModuleId}”。", device.ModuleId, deviceName));
-        }
-        else if (!moduleEnabled)
-        {
-            issues.Add(CreateIssue("MODULE_NOT_ENABLED", $"PLC“{deviceName}”引用模块“{device.ModuleId}”，但该模块未启用。", device.ModuleId, deviceName));
-        }
-        else
-        {
-            ValidateEnabledModuleServices(device, deviceName, issues);
-        }
-
-        ValidateDeviceEndpoint(device, deviceName, issues);
-        ValidateIoMappings(device, deviceName, mappings, issues);
-    }
-
-    private void ValidateEnabledModuleServices(
-        NetworkDeviceEntity device,
-        string deviceName,
-        List<StartupDiagnosticIssue> issues)
-    {
-        var module = _modulesById[device.ModuleId];
-        if (!_runtimeRegistry.HasFactory(module.ModuleId))
-        {
-            issues.Add(CreateIssue("RUNTIME_FACTORY_MISSING", $"PLC“{deviceName}”使用模块“{module.ModuleId}”，但运行时工厂未注册。", module.ModuleId, deviceName));
-        }
-
-        if (!_cellDataRegistry.IsRegistered(module.ProcessType))
-        {
-            issues.Add(CreateIssue("CELLDATA_REGISTRATION_MISSING", $"PLC“{deviceName}”使用模块“{module.ModuleId}”，但 CellData 未注册。", module.ModuleId, deviceName));
-        }
-    }
-
-    private static void ValidateDeviceEndpoint(
-        NetworkDeviceEntity device,
-        string deviceName,
-        List<StartupDiagnosticIssue> issues)
-    {
-        if (string.IsNullOrWhiteSpace(device.DeviceModel)
-            || !Enum.TryParse<PlcType>(device.DeviceModel, ignoreCase: true, out var plcType))
-        {
-            issues.Add(CreateIssue("DEVICE_MODEL_INVALID", $"PLC“{deviceName}”的 DeviceModel 无效：{device.DeviceModel ?? "<空>"}。", device.ModuleId, deviceName));
-            return;
-        }
-
-        if (plcType == PlcType.ModbusRtu)
-        {
-            if (string.IsNullOrWhiteSpace(device.SendCmd1))
-            {
-                issues.Add(CreateIssue("CONFIG_INVALID", $"PLC“{deviceName}”是 Modbus RTU 时，Command1 必须填写串口设备名称。", device.ModuleId, deviceName));
-            }
-
-            if (device.Port1 is < 1 or > 247)
-            {
-                issues.Add(CreateIssue("CONFIG_INVALID", $"PLC“{deviceName}”是 Modbus RTU 时，Port1 必须填写 1 到 247 之间的从站 ID。", device.ModuleId, deviceName));
-            }
-        }
-        else
-        {
-            if (string.IsNullOrWhiteSpace(device.IpAddress))
-            {
-                issues.Add(CreateIssue("CONFIG_INVALID", $"PLC“{deviceName}”缺少 IpAddress。", device.ModuleId, deviceName));
-            }
-
-            if (device.Port1 <= 0 || device.Port1 > 65535)
-            {
-                issues.Add(CreateIssue("CONFIG_INVALID", $"PLC“{deviceName}”的 Port1 无效：{device.Port1}。", device.ModuleId, deviceName));
-            }
-        }
-
-        if (device.ConnectTimeout <= 0)
-        {
-            issues.Add(CreateIssue("CONFIG_INVALID", $"PLC“{deviceName}”的 ConnectTimeout 必须大于 0。", device.ModuleId, deviceName));
-        }
-    }
-
-    private static void ValidateIoMappings(
-        NetworkDeviceEntity device,
-        string deviceName,
-        IReadOnlyCollection<IoMappingEntity> mappings,
-        List<StartupDiagnosticIssue> issues)
-    {
-        if (mappings.Count == 0)
-        {
-            issues.Add(CreateIssue("DEVICE_MODULE_MISMATCH", $"PLC“{deviceName}”没有配置 IO 映射。", device.ModuleId, deviceName));
-            return;
-        }
-
-        if (mappings.Any(x => string.IsNullOrWhiteSpace(x.PlcAddress)))
-        {
-            issues.Add(CreateIssue("DEVICE_MODULE_MISMATCH", $"PLC“{deviceName}”存在 PlcAddress 为空的 IO 映射。", device.ModuleId, deviceName));
-        }
-
-        if (mappings.Any(x => x.AddressCount <= 0))
-        {
-            issues.Add(CreateIssue("DEVICE_MODULE_MISMATCH", $"PLC“{deviceName}”存在 AddressCount 小于等于 0 的 IO 映射。", device.ModuleId, deviceName));
-        }
-
-        if (mappings.Any(x => x.Direction is not ("Read" or "Write")))
-        {
-            issues.Add(CreateIssue("DEVICE_MODULE_MISMATCH", $"PLC“{deviceName}”存在 Direction 无效的 IO 映射。", device.ModuleId, deviceName));
-        }
-    }
-
-    private void ValidateHardwareProfile(
-        NetworkDeviceEntity device,
-        string deviceName,
-        IReadOnlyCollection<IoMappingEntity> mappings,
-        List<StartupDiagnosticIssue> issues)
-    {
-        if (string.IsNullOrWhiteSpace(device.ModuleId)
-            || !_hardwareProfilesByModuleId.TryGetValue(device.ModuleId, out var provider))
-        {
-            return;
-        }
-
-        var validationResult = provider.ValidatePlcConfiguration(
-            deviceName,
-            device.DeviceModel,
-            mappings.Select(static x => new ModuleIoSnapshot(
-                    x.SignalKey,
-                    x.PlcAddress,
-                    x.AddressCount,
-                    x.DataType,
-                    x.Direction,
-                    x.SortOrder,
-                    x.Category,
-                    x.BusinessGroup,
-                    x.SignalName))
-                .ToArray());
-
-        if (!validationResult.IsValid)
-        {
-            issues.AddRange(validationResult.Issues.Select(issue =>
-                CreateIssue("HARDWARE_PROFILE_INVALID", issue.Message, device.ModuleId, deviceName)));
-        }
-    }
-
-    private IReadOnlyList<ModuleRegistrationSnapshot> BuildModuleRegistrations()
-        => _discoveredModulesById.Values
-            .OrderBy(x => x.ModuleId, StringComparer.OrdinalIgnoreCase)
-            .Select(x => new ModuleRegistrationSnapshot(
-                x.ModuleId,
-                x.ProcessType,
-                x.AssemblyName,
-                _modulesById.ContainsKey(x.ModuleId),
-                _cellDataRegistry.IsRegistered(x.ProcessType),
-                _runtimeRegistry.HasFactory(x.ModuleId),
-                _integrationRegistry.HasCloudUploader(x.ProcessType),
-                _integrationRegistry.HasMesUploader(x.ProcessType),
-                _hardwareProfilesByModuleId.ContainsKey(x.ModuleId)))
-            .ToArray();
-
-    private ConfigurationProfileSnapshot BuildConfigurationProfile()
-    {
-        var environmentName = _configuration["Shell:Environment"]?.Trim();
-        if (string.IsNullOrWhiteSpace(environmentName))
-        {
-            environmentName = "Production";
-        }
-
-        var machineProfile = _configuration["Shell:MachineProfile"]?.Trim();
-        var machineProfileFileName = _configuration["Shell:MachineProfileFileName"]?.Trim();
-        var machineProfileLoaded = bool.TryParse(_configuration["Shell:MachineProfileLoaded"], out var loaded)
-            && loaded;
-
-        return new ConfigurationProfileSnapshot(
-            environmentName,
-            string.IsNullOrWhiteSpace(machineProfile) ? null : machineProfile,
-            string.IsNullOrWhiteSpace(machineProfileFileName) ? null : machineProfileFileName,
-            machineProfileLoaded,
-            _runtimePaths.RuntimeDataRoot);
-    }
-
-    private static StartupDiagnosticIssue CreateIssue(
-        string code,
-        string message,
-        string? moduleId = null,
-        string? deviceName = null)
-        => new(code, message, moduleId, deviceName);
 }

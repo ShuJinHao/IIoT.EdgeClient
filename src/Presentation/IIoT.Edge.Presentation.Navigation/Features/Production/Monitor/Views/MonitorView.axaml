@@ -2,8 +2,7 @@
     x:Class="IIoT.Edge.Presentation.Navigation.Features.Production.Monitor.MonitorViewPage"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:dg="using:Avalonia.Controls"
-    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
+        xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
 
     <Grid RowDefinitions="Auto,*">
         <Grid
@@ -62,7 +61,7 @@
                 </edge:EdgeFilterComboBox.ItemTemplate>
             </edge:EdgeFilterComboBox>
         </Grid>
-        <ScrollViewer
+        <edge:EdgeScrollHost
             Grid.Row="1"
             HorizontalScrollBarVisibility="Disabled"
             VerticalScrollBarVisibility="Auto">
@@ -146,10 +145,10 @@
                                                 SelectedItem="{Binding SelectedCell, Mode=TwoWay}"
                                                 ViewportMaxHeight="220">
                                                 <edge:EdgeDataGrid.Columns>
-                                                    <dg:DataGridTextColumn Binding="{Binding InternalKey}" Header="{DynamicResource Navigation_Monitor_ColumnInternalKey}" MinWidth="220" Width="2.2*" />
-                                                    <dg:DataGridTextColumn Binding="{Binding DisplayLabel}" Header="{DynamicResource Navigation_Monitor_ColumnBusinessId}" MinWidth="150" Width="1.2*" />
-                                                    <dg:DataGridTextColumn Binding="{Binding RuntimeStatusText}" Header="{DynamicResource Navigation_Monitor_ColumnRuntimeStatus}" MinWidth="120" Width="1*" />
-                                                    <dg:DataGridTextColumn Binding="{Binding CompletedTimeText}" Header="{DynamicResource Navigation_Monitor_ColumnCompletedAt}" MinWidth="150" Width="1*" />
+                                                    <edge:EdgeTextColumn Binding="{Binding InternalKey}" Header="{DynamicResource Navigation_Monitor_ColumnInternalKey}" MinWidth="220" Width="2.2*" />
+                                                    <edge:EdgeTextColumn Binding="{Binding DisplayLabel}" Header="{DynamicResource Navigation_Monitor_ColumnBusinessId}" MinWidth="150" Width="1.2*" />
+                                                    <edge:EdgeTextColumn Binding="{Binding RuntimeStatusText}" Header="{DynamicResource Navigation_Monitor_ColumnRuntimeStatus}" MinWidth="120" Width="1*" />
+                                                    <edge:EdgeTextColumn Binding="{Binding CompletedTimeText}" Header="{DynamicResource Navigation_Monitor_ColumnCompletedAt}" MinWidth="150" Width="1*" />
                                                 </edge:EdgeDataGrid.Columns>
                                             </edge:EdgeDataGrid>
                                             <StackPanel
@@ -193,16 +192,16 @@
                                                 IsReadOnly="True"
                                                 ItemsSource="{Binding SelectedCellFieldRows}">
                                                 <edge:EdgeDataGrid.Columns>
-                                                    <dg:DataGridTextColumn Binding="{Binding Name}" Header="{DynamicResource Navigation_Monitor_ColumnFieldPath}" MinWidth="260" Width="1.1*" />
-                                                    <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Monitor_ColumnValue}" MinWidth="420" Width="2.4*">
-                                                        <dg:DataGridTemplateColumn.CellTemplate>
+                                                    <edge:EdgeTextColumn Binding="{Binding Name}" Header="{DynamicResource Navigation_Monitor_ColumnFieldPath}" MinWidth="260" Width="1.1*" />
+                                                    <edge:EdgeTemplateColumn Header="{DynamicResource Navigation_Monitor_ColumnValue}" MinWidth="420" Width="2.4*">
+                                                        <edge:EdgeTemplateColumn.CellTemplate>
                                                             <DataTemplate>
                                                                 <TextBlock
                                                                     Text="{Binding Value}"
                                                                     TextWrapping="Wrap" />
                                                             </DataTemplate>
-                                                        </dg:DataGridTemplateColumn.CellTemplate>
-                                                    </dg:DataGridTemplateColumn>
+                                                        </edge:EdgeTemplateColumn.CellTemplate>
+                                                    </edge:EdgeTemplateColumn>
                                                 </edge:EdgeDataGrid.Columns>
                                             </edge:EdgeDataGrid>
                                             <StackPanel
@@ -314,12 +313,12 @@
                                     IsVisible="{Binding HasStateMachineTaskItems}"
                                     ItemsSource="{Binding StateMachineTaskItems}">
                                     <edge:EdgeDataGrid.Columns>
-                                        <dg:DataGridTextColumn Binding="{Binding DisplayName}" Header="{DynamicResource Navigation_Monitor_ColumnTask}" MinWidth="180" Width="1.1*" />
-                                        <dg:DataGridTextColumn Binding="{Binding StepText}" Header="{DynamicResource Navigation_Monitor_ColumnStepStatus}" MinWidth="180" Width="1.1*" />
-                                        <dg:DataGridTextColumn Binding="{Binding StepValueText}" Header="{DynamicResource Navigation_Monitor_ColumnStepValue}" MinWidth="90" Width="90" />
-                                        <dg:DataGridTextColumn Binding="{Binding AvailabilityStatusText}" Header="{DynamicResource Navigation_Monitor_ColumnRunCondition}" MinWidth="130" Width="130" />
-                                        <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Monitor_ColumnDescription}" MinWidth="260" Width="1.6*">
-                                            <dg:DataGridTemplateColumn.CellTemplate>
+                                        <edge:EdgeTextColumn Binding="{Binding DisplayName}" Header="{DynamicResource Navigation_Monitor_ColumnTask}" MinWidth="180" Width="1.1*" />
+                                        <edge:EdgeTextColumn Binding="{Binding StepText}" Header="{DynamicResource Navigation_Monitor_ColumnStepStatus}" MinWidth="180" Width="1.1*" />
+                                        <edge:EdgeTextColumn Binding="{Binding StepValueText}" Header="{DynamicResource Navigation_Monitor_ColumnStepValue}" MinWidth="90" Width="90" />
+                                        <edge:EdgeTextColumn Binding="{Binding AvailabilityStatusText}" Header="{DynamicResource Navigation_Monitor_ColumnRunCondition}" MinWidth="130" Width="130" />
+                                        <edge:EdgeTemplateColumn Header="{DynamicResource Navigation_Monitor_ColumnDescription}" MinWidth="260" Width="1.6*">
+                                            <edge:EdgeTemplateColumn.CellTemplate>
                                                 <DataTemplate>
                                                     <TextBlock
                                                         FontSize="{DynamicResource Edge.FontSize.Caption}"
@@ -327,8 +326,8 @@
                                                         Text="{Binding DetailText}"
                                                         TextWrapping="Wrap" />
                                                 </DataTemplate>
-                                            </dg:DataGridTemplateColumn.CellTemplate>
-                                        </dg:DataGridTemplateColumn>
+                                            </edge:EdgeTemplateColumn.CellTemplate>
+                                        </edge:EdgeTemplateColumn>
                                     </edge:EdgeDataGrid.Columns>
                                 </edge:EdgeDataGrid>
 
@@ -357,6 +356,6 @@
                     </StackPanel>
                 </StackPanel>
             </StackPanel>
-        </ScrollViewer>
+        </edge:EdgeScrollHost>
     </Grid>
 </UserControl>

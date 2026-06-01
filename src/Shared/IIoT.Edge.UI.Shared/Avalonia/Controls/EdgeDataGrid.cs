@@ -7,7 +7,8 @@ namespace IIoT.Edge.UI.Shared.Avalonia.Controls;
 public enum EdgeDataGridDensity
 {
     Compact,
-    Normal
+    Normal,
+    Diagnostic
 }
 
 public class EdgeDataGrid : DataGrid
@@ -21,6 +22,11 @@ public class EdgeDataGrid : DataGrid
         AvaloniaProperty.Register<EdgeDataGrid, double>(
             nameof(ViewportMaxHeight),
             360d);
+
+    public static readonly StyledProperty<double> HorizontalScrollBarReserveHeightProperty =
+        AvaloniaProperty.Register<EdgeDataGrid, double>(
+            nameof(HorizontalScrollBarReserveHeight),
+            4d);
 
     static EdgeDataGrid()
     {
@@ -49,10 +55,17 @@ public class EdgeDataGrid : DataGrid
         set => SetValue(ViewportMaxHeightProperty, value);
     }
 
+    public double HorizontalScrollBarReserveHeight
+    {
+        get => GetValue(HorizontalScrollBarReserveHeightProperty);
+        set => SetValue(HorizontalScrollBarReserveHeightProperty, value);
+    }
+
     private void UpdateDensityClasses()
     {
         SetClass("density-compact", Density == EdgeDataGridDensity.Compact);
         SetClass("density-normal", Density == EdgeDataGridDensity.Normal);
+        SetClass("density-diagnostic", Density == EdgeDataGridDensity.Diagnostic);
     }
 
     private void UpdateViewportLimit()

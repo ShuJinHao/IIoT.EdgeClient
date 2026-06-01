@@ -43,6 +43,10 @@ public static class DependencyInjection
         services.AddTransient<ICapacityViewService, CapacityViewService>();
         services.AddTransient<IDataViewService, DataViewService>();
         services.AddTransient<IMonitorViewService, MonitorViewService>();
+        services.AddTransient<IMonitorConfiguredDeviceLoader, MonitorConfiguredDeviceLoader>();
+        services.AddTransient<IMonitorStateMachineTaskProjection, MonitorStateMachineTaskProjection>();
+        services.AddTransient<IMonitorSnapshotSourceMatcher, MonitorSnapshotSourceMatcher>();
+        services.AddTransient<IMonitorSnapshotProjectionBuilder, MonitorSnapshotProjectionBuilder>();
         services.AddTransient<IEquipmentPanelService, EquipmentPanelService>();
         services.AddTransient<ILogViewService, LogViewService>();
         services.AddSingleton<IEdgeSyncDiagnosticsQuery, EdgeSyncDiagnosticsQuery>();

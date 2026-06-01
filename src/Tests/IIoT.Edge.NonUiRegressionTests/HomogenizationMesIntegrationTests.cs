@@ -472,7 +472,7 @@ public sealed class HomogenizationMesIntegrationTests
             logger,
             new FakeProductionTimeProvider(),
             Options.Create(CreateMesOptions()),
-            Options.Create(CreateCodeOptions()));
+            new HomogenizationMesItemPayloadBuilder(Options.Create(CreateCodeOptions())));
     }
 
     private static MesRequestExecutor CreateExecutor(

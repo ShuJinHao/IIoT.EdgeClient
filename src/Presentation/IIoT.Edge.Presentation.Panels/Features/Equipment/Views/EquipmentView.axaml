@@ -67,9 +67,10 @@
                                 Text="{DynamicResource Panels_Label_MesPlanSelection}" />
                             <edge:EdgeActionButton
                                 Grid.Column="1"
+                                Classes="right-rail plan-action"
                                 Command="{Binding SelectProductionPlanCommand}"
                                 Icon="{StaticResource Edge.Icon.Plan}"
-                                Kind="Primary"
+                                Kind="Secondary"
                                 Size="Compact"
                                 Content="{DynamicResource Panels_Button_SelectProductionPlan}" />
                         </Grid>

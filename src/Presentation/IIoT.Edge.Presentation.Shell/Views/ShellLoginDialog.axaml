@@ -55,8 +55,8 @@
                         HorizontalAlignment="Stretch"
                         SelectionChanged="OnModeSelectionChanged"
                         SelectedIndex="0">
-                        <ListBoxItem Content="{DynamicResource Shell_Login_LocalEmergency}" />
-                        <ListBoxItem Content="{DynamicResource Shell_Login_CloudEmployee}" />
+                        <edge:EdgeSegmentedNavItem Content="{DynamicResource Shell_Login_LocalEmergency}" />
+                        <edge:EdgeSegmentedNavItem Content="{DynamicResource Shell_Login_CloudEmployee}" />
                     </edge:EdgeSegmentedNav>
 
                     <Grid

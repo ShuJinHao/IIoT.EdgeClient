@@ -70,11 +70,13 @@ public class RecipeViewModel : LocalizedCrudPageViewModelBase
     public RecipeViewModel(
         IRecipeViewCrudService crudService,
         IRecipeService recipeService,
-        IAppLanguageService languageService)
+        IAppLanguageService languageService,
+        IEditorValidator<LocalRecipeParamEditModel> localRecipeParamValidator)
         : this(
             crudService,
             recipeService,
             languageService,
+            localRecipeParamValidator,
             "Formula.RecipeView",
             "Navigation_Title_ProductRecipe",
             "产品配方")
@@ -85,6 +87,7 @@ public class RecipeViewModel : LocalizedCrudPageViewModelBase
         IRecipeViewCrudService crudService,
         IRecipeService recipeService,
         IAppLanguageService languageService,
+        IEditorValidator<LocalRecipeParamEditModel> localRecipeParamValidator,
         string viewId,
         string titleResourceKey,
         string titleFallback)
@@ -92,7 +95,7 @@ public class RecipeViewModel : LocalizedCrudPageViewModelBase
     {
         _crudService = crudService;
         _recipeService = recipeService;
-        _localRecipeParamValidator = new LocalRecipeParamValidator(GetText);
+        _localRecipeParamValidator = localRecipeParamValidator;
 
         SyncCloudCommand = CreateBusyCommand(OnSyncCloudAsync);
         SwitchSourceCommand = new BaseCommand(_ => OnSwitchSource());

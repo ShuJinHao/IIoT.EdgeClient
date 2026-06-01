@@ -2,8 +2,7 @@
     x:Class="IIoT.Edge.Presentation.Navigation.Features.Hardware.PlcTaskBindingView.PlcTaskBindingPage"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:dg="using:Avalonia.Controls"
-    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
+        xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
     xmlns:sharedViews="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared">
 
     <Grid RowDefinitions="Auto,*" Margin="20">
@@ -44,6 +43,7 @@
             Margin="0,16,0,0"
             Spacing="12">
             <edge:EdgeStatusListItem
+                Classes="compact right-rail strip"
                 Status="Info"
                 StatusText="{DynamicResource Navigation_Hint_SelectDevice}"
                 Title="{Binding SelectedDevice.DeviceStateText}" />
@@ -57,10 +57,10 @@
                     IsReadOnly="False"
                     ItemsSource="{Binding SelectedDeviceTasks}">
                     <edge:EdgeDataGrid.Columns>
-                        <dg:DataGridCheckBoxColumn Binding="{Binding Enabled}" Header="{DynamicResource Navigation_Column_Enable}" MinWidth="80" Width="80" />
-                        <dg:DataGridTextColumn Binding="{Binding DisplayName}" Header="{DynamicResource Navigation_Column_TaskName}" IsReadOnly="True" MinWidth="200" Width="2*" />
-                        <dg:DataGridTextColumn Binding="{Binding AvailabilityText}" Header="{DynamicResource Navigation_Column_TaskAvailability}" IsReadOnly="True" MinWidth="180" Width="180" />
-                        <dg:DataGridTextColumn Binding="{Binding NoteText}" Header="{DynamicResource Navigation_Column_Note}" IsReadOnly="True" MinWidth="320" Width="3*" />
+                        <edge:EdgeCheckColumn Binding="{Binding Enabled}" Header="{DynamicResource Navigation_Column_Enable}" MinWidth="80" Width="80" />
+                        <edge:EdgeTextColumn Binding="{Binding DisplayName}" Header="{DynamicResource Navigation_Column_TaskName}" IsReadOnly="True" MinWidth="200" Width="2*" />
+                        <edge:EdgeTextColumn Binding="{Binding AvailabilityText}" Header="{DynamicResource Navigation_Column_TaskAvailability}" IsReadOnly="True" MinWidth="180" Width="180" />
+                        <edge:EdgeTextColumn Binding="{Binding NoteText}" Header="{DynamicResource Navigation_Column_Note}" IsReadOnly="True" MinWidth="320" Width="3*" />
                     </edge:EdgeDataGrid.Columns>
                 </edge:EdgeDataGrid>
             </edge:EdgeTablePanel>

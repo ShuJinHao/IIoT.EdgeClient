@@ -44,13 +44,13 @@
                     </StackPanel>
                 </StackPanel>
 
-                <ScrollViewer MaxHeight="150" VerticalScrollBarVisibility="Auto">
+                <edge:EdgeScrollHost MaxHeight="150" Variant="Dialog">
                     <TextBlock
                         FontSize="{DynamicResource Edge.FontSize.Body}"
                         Foreground="{DynamicResource Edge.Brush.Text.Primary}"
                         Text="{Binding Message}"
                         TextWrapping="Wrap" />
-                </ScrollViewer>
+                </edge:EdgeScrollHost>
 
                 <edge:EdgeActionButton
                     HorizontalAlignment="Right"

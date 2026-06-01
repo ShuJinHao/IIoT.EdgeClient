@@ -11,14 +11,16 @@ using System.Windows.Input;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Production.Monitor;
 
-public class MonitorViewModel : NavigationViewModelBase
+public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallback
 {
     private readonly IMonitorViewService _monitorViewService;
     private readonly DispatcherTimer _refreshTimer;
     private readonly LocalizedSyncDiagnosticsText _diagnosticsText;
+    private readonly IMonitorViewModelSummaryFormatter _summaryFormatter;
+    private readonly IMonitorStateMachineTaskItemFactory _stateMachineTaskItemFactory;
+    private readonly IMonitorViewModelTabController _tabController;
 
     private IReadOnlyList<DeviceMonitorSnapshot> _lastSnapshots = [];
-    private MonitorTabItemViewModel _selectedTab = null!;
     private string? _selectedDevice;
     private string _cloudSyncStatus = string.Empty;
     private string _mesSyncStatus = string.Empty;
@@ -27,11 +29,16 @@ public class MonitorViewModel : NavigationViewModelBase
     private MonitorCellDebugItemViewModel? _selectedCell;
     private string _cellQueryText = string.Empty;
     private DataTable _cellTable = new();
+    private bool _refreshInFlight;
 
-    public MonitorViewModel(IMonitorViewService monitorViewService, IAppLanguageService languageService)
+    public MonitorViewModel(
+        IMonitorViewService monitorViewService,
+        IAppLanguageService languageService,
+        IMonitorViewModelCollaboratorFactory collaboratorFactory)
         : this(
             monitorViewService,
             languageService,
+            collaboratorFactory,
             "Production.Monitor",
             "Navigation_Title_RealtimeMonitor",
             "实时监控")
@@ -41,6 +48,7 @@ public class MonitorViewModel : NavigationViewModelBase
     public MonitorViewModel(
         IMonitorViewService monitorViewService,
         IAppLanguageService languageService,
+        IMonitorViewModelCollaboratorFactory collaboratorFactory,
         string viewId,
         string titleResourceKey,
         string titleFallback)
@@ -48,12 +56,11 @@ public class MonitorViewModel : NavigationViewModelBase
     {
         _monitorViewService = monitorViewService;
         _diagnosticsText = new LocalizedSyncDiagnosticsText(languageService);
-
-        Tabs =
-        [
-            new(languageService, "DeviceStatus", "Navigation_Monitor_Tab_DeviceStatus", "设备状态"),
-            new(languageService, "StateMachine", "Navigation_Monitor_Tab_StateMachine", "状态机")
-        ];
+        Tabs = [];
+        var collaborators = collaboratorFactory.Create(new MonitorViewModelCollaboratorContext(this, Tabs));
+        _tabController = collaborators.TabController;
+        _summaryFormatter = collaborators.SummaryFormatter;
+        _stateMachineTaskItemFactory = collaborators.StateMachineTaskItemFactory;
 
         SelectTabCommand = new BaseCommand(parameter =>
         {
@@ -62,14 +69,14 @@ public class MonitorViewModel : NavigationViewModelBase
                 Select(tab);
             }
         });
-        Select(Tabs[0]);
+        _tabController.Initialize();
 
         _refreshTimer = new DispatcherTimer
         {
             Interval = TimeSpan.FromMilliseconds(500)
         };
         _refreshTimer.Tick += (_, _) => RunViewTaskInBackground(
-            RefreshAsync,
+            RefreshOnceAsync,
             GetText("Navigation_Monitor_RefreshFailed", "监控刷新失败。"));
     }
 
@@ -77,7 +84,7 @@ public class MonitorViewModel : NavigationViewModelBase
 
     public MonitorTabItemViewModel SelectedTab
     {
-        get => _selectedTab;
+        get => _tabController.SelectedTab;
         set => Select(value);
     }
 
@@ -153,9 +160,9 @@ public class MonitorViewModel : NavigationViewModelBase
         set => SetSelectedCell(value);
     }
 
-    public bool IsDeviceStatusTabSelected => SelectedTab.Key == "DeviceStatus";
+    public bool IsDeviceStatusTabSelected => _tabController.IsDeviceStatusTabSelected;
 
-    public bool IsStateMachineTabSelected => SelectedTab.Key == "StateMachine";
+    public bool IsStateMachineTabSelected => _tabController.IsStateMachineTabSelected;
 
     public bool HasDevices => DeviceOptions.Count > 0;
 
@@ -220,7 +227,7 @@ public class MonitorViewModel : NavigationViewModelBase
         }
 
         await RunViewTaskAsync(
-            RefreshAsync,
+            RefreshOnceAsync,
             GetText("Navigation_Monitor_LoadFailed", "加载监控数据失败。"));
     }
 
@@ -235,12 +242,30 @@ public class MonitorViewModel : NavigationViewModelBase
         ApplySnapshots(await _monitorViewService.GetSnapshotsAsync());
     }
 
+    private async Task RefreshOnceAsync()
+    {
+        if (_refreshInFlight)
+        {
+            return;
+        }
+
+        _refreshInFlight = true;
+        try
+        {
+            await RefreshAsync();
+        }
+        finally
+        {
+            _refreshInFlight = false;
+        }
+    }
+
     private void ApplySnapshots(IReadOnlyList<DeviceMonitorSnapshot> snapshots)
     {
         _lastSnapshots = snapshots;
         ReplaceItems(DeviceOptions, snapshots.Select(static snapshot => snapshot.DeviceName).Distinct());
 
-        var nextDevice = ResolveSelectedDevice(snapshots);
+        var nextDevice = MonitorViewModelSnapshotApplier.ResolveSelectedDevice(snapshots, _selectedDevice);
         if (!string.Equals(_selectedDevice, nextDevice, StringComparison.Ordinal))
         {
             _selectedDevice = nextDevice;
@@ -248,22 +273,6 @@ public class MonitorViewModel : NavigationViewModelBase
         }
 
         ApplySelectedSnapshot();
-    }
-
-    private string? ResolveSelectedDevice(IReadOnlyList<DeviceMonitorSnapshot> snapshots)
-    {
-        if (snapshots.Count == 0)
-        {
-            return null;
-        }
-
-        if (!string.IsNullOrWhiteSpace(_selectedDevice)
-            && snapshots.Any(snapshot => string.Equals(snapshot.DeviceName, _selectedDevice, StringComparison.Ordinal)))
-        {
-            return _selectedDevice;
-        }
-
-        return snapshots[0].DeviceName;
     }
 
     private void ApplySelectedSnapshot()
@@ -287,19 +296,15 @@ public class MonitorViewModel : NavigationViewModelBase
             return;
         }
 
-        var summaryItems = CreateSummaryItems(snapshot);
+        var summaryItems = _summaryFormatter.CreateSummaryItems(snapshot);
         ReplaceItems(PrimarySummaryItems, summaryItems.Take(Math.Max(0, summaryItems.Count - 1)));
-        ReplaceItems(StateMachineSummaryItems, CreateStateMachineSummaryItems(summaryItems));
+        ReplaceItems(StateMachineSummaryItems, _summaryFormatter.CreateStateMachineSummaryItems(summaryItems));
         LastErrorItem = summaryItems[^1];
         ReplaceItems(EquipmentStatusRows, snapshot.EquipmentStatusRows);
         ReplaceItems(RealtimeRows, snapshot.RealtimeRows);
         ReplaceItems(StepRows, snapshot.StepRows);
         ReplaceItems(DeviceDataRows, snapshot.DeviceDataRows);
-        ReplaceItems(
-            StateMachineTaskItems,
-            snapshot.StateMachineTaskRows
-                .Where(static row => row.Enabled)
-                .Select(row => MonitorStateMachineTaskItemViewModel.Create(row, GetText)));
+        ReplaceItems(StateMachineTaskItems, _stateMachineTaskItemFactory.CreateItems(snapshot.StateMachineTaskRows));
         _cellDebugRows = snapshot.CellDebugRows;
         ApplyCellDebugFilter();
         _cellTable = snapshot.CellTable;
@@ -308,43 +313,17 @@ public class MonitorViewModel : NavigationViewModelBase
     }
 
     private DeviceMonitorSnapshot? FindSelectedSnapshot()
-        => string.IsNullOrWhiteSpace(_selectedDevice)
-            ? null
-            : _lastSnapshots.FirstOrDefault(snapshot =>
-                string.Equals(snapshot.DeviceName, _selectedDevice, StringComparison.Ordinal));
+        => MonitorViewModelSnapshotApplier.FindSelectedSnapshot(_lastSnapshots, _selectedDevice);
 
     private void ApplyCellDebugFilter()
     {
         var selectedKey = SelectedCell?.InternalKey;
-        var filteredRows = FilterCellDebugRows(_cellDebugRows, _cellQueryText)
-            .Select(static row => new MonitorCellDebugItemViewModel(row))
-            .ToList();
+        var filteredRows = MonitorViewModelCellDebugController.CreateFilteredItems(_cellDebugRows, _cellQueryText);
 
         ReplaceItems(CellDebugItems, filteredRows);
-        var nextSelectedCell = !string.IsNullOrWhiteSpace(selectedKey)
-            ? CellDebugItems.FirstOrDefault(item => string.Equals(item.InternalKey, selectedKey, StringComparison.Ordinal))
-            : null;
-        SetSelectedCell(nextSelectedCell ?? CellDebugItems.FirstOrDefault());
+        SetSelectedCell(MonitorViewModelCellDebugController.ResolveSelectedCell(CellDebugItems, selectedKey));
         RaiseCellDebugPropertiesChanged();
     }
-
-    private static IEnumerable<MonitorCellDebugSnapshot> FilterCellDebugRows(
-        IReadOnlyList<MonitorCellDebugSnapshot> rows,
-        string queryText)
-    {
-        var query = queryText.Trim();
-        if (string.IsNullOrWhiteSpace(query))
-        {
-            return rows;
-        }
-
-        return rows.Where(row =>
-            Contains(row.InternalKey, query)
-            || Contains(row.DisplayLabel, query));
-    }
-
-    private static bool Contains(string value, string query)
-        => value.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
 
     private void SetSelectedCell(MonitorCellDebugItemViewModel? cell)
     {
@@ -357,59 +336,6 @@ public class MonitorViewModel : NavigationViewModelBase
         OnPropertyChanged(nameof(SelectedCell));
         ReplaceItems(SelectedCellFieldRows, cell?.FieldRows ?? []);
         RaiseSelectedCellPropertiesChanged();
-    }
-
-    private IReadOnlyList<MonitorStatusItemVm> CreateSummaryItems(DeviceMonitorSnapshot snapshot)
-        =>
-        [
-            new(
-                GetText("Navigation_Monitor_ColumnConnectionStatus", "连接状态"),
-                snapshot.IsConnected
-                    ? GetText("Navigation_Monitor_ConnectionOnline", "已连接")
-                    : GetText("Navigation_Monitor_ConnectionOffline", "未连接")),
-            new(GetText("Navigation_Monitor_Source", "数据来源"), FormatSource(snapshot.Source)),
-            new(
-                GetText("Navigation_Monitor_ConfigurationState", "配置状态"),
-                FormatConfigurationState(snapshot)),
-            new(GetText("Navigation_Monitor_ConfigurationEndpoint", "PLC 端点"), snapshot.PlcEndpointText),
-            new(GetText("Navigation_Monitor_LastHeartbeat", "最近心跳"), snapshot.LastHeartbeatText),
-            new(GetText("Navigation_Monitor_LastUpdated", "最近更新"), snapshot.LastUpdatedText),
-            new(GetText("Navigation_Monitor_WipCount", "在制记录"), snapshot.CellCount.ToString()),
-            new(GetText("Navigation_Monitor_LastConnected", "最近连接"), snapshot.LastConnectedAtText),
-            new(GetText("Navigation_Monitor_LastFailure", "最近异常"), snapshot.LastFailureAtText),
-            new(GetText("Navigation_Monitor_LastError", "最后错误"), snapshot.LastErrorText)
-        ];
-
-    private static IReadOnlyList<MonitorStatusItemVm> CreateStateMachineSummaryItems(IReadOnlyList<MonitorStatusItemVm> summaryItems)
-        => summaryItems.Count < 7
-            ? summaryItems.Take(Math.Max(0, summaryItems.Count - 1)).ToList()
-            : [summaryItems[0], summaryItems[1], summaryItems[2], summaryItems[3], summaryItems[6]];
-
-    private string FormatSource(MonitorSnapshotSource source)
-        => source switch
-        {
-            MonitorSnapshotSource.ProductionContext => GetText(
-                "Navigation_Monitor_SourceProductionContext",
-                "生产上下文"),
-            MonitorSnapshotSource.RuntimeStatus => GetText(
-                "Navigation_Monitor_SourceRuntimeStatus",
-                "PLC 运行状态"),
-            MonitorSnapshotSource.PlcConfiguration => GetText(
-                "Navigation_Monitor_SourcePlcConfiguration",
-                "PLC 配置"),
-            _ => GetText("Navigation_Monitor_SourceUnknown", "未知")
-        };
-
-    private string FormatConfigurationState(DeviceMonitorSnapshot snapshot)
-    {
-        if (!snapshot.HasPlcConfiguration)
-        {
-            return GetText("Navigation_Monitor_ConfigurationMissing", "未配置");
-        }
-
-        return snapshot.IsPlcConfigurationEnabled
-            ? GetText("Navigation_Monitor_ConfigurationEnabled", "已启用")
-            : GetText("Navigation_Monitor_ConfigurationDisabled", "未启用");
     }
 
     private void RefreshSyncDiagnostics(DeviceMonitorSnapshot? snapshot)
@@ -429,35 +355,13 @@ public class MonitorViewModel : NavigationViewModelBase
 
     private void Select(MonitorTabItemViewModel? tab)
     {
-        if (tab is null)
-        {
-            return;
-        }
-
-        foreach (var item in Tabs)
-        {
-            item.IsSelected = ReferenceEquals(item, tab);
-        }
-
-        if (ReferenceEquals(_selectedTab, tab))
-        {
-            return;
-        }
-
-        _selectedTab = tab;
-        OnPropertyChanged(nameof(SelectedTab));
-        OnPropertyChanged(nameof(IsDeviceStatusTabSelected));
-        OnPropertyChanged(nameof(IsStateMachineTabSelected));
+        _tabController.Select(tab);
     }
 
     protected override void RefreshLocalization()
     {
         base.RefreshLocalization();
-        foreach (var tab in Tabs)
-        {
-            tab.RefreshLanguage();
-        }
-
+        _tabController.RefreshLanguage();
         ApplySelectedSnapshot();
     }
 
@@ -497,4 +401,7 @@ public class MonitorViewModel : NavigationViewModelBase
         OnPropertyChanged(nameof(IsSelectedCellEmpty));
         OnPropertyChanged(nameof(IsSelectedCellFieldRowsEmpty));
     }
+
+    void IMonitorViewModelCallback.NotifyPropertyChanged(string propertyName)
+        => OnPropertyChanged(propertyName);
 }

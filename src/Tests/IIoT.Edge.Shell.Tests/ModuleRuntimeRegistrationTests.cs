@@ -817,21 +817,29 @@ public sealed class ModuleRuntimeRegistrationTests
             var developmentSampleInitializer = serviceProvider.GetRequiredService<IDevelopmentSampleInitializer>();
             var networkDevices = serviceProvider.GetRequiredService<IRepository<NetworkDeviceEntity>>();
             var ioMappings = serviceProvider.GetRequiredService<IRepository<IoMappingEntity>>();
+            var configurationProfileBuilder = new StartupConfigurationProfileBuilder(configuration, runtimePaths);
+            var syncValidators = new IStartupDiagnosticValidator[]
+            {
+                new StartupAppSettingsValidator(configuration, shiftConfig),
+                new StartupModuleRegistrationValidator(cellDataRegistry, runtimeRegistry, integrationRegistry)
+            };
+            var asyncValidators = new IStartupAsyncDiagnosticValidator[]
+            {
+                new StartupPlcConfigurationValidator(ioMappings, cellDataRegistry, runtimeRegistry)
+            };
             var diagnosticsReportBuilder = new StartupDiagnosticsReportBuilder(
-                configuration,
-                runtimePaths,
-                shiftConfig,
                 networkDevices,
-                ioMappings,
-                cellDataRegistry,
-                runtimeRegistry,
-                integrationRegistry,
                 new StartupPluginLifecycleSnapshotBuilder(),
                 discovery.Modules,
                 [.. discovery.Issues, .. activation.Issues],
                 activation.EnabledModuleIds,
                 activation.Modules,
-                serviceProvider.GetServices<IModuleHardwareProfileProvider>());
+                serviceProvider.GetServices<IModuleHardwareProfileProvider>(),
+                syncValidators,
+                asyncValidators,
+                configurationProfileBuilder,
+                new StartupModuleRegistrationSnapshotBuilder(cellDataRegistry, runtimeRegistry, integrationRegistry),
+                serviceProvider.GetService<ILocalSystemRuntimeConfigService>());
             var manager = new AppLifecycleManager(
                 new AppStartupInitializer(
                     serviceProvider,

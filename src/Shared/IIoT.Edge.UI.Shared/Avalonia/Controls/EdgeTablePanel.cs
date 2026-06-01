@@ -10,12 +10,24 @@ public enum EdgeTablePanelSurface
     Transparent
 }
 
+public enum EdgeTablePanelDensity
+{
+    Compact,
+    Normal,
+    Diagnostic
+}
+
 public class EdgeTablePanel : TemplatedControl
 {
     public static readonly StyledProperty<EdgeTablePanelSurface> SurfaceProperty =
         AvaloniaProperty.Register<EdgeTablePanel, EdgeTablePanelSurface>(
             nameof(Surface),
             EdgeTablePanelSurface.Card);
+
+    public static readonly StyledProperty<EdgeTablePanelDensity> DensityProperty =
+        AvaloniaProperty.Register<EdgeTablePanel, EdgeTablePanelDensity>(
+            nameof(Density),
+            EdgeTablePanelDensity.Normal);
 
     public static readonly StyledProperty<object?> TitleProperty =
         AvaloniaProperty.Register<EdgeTablePanel, object?>(nameof(Title));
@@ -63,6 +75,7 @@ public class EdgeTablePanel : TemplatedControl
     static EdgeTablePanel()
     {
         SurfaceProperty.Changed.AddClassHandler<EdgeTablePanel>((panel, _) => panel.UpdateSurfaceClasses());
+        DensityProperty.Changed.AddClassHandler<EdgeTablePanel>((panel, _) => panel.UpdateDensityClasses());
         SubtitleProperty.Changed.AddClassHandler<EdgeTablePanel>((panel, _) => panel.UpdatePseudoClasses());
         StatusContentProperty.Changed.AddClassHandler<EdgeTablePanel>((panel, _) => panel.UpdatePseudoClasses());
         FilterContentProperty.Changed.AddClassHandler<EdgeTablePanel>((panel, _) => panel.UpdatePseudoClasses());
@@ -75,6 +88,7 @@ public class EdgeTablePanel : TemplatedControl
     public EdgeTablePanel()
     {
         UpdateSurfaceClasses();
+        UpdateDensityClasses();
         UpdatePseudoClasses();
     }
 
@@ -82,6 +96,12 @@ public class EdgeTablePanel : TemplatedControl
     {
         get => GetValue(SurfaceProperty);
         set => SetValue(SurfaceProperty, value);
+    }
+
+    public EdgeTablePanelDensity Density
+    {
+        get => GetValue(DensityProperty);
+        set => SetValue(DensityProperty, value);
     }
 
     public object? Title
@@ -171,14 +191,24 @@ public class EdgeTablePanel : TemplatedControl
 
     private void UpdatePseudoClasses()
     {
+        var hasFilter = HasVisibleContent(FilterContent);
+        var hasActions = HasVisibleContent(ActionContent);
+        var hasStatus = HasVisibleContent(StatusContent);
+
         SetPseudoClass(":empty", IsEmpty && !ShowContentWhenEmpty);
         SetPseudoClass(":error", HasError);
         SetPseudoClass(":has-subtitle", HasVisibleContent(Subtitle));
-        SetPseudoClass(":has-status", HasVisibleContent(StatusContent));
-        SetPseudoClass(":has-toolbar", HasVisibleContent(FilterContent) || HasVisibleContent(ActionContent));
+        SetPseudoClass(":has-status", hasStatus);
+        SetPseudoClass(":has-toolbar", hasFilter || hasActions);
+        SetPseudoClass(":has-filter", hasFilter);
+        SetPseudoClass(":has-actions", hasActions);
+        SetPseudoClass(":actions-only", hasActions && !hasFilter && !hasStatus);
         SetClass("has-subtitle", HasVisibleContent(Subtitle));
-        SetClass("has-status", HasVisibleContent(StatusContent));
-        SetClass("has-toolbar", HasVisibleContent(FilterContent) || HasVisibleContent(ActionContent));
+        SetClass("has-status", hasStatus);
+        SetClass("has-toolbar", hasFilter || hasActions);
+        SetClass("has-filter", hasFilter);
+        SetClass("has-actions", hasActions);
+        SetClass("actions-only", hasActions && !hasFilter && !hasStatus);
         SetClass("empty-content-visible", ShowContentWhenEmpty && IsEmpty && !HasError);
     }
 
@@ -196,6 +226,13 @@ public class EdgeTablePanel : TemplatedControl
     {
         SetClass("surface-card", Surface == EdgeTablePanelSurface.Card);
         SetClass("surface-transparent", Surface == EdgeTablePanelSurface.Transparent);
+    }
+
+    private void UpdateDensityClasses()
+    {
+        SetClass("density-compact", Density == EdgeTablePanelDensity.Compact);
+        SetClass("density-normal", Density == EdgeTablePanelDensity.Normal);
+        SetClass("density-diagnostic", Density == EdgeTablePanelDensity.Diagnostic);
     }
 
     private void SetPseudoClass(string name, bool enabled)

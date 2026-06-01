@@ -3,7 +3,7 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
-    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+    <edge:EdgeScrollHost>
         <StackPanel Margin="{DynamicResource Edge.Thickness.32}" Spacing="24">
             <edge:EdgeSectionHeader
                 Title="{DynamicResource Navigation_Dashboard_Title}"
@@ -387,5 +387,5 @@
                 </StackPanel>
             </edge:EdgeCard>
         </StackPanel>
-    </ScrollViewer>
+    </edge:EdgeScrollHost>
 </UserControl>

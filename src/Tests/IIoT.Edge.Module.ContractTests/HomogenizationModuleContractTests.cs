@@ -88,6 +88,10 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
 
         Assert.Contains(
             result.Services,
+            descriptor => descriptor.ServiceType == typeof(IHomogenizationMesItemPayloadBuilder)
+                          && descriptor.ImplementationType?.FullName == "IIoT.Edge.Module.Homogenization.Integration.HomogenizationMesItemPayloadBuilder");
+        Assert.Contains(
+            result.Services,
             descriptor => descriptor.ServiceType == typeof(HomogenizationMesChannel)
                           && descriptor.ImplementationType == typeof(HomogenizationMesChannel));
         Assert.Contains(
