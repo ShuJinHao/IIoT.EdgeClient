@@ -291,6 +291,7 @@ public class CapacityViewModel : NavigationViewModelBase
             ChartPoints.Add(new EdgeChartPoint
             {
                 Label = string.IsNullOrWhiteSpace(row.Date) ? row.DateFull : row.Date,
+                TooltipLabel = string.IsNullOrWhiteSpace(row.DateFull) ? row.Date : row.DateFull,
                 Values = new Dictionary<string, double>(StringComparer.Ordinal)
                 {
                     [ChartTotalKey] = row.Total,
@@ -330,7 +331,8 @@ public class CapacityViewModel : NavigationViewModelBase
             Title = GetText("Navigation_Capacity_TotalOutput", "产量合计"),
             Kind = EdgeChartSeriesKind.Bar,
             Axis = EdgeChartAxis.Primary,
-            Brush = ResolveBrush("Edge.Brush.Chart.Accent")
+            Brush = ResolveBrush("Edge.Brush.Chart.Accent"),
+            TooltipValueFormat = "0"
         });
         ChartSeries.Add(new EdgeChartSeries
         {
@@ -338,7 +340,8 @@ public class CapacityViewModel : NavigationViewModelBase
             Title = GetText("Navigation_Capacity_Good", "良品"),
             Kind = EdgeChartSeriesKind.Bar,
             Axis = EdgeChartAxis.Primary,
-            Brush = ResolveBrush("Edge.Brush.Status.Running")
+            Brush = ResolveBrush("Edge.Brush.Status.Running"),
+            TooltipValueFormat = "0"
         });
         ChartSeries.Add(new EdgeChartSeries
         {
@@ -346,7 +349,8 @@ public class CapacityViewModel : NavigationViewModelBase
             Title = GetText("Navigation_Capacity_Bad", "不良"),
             Kind = EdgeChartSeriesKind.Bar,
             Axis = EdgeChartAxis.Primary,
-            Brush = ResolveBrush("Edge.Brush.Status.Warning")
+            Brush = ResolveBrush("Edge.Brush.Status.Warning"),
+            TooltipValueFormat = "0"
         });
         ChartSeries.Add(new EdgeChartSeries
         {
@@ -354,7 +358,8 @@ public class CapacityViewModel : NavigationViewModelBase
             Title = GetText("Navigation_Column_Yield", "良率"),
             Kind = EdgeChartSeriesKind.Line,
             Axis = EdgeChartAxis.Secondary,
-            Brush = ResolveBrush("Edge.Brush.Chart.Secondary")
+            Brush = ResolveBrush("Edge.Brush.Chart.Secondary"),
+            TooltipValueFormat = "0.0'%'"
         });
     }
 

@@ -4,6 +4,7 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
 using Avalonia.Media;
 
 namespace IIoT.Edge.UI.Shared.Avalonia.Controls;
@@ -31,11 +32,15 @@ public sealed class EdgeChartSeries
     public EdgeChartAxis Axis { get; set; } = EdgeChartAxis.Primary;
 
     public IBrush? Brush { get; set; }
+
+    public string? TooltipValueFormat { get; set; }
 }
 
 public sealed class EdgeChartPoint
 {
     public object? Label { get; set; }
+
+    public object? TooltipLabel { get; set; }
 
     public IDictionary<string, double> Values { get; set; } = new Dictionary<string, double>(StringComparer.Ordinal);
 
@@ -49,6 +54,7 @@ public class EdgeBarLineChart : TemplatedControl
 {
     private INotifyCollectionChanged? _itemsSourceNotifications;
     private INotifyCollectionChanged? _seriesNotifications;
+    private int? _hoveredPointIndex;
 
     public static readonly StyledProperty<IEnumerable?> ItemsSourceProperty =
         AvaloniaProperty.Register<EdgeBarLineChart, IEnumerable?>(nameof(ItemsSource));
@@ -107,6 +113,8 @@ public class EdgeBarLineChart : TemplatedControl
 
     public EdgeBarLineChart()
     {
+        PointerMoved += OnPointerMoved;
+        PointerExited += OnPointerExited;
         RefreshChart();
     }
 
@@ -199,14 +207,14 @@ public class EdgeBarLineChart : TemplatedControl
             return;
         }
 
-        var legendHeight = 30d;
-        var plot = new Rect(48, 18, Math.Max(0, Bounds.Width - 96), Math.Max(0, Bounds.Height - 72 - legendHeight));
+        var plot = CreatePlotRect();
         if (plot.Width <= 0 || plot.Height <= 0)
         {
             return;
         }
 
         DrawGrid(context, plot);
+        DrawHoverGuide(context, plot, points);
         DrawSeries(context, plot, points, series);
         DrawAxes(context, plot, points, series);
         DrawLegend(context, plot, series);
@@ -214,6 +222,7 @@ public class EdgeBarLineChart : TemplatedControl
 
     private void RefreshChart()
     {
+        ClearHover();
         UpdatePseudoClasses();
         InvalidateVisual();
     }
@@ -248,9 +257,71 @@ public class EdgeBarLineChart : TemplatedControl
     private void OnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
         => RefreshChart();
 
+    private void OnPointerMoved(object? sender, PointerEventArgs e)
+    {
+        var points = GetPoints();
+        var series = GetSeries();
+        if (points.Count == 0 || series.Count == 0 || Bounds.Width <= 0 || Bounds.Height <= 0)
+        {
+            ClearHover();
+            return;
+        }
+
+        var plot = CreatePlotRect();
+        if (plot.Width <= 0 || plot.Height <= 0)
+        {
+            ClearHover();
+            return;
+        }
+
+        var pointer = e.GetPosition(this);
+        var hoverBounds = new Rect(plot.Left - 10, plot.Top - 18, plot.Width + 20, plot.Height + 36);
+        if (!hoverBounds.Contains(pointer))
+        {
+            ClearHover();
+            return;
+        }
+
+        var groupWidth = plot.Width / points.Count;
+        var index = (int)Math.Clamp(
+            Math.Floor((pointer.X - plot.Left) / groupWidth),
+            0,
+            points.Count - 1);
+
+        if (_hoveredPointIndex == index)
+        {
+            return;
+        }
+
+        _hoveredPointIndex = index;
+        ToolTip.SetTip(this, BuildTooltip(points[index], series));
+        InvalidateVisual();
+    }
+
+    private void OnPointerExited(object? sender, PointerEventArgs e)
+        => ClearHover();
+
+    private void ClearHover()
+    {
+        if (_hoveredPointIndex is null && ToolTip.GetTip(this) is null)
+        {
+            return;
+        }
+
+        _hoveredPointIndex = null;
+        ToolTip.SetTip(this, null);
+        InvalidateVisual();
+    }
+
     private void UpdatePseudoClasses()
     {
         SetPseudoClass(":empty", GetPoints().Count == 0 || GetSeries().Count == 0);
+    }
+
+    private Rect CreatePlotRect()
+    {
+        var legendHeight = 30d;
+        return new Rect(48, 18, Math.Max(0, Bounds.Width - 96), Math.Max(0, Bounds.Height - 72 - legendHeight));
     }
 
     private void DrawGrid(DrawingContext context, Rect plot)
@@ -310,6 +381,25 @@ public class EdgeBarLineChart : TemplatedControl
         {
             DrawLineSeries(context, plot, points, item, groupWidth, primaryMax, secondaryMax);
         }
+    }
+
+    private void DrawHoverGuide(DrawingContext context, Rect plot, IReadOnlyList<EdgeChartPoint> points)
+    {
+        if (_hoveredPointIndex is not { } index || index < 0 || index >= points.Count)
+        {
+            return;
+        }
+
+        var guideBrush = GridLineBrush;
+        if (guideBrush is null)
+        {
+            return;
+        }
+
+        var groupWidth = plot.Width / points.Count;
+        var x = plot.Left + groupWidth * index + groupWidth / 2;
+        var pen = new Pen(guideBrush, 1.4);
+        context.DrawLine(pen, new Point(x, plot.Top), new Point(x, plot.Bottom));
     }
 
     private void DrawLineSeries(
@@ -448,6 +538,35 @@ public class EdgeBarLineChart : TemplatedControl
         return string.IsNullOrWhiteSpace(format)
             ? value.ToString("0.#", CultureInfo.CurrentCulture)
             : value.ToString(format, CultureInfo.CurrentCulture);
+    }
+
+    private static string BuildTooltip(EdgeChartPoint point, IReadOnlyList<EdgeChartSeries> series)
+    {
+        var title = Convert.ToString(point.TooltipLabel, CultureInfo.CurrentCulture);
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            title = Convert.ToString(point.Label, CultureInfo.CurrentCulture);
+        }
+
+        var lines = new List<string>();
+        if (!string.IsNullOrWhiteSpace(title))
+        {
+            lines.Add(title);
+        }
+
+        foreach (var item in series)
+        {
+            var label = Convert.ToString(item.Title, CultureInfo.CurrentCulture);
+            if (string.IsNullOrWhiteSpace(label))
+            {
+                label = item.Key;
+            }
+
+            var value = FormatValue(point.GetValue(item.Key), item.TooltipValueFormat);
+            lines.Add($"{label}: {value}");
+        }
+
+        return string.Join(Environment.NewLine, lines);
     }
 
     private static void DrawText(DrawingContext context, string text, Point origin, IBrush brush, double size)
