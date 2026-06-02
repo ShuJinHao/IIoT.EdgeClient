@@ -7,8 +7,6 @@ using IIoT.Edge.Infrastructure.DeviceComm.Barcode.Readers;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Infrastructure.DeviceComm.Signals;
-using IIoT.Edge.Runtime.Base;
-using IIoT.Edge.Runtime.Plc;
 using IIoT.Edge.Runtime.Signals;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.Enums;

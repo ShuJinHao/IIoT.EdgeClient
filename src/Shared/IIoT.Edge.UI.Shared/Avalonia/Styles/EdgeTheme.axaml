@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml" />
     <StyleInclude Source="avares://IIoT.Edge.UI.Shared/Avalonia/Resources/EdgeIcons.axaml" />
+    <StyleInclude Source="avares://IIoT.Edge.UI.Shared/Avalonia/Resources/EdgeConverters.axaml" />
 
     <Styles.Resources>
         <Color x:Key="Edge.Color.Gray50">#F7F8F2</Color>
@@ -20,11 +21,11 @@
         <Color x:Key="Edge.Color.Ivory50">#FFFDF6</Color>
         <Color x:Key="Edge.Color.Ivory100">#F7F0E2</Color>
         <Color x:Key="Edge.Color.Ivory200">#EFE8D8</Color>
-        <Color x:Key="Edge.Color.AppWarm">#F3F1E7</Color>
-        <Color x:Key="Edge.Color.CardWarm">#FBF8EF</Color>
-        <Color x:Key="Edge.Color.PanelWarm">#F6F3EA</Color>
-        <Color x:Key="Edge.Color.WashWarm">#F0E8D9</Color>
-        <Color x:Key="Edge.Color.LineWarm">#E5DED0</Color>
+        <Color x:Key="Edge.Color.AppWarm">#ECE9DD</Color>
+        <Color x:Key="Edge.Color.CardWarm">#FFFDF6</Color>
+        <Color x:Key="Edge.Color.PanelWarm">#F8F4EA</Color>
+        <Color x:Key="Edge.Color.WashWarm">#F2EBDD</Color>
+        <Color x:Key="Edge.Color.LineWarm">#DED6C6</Color>
 
         <Color x:Key="Edge.Color.Lime100">#EFFBC9</Color>
         <Color x:Key="Edge.Color.Lime500">#C6F432</Color>
@@ -47,10 +48,10 @@
         <SolidColorBrush x:Key="Edge.Brush.Surface.Inverse" Color="{StaticResource Edge.Color.Gray900}" />
         <SolidColorBrush x:Key="Edge.Brush.Surface.Wash" Color="{StaticResource Edge.Color.WashWarm}" />
         <SolidColorBrush x:Key="Edge.Brush.Surface.Raised" Color="{StaticResource Edge.Color.PanelWarm}" />
-        <SolidColorBrush x:Key="Edge.Brush.Surface.Highlight" Color="{StaticResource Edge.Color.Lime100}" />
+        <SolidColorBrush x:Key="Edge.Brush.Surface.Highlight" Color="{StaticResource Edge.Color.Ivory200}" />
         <SolidColorBrush x:Key="Edge.Brush.Sidebar.Background" Color="{StaticResource Edge.Color.AppWarm}" />
         <SolidColorBrush x:Key="Edge.Brush.Sidebar.Divider" Color="{StaticResource Edge.Color.LineWarm}" />
-        <SolidColorBrush x:Key="Edge.Brush.Sidebar.Selected" Color="{StaticResource Edge.Color.Lime100}" />
+        <SolidColorBrush x:Key="Edge.Brush.Sidebar.Selected" Color="{StaticResource Edge.Color.Gray900}" />
         <SolidColorBrush x:Key="Edge.Brush.Language.Background" Color="{StaticResource Edge.Color.CardWarm}" />
         <SolidColorBrush x:Key="Edge.Brush.Language.Hover" Color="{StaticResource Edge.Color.WashWarm}" />
         <SolidColorBrush x:Key="Edge.Brush.Language.Border" Color="{StaticResource Edge.Color.LineWarm}" />
@@ -67,9 +68,9 @@
         <SolidColorBrush x:Key="Edge.Brush.Scrollbar.Thumb" Color="{StaticResource Edge.Color.Gray700}" />
         <SolidColorBrush x:Key="Edge.Brush.Scrollbar.Track" Color="Transparent" />
         <SolidColorBrush x:Key="Edge.Brush.Surface.Panel" Color="{StaticResource Edge.Color.PanelWarm}" />
-        <SolidColorBrush x:Key="Edge.Brush.Surface.Subtle" Color="{StaticResource Edge.Color.Lime100}" />
+        <SolidColorBrush x:Key="Edge.Brush.Surface.Subtle" Color="{StaticResource Edge.Color.Ivory200}" />
         <SolidColorBrush x:Key="Edge.Brush.Border.Subtle" Color="{StaticResource Edge.Color.LineWarm}" />
-        <SolidColorBrush x:Key="Edge.Brush.Border.Focus" Color="{StaticResource Edge.Color.Lime500}" />
+        <SolidColorBrush x:Key="Edge.Brush.Border.Focus" Color="{StaticResource Edge.Color.Yellow500}" />
         <SolidColorBrush x:Key="Edge.Brush.Text.Primary" Color="{StaticResource Edge.Color.Gray900}" />
         <SolidColorBrush x:Key="Edge.Brush.Text.Secondary" Color="{StaticResource Edge.Color.Gray700}" />
         <SolidColorBrush x:Key="Edge.Brush.Text.Muted" Color="{StaticResource Edge.Color.Gray500}" />
@@ -87,7 +88,7 @@
         <SolidColorBrush x:Key="Edge.Brush.Header.ChipBackground" Color="{StaticResource Edge.Color.Ivory50}" />
         <SolidColorBrush x:Key="Edge.Brush.Header.ChipHover" Color="{StaticResource Edge.Color.Ivory100}" />
         <SolidColorBrush x:Key="Edge.Brush.Header.ChipBorder" Color="{StaticResource Edge.Color.Gray200}" />
-        <SolidColorBrush x:Key="Edge.Brush.Header.AvatarBackground" Color="{StaticResource Edge.Color.Lime100}" />
+        <SolidColorBrush x:Key="Edge.Brush.Header.AvatarBackground" Color="{StaticResource Edge.Color.Ivory100}" />
         <SolidColorBrush x:Key="Edge.Brush.Header.Divider" Color="{StaticResource Edge.Color.Gray200}" />
         <SolidColorBrush x:Key="Edge.Brush.Header.WindowButtonHover" Color="{StaticResource Edge.Color.Ivory100}" />
         <SolidColorBrush x:Key="Edge.Brush.Header.WindowButtonCloseHover" Color="{StaticResource Edge.Color.Red50}" />
@@ -96,7 +97,7 @@
         <SolidColorBrush x:Key="Edge.Brush.Footer.StatusFallback" Color="{StaticResource Edge.Color.Gray500}" />
         <SolidColorBrush x:Key="Edge.Brush.Chart.Track" Color="{StaticResource Edge.Color.Ivory200}" />
         <SolidColorBrush x:Key="Edge.Brush.Chart.Accent" Color="{StaticResource Edge.Color.Yellow500}" />
-        <SolidColorBrush x:Key="Edge.Brush.Chart.Secondary" Color="{StaticResource Edge.Color.Lime500}" />
+        <SolidColorBrush x:Key="Edge.Brush.Chart.Secondary" Color="{StaticResource Edge.Color.Blue500}" />
 
         <SolidColorBrush x:Key="Edge.Brush.Status.Running" Color="{StaticResource Edge.Color.Lime500}" />
         <SolidColorBrush x:Key="Edge.Brush.Status.Idle" Color="{StaticResource Edge.Color.Orange500}" />
@@ -123,8 +124,8 @@
         <CornerRadius x:Key="Edge.CornerRadius.Small">6</CornerRadius>
         <CornerRadius x:Key="Edge.CornerRadius.Medium">8</CornerRadius>
         <CornerRadius x:Key="Edge.CornerRadius.Large">14</CornerRadius>
-        <CornerRadius x:Key="Edge.CornerRadius.Stage">24</CornerRadius>
-        <CornerRadius x:Key="Edge.CornerRadius.Card">18</CornerRadius>
+        <CornerRadius x:Key="Edge.CornerRadius.Stage">20</CornerRadius>
+        <CornerRadius x:Key="Edge.CornerRadius.Card">14</CornerRadius>
         <CornerRadius x:Key="Edge.CornerRadius.Control">12</CornerRadius>
         <CornerRadius x:Key="Edge.CornerRadius.Pill">999</CornerRadius>
         <CornerRadius x:Key="Edge.CornerRadius.Circle">999</CornerRadius>
@@ -193,10 +194,10 @@
         <FontFamily x:Key="Edge.FontFamily.Mono">Consolas, JetBrains Mono, monospace</FontFamily>
         <FontFamily x:Key="Edge.FontFamily.Display">Microsoft YaHei UI, Segoe UI, PingFang SC, sans-serif</FontFamily>
 
-        <BoxShadows x:Key="Edge.Shadow.Card">0 0 0 0 #00000000</BoxShadows>
-        <BoxShadows x:Key="Edge.Shadow.Float">0 10 24 0 #143B3314</BoxShadows>
-        <BoxShadows x:Key="Edge.Shadow.App">0 14 34 0 #143B3312</BoxShadows>
-        <BoxShadows x:Key="Edge.Shadow.Soft">0 2 6 0 #063B3308</BoxShadows>
+        <BoxShadows x:Key="Edge.Shadow.Card">0 2 8 0 #143B330F</BoxShadows>
+        <BoxShadows x:Key="Edge.Shadow.Float">0 10 26 0 #143B3318</BoxShadows>
+        <BoxShadows x:Key="Edge.Shadow.App">0 16 36 0 #143B3316</BoxShadows>
+        <BoxShadows x:Key="Edge.Shadow.Soft">0 4 12 0 #143B3314</BoxShadows>
         <BoxShadows x:Key="Edge.Shadow.None">0 0 0 0 #00000000</BoxShadows>
 
     </Styles.Resources>

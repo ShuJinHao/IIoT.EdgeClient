@@ -6,7 +6,6 @@ using IIoT.Edge.Application.Features.Config;
 using IIoT.Edge.Application.Features.Config.LocalParameterConfig;
 using IIoT.Edge.Application.Features.Config.ModuleParameters;
 using IIoT.Edge.Application.Features.Config.ParamView;
-using IIoT.Edge.Application.Features.Config.ParamView.Models;
 using IIoT.Edge.Application.Features.Config.UseCases.ModuleParam;
 using IIoT.Edge.Application.Features.Config.UseCases.SystemConfig.Queries;
 using IIoT.Edge.Domain.Config.Aggregates;
@@ -94,15 +93,7 @@ public sealed class LocalParameterConfigBehaviorTests
 
         var saveResult = await service.SaveAsync(
             [
-                new ModuleParamVm
-                {
-                    ModuleId = ModuleId,
-                    Category = ModuleParamCategory.Business,
-                    Key = moduleKey,
-                    Name = "启用托盘码重码验证",
-                    DisplayName = "托盘码重码验证启用",
-                    Value = "true"
-                }
+                new ModuleParamDto(moduleKey, "true")
             ]);
 
         Assert.True(saveResult.IsSuccess);

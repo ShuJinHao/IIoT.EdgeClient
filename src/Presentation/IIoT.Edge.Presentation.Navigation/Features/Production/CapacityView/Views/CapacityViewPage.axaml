@@ -26,24 +26,28 @@
             </edge:EdgeNoticeBar>
 
             <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing12}">
-                <edge:EdgeKpiCard
+                <edge:EdgeMetricCard
+                    Classes="kpi-compact"
+                    Status="Info"
                     Title="{DynamicResource Navigation_Capacity_TotalOutput}"
-                    TrendStatus="Info"
                     Value="{Binding PeriodTotal}" />
-                <edge:EdgeKpiCard
+                <edge:EdgeMetricCard
                     Grid.Column="1"
+                    Classes="kpi-compact"
+                    Status="Running"
                     Title="{DynamicResource Navigation_Capacity_Good}"
-                    TrendStatus="Running"
                     Value="{Binding PeriodOk}" />
-                <edge:EdgeKpiCard
+                <edge:EdgeMetricCard
                     Grid.Column="2"
+                    Classes="kpi-compact"
+                    Status="Error"
                     Title="{DynamicResource Navigation_Capacity_Bad}"
-                    TrendStatus="Error"
                     Value="{Binding PeriodNg}" />
-                <edge:EdgeKpiCard
+                <edge:EdgeMetricCard
                     Grid.Column="3"
+                    Classes="kpi-compact"
+                    Status="Warning"
                     Title="{DynamicResource Navigation_Capacity_AvgPerDay}"
-                    TrendStatus="Warning"
                     Value="{Binding AvgDaily}" />
             </Grid>
 

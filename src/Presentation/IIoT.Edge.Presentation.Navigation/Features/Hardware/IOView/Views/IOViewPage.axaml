@@ -11,7 +11,7 @@
             <Grid ColumnDefinitions="*">
                 <StackPanel Spacing="4">
                     <TextBlock
-                        FontSize="24"
+                        FontSize="{DynamicResource Edge.FontSize.Title24}"
                         FontWeight="SemiBold"
                         Foreground="{DynamicResource Edge.Brush.Text.Primary}"
                         Text="{Binding ViewTitle}" />
@@ -81,12 +81,12 @@
                                                 Text="{Binding WriteValue, Mode=TwoWay}" />
                                             <edge:EdgeActionButton
                                                 Grid.Column="2"
-                                                Classes="cell"
                                                 Command="{Binding WriteCommand}"
                                                 Content="{DynamicResource Navigation_Button_Write}"
                                                 Icon="{StaticResource Edge.Icon.Write}"
                                                 IsEnabled="{Binding CanWrite}"
                                                 Kind="Primary"
+                                                Role="Cell"
                                                 Size="Compact" />
                                         </Grid>
                                     </DataTemplate>
@@ -151,7 +151,7 @@
                                         Command="{Binding ToggleExpandedCommand}"
                                         Content="{Binding ToggleText}"
                                         Icon="{StaticResource Edge.Icon.Expand}"
-                                        Kind="Soft"
+                                        Kind="Secondary"
                                         Size="Compact" />
                                 </StackPanel>
                             </edge:EdgeTablePanel.ActionContent>

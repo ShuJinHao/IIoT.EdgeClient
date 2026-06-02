@@ -7,34 +7,20 @@
     Height="260"
     CanResize="False"
     WindowStartupLocation="CenterOwner">
-    <Border
-        Padding="22"
-        Background="{DynamicResource Edge.Surface.Main}">
-        <Grid RowDefinitions="Auto,*,Auto">
-            <TextBlock
-                FontSize="18"
-                FontWeight="SemiBold"
-                Foreground="{DynamicResource Edge.Text.Primary}"
-                Text="{Binding Title}"
-                TextWrapping="Wrap" />
+    <edge:EdgeDialogChrome
+        Classes="confirmation-dialog"
+        Title="{Binding Title}">
+        <TextBlock
+            Classes="confirmation-message"
+            Text="{Binding Message}" />
 
-            <TextBlock
-                Grid.Row="1"
-                Margin="0,16,0,18"
-                Foreground="{DynamicResource Edge.Text.Primary}"
-                Text="{Binding Message}"
-                TextWrapping="Wrap" />
-
-            <StackPanel
-                Grid.Row="2"
-                HorizontalAlignment="Right"
-                Orientation="Horizontal"
-                Spacing="10">
+        <edge:EdgeDialogChrome.FooterContent>
+            <StackPanel Classes="confirmation-actions">
                 <edge:EdgeActionButton
                     Click="OnCancelClick"
                     Content="{DynamicResource Navigation_Button_Cancel}"
                     Icon="{StaticResource Edge.Icon.Close}"
-                    Kind="Soft"
+                    Kind="Secondary"
                     Size="Compact" />
                 <edge:EdgeActionButton
                     Click="OnConfirmClick"
@@ -43,6 +29,6 @@
                     Kind="Primary"
                     Size="Compact" />
             </StackPanel>
-        </Grid>
-    </Border>
+        </edge:EdgeDialogChrome.FooterContent>
+    </edge:EdgeDialogChrome>
 </Window>

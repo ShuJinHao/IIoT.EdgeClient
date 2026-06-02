@@ -56,7 +56,7 @@
                     HorizontalAlignment="Right"
                     Click="OnCloseClick"
                     Icon="{StaticResource Edge.Icon.Close}"
-                    Kind="Soft"
+                    Kind="Secondary"
                     Size="Compact"
                     Content="{DynamicResource Shell_CrashDialogClose}" />
             </StackPanel>

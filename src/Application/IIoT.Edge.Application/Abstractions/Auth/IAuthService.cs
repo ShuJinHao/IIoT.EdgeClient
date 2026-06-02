@@ -1,5 +1,3 @@
-using IIoT.Edge.Application.Common.Models;
-
 namespace IIoT.Edge.Application.Abstractions.Auth;
 
 /// <summary>

@@ -14,6 +14,7 @@ internal static class ShellStartupDependencyInjection
         services.AddSingleton<IShellRuntimePathResolver, ShellRuntimePathResolver>();
         services.AddSingleton<IModulePluginAssemblyResolver, ModulePluginAssemblyResolver>();
         services.AddSingleton<IModulePluginLoader, ModulePluginLoader>();
+        services.AddSingleton<IModulePluginCompatibilityPolicy, ModulePluginCompatibilityPolicy>();
         services.AddSingleton<IModuleCatalog, DirectoryModuleCatalog>();
         services.AddSingleton<IShellModuleCatalog, ShellModuleCatalog>();
         return services;

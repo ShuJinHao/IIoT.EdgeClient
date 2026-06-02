@@ -25,7 +25,7 @@ Before implementation, read `docs/插件开发约定.md` and follow the single `
 - Register services, views, runtime factories, CellData, PLC signal profiles, hardware profiles, development samples, and uploaders through `IEdgeProcessModuleBuilder`.
 - Keep module data under the module: `Payload`, snapshots, PLC signal enum/profile implementation, module options, and module `Context`.
 - Put shared runtime state and factories under `Runtime/`; put tasks under `Runtime/Tasks/`.
-- Put PLC signal enums and profile implementations under `Config/Hardware/`; interfaces, base classes, accessors, and offset calculation belong to `Application` / `Runtime`, not plugin projects.
+- Put PLC signal enums and profile implementations under `Config/Hardware/`; host contracts and plugin task bases belong to `Application` / `Runtime`, while PLC communication and scan ownership belongs to `Infrastructure.DeviceComm`, not plugin projects.
 - Put module parameter enums under `Config/Parameters/` with exactly three files: `MesParam.cs`, `CloudParam.cs`, and `BusinessParam.cs`.
 - Register parameter enums through `builder.RegisterParameters<MesParam, CloudParam, BusinessParam>()`; do not place process parameter names in host code.
 - Use explicit `switch (Step)` task machines for trigger/ack PLC workflows; reserve `HeartbeatMirrorPlcTaskBase` and `PeriodicSnapshotUploadTaskBase<TSnapshot>` for heartbeat and periodic snapshot tasks.
@@ -69,7 +69,7 @@ Use this order when adding a new process module:
 - Plugin `*PlcSignalProfile` is only the default template for applying templates and development seeding. Do not create JSON point seeds. Fixed development sample PLC devices should be defined in the sample contributor code; add a JSON seed only after the user confirms there are multiple sample sets worth configuring.
 - Plugin `*PlcSignalProfile` must split standard IO points by the fixed categories `信号交互`, `单点读数据`, and `连续读数据`, then expose one `Signals` aggregate for templates/seeding. Do not maintain a flat point dump or a second JSON point list.
 - Plugin registration must use `builder.RegisterPlcSignalProfile<TSignalKey, TProfile>()`, `builder.RegisterHardwareProfile<TProvider>()`, and `builder.RegisterDevelopmentSample<TContributor>()`. Do not directly register these host abstractions from plugin code.
-- PLC IO scanning, read/write merge, block planning, reconnect backoff, and buffer transport belong to `IIoT.Edge.Runtime`; infrastructure projects should only provide concrete PLC communication and status reporting.
+- PLC IO scanning, read/write merge, block planning, reconnect backoff, and buffer transport belong to `IIoT.Edge.Infrastructure.DeviceComm`; `IIoT.Edge.Runtime` remains the host runtime infrastructure and plugin task SDK.
 - Realtime scanning must only process `信号交互`. `单点读数据` and `连续读数据` are read by business tasks or manual debug reads and must not be added to the realtime loop.
 - Plugin hardware profiles own IO runtime policy such as `SignalLoopIntervalMs`, `MaxSignalBlockWordCount`, `WriteGapPolicy`, and business read lengths. The host must not provide global production point defaults.
 - IO mappings are loaded for the selected device as one full list and shown with table scrolling, not host-side paging.

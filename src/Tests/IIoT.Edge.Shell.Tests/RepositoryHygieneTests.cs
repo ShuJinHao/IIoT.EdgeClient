@@ -77,6 +77,14 @@ public sealed class RepositoryHygieneTests
         @"(?:GetText|FormatText)\(\s*""([^""]+)""",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
+    private static readonly Regex ApplicationUiFacingTypePattern = new(
+        @"\b(?:class|record(?:\s+class|\s+struct)?|struct|interface)\s+([A-Za-z_][A-Za-z0-9_]*(?:Vm|ViewModel))\b",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex RemovedMapperUsagePattern = new(
+        @"\b(?:Add" + "Auto" + "Mapper|I" + "Mapper|Create" + "Map" + @")\b|:\s*Profile\b",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
     [Fact]
     public void SharedProjects_ShouldNotReferenceUpperLayers()
     {
@@ -90,6 +98,85 @@ public sealed class RepositoryHygieneTests
             UpperLayerProjectFragments.Any(fragment => reference.Contains(fragment, StringComparison.OrdinalIgnoreCase)));
 
         Assert.Empty(GetProjectReferences(sharedKernelProject));
+    }
+
+    [Fact]
+    public void CoreLayerProjectReferences_ShouldPreserveDependencyDirection()
+    {
+        var root = FindRepositoryRoot();
+        var projectReferences = new Dictionary<string, string[]>
+        {
+            ["src/Core/IIoT.Edge.Domain/IIoT.Edge.Domain.csproj"] =
+            [
+                "src/Shared/IIoT.Edge.SharedKernel/IIoT.Edge.SharedKernel.csproj"
+            ],
+            ["src/Application/IIoT.Edge.Application/IIoT.Edge.Application.csproj"] =
+            [
+                "src/Core/IIoT.Edge.Domain/IIoT.Edge.Domain.csproj",
+                "src/Shared/IIoT.Edge.SharedKernel/IIoT.Edge.SharedKernel.csproj"
+            ],
+            ["src/Infrastructure/IIoT.Edge.Infrastructure.DeviceComm/IIoT.Edge.Infrastructure.DeviceComm.csproj"] =
+            [
+                "src/Application/IIoT.Edge.Application/IIoT.Edge.Application.csproj"
+            ],
+            ["src/Shared/IIoT.Edge.SharedKernel/IIoT.Edge.SharedKernel.csproj"] = []
+        };
+
+        foreach (var (projectPath, expectedReferences) in projectReferences)
+        {
+            var actualReferences = GetProjectReferenceRepositoryPaths(root, ToFullPath(root, projectPath))
+                .Order(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            var expected = expectedReferences
+                .Order(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            Assert.Equal(expected, actualReferences);
+        }
+    }
+
+    [Fact]
+    public void CoreLayerSource_ShouldNotReferenceForbiddenUpperLayerNamespaces()
+    {
+        var root = FindRepositoryRoot();
+        var forbiddenByDirectory = new Dictionary<string, string[]>
+        {
+            ["src/Core/IIoT.Edge.Domain"] =
+            [
+                "IIoT.Edge.Application",
+                "IIoT.Edge.Infrastructure",
+                "IIoT.Edge.Runtime",
+                "IIoT.Edge.Presentation",
+                "IIoT.Edge.UI.Shared"
+            ],
+            ["src/Application/IIoT.Edge.Application"] =
+            [
+                "IIoT.Edge.Infrastructure",
+                "IIoT.Edge.Runtime",
+                "IIoT.Edge.Presentation",
+                "IIoT.Edge.UI.Shared"
+            ],
+            ["src/Infrastructure/IIoT.Edge.Infrastructure.DeviceComm"] =
+            [
+                "IIoT.Edge.Runtime"
+            ],
+            ["src/Shared/IIoT.Edge.SharedKernel"] =
+            [
+                "IIoT.Edge.Application",
+                "IIoT.Edge.Infrastructure",
+                "IIoT.Edge.Runtime",
+                "IIoT.Edge.Presentation",
+                "IIoT.Edge.UI.Shared"
+            ]
+        };
+
+        var matches = forbiddenByDirectory
+            .SelectMany(check => EnumerateFiles(ToFullPath(root, check.Key), "*.*")
+                .Where(IsTextCandidate)
+                .SelectMany(path => FindForbiddenMatches(root, path, check.Value)))
+            .ToArray();
+
+        Assert.Empty(matches);
     }
 
     [Fact]
@@ -286,6 +373,121 @@ public sealed class RepositoryHygieneTests
     }
 
     [Fact]
+    public void SourceTree_ShouldNotReferenceRemovedMapperOrUnusedCentralPackages()
+    {
+        var root = FindRepositoryRoot();
+        var forbiddenNames = new[]
+        {
+            "Auto" + "Mapper",
+            "Microsoft.Extensions." + "DependencyModel"
+        };
+        var files = EnumerateFiles(Path.Combine(root, "src"), "*.*")
+            .Where(IsTextCandidate)
+            .Append(Path.Combine(root, "Directory.Packages.props"))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        var nameMatches = files
+            .SelectMany(path => FindForbiddenMatches(root, path, forbiddenNames))
+            .ToArray();
+        var usageMatches = files
+            .SelectMany(path => RemovedMapperUsagePattern
+                .Matches(File.ReadAllText(path))
+                .Select(match => $"{ToRepositoryPath(root, path)} contains removed mapper usage at offset {match.Index}"))
+            .ToArray();
+
+        Assert.Empty(nameMatches.Concat(usageMatches));
+    }
+
+    [Fact]
+    public void Application_ShouldNotReintroducePresentationModelsOrObservableBase()
+    {
+        var root = FindRepositoryRoot();
+        var applicationRoot = Path.Combine(root, "src", "Application", "IIoT.Edge.Application");
+        var files = EnumerateFiles(applicationRoot, "*.cs").ToArray();
+
+        var typeMatches = files
+            .SelectMany(path => ApplicationUiFacingTypePattern
+                .Matches(File.ReadAllText(path))
+                .Select(match => $"{ToRepositoryPath(root, path)} declares UI-facing type {match.Groups[1].Value}"))
+            .ToArray();
+        var fileMatches = files
+            .Where(path =>
+            {
+                var name = Path.GetFileNameWithoutExtension(path);
+                return name.EndsWith("Vm", StringComparison.Ordinal)
+                    || name.EndsWith("ViewModel", StringComparison.Ordinal)
+                    || name.EndsWith("ViewModels", StringComparison.Ordinal);
+            })
+            .Select(path => $"{ToRepositoryPath(root, path)} keeps a UI-facing file name")
+            .ToArray();
+        var observableMatches = files
+            .Where(path => File.ReadAllText(path).Contains("Observable" + "ModelBase", StringComparison.Ordinal))
+            .Select(path => $"{ToRepositoryPath(root, path)} references ObservableModelBase")
+            .ToArray();
+
+        Assert.Empty(typeMatches.Concat(fileMatches).Concat(observableMatches));
+    }
+
+    [Fact]
+    public void PresentationRecipeView_ShouldNotKeepDuplicateMediatRUseCases()
+    {
+        var root = FindRepositoryRoot();
+        var recipeViewRoot = Path.Combine(
+            root,
+            "src",
+            "Presentation",
+            "IIoT.Edge.Presentation.Navigation",
+            "Features",
+            "Formula",
+            "RecipeView");
+        var forbiddenNames = new[]
+        {
+            "IRequest",
+            "IRequestHandler",
+            "GetRecipeViewSnapshotQuery",
+            "GetIsLocalAdminQuery",
+            "SyncRecipeFromCloudCommand",
+            "SwitchRecipeSourceCommand",
+            "SaveLocalRecipeParamCommand",
+            "DeleteLocalRecipeParamCommand"
+        };
+
+        var matches = EnumerateFiles(recipeViewRoot, "*.cs")
+            .SelectMany(path => FindForbiddenMatches(root, path, forbiddenNames))
+            .ToArray();
+
+        Assert.Empty(matches);
+    }
+
+    [Fact]
+    public void PresentationViewModels_ShouldNotDependOnMediatRSender()
+    {
+        var root = FindRepositoryRoot();
+        var presentationRoot = Path.Combine(root, "src", "Presentation");
+
+        var matches = EnumerateFiles(presentationRoot, "*.cs")
+            .Where(path => ToRepositoryPath(root, path).Contains("/ViewModels/", StringComparison.Ordinal))
+            .SelectMany(path => FindForbiddenMatches(root, path, ["ISender", "using MediatR"]))
+            .ToArray();
+
+        Assert.Empty(matches);
+    }
+
+    [Fact]
+    public void Presentation_ShouldNotDefineMediatRRequestUseCases()
+    {
+        var root = FindRepositoryRoot();
+        var presentationRoot = Path.Combine(root, "src", "Presentation");
+
+        var matches = EnumerateFiles(presentationRoot, "*.cs")
+            .SelectMany(path => FindForbiddenMatches(root, path, ["IRequest", "IRequestHandler"]))
+            .ToArray();
+
+        Assert.Empty(matches);
+    }
+
+    [Fact]
     public void SourceTree_ShouldNotContainMojibakeMarkers()
     {
         var root = FindRepositoryRoot();
@@ -451,6 +653,21 @@ public sealed class RepositoryHygieneTests
             .Select(value => value!)
             .ToArray();
 
+    private static IReadOnlyList<string> GetProjectReferenceRepositoryPaths(string root, string projectPath)
+    {
+        var projectDirectory = Path.GetDirectoryName(projectPath)
+            ?? throw new InvalidOperationException($"无法定位项目目录：{projectPath}");
+
+        return XDocument.Load(projectPath)
+            .Descendants("ProjectReference")
+            .Select(element => element.Attribute("Include")?.Value)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!.Replace('\\', Path.DirectorySeparatorChar))
+            .Select(value => Path.GetFullPath(Path.Combine(projectDirectory, value)))
+            .Select(path => ToRepositoryPath(root, path))
+            .ToArray();
+    }
+
     private static IReadOnlySet<string> GetXamlResourceKeys(string path)
     {
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
@@ -544,6 +761,9 @@ public sealed class RepositoryHygieneTests
 
         throw new DirectoryNotFoundException("无法定位 IIoT.EdgeClient 仓库根目录。");
     }
+
+    private static string ToFullPath(string root, string repositoryPath)
+        => Path.Combine(root, repositoryPath.Replace('/', Path.DirectorySeparatorChar));
 
     private static string ToRepositoryPath(string root, string path)
         => Path.GetRelativePath(root, path).Replace('\\', '/');

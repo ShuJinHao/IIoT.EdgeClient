@@ -16,8 +16,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Application\IIoT.Edge.Application\IIoT.Edge.Application.csproj" />
-    <ProjectReference Include="..\..\Runtime\IIoT.Edge.Runtime\IIoT.Edge.Runtime.csproj" />
   </ItemGroup>
 
 </Project>
-

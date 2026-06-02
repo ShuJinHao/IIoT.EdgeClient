@@ -2,8 +2,8 @@ using System.Collections.ObjectModel;
 using System.Windows.Input;
 using Avalonia.Threading;
 using IIoT.Edge.Application.Abstractions.Auth;
-using IIoT.Edge.Application.Common.Models;
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
+using IIoT.Edge.Presentation.Navigation.Common;
 using IIoT.Edge.Presentation.Navigation.Localization;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
@@ -190,7 +190,7 @@ public sealed class PlcTaskBindingDeviceVm
     public ObservableCollection<PlcTaskBindingTaskVm> Tasks { get; } = [];
 }
 
-public sealed class PlcTaskBindingTaskVm : ObservableModelBase
+public sealed class PlcTaskBindingTaskVm : PresentationObservableModelBase
 {
     private bool _enabled;
 

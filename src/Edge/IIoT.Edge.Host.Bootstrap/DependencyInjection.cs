@@ -92,6 +92,7 @@ public static class DependencyInjection
         services.TryAddSingleton<ICrashLogWriter, CrashLogWriter>();
         services.TryAddSingleton<IModulePluginAssemblyResolver, ModulePluginAssemblyResolver>();
         services.TryAddSingleton<IModulePluginLoader, ModulePluginLoader>();
+        services.TryAddSingleton<IModulePluginCompatibilityPolicy, ModulePluginCompatibilityPolicy>();
         services.TryAddSingleton<IModuleCatalog, DirectoryModuleCatalog>();
         services.AddSingleton<IDevelopmentSampleInitializer, DevelopmentSampleInitializer>();
         services.AddSingleton<IStartupDiagnosticsStore, StartupDiagnosticsStore>();
@@ -131,17 +132,6 @@ public static class DependencyInjection
                 ]);
         });
 
-        services.AddAutoMapper(
-            _ => { },
-            [
-                typeof(IIoT.Edge.Application.DependencyInjection).Assembly,
-                typeof(IIoT.Edge.Presentation.Shell.DependencyInjection).Assembly,
-                typeof(IIoT.Edge.Presentation.Navigation.DependencyInjection).Assembly,
-                typeof(IIoT.Edge.Presentation.Panels.DependencyInjection).Assembly,
-                typeof(IIoT.Edge.Infrastructure.Integration.DependencyInjection).Assembly,
-                typeof(IIoT.Edge.Infrastructure.DeviceComm.DependencyInjection).Assembly,
-                ..moduleAssemblies
-            ]);
         services.AddShellPresentation();
         services.AddNavigationPresentation();
         services.AddPanelPresentation();

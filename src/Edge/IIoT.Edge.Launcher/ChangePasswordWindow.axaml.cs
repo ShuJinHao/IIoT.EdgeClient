@@ -23,11 +23,11 @@ public partial class ChangePasswordWindow : Window
     {
         if (string.IsNullOrWhiteSpace(UserNameInput.Text))
         {
-            UserNameInput.FocusInput();
+            UserNameInput.Focus();
             return;
         }
 
-        OldPasswordInput.FocusInput();
+        OldPasswordInput.Focus();
     }
 
     private void OnClosed(object? sender, EventArgs e)
@@ -80,35 +80,35 @@ public partial class ChangePasswordWindow : Window
         if (string.IsNullOrWhiteSpace(UserNameInput.Text))
         {
             DialogErrorText.Text = Text("Launcher_ChangePassword_UserNameRequired");
-            UserNameInput.FocusInput();
+            UserNameInput.Focus();
             return false;
         }
 
         if (string.IsNullOrWhiteSpace(OldPasswordInput.Text))
         {
             DialogErrorText.Text = Text("Launcher_ChangePassword_OldPasswordRequired");
-            OldPasswordInput.FocusInput();
+            OldPasswordInput.Focus();
             return false;
         }
 
         if (string.IsNullOrWhiteSpace(NewPasswordInput.Text))
         {
             DialogErrorText.Text = Text("Launcher_ChangePassword_NewPasswordRequired");
-            NewPasswordInput.FocusInput();
+            NewPasswordInput.Focus();
             return false;
         }
 
         if (NewPasswordInput.Text.Length < 6)
         {
             DialogErrorText.Text = Text("Launcher_ChangePassword_NewPasswordMinLength");
-            NewPasswordInput.FocusInput();
+            NewPasswordInput.Focus();
             return false;
         }
 
         if (!string.Equals(NewPasswordInput.Text, ConfirmPasswordInput.Text, StringComparison.Ordinal))
         {
             DialogErrorText.Text = Text("Launcher_ChangePassword_ConfirmMismatch");
-            ConfirmPasswordInput.FocusInput();
+            ConfirmPasswordInput.Focus();
             return false;
         }
 

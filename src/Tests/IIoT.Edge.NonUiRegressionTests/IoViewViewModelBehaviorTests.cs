@@ -1,6 +1,7 @@
 ﻿using System.Globalization;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Application.Features.Hardware.IOView;
 using IIoT.Edge.Application.Features.Hardware.Queries;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
@@ -10,7 +11,6 @@ using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.SharedKernel.Result;
 using IIoT.Edge.UI.Shared.Localization;
-using MediatR;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 
@@ -376,7 +376,7 @@ public sealed class IoViewViewModelBehaviorTests
         => new(
             dataStore ?? new PlcDataStore(),
             new FakePlcConnectionManager(devices.Select(static x => x.Id).ToArray()),
-            new FakeIoSender(devices, mappings ?? new Dictionary<int, List<IoMappingEntity>>()),
+            new FakeIoViewQueryFacade(devices, mappings ?? new Dictionary<int, List<IoMappingEntity>>()),
             moduleIdFilter);
 
     private static NetworkDeviceEntity CreateDevice(
@@ -415,12 +415,12 @@ public sealed class IoViewViewModelBehaviorTests
     private sealed class TestIoViewModel(
         IPlcDataStore dataStore,
         IPlcConnectionManager plcConnectionManager,
-        ISender sender,
+        IIoViewQueryFacade queryFacade,
         string? moduleIdFilter)
         : IoViewViewModel(
             dataStore,
             plcConnectionManager,
-            sender,
+            queryFacade,
             new TestLanguageService(),
             "Test.IO",
             "Navigation_Title_IoInteract",
@@ -462,40 +462,25 @@ public sealed class IoViewViewModelBehaviorTests
             => string.Format(CultureInfo.CurrentCulture, fallback, args);
     }
 
-    private sealed class FakeIoSender(
+    private sealed class FakeIoViewQueryFacade(
         IReadOnlyCollection<NetworkDeviceEntity> devices,
-        IReadOnlyDictionary<int, List<IoMappingEntity>> mappings) : ISender
+        IReadOnlyDictionary<int, List<IoMappingEntity>> mappings) : IIoViewQueryFacade
     {
-        public Task<TResponse> Send<TResponse>(IRequest<TResponse> request, CancellationToken cancellationToken = default)
+        public Task<Result<List<NetworkDeviceEntity>>> GetNetworkDevicesAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(Result.Success(devices.ToList()));
+
+        public Task<Result<IoMappingPagedDto>> GetIoMappingsAsync(
+            int networkDeviceId,
+            int pageIndex,
+            int pageSize,
+            CancellationToken cancellationToken = default)
         {
-            if (request is GetAllNetworkDevicesQuery)
-            {
-                return Task.FromResult((TResponse)(object)Result.Success(devices.ToList()));
-            }
+            var items = mappings.TryGetValue(networkDeviceId, out var deviceMappings)
+                ? deviceMappings
+                : [];
 
-            if (request is GetIoMappingsByDeviceQuery query)
-            {
-                var items = mappings.TryGetValue(query.NetworkDeviceId, out var deviceMappings)
-                    ? deviceMappings
-                    : [];
-                return Task.FromResult((TResponse)(object)Result.Success(new IoMappingPagedDto(items, items.Count)));
-            }
-
-            throw new NotSupportedException(request.GetType().Name);
+            return Task.FromResult(Result.Success(new IoMappingPagedDto(items, items.Count)));
         }
-
-        public Task Send<TRequest>(TRequest request, CancellationToken cancellationToken = default)
-            where TRequest : IRequest
-            => throw new NotSupportedException(request?.GetType().Name);
-
-        public Task<object?> Send(object request, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException(request.GetType().Name);
-
-        public IAsyncEnumerable<TResponse> CreateStream<TResponse>(IStreamRequest<TResponse> request, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public IAsyncEnumerable<object?> CreateStream(object request, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
     }
 
     private sealed class FakePlcConnectionManager(IReadOnlyCollection<int> connectedIds) : IPlcConnectionManager
@@ -547,4 +532,3 @@ public sealed class IoViewViewModelBehaviorTests
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }
-

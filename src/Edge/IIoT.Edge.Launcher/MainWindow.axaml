@@ -2,7 +2,6 @@
     x:Class="IIoT.Edge.Launcher.MainWindow"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:converters="clr-namespace:IIoT.Edge.Launcher.Converters"
     xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
     Title="{DynamicResource Launcher_WindowTitle}"
     Width="1280"
@@ -15,10 +14,6 @@
     TransparencyLevelHint="Transparent"
     WindowDecorations="None"
     WindowStartupLocation="CenterScreen">
-    <Window.Resources>
-        <converters:ProfileIconPathConverter x:Key="ProfileIconPathConverter" />
-    </Window.Resources>
-
     <Border
         Margin="0"
         Background="{DynamicResource Edge.Brush.App.Container}"
@@ -46,7 +41,8 @@
                         <edge:EdgeActionButton
                             Content="{Binding LanguageToggleText}"
                             Icon="{StaticResource Edge.Icon.Language}"
-                            Kind="Language"
+                            Kind="Ghost"
+                            Role="Language"
                             Click="ToggleLanguageButton_Click"
                             ToolTip.Tip="{DynamicResource Launcher_ToolTip_SwitchLanguage}" />
                         <edge:EdgeWindowButton
@@ -116,13 +112,15 @@
                                 Grid.Row="1"
                                 VerticalAlignment="Center"
                                 Spacing="14">
-                                <edge:EdgeLoginInput
+                                <edge:EdgeTextBox
                                     x:Name="UserNameTextBox"
+                                    Classes="edge-text-box dialog-input"
                                     HorizontalAlignment="Stretch"
                                     Width="NaN"
                                     PlaceholderText="{DynamicResource Launcher_Login_UserNamePlaceholder}" />
-                                <edge:EdgeLoginInput
+                                <edge:EdgeTextBox
                                     x:Name="PasswordInput"
+                                    Classes="edge-text-box dialog-input"
                                     HorizontalAlignment="Stretch"
                                     Width="NaN"
                                     PasswordChar="●"
@@ -154,7 +152,7 @@
                                     HorizontalContentAlignment="Center"
                                     HorizontalAlignment="Stretch"
                                     IsEnabled="{Binding !IsBusy}"
-                                    Kind="Soft"
+                                    Kind="Secondary"
                                     MinHeight="38"
                                     VerticalContentAlignment="Center"
                                     Content="{DynamicResource Launcher_Button_ChangePassword}" />
@@ -187,50 +185,103 @@
                         </Grid>
                     </edge:EdgeCard>
 
-                    <edge:EdgeFeatureHeroCard
+                    <edge:EdgeCard
                         Grid.Column="2"
+                        Classes="launcher-hero-card"
                         MinHeight="470"
-                        VerticalAlignment="Center"
-                        Title="{DynamicResource Launcher_Hero_Title}"
-                        VersionLabel="{DynamicResource Launcher_Hero_VersionLabel}"
-                        VersionText="{Binding AppVersionText}">
-                        <edge:EdgeFeatureHeroCard.Icon>
-                            <PathIcon
-                                Width="32"
-                                Height="32"
-                                Data="{StaticResource Edge.Icon.Launch}"
-                                Foreground="{DynamicResource Edge.Brush.Text.OnAccent}" />
-                        </edge:EdgeFeatureHeroCard.Icon>
-                        <edge:EdgeFeatureHeroCard.InfoContent>
-                            <Grid Width="620" ColumnDefinitions="*,*,*" ColumnSpacing="14">
-                                <edge:EdgeInfoTile
-                                    Grid.Column="0"
-                                    Label="{DynamicResource Launcher_Hero_PlatformLabel}"
-                                    Value="{Binding PlatformMetaText}" />
-                                <edge:EdgeInfoTile
-                                    Grid.Column="1"
-                                    Label="{DynamicResource Launcher_Hero_ArchitectureLabel}"
-                                    Value="{Binding ArchitectureText}" />
-                                <edge:EdgeInfoTile
-                                    Grid.Column="2"
-                                    Label="{DynamicResource Launcher_Hero_MaintainerLabel}"
-                                    Value="{Binding MaintainerText}" />
+                        VerticalAlignment="Center">
+                        <Grid>
+                            <Border Classes="launcher-hero-background" />
+                            <Grid
+                                Classes="launcher-hero-shell"
+                                RowDefinitions="Auto,Auto,Auto">
+                                <StackPanel
+                                    Classes="launcher-hero-top"
+                                    Orientation="Horizontal">
+                                    <Border Classes="launcher-hero-icon-frame">
+                                        <PathIcon
+                                            Classes="launcher-hero-icon"
+                                            Data="{StaticResource Edge.Icon.Launch}" />
+                                    </Border>
+                                    <edge:EdgeCard Classes="launcher-info-tile launcher-version-tile">
+                                        <StackPanel Classes="launcher-info-tile-content">
+                                            <TextBlock
+                                                Classes="launcher-info-tile-label"
+                                                Text="{DynamicResource Launcher_Hero_VersionLabel}" />
+                                            <TextBlock
+                                                Classes="launcher-info-tile-value"
+                                                Text="{Binding AppVersionText}" />
+                                        </StackPanel>
+                                    </edge:EdgeCard>
+                                </StackPanel>
+
+                                <StackPanel
+                                    Grid.Row="1"
+                                    Classes="launcher-hero-main">
+                                    <TextBlock
+                                        Classes="launcher-hero-title"
+                                        Text="{DynamicResource Launcher_Hero_Title}"
+                                        TextWrapping="Wrap" />
+                                    <Grid
+                                        Classes="launcher-hero-info-grid"
+                                        ColumnDefinitions="*,*,*"
+                                        ColumnSpacing="14">
+                                        <edge:EdgeCard
+                                            Grid.Column="0"
+                                            Classes="launcher-info-tile">
+                                            <StackPanel Classes="launcher-info-tile-content">
+                                                <TextBlock
+                                                    Classes="launcher-info-tile-label"
+                                                    Text="{DynamicResource Launcher_Hero_PlatformLabel}" />
+                                                <TextBlock
+                                                    Classes="launcher-info-tile-value"
+                                                    Text="{Binding PlatformMetaText}" />
+                                            </StackPanel>
+                                        </edge:EdgeCard>
+                                        <edge:EdgeCard
+                                            Grid.Column="1"
+                                            Classes="launcher-info-tile">
+                                            <StackPanel Classes="launcher-info-tile-content">
+                                                <TextBlock
+                                                    Classes="launcher-info-tile-label"
+                                                    Text="{DynamicResource Launcher_Hero_ArchitectureLabel}" />
+                                                <TextBlock
+                                                    Classes="launcher-info-tile-value"
+                                                    Text="{Binding ArchitectureText}" />
+                                            </StackPanel>
+                                        </edge:EdgeCard>
+                                        <edge:EdgeCard
+                                            Grid.Column="2"
+                                            Classes="launcher-info-tile">
+                                            <StackPanel Classes="launcher-info-tile-content">
+                                                <TextBlock
+                                                    Classes="launcher-info-tile-label"
+                                                    Text="{DynamicResource Launcher_Hero_MaintainerLabel}" />
+                                                <TextBlock
+                                                    Classes="launcher-info-tile-value"
+                                                    Text="{Binding MaintainerText}" />
+                                            </StackPanel>
+                                        </edge:EdgeCard>
+                                    </Grid>
+                                </StackPanel>
+
+                                <StackPanel
+                                    Grid.Row="2"
+                                    Classes="launcher-hero-flow"
+                                    Orientation="Horizontal">
+                                    <edge:EdgeStatusChip
+                                        Status="Default"
+                                        Text="{DynamicResource Launcher_Hero_FlowLogin}" />
+                                    <edge:EdgeStatusChip
+                                        Status="Default"
+                                        Text="{DynamicResource Launcher_Hero_FlowProfile}" />
+                                    <edge:EdgeStatusChip
+                                        Status="Default"
+                                        Text="{DynamicResource Launcher_Hero_FlowShell}" />
+                                </StackPanel>
                             </Grid>
-                        </edge:EdgeFeatureHeroCard.InfoContent>
-                        <edge:EdgeFeatureHeroCard.FlowContent>
-                            <StackPanel Width="620" Orientation="Horizontal" Spacing="10">
-                                <edge:EdgeStatusChip
-                                    Status="Default"
-                                    Text="{DynamicResource Launcher_Hero_FlowLogin}" />
-                                <edge:EdgeStatusChip
-                                    Status="Default"
-                                    Text="{DynamicResource Launcher_Hero_FlowProfile}" />
-                                <edge:EdgeStatusChip
-                                    Status="Default"
-                                    Text="{DynamicResource Launcher_Hero_FlowShell}" />
-                            </StackPanel>
-                        </edge:EdgeFeatureHeroCard.FlowContent>
-                    </edge:EdgeFeatureHeroCard>
+                        </Grid>
+                    </edge:EdgeCard>
                 </Grid>
 
                 <Grid
@@ -261,7 +312,7 @@
                                 Spacing="4">
                                 <TextBlock
                                     FontFamily="{DynamicResource Edge.FontFamily.Display}"
-                                    FontSize="24"
+                                    FontSize="{DynamicResource Edge.FontSize.Title24}"
                                     FontWeight="SemiBold"
                                     Foreground="{DynamicResource Edge.Brush.Text.Primary}"
                                     Text="{DynamicResource Launcher_Selection_Title}" />
@@ -302,8 +353,9 @@
                         CardPadding="14"
                         Surface="Card">
                         <Grid ColumnDefinitions="320,16,Auto,*">
-                            <edge:EdgeLoginInput
+                            <edge:EdgeTextBox
                                 Grid.Column="0"
+                                Classes="edge-text-box search-input"
                                 Width="320"
                                 Text="{Binding ProfileSearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                 PlaceholderText="{DynamicResource Launcher_Selection_SearchPlaceholder}" />
@@ -343,25 +395,75 @@
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <edge:EdgeProcessCard
+                                    <edge:EdgeCard
+                                        Classes="launcher-process-card"
                                         Width="360"
                                         Margin="0,0,16,16"
-                                        DataLabel="{DynamicResource Launcher_Profile_DataLabel}"
-                                        DataPath="{Binding DataDisplayPath}"
-                                        Detail="{Binding ProfileId}"
-                                        PluginLabel="{DynamicResource Launcher_Profile_PluginLabel}"
-                                        PluginPath="{Binding PluginDisplayPath}"
-                                        Title="{Binding DisplayName}"
-                                        Subtitle="{Binding MachineProfile}">
-                                        <edge:EdgeProcessCard.Icon>
-                                            <PathIcon
-                                                Width="22"
-                                                Height="22"
-                                                Data="{Binding IconKind, Converter={StaticResource ProfileIconPathConverter}}"
-                                                Foreground="{DynamicResource Edge.Brush.Text.Primary}" />
-                                        </edge:EdgeProcessCard.Icon>
-                                        <edge:EdgeProcessCard.ActionContent>
+                                        ToolTip.Tip="{Binding ProfileId}">
+                                        <Grid
+                                            Classes="launcher-process-layout"
+                                            RowDefinitions="Auto,*,Auto">
+                                            <Grid
+                                                ColumnDefinitions="Auto,*"
+                                                ColumnSpacing="12">
+                                                <Border
+                                                    Grid.Column="0"
+                                                    Classes="launcher-process-icon-frame">
+                                                    <Border Classes="launcher-process-icon-inner">
+                                                        <PathIcon
+                                                            Classes="launcher-process-icon"
+                                                            Data="{Binding IconKind, Converter={StaticResource Edge.Converter.ProfileIconPath}}" />
+                                                    </Border>
+                                                </Border>
+
+                                                <StackPanel
+                                                    Grid.Column="1"
+                                                    Classes="launcher-process-title-stack">
+                                                    <TextBlock
+                                                        Classes="launcher-process-title"
+                                                        Text="{Binding DisplayName}" />
+                                                    <edge:EdgeStatusChip
+                                                        HorizontalAlignment="Left"
+                                                        Status="Default"
+                                                        Text="{Binding MachineProfile}" />
+                                                </StackPanel>
+                                            </Grid>
+
+                                            <StackPanel
+                                                Grid.Row="1"
+                                                Classes="launcher-process-paths">
+                                                <Border Classes="launcher-process-path-row">
+                                                    <Grid
+                                                        ColumnDefinitions="42,*"
+                                                        ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
+                                                        <TextBlock
+                                                            Grid.Column="0"
+                                                            Classes="launcher-process-path-label"
+                                                            Text="{DynamicResource Launcher_Profile_PluginLabel}" />
+                                                        <TextBlock
+                                                            Grid.Column="1"
+                                                            Classes="launcher-process-path-value"
+                                                            Text="{Binding PluginDisplayPath}" />
+                                                    </Grid>
+                                                </Border>
+                                                <Border Classes="launcher-process-path-row">
+                                                    <Grid
+                                                        ColumnDefinitions="42,*"
+                                                        ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
+                                                        <TextBlock
+                                                            Grid.Column="0"
+                                                            Classes="launcher-process-path-label"
+                                                            Text="{DynamicResource Launcher_Profile_DataLabel}" />
+                                                        <TextBlock
+                                                            Grid.Column="1"
+                                                            Classes="launcher-process-path-value"
+                                                            Text="{Binding DataDisplayPath}" />
+                                                    </Grid>
+                                                </Border>
+                                            </StackPanel>
+
                                             <edge:EdgeActionButton
+                                                Grid.Row="2"
                                                 Click="LaunchProfileButton_Click"
                                                 HorizontalContentAlignment="Center"
                                                 HorizontalAlignment="Stretch"
@@ -369,8 +471,8 @@
                                                 MinHeight="40"
                                                 VerticalContentAlignment="Center"
                                                 Content="{DynamicResource Launcher_Button_LaunchProfile}" />
-                                        </edge:EdgeProcessCard.ActionContent>
-                                    </edge:EdgeProcessCard>
+                                        </Grid>
+                                    </edge:EdgeCard>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>

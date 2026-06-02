@@ -21,7 +21,7 @@
                     Text="{Binding Title, RelativeSource={RelativeSource AncestorType=views:PlaceholderPageView}}" />
                 <TextBlock
                     HorizontalAlignment="Center"
-                    FontSize="14"
+                    FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
                     Foreground="{DynamicResource Edge.Text.Muted}"
                     Text="{Binding Description, RelativeSource={RelativeSource AncestorType=views:PlaceholderPageView}}"
                     TextAlignment="Center"

@@ -9,7 +9,6 @@ using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Recipe;
 using IIoT.Edge.Application.Abstractions.Tasks;
-using IIoT.Edge.Application.Common.Models;
 using IIoT.Edge.Application.Features.Config.ModuleParameters;
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 using IIoT.Edge.Domain.Hardware.Aggregates;
@@ -526,7 +525,9 @@ public sealed class ModuleRuntimeRegistrationTests
         => new ShellModuleCatalog(CreateModuleCatalog());
 
     private static IModuleCatalog CreateModuleCatalog()
-        => new DirectoryModuleCatalog(new ModulePluginLoader(new ModulePluginAssemblyResolver()));
+        => new DirectoryModuleCatalog(
+            new ModulePluginLoader(new ModulePluginAssemblyResolver()),
+            new ModulePluginCompatibilityPolicy());
 
     private sealed class TestHostEnvironment(string environmentName) : IHostEnvironment
     {

@@ -1,5 +1,5 @@
 using IIoT.Edge.Application.Common.Crud;
-using IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Models;
+using IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView.Models;
 using IIoT.Edge.Application.Features.Hardware.IoMappings;
 using IIoT.Edge.Presentation.Navigation.Features.Config.ParamView;
 using IIoT.Edge.Presentation.Navigation.Features.Configuration;
@@ -27,6 +27,7 @@ public static class DependencyInjection
         services.AddSingleton<OverviewWorkspaceViewModel>();
         services.AddSingleton<ConfigurationWorkspaceViewModel>();
         services.AddSingleton<DashboardViewModel>();
+        services.AddSingleton<IParamViewModelMapper, ParamViewModelMapper>();
         services.AddSingleton<ParamViewModel>();
         services.AddSingleton<IIoViewMappingBuilder, IoViewMappingBuilder>();
         services.AddSingleton<IIoViewSignalValueUpdater, IoViewSignalValueUpdater>();
@@ -39,6 +40,7 @@ public static class DependencyInjection
         services.AddSingleton<IEditorValidator<IoMappingVm>, IoMappingValidator>();
         services.AddSingleton<IHardwareConfigValidationPresenter, HardwareConfigValidationPresenter>();
         services.AddSingleton<IHardwareConfigStandardSignalDraftService, HardwareConfigStandardSignalDraftService>();
+        services.AddSingleton<IHardwareConfigEditModelMapper, HardwareConfigEditModelMapper>();
         services.AddSingleton<IHardwareConfigMappingSaveBuilder, HardwareConfigMappingSaveBuilder>();
         services.AddSingleton<IHardwareConfigEditSession, HardwareConfigEditSession>();
         services.AddSingleton<IHardwareConfigDeviceSelectionCoordinator, HardwareConfigDeviceSelectionCoordinator>();

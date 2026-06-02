@@ -82,13 +82,11 @@ public sealed class ModuleParameterBehaviorTests
         Assert.Equal("Module:Homogenization:Mes:启用", mesEnabled.Key);
         Assert.Equal("启用", mesEnabled.Name);
         Assert.Equal("MES上传启用", mesEnabled.DisplayNameFallback);
-        Assert.Equal("MES上传启用", mesEnabled.DisplayName);
         Assert.Contains("不调用 MES", mesEnabled.DescriptionFallback, StringComparison.Ordinal);
 
         Assert.Equal("Module:Homogenization:Cloud:启用", cloudEnabled.Key);
         Assert.Equal("启用", cloudEnabled.Name);
         Assert.Equal("云端上传启用", cloudEnabled.DisplayNameFallback);
-        Assert.Equal("云端上传启用", cloudEnabled.DisplayName);
         Assert.Contains("不访问 Cloud", cloudEnabled.DescriptionFallback, StringComparison.Ordinal);
     }
 

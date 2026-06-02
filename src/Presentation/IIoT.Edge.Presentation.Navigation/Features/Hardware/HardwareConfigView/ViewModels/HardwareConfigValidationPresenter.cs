@@ -1,5 +1,5 @@
 using IIoT.Edge.Application.Common.Crud;
-using IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Models;
+using IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView.Models;
 using IIoT.Edge.Application.Features.Hardware.IoMappings;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView;

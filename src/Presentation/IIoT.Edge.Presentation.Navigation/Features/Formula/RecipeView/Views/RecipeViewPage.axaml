@@ -96,13 +96,13 @@
                                 <DataTemplate>
                                     <edge:EdgeActionButton
                                         HorizontalAlignment="Right"
-                                        Classes="cell"
                                         Command="{Binding $parent[UserControl].DataContext.DeleteLocalParamCommand}"
                                         CommandParameter="{Binding Name}"
                                         Content="{DynamicResource Navigation_Button_Delete}"
                                         Icon="{StaticResource Edge.Icon.Delete}"
                                         IsVisible="{Binding $parent[UserControl].DataContext.IsLocalAdmin}"
                                         Kind="Danger"
+                                        Role="Cell"
                                         Size="Compact"
                                         ToolTip.Tip="{DynamicResource Navigation_Tooltip_DeleteParam}" />
                                 </DataTemplate>

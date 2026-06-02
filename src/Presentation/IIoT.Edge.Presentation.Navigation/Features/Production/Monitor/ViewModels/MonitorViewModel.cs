@@ -13,7 +13,7 @@ namespace IIoT.Edge.Presentation.Navigation.Features.Production.Monitor;
 
 public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallback
 {
-    private readonly IMonitorViewService _monitorViewService;
+    private readonly IMonitorSnapshotQueryFacade _monitorSnapshotQueryFacade;
     private readonly DispatcherTimer _refreshTimer;
     private readonly LocalizedSyncDiagnosticsText _diagnosticsText;
     private readonly IMonitorViewModelSummaryFormatter _summaryFormatter;
@@ -32,11 +32,11 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
     private bool _refreshInFlight;
 
     public MonitorViewModel(
-        IMonitorViewService monitorViewService,
+        IMonitorSnapshotQueryFacade monitorSnapshotQueryFacade,
         IAppLanguageService languageService,
         IMonitorViewModelCollaboratorFactory collaboratorFactory)
         : this(
-            monitorViewService,
+            monitorSnapshotQueryFacade,
             languageService,
             collaboratorFactory,
             "Production.Monitor",
@@ -46,7 +46,7 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
     }
 
     public MonitorViewModel(
-        IMonitorViewService monitorViewService,
+        IMonitorSnapshotQueryFacade monitorSnapshotQueryFacade,
         IAppLanguageService languageService,
         IMonitorViewModelCollaboratorFactory collaboratorFactory,
         string viewId,
@@ -54,7 +54,7 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
         string titleFallback)
         : base(languageService, viewId, titleResourceKey, titleFallback)
     {
-        _monitorViewService = monitorViewService;
+        _monitorSnapshotQueryFacade = monitorSnapshotQueryFacade;
         _diagnosticsText = new LocalizedSyncDiagnosticsText(languageService);
         Tabs = [];
         var collaborators = collaboratorFactory.Create(new MonitorViewModelCollaboratorContext(this, Tabs));
@@ -239,7 +239,7 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
 
     private async Task RefreshAsync()
     {
-        ApplySnapshots(await _monitorViewService.GetSnapshotsAsync());
+        ApplySnapshots(await _monitorSnapshotQueryFacade.GetSnapshotsAsync());
     }
 
     private async Task RefreshOnceAsync()

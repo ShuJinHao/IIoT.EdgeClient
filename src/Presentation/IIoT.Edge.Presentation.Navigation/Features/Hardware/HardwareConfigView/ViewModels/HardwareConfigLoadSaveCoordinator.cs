@@ -2,7 +2,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
 using IIoT.Edge.Application.Common.Crud;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView;
-using IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Models;
+using IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView.Models;
 using IIoT.Edge.Application.Features.Hardware.IoMappings;
 using IIoT.Edge.Presentation.Navigation.Features.Hardware;
 using IIoT.Edge.UI.Shared.Localization;
@@ -27,17 +27,20 @@ public sealed class HardwareConfigLoadSaveCoordinator : IHardwareConfigLoadSaveC
     private readonly IHardwareConfigCrudService _crudService;
     private readonly IHardwareConfigValidationPresenter _validationPresenter;
     private readonly IHardwareConfigEditSession _editSession;
+    private readonly IHardwareConfigEditModelMapper _modelMapper;
     private readonly IAppLanguageService _languageService;
 
     public HardwareConfigLoadSaveCoordinator(
         IHardwareConfigCrudService crudService,
         IHardwareConfigValidationPresenter validationPresenter,
         IHardwareConfigEditSession editSession,
+        IHardwareConfigEditModelMapper modelMapper,
         IAppLanguageService languageService)
     {
         _crudService = crudService;
         _validationPresenter = validationPresenter;
         _editSession = editSession;
+        _modelMapper = modelMapper;
         _languageService = languageService;
     }
 
@@ -45,8 +48,12 @@ public sealed class HardwareConfigLoadSaveCoordinator : IHardwareConfigLoadSaveC
     {
         var result = await _crudService.LoadAsync();
 
-        HardwareConfigViewModel.ReplaceCollection(viewModel.NetworkDevices, result.NetworkDevices);
-        HardwareConfigViewModel.ReplaceCollection(viewModel.SerialDevices, result.SerialDevices);
+        HardwareConfigViewModel.ReplaceCollection(
+            viewModel.NetworkDevices,
+            result.NetworkDevices.Select(_modelMapper.ToNetworkDeviceVm));
+        HardwareConfigViewModel.ReplaceCollection(
+            viewModel.SerialDevices,
+            result.SerialDevices.Select(_modelMapper.ToSerialDeviceVm));
 
         if (viewModel.NetworkDevices.Count > 0)
         {
@@ -68,7 +75,10 @@ public sealed class HardwareConfigLoadSaveCoordinator : IHardwareConfigLoadSaveC
 
     public async Task RefreshModuleTemplateInfoAsync(HardwareConfigViewModel viewModel)
     {
-        var result = await _crudService.GetModuleTemplateInfoAsync(viewModel.SelectedNetworkDevice);
+        var selectedDevice = viewModel.SelectedNetworkDevice is null
+            ? null
+            : _modelMapper.ToNetworkDeviceDto(viewModel.SelectedNetworkDevice);
+        var result = await _crudService.GetModuleTemplateInfoAsync(selectedDevice);
         var defaultSignals = result.DefaultSignals.ToArray();
         var candidateSignals = result.CandidateSignals.Count == 0
             ? defaultSignals
@@ -107,7 +117,10 @@ public sealed class HardwareConfigLoadSaveCoordinator : IHardwareConfigLoadSaveC
             return CrudOperationResult.Success("已取消重置标准点位。");
         }
 
-        var result = await _crudService.ApplyModuleTemplateAsync(viewModel.SelectedNetworkDevice);
+        var selectedDevice = viewModel.SelectedNetworkDevice is null
+            ? null
+            : _modelMapper.ToNetworkDeviceDto(viewModel.SelectedNetworkDevice);
+        var result = await _crudService.ApplyModuleTemplateAsync(selectedDevice);
         if (result.IsSuccess)
         {
             await LoadIoMappingsAsync(viewModel);
@@ -127,12 +140,13 @@ public sealed class HardwareConfigLoadSaveCoordinator : IHardwareConfigLoadSaveC
         }
 
         var mappingsToSave = _editSession.BuildMappingsToSave(viewModel.IoMappings);
+        var selectedNetworkDeviceId = viewModel.SelectedNetworkDevice?.Id ?? 0;
 
         var saveResult = await _crudService.SaveAsync(
-            viewModel.NetworkDevices,
-            viewModel.SerialDevices,
-            viewModel.SelectedNetworkDevice?.Id ?? 0,
-            mappingsToSave);
+            viewModel.NetworkDevices.Select(_modelMapper.ToNetworkDeviceDto).ToArray(),
+            viewModel.SerialDevices.Select(_modelMapper.ToSerialDeviceDto).ToArray(),
+            selectedNetworkDeviceId,
+            mappingsToSave.Select(mapping => _modelMapper.ToIoMappingDto(mapping, selectedNetworkDeviceId)).ToArray());
 
         if (saveResult.IsSuccess
             || saveResult.Message.StartsWith("配置已保存", StringComparison.Ordinal))
@@ -154,7 +168,9 @@ public sealed class HardwareConfigLoadSaveCoordinator : IHardwareConfigLoadSaveC
         }
 
         var result = await _crudService.LoadIoMappingsAsync(viewModel.SelectedNetworkDevice.Id);
-        HardwareConfigViewModel.ReplaceCollection(viewModel.IoMappings, result.Items);
+        HardwareConfigViewModel.ReplaceCollection(
+            viewModel.IoMappings,
+            result.Items.Select(_modelMapper.ToIoMappingVm));
         viewModel.SelectedIoMapping = null;
         viewModel.RefreshIoMappingGroups();
     }

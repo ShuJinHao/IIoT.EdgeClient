@@ -1,6 +1,6 @@
 using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Common.Crud;
-using IIoT.Edge.Application.Features.Config.ParamView.Models;
+using IIoT.Edge.Application.Features.Config.UseCases.ModuleParam;
 using MediatR;
 
 namespace IIoT.Edge.Application.Features.Config.ParamView;
@@ -13,7 +13,7 @@ public interface IParamViewCrudService
     Task<ParamViewInitResult> LoadAsync(CancellationToken cancellationToken = default);
 
     Task<CrudOperationResult> SaveAsync(
-        IReadOnlyCollection<ModuleParamVm> moduleParams,
+        IReadOnlyCollection<ModuleParamDto> moduleParams,
         CancellationToken cancellationToken = default);
 }
 
@@ -28,7 +28,7 @@ public sealed class ParamViewCrudService(
         => sender.Send(new LoadParamViewQuery(), cancellationToken);
 
     public Task<CrudOperationResult> SaveAsync(
-        IReadOnlyCollection<ModuleParamVm> moduleParams,
+        IReadOnlyCollection<ModuleParamDto> moduleParams,
         CancellationToken cancellationToken = default)
     {
         if (!permissionService.CanEditParams)

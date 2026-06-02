@@ -125,7 +125,7 @@
                     <Grid RowDefinitions="Auto,Auto,Auto">
                         <TextBlock
                             Margin="0,0,0,16"
-                            FontSize="18"
+                            FontSize="{DynamicResource Edge.FontSize.SubData18}"
                             FontWeight="SemiBold"
                             Foreground="{DynamicResource Edge.Text.Primary}"
                             Text="{DynamicResource Navigation_Dialog_AddIoPoint}" />
@@ -215,7 +215,7 @@
                                 Command="{Binding CancelAddIoMappingDialogCommand}"
                                 Content="{DynamicResource Navigation_Button_Cancel}"
                                 Icon="{StaticResource Edge.Icon.Close}"
-                                Kind="Soft"
+                                Kind="Secondary"
                                 Size="Compact" />
                             <edge:EdgeActionButton
                                 Command="{Binding ConfirmAddIoMappingCommand}"

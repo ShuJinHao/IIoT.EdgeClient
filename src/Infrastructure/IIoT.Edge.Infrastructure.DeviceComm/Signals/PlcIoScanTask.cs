@@ -4,13 +4,11 @@ using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc;
-using IIoT.Edge.Runtime.Base;
-using IIoT.Edge.Runtime.Plc;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Signals;
 
 /// <summary>
-/// 基于具体 PLC 通讯服务的 IO 扫描任务，状态上报留在基础设施层，扫描循环由 Runtime 基类承载。
+/// 基于具体 PLC 通讯服务的 IO 扫描任务，状态上报留在基础设施层。
 /// </summary>
 public sealed class PlcIoScanTask : PlcIoScanTaskBase
 {

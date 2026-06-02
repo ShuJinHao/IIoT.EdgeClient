@@ -5,40 +5,48 @@
     xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
     <UserControl.Resources>
         <DataTemplate x:Key="ParameterGroupTemplate">
-            <edge:EdgeParameterPanel
+            <edge:EdgeCard
+                Classes="parameter-panel"
                 Margin="{DynamicResource Edge.Thickness.12}"
-                Title="{Binding ModuleDisplayName}">
-                <ItemsControl ItemsSource="{Binding Params}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <StackPanel Spacing="{DynamicResource Edge.Size.Spacing8}" />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <edge:EdgeFieldRow
-                                Classes.boolean="{Binding IsBool}"
-                                Description="{Binding Description}"
-                                Label="{Binding DisplayName}">
-                                <Grid>
-                                    <edge:EdgeTextBox
-                                        MinWidth="220"
-                                        IsEnabled="{Binding $parent[UserControl].DataContext.CanEdit}"
-                                        IsVisible="{Binding !IsBool}"
-                                        Text="{Binding Value, Mode=TwoWay}" />
-                                    <edge:EdgeCheckBox
-                                        Classes="boolean"
-                                        HorizontalAlignment="Left"
-                                        VerticalAlignment="Center"
-                                        IsChecked="{Binding BoolValue, Mode=TwoWay}"
-                                        IsEnabled="{Binding $parent[UserControl].DataContext.CanEdit}"
-                                        IsVisible="{Binding IsBool}" />
-                                </Grid>
-                            </edge:EdgeFieldRow>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </edge:EdgeParameterPanel>
+                Elevation="Card"
+                PaddingMode="None"
+                Surface="Raised">
+                <StackPanel Spacing="{DynamicResource Edge.Size.Spacing6}">
+                    <TextBlock
+                        Classes="edge-parameter-title"
+                        Text="{Binding ModuleDisplayName}" />
+                    <ItemsControl ItemsSource="{Binding Params}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Spacing="{DynamicResource Edge.Size.Spacing8}" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <edge:EdgeFieldRow
+                                    Classes.boolean="{Binding IsBool}"
+                                    Description="{Binding Description}"
+                                    Label="{Binding DisplayName}">
+                                    <Grid>
+                                        <edge:EdgeTextBox
+                                            MinWidth="220"
+                                            IsEnabled="{Binding $parent[UserControl].DataContext.CanEdit}"
+                                            IsVisible="{Binding !IsBool}"
+                                            Text="{Binding Value, Mode=TwoWay}" />
+                                        <edge:EdgeCheckBox
+                                            Classes="boolean"
+                                            HorizontalAlignment="Left"
+                                            VerticalAlignment="Center"
+                                            IsChecked="{Binding BoolValue, Mode=TwoWay}"
+                                            IsEnabled="{Binding $parent[UserControl].DataContext.CanEdit}"
+                                            IsVisible="{Binding IsBool}" />
+                                    </Grid>
+                                </edge:EdgeFieldRow>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </edge:EdgeCard>
         </DataTemplate>
     </UserControl.Resources>
 

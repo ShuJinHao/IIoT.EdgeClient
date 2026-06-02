@@ -55,17 +55,48 @@
                             Title="{DynamicResource Navigation_Diagnostics_DeadLetterAndIssues}"
                             Value="{Binding TotalIssueCount}" />
                     </UniformGrid>
-                    <controls:EdgeStatusSummaryCard
-                        Title="{DynamicResource Navigation_Diagnostics_ModuleOverview}"
-                        PrimaryText="{Binding DiscoveredModulesSummary}"
-                        SecondaryText="{Binding EnabledModulesSummary}"
-                        TertiaryText="{Binding ActivatedModulesSummary}" />
-                    <controls:EdgeStatusSummaryCard
-                        Title="{DynamicResource Navigation_Diagnostics_ConfigLabel}"
-                        PrimaryText="{Binding ConfigurationProfileSummary}" />
-                    <controls:EdgeStatusSummaryCard
-                        Title="{DynamicResource Navigation_Diagnostics_Context}"
-                        PrimaryText="{Binding ContextPersistenceSummary}" />
+                    <controls:EdgeCard Classes="status-summary-card">
+                        <StackPanel Classes="edge-status-summary-root">
+                            <TextBlock
+                                Classes="edge-status-summary-title"
+                                Text="{DynamicResource Navigation_Diagnostics_ModuleOverview}" />
+                            <StackPanel Classes="edge-status-summary-body">
+                                <TextBlock
+                                    Classes="edge-status-summary-primary"
+                                    Text="{Binding DiscoveredModulesSummary}" />
+                                <TextBlock
+                                    Classes="edge-status-summary-secondary"
+                                    Text="{Binding EnabledModulesSummary}" />
+                                <TextBlock
+                                    Classes="edge-status-summary-tertiary"
+                                    Text="{Binding ActivatedModulesSummary}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </controls:EdgeCard>
+                    <controls:EdgeCard Classes="status-summary-card">
+                        <StackPanel Classes="edge-status-summary-root">
+                            <TextBlock
+                                Classes="edge-status-summary-title"
+                                Text="{DynamicResource Navigation_Diagnostics_ConfigLabel}" />
+                            <StackPanel Classes="edge-status-summary-body">
+                                <TextBlock
+                                    Classes="edge-status-summary-primary"
+                                    Text="{Binding ConfigurationProfileSummary}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </controls:EdgeCard>
+                    <controls:EdgeCard Classes="status-summary-card">
+                        <StackPanel Classes="edge-status-summary-root">
+                            <TextBlock
+                                Classes="edge-status-summary-title"
+                                Text="{DynamicResource Navigation_Diagnostics_Context}" />
+                            <StackPanel Classes="edge-status-summary-body">
+                                <TextBlock
+                                    Classes="edge-status-summary-primary"
+                                    Text="{Binding ContextPersistenceSummary}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </controls:EdgeCard>
                 </StackPanel>
                 <StackPanel IsVisible="{Binding IsSyncOpsTabSelected}" Spacing="16">
                     <controls:EdgeTablePanel
@@ -122,20 +153,20 @@
                                                 VerticalAlignment="Center"
                                                 Margin="4,0">
                                                 <controls:EdgeActionButton
-                                                    Classes="cell"
                                                     Command="{Binding $parent[UserControl].DataContext.RequeueDeadLetterCommand}"
                                                     CommandParameter="{Binding}"
                                                     Content="{DynamicResource Navigation_Button_Requeue}"
                                                     Icon="{StaticResource Edge.Icon.Sync}"
                                                     Kind="Primary"
+                                                    Role="Cell"
                                                     Size="Compact" />
                                                 <controls:EdgeActionButton
-                                                    Classes="cell"
                                                     Command="{Binding $parent[UserControl].DataContext.DeleteDeadLetterCommand}"
                                                     CommandParameter="{Binding}"
                                                     Content="{DynamicResource Navigation_Button_Delete}"
                                                     Icon="{StaticResource Edge.Icon.Delete}"
                                                     Kind="Danger"
+                                                    Role="Cell"
                                                     Size="Compact" />
                                             </StackPanel>
                                         </DataTemplate>
@@ -181,20 +212,20 @@
                                                 VerticalAlignment="Center"
                                                 Margin="4,0">
                                                 <controls:EdgeActionButton
-                                                    Classes="cell"
                                                     Command="{Binding $parent[UserControl].DataContext.RequeueDeadLetterCommand}"
                                                     CommandParameter="{Binding}"
                                                     Content="{DynamicResource Navigation_Button_Requeue}"
                                                     Icon="{StaticResource Edge.Icon.Sync}"
                                                     Kind="Primary"
+                                                    Role="Cell"
                                                     Size="Compact" />
                                                 <controls:EdgeActionButton
-                                                    Classes="cell"
                                                     Command="{Binding $parent[UserControl].DataContext.DeleteDeadLetterCommand}"
                                                     CommandParameter="{Binding}"
                                                     Content="{DynamicResource Navigation_Button_Delete}"
                                                     Icon="{StaticResource Edge.Icon.Delete}"
                                                     Kind="Danger"
+                                                    Role="Cell"
                                                     Size="Compact" />
                                             </StackPanel>
                                         </DataTemplate>
@@ -205,12 +236,29 @@
                     </controls:EdgeTablePanel>
                 </StackPanel>
                 <StackPanel IsVisible="{Binding IsStartupTabSelected}" Spacing="16">
-                    <controls:EdgeStatusSummaryCard
-                        Title="{DynamicResource Navigation_Diagnostics_ModuleOverview}"
-                        PrimaryText="{Binding DiscoveredModulesSummary}"
-                        SecondaryText="{Binding EnabledModulesSummary}"
-                        TertiaryText="{Binding ActivatedModulesSummary}"
-                        FooterText="{Binding LastUpdatedSummary}" />
+                    <controls:EdgeCard Classes="status-summary-card">
+                        <StackPanel Classes="edge-status-summary-root">
+                            <TextBlock
+                                Classes="edge-status-summary-title"
+                                Text="{DynamicResource Navigation_Diagnostics_ModuleOverview}" />
+                            <StackPanel Classes="edge-status-summary-body">
+                                <TextBlock
+                                    Classes="edge-status-summary-primary"
+                                    Text="{Binding DiscoveredModulesSummary}" />
+                                <TextBlock
+                                    Classes="edge-status-summary-secondary"
+                                    Text="{Binding EnabledModulesSummary}" />
+                                <TextBlock
+                                    Classes="edge-status-summary-tertiary"
+                                    Text="{Binding ActivatedModulesSummary}" />
+                                <Border Classes="edge-status-summary-footer">
+                                    <TextBlock
+                                        Classes="edge-status-summary-footer-text"
+                                        Text="{Binding LastUpdatedSummary}" />
+                                </Border>
+                            </StackPanel>
+                        </StackPanel>
+                    </controls:EdgeCard>
                     <controls:EdgeTablePanel
 Title="{DynamicResource Navigation_Diagnostics_MesUpload}">
                         <controls:EdgeDataGrid

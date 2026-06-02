@@ -3,48 +3,42 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
-    <edge:EdgeCard
-        Elevation="Flat"
-        PaddingMode="Compact"
-        Surface="Card">
-        <Grid RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="{DynamicResource Edge.Size.Spacing8}">
+    <edge:EdgeCard Classes="right-rail-equipment">
+        <Grid
+            Classes="edge-equipment-root"
+            RowDefinitions="Auto,Auto,Auto,Auto">
             <TextBlock
-                VerticalAlignment="Center"
-                FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
-                FontWeight="SemiBold"
-                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                Classes="edge-equipment-title"
                 Text="{DynamicResource Panels_Title_Equipment}" />
 
             <Border
-                Grid.Row="1"
-                Background="{DynamicResource Edge.Brush.Surface.Wash}"
-                CornerRadius="{DynamicResource Edge.CornerRadius.Control}"
-                Padding="{DynamicResource Edge.Thickness.8}">
-                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
+                Classes="edge-equipment-status-row"
+                Grid.Row="1">
+                <Grid
+                    Classes="edge-equipment-status-grid"
+                    ColumnDefinitions="*,Auto">
                     <TextBlock
-                        VerticalAlignment="Center"
-                        FontSize="{DynamicResource Edge.FontSize.Caption}"
-                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                        Classes="edge-equipment-label"
                         Text="{DynamicResource Panels_Label_EquipmentStatus}" />
-                    <Grid Grid.Column="1" VerticalAlignment="Center">
+                    <Grid Grid.Column="1">
                         <StackPanel
-                            IsVisible="{Binding IsRecipeActive}"
-                            Orientation="Horizontal"
-                            Spacing="{DynamicResource Edge.Size.Spacing4}">
-                            <edge:EdgeStatusDot Status="Running" />
+                            Classes="edge-equipment-state"
+                            IsVisible="{Binding IsRecipeActive}">
+                            <edge:EdgeStatusDot
+                                Classes="edge-equipment-status-dot"
+                                Status="Running" />
                             <TextBlock
-                                FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
+                                Classes="edge-equipment-state-text"
                                 Text="{DynamicResource Panels_Status_Running}" />
                         </StackPanel>
                         <StackPanel
-                            IsVisible="{Binding !IsRecipeActive}"
-                            Orientation="Horizontal"
-                            Spacing="{DynamicResource Edge.Size.Spacing4}">
-                            <edge:EdgeStatusDot Status="Offline" />
+                            Classes="edge-equipment-state"
+                            IsVisible="{Binding !IsRecipeActive}">
+                            <edge:EdgeStatusDot
+                                Classes="edge-equipment-status-dot"
+                                Status="Offline" />
                             <TextBlock
-                                FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
+                                Classes="edge-equipment-state-text"
                                 Text="{DynamicResource Panels_Status_Inactive}" />
                         </StackPanel>
                     </Grid>
@@ -52,142 +46,108 @@
             </Border>
 
             <Border
-                Grid.Row="2"
-                Background="{DynamicResource Edge.Brush.Surface.Wash}"
-                CornerRadius="{DynamicResource Edge.CornerRadius.Control}"
-                MinHeight="96"
-                Padding="10,8">
+                Classes="edge-equipment-plan-card"
+                Grid.Row="2">
                 <Grid
-                    RowDefinitions="Auto,Auto"
-                    RowSpacing="{DynamicResource Edge.Size.Spacing4}">
-                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
+                    Classes="edge-equipment-plan-root"
+                    RowDefinitions="Auto,Auto">
+                    <Grid
+                        Classes="edge-equipment-plan-header"
+                        ColumnDefinitions="*,Auto">
+                        <TextBlock
+                            Classes="edge-equipment-label"
+                            Text="{DynamicResource Panels_Label_MesPlanSelection}" />
+                        <edge:EdgeActionButton
+                            Grid.Column="1"
+                            Classes="plan-action"
+                            Command="{Binding SelectProductionPlanCommand}"
+                            Icon="{StaticResource Edge.Icon.Plan}"
+                            Kind="Secondary"
+                            Role="RightRail"
+                            Size="Compact"
+                            Content="{DynamicResource Panels_Button_SelectProductionPlan}" />
+                    </Grid>
+
+                    <Grid
+                        Classes="edge-equipment-plan-body"
+                        Grid.Row="1">
+                        <StackPanel
+                            Classes="edge-equipment-plan-empty"
+                            IsVisible="{Binding !HasSelectedProductionPlan}">
                             <TextBlock
-                                FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                Text="{DynamicResource Panels_Label_MesPlanSelection}" />
-                            <edge:EdgeActionButton
-                                Grid.Column="1"
-                                Classes="right-rail plan-action"
-                                Command="{Binding SelectProductionPlanCommand}"
-                                Icon="{StaticResource Edge.Icon.Plan}"
-                                Kind="Secondary"
-                                Size="Compact"
-                                Content="{DynamicResource Panels_Button_SelectProductionPlan}" />
-                        </Grid>
+                                Classes="edge-equipment-plan-title"
+                                Text="{DynamicResource Panels_Status_MesPlanRequired}" />
+                            <TextBlock
+                                Classes="edge-equipment-plan-description"
+                                Text="{DynamicResource Panels_Hint_SelectMainPlanBeforeProduction}" />
+                        </StackPanel>
 
-                        <Grid Grid.Row="1">
-                            <StackPanel
-                                IsVisible="{Binding !HasSelectedProductionPlan}"
-                                VerticalAlignment="Top"
-                                Spacing="{DynamicResource Edge.Size.Spacing4}">
-                                <TextBlock
-                                    FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
-                                    FontWeight="SemiBold"
-                                    Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                                    Text="{DynamicResource Panels_Status_MesPlanRequired}" />
-                                <TextBlock
-                                    FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                    Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                    Text="{DynamicResource Panels_Hint_SelectMainPlanBeforeProduction}" />
-                            </StackPanel>
-
+                        <Grid
+                            Classes="edge-equipment-plan-selected"
+                            IsVisible="{Binding HasSelectedProductionPlan}"
+                            RowDefinitions="Auto,Auto,Auto,Auto">
+                            <TextBlock
+                                Classes="edge-equipment-plan-title"
+                                Text="{Binding SelectedPlanCode}" />
+                            <TextBlock
+                                Classes="edge-equipment-plan-description"
+                                Grid.Row="1"
+                                Text="{Binding SelectedPlanProductSummary}" />
                             <Grid
-                                IsVisible="{Binding HasSelectedProductionPlan}"
-                                RowDefinitions="Auto,Auto,Auto,Auto"
-                                RowSpacing="1">
+                                Classes="edge-equipment-trace-row"
+                                Grid.Row="2"
+                                ColumnDefinitions="64,*">
                                 <TextBlock
-                                    FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
-                                    FontWeight="SemiBold"
-                                    Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                                    Text="{Binding SelectedPlanCode}"
-                                    TextTrimming="CharacterEllipsis" />
+                                    Classes="edge-equipment-plan-key"
+                                    Text="{DynamicResource Panels_Label_TraceBatchNumber}" />
                                 <TextBlock
-                                    Grid.Row="1"
-                                    FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                    Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                    Text="{Binding SelectedPlanProductSummary}"
-                                    TextTrimming="CharacterEllipsis" />
-                                <Grid
-                                    Grid.Row="2"
-                                    ColumnDefinitions="64,*"
-                                    ColumnSpacing="{DynamicResource Edge.Size.Spacing6}">
-                                    <TextBlock
-                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                        Text="{DynamicResource Panels_Label_TraceBatchNumber}" />
-                                    <TextBlock
-                                        Grid.Column="1"
-                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                        FontWeight="SemiBold"
-                                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                                        Text="{Binding TraceBatchNumber}"
-                                        TextTrimming="CharacterEllipsis" />
-                                </Grid>
-                                <TextBlock
-                                    Grid.Row="3"
-                                    FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                    Foreground="{DynamicResource Edge.Brush.Status.Error}"
-                                    IsVisible="{Binding HasTraceBatchError}"
-                                    Text="{Binding TraceBatchError}"
-                                    TextTrimming="CharacterEllipsis" />
+                                    Classes="edge-equipment-plan-value"
+                                    Grid.Column="1"
+                                    Text="{Binding TraceBatchNumber}" />
                             </Grid>
+                            <TextBlock
+                                Classes="edge-equipment-plan-error"
+                                Grid.Row="3"
+                                IsVisible="{Binding HasTraceBatchError}"
+                                Text="{Binding TraceBatchError}" />
                         </Grid>
-
+                    </Grid>
                 </Grid>
             </Border>
 
             <Grid
+                Classes="edge-equipment-metrics"
                 Grid.Row="3"
-                ColumnDefinitions="*,*,*"
-                ColumnSpacing="{DynamicResource Edge.Size.Spacing8}"
-                Height="46"
-                VerticalAlignment="Top">
-                <StackPanel HorizontalAlignment="Center">
+                ColumnDefinitions="*,*,*">
+                <StackPanel Classes="edge-equipment-metric">
                     <TextBlock
-                        FontSize="{DynamicResource Edge.FontSize.SubData18}"
-                        FontWeight="Bold"
-                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                        HorizontalAlignment="Center"
-                        Text="{Binding TodayOutput}"
-                        TextAlignment="Center" />
+                        Classes="edge-equipment-metric-value"
+                        Text="{Binding TodayOutput}" />
                     <TextBlock
-                        FontSize="{DynamicResource Edge.FontSize.Caption}"
-                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                        HorizontalAlignment="Center"
-                        Text="{DynamicResource Panels_Label_Output}"
-                        TextAlignment="Center" />
+                        Classes="edge-equipment-metric-label"
+                        Text="{DynamicResource Panels_Label_Output}" />
                 </StackPanel>
 
-                <StackPanel Grid.Column="1" HorizontalAlignment="Center">
+                <StackPanel
+                    Classes="edge-equipment-metric"
+                    Grid.Column="1">
                     <TextBlock
-                        FontSize="{DynamicResource Edge.FontSize.SubData18}"
-                        FontWeight="Bold"
-                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                        HorizontalAlignment="Center"
-                        Text="{Binding TodayYield}"
-                        TextAlignment="Center" />
+                        Classes="edge-equipment-metric-value"
+                        Text="{Binding TodayYield}" />
                     <TextBlock
-                        FontSize="{DynamicResource Edge.FontSize.Caption}"
-                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                        HorizontalAlignment="Center"
-                        Text="{DynamicResource Panels_Label_Yield}"
-                        TextAlignment="Center" />
+                        Classes="edge-equipment-metric-label"
+                        Text="{DynamicResource Panels_Label_Yield}" />
                 </StackPanel>
 
-                <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                <StackPanel
+                    Classes="edge-equipment-metric"
+                    Grid.Column="2">
                     <TextBlock
-                        FontSize="{DynamicResource Edge.FontSize.SubData18}"
-                        FontWeight="Bold"
-                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                        HorizontalAlignment="Center"
-                        Text="{Binding NgCount}"
-                        TextAlignment="Center" />
+                        Classes="edge-equipment-metric-value"
+                        Text="{Binding NgCount}" />
                     <TextBlock
-                        FontSize="{DynamicResource Edge.FontSize.Caption}"
-                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                        HorizontalAlignment="Center"
-                        Text="{DynamicResource Panels_Label_NgShort}"
-                        TextAlignment="Center" />
+                        Classes="edge-equipment-metric-label"
+                        Text="{DynamicResource Panels_Label_NgShort}" />
                 </StackPanel>
             </Grid>
         </Grid>

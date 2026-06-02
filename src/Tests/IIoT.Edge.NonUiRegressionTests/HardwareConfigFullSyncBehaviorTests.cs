@@ -1,11 +1,9 @@
 using System.Linq.Expressions;
-using AutoMapper;
 using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Common.Crud;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView;
-using IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Models;
 using IIoT.Edge.Application.Features.Hardware.Queries;
 using IIoT.Edge.Application.Features.Hardware.UseCases.IoMapping.Commands;
 using IIoT.Edge.Application.Features.Hardware.UseCases.NetworkDevice.Commands;
@@ -18,7 +16,6 @@ using IIoT.Edge.SharedKernel.Repository;
 using IIoT.Edge.SharedKernel.Result;
 using IIoT.Edge.SharedKernel.Specification;
 using MediatR;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 
@@ -283,7 +280,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
 
         var result = await handler.Handle(
             new SaveHardwareConfigCommand(
-                [CreateNetworkVm(id: 2, name: "PLC-B")],
+                [CreateNetworkDto(id: 2, name: "PLC-B")],
                 [],
                 2,
                 []),
@@ -314,22 +311,11 @@ public sealed class HardwareConfigFullSyncBehaviorTests
 
         var result = await handler.Handle(
             new SaveHardwareConfigCommand(
-                [CreateNetworkVm(id: 1, name: "PLC-A"), CreateNetworkVm(id: 2, name: "PLC-B")],
+                [CreateNetworkDto(id: 1, name: "PLC-A"), CreateNetworkDto(id: 2, name: "PLC-B")],
                 [],
                 1,
                 [
-                    new IoMappingVm
-                    {
-                        Id = 11,
-                        NetworkDeviceId = 1,
-                        SignalKey = "Signal.A",
-                        PlcAddress = "DB1.DBW0",
-                        AddressCount = 1,
-                        DataType = "Int16",
-                        Direction = "Read",
-                        SortOrder = 1,
-                        Remark = "new"
-                    }
+                    CreateIoMappingDto(id: 11, deviceId: 1, signalKey: "Signal.A", remark: "new")
                 ]),
             CancellationToken.None);
 
@@ -358,23 +344,11 @@ public sealed class HardwareConfigFullSyncBehaviorTests
 
         var result = await handler.Handle(
             new SaveHardwareConfigCommand(
-                [CreateNetworkVm(id: 1, name: "PLC-A"), CreateNetworkVm(id: 2, name: "PLC-B")],
+                [CreateNetworkDto(id: 1, name: "PLC-A"), CreateNetworkDto(id: 2, name: "PLC-B")],
                 [],
                 1,
                 [
-                    new IoMappingVm
-                    {
-                        Id = 11,
-                        NetworkDeviceId = 1,
-                        SignalKey = "Signal.A",
-                        PlcAddress = "DB1.DBW0",
-                        AddressCount = 1,
-                        DataType = "Int16",
-                        Direction = "Read",
-                        Category = "单点读数据",
-                        SortOrder = 1,
-                        Remark = "same"
-                    }
+                    CreateIoMappingDto(id: 11, deviceId: 1, signalKey: "Signal.A", remark: "same")
                 ]),
             CancellationToken.None);
 
@@ -400,8 +374,8 @@ public sealed class HardwareConfigFullSyncBehaviorTests
         var result = await handler.Handle(
             new SaveHardwareConfigCommand(
                 [
-                    CreateNetworkVm(id: 1, name: "PLC-DUP", ipAddress: "192.168.0.10", port1: 103),
-                    CreateNetworkVm(id: 2, name: "PLC-DUP", ipAddress: "192.168.0.11", port1: 104)
+                    CreateNetworkDto(id: 1, name: "PLC-DUP", ipAddress: "192.168.0.10", port1: 103),
+                    CreateNetworkDto(id: 2, name: "PLC-DUP", ipAddress: "192.168.0.11", port1: 104)
                 ],
                 [],
                 1,
@@ -432,7 +406,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
         var result = await handler.Handle(
             new SaveHardwareConfigCommand(
                 [
-                    CreateNetworkVm(id: 2, name: "PLC-B", port1: 103)
+                    CreateNetworkDto(id: 2, name: "PLC-B", port1: 103)
                 ],
                 [],
                 2,
@@ -452,18 +426,8 @@ public sealed class HardwareConfigFullSyncBehaviorTests
     private static SaveHardwareConfigHandler CreateSaveHandler(HardwareConfigSender sender, FakePlcConnectionManager plcManager)
         => new(
             sender,
-            CreateMapper(),
             new StubPermissionService { CanEditHardware = true },
             plcManager);
-
-    private static IMapper CreateMapper()
-    {
-        var configuration = new MapperConfiguration(
-            cfg => cfg.AddProfile<IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Mappings.HardwareConfigMappingProfile>(),
-            NullLoggerFactory.Instance);
-
-        return configuration.CreateMapper();
-    }
 
     private static NetworkDeviceEntity CreateNetworkDevice(
         int id,
@@ -479,23 +443,45 @@ public sealed class HardwareConfigFullSyncBehaviorTests
         return entity;
     }
 
-    private static NetworkDeviceVm CreateNetworkVm(
+    private static NetworkDeviceDto CreateNetworkDto(
         int id,
         string name,
         string ipAddress = "192.168.0.10",
         int port1 = 102)
-        => new()
-        {
-            Id = id,
-            DeviceName = name,
-            DeviceType = DeviceType.PLC,
-            DeviceModel = "S7",
-            ModuleId = "TestProcess",
-            IpAddress = ipAddress,
-            Port1 = port1,
-            ConnectTimeout = 3000,
-            IsEnabled = true
-        };
+        => new(
+            id,
+            name,
+            DeviceType.PLC,
+            "S7",
+            "TestProcess",
+            ipAddress,
+            port1,
+            null,
+            null,
+            null,
+            3000,
+            true,
+            null);
+
+    private static IoMappingDto CreateIoMappingDto(
+        int id,
+        int deviceId,
+        string signalKey,
+        string plcAddress = "DB1.DBW0",
+        string? remark = null)
+        => new(
+            id,
+            deviceId,
+            signalKey,
+            plcAddress,
+            1,
+            "Int16",
+            "Read",
+            "单点读数据",
+            string.Empty,
+            string.Empty,
+            1,
+            remark);
 
     private static SerialDeviceEntity CreateSerialDevice(int id, string name)
     {

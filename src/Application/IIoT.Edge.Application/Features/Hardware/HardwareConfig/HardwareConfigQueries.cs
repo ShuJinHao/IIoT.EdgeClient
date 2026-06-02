@@ -1,9 +1,6 @@
-using AutoMapper;
 using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Common.Crud;
-using IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Mappings;
-using IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Models;
 using IIoT.Edge.Application.Features.Hardware.Queries;
 using IIoT.Edge.Application.Features.Hardware.UseCases.IoMapping.Commands;
 using IIoT.Edge.Application.Features.Hardware.UseCases.NetworkDevice.Commands;
@@ -16,11 +13,11 @@ using MediatR;
 namespace IIoT.Edge.Application.Features.Hardware.HardwareConfigView;
 
 public record HardwareConfigInitResult(
-    List<NetworkDeviceVm> NetworkDevices,
-    List<SerialDeviceVm> SerialDevices);
+    List<NetworkDeviceDto> NetworkDevices,
+    List<SerialDeviceDto> SerialDevices);
 
 public record IoMappingPageResult(
-    List<IoMappingVm> Items,
+    List<IoMappingDto> Items,
     int TotalCount);
 
 public record ModuleTemplateInfoResult(
@@ -36,41 +33,72 @@ public record LoadIoMappingsQuery(int NetworkDeviceId)
     : IRequest<IoMappingPageResult>;
 
 public record SaveHardwareConfigCommand(
-    List<NetworkDeviceVm> NetworkDevices,
-    List<SerialDeviceVm> SerialDevices,
+    List<NetworkDeviceDto> NetworkDevices,
+    List<SerialDeviceDto> SerialDevices,
     int SelectedNetworkDeviceId,
-    List<IoMappingVm> IoMappings) : IRequest<CrudOperationResult>;
+    List<IoMappingDto> IoMappings) : IRequest<CrudOperationResult>;
 
-public class LoadHardwareConfigHandler(ISender sender, IMapper mapper)
+public class LoadHardwareConfigHandler(ISender sender)
     : IRequestHandler<LoadHardwareConfigQuery, HardwareConfigInitResult>
 {
     public async Task<HardwareConfigInitResult> Handle(LoadHardwareConfigQuery request, CancellationToken ct)
     {
         var networkResult = await sender.Send(new GetAllNetworkDevicesQuery(), ct);
-        var networks = new List<NetworkDeviceVm>();
+        var networks = new List<NetworkDeviceDto>();
         if (networkResult.IsSuccess && networkResult.Value != null)
         {
             foreach (var network in networkResult.Value)
             {
-                networks.Add(mapper.Map<NetworkDeviceVm>(network));
+                networks.Add(MapNetworkDevice(network));
             }
         }
 
         var serialResult = await sender.Send(new GetAllSerialDevicesQuery(), ct);
-        var serials = new List<SerialDeviceVm>();
+        var serials = new List<SerialDeviceDto>();
         if (serialResult.IsSuccess && serialResult.Value != null)
         {
             foreach (var serial in serialResult.Value)
             {
-                serials.Add(mapper.Map<SerialDeviceVm>(serial));
+                serials.Add(MapSerialDevice(serial));
             }
         }
 
         return new HardwareConfigInitResult(networks, serials);
     }
+
+    private static NetworkDeviceDto MapNetworkDevice(NetworkDeviceEntity entity)
+        => new(
+            entity.Id,
+            entity.DeviceName,
+            entity.DeviceType,
+            entity.DeviceModel,
+            entity.ModuleId,
+            entity.IpAddress,
+            entity.Port1,
+            entity.Port2,
+            entity.SendCmd1,
+            entity.SendCmd2,
+            entity.ConnectTimeout,
+            entity.IsEnabled,
+            entity.Remark);
+
+    private static SerialDeviceDto MapSerialDevice(SerialDeviceEntity entity)
+        => new(
+            entity.Id,
+            entity.DeviceName,
+            entity.DeviceType,
+            entity.PortName,
+            entity.BaudRate,
+            entity.DataBits,
+            entity.StopBits,
+            entity.Parity,
+            entity.SendCmd1,
+            entity.SendCmd2,
+            entity.IsEnabled,
+            entity.Remark);
 }
 
-public class LoadIoMappingsHandler(ISender sender, IMapper mapper)
+public class LoadIoMappingsHandler(ISender sender)
     : IRequestHandler<LoadIoMappingsQuery, IoMappingPageResult>
 {
     public async Task<IoMappingPageResult> Handle(LoadIoMappingsQuery request, CancellationToken ct)
@@ -85,16 +113,30 @@ public class LoadIoMappingsHandler(ISender sender, IMapper mapper)
         }
 
         var items = result.Value.Items
-            .Select(item => mapper.Map<IoMappingVm>(item))
+            .Select(MapIoMapping)
             .ToList();
 
         return new IoMappingPageResult(items, items.Count);
     }
+
+    private static IoMappingDto MapIoMapping(IoMappingEntity entity)
+        => new(
+            entity.Id,
+            entity.NetworkDeviceId,
+            entity.SignalKey,
+            entity.PlcAddress,
+            entity.AddressCount,
+            entity.DataType,
+            entity.Direction,
+            entity.Category,
+            entity.BusinessGroup,
+            entity.SignalName,
+            entity.SortOrder,
+            entity.Remark);
 }
 
 public class SaveHardwareConfigHandler(
     ISender sender,
-    IMapper mapper,
     IClientPermissionService permissionService,
     IPlcConnectionManager plcConnectionManager)
     : IRequestHandler<SaveHardwareConfigCommand, CrudOperationResult>
@@ -109,15 +151,13 @@ public class SaveHardwareConfigHandler(
         var existingNetworkDevices = await LoadExistingNetworkDevicesAsync(ct);
         var existingIoMappings = await LoadExistingIoMappingsAsync(request.SelectedNetworkDeviceId, ct);
 
-        var networkDtos = mapper.Map<List<NetworkDeviceDto>>(request.NetworkDevices);
-        var networkResult = await sender.Send(new SaveNetworkDevicesCommand(networkDtos), ct);
+        var networkResult = await sender.Send(new SaveNetworkDevicesCommand(request.NetworkDevices), ct);
         if (!networkResult.IsSuccess)
         {
             return CrudOperationResult.Failure(networkResult.ErrorMessage ?? "网络设备保存失败。");
         }
 
-        var serialDtos = mapper.Map<List<SerialDeviceDto>>(request.SerialDevices);
-        var serialResult = await sender.Send(new SaveSerialDevicesCommand(serialDtos), ct);
+        var serialResult = await sender.Send(new SaveSerialDevicesCommand(request.SerialDevices), ct);
         if (!serialResult.IsSuccess)
         {
             return CrudOperationResult.Failure(serialResult.ErrorMessage ?? "串口设备保存失败。");
@@ -129,11 +169,7 @@ public class SaveHardwareConfigHandler(
         if (selectedDeviceStillExists)
         {
             var ioDtos = request.IoMappings
-                .Select(vm => mapper.Map<IoMappingDto>(vm, opts =>
-                {
-                    opts.Items[HardwareConfigMappingProfile.NetworkDeviceIdContextKey] =
-                        request.SelectedNetworkDeviceId;
-                }))
+                .Select(dto => dto with { NetworkDeviceId = request.SelectedNetworkDeviceId })
                 .ToList();
 
             var ioResult = await sender.Send(new SaveIoMappingsCommand(request.SelectedNetworkDeviceId, ioDtos), ct);
@@ -268,7 +304,7 @@ public class SaveHardwareConfigHandler(
         return result.Value.Items;
     }
 
-    private static bool HasRuntimeRelevantNetworkChange(NetworkDeviceEntity existing, NetworkDeviceVm incoming)
+    private static bool HasRuntimeRelevantNetworkChange(NetworkDeviceEntity existing, NetworkDeviceDto incoming)
     {
         return !string.Equals(existing.DeviceName?.Trim(), incoming.DeviceName?.Trim(), StringComparison.OrdinalIgnoreCase)
             || !string.Equals(existing.DeviceModel?.Trim(), incoming.DeviceModel?.Trim(), StringComparison.OrdinalIgnoreCase)
@@ -284,7 +320,7 @@ public class SaveHardwareConfigHandler(
 
     private static bool HasIoMappingsChanged(
         IReadOnlyCollection<IoMappingEntity> existingMappings,
-        IReadOnlyCollection<IoMappingVm> incomingMappings,
+        IReadOnlyCollection<IoMappingDto> incomingMappings,
         int networkDeviceId)
     {
         var existing = existingMappings

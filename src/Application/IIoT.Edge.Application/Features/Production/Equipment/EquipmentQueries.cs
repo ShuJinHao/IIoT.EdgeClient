@@ -2,7 +2,6 @@
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Recipe;
 using IIoT.Edge.Application.Features.Hardware.Queries;
-using IIoT.Edge.Application.Features.Production.Equipment.Models;
 using MediatR;
 
 namespace IIoT.Edge.Application.Features.Production.Equipment;
@@ -18,7 +17,16 @@ public record RecipeSnapshot(
     string RecipeVersion,
     string ProcessName,
     bool IsRecipeActive,
-    List<RecipeParamViewModel> Parameters);
+    List<RecipeParamSnapshot> Parameters);
+
+public record RecipeParamSnapshot(
+    string ParamName,
+    string CurrentValue,
+    string MinValue,
+    string MaxValue,
+    string Unit,
+    string WarnLow,
+    string WarnHigh);
 
 public record CapacitySnapshot(
     int TodayOutput,
@@ -86,16 +94,14 @@ public class GetRecipeSnapshotHandler(IRecipeService recipeService)
             : $"{recipe.RecipeName} ({tag})";
 
         var parameters = recipe.Parameters.Values
-            .Select(parameter => new RecipeParamViewModel
-            {
-                ParamName = parameter.Name,
-                CurrentValue = parameter.CustomValue ?? "--",
-                MinValue = parameter.Min?.ToString("G4") ?? "--",
-                MaxValue = parameter.Max?.ToString("G4") ?? "--",
-                Unit = parameter.Unit,
-                WarnLow = parameter.Min.HasValue ? (parameter.Min * 1.05)?.ToString("G4") ?? "--" : "--",
-                WarnHigh = parameter.Max.HasValue ? (parameter.Max * 0.95)?.ToString("G4") ?? "--" : "--"
-            })
+            .Select(parameter => new RecipeParamSnapshot(
+                parameter.Name,
+                parameter.CustomValue ?? "--",
+                parameter.Min?.ToString("G4") ?? "--",
+                parameter.Max?.ToString("G4") ?? "--",
+                parameter.Unit,
+                parameter.Min.HasValue ? (parameter.Min * 1.05)?.ToString("G4") ?? "--" : "--",
+                parameter.Max.HasValue ? (parameter.Max * 0.95)?.ToString("G4") ?? "--" : "--"))
             .ToList();
 
         return Task.FromResult<RecipeSnapshot?>(

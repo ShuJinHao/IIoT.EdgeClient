@@ -10,7 +10,6 @@ using IIoT.Edge.Infrastructure.DeviceComm.Signals;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.SharedKernel.Repository;
-using IIoT.Edge.Runtime.Plc;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Plc;
 

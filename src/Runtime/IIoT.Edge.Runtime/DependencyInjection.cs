@@ -11,7 +11,6 @@ using IIoT.Edge.Runtime.Context;
 using IIoT.Edge.Runtime.DataPipeline.Consumers;
 using IIoT.Edge.Runtime.DataPipeline.Services;
 using IIoT.Edge.Runtime.DataPipeline.Tasks;
-using IIoT.Edge.Runtime.Plc;
 using IIoT.Edge.Runtime.Signals;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using Microsoft.Extensions.DependencyInjection;
@@ -39,7 +38,6 @@ public static class DependencyInjection
                 sp.GetRequiredService<IProductionContextRuntimeStateCopier>()));
         services.AddSingleton<IProductionContextStore>(sp => sp.GetRequiredService<ProductionContextStore>());
         services.AddSingleton<ITodayCapacityStore, TodayCapacityStore>();
-        services.AddSingleton<IPlcSignalBlockPlanner, DefaultPlcSignalBlockPlanner>();
 
         AddDataPipelineRuntimeCore(services);
 

@@ -1,5 +1,5 @@
 using System.ComponentModel;
-using IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Models;
+using IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView.Models;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView;
 

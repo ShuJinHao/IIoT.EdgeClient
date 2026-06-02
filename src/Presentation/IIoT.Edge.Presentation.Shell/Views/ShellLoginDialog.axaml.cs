@@ -23,7 +23,7 @@ public partial class ShellLoginDialog : Window
             Topmost = true;
             Topmost = false;
             RefreshMode();
-            LocalPasswordInput.FocusInput();
+            LocalPasswordInput.Focus();
         };
     }
 
@@ -94,12 +94,12 @@ public partial class ShellLoginDialog : Window
             if (IsCloudMode)
             {
                 CloudPasswordInput.Text = string.Empty;
-                CloudPasswordInput.FocusInput();
+                CloudPasswordInput.Focus();
             }
             else
             {
                 LocalPasswordInput.Text = string.Empty;
-                LocalPasswordInput.FocusInput();
+                LocalPasswordInput.Focus();
             }
         }
         finally
@@ -124,11 +124,11 @@ public partial class ShellLoginDialog : Window
 
         if (IsCloudMode)
         {
-            EmployeeNoInput.FocusInput();
+            EmployeeNoInput.Focus();
         }
         else
         {
-            LocalPasswordInput.FocusInput();
+            LocalPasswordInput.Focus();
         }
     }
 

@@ -9,7 +9,7 @@ namespace IIoT.Edge.Presentation.Navigation.Features.Production.DataView;
 
 public class DataViewModel : NavigationViewModelBase
 {
-    private readonly IDataViewService _dataViewService;
+    private readonly IProductionDataQueryFacade _productionDataQueryFacade;
 
     private int _todayTotal;
     public int TodayTotal
@@ -60,9 +60,9 @@ public class DataViewModel : NavigationViewModelBase
     public ICommand QueryCommand { get; }
     public ICommand ExportCommand { get; }
 
-    public DataViewModel(IDataViewService dataViewService, IAppLanguageService languageService)
+    public DataViewModel(IProductionDataQueryFacade productionDataQueryFacade, IAppLanguageService languageService)
         : this(
-            dataViewService,
+            productionDataQueryFacade,
             languageService,
             "Production.DataView",
             "Navigation_Title_Data",
@@ -71,14 +71,14 @@ public class DataViewModel : NavigationViewModelBase
     }
 
     public DataViewModel(
-        IDataViewService dataViewService,
+        IProductionDataQueryFacade productionDataQueryFacade,
         IAppLanguageService languageService,
         string viewId,
         string titleResourceKey,
         string titleFallback)
         : base(languageService, viewId, titleResourceKey, titleFallback)
     {
-        _dataViewService = dataViewService;
+        _productionDataQueryFacade = productionDataQueryFacade;
         QueryCommand = new AsyncCommand(() => RunViewTaskAsync(
             QueryAsync,
             GetText("Navigation_Data_QueryFailed", "生产数据查询失败。")));
@@ -94,7 +94,7 @@ public class DataViewModel : NavigationViewModelBase
 
     private async Task QueryAsync()
     {
-        var snapshot = await _dataViewService.QueryAsync(DateFrom, DateTo);
+        var snapshot = await _productionDataQueryFacade.QueryAsync(DateFrom, DateTo);
 
         TodayTotal = snapshot.TodayTotal;
         TodayOk = snapshot.TodayOk;

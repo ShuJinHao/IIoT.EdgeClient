@@ -3,11 +3,9 @@ using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Auth;
-using IIoT.Edge.Application.Common.Models;
 using IIoT.Edge.Application.Features.Config.ParamView;
-using IIoT.Edge.Application.Features.Config.ParamView.Models;
+using IIoT.Edge.Application.Features.Config.UseCases.ModuleParam;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView;
-using IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Models;
 using IIoT.Edge.Application.Features.Hardware.Queries;
 using IIoT.Edge.Application.Features.Hardware.UseCases.IoMapping.Commands;
 using IIoT.Edge.Application.Features.Hardware.UseCases.NetworkDevice.Commands;
@@ -18,7 +16,6 @@ using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.SharedKernel.Result;
 using MediatR;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 
@@ -69,7 +66,7 @@ public sealed class ConfigPermissionGuardBehaviorTests
             new StubPermissionService { CanEditParams = false });
 
         var result = await service.SaveAsync(
-            [new ModuleParamVm { Key = "Module:Homogenization:Business:启用托盘码重码验证", Value = "true" }]);
+            [new ModuleParamDto("Module:Homogenization:Business:启用托盘码重码验证", "true")]);
 
         Assert.False(result.IsSuccess);
         Assert.Contains("参数配置权限", result.Message);
@@ -86,7 +83,7 @@ public sealed class ConfigPermissionGuardBehaviorTests
 
         var result = await handler.Handle(
             new SaveParamViewCommand(
-                [new ModuleParamVm { Key = "Module:Homogenization:Business:启用托盘码重码验证", Value = "true" }]),
+                [new ModuleParamDto("Module:Homogenization:Business:启用托盘码重码验证", "true")]),
             CancellationToken.None);
 
         Assert.False(result.IsSuccess);
@@ -104,7 +101,7 @@ public sealed class ConfigPermissionGuardBehaviorTests
             new StubPermissionService { CanEditHardware = false });
 
         var result = await service.SaveAsync(
-            [new NetworkDeviceVm { Id = 1, DeviceName = "PLC-A", DeviceType = DeviceType.PLC }],
+            [CreateNetworkDeviceDto(1, "PLC-A")],
             [],
             1,
             []);
@@ -122,13 +119,7 @@ public sealed class ConfigPermissionGuardBehaviorTests
             [],
             new StubPermissionService { CanEditHardware = false });
 
-        var result = await service.ApplyModuleTemplateAsync(new NetworkDeviceVm
-        {
-            Id = 1,
-            DeviceName = "PLC-A",
-            DeviceType = DeviceType.PLC,
-            ModuleId = "TestProcess"
-        });
+        var result = await service.ApplyModuleTemplateAsync(CreateNetworkDeviceDto(1, "PLC-A"));
 
         Assert.False(result.IsSuccess);
         Assert.Equal(0, sender.SendCount);
@@ -148,13 +139,7 @@ public sealed class ConfigPermissionGuardBehaviorTests
             [new ResetTemplateProfile()],
             new StubPermissionService { CanEditHardware = true });
 
-        var result = await service.ApplyModuleTemplateAsync(new NetworkDeviceVm
-        {
-            Id = 7,
-            DeviceName = "PLC-A",
-            DeviceType = DeviceType.PLC,
-            ModuleId = "TestModule"
-        });
+        var result = await service.ApplyModuleTemplateAsync(CreateNetworkDeviceDto(7, "PLC-A", moduleId: "TestModule"));
 
         Assert.True(result.IsSuccess, result.Message);
         Assert.NotNull(savedCommand);
@@ -187,53 +172,20 @@ public sealed class ConfigPermissionGuardBehaviorTests
 
         var handler = new SaveHardwareConfigHandler(
             sender,
-            CreateMapper(),
             new StubPermissionService { CanEditHardware = true },
             plcManager);
 
         var result = await handler.Handle(
             new SaveHardwareConfigCommand(
                 [
-                    new NetworkDeviceVm
-                    {
-                        Id = 1,
-                        DeviceName = "PLC-A",
-                        DeviceType = DeviceType.PLC,
-                        ModuleId = "TestProcess",
-                        IsEnabled = true
-                    },
-                    new NetworkDeviceVm
-                    {
-                        Id = 2,
-                        DeviceName = "PLC-B",
-                        DeviceType = DeviceType.PLC,
-                        ModuleId = "TestProcess",
-                        IsEnabled = false
-                    },
-                    new NetworkDeviceVm
-                    {
-                        Id = 3,
-                        DeviceName = "Scanner-A",
-                        DeviceType = DeviceType.Scanner,
-                        ModuleId = string.Empty,
-                        IsEnabled = true
-                    }
+                    CreateNetworkDeviceDto(1, "PLC-A"),
+                    CreateNetworkDeviceDto(2, "PLC-B", isEnabled: false),
+                    CreateNetworkDeviceDto(3, "Scanner-A", DeviceType.Scanner, moduleId: string.Empty)
                 ],
                 [],
                 1,
                 [
-                    new IoMappingVm
-                    {
-                        Id = 10,
-                        NetworkDeviceId = 1,
-                        SignalKey = "Test.Signal",
-                        SignalName = "测试信号",
-                        PlcAddress = "DB1.DBW0",
-                        AddressCount = 1,
-                        DataType = "Int16",
-                        Direction = "Read",
-                        SortOrder = 1
-                    }
+                    CreateIoMappingDto(10, 1, "Test.Signal", signalName: "测试信号")
                 ]),
             CancellationToken.None);
 
@@ -253,17 +205,45 @@ public sealed class ConfigPermissionGuardBehaviorTests
             sender.Requests.Select(x => x.GetType()).ToArray());
     }
 
-    private static AutoMapper.IMapper CreateMapper()
-    {
-        var configuration = new AutoMapper.MapperConfiguration(
-            cfg =>
-            {
-                cfg.AddProfile<IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Mappings.HardwareConfigMappingProfile>();
-            },
-            NullLoggerFactory.Instance);
+    private static NetworkDeviceDto CreateNetworkDeviceDto(
+        int id,
+        string name,
+        DeviceType deviceType = DeviceType.PLC,
+        string moduleId = "TestProcess",
+        bool isEnabled = true)
+        => new(
+            id,
+            name,
+            deviceType,
+            deviceType == DeviceType.PLC ? "S7" : null,
+            moduleId,
+            "192.168.0.10",
+            102,
+            null,
+            null,
+            null,
+            3000,
+            isEnabled,
+            null);
 
-        return configuration.CreateMapper();
-    }
+    private static IoMappingDto CreateIoMappingDto(
+        int id,
+        int deviceId,
+        string signalKey,
+        string signalName = "")
+        => new(
+            id,
+            deviceId,
+            signalKey,
+            "DB1.DBW0",
+            1,
+            "Int16",
+            "Read",
+            "单点读数据",
+            string.Empty,
+            signalName,
+            1,
+            null);
 
     private sealed class FakeAuthService : IAuthService
     {

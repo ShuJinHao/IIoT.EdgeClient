@@ -1,9 +1,10 @@
 using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Common.Crud;
-using IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Models;
 using IIoT.Edge.Application.Features.Hardware.Queries;
 using IIoT.Edge.Application.Features.Hardware.UseCases.IoMapping.Commands;
+using IIoT.Edge.Application.Features.Hardware.UseCases.NetworkDevice.Commands;
+using IIoT.Edge.Application.Features.Hardware.UseCases.SerialDevice.Commands;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.SharedKernel.Enums;
 using MediatR;
@@ -22,18 +23,18 @@ public interface IHardwareConfigCrudService
         CancellationToken cancellationToken = default);
 
     Task<ModuleTemplateInfoResult> GetModuleTemplateInfoAsync(
-        NetworkDeviceVm? selectedNetworkDevice,
+        NetworkDeviceDto? selectedNetworkDevice,
         CancellationToken cancellationToken = default);
 
     Task<CrudOperationResult> ApplyModuleTemplateAsync(
-        NetworkDeviceVm? selectedNetworkDevice,
+        NetworkDeviceDto? selectedNetworkDevice,
         CancellationToken cancellationToken = default);
 
     Task<CrudOperationResult> SaveAsync(
-        IReadOnlyCollection<NetworkDeviceVm> networkDevices,
-        IReadOnlyCollection<SerialDeviceVm> serialDevices,
+        IReadOnlyCollection<NetworkDeviceDto> networkDevices,
+        IReadOnlyCollection<SerialDeviceDto> serialDevices,
         int selectedNetworkDeviceId,
-        IReadOnlyCollection<IoMappingVm> ioMappings,
+        IReadOnlyCollection<IoMappingDto> ioMappings,
         CancellationToken cancellationToken = default);
 }
 
@@ -59,7 +60,7 @@ public sealed class HardwareConfigCrudService(
             cancellationToken);
 
     public Task<ModuleTemplateInfoResult> GetModuleTemplateInfoAsync(
-        NetworkDeviceVm? selectedNetworkDevice,
+        NetworkDeviceDto? selectedNetworkDevice,
         CancellationToken cancellationToken = default)
     {
         if (selectedNetworkDevice is null)
@@ -120,7 +121,7 @@ public sealed class HardwareConfigCrudService(
     }
 
     public async Task<CrudOperationResult> ApplyModuleTemplateAsync(
-        NetworkDeviceVm? selectedNetworkDevice,
+        NetworkDeviceDto? selectedNetworkDevice,
         CancellationToken cancellationToken = default)
     {
         if (!permissionService.CanEditHardware)
@@ -175,10 +176,10 @@ public sealed class HardwareConfigCrudService(
     }
 
     public Task<CrudOperationResult> SaveAsync(
-        IReadOnlyCollection<NetworkDeviceVm> networkDevices,
-        IReadOnlyCollection<SerialDeviceVm> serialDevices,
+        IReadOnlyCollection<NetworkDeviceDto> networkDevices,
+        IReadOnlyCollection<SerialDeviceDto> serialDevices,
         int selectedNetworkDeviceId,
-        IReadOnlyCollection<IoMappingVm> ioMappings,
+        IReadOnlyCollection<IoMappingDto> ioMappings,
         CancellationToken cancellationToken = default)
     {
         if (!permissionService.CanEditHardware)

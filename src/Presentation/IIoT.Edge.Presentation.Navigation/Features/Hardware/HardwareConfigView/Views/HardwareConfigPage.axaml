@@ -9,7 +9,7 @@
         <Grid ColumnDefinitions="*,Auto">
             <StackPanel Spacing="4">
                 <TextBlock
-                    FontSize="24"
+                    FontSize="{DynamicResource Edge.FontSize.Title24}"
                     FontWeight="SemiBold"
                     Foreground="{DynamicResource Edge.Text.Primary}"
                     Text="{Binding ViewTitle}" />

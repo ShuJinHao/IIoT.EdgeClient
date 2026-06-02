@@ -11,7 +11,6 @@ using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Time;
-using IIoT.Edge.Application.Common.Models;
 using IIoT.Edge.Infrastructure.Integration.Config;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.DataPipeline;

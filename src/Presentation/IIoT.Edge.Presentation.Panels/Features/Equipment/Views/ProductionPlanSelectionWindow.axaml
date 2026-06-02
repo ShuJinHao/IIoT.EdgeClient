@@ -106,7 +106,7 @@
                     <edge:EdgeActionButton
                         Click="OnCancelClick"
                         Icon="{StaticResource Edge.Icon.Close}"
-                        Kind="Soft"
+                        Kind="Secondary"
                         Size="Compact"
                         Content="{DynamicResource Panels_Button_Cancel}" />
                     <edge:EdgeActionButton
