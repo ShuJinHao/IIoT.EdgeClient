@@ -10,7 +10,7 @@
             ColumnDefinitions="Auto,*"
             ColumnSpacing="{DynamicResource Edge.Size.Spacing12}">
             <edge:EdgeCard
-                Height="42"
+                Height="44"
                 Elevation="Flat"
                 PaddingMode="None"
                 Surface="Wash">
@@ -97,7 +97,7 @@
                     <StackPanel
                         IsVisible="{Binding IsDeviceStatusTabSelected}"
                         Spacing="{DynamicResource Edge.Size.Spacing12}">
-                        <edge:EdgeCard CardPadding="{DynamicResource Edge.Thickness.Card.Compact}">
+                        <edge:EdgeCard PaddingMode="Compact">
                             <edge:EdgeCard.Header>
                                 <edge:EdgeSectionHeader
                                     Title="{DynamicResource Navigation_Monitor_CellDebugTitle}"
@@ -233,7 +233,7 @@
                     <StackPanel
                         IsVisible="{Binding IsStateMachineTabSelected}"
                         Spacing="{DynamicResource Edge.Size.Spacing12}">
-                        <edge:EdgeCard CardPadding="{DynamicResource Edge.Thickness.Card.Compact}">
+                        <edge:EdgeCard PaddingMode="Compact">
                             <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="{DynamicResource Edge.Size.Spacing8}">
                                 <TextBlock
                                     FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
@@ -296,7 +296,7 @@
                                 </Border>
                             </Grid>
                         </edge:EdgeCard>
-                        <edge:EdgeCard CardPadding="{DynamicResource Edge.Thickness.Card.Compact}">
+                        <edge:EdgeCard PaddingMode="Compact">
                             <edge:EdgeCard.Header>
                                 <edge:EdgeSectionHeader
                                     Title="{DynamicResource Navigation_Monitor_StateMachineTasksTitle}"

@@ -6,8 +6,8 @@
     xmlns:views="clr-namespace:IIoT.Edge.Presentation.Navigation.Features.Shell">
     <Grid Margin="{DynamicResource Edge.Thickness.20}">
         <edge:EdgeCard
-            CardPadding="{DynamicResource Edge.Thickness.24}"
-            Elevation="Card">
+            Elevation="Card"
+            PaddingMode="Normal">
             <StackPanel
                 MaxWidth="560"
                 HorizontalAlignment="Center"

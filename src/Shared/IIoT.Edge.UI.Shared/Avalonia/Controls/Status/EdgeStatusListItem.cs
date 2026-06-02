@@ -1,5 +1,4 @@
 using Avalonia;
-using Avalonia.Controls.Primitives;
 using Avalonia.Media;
 
 namespace IIoT.Edge.UI.Shared.Avalonia.Controls;
@@ -7,21 +6,8 @@ namespace IIoT.Edge.UI.Shared.Avalonia.Controls;
 /// <summary>
 /// 右侧栏和状态列表的统一展示行，只负责视觉表达，不承载点击或业务动作。
 /// </summary>
-public class EdgeStatusListItem : TemplatedControl
+public class EdgeStatusListItem : EdgeStatusControlBase
 {
-    private static readonly string[] StatusClasses =
-    [
-        "default",
-        "running",
-        "idle",
-        "stopped",
-        "offline",
-        "info",
-        "cache",
-        "warning",
-        "error"
-    ];
-
     public static readonly StyledProperty<string?> TitleProperty =
         AvaloniaProperty.Register<EdgeStatusListItem, string?>(nameof(Title));
 
@@ -30,9 +16,6 @@ public class EdgeStatusListItem : TemplatedControl
 
     public static readonly StyledProperty<string?> DetailProperty =
         AvaloniaProperty.Register<EdgeStatusListItem, string?>(nameof(Detail));
-
-    public static readonly StyledProperty<EdgeVisualStatus> StatusProperty =
-        AvaloniaProperty.Register<EdgeStatusListItem, EdgeVisualStatus>(nameof(Status), EdgeVisualStatus.Default);
 
     public static readonly StyledProperty<string?> StatusTextProperty =
         AvaloniaProperty.Register<EdgeStatusListItem, string?>(nameof(StatusText));
@@ -65,7 +48,6 @@ public class EdgeStatusListItem : TemplatedControl
 
     static EdgeStatusListItem()
     {
-        StatusProperty.Changed.AddClassHandler<EdgeStatusListItem>((control, _) => control.UpdateStatusClass());
         DescriptionProperty.Changed.AddClassHandler<EdgeStatusListItem>((control, _) => control.UpdateContentState());
         DetailProperty.Changed.AddClassHandler<EdgeStatusListItem>((control, _) => control.UpdateContentState());
         StatusTextProperty.Changed.AddClassHandler<EdgeStatusListItem>((control, _) => control.UpdateContentState());
@@ -74,7 +56,6 @@ public class EdgeStatusListItem : TemplatedControl
 
     public EdgeStatusListItem()
     {
-        UpdateStatusClass();
         UpdateContentState();
     }
 
@@ -94,12 +75,6 @@ public class EdgeStatusListItem : TemplatedControl
     {
         get => GetValue(DetailProperty);
         set => SetValue(DetailProperty, value);
-    }
-
-    public EdgeVisualStatus Status
-    {
-        get => GetValue(StatusProperty);
-        set => SetValue(StatusProperty, value);
     }
 
     public string? StatusText
@@ -148,16 +123,6 @@ public class EdgeStatusListItem : TemplatedControl
     {
         get => _hasActionContent;
         private set => SetAndRaise(HasActionContentProperty, ref _hasActionContent, value);
-    }
-
-    private void UpdateStatusClass()
-    {
-        foreach (var className in StatusClasses)
-        {
-            Classes.Remove(className);
-        }
-
-        Classes.Add(Status.ToString().ToLowerInvariant());
     }
 
     private void UpdateContentState()

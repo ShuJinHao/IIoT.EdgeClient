@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Data;
 
 namespace IIoT.Edge.UI.Shared.Avalonia.Controls;
@@ -27,6 +28,23 @@ public class EdgeFilterDatePicker : CalendarDatePicker
     {
         get => GetValue(SelectedDateOffsetProperty);
         set => SetValue(SelectedDateOffsetProperty, value);
+    }
+
+    protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
+    {
+        base.OnApplyTemplate(e);
+
+        if (e.NameScope.Find<Calendar>("PART_Calendar") is { } calendar &&
+            !calendar.Classes.Contains("edge-filter-calendar"))
+        {
+            calendar.Classes.Add("edge-filter-calendar");
+        }
+
+        if (e.NameScope.Find<Button>("PART_Button") is { } button &&
+            !button.Classes.Contains("edge-filter-date-button"))
+        {
+            button.Classes.Add("edge-filter-date-button");
+        }
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)

@@ -8,7 +8,7 @@
         <controls:EdgeCard
             Margin="20,10,30,0"
             HorizontalAlignment="Left"
-            Height="42"
+            Height="44"
             Elevation="Flat"
             PaddingMode="None"
             Surface="Wash">
@@ -127,8 +127,7 @@
                                 IsVisible="{Binding !CanOperateDeadLetters}">
                                 <controls:EdgeNoticeBar.Content>
                                     <TextBlock
-                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                        Classes="edge-notice-message"
                                         Text="{DynamicResource Navigation_Diagnostics_AdminOnlyNotice}" />
                                 </controls:EdgeNoticeBar.Content>
                             </controls:EdgeNoticeBar>
@@ -186,8 +185,7 @@
                                 IsVisible="{Binding !CanOperateDeadLetters}">
                                 <controls:EdgeNoticeBar.Content>
                                     <TextBlock
-                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                        Classes="edge-notice-message"
                                         Text="{DynamicResource Navigation_Diagnostics_AdminOnlyNotice}" />
                                 </controls:EdgeNoticeBar.Content>
                             </controls:EdgeNoticeBar>

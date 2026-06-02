@@ -37,17 +37,13 @@
             </edge:EdgeTablePanel.ActionContent>
 
             <edge:EdgeTablePanel.StatusContent>
-                <Border
+                <edge:EdgeNoticeBar
                     IsVisible="{Binding HasStatus}"
-                    Background="{DynamicResource Edge.Brush.Surface.Wash}"
-                    CornerRadius="{DynamicResource Edge.CornerRadius.Control}"
-                    Padding="12,8">
+                    Status="Info">
                     <TextBlock
-                        FontSize="{DynamicResource Edge.FontSize.Caption}"
-                        Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
-                        Text="{Binding StatusMessage}"
-                        TextWrapping="Wrap" />
-                </Border>
+                        Classes="edge-notice-message"
+                        Text="{Binding StatusMessage}" />
+                </edge:EdgeNoticeBar>
             </edge:EdgeTablePanel.StatusContent>
 
             <edge:EdgeDataGrid

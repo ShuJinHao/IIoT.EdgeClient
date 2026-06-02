@@ -1,0 +1,938 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
+        xmlns:views="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared">
+
+    <Style Selector="ScrollViewer">
+        <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="ScrollViewer.edge-scroll-host">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
+        <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+    </Style>
+
+    <Style Selector="ScrollViewer.edge-scroll-host.variant-page">
+        <Setter Property="Padding" Value="0" />
+    </Style>
+
+    <Style Selector="ScrollViewer.edge-scroll-host.variant-dialog">
+        <Setter Property="MaxHeight" Value="180" />
+    </Style>
+
+    <Style Selector="ScrollViewer.edge-scroll-host.variant-panel">
+        <Setter Property="Padding" Value="0" />
+    </Style>
+
+    <Style Selector="ScrollViewer.edge-scroll-host ScrollBar">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Width" Value="10" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border
+                    Padding="2"
+                    Background="{TemplateBinding Background}"
+                    CornerRadius="999">
+                    <Track
+                        Name="PART_Track"
+                        Maximum="{TemplateBinding Maximum}"
+                        Minimum="{TemplateBinding Minimum}"
+                        Orientation="{TemplateBinding Orientation}"
+                        Value="{Binding Value, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                        ViewportSize="{TemplateBinding ViewportSize}">
+                        <Track.DecreaseButton>
+                            <RepeatButton
+                                Width="0"
+                                Height="0"
+                                IsHitTestVisible="False"
+                                Opacity="0" />
+                        </Track.DecreaseButton>
+                        <Track.IncreaseButton>
+                            <RepeatButton
+                                Width="0"
+                                Height="0"
+                                IsHitTestVisible="False"
+                                Opacity="0" />
+                        </Track.IncreaseButton>
+                        <Track.Thumb>
+                            <Thumb
+                                MinWidth="0"
+                                MinHeight="0"
+                                Background="{DynamicResource Edge.Brush.Scrollbar.Thumb}"
+                                Opacity="0.32">
+                                <Thumb.Template>
+                                    <ControlTemplate>
+                                        <Border
+                                            Background="{TemplateBinding Background}"
+                                            CornerRadius="999" />
+                                    </ControlTemplate>
+                                </Thumb.Template>
+                            </Thumb>
+                        </Track.Thumb>
+                    </Track>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="ScrollViewer.edge-scroll-host ScrollBar:pointerover Thumb">
+        <Setter Property="Opacity" Value="0.55" />
+    </Style>
+
+    <Style Selector="ScrollViewer.edge-scroll-host ScrollBar:vertical /template/ Thumb">
+        <Setter Property="MinHeight" Value="28" />
+    </Style>
+
+    <Style Selector="StackPanel.edge-empty-state-inline">
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="MaxWidth" Value="300" />
+        <Setter Property="Spacing" Value="{DynamicResource Edge.Size.Spacing4}" />
+    </Style>
+
+    <Style Selector="StackPanel.edge-empty-state-rail">
+        <Setter Property="MaxWidth" Value="190" />
+    </Style>
+
+    <Style Selector="views|EmptyStateView.edge-empty-state-rail StackPanel.edge-empty-state-inline">
+        <Setter Property="MaxWidth" Value="190" />
+    </Style>
+
+    <Style Selector="TextBlock.edge-empty-state-title">
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.BodyStrong}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Primary}" />
+        <Setter Property="TextAlignment" Value="Center" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <Style Selector="TextBlock.edge-empty-state-message">
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Caption}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Muted}" />
+        <Setter Property="LineHeight" Value="15" />
+        <Setter Property="MaxLines" Value="2" />
+        <Setter Property="TextAlignment" Value="Center" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style Selector="Border.edge-empty-state">
+        <Setter Property="Padding" Value="10" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Control}" />
+    </Style>
+
+    <Style Selector="views|EmptyStateView.loading Border.edge-empty-state">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Surface.Wash}" />
+    </Style>
+
+    <Style Selector="views|EmptyStateView.error Border.edge-empty-state">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Surface.Wash}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Edge.Brush.Status.Error}" />
+        <Setter Property="BorderThickness" Value="1" />
+    </Style>
+
+    <Style Selector="views|EmptyStateView.error TextBlock.edge-empty-state-title">
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Status.Error}" />
+    </Style>
+
+    <Style Selector="controls|EdgeLogList">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <controls:EdgeCard
+                    Classes="edge-log-list-card"
+                    Surface="Card"
+                    PaddingMode="None"
+                    Elevation="Flat">
+                    <Grid RowDefinitions="Auto,18,*" RowSpacing="2">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                                FontWeight="SemiBold"
+                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                Text="{TemplateBinding Title}" />
+
+                            <controls:EdgeActionButton
+                                Grid.Column="1"
+                                Classes="log-clear"
+                                Content="{TemplateBinding ClearText}"
+                                MinWidth="44"
+                                Command="{TemplateBinding ClearCommand}"
+                                Kind="Ghost"
+                                Role="RightRail"
+                                Size="Compact" />
+                        </Grid>
+
+                        <Border
+                            Grid.Row="1"
+                            Background="Transparent"
+                            BorderBrush="{DynamicResource Edge.Brush.Surface.Wash}"
+                            BorderThickness="0,0,0,1"
+                            CornerRadius="{DynamicResource Edge.CornerRadius.Control}"
+                            Padding="7,0,7,2">
+                            <Grid ColumnDefinitions="54,74,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
+                                <TextBlock
+                                    VerticalAlignment="Center"
+                                    FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                    Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                    Text="{TemplateBinding TimeHeader}" />
+                                <TextBlock
+                                    Grid.Column="1"
+                                    VerticalAlignment="Center"
+                                    FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                    Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                    Text="{TemplateBinding LevelHeader}" />
+                                <TextBlock
+                                    Grid.Column="2"
+                                    VerticalAlignment="Center"
+                                    FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                    Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                    Text="{TemplateBinding MessageHeader}" />
+                            </Grid>
+                        </Border>
+
+                        <Grid Grid.Row="2" MinHeight="284">
+                            <StackPanel Classes="edge-data-panel-content">
+                                <ScrollViewer
+                                    Classes="edge-scroll-host variant-panel"
+                                    VerticalScrollBarVisibility="Auto">
+                                    <ItemsControl
+                                        ItemTemplate="{TemplateBinding ItemTemplate}"
+                                        ItemsSource="{TemplateBinding ItemsSource}" />
+                                </ScrollViewer>
+                            </StackPanel>
+
+                            <views:EmptyStateView
+                                Classes="edge-log-empty edge-empty-state-rail"
+                                IsVisible="{TemplateBinding IsEmpty}"
+                                Message="{TemplateBinding EmptyMessage}"
+                                State="Empty"
+                                Title="{TemplateBinding EmptyTitle}" />
+                        </Grid>
+                    </Grid>
+                </controls:EdgeCard>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="controls|EdgeLogListItem">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border
+                    MinHeight="24"
+                    Padding="7,3,7,4"
+                    BorderBrush="{DynamicResource Edge.Brush.Surface.Wash}"
+                    BorderThickness="0,0,0,0.35">
+                    <Grid ColumnDefinitions="54,74,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
+                        <TextBlock
+                            VerticalAlignment="Top"
+                            FontSize="{DynamicResource Edge.FontSize.Caption}"
+                            Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
+                            Text="{TemplateBinding TimeText}" />
+
+                        <Grid
+                            Grid.Column="1"
+                            ClipToBounds="True"
+                            ColumnDefinitions="Auto,*"
+                            ColumnSpacing="{DynamicResource Edge.Size.Spacing4}"
+                            VerticalAlignment="Top"
+                            HorizontalAlignment="Stretch">
+                            <controls:EdgeStatusDot
+                                VerticalAlignment="Center"
+                                Size="5.5"
+                                Status="{TemplateBinding Status}" />
+                            <TextBlock
+                                Grid.Column="1"
+                                FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                LineHeight="14"
+                                MaxLines="1"
+                                Text="{TemplateBinding LevelText}"
+                                TextTrimming="CharacterEllipsis"
+                                ToolTip.Tip="{TemplateBinding LevelText}" />
+                        </Grid>
+
+                        <TextBlock
+                            Grid.Column="2"
+                            FontSize="{DynamicResource Edge.FontSize.Caption}"
+                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                            LineHeight="14"
+                            MaxLines="{TemplateBinding MaxMessageLines}"
+                            Text="{TemplateBinding Message}"
+                            TextTrimming="CharacterEllipsis"
+                            TextWrapping="Wrap"
+                            ToolTip.Tip="{TemplateBinding Message}" />
+                    </Grid>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="DataGrid.edge-data-grid">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CanUserReorderColumns" Value="False" />
+        <Setter Property="CanUserResizeColumns" Value="True" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Control}" />
+        <Setter Property="FontFamily" Value="{DynamicResource Edge.FontFamily.Default}" />
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Caption}" />
+        <Setter Property="GridLinesVisibility" Value="Horizontal" />
+        <Setter Property="HeadersVisibility" Value="Column" />
+        <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource Edge.Brush.Border.Subtle}" />
+        <Setter Property="HorizontalScrollBarVisibility" Value="Auto" />
+        <Setter Property="IsReadOnly" Value="True" />
+        <Setter Property="RowBackground" Value="Transparent" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+        <Setter Property="VerticalGridLinesBrush" Value="Transparent" />
+        <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border
+                    x:Name="DataGridBorder"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="{TemplateBinding CornerRadius}">
+                    <Grid
+                        ClipToBounds="True"
+                        ColumnDefinitions="Auto,*,Auto"
+                        RowDefinitions="Auto,*,Auto">
+                        <Border
+                            x:Name="PART_EdgeColumnHeaderBackground"
+                            Grid.Row="0"
+                            Grid.Column="1"
+                            Height="{TemplateBinding ColumnHeaderHeight}"
+                            Background="{DynamicResource Edge.Brush.Table.HeaderBackground}"
+                            CornerRadius="{DynamicResource Edge.CornerRadius.Control}"
+                            IsHitTestVisible="False" />
+                        <DataGridColumnHeader
+                            Name="PART_TopLeftCornerHeader"
+                            Theme="{StaticResource DataGridTopLeftColumnHeader}" />
+                        <DataGridColumnHeadersPresenter
+                            Name="PART_ColumnHeadersPresenter"
+                            Grid.Row="0"
+                            Grid.Column="1" />
+                        <Rectangle
+                            Name="PART_ColumnHeadersAndRowsSeparator"
+                            Grid.Row="0"
+                            Grid.Column="0"
+                            Grid.ColumnSpan="3"
+                            Height="1"
+                            VerticalAlignment="Bottom"
+                            Fill="Transparent" />
+
+                        <DataGridRowsPresenter
+                            Name="PART_RowsPresenter"
+                            Grid.Row="1"
+                            Grid.Column="1"
+                            ClipToBounds="True"
+                            ScrollViewer.IsScrollInertiaEnabled="{TemplateBinding IsScrollInertiaEnabled}">
+                            <DataGridRowsPresenter.GestureRecognizers>
+                                <ScrollGestureRecognizer
+                                    CanHorizontallyScroll="True"
+                                    CanVerticallyScroll="True"
+                                    IsScrollInertiaEnabled="{Binding (ScrollViewer.IsScrollInertiaEnabled), ElementName=PART_RowsPresenter}" />
+                            </DataGridRowsPresenter.GestureRecognizers>
+                        </DataGridRowsPresenter>
+                        <Rectangle
+                            Name="PART_BottomRightCorner"
+                            Grid.Row="2"
+                            Grid.Column="2"
+                            Fill="Transparent" />
+                        <ScrollBar
+                            Name="PART_VerticalScrollbar"
+                            Classes="edge-data-grid-scrollbar"
+                            Grid.Row="1"
+                            Grid.Column="2"
+                            Margin="4,2,0,2"
+                            Width="6"
+                            Orientation="Vertical" />
+
+                        <Grid
+                            Grid.Row="2"
+                            Grid.Column="1"
+                            ColumnDefinitions="Auto,*"
+                            Height="{Binding HorizontalScrollBarReserveHeight, RelativeSource={RelativeSource TemplatedParent}}"
+                            IsVisible="{Binding IsVisible, ElementName=PART_HorizontalScrollbar}"
+                            ClipToBounds="True">
+                            <Rectangle Name="PART_FrozenColumnScrollBarSpacer" />
+                            <ScrollBar
+                                Name="PART_HorizontalScrollbar"
+                                Classes="edge-data-grid-scrollbar"
+                                Grid.Column="1"
+                                Height="3"
+                                Margin="0,0,0,1"
+                                VerticalAlignment="Center"
+                                Orientation="Horizontal" />
+                        </Grid>
+                        <Border
+                            x:Name="PART_DisabledVisualElement"
+                            Grid.Row="0"
+                            Grid.RowSpan="3"
+                            Grid.Column="0"
+                            Grid.ColumnSpan="3"
+                            HorizontalAlignment="Stretch"
+                            VerticalAlignment="Stretch"
+                            Background="{DynamicResource DataGridDisabledVisualElementBackground}"
+                            CornerRadius="{DynamicResource Edge.CornerRadius.Control}"
+                            IsHitTestVisible="False"
+                            IsVisible="{Binding !$parent[DataGrid].IsEnabled}" />
+                    </Grid>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="DataGrid.edge-data-grid ScrollBar.edge-data-grid-scrollbar">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Scrollbar.Track}" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border
+                    Padding="0"
+                    Background="{TemplateBinding Background}"
+                    CornerRadius="999">
+                    <Track
+                        Name="PART_Track"
+                        Maximum="{TemplateBinding Maximum}"
+                        Minimum="{TemplateBinding Minimum}"
+                        Orientation="{TemplateBinding Orientation}"
+                        Value="{Binding Value, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                        ViewportSize="{TemplateBinding ViewportSize}">
+                        <Track.DecreaseButton>
+                            <RepeatButton
+                                Width="0"
+                                Height="0"
+                                IsHitTestVisible="False"
+                                Opacity="0" />
+                        </Track.DecreaseButton>
+                        <Track.IncreaseButton>
+                            <RepeatButton
+                                Width="0"
+                                Height="0"
+                                IsHitTestVisible="False"
+                                Opacity="0" />
+                        </Track.IncreaseButton>
+                        <Track.Thumb>
+                            <Thumb
+                                MinWidth="0"
+                                MinHeight="0"
+                                Background="{DynamicResource Edge.Brush.Scrollbar.Thumb}"
+                                Opacity="0.18">
+                                <Thumb.Template>
+                                    <ControlTemplate>
+                                        <Border
+                                            Background="{TemplateBinding Background}"
+                                            CornerRadius="999" />
+                                    </ControlTemplate>
+                                </Thumb.Template>
+                            </Thumb>
+                        </Track.Thumb>
+                    </Track>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="DataGrid.edge-data-grid ScrollBar.edge-data-grid-scrollbar:pointerover Thumb">
+        <Setter Property="Opacity" Value="0.42" />
+    </Style>
+
+    <Style Selector="DataGrid.edge-data-grid ScrollBar.edge-data-grid-scrollbar:horizontal">
+        <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <!-- 仅沿滚动轴给拇指一个最小可抓取长度；横向高度由独立底栏控制，避免越界盖住内容 -->
+    <Style Selector="DataGrid.edge-data-grid ScrollBar.edge-data-grid-scrollbar:vertical /template/ Thumb">
+        <Setter Property="MinHeight" Value="28" />
+    </Style>
+
+    <Style Selector="DataGrid.edge-data-grid ScrollBar.edge-data-grid-scrollbar:horizontal /template/ Thumb">
+        <Setter Property="MinWidth" Value="28" />
+    </Style>
+
+    <Style Selector="DataGrid.edge-data-grid.density-compact">
+        <Setter Property="ColumnHeaderHeight" Value="30" />
+        <Setter Property="RowHeight" Value="30" />
+    </Style>
+
+    <Style Selector="DataGrid.edge-data-grid.density-normal">
+        <Setter Property="ColumnHeaderHeight" Value="36" />
+        <Setter Property="RowHeight" Value="36" />
+    </Style>
+
+    <Style Selector="DataGrid.edge-data-grid.density-diagnostic">
+        <Setter Property="ColumnHeaderHeight" Value="34" />
+        <Setter Property="RowHeight" Value="34" />
+    </Style>
+
+    <Style Selector="DataGrid.edge-data-grid DataGridColumnHeader">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Secondary}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="AreSeparatorsVisible" Value="False" />
+        <Setter Property="Padding" Value="8,0" />
+        <Setter Property="SeparatorBrush" Value="Transparent" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border
+                    x:Name="HeaderBorder"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="{TemplateBinding CornerRadius}">
+                    <Grid
+                        Name="PART_ColumnHeaderRoot"
+                        Background="Transparent"
+                        ColumnDefinitions="*,Auto">
+                        <ContentPresenter
+                            Margin="{TemplateBinding Padding}"
+                            HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}" />
+                        <Thumb
+                            Name="PART_LeftHeaderGripper"
+                            Width="0"
+                            HorizontalAlignment="Left"
+                            IsVisible="False" />
+                        <Thumb
+                            Name="PART_RightHeaderGripper"
+                            Grid.Column="1"
+                            Width="12"
+                            HorizontalAlignment="Right"
+                            Cursor="SizeWestEast"
+                            IsVisible="True">
+                            <Thumb.Template>
+                                <ControlTemplate>
+                                    <Border Background="Transparent">
+                                        <Border
+                                            x:Name="ResizeGripLine"
+                                            Width="1"
+                                            HorizontalAlignment="Right"
+                                            Margin="0,8,0,8"
+                                            Background="{DynamicResource Edge.Brush.Border.Subtle}"
+                                            Opacity="0.28" />
+                                    </Border>
+                                </ControlTemplate>
+                            </Thumb.Template>
+                        </Thumb>
+                    </Grid>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="DataGrid.edge-data-grid DataGridColumnHeader:pointerover /template/ Grid#PART_ColumnHeaderRoot">
+        <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="DataGrid.edge-data-grid DataGridColumnHeader:pressed /template/ Grid#PART_ColumnHeaderRoot">
+        <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="DataGrid.edge-data-grid DataGridColumnHeader TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Secondary}" />
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Caption}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="LineHeight" Value="16" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        <Setter Property="TextWrapping" Value="NoWrap" />
+        <Setter Property="MaxLines" Value="1" />
+        <Setter Property="ToolTip.Tip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
+    </Style>
+
+    <Style Selector="DataGrid.edge-data-grid DataGridColumnHeader /template/ Thumb#PART_LeftHeaderGripper">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <Style Selector="DataGrid.edge-data-grid DataGridColumnHeader:pointerover /template/ Thumb#PART_RightHeaderGripper /template/ Border#ResizeGripLine">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Border.Focus}" />
+        <Setter Property="Opacity" Value="0.62" />
+    </Style>
+
+    <Style Selector="DataGrid.edge-data-grid DataGridCell">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Primary}" />
+        <Setter Property="Padding" Value="8,0" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <!-- 自定义模板：去掉 Fluent 默认单元格的 CurrencyVisual/FocusVisual 矩形，消除选中黑框 -->
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border
+                    x:Name="CellBorder"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}">
+                    <ContentPresenter
+                        Margin="{TemplateBinding Padding}"
+                        HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                        VerticalAlignment="Center"
+                        Content="{TemplateBinding Content}"
+                        ContentTemplate="{TemplateBinding ContentTemplate}" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="DataGrid.edge-data-grid.density-compact DataGridCell">
+        <Setter Property="Padding" Value="8,0" />
+    </Style>
+
+    <Style Selector="DataGrid.edge-data-grid.density-normal DataGridCell">
+        <Setter Property="Padding" Value="10,0" />
+    </Style>
+
+    <Style Selector="DataGrid.edge-data-grid.density-diagnostic DataGridCell">
+        <Setter Property="Padding" Value="9,0" />
+    </Style>
+
+    <Style Selector="DataGrid.edge-data-grid DataGridCell TextBlock">
+        <Setter Property="LineHeight" Value="18" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        <Setter Property="TextWrapping" Value="NoWrap" />
+        <Setter Property="MaxLines" Value="1" />
+        <Setter Property="ToolTip.Tip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
+    </Style>
+
+    <Style Selector="DataGrid.edge-data-grid DataGridCell.edge-action-cell">
+        <Setter Property="Padding" Value="5,0" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="DataGrid.edge-data-grid DataGridCell.edge-check-cell">
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="DataGrid.edge-data-grid DataGridCell.edge-template-cell TextBlock">
+        <Setter Property="LineHeight" Value="18" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        <Setter Property="TextWrapping" Value="NoWrap" />
+        <Setter Property="MaxLines" Value="1" />
+        <Setter Property="ToolTip.Tip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
+    </Style>
+
+    <Style Selector="DataGrid.edge-data-grid DataGridRow:pointerover">
+        <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="DataGrid.edge-data-grid DataGridRow:pointerover /template/ Rectangle#BackgroundRectangle">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Table.RowHover}" />
+        <Setter Property="Opacity" Value="0.16" />
+    </Style>
+
+    <Style Selector="DataGrid.edge-data-grid DataGridRow:selected">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Table.SelectedForeground}" />
+    </Style>
+
+    <Style Selector="DataGrid.edge-data-grid DataGridRow:selected /template/ Rectangle#BackgroundRectangle">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Table.SelectedBackground}" />
+        <Setter Property="Opacity" Value="0.22" />
+    </Style>
+
+    <Style Selector="DataGrid.edge-data-grid DataGridCell:selected">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Table.SelectedForeground}" />
+    </Style>
+
+    <Style Selector="DataGrid.edge-data-grid DataGridRow:selected DataGridCell">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Table.SelectedForeground}" />
+    </Style>
+
+    <Style Selector="DataGrid.edge-data-grid DataGridCell:focus">
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <Style Selector="DataGrid.edge-data-grid DataGridCell:current">
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <Style Selector="DataGrid.edge-data-grid:empty-columns /template/ Border#PART_EdgeColumnHeaderBackground">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <Style Selector="controls|EdgeListBox">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
+    </Style>
+
+    <Style Selector="controls|EdgeListBox ListBoxItem">
+        <Setter Property="MinHeight" Value="34" />
+        <Setter Property="Padding" Value="8,4" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Secondary}" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Control}" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border
+                    Padding="{TemplateBinding Padding}"
+                    Background="{TemplateBinding Background}"
+                    CornerRadius="{TemplateBinding CornerRadius}">
+                    <ContentPresenter
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Center"
+                        Content="{TemplateBinding Content}"
+                        ContentTemplate="{TemplateBinding ContentTemplate}" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="controls|EdgeListBox ListBoxItem:pointerover">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Surface.Wash}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Primary}" />
+    </Style>
+
+    <Style Selector="controls|EdgeListBox ListBoxItem:selected">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Segmented.ItemSelected}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Segmented.ItemSelectedForeground}" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel">
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <controls:EdgeCard
+                    Classes="edge-table-panel-card"
+                    ClipToBounds="True"
+                    Elevation="Card"
+                    VerticalAlignment="Top"
+                    PaddingMode="Compact"
+                    Surface="Card">
+                    <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+                        <Grid
+                            Grid.Row="0"
+                            MinHeight="32"
+                            ColumnDefinitions="*,Auto"
+                            ColumnSpacing="{DynamicResource Edge.Size.Spacing10}">
+                            <StackPanel Grid.Column="0">
+                                <TextBlock
+                                    FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                                    FontWeight="SemiBold"
+                                    Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                    Text="{TemplateBinding Title}" />
+                                <TextBlock
+                                    Classes="edge-table-subtitle"
+                                    Margin="0,4,0,0"
+                                    FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                    Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                    Text="{TemplateBinding Subtitle}"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+
+                            <ContentPresenter
+                                Grid.Column="1"
+                                Classes="edge-table-actions"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                Content="{TemplateBinding ActionContent}" />
+                        </Grid>
+
+                        <Grid
+                            Grid.Row="1"
+                            Classes="edge-table-toolbar"
+                            Margin="0,6,0,0"
+                            ColumnDefinitions="*">
+                            <ContentPresenter
+                                Classes="edge-table-filter"
+                                HorizontalAlignment="Left"
+                                VerticalAlignment="Center"
+                                Content="{TemplateBinding FilterContent}" />
+                        </Grid>
+
+                        <ContentPresenter
+                            Grid.Row="2"
+                            Classes="edge-table-status"
+                            Margin="0,4,0,0"
+                            Content="{TemplateBinding StatusContent}" />
+
+                        <Grid
+                            Grid.Row="3"
+                            Classes="edge-table-content-host"
+                            MinHeight="{TemplateBinding ContentMinHeight}">
+                            <ContentPresenter
+                                Classes="edge-table-content"
+                                Content="{TemplateBinding Content}" />
+
+                            <views:EmptyStateView
+                                Classes="edge-table-loading"
+                                Message="{TemplateBinding LoadingMessage}"
+                                State="Loading"
+                                Title="{TemplateBinding LoadingTitle}" />
+
+                            <views:EmptyStateView
+                                Classes="edge-table-error"
+                                Message=""
+                                State="Error"
+                                Title="{TemplateBinding ErrorMessage}" />
+
+                            <views:EmptyStateView
+                                Classes="edge-table-empty"
+                                Message="{TemplateBinding EmptyMessage}"
+                                State="Empty"
+                                Title="{TemplateBinding EmptyTitle}" />
+                        </Grid>
+
+                        <ContentPresenter
+                            Grid.Row="4"
+                            HorizontalAlignment="Stretch"
+                            Content="{TemplateBinding FooterContent}" />
+                    </Grid>
+                </controls:EdgeCard>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel ContentPresenter.edge-table-content">
+        <Setter Property="IsVisible" Value="True" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel controls|EdgeCard.edge-table-panel-card">
+        <Setter Property="VerticalAlignment" Value="Top" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel controls|EdgeCard.edge-table-panel-card /template/ Border#PART_EdgeCardRoot">
+        <Setter Property="Padding" Value="16,12" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Card}" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel Grid.edge-table-content-host">
+        <Setter Property="Margin" Value="0,4,0,0" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel.actions-only">
+        <Setter Property="VerticalAlignment" Value="Top" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel.actions-only Grid.edge-table-content-host">
+        <Setter Property="Margin" Value="0,2,0,0" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel.actions-only controls|EdgeCard.edge-table-panel-card /template/ Border#PART_EdgeCardRoot">
+        <Setter Property="Padding" Value="12" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel.density-compact Grid.edge-table-content-host">
+        <Setter Property="Margin" Value="0,2,0,0" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel.density-compact controls|EdgeCard.edge-table-panel-card /template/ Border#PART_EdgeCardRoot">
+        <Setter Property="Padding" Value="12" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel.density-diagnostic Grid.edge-table-content-host">
+        <Setter Property="Margin" Value="0,6,0,0" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel ContentPresenter.edge-table-status">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel.has-status ContentPresenter.edge-table-status">
+        <Setter Property="IsVisible" Value="True" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel Grid.edge-table-toolbar">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel.has-filter Grid.edge-table-toolbar">
+        <Setter Property="IsVisible" Value="True" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel ContentPresenter.edge-table-actions">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel.has-actions ContentPresenter.edge-table-actions">
+        <Setter Property="IsVisible" Value="True" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel TextBlock.edge-table-subtitle">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel.has-subtitle TextBlock.edge-table-subtitle">
+        <Setter Property="IsVisible" Value="True" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel.surface-transparent controls|EdgeCard.edge-table-panel-card /template/ Border#PART_EdgeCardRoot">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.App.Container}" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="{DynamicResource Edge.Thickness.Zero}" />
+        <Setter Property="BoxShadow" Value="{DynamicResource Edge.Shadow.None}" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel views|EmptyStateView.edge-table-loading">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel views|EmptyStateView.edge-table-error">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel views|EmptyStateView.edge-table-empty">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel:error ContentPresenter.edge-table-content">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel:error views|EmptyStateView.edge-table-error">
+        <Setter Property="IsVisible" Value="True" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel:error views|EmptyStateView.edge-table-empty">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel:loading ContentPresenter.edge-table-content">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel:loading views|EmptyStateView.edge-table-loading">
+        <Setter Property="IsVisible" Value="True" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel:empty ContentPresenter.edge-table-content">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel:empty views|EmptyStateView.edge-table-empty">
+        <Setter Property="IsVisible" Value="True" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel.empty-content-visible:empty ContentPresenter.edge-table-content">
+        <Setter Property="IsVisible" Value="True" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel.empty-content-visible:empty views|EmptyStateView.edge-table-empty">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+</Styles>

@@ -5,31 +5,33 @@
     <StyleInclude Source="avares://IIoT.Edge.UI.Shared/Avalonia/Resources/EdgeConverters.axaml" />
 
     <Styles.Resources>
-        <Color x:Key="Edge.Color.Gray50">#F7F8F2</Color>
-        <Color x:Key="Edge.Color.Gray100">#EEF0EA</Color>
-        <Color x:Key="Edge.Color.Gray200">#E3E7DA</Color>
-        <Color x:Key="Edge.Color.Gray300">#DADFD3</Color>
-        <Color x:Key="Edge.Color.Gray500">#667063</Color>
-        <Color x:Key="Edge.Color.Gray700">#334033</Color>
-        <Color x:Key="Edge.Color.Gray900">#18201A</Color>
+        <Color x:Key="Edge.Color.Gray50">#F8FAF6</Color>
+        <Color x:Key="Edge.Color.Gray100">#EEF2EA</Color>
+        <Color x:Key="Edge.Color.Gray200">#DDE5D8</Color>
+        <Color x:Key="Edge.Color.Gray300">#CAD3C6</Color>
+        <Color x:Key="Edge.Color.Gray500">#5F6B5D</Color>
+        <Color x:Key="Edge.Color.Gray700">#2F3B30</Color>
+        <Color x:Key="Edge.Color.Gray900">#151C17</Color>
         <Color x:Key="Edge.Color.White">#FFFFFF</Color>
         <Color x:Key="Edge.Color.OnDark.Muted">#A8B0A5</Color>
         <Color x:Key="Edge.Color.OnDark.Divider">#3A4238</Color>
-        <Color x:Key="Edge.Color.WarmGray100">#E8E2D8</Color>
-        <Color x:Key="Edge.Color.WarmGray200">#DDD5C8</Color>
-        <Color x:Key="Edge.Color.WarmGray700">#4B463D</Color>
-        <Color x:Key="Edge.Color.Ivory50">#FFFDF6</Color>
-        <Color x:Key="Edge.Color.Ivory100">#F7F0E2</Color>
-        <Color x:Key="Edge.Color.Ivory200">#EFE8D8</Color>
-        <Color x:Key="Edge.Color.AppWarm">#ECE9DD</Color>
-        <Color x:Key="Edge.Color.CardWarm">#FFFDF6</Color>
-        <Color x:Key="Edge.Color.PanelWarm">#F8F4EA</Color>
-        <Color x:Key="Edge.Color.WashWarm">#F2EBDD</Color>
-        <Color x:Key="Edge.Color.LineWarm">#DED6C6</Color>
+        <Color x:Key="Edge.Color.WarmGray100">#E3E8DE</Color>
+        <Color x:Key="Edge.Color.WarmGray200">#D8E0D2</Color>
+        <Color x:Key="Edge.Color.WarmGray700">#424C3E</Color>
+        <Color x:Key="Edge.Color.Ivory50">#FEFFF9</Color>
+        <Color x:Key="Edge.Color.Ivory100">#F3F6EC</Color>
+        <Color x:Key="Edge.Color.Ivory200">#E7EEE0</Color>
+        <Color x:Key="Edge.Color.AppWarm">#E9EEE4</Color>
+        <Color x:Key="Edge.Color.CardWarm">#FEFFF9</Color>
+        <Color x:Key="Edge.Color.PanelWarm">#F5F8F0</Color>
+        <Color x:Key="Edge.Color.WashWarm">#EDF3E6</Color>
+        <Color x:Key="Edge.Color.LineWarm">#D4DEC9</Color>
 
         <Color x:Key="Edge.Color.Lime100">#EFFBC9</Color>
         <Color x:Key="Edge.Color.Lime500">#C6F432</Color>
         <Color x:Key="Edge.Color.Lime700">#75A600</Color>
+        <Color x:Key="Edge.Color.Green100">#E4F4E7</Color>
+        <Color x:Key="Edge.Color.Green500">#2F8F46</Color>
         <Color x:Key="Edge.Color.Yellow400">#F4CC4A</Color>
         <Color x:Key="Edge.Color.Yellow500">#E8B923</Color>
         <Color x:Key="Edge.Color.Yellow700">#9C6B00</Color>
@@ -99,7 +101,8 @@
         <SolidColorBrush x:Key="Edge.Brush.Chart.Accent" Color="{StaticResource Edge.Color.Yellow500}" />
         <SolidColorBrush x:Key="Edge.Brush.Chart.Secondary" Color="{StaticResource Edge.Color.Blue500}" />
 
-        <SolidColorBrush x:Key="Edge.Brush.Status.Running" Color="{StaticResource Edge.Color.Lime500}" />
+        <SolidColorBrush x:Key="Edge.Brush.Status.Running" Color="{StaticResource Edge.Color.Green500}" />
+        <SolidColorBrush x:Key="Edge.Brush.Status.RunningSurface" Color="{StaticResource Edge.Color.Green100}" />
         <SolidColorBrush x:Key="Edge.Brush.Status.Idle" Color="{StaticResource Edge.Color.Orange500}" />
         <SolidColorBrush x:Key="Edge.Brush.Status.Stopped" Color="{StaticResource Edge.Color.Red500}" />
         <SolidColorBrush x:Key="Edge.Brush.Status.Offline" Color="{StaticResource Edge.Color.Gray500}" />
@@ -121,12 +124,12 @@
         <SolidColorBrush x:Key="Edge.Success" Color="{StaticResource Edge.Color.Green700}" />
         <SolidColorBrush x:Key="Edge.Warning" Color="{StaticResource Edge.Color.Orange500}" />
 
-        <CornerRadius x:Key="Edge.CornerRadius.Small">6</CornerRadius>
+        <CornerRadius x:Key="Edge.CornerRadius.Small">4</CornerRadius>
         <CornerRadius x:Key="Edge.CornerRadius.Medium">8</CornerRadius>
-        <CornerRadius x:Key="Edge.CornerRadius.Large">14</CornerRadius>
-        <CornerRadius x:Key="Edge.CornerRadius.Stage">20</CornerRadius>
-        <CornerRadius x:Key="Edge.CornerRadius.Card">14</CornerRadius>
-        <CornerRadius x:Key="Edge.CornerRadius.Control">12</CornerRadius>
+        <CornerRadius x:Key="Edge.CornerRadius.Large">10</CornerRadius>
+        <CornerRadius x:Key="Edge.CornerRadius.Stage">16</CornerRadius>
+        <CornerRadius x:Key="Edge.CornerRadius.Card">8</CornerRadius>
+        <CornerRadius x:Key="Edge.CornerRadius.Control">8</CornerRadius>
         <CornerRadius x:Key="Edge.CornerRadius.Pill">999</CornerRadius>
         <CornerRadius x:Key="Edge.CornerRadius.Circle">999</CornerRadius>
         <CornerRadius x:Key="Edge.CornerRadius.NavRail">8,0,0,8</CornerRadius>
@@ -171,9 +174,9 @@
         <x:Double x:Key="Edge.Size.NavButtonWidth">48</x:Double>
         <x:Double x:Key="Edge.Size.NavButtonMinHeight">52</x:Double>
         <x:Double x:Key="Edge.Size.NavTileWidth">38</x:Double>
-        <x:Double x:Key="Edge.Size.NavTileHeight">34</x:Double>
+        <x:Double x:Key="Edge.Size.NavTileHeight">44</x:Double>
         <x:Double x:Key="Edge.Size.NavIcon">18</x:Double>
-        <x:Double x:Key="Edge.Size.HeaderIconButton">40</x:Double>
+        <x:Double x:Key="Edge.Size.HeaderIconButton">44</x:Double>
         <x:Double x:Key="Edge.Size.HeaderIcon">20</x:Double>
         <x:Double x:Key="Edge.Size.OperatorAvatar">36</x:Double>
         <x:Double x:Key="Edge.Size.HeaderBrandMark">30</x:Double>
@@ -194,10 +197,10 @@
         <FontFamily x:Key="Edge.FontFamily.Mono">Consolas, JetBrains Mono, monospace</FontFamily>
         <FontFamily x:Key="Edge.FontFamily.Display">Microsoft YaHei UI, Segoe UI, PingFang SC, sans-serif</FontFamily>
 
-        <BoxShadows x:Key="Edge.Shadow.Card">0 2 8 0 #143B330F</BoxShadows>
-        <BoxShadows x:Key="Edge.Shadow.Float">0 10 26 0 #143B3318</BoxShadows>
-        <BoxShadows x:Key="Edge.Shadow.App">0 16 36 0 #143B3316</BoxShadows>
-        <BoxShadows x:Key="Edge.Shadow.Soft">0 4 12 0 #143B3314</BoxShadows>
+        <BoxShadows x:Key="Edge.Shadow.Card">0 4 14 0 #151C1714</BoxShadows>
+        <BoxShadows x:Key="Edge.Shadow.Float">0 14 34 0 #151C171F</BoxShadows>
+        <BoxShadows x:Key="Edge.Shadow.App">0 18 42 0 #151C171C</BoxShadows>
+        <BoxShadows x:Key="Edge.Shadow.Soft">0 6 18 0 #151C1718</BoxShadows>
         <BoxShadows x:Key="Edge.Shadow.None">0 0 0 0 #00000000</BoxShadows>
 
     </Styles.Resources>

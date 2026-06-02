@@ -15,9 +15,11 @@
                     Text="{DynamicResource Navigation_DashboardPreview_Subtitle}" />
             </StackPanel>
 
-            <edge:EdgeStatusPill
+            <edge:EdgeStatusChip
                 Grid.Column="1"
                 VerticalAlignment="Center"
+                ChipPadding="{DynamicResource Edge.Thickness.Chip.Comfortable}"
+                ShowDot="True"
                 Status="Info"
                 Text="{Binding CurrentBatch, FallbackValue=—, TargetNullValue=—}" />
         </Grid>

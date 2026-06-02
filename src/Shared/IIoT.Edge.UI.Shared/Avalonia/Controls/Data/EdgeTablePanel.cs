@@ -60,6 +60,9 @@ public class EdgeTablePanel : TemplatedControl
     public static readonly StyledProperty<bool> IsEmptyProperty =
         AvaloniaProperty.Register<EdgeTablePanel, bool>(nameof(IsEmpty));
 
+    public static readonly StyledProperty<bool> IsLoadingProperty =
+        AvaloniaProperty.Register<EdgeTablePanel, bool>(nameof(IsLoading));
+
     public static readonly StyledProperty<bool> HasErrorProperty =
         AvaloniaProperty.Register<EdgeTablePanel, bool>(nameof(HasError));
 
@@ -72,6 +75,12 @@ public class EdgeTablePanel : TemplatedControl
     public static readonly StyledProperty<object?> EmptyMessageProperty =
         AvaloniaProperty.Register<EdgeTablePanel, object?>(nameof(EmptyMessage));
 
+    public static readonly StyledProperty<object?> LoadingTitleProperty =
+        AvaloniaProperty.Register<EdgeTablePanel, object?>(nameof(LoadingTitle));
+
+    public static readonly StyledProperty<object?> LoadingMessageProperty =
+        AvaloniaProperty.Register<EdgeTablePanel, object?>(nameof(LoadingMessage));
+
     static EdgeTablePanel()
     {
         SurfaceProperty.Changed.AddClassHandler<EdgeTablePanel>((panel, _) => panel.UpdateSurfaceClasses());
@@ -82,6 +91,7 @@ public class EdgeTablePanel : TemplatedControl
         ActionContentProperty.Changed.AddClassHandler<EdgeTablePanel>((panel, _) => panel.UpdatePseudoClasses());
         ShowContentWhenEmptyProperty.Changed.AddClassHandler<EdgeTablePanel>((panel, _) => panel.UpdatePseudoClasses());
         IsEmptyProperty.Changed.AddClassHandler<EdgeTablePanel>((panel, _) => panel.UpdatePseudoClasses());
+        IsLoadingProperty.Changed.AddClassHandler<EdgeTablePanel>((panel, _) => panel.UpdatePseudoClasses());
         HasErrorProperty.Changed.AddClassHandler<EdgeTablePanel>((panel, _) => panel.UpdatePseudoClasses());
     }
 
@@ -165,6 +175,12 @@ public class EdgeTablePanel : TemplatedControl
         set => SetValue(IsEmptyProperty, value);
     }
 
+    public bool IsLoading
+    {
+        get => GetValue(IsLoadingProperty);
+        set => SetValue(IsLoadingProperty, value);
+    }
+
     public bool HasError
     {
         get => GetValue(HasErrorProperty);
@@ -189,13 +205,26 @@ public class EdgeTablePanel : TemplatedControl
         set => SetValue(EmptyMessageProperty, value);
     }
 
+    public object? LoadingTitle
+    {
+        get => GetValue(LoadingTitleProperty);
+        set => SetValue(LoadingTitleProperty, value);
+    }
+
+    public object? LoadingMessage
+    {
+        get => GetValue(LoadingMessageProperty);
+        set => SetValue(LoadingMessageProperty, value);
+    }
+
     private void UpdatePseudoClasses()
     {
         var hasFilter = HasVisibleContent(FilterContent);
         var hasActions = HasVisibleContent(ActionContent);
         var hasStatus = HasVisibleContent(StatusContent);
 
-        SetPseudoClass(":empty", IsEmpty && !ShowContentWhenEmpty);
+        SetPseudoClass(":empty", IsEmpty && !ShowContentWhenEmpty && !IsLoading && !HasError);
+        SetPseudoClass(":loading", IsLoading && !HasError);
         SetPseudoClass(":error", HasError);
         SetPseudoClass(":has-subtitle", HasVisibleContent(Subtitle));
         SetPseudoClass(":has-status", hasStatus);
@@ -209,7 +238,7 @@ public class EdgeTablePanel : TemplatedControl
         SetClass("has-filter", hasFilter);
         SetClass("has-actions", hasActions);
         SetClass("actions-only", hasActions && !hasFilter && !hasStatus);
-        SetClass("empty-content-visible", ShowContentWhenEmpty && IsEmpty && !HasError);
+        SetClass("empty-content-visible", ShowContentWhenEmpty && IsEmpty && !HasError && !IsLoading);
     }
 
     private static bool HasVisibleContent(object? content)

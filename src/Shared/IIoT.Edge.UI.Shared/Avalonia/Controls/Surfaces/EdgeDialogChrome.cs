@@ -4,6 +4,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Metadata;
+using System.Windows.Input;
 
 namespace IIoT.Edge.UI.Shared.Avalonia.Controls;
 
@@ -24,8 +25,14 @@ public class EdgeDialogChrome : TemplatedControl
     public static readonly StyledProperty<object?> FooterContentProperty =
         AvaloniaProperty.Register<EdgeDialogChrome, object?>(nameof(FooterContent));
 
+    public static readonly StyledProperty<ICommand?> CloseCommandProperty =
+        AvaloniaProperty.Register<EdgeDialogChrome, ICommand?>(nameof(CloseCommand));
+
     public static readonly StyledProperty<bool> CloseTopLevelOnCloseProperty =
         AvaloniaProperty.Register<EdgeDialogChrome, bool>(nameof(CloseTopLevelOnClose), true);
+
+    public static readonly StyledProperty<bool> MoveTopLevelOnHeaderDragProperty =
+        AvaloniaProperty.Register<EdgeDialogChrome, bool>(nameof(MoveTopLevelOnHeaderDrag), true);
 
     private Control? header;
     private Button? closeButton;
@@ -63,10 +70,22 @@ public class EdgeDialogChrome : TemplatedControl
         set => SetValue(FooterContentProperty, value);
     }
 
+    public ICommand? CloseCommand
+    {
+        get => GetValue(CloseCommandProperty);
+        set => SetValue(CloseCommandProperty, value);
+    }
+
     public bool CloseTopLevelOnClose
     {
         get => GetValue(CloseTopLevelOnCloseProperty);
         set => SetValue(CloseTopLevelOnCloseProperty, value);
+    }
+
+    public bool MoveTopLevelOnHeaderDrag
+    {
+        get => GetValue(MoveTopLevelOnHeaderDragProperty);
+        set => SetValue(MoveTopLevelOnHeaderDragProperty, value);
     }
 
     protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
@@ -99,6 +118,11 @@ public class EdgeDialogChrome : TemplatedControl
 
     private void OnHeaderPointerPressed(object? sender, PointerPressedEventArgs e)
     {
+        if (!MoveTopLevelOnHeaderDrag)
+        {
+            return;
+        }
+
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
             return;
@@ -113,6 +137,12 @@ public class EdgeDialogChrome : TemplatedControl
     private void OnCloseButtonClick(object? sender, RoutedEventArgs e)
     {
         CloseRequested?.Invoke(this, EventArgs.Empty);
+
+        var closeCommand = CloseCommand;
+        if (closeCommand is not null && closeCommand.CanExecute(null))
+        {
+            closeCommand.Execute(null);
+        }
 
         if (!CloseTopLevelOnClose)
         {

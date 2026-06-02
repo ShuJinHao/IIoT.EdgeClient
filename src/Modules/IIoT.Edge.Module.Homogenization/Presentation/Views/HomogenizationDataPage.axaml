@@ -12,16 +12,11 @@
         ShowContentWhenEmpty="True"
         Title="{Binding ViewTitle}">
         <edge:EdgeTablePanel.StatusContent>
-            <Border
-                Padding="14,8"
-                Background="{DynamicResource Edge.Brush.Surface.Wash}"
-                CornerRadius="{DynamicResource Edge.CornerRadius.Control}">
+            <edge:EdgeNoticeBar Status="Info">
                 <TextBlock
-                    FontSize="{DynamicResource Edge.FontSize.Caption}"
-                    Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                    Text="{Binding StatusMessage}"
-                    TextWrapping="Wrap" />
-            </Border>
+                    Classes="edge-notice-message"
+                    Text="{Binding StatusMessage}" />
+            </edge:EdgeNoticeBar>
         </edge:EdgeTablePanel.StatusContent>
 
         <edge:EdgeDataGrid

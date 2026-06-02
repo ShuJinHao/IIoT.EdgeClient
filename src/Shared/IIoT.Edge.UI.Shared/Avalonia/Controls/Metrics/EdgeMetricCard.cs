@@ -1,26 +1,12 @@
 using Avalonia;
-using Avalonia.Controls.Primitives;
 
 namespace IIoT.Edge.UI.Shared.Avalonia.Controls;
 
 /// <summary>
 /// 指标卡片基座，用于产量、良率、NG、连接数等摘要数据。
 /// </summary>
-public class EdgeMetricCard : TemplatedControl
+public class EdgeMetricCard : EdgeStatusControlBase
 {
-    private static readonly string[] StatusClasses =
-    [
-        "default",
-        "running",
-        "idle",
-        "stopped",
-        "offline",
-        "info",
-        "cache",
-        "warning",
-        "error"
-    ];
-
     private static readonly string[] IconClasses =
     [
         "has-icon",
@@ -42,18 +28,13 @@ public class EdgeMetricCard : TemplatedControl
     public static readonly StyledProperty<object?> IconProperty =
         AvaloniaProperty.Register<EdgeMetricCard, object?>(nameof(Icon));
 
-    public static readonly StyledProperty<EdgeVisualStatus> StatusProperty =
-        AvaloniaProperty.Register<EdgeMetricCard, EdgeVisualStatus>(nameof(Status), EdgeVisualStatus.Default);
-
     static EdgeMetricCard()
     {
-        StatusProperty.Changed.AddClassHandler<EdgeMetricCard>((control, _) => control.UpdateStatusClass());
         IconProperty.Changed.AddClassHandler<EdgeMetricCard>((control, _) => control.UpdateIconClass());
     }
 
     public EdgeMetricCard()
     {
-        UpdateStatusClass();
         UpdateIconClass();
     }
 
@@ -85,22 +66,6 @@ public class EdgeMetricCard : TemplatedControl
     {
         get => GetValue(IconProperty);
         set => SetValue(IconProperty, value);
-    }
-
-    public EdgeVisualStatus Status
-    {
-        get => GetValue(StatusProperty);
-        set => SetValue(StatusProperty, value);
-    }
-
-    private void UpdateStatusClass()
-    {
-        foreach (var className in StatusClasses)
-        {
-            Classes.Remove(className);
-        }
-
-        Classes.Add(Status.ToString().ToLowerInvariant());
     }
 
     private void UpdateIconClass()

@@ -10,11 +10,22 @@ if (-not (Test-Path $sharedRoot)) {
 $controlsDir = Join-Path $sharedRoot "Avalonia/Controls"
 $edgeActionButton = Join-Path $controlsDir "Actions/EdgeActionButton.cs"
 $edgeControls = Join-Path $sharedRoot "Avalonia/Styles/EdgeControls.axaml"
+$edgeControlsDir = Join-Path $sharedRoot "Avalonia/Styles/Controls"
+$edgeInputs = Join-Path $edgeControlsDir "Inputs.axaml"
+$edgeFilterDatePicker = Join-Path $controlsDir "Inputs/EdgeFilterDatePicker.cs"
 $edgeTheme = Join-Path $sharedRoot "Avalonia/Styles/EdgeTheme.axaml"
 $edgeIcons = Join-Path $sharedRoot "Avalonia/Resources/EdgeIcons.axaml"
 $edgeConverters = Join-Path $sharedRoot "Avalonia/Resources/EdgeConverters.axaml"
 $convertersDir = Join-Path $sharedRoot "Avalonia/Converters"
 $srcDir = Join-Path $repoRoot "src"
+
+$edgeStyleFiles = @($edgeControls)
+if (Test-Path $edgeControlsDir) {
+    $edgeStyleFiles += @(
+        Get-ChildItem -Path $edgeControlsDir -Filter "*.axaml" -File |
+            Select-Object -ExpandProperty FullName
+    )
+}
 
 $controlFiles = @(Get-ChildItem -Path $controlsDir -Filter "*.cs" -Recurse -File)
 if ($controlFiles.Count -ne 36) {
@@ -53,9 +64,9 @@ $expectedPublicEdgeClasses = @(
     "EdgeSegmentedNav",
     "EdgeSegmentedNavItem",
     "EdgeStatusChip",
+    "EdgeStatusControlBase",
     "EdgeStatusDot",
     "EdgeStatusListItem",
-    "EdgeStatusPill",
     "EdgeSummaryItem",
     "EdgeTabControl",
     "EdgeTablePanel",
@@ -81,6 +92,20 @@ if ($unexpectedPublicEdgeClasses.Count -ne 0) {
 $missingPublicEdgeClasses = @($expectedPublicEdgeClasses | Where-Object { $_ -notin $publicEdgeClassNames })
 if ($missingPublicEdgeClasses.Count -ne 0) {
     Write-Error "Expected public Edge classes missing: $($missingPublicEdgeClasses -join ', ')."
+}
+
+if (-not (Test-Path $edgeFilterDatePicker)) {
+    Write-Error "EdgeFilterDatePicker is missing. Date filtering must stay in shared UI."
+}
+
+$edgeDatePickerInheritanceHits = @(Select-String -Path $edgeFilterDatePicker -Pattern 'class\s+EdgeFilterDatePicker\s*:\s*CalendarDatePicker')
+if ($edgeDatePickerInheritanceHits.Count -eq 0) {
+    Write-Error 'EdgeFilterDatePicker must remain the shared CalendarDatePicker entrypoint.'
+}
+
+$edgeDatePickerClassHits = @(Select-String -Path $edgeFilterDatePicker -SimpleMatch 'edge-filter-calendar')
+if ($edgeDatePickerClassHits.Count -eq 0) {
+    Write-Error 'EdgeFilterDatePicker must scope its popup Calendar with the edge-filter-calendar class.'
 }
 
 $expectedPublicEdgeEnums = @(
@@ -215,6 +240,50 @@ if ($deprecatedFiles.Count -ne 0) {
     Write-Error "Deprecated shared controls remain: $($deprecatedFiles.FullName -join ', ')"
 }
 
+$sourceFiles = @(
+    Get-ChildItem -Path $srcDir -Recurse -File |
+        Where-Object {
+            $_.Extension -in @(".cs", ".axaml", ".xaml") -and
+            $_.FullName -notmatch "[/\\](bin|obj)[/\\]"
+        }
+)
+
+$removedApiHits = @($sourceFiles | Select-String -Pattern '\bEdgeStatusPill\b|\b(CardBackground|CardBorderBrush|CardBorderThickness|CardCornerRadius|CardPadding|CardShadow)(Property)?\b')
+if ($removedApiHits.Count -ne 0) {
+    Write-Error 'Removed status/card escape API remains in source. Use EdgeStatusChip ShowDot and EdgeCard Surface/Elevation/Variant/PaddingMode.'
+}
+
+$edgeStatusBase = Join-Path $controlsDir "Status/EdgeStatusControlBase.cs"
+$statusBaseHits = @(Select-String -Path $edgeStatusBase -Pattern '^public abstract class EdgeStatusControlBase : TemplatedControl')
+if ($statusBaseHits.Count -eq 0) {
+    Write-Error 'EdgeStatusControlBase must remain the shared status behavior base class.'
+}
+
+$statusDerivedClasses = @(
+    "EdgeStatusChip",
+    "EdgeStatusDot",
+    "EdgeStatusListItem",
+    "EdgeNoticeBar",
+    "EdgeMetricCard"
+)
+
+foreach ($className in $statusDerivedClasses) {
+    $derivedHits = @(Select-String -Path $controlFiles.FullName -Pattern "^public class $className : EdgeStatusControlBase\b")
+    if ($derivedHits.Count -eq 0) {
+        Write-Error "$className must inherit EdgeStatusControlBase."
+    }
+}
+
+$statusBoilerplateHits = @(
+    $controlFiles |
+        Where-Object { [System.IO.Path]::GetFullPath($_.FullName) -ne [System.IO.Path]::GetFullPath($edgeStatusBase) } |
+        Select-String -Pattern '\bStatusClasses\b|\bUpdateStatusClass\s*\('
+)
+
+if ($statusBoilerplateHits.Count -ne 0) {
+    Write-Error 'Duplicated status class boilerplate remains outside EdgeStatusControlBase.'
+}
+
 $expectedFontFile = [System.IO.Path]::GetFullPath((Join-Path $sharedRoot "Assets/fonts/iconfont.ttf"))
 $fontFiles = @(
     Get-ChildItem -Path $srcDir -Recurse -File |
@@ -267,14 +336,6 @@ if ($indTokenHits.Count -ne 0) {
     Write-Error 'Ind.* token usage remains in shared UI. Use Edge.* tokens.'
 }
 
-$sourceFiles = @(
-    Get-ChildItem -Path $srcDir -Recurse -File |
-        Where-Object {
-            $_.Extension -in @(".cs", ".axaml", ".xaml") -and
-            $_.FullName -notmatch "[/\\](bin|obj)[/\\]"
-        }
-)
-
 $removedControlNames = @(
     "EdgeDataPanel",
     "EdgeFeatureHeroCard",
@@ -317,12 +378,12 @@ if ($legacyActionButtonClassHits.Count -ne 0) {
     Write-Error 'Legacy EdgeActionButton scene class usage remains. Use EdgeActionButton Role instead.'
 }
 
-$legacyActionButtonSelectorHits = @(Select-String -Path $edgeControls -Pattern 'EdgeActionButton\.(soft|cell|icononly|language|nav|right-rail)\b')
+$legacyActionButtonSelectorHits = @(Select-String -Path $edgeStyleFiles -Pattern 'EdgeActionButton\.(soft|cell|icononly|language|nav|right-rail)\b')
 if ($legacyActionButtonSelectorHits.Count -ne 0) {
     Write-Error 'Legacy EdgeActionButton style selectors remain. Use semantic Kind and role-* selectors.'
 }
 
-$legacyTableSelectorHits = @(Select-String -Path $edgeControls -Pattern 'DataGrid\.(edge-grid|production-grid)\b')
+$legacyTableSelectorHits = @(Select-String -Path $edgeStyleFiles -Pattern 'DataGrid\.(edge-grid|production-grid)\b')
 if ($legacyTableSelectorHits.Count -ne 0) {
     Write-Error 'Legacy DataGrid style selectors remain. Use EdgeDataGrid and its density classes.'
 }
@@ -363,6 +424,24 @@ if ($privateSurfaceValueHits.Count -ne 0) {
 $hardcodedFontSizeHits = @($businessAxamlFiles | Select-String -Pattern 'FontSize="[0-9][^"]*"')
 if ($hardcodedFontSizeHits.Count -ne 0) {
     Write-Error 'Hardcoded FontSize remains in business XAML. Use Edge.FontSize.* tokens or shared control classes.'
+}
+
+$requiredDatePickerStylePatterns = @(
+    "CalendarDatePicker.edge-filter-date",
+    "Button.edge-filter-date-button",
+    "Calendar.edge-filter-calendar",
+    "CalendarDayButton:selected",
+    "CalendarDayButton:inactive",
+    "CalendarButton:selected",
+    "Border#PopupBorder",
+    "Edge.Icon.Calendar"
+)
+
+foreach ($pattern in $requiredDatePickerStylePatterns) {
+    $styleHits = @(Select-String -Path $edgeInputs -SimpleMatch $pattern)
+    if ($styleHits.Count -eq 0) {
+        Write-Error "Required EdgeFilterDatePicker shared style missing from Inputs.axaml: $pattern"
+    }
 }
 
 $confirmationDialogFiles = @($businessAxamlFiles | Where-Object { $_.Name -like "*ConfirmationDialog.axaml" })
@@ -416,6 +495,136 @@ if ($legacyButtonKindClassHits.Count -ne 0) {
     Write-Error 'Legacy EdgeActionButton Kind class names remain in EdgeActionButton.cs.'
 }
 
+$requiredTextRoleClasses = @(
+    "edge-text-list-item",
+    "edge-text-dialog-title",
+    "edge-text-form-label",
+    "edge-text-form-section-title",
+    "edge-text-dialog-message",
+    "edge-notice-message"
+)
+
+foreach ($className in $requiredTextRoleClasses) {
+    $classHits = @(Select-String -Path $edgeStyleFiles -SimpleMatch "TextBlock.$className")
+    if ($classHits.Count -eq 0) {
+        Write-Error "Required shared TextBlock role class missing: $className"
+    }
+}
+
+$edgeDialogChrome = Join-Path $controlsDir "Surfaces/EdgeDialogChrome.cs"
+$requiredDialogApiHits = @(
+    @(Select-String -Path $edgeDialogChrome -SimpleMatch "CloseCommandProperty"),
+    @(Select-String -Path $edgeDialogChrome -SimpleMatch "MoveTopLevelOnHeaderDragProperty")
+)
+
+if (($requiredDialogApiHits | Where-Object { $_.Count -eq 0 }).Count -ne 0) {
+    Write-Error 'EdgeDialogChrome must support CloseCommand and MoveTopLevelOnHeaderDrag for inline dialogs.'
+}
+
+$requiredDialogClasses = @(
+    "Border.edge-dialog-overlay",
+    "Window.edge-dialog-overlay-window",
+    "controls|EdgeDialogChrome.inline-dialog",
+    "controls|EdgeDialogChrome.crash-dialog",
+    "StackPanel.edge-dialog-actions"
+)
+
+foreach ($selector in $requiredDialogClasses) {
+    $selectorHits = @(Select-String -Path $edgeStyleFiles -SimpleMatch $selector)
+    if ($selectorHits.Count -eq 0) {
+        Write-Error "Required shared dialog selector missing: $selector"
+    }
+}
+
+$requiredSharedSelectors = @(
+    "PathIcon.edge-notice-icon",
+    "TextBlock.edge-notice-message"
+)
+
+foreach ($selector in $requiredSharedSelectors) {
+    $selectorHits = @(Select-String -Path $edgeStyleFiles -SimpleMatch $selector)
+    if ($selectorHits.Count -eq 0) {
+        Write-Error "Required shared selector missing: $selector"
+    }
+}
+
+$emptyStateView = Join-Path $sharedRoot "Avalonia/Views/EmptyStateView.axaml.cs"
+$requiredEmptyStateApiHits = @(
+    @(Select-String -Path $emptyStateView -SimpleMatch "enum EmptyStateKind"),
+    @(Select-String -Path $emptyStateView -SimpleMatch "StateProperty"),
+    @(Select-String -Path $emptyStateView -SimpleMatch '"loading"'),
+    @(Select-String -Path $emptyStateView -SimpleMatch '"error"')
+)
+
+if (($requiredEmptyStateApiHits | Where-Object { $_.Count -eq 0 }).Count -ne 0) {
+    Write-Error 'EmptyStateView must own empty/loading/error visual state.'
+}
+
+$edgeTablePanel = Join-Path $controlsDir "Data/EdgeTablePanel.cs"
+$requiredTableStateApiHits = @(
+    @(Select-String -Path $edgeTablePanel -SimpleMatch "IsLoadingProperty"),
+    @(Select-String -Path $edgeTablePanel -SimpleMatch "LoadingTitleProperty"),
+    @(Select-String -Path $edgeTablePanel -SimpleMatch "LoadingMessageProperty"),
+    @(Select-String -Path $edgeTablePanel -SimpleMatch '":loading"')
+)
+
+if (($requiredTableStateApiHits | Where-Object { $_.Count -eq 0 }).Count -ne 0) {
+    Write-Error 'EdgeTablePanel must expose shared loading state and route it through EmptyStateView.'
+}
+
+$requiredEmptyStateSelectors = @(
+    "views|EmptyStateView.loading",
+    "views|EmptyStateView.error",
+    "views:EmptyStateView"
+)
+
+foreach ($selector in $requiredEmptyStateSelectors) {
+    $selectorHits = @(Select-String -Path $edgeStyleFiles -SimpleMatch $selector)
+    if ($selectorHits.Count -eq 0) {
+        Write-Error "Required shared empty-state selector/template usage missing: $selector"
+    }
+}
+
+$requiredIconKeys = @(
+    "Edge.Icon.Warning"
+)
+
+foreach ($key in $requiredIconKeys) {
+    $iconHits = @(Select-String -Path $edgeIcons -SimpleMatch "x:Key=""$key""")
+    if ($iconHits.Count -eq 0) {
+        Write-Error "Required shared icon resource key missing: $key"
+    }
+}
+
+$crashDialogFiles = @($businessAxamlFiles | Where-Object { $_.Name -like "*CrashDialog.axaml" })
+foreach ($dialogFile in $crashDialogFiles) {
+    $usesSharedDialogChrome = @(Select-String -Path $dialogFile.FullName -Pattern '<[^>]*EdgeDialogChrome\b')
+    if ($usesSharedDialogChrome.Count -eq 0) {
+        Write-Error "Crash dialog must use EdgeDialogChrome: $($dialogFile.FullName)"
+    }
+
+    $privateCrashCardHits = @(Select-String -Path $dialogFile.FullName -Pattern '<[^>]*EdgeCard\b|<Border\b')
+    if ($privateCrashCardHits.Count -ne 0) {
+        Write-Error "Crash dialog must not private-build its shell with EdgeCard or Border: $($dialogFile.FullName)"
+    }
+}
+
+foreach ($axamlFile in $businessAxamlFiles) {
+    $content = Get-Content -Path $axamlFile.FullName -Raw
+    $statusContentMatches = [regex]::Matches($content, '(?s)<[^>]*EdgeTablePanel\.StatusContent>.*?</[^>]*EdgeTablePanel\.StatusContent>')
+
+    foreach ($match in $statusContentMatches) {
+        $block = $match.Value
+        if ($block -match '<Border\b') {
+            Write-Error "EdgeTablePanel.StatusContent must use EdgeNoticeBar instead of Border: $($axamlFile.FullName)"
+        }
+
+        if ($block -notmatch '<[^>]*EdgeNoticeBar\b') {
+            Write-Error "EdgeTablePanel.StatusContent must use EdgeNoticeBar: $($axamlFile.FullName)"
+        }
+    }
+}
+
 $converterRoot = [System.IO.Path]::GetFullPath($convertersDir)
 $converterHits = @(
     Get-ChildItem -Path $srcDir -Recurse -File -Filter "*.cs" |
@@ -464,6 +673,17 @@ foreach ($hit in $inlinePathDataHits) {
     }
 }
 
+$requiredIconKeys = @(
+    "Edge.Icon.Calendar"
+)
+
+foreach ($key in $requiredIconKeys) {
+    $keyHits = @(Select-String -Path $edgeIcons -SimpleMatch "x:Key=""$key""")
+    if ($keyHits.Count -eq 0) {
+        Write-Error "Required icon resource key missing: $key"
+    }
+}
+
 $requiredConverterKeys = @(
     "Edge.Converter.LogLevelToVisualStatus",
     "Edge.Converter.ProfileIconPath"
@@ -476,12 +696,42 @@ foreach ($key in $requiredConverterKeys) {
     }
 }
 
-$styleIncludeHits = @(Select-String -Path $edgeControls -Pattern "Styles/Controls/")
-if ($styleIncludeHits.Count -ne 0) {
-    Write-Error "Split style include remains in EdgeControls.axaml."
+$requiredSplitStyleFiles = @(
+    "Actions.axaml",
+    "Surfaces.axaml",
+    "Inputs.axaml",
+    "Navigation.axaml",
+    "Data.axaml",
+    "Status.axaml",
+    "Metrics.axaml",
+    "Charts.axaml",
+    "Shell.axaml"
+)
+
+foreach ($fileName in $requiredSplitStyleFiles) {
+    $splitStyleFile = Join-Path $edgeControlsDir $fileName
+    if (-not (Test-Path $splitStyleFile)) {
+        Write-Error "Required split style file missing: $splitStyleFile"
+    }
+
+    $styleHits = @(Select-String -Path $splitStyleFile -Pattern '<Style Selector=')
+    if ($styleHits.Count -eq 0) {
+        Write-Error "Split style file is an empty shell include: $splitStyleFile"
+    }
+
+    $include = "Source=""avares://IIoT.Edge.UI.Shared/Avalonia/Styles/Controls/$fileName"""
+    $includeHits = @(Select-String -Path $edgeControls -SimpleMatch $include)
+    if ($includeHits.Count -eq 0) {
+        Write-Error "Required split style include missing from EdgeControls.axaml: $fileName"
+    }
 }
 
-$scrollbarRollbackHits = @(Select-String -Path $edgeControls -Pattern 'Value="\{TemplateBinding Value\}')
+$edgeControlsRealStyleHits = @(Select-String -Path $edgeControls -Pattern '<Style Selector=')
+if ($edgeControlsRealStyleHits.Count -ne 0) {
+    Write-Error "EdgeControls.axaml must remain a style include entrypoint only."
+}
+
+$scrollbarRollbackHits = @(Select-String -Path $edgeStyleFiles -Pattern 'Value="\{TemplateBinding Value\}')
 if ($scrollbarRollbackHits.Count -ne 0) {
     Write-Error 'Scrollbar Value="{TemplateBinding Value}" rollback detected.'
 }

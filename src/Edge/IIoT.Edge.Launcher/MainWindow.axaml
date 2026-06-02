@@ -67,9 +67,8 @@
                 <Grid x:Name="LoginPageRoot" ColumnDefinitions="380,24,*">
                     <edge:EdgeCard
                         Grid.Column="0"
-                        CardBorderThickness="1"
-                        CardPadding="{DynamicResource Edge.Thickness.32}"
                         Elevation="Card"
+                        PaddingMode="Spacious"
                         Surface="Card">
                         <Grid RowDefinitions="Auto,*,Auto">
                             <StackPanel Spacing="12">
@@ -143,7 +142,7 @@
                                     HorizontalAlignment="Stretch"
                                     IsEnabled="{Binding !IsBusy}"
                                     Kind="Primary"
-                                    MinHeight="42"
+                                    MinHeight="44"
                                     VerticalContentAlignment="Center"
                                     Content="{DynamicResource Launcher_Button_Login}" />
 
@@ -153,7 +152,7 @@
                                     HorizontalAlignment="Stretch"
                                     IsEnabled="{Binding !IsBusy}"
                                     Kind="Secondary"
-                                    MinHeight="38"
+                                    MinHeight="44"
                                     VerticalContentAlignment="Center"
                                     Content="{DynamicResource Launcher_Button_ChangePassword}" />
                             </StackPanel>
@@ -289,8 +288,7 @@
                     IsVisible="False"
                     RowDefinitions="Auto,Auto,*,Auto">
                     <edge:EdgeCard
-                        CardBorderThickness="1"
-                        CardPadding="20"
+                        PaddingMode="Normal"
                         Surface="Card">
                         <Grid ColumnDefinitions="Auto,*,Auto">
                             <Border
@@ -349,8 +347,7 @@
                     <edge:EdgeCard
                         Grid.Row="1"
                         Margin="0,14,0,14"
-                        CardBorderThickness="1"
-                        CardPadding="14"
+                        PaddingMode="Compact"
                         Surface="Card">
                         <Grid ColumnDefinitions="320,16,Auto,*">
                             <edge:EdgeTextBox
@@ -468,7 +465,7 @@
                                                 HorizontalContentAlignment="Center"
                                                 HorizontalAlignment="Stretch"
                                                 Kind="Primary"
-                                                MinHeight="40"
+                                                MinHeight="44"
                                                 VerticalContentAlignment="Center"
                                                 Content="{DynamicResource Launcher_Button_LaunchProfile}" />
                                         </Grid>
@@ -480,8 +477,7 @@
 
                     <edge:EdgeCard
                         Grid.Row="3"
-                        CardBorderThickness="1"
-                        CardPadding="14"
+                        PaddingMode="Compact"
                         Surface="Card">
                         <StackPanel Spacing="8">
                             <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">

@@ -1,5 +1,4 @@
 using Avalonia;
-using Avalonia.Controls.Primitives;
 using Avalonia.Media;
 
 namespace IIoT.Edge.UI.Shared.Avalonia.Controls;
@@ -7,26 +6,10 @@ namespace IIoT.Edge.UI.Shared.Avalonia.Controls;
 /// <summary>
 /// 统一状态标签，用于在线、运行、失败、缓存等短状态文本。
 /// </summary>
-public class EdgeStatusChip : TemplatedControl
+public class EdgeStatusChip : EdgeStatusControlBase
 {
-    private static readonly string[] StatusClasses =
-    [
-        "default",
-        "running",
-        "idle",
-        "stopped",
-        "offline",
-        "info",
-        "cache",
-        "warning",
-        "error"
-    ];
-
-    public static readonly StyledProperty<EdgeVisualStatus> StatusProperty =
-        AvaloniaProperty.Register<EdgeStatusChip, EdgeVisualStatus>(nameof(Status), EdgeVisualStatus.Info);
-
-    public static readonly StyledProperty<string?> TextProperty =
-        AvaloniaProperty.Register<EdgeStatusChip, string?>(nameof(Text));
+    public static readonly StyledProperty<object?> TextProperty =
+        AvaloniaProperty.Register<EdgeStatusChip, object?>(nameof(Text));
 
     public static readonly StyledProperty<EdgeVisualVariant> VariantProperty =
         AvaloniaProperty.Register<EdgeStatusChip, EdgeVisualVariant>(nameof(Variant), EdgeVisualVariant.Default);
@@ -37,26 +20,21 @@ public class EdgeStatusChip : TemplatedControl
     public static readonly StyledProperty<IBrush?> TextBrushProperty =
         AvaloniaProperty.Register<EdgeStatusChip, IBrush?>(nameof(TextBrush));
 
+    public static readonly StyledProperty<IBrush?> DotFillProperty =
+        AvaloniaProperty.Register<EdgeStatusChip, IBrush?>(nameof(DotFill));
+
     public static readonly StyledProperty<Thickness> ChipPaddingProperty =
         AvaloniaProperty.Register<EdgeStatusChip, Thickness>(nameof(ChipPadding), new Thickness(8, 2));
 
+    public static readonly StyledProperty<bool> ShowDotProperty =
+        AvaloniaProperty.Register<EdgeStatusChip, bool>(nameof(ShowDot));
+
     static EdgeStatusChip()
     {
-        StatusProperty.Changed.AddClassHandler<EdgeStatusChip>((control, _) => control.UpdateStatusClass());
+        StatusProperty.OverrideDefaultValue<EdgeStatusChip>(EdgeVisualStatus.Info);
     }
 
-    public EdgeStatusChip()
-    {
-        UpdateStatusClass();
-    }
-
-    public EdgeVisualStatus Status
-    {
-        get => GetValue(StatusProperty);
-        set => SetValue(StatusProperty, value);
-    }
-
-    public string? Text
+    public object? Text
     {
         get => GetValue(TextProperty);
         set => SetValue(TextProperty, value);
@@ -80,19 +58,21 @@ public class EdgeStatusChip : TemplatedControl
         set => SetValue(TextBrushProperty, value);
     }
 
+    public IBrush? DotFill
+    {
+        get => GetValue(DotFillProperty);
+        set => SetValue(DotFillProperty, value);
+    }
+
     public Thickness ChipPadding
     {
         get => GetValue(ChipPaddingProperty);
         set => SetValue(ChipPaddingProperty, value);
     }
 
-    private void UpdateStatusClass()
+    public bool ShowDot
     {
-        foreach (var className in StatusClasses)
-        {
-            Classes.Remove(className);
-        }
-
-        Classes.Add(Status.ToString().ToLowerInvariant());
+        get => GetValue(ShowDotProperty);
+        set => SetValue(ShowDotProperty, value);
     }
 }

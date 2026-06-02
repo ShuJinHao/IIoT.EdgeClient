@@ -18,11 +18,8 @@
                     <edge:EdgeStatusDot Status="Warning" />
                 </edge:EdgeNoticeBar.Icon>
                 <TextBlock
-                    FontSize="{DynamicResource Edge.FontSize.Body}"
-                    FontWeight="SemiBold"
-                    Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                    Text="{DynamicResource Navigation_Capacity_OfflineHint}"
-                    TextWrapping="Wrap" />
+                    Classes="edge-notice-message prominent"
+                    Text="{DynamicResource Navigation_Capacity_OfflineHint}" />
             </edge:EdgeNoticeBar>
 
             <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing12}">
