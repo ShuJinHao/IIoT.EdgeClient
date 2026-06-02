@@ -24,6 +24,7 @@ using IIoT.Edge.Presentation.Navigation;
 using IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
 using IIoT.Edge.Presentation.Panels;
 using IIoT.Edge.Presentation.Shell;
+using IIoT.Edge.Presentation.VisualTestData;
 using IIoT.Edge.Runtime;
 using IIoT.Edge.Runtime.DataPipeline.Tasks;
 using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
@@ -135,6 +136,7 @@ public static class DependencyInjection
         services.AddShellPresentation();
         services.AddNavigationPresentation();
         services.AddPanelPresentation();
+        services.AddVisualTestDataPresentation(configuration);
 
         RegisterHostViews(new HostViewRegistry(viewRegistry));
         RegisterModules(services, viewRegistry, configuration, enabledModules, cellDataTypeRegistry);

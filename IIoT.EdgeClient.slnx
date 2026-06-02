@@ -21,6 +21,7 @@
     <Project Path="src/Presentation/IIoT.Edge.Presentation.Shell/IIoT.Edge.Presentation.Shell.csproj" />
     <Project Path="src/Presentation/IIoT.Edge.Presentation.Navigation/IIoT.Edge.Presentation.Navigation.csproj" />
     <Project Path="src/Presentation/IIoT.Edge.Presentation.Panels/IIoT.Edge.Presentation.Panels.csproj" />
+    <Project Path="src/Presentation/IIoT.Edge.Presentation.VisualTestData/IIoT.Edge.Presentation.VisualTestData.csproj" />
   </Folder>
   <Folder Name="/src/Modules/">
     <Project Path="src/Modules/IIoT.Edge.Module.Homogenization/IIoT.Edge.Module.Homogenization.csproj" />
@@ -42,4 +43,3 @@
     <Project Path="src/Tools/IIoT.Edge.RuntimeLayoutSync/IIoT.Edge.RuntimeLayoutSync.csproj" />
   </Folder>
 </Solution>
-
