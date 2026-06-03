@@ -88,6 +88,10 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
 
         Assert.Contains(
             result.Services,
+            descriptor => descriptor.ServiceType == typeof(IHomogenizationMesItemPayloadBuilder)
+                          && descriptor.ImplementationType?.FullName == "IIoT.Edge.Module.Homogenization.Integration.HomogenizationMesItemPayloadBuilder");
+        Assert.Contains(
+            result.Services,
             descriptor => descriptor.ServiceType == typeof(HomogenizationMesChannel)
                           && descriptor.ImplementationType == typeof(HomogenizationMesChannel));
         Assert.Contains(
@@ -251,10 +255,10 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
     private sealed class ContractHomogenizationMesChannel : HomogenizationMesScenarioChannel
     {
         public string ProcessType => "Homogenization";
-        public MesUploadMode UploadMode => MesUploadMode.Single;
+        public ProcessUploadMode UploadMode => ProcessUploadMode.Single;
 
         public Task<MesCallResult> UploadAsync(
-            ProcessMesUploadContext context,
+            ProcessUploadContext context,
             IReadOnlyList<IIoT.Edge.SharedKernel.DataPipeline.CellCompletedRecord> records,
             CancellationToken cancellationToken = default)
             => Task.FromResult(MesCallResult.Success());

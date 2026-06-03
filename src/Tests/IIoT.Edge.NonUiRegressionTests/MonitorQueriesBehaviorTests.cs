@@ -1,8 +1,11 @@
 using IIoT.Edge.Application.Common.Diagnostics;
+using IIoT.Edge.Application;
+using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 using IIoT.Edge.Application.Features.Hardware.Queries;
 using IIoT.Edge.Application.Features.Production.Monitor;
@@ -15,6 +18,7 @@ using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.SharedKernel.Result;
 using MediatR;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 
@@ -90,7 +94,7 @@ public sealed class MonitorQueriesBehaviorTests
     public async Task Handle_WhenPluginTaskCandidatesExist_ShouldUseRuntimeFactoryDisplayNames()
     {
         var candidate = new TaskCandidate("Injected.Scan", "插件扫码任务", []);
-        var device = CreatePlcDevice(21, "PLC-Injected", moduleId: "Injected");
+        var device = CreatePlcDevice(21, "PLC-Injected");
         var handler = CreateHandler(
             new FakeDeviceService(),
             new FakeFailedRecordStore(),
@@ -106,7 +110,7 @@ public sealed class MonitorQueriesBehaviorTests
             taskBindingService: FakePlcTaskBindingService.FromBindings(
                 "Injected",
                 [
-                    CreateTaskBindingDevice(device, [
+                    CreateTaskBindingDevice(device, "Injected", [
                         CreateTaskBindingItem(candidate)
                     ])
                 ]));
@@ -136,7 +140,7 @@ public sealed class MonitorQueriesBehaviorTests
             new TaskCandidate("Injected.Reset", "复位任务", []),
             new TaskCandidate("Injected.Other", "其他任务", [])
         };
-        var device = CreatePlcDevice(22, "PLC-Injected", moduleId: "Injected");
+        var device = CreatePlcDevice(22, "PLC-Injected");
         var handler = CreateHandler(
             new FakeDeviceService(),
             new FakeFailedRecordStore(),
@@ -152,7 +156,7 @@ public sealed class MonitorQueriesBehaviorTests
             taskBindingService: FakePlcTaskBindingService.FromBindings(
                 "Injected",
                 [
-                    CreateTaskBindingDevice(device, candidates.Select(static candidate => CreateTaskBindingItem(candidate)).ToArray())
+                    CreateTaskBindingDevice(device, "Injected", candidates.Select(static candidate => CreateTaskBindingItem(candidate)).ToArray())
                 ]));
         var context = contextStore.GetOrCreate("PLC-Injected");
         context.NetworkDeviceId = 22;
@@ -175,7 +179,7 @@ public sealed class MonitorQueriesBehaviorTests
     {
         var enabled = new TaskCandidate("Injected.Enabled", "启用任务", []);
         var disabled = new TaskCandidate("Injected.Disabled", "禁用任务", []);
-        var device = CreatePlcDevice(23, "PLC-Injected", moduleId: "Injected");
+        var device = CreatePlcDevice(23, "PLC-Injected");
         var handler = CreateHandler(
             new FakeDeviceService(),
             new FakeFailedRecordStore(),
@@ -191,7 +195,7 @@ public sealed class MonitorQueriesBehaviorTests
             taskBindingService: FakePlcTaskBindingService.FromBindings(
                 "Injected",
                 [
-                    CreateTaskBindingDevice(device, [
+                    CreateTaskBindingDevice(device, "Injected", [
                         CreateTaskBindingItem(enabled),
                         CreateTaskBindingItem(disabled, enabled: false)
                     ])
@@ -217,7 +221,7 @@ public sealed class MonitorQueriesBehaviorTests
             new TaskCandidate("Injected.Task5", "任务 5", []),
             new TaskCandidate("Injected.Task6", "任务 6", [])
         };
-        var device = CreatePlcDevice(25, "PLC-Injected", moduleId: "Injected");
+        var device = CreatePlcDevice(25, "PLC-Injected");
         var handler = CreateHandler(
             new FakeDeviceService(),
             new FakeFailedRecordStore(),
@@ -235,6 +239,7 @@ public sealed class MonitorQueriesBehaviorTests
                 [
                     CreateTaskBindingDevice(
                         device,
+                        "Injected",
                         candidates.Select(static candidate => CreateTaskBindingItem(
                             candidate,
                             enabled: false,
@@ -255,7 +260,7 @@ public sealed class MonitorQueriesBehaviorTests
     {
         var requiredSignal = new TaskRequiredSignal("Injected.SignalA", "Read");
         var candidate = new TaskCandidate("Injected.Blocked", "缺 IO 任务", [requiredSignal]);
-        var device = CreatePlcDevice(26, "PLC-Injected", moduleId: "Injected");
+        var device = CreatePlcDevice(26, "PLC-Injected");
         var handler = CreateHandler(
             new FakeDeviceService(),
             new FakeFailedRecordStore(),
@@ -271,7 +276,7 @@ public sealed class MonitorQueriesBehaviorTests
             taskBindingService: FakePlcTaskBindingService.FromBindings(
                 "Injected",
                 [
-                    CreateTaskBindingDevice(device, [
+                    CreateTaskBindingDevice(device, "Injected", [
                         CreateTaskBindingItem(
                             candidate,
                             canRun: false,
@@ -294,7 +299,7 @@ public sealed class MonitorQueriesBehaviorTests
     public async Task Handle_WhenRuntimeFactoryIsMissing_ShouldReturnEmptyStateMachineRows()
     {
         var candidate = new TaskCandidate("Missing.Enabled", "不应显示", []);
-        var device = CreatePlcDevice(24, "PLC-Missing", moduleId: "Missing");
+        var device = CreatePlcDevice(24, "PLC-Missing");
         var handler = CreateHandler(
             new FakeDeviceService(),
             new FakeFailedRecordStore(),
@@ -310,7 +315,7 @@ public sealed class MonitorQueriesBehaviorTests
             taskBindingService: FakePlcTaskBindingService.FromBindings(
                 "Missing",
                 [
-                    CreateTaskBindingDevice(device, [
+                    CreateTaskBindingDevice(device, "Missing", [
                         CreateTaskBindingItem(candidate)
                     ])
                 ]));
@@ -471,7 +476,7 @@ public sealed class MonitorQueriesBehaviorTests
         Assert.Empty(snapshot.EquipmentStatusRows);
         Assert.Empty(snapshot.RealtimeRows);
         Assert.Equal(0, snapshot.CellCount);
-        Assert.Equal(0, snapshot.CellTable.Rows.Count);
+        Assert.Empty(snapshot.CellTable.Rows);
         Assert.Empty(snapshot.CellDebugRows);
     }
 
@@ -729,9 +734,10 @@ public sealed class MonitorQueriesBehaviorTests
         var effectiveTaskBindingService = taskBindingService
             ?? FakePlcTaskBindingService.FromDevices(devices, DefaultTaskCandidates);
 
-        return new GetMonitorSnapshotHandler(
-            contextStore,
-            new EdgeSyncDiagnosticsQuery(
+        var services = new ServiceCollection();
+        services.AddEdgeApplication();
+        services.AddSingleton<IProductionContextStore>(contextStore);
+        services.AddSingleton<IEdgeSyncDiagnosticsQuery>(new EdgeSyncDiagnosticsQuery(
                 contextStore,
                 deviceService,
                 cloudDiagnostics,
@@ -740,26 +746,25 @@ public sealed class MonitorQueriesBehaviorTests
                 cloudRetryStore,
                 mesRetryStore,
                 new FakeDeviceLogBufferStore(),
-                new FakeCapacityBufferStore()),
-            new FakeProductionTimeProvider(),
-            new FakePlcConnectionManager(runtimeSnapshots ?? []),
-            effectiveRuntimeRegistry,
-            effectiveTaskBindingService,
-            new MonitorHardwareSender(devices));
+                new FakeCapacityBufferStore()));
+        services.AddSingleton<IProductionTimeProvider>(new FakeProductionTimeProvider());
+        services.AddSingleton<IPlcConnectionManager>(new FakePlcConnectionManager(runtimeSnapshots ?? []));
+        services.AddSingleton(effectiveRuntimeRegistry);
+        services.AddSingleton(effectiveTaskBindingService);
+        services.AddSingleton<ISender>(new MonitorHardwareSender(devices));
+        services.AddTransient<GetMonitorSnapshotHandler>();
+
+        return services.BuildServiceProvider().GetRequiredService<GetMonitorSnapshotHandler>();
     }
 
     private static NetworkDeviceEntity CreatePlcDevice(
         int id,
         string deviceName,
-        bool isEnabled = true,
-        string? moduleId = "Homogenization")
+        bool isEnabled = true)
     {
         var device = NetworkDeviceEntity.Create(deviceName, DeviceType.PLC, "127.0.0.1", 6000)
             .WithId(id);
-        if (!string.IsNullOrWhiteSpace(moduleId))
-        {
-            device.AssignModule(moduleId);
-        }
+        device.UpdateDeviceModel("S7");
 
         device.SetEnabled(isEnabled);
         return device;
@@ -767,8 +772,14 @@ public sealed class MonitorQueriesBehaviorTests
 
     private static PlcTaskBindingDeviceDto CreateTaskBindingDevice(
         NetworkDeviceEntity device,
+        string moduleId,
         IReadOnlyList<PlcTaskBindingItemDto> tasks)
-        => new(device.Id, device.DeviceName, device.ModuleId, device.IsEnabled, tasks);
+        => new(device.Id, device.DeviceName, moduleId, device.IsEnabled, tasks);
+
+    private static PlcTaskBindingDeviceDto CreateTaskBindingDevice(
+        NetworkDeviceEntity device,
+        IReadOnlyList<PlcTaskBindingItemDto> tasks)
+        => CreateTaskBindingDevice(device, "Homogenization", tasks);
 
     private static PlcTaskBindingItemDto CreateTaskBindingItem(
         TaskCandidate candidate,
@@ -869,17 +880,15 @@ public sealed class MonitorQueriesBehaviorTests
             IReadOnlyCollection<NetworkDeviceEntity> devices,
             IReadOnlyList<TaskCandidate> candidates)
         {
-            var rowsByModule = devices
-                .Where(static device => !string.IsNullOrWhiteSpace(device.ModuleId))
-                .GroupBy(static device => device.ModuleId, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(
-                    static group => group.Key,
-                    group => (IReadOnlyList<PlcTaskBindingDeviceDto>)group
-                        .Select(device => CreateTaskBindingDevice(
-                            device,
-                            candidates.Select(static candidate => CreateTaskBindingItem(candidate)).ToArray()))
-                        .ToArray(),
-                    StringComparer.OrdinalIgnoreCase);
+            var rowsByModule = new Dictionary<string, IReadOnlyList<PlcTaskBindingDeviceDto>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Homogenization"] = devices
+                    .Select(device => CreateTaskBindingDevice(
+                        device,
+                        "Homogenization",
+                        candidates.Select(static candidate => CreateTaskBindingItem(candidate)).ToArray()))
+                    .ToArray()
+            };
 
             return new FakePlcTaskBindingService(rowsByModule);
         }

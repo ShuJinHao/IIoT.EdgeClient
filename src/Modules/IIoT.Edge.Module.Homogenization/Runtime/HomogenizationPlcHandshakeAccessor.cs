@@ -80,17 +80,6 @@ internal sealed class HomogenizationPlcHandshakeAccessor
         ReplyException(interaction);
     }
 
-    /// <summary>
-    /// 镜像心跳交互，读取同一业务动作的 PLC->PC 读点并写回 PC->PLC 写点。
-    /// </summary>
-    public (ushort Input, ushort Output) MirrorHeartbeat()
-    {
-        var input = _signals.ReadUInt16(HomogenizationPlcSignals.Interaction.心跳);
-        var output = input == 0 ? (ushort)1 : input;
-        _signals.WriteUInt16(HomogenizationPlcSignals.Interaction.心跳, output);
-        return (input, output);
-    }
-
     private ushort ReadInteraction(HomogenizationPlcSignals.Interaction interaction)
         => _signals.ReadUInt16(interaction);
 

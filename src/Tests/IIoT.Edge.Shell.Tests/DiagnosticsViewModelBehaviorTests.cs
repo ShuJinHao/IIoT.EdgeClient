@@ -10,6 +10,7 @@ using IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
 using IIoT.Edge.Presentation.Navigation.Localization;
 using IIoT.Edge.Presentation.Shell.Localization;
 using IIoT.Edge.SharedKernel.DataPipeline;
+using IIoT.Edge.UI.Shared.Avalonia.Controls;
 using IIoT.Edge.UI.Shared.Localization;
 using Xunit;
 
@@ -99,13 +100,12 @@ public sealed class DiagnosticsViewModelBehaviorTests
 
             Assert.Collection(
                 viewModel.Tabs,
-                tab => Assert.Equal("Diag.Overview", tab.Key),
                 tab => Assert.Equal("Diag.SyncOps", tab.Key),
                 tab => Assert.Equal("Diag.Startup", tab.Key));
-            Assert.True(viewModel.IsOverviewTabSelected);
+            Assert.True(viewModel.IsSyncOpsTabSelected);
 
             viewModel.SelectTabCommand.Execute(viewModel.Tabs[1]);
-            Assert.True(viewModel.IsSyncOpsTabSelected);
+            Assert.True(viewModel.IsStartupTabSelected);
 
             await viewModel.RefreshAsync();
 
@@ -117,10 +117,28 @@ public sealed class DiagnosticsViewModelBehaviorTests
             Assert.Contains("存储故障：是", viewModel.CloudPersistenceSummary, StringComparison.Ordinal);
             Assert.Contains("存储故障：是", viewModel.MesPersistenceSummary, StringComparison.Ordinal);
             Assert.Contains("损坏文件数：2", viewModel.ContextPersistenceSummary, StringComparison.Ordinal);
+            Assert.Equal("2", viewModel.ContextCorruptFileCount);
+            Assert.NotEqual("--", viewModel.ContextLastCorruptDetectedAt);
             Assert.Contains("机型：HomogenizationLine", viewModel.ConfigurationProfileSummary, StringComparison.Ordinal);
+            Assert.Equal("Production", viewModel.ConfigurationEnvironment);
+            Assert.Equal("HomogenizationLine", viewModel.ConfigurationMachineProfile);
+            Assert.Equal(@"C:\EdgeRuntime\HomogenizationLine", viewModel.ConfigurationRuntimeDataRoot);
             Assert.Single(viewModel.ModuleRegistrations);
             Assert.Single(viewModel.PluginStates);
             Assert.Single(viewModel.DeviceBindings);
+            var readinessRow = Assert.Single(viewModel.ModuleReadinessRows);
+            Assert.Equal("Homogenization", readinessRow.DisplayName);
+            Assert.Equal("PLC-A", readinessRow.DeviceNames);
+            Assert.True(readinessRow.ModuleRegistered);
+            Assert.True(readinessRow.PluginActivated);
+            Assert.True(viewModel.IsStartupHealthy);
+            Assert.False(viewModel.HasStartupIssues);
+            Assert.False(viewModel.IsModuleReadinessExpanded);
+            Assert.True(viewModel.IsModuleReadinessCollapsed);
+            Assert.Equal("展开明细", viewModel.ModuleReadinessToggleText);
+            viewModel.ToggleModuleReadinessCommand.Execute(null);
+            Assert.True(viewModel.IsModuleReadinessExpanded);
+            Assert.Equal("收起明细", viewModel.ModuleReadinessToggleText);
             Assert.Single(viewModel.MesUploadDiagnostics);
 
             Assert.Equal(2, viewModel.SyncChannels.Count);
@@ -159,6 +177,68 @@ public sealed class DiagnosticsViewModelBehaviorTests
                 Assert.DoesNotContain("否", row.LastError, StringComparison.Ordinal);
                 Assert.DoesNotContain("否", row.Note, StringComparison.Ordinal);
             }
+        });
+
+    [Fact]
+    public Task DiagnosticsViewModel_ShouldPresentStartupIssuesAsLogRows()
+        => RunOnStaThreadAsync(async () =>
+        {
+            var startupStore = new FakeStartupDiagnosticsStore();
+            startupStore.Update(new StartupDiagnosticsReport(
+                GeneratedAt: new DateTime(2026, 6, 3, 14, 0, 0),
+                ConfigurationProfile: new ConfigurationProfileSnapshot(
+                    "Production",
+                    "HomogenizationLine",
+                    "appsettings.machine.HomogenizationLine.json",
+                    true,
+                    @"C:\EdgeRuntime\HomogenizationLine"),
+                DiscoveredModules: ["Homogenization"],
+                EnabledModules: ["Homogenization"],
+                ActivatedModules: ["Homogenization"],
+                PluginStates: [],
+                ModuleRegistrations: [],
+                DeviceBindings: [],
+                Issues:
+                [
+                    new StartupDiagnosticIssue(
+                        "DEVICE_MODULE_MISMATCH",
+                        "PLC“PLC-Homogenization-01”存在 PlcAddress 为空的 IO 映射。",
+                        "Homogenization",
+                        "PLC-Homogenization-01"),
+                    new StartupDiagnosticIssue(
+                        "HARDWARE_PROFILE_INVALID",
+                        "PLC[PLC-Homogenization-01] 的信号 Homogenization.Interaction.test1 PLC 地址不能为空。",
+                        "Homogenization",
+                        "PLC-Homogenization-01"),
+                    new StartupDiagnosticIssue(
+                        "HARDWARE_PROFILE_INVALID",
+                        "PLC[PLC-Homogenization-01] 的信号 Homogenization.Interaction.test1 PLC 地址不能为空。",
+                        "Homogenization",
+                        "PLC-Homogenization-01")
+                ]));
+
+            var viewModel = CreateViewModel(startupStore, new FakeEdgeSyncDiagnosticsQuery(), new TestAppLanguageService());
+
+            await viewModel.RefreshAsync();
+
+            Assert.True(viewModel.HasStartupIssues);
+            Assert.Equal(3, viewModel.TotalIssueCount);
+            Assert.Equal(2, viewModel.Issues.Count);
+
+            var plcRow = Assert.Single(viewModel.Issues, row => row.Message.Contains("PlcAddress", StringComparison.Ordinal));
+            Assert.Equal("ERROR", plcRow.LevelText);
+            Assert.Equal(EdgeVisualStatus.Error, plcRow.Status);
+            Assert.Equal(plcRow.Message, plcRow.DisplayMessage);
+            Assert.False(plcRow.HasDuplicateCount);
+
+            var signalRow = Assert.Single(viewModel.Issues, row => row.Message.Contains("Interaction.test1", StringComparison.Ordinal));
+            Assert.Equal("信号 Homogenization.Interaction.test1 地址不能为空。", signalRow.Message);
+            Assert.Equal("ERROR", signalRow.LevelText);
+            Assert.Equal(EdgeVisualStatus.Error, signalRow.Status);
+            Assert.Equal(2, signalRow.DuplicateCount);
+            Assert.True(signalRow.HasDuplicateCount);
+            Assert.Equal("×2", signalRow.DuplicateBadgeText);
+            Assert.Equal("信号 Homogenization.Interaction.test1 地址不能为空。 ×2", signalRow.DisplayMessage);
         });
 
     [Fact]
@@ -206,6 +286,10 @@ public sealed class DiagnosticsViewModelBehaviorTests
             var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery();
             var viewModel = CreateViewModel(startupStore, diagnosticsQuery, new TestAppLanguageService());
             await viewModel.RefreshAsync();
+
+            Assert.False(viewModel.HasStartupReport);
+            Assert.False(viewModel.IsStartupHealthy);
+            Assert.False(viewModel.HasStartupIssues);
 
             diagnosticsQuery.ResetCounters();
             diagnosticsQuery.BlockUntilReleased();
@@ -555,6 +639,12 @@ public sealed class DiagnosticsViewModelBehaviorTests
     {
         var diagnosticsText = new LocalizedSyncDiagnosticsText(languageService);
         var displayNameResolver = new DiagnosticsModuleDisplayNameResolver(diagnosticsText);
+        var collaboratorFactory = new DiagnosticsViewModelCollaboratorFactory(
+            languageService,
+            deadLetterOperator ?? new DiagnosticsDeadLetterOperator(),
+            deadLetterConfirmationService ?? new FakeDeadLetterConfirmationService(),
+            permissionService ?? new FakeClientPermissionService());
+
         return new DiagnosticsViewModel(
             startupStore,
             diagnosticsQuery,
@@ -564,9 +654,7 @@ public sealed class DiagnosticsViewModelBehaviorTests
             new DiagnosticsRowsBuilder(languageService, diagnosticsText, displayNameResolver),
             new DiagnosticsInitialSummaryFactory(languageService, diagnosticsText),
             new DiagnosticsRefreshCoordinator(),
-            deadLetterOperator ?? new DiagnosticsDeadLetterOperator(),
-            deadLetterConfirmationService ?? new FakeDeadLetterConfirmationService(),
-            permissionService ?? new FakeClientPermissionService());
+            collaboratorFactory);
     }
 
     private static EdgeSyncDiagnosticsSnapshot CreateReadySyncSnapshot(

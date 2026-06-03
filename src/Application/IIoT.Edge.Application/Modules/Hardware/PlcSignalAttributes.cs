@@ -29,10 +29,6 @@ public sealed class PlcInteractionSignalAttribute(
     public int AddressCount { get; init; } = 1;
 
     public string DataType { get; init; } = IoMappingOptionCatalog.DataTypeInt16;
-
-    public string ReadSignalName { get; init; } = "PLC 触发";
-
-    public string WriteSignalName { get; init; } = "上位机应答";
 }
 
 /// <summary>
@@ -47,7 +43,7 @@ public sealed class PlcReadSignalAttribute(
     int sortOrder,
     string category,
     string businessGroup,
-    string signalName) : Attribute
+    string displayName) : Attribute
 {
     public string SignalKey { get; } = signalKey;
 
@@ -63,9 +59,7 @@ public sealed class PlcReadSignalAttribute(
 
     public string BusinessGroup { get; } = businessGroup;
 
-    public string SignalName { get; } = signalName;
-
-    public string? DisplayName { get; init; }
+    public string DisplayName { get; init; } = displayName;
 }
 
 /// <summary>
@@ -80,7 +74,7 @@ public sealed class PlcWriteSignalAttribute(
     int sortOrder,
     string category,
     string businessGroup,
-    string signalName) : Attribute
+    string displayName) : Attribute
 {
     public string SignalKey { get; } = signalKey;
 
@@ -96,7 +90,5 @@ public sealed class PlcWriteSignalAttribute(
 
     public string BusinessGroup { get; } = businessGroup;
 
-    public string SignalName { get; } = signalName;
-
-    public string? DisplayName { get; init; }
+    public string DisplayName { get; init; } = displayName;
 }

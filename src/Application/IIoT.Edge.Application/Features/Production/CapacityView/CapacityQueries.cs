@@ -3,7 +3,7 @@
 namespace IIoT.Edge.Application.Features.Production.CapacityView;
 
 public record CapacityViewResult(
-    List<DailyCapacityVm> Rows,
+    List<DailyCapacitySnapshot> Rows,
     int PeriodTotal,
     int PeriodOk,
     int PeriodNg,
@@ -78,7 +78,7 @@ public class QueryCapacityHistoryHandler(CapacityCloudQueryService service)
 
 internal static class CapacityQueryHelper
 {
-    internal static CapacityViewResult ToResult(List<DailyCapacityVm> rows, int divisor)
+    internal static CapacityViewResult ToResult(List<DailyCapacitySnapshot> rows, int divisor)
     {
         var total = rows.Sum(item => item.Total);
         var ok = rows.Sum(item => item.OkCount);

@@ -9,6 +9,7 @@ using IIoT.Edge.Module.Homogenization.Runtime;
 using IIoT.Edge.Presentation.Navigation.PluginSystem;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.PluginSystem;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 
 namespace IIoT.Edge.Module.Homogenization.Presentation;
@@ -44,15 +45,20 @@ public sealed class HomogenizationDataViewModel : PresentationViewModelBase
 
     private readonly IProductionContextStore _contextStore;
     private readonly IAppLanguageService _languageService;
+    private readonly bool _visualTestDataEnabled;
+    private readonly string _visualTestBatchCode;
     private readonly DispatcherTimer _timer;
 
     public HomogenizationDataViewModel(
         IProductionContextStore contextStore,
         IAppLanguageService languageService,
+        IConfiguration configuration,
         IOptions<HomogenizationModuleOptions> moduleOptions)
     {
         _contextStore = contextStore;
         _languageService = languageService;
+        _visualTestDataEnabled = configuration.GetValue("UI:VisualTestData:Enabled", false);
+        _visualTestBatchCode = configuration["UI:VisualTestData:BatchCode"] ?? "VT-HG-20260602-01";
         _timer = HomogenizationPresentationHelpers.CreateTimer(
             RefreshAsync,
             moduleOptions.Value.Presentation.DataViewRefreshIntervalMs);
@@ -132,34 +138,9 @@ public sealed class HomogenizationDataViewModel : PresentationViewModelBase
     private Task RefreshAsync()
         => RunViewTaskAsync(() =>
         {
-            var rows = _contextStore.GetAll()
-                .OfType<HomogenizationContext>()
-                .SelectMany(static x => x.OutboundRecords)
-                .OrderByDescending(static x => x.CompletedTime ?? x.InboundTime ?? DateTime.MinValue)
-                .Select(static x => new HomogenizationDataRow(
-                    FormatText(x.TrayCode),
-                    FormatText(x.DeviceCode),
-                    FormatText(x.DeviceName),
-                    FormatDate(x.InboundTime),
-                    FormatDate(x.CompletedTime),
-                    FormatText(x.RuntimeStatus),
-                    x.RealtimeSnapshot?.StirringSpeed.ToString(CultureInfo.InvariantCulture) ?? EmptyValue,
-                    x.RealtimeSnapshot?.Temperature.ToString(CultureInfo.InvariantCulture) ?? EmptyValue,
-                    x.RealtimeSnapshot?.Vacuum.ToString(CultureInfo.InvariantCulture) ?? EmptyValue,
-                    FormatNumber(x.CntActualKg),
-                    FormatNumber(x.CntTargetKg),
-                    FormatNumber(x.CntTankAWeightKg),
-                    FormatNumber(x.CntTankBWeightKg),
-                    FormatNumber(x.NmpActualKg),
-                    FormatNumber(x.NmpTargetKg),
-                    FormatNumber(x.GlueActualKg),
-                    FormatNumber(x.SetStirringTimeMinutes),
-                    FormatNumber(x.RemainingStirringTimeMinutes),
-                    FormatNumber(x.SetDispersionTimeMinutes),
-                    FormatNumber(x.RemainingDispersionTimeMinutes),
-                    FormatText(x.MainBatchPlan),
-                    FormatText(x.BatchNumber)))
-                .ToArray();
+            var rows = _visualTestDataEnabled
+                ? BuildVisualTestRows(_visualTestBatchCode)
+                : LoadContextRows();
 
             ReplaceItems(Records, rows);
             OnPropertyChanged(nameof(IsRecordsEmpty));
@@ -169,6 +150,79 @@ public sealed class HomogenizationDataViewModel : PresentationViewModelBase
                 : HomogenizationText.Format("Homogenization_RecordCountFormat", "共 {0} 条出料记录。", rows.Length));
             return Task.CompletedTask;
         }, trackBusy: false, clearFeedback: false);
+
+    private HomogenizationDataRow[] LoadContextRows()
+        => _contextStore.GetAll()
+            .OfType<HomogenizationContext>()
+            .SelectMany(static x => x.OutboundRecords)
+            .OrderByDescending(static x => x.CompletedTime ?? x.InboundTime ?? DateTime.MinValue)
+            .Select(static x => new HomogenizationDataRow(
+                FormatText(x.TrayCode),
+                FormatText(x.DeviceCode),
+                FormatText(x.DeviceName),
+                FormatDate(x.InboundTime),
+                FormatDate(x.CompletedTime),
+                FormatText(x.RuntimeStatus),
+                x.RealtimeSnapshot?.StirringSpeed.ToString(CultureInfo.InvariantCulture) ?? EmptyValue,
+                x.RealtimeSnapshot?.Temperature.ToString(CultureInfo.InvariantCulture) ?? EmptyValue,
+                x.RealtimeSnapshot?.Vacuum.ToString(CultureInfo.InvariantCulture) ?? EmptyValue,
+                FormatNumber(x.CntActualKg),
+                FormatNumber(x.CntTargetKg),
+                FormatNumber(x.CntTankAWeightKg),
+                FormatNumber(x.CntTankBWeightKg),
+                FormatNumber(x.NmpActualKg),
+                FormatNumber(x.NmpTargetKg),
+                FormatNumber(x.GlueActualKg),
+                FormatNumber(x.SetStirringTimeMinutes),
+                FormatNumber(x.RemainingStirringTimeMinutes),
+                FormatNumber(x.SetDispersionTimeMinutes),
+                FormatNumber(x.RemainingDispersionTimeMinutes),
+                FormatText(x.MainBatchPlan),
+                FormatText(x.BatchNumber)))
+            .ToArray();
+
+    private static HomogenizationDataRow[] BuildVisualTestRows(string batchCode)
+    {
+        var baseTime = DateTime.Now.Date.AddHours(8);
+        return Enumerable.Range(0, 18)
+            .Select(index =>
+            {
+                var inboundTime = baseTime.AddMinutes(index * 18);
+                var completedTime = inboundTime.AddMinutes(42 + index % 4 * 3);
+                var trayIndex = index + 1;
+                var stirringSpeed = 610 + index % 7 * 4;
+                var temperature = 41.8 + index % 6 * 0.3;
+                var vacuum = -88.0 - index % 5 * 0.4;
+                var cntActual = 120.0 + index % 8 * 0.7;
+                var nmpActual = 82.0 + index % 6 * 0.5;
+                var glueActual = 56.0 + index % 5 * 0.4;
+
+                return new HomogenizationDataRow(
+                    $"TR-VT-{trayIndex:D3}",
+                    "HG-DEV-01",
+                    "匀浆视觉验收设备",
+                    FormatDate(inboundTime),
+                    FormatDate(completedTime),
+                    index % 6 == 0 ? "待复核" : "已出料",
+                    stirringSpeed.ToString(CultureInfo.InvariantCulture),
+                    temperature.ToString("0.0", CultureInfo.InvariantCulture),
+                    vacuum.ToString("0.0", CultureInfo.InvariantCulture),
+                    cntActual.ToString("0.0", CultureInfo.InvariantCulture),
+                    "128.0",
+                    (63.0 + index % 3).ToString("0.0", CultureInfo.InvariantCulture),
+                    (66.0 + index % 4).ToString("0.0", CultureInfo.InvariantCulture),
+                    nmpActual.ToString("0.0", CultureInfo.InvariantCulture),
+                    "88.0",
+                    glueActual.ToString("0.0", CultureInfo.InvariantCulture),
+                    "45",
+                    Math.Max(0, 45 - index % 9 * 4).ToString(CultureInfo.InvariantCulture),
+                    "30",
+                    Math.Max(0, 30 - index % 6 * 5).ToString(CultureInfo.InvariantCulture),
+                    batchCode,
+                    $"{batchCode}-{trayIndex:D2}");
+            })
+            .ToArray();
+    }
 
     private void RefreshLocalizedText()
     {

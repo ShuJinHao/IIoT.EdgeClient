@@ -27,7 +27,7 @@ public class CapacityCloudQueryService
 
     // 按生产日查询：优先使用分时明细，缺失时回退到汇总数据。
 
-    public async Task<List<DailyCapacityVm>> QueryByProductionDayAsync(
+    public async Task<List<DailyCapacitySnapshot>> QueryByProductionDayAsync(
         Guid deviceId, DateTime productionDate, string plcName)
 
     {
@@ -46,7 +46,7 @@ public class CapacityCloudQueryService
         {
             return hourlyToday.Concat(nightSlots)
                 .OrderBy(x => x.SlotOrder)
-                .Select(x => new DailyCapacityVm
+                .Select(x => new DailyCapacitySnapshot
                 {
                     Date = productionDate.ToString("MM-dd"),
                     DateFull = x.TimeLabel,
@@ -64,13 +64,13 @@ public class CapacityCloudQueryService
         var summaryNextDay = await QuerySummaryAsync(deviceId, nextDay, plcName);
 
         if (summaryToday is null && summaryNextDay is null)
-            return new List<DailyCapacityVm>();
+            return new List<DailyCapacitySnapshot>();
 
         var totalCount = (summaryToday?.TotalCount ?? 0) + (summaryNextDay?.NightShiftTotal ?? 0);
         var okCount = (summaryToday?.OkCount ?? 0) + (summaryNextDay?.NightShiftOk ?? 0);
         var ngCount = (summaryToday?.NgCount ?? 0) + (summaryNextDay?.NightShiftNg ?? 0);
 
-        return new List<DailyCapacityVm>
+        return new List<DailyCapacitySnapshot>
         {
             new()
             {
@@ -93,7 +93,7 @@ public class CapacityCloudQueryService
 
     // 按月查询：返回当月每日汇总。
 
-    public async Task<List<DailyCapacityVm>> QueryByMonthAsync(
+    public async Task<List<DailyCapacitySnapshot>> QueryByMonthAsync(
         Guid deviceId, int year, int month, string plcName)
 
     {
@@ -106,7 +106,7 @@ public class CapacityCloudQueryService
 
     // 按年查询：按月份聚合全年汇总。
 
-    public async Task<List<DailyCapacityVm>> QueryByYearAsync(
+    public async Task<List<DailyCapacitySnapshot>> QueryByYearAsync(
         Guid deviceId, int year, string plcName)
 
     {
@@ -122,7 +122,7 @@ public class CapacityCloudQueryService
                 var total = g.Sum(x => x.Total);
                 var ok = g.Sum(x => x.OkCount);
                 var ng = g.Sum(x => x.NgCount);
-                return new DailyCapacityVm
+                return new DailyCapacitySnapshot
                 {
                     Date = g.Key,
                     DateFull = g.Key,
@@ -139,7 +139,7 @@ public class CapacityCloudQueryService
 
     // 私有查询：调用云端接口并解析响应。
 
-    private async Task<List<HourlySlotVm>> QueryHourlyAsync(
+    private async Task<List<HourlyCapacitySlotSnapshot>> QueryHourlyAsync(
         Guid deviceId, DateTime date, string plcName)
 
     {
@@ -158,7 +158,7 @@ public class CapacityCloudQueryService
             var root = doc.RootElement;
             if (root.ValueKind != JsonValueKind.Array) return new();
 
-            var slots = new List<HourlySlotVm>();
+            var slots = new List<HourlyCapacitySlotSnapshot>();
             foreach (var item in root.EnumerateArray())
             {
                 var hour = ReadInt(item, "hour", "Hour");
@@ -179,7 +179,7 @@ public class CapacityCloudQueryService
                 if (string.IsNullOrWhiteSpace(shift))
                     shift = GetShiftCode(hour, minute);
 
-                slots.Add(new HourlySlotVm
+                slots.Add(new HourlyCapacitySlotSnapshot
                 {
                     SlotOrder = hour * 2 + (minute >= 30 ? 1 : 0),
                     Hour = hour,
@@ -198,7 +198,7 @@ public class CapacityCloudQueryService
         catch { return new(); }
     }
 
-    private async Task<DailySummaryVm?> QuerySummaryAsync(
+    private async Task<DailyCapacitySummarySnapshot?> QuerySummaryAsync(
         Guid deviceId, DateTime date, string plcName)
 
     {
@@ -234,7 +234,7 @@ public class CapacityCloudQueryService
             if (total == 0) total = dayTotal + nightTotal;
             if (ok == 0 && ng == 0) { ok = dayOk + nightOk; ng = dayNg + nightNg; }
 
-            return new DailySummaryVm
+            return new DailyCapacitySummarySnapshot
             {
                 TotalCount = total,
                 OkCount = ok,
@@ -250,7 +250,7 @@ public class CapacityCloudQueryService
         catch { return null; }
     }
 
-    private async Task<List<DailyCapacityVm>> QuerySummaryRangeAsync(
+    private async Task<List<DailyCapacitySnapshot>> QuerySummaryRangeAsync(
         Guid deviceId, DateTime startDate, DateTime endDate, string plcName)
 
     {
@@ -269,7 +269,7 @@ public class CapacityCloudQueryService
             var root = doc.RootElement;
             if (root.ValueKind != JsonValueKind.Array) return new();
 
-            var rows = new List<DailyCapacityVm>();
+            var rows = new List<DailyCapacitySnapshot>();
             foreach (var item in root.EnumerateArray())
             {
                 var dateStr = ReadString(item, "date", "Date");
@@ -285,7 +285,7 @@ public class CapacityCloudQueryService
 
                 if (string.IsNullOrWhiteSpace(dateStr)) continue;
 
-                rows.Add(new DailyCapacityVm
+                rows.Add(new DailyCapacitySnapshot
                 {
                     Date = dateStr.Length >= 10 ? dateStr.Substring(5, 5) : dateStr,
                     DateFull = dateStr,

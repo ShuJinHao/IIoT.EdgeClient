@@ -63,50 +63,18 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
     {
         const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.工艺参数上传;
 
-        switch (Step)
-        {
-            case 0:
-                if (Interaction.IsTriggered(trigger))
-                {
-                    Logger.Info($"[{ModuleContext.DeviceName}] {TaskName} 工艺参数上传已触发。");
-                    Step = 10;
-                }
-
-                break;
-
-            case 10:
-                try
-                {
-                    await ProcessTriggerAsync(TaskCancellationToken).ConfigureAwait(false);
-                    Step = 30;
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    var message = $"配方上传处理异常：{ex.Message}";
-                    _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Recipe, message);
-                    ModuleContext.LastRecipeAt = ProductionTime.BusinessNow;
-                    ModuleContext.LastRecipeResult = message;
-                    Interaction.ReplyException(trigger);
-                    Logger.Error($"[{ModuleContext.DeviceName}] {TaskName} {message}");
-                    Step = 30;
-                }
-
-                break;
-
-            case 30:
-                if (Interaction.IsReset(trigger))
-                {
-                    Interaction.ReplyReset(trigger);
-                    Logger.Info($"[{ModuleContext.DeviceName}] {TaskName} 配方上传复位。");
-                    Step = 0;
-                }
-
-                break;
-        }
+        await ExecuteHandshakeAsync(
+            trigger,
+            "工艺参数上传已触发。",
+            "配方上传复位。",
+            ProcessTriggerAsync,
+            static ex => $"配方上传处理异常：{ex.Message}",
+            message =>
+            {
+                _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Recipe, message);
+                ModuleContext.LastRecipeAt = ProductionTime.BusinessNow;
+                ModuleContext.LastRecipeResult = message;
+            }).ConfigureAwait(false);
     }
 
     private async Task ProcessTriggerAsync(CancellationToken cancellationToken)
@@ -143,4 +111,3 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
         Interaction.ReplyResult(trigger, result);
     }
 }
-

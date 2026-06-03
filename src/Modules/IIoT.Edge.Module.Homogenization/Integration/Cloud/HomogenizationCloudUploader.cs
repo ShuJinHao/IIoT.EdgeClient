@@ -31,7 +31,7 @@ public sealed class HomogenizationCloudUploader
     }
 
     protected override Task<CloudCallResult?> CheckBeforeUploadAsync(
-        ProcessCloudUploadContext context,
+        ProcessUploadContext context,
         IReadOnlyList<CellCompletedRecord> records,
         CancellationToken cancellationToken)
     {
@@ -41,7 +41,7 @@ public sealed class HomogenizationCloudUploader
     }
 
     protected override object BuildPayload(
-        ProcessCloudUploadContext context,
+        ProcessUploadContext context,
         IReadOnlyList<HomogenizationCellData> cellData,
         IReadOnlyList<CellCompletedRecord> records)
         => throw new InvalidOperationException("匀浆云端上传未启用，不应构建云端 payload。");

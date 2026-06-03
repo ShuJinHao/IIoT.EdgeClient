@@ -24,6 +24,7 @@ using IIoT.Edge.Presentation.Navigation;
 using IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
 using IIoT.Edge.Presentation.Panels;
 using IIoT.Edge.Presentation.Shell;
+using IIoT.Edge.Presentation.VisualTestData;
 using IIoT.Edge.Runtime;
 using IIoT.Edge.Runtime.DataPipeline.Tasks;
 using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
@@ -92,6 +93,7 @@ public static class DependencyInjection
         services.TryAddSingleton<ICrashLogWriter, CrashLogWriter>();
         services.TryAddSingleton<IModulePluginAssemblyResolver, ModulePluginAssemblyResolver>();
         services.TryAddSingleton<IModulePluginLoader, ModulePluginLoader>();
+        services.TryAddSingleton<IModulePluginCompatibilityPolicy, ModulePluginCompatibilityPolicy>();
         services.TryAddSingleton<IModuleCatalog, DirectoryModuleCatalog>();
         services.AddSingleton<IDevelopmentSampleInitializer, DevelopmentSampleInitializer>();
         services.AddSingleton<IStartupDiagnosticsStore, StartupDiagnosticsStore>();
@@ -131,20 +133,10 @@ public static class DependencyInjection
                 ]);
         });
 
-        services.AddAutoMapper(
-            _ => { },
-            [
-                typeof(IIoT.Edge.Application.DependencyInjection).Assembly,
-                typeof(IIoT.Edge.Presentation.Shell.DependencyInjection).Assembly,
-                typeof(IIoT.Edge.Presentation.Navigation.DependencyInjection).Assembly,
-                typeof(IIoT.Edge.Presentation.Panels.DependencyInjection).Assembly,
-                typeof(IIoT.Edge.Infrastructure.Integration.DependencyInjection).Assembly,
-                typeof(IIoT.Edge.Infrastructure.DeviceComm.DependencyInjection).Assembly,
-                ..moduleAssemblies
-            ]);
         services.AddShellPresentation();
         services.AddNavigationPresentation();
         services.AddPanelPresentation();
+        services.AddVisualTestDataPresentation(configuration);
 
         RegisterHostViews(new HostViewRegistry(viewRegistry));
         RegisterModules(services, viewRegistry, configuration, enabledModules, cellDataTypeRegistry);
@@ -208,6 +200,11 @@ public static class DependencyInjection
 
         services.AddSingleton<IAppStartupInitializer, AppStartupInitializer>();
         services.AddSingleton<IStartupPluginLifecycleSnapshotBuilder, StartupPluginLifecycleSnapshotBuilder>();
+        services.AddSingleton<IStartupConfigurationProfileBuilder, StartupConfigurationProfileBuilder>();
+        services.AddSingleton<IStartupModuleRegistrationSnapshotBuilder, StartupModuleRegistrationSnapshotBuilder>();
+        services.AddSingleton<IStartupDiagnosticValidator, StartupAppSettingsValidator>();
+        services.AddSingleton<IStartupDiagnosticValidator, StartupModuleRegistrationValidator>();
+        services.AddSingleton<IStartupAsyncDiagnosticValidator, StartupPlcConfigurationValidator>();
         services.AddSingleton<IStartupDiagnosticsReportBuilder, StartupDiagnosticsReportBuilder>();
         services.AddSingleton<IPlcRuntimeTaskBinder, PlcRuntimeTaskBinder>();
         services.AddSingleton<IAppRuntimeStateCoordinator, AppRuntimeStateCoordinator>();
@@ -280,8 +277,6 @@ public static class DependencyInjection
 
             module.Configure(builder);
         }
-
-        ValidateModuleRegistrations(modules, cellDataRegistry, runtimeRegistry, integrationRegistry);
     }
 
     private static void ValidateModuleIdentity(IEnumerable<IEdgeProcessModule> modules)
@@ -299,34 +294,6 @@ public static class DependencyInjection
             if (!processTypes.Add(module.ProcessType))
             {
                 throw new InvalidOperationException($"Duplicate ProcessType detected: {module.ProcessType}");
-            }
-        }
-    }
-
-    private static void ValidateModuleRegistrations(
-        IEnumerable<IEdgeProcessModule> modules,
-        ICellDataRegistry cellDataRegistry,
-        IStationRuntimeRegistry runtimeRegistry,
-        IProcessIntegrationRegistry integrationRegistry)
-    {
-        foreach (var module in modules)
-        {
-            if (!cellDataRegistry.IsRegistered(module.ProcessType))
-            {
-                throw new InvalidOperationException(
-                    $"Module '{module.ModuleId}' is missing CellData registration for process type '{module.ProcessType}'.");
-            }
-
-            if (!runtimeRegistry.HasFactory(module.ModuleId))
-            {
-                throw new InvalidOperationException(
-                    $"Module '{module.ModuleId}' is missing PLC runtime factory registration.");
-            }
-
-            if (!integrationRegistry.HasCloudUploader(module.ProcessType))
-            {
-                throw new InvalidOperationException(
-                    $"Module '{module.ModuleId}' is missing cloud uploader registration for process type '{module.ProcessType}'.");
             }
         }
     }

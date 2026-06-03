@@ -98,7 +98,7 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
     private async Task ResetHomogenizationConfigurationAsync(CancellationToken cancellationToken)
     {
         var existingDevices = await _networkDevices.GetListAsync(
-            x => x.ModuleId == DependencyInjection.ModuleKey,
+            _ => true,
             cancellationToken).ConfigureAwait(false);
 
         if (existingDevices.Count == 0)
@@ -136,8 +136,7 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
         CancellationToken cancellationToken)
     {
         var existingDevice = await _networkDevices.GetAsync(
-            x => x.ModuleId == DependencyInjection.ModuleKey
-                && x.DeviceName == seedDevice.DeviceName,
+            x => x.DeviceName == seedDevice.DeviceName,
             cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (existingDevice is not null)
@@ -146,27 +145,15 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
             return existingDevice;
         }
 
-        var conflictingDevice = await _networkDevices.GetAsync(
-            x => x.DeviceName == seedDevice.DeviceName,
-            cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        if (conflictingDevice is not null)
-        {
-            _logger.Warn($"[匀浆][设备样本] 跳过设备“{seedDevice.DeviceName}”，该名称已被模块“{conflictingDevice.ModuleId}”占用。");
-            return null;
-        }
-
         var defaults = hardwareProfile.GetDefaultPlcSettings();
         var device = NetworkDeviceEntity.Create(
             seedDevice.DeviceName,
             DeviceType.PLC,
             string.IsNullOrWhiteSpace(seedDevice.IpAddress) ? "127.0.0.1" : seedDevice.IpAddress,
             seedDevice.Port1 > 0 ? seedDevice.Port1 : defaults.Port1 ?? 6000);
-        device.AssignModule(
-            DependencyInjection.ModuleKey,
-            string.IsNullOrWhiteSpace(seedDevice.DeviceModel)
-                ? defaults.DeviceModel
-                : seedDevice.DeviceModel);
+        device.UpdateDeviceModel(string.IsNullOrWhiteSpace(seedDevice.DeviceModel)
+            ? defaults.DeviceModel
+            : seedDevice.DeviceModel);
         device.UpdateEndpoint(
             device.IpAddress,
             device.Port1,
@@ -224,8 +211,7 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
             template.DataType,
             template.Direction,
             template.Category,
-            template.BusinessGroup,
-            template.SignalName);
+            template.BusinessGroup);
         entity.UpdateSortOrder(template.SortOrder);
         entity.UpdateMetadata(
             template.SignalKey,
@@ -233,7 +219,6 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
             template.Direction,
             template.Category,
             template.BusinessGroup,
-            template.SignalName,
             string.IsNullOrWhiteSpace(template.Remark) ? SeedRemark : template.Remark);
         return entity;
     }

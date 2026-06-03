@@ -2,73 +2,123 @@
     x:Class="IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView.SerialDevicePage"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:dg="using:Avalonia.Controls"
-    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
+        xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
 
-    <edge:EdgeTablePanel
-        Margin="0,12,0,0"
-        Title="{DynamicResource Navigation_Tab_SerialDevice}">
-        <edge:EdgeTablePanel.ActionContent>
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <edge:EdgeActionButton
-                    Command="{Binding AddSerialDeviceCommand}"
-                    Content="{DynamicResource Navigation_Button_Add}"
-                    Icon="{StaticResource Edge.Icon.Add}"
-                    Kind="Primary"
-                    Size="Compact" />
-                <edge:EdgeActionButton
-                    Command="{Binding DeleteSerialDeviceCommand}"
-                    CommandParameter="{Binding SelectedItem, ElementName=SerialGrid}"
-                    Content="{DynamicResource Navigation_Button_Delete}"
-                    Icon="{StaticResource Edge.Icon.Delete}"
-                    Kind="Danger"
-                    Size="Compact" />
-            </StackPanel>
-        </edge:EdgeTablePanel.ActionContent>
+    <Grid Margin="0,12,0,0">
+        <edge:EdgeTablePanel Title="{DynamicResource Navigation_Tab_SerialDevice}">
+            <edge:EdgeTablePanel.ActionContent>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <edge:EdgeActionButton
+                        Command="{Binding AddSerialDeviceCommand}"
+                        Content="{DynamicResource Navigation_Button_Add}"
+                        Icon="{StaticResource Edge.Icon.Add}"
+                        Kind="Primary"
+                        Size="Compact" />
+                    <edge:EdgeActionButton
+                        Command="{Binding EditSerialDeviceCommand}"
+                        CommandParameter="{Binding SelectedItem, ElementName=SerialGrid}"
+                        Content="{DynamicResource Navigation_Button_Edit}"
+                        Icon="{StaticResource Edge.Icon.Write}"
+                        Kind="Secondary"
+                        Size="Compact" />
+                    <edge:EdgeActionButton
+                        Command="{Binding DeleteSerialDeviceCommand}"
+                        CommandParameter="{Binding SelectedItem, ElementName=SerialGrid}"
+                        Content="{DynamicResource Navigation_Button_Delete}"
+                        Icon="{StaticResource Edge.Icon.Delete}"
+                        Kind="Danger"
+                        Size="Compact" />
+                </StackPanel>
+            </edge:EdgeTablePanel.ActionContent>
 
-        <edge:EdgeDataGrid
-            x:Name="SerialGrid"
-            AutoGenerateColumns="False"
-            CanUserReorderColumns="False"
-            CanUserResizeColumns="True"
-            CanUserSortColumns="False"
-            IsReadOnly="{Binding !CanEdit}"
-            ItemsSource="{Binding SerialDevices}">
-            <edge:EdgeDataGrid.Columns>
-                <dg:DataGridTextColumn Binding="{Binding DeviceName}" Header="{DynamicResource Navigation_Column_DeviceName}" MinWidth="170" Width="170" />
-                <dg:DataGridTextColumn Binding="{Binding DeviceType}" Header="{DynamicResource Navigation_Column_DeviceType}" MinWidth="120" Width="120" />
-                <dg:DataGridTextColumn Binding="{Binding PortName}" Header="{DynamicResource Navigation_Column_PortName}" MinWidth="100" Width="100" />
-                <dg:DataGridTextColumn Binding="{Binding BaudRate}" Header="{DynamicResource Navigation_Column_BaudRate}" MinWidth="100" Width="100" />
-                <dg:DataGridTextColumn Binding="{Binding DataBits}" Header="{DynamicResource Navigation_Column_DataBits}" MinWidth="90" Width="90" />
-                <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_StopBits}" MinWidth="100" Width="100">
-                    <dg:DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding StopBits}" />
-                        </DataTemplate>
-                    </dg:DataGridTemplateColumn.CellTemplate>
-                    <dg:DataGridTemplateColumn.CellEditingTemplate>
-                        <DataTemplate>
-                            <edge:EdgeFilterComboBox ItemsSource="{Binding DataContext.StopBitOptions, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedItem="{Binding StopBits}" />
-                        </DataTemplate>
-                    </dg:DataGridTemplateColumn.CellEditingTemplate>
-                </dg:DataGridTemplateColumn>
-                <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Column_Parity}" MinWidth="100" Width="100">
-                    <dg:DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding Parity}" />
-                        </DataTemplate>
-                    </dg:DataGridTemplateColumn.CellTemplate>
-                    <dg:DataGridTemplateColumn.CellEditingTemplate>
-                        <DataTemplate>
-                            <edge:EdgeFilterComboBox ItemsSource="{Binding DataContext.ParityOptions, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedItem="{Binding Parity}" />
-                        </DataTemplate>
-                    </dg:DataGridTemplateColumn.CellEditingTemplate>
-                </dg:DataGridTemplateColumn>
-                <dg:DataGridTextColumn Binding="{Binding SendCmd1}" Header="{DynamicResource Navigation_Column_Command1}" MinWidth="100" Width="100" />
-                <dg:DataGridTextColumn Binding="{Binding SendCmd2}" Header="{DynamicResource Navigation_Column_Command2}" MinWidth="100" Width="100" />
-                <dg:DataGridCheckBoxColumn Binding="{Binding IsEnabled}" Header="{DynamicResource Navigation_Column_Enable}" MinWidth="80" Width="80" />
-                <dg:DataGridTextColumn Binding="{Binding Remark}" Header="{DynamicResource Navigation_Column_Remark}" MinWidth="180" Width="180" />
-            </edge:EdgeDataGrid.Columns>
-        </edge:EdgeDataGrid>
-    </edge:EdgeTablePanel>
+            <edge:EdgeDataGrid
+                x:Name="SerialGrid"
+                AutoGenerateColumns="False"
+                CanUserReorderColumns="False"
+                CanUserResizeColumns="True"
+                CanUserSortColumns="False"
+                IsReadOnly="True"
+                ItemsSource="{Binding SerialDevices}">
+                <edge:EdgeDataGrid.Columns>
+                    <edge:EdgeTextColumn Binding="{Binding DeviceName}" Header="{DynamicResource Navigation_Column_DeviceName}" MinWidth="180" Width="2*" />
+                    <edge:EdgeTextColumn Binding="{Binding DeviceType}" Header="{DynamicResource Navigation_Column_DeviceType}" MinWidth="130" Width="130" />
+                    <edge:EdgeTextColumn Binding="{Binding PortName}" Header="{DynamicResource Navigation_Column_PortName}" MinWidth="120" Width="120" />
+                    <edge:EdgeTextColumn Binding="{Binding BaudRate}" Header="{DynamicResource Navigation_Column_BaudRate}" MinWidth="110" Width="110" />
+                    <edge:EdgeCheckColumn Binding="{Binding IsEnabled}" Header="{DynamicResource Navigation_Column_Enable}" MinWidth="80" Width="80" />
+                </edge:EdgeDataGrid.Columns>
+            </edge:EdgeDataGrid>
+        </edge:EdgeTablePanel>
+
+        <Border
+            Classes="edge-dialog-overlay"
+            IsVisible="{Binding IsSerialDeviceDialogOpen}">
+            <edge:EdgeDialogChrome
+                Classes="inline-dialog hardware-form-dialog"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                CloseCommand="{Binding CancelSerialDeviceDialogCommand}"
+                CloseTopLevelOnClose="False"
+                Title="{Binding SerialDeviceDialogTitle}">
+                <Grid
+                    ColumnDefinitions="*,*,*"
+                    RowDefinitions="Auto,Auto,Auto,Auto,Auto"
+                    ColumnSpacing="{DynamicResource Edge.Size.Spacing8}"
+                    RowSpacing="{DynamicResource Edge.Size.Spacing6}">
+                    <edge:EdgeFieldRow Classes="dialog-form" Grid.ColumnSpan="3" Label="{DynamicResource Navigation_Column_DeviceName}">
+                        <edge:EdgeTextBox Text="{Binding EditingSerialDevice.DeviceName}" />
+                    </edge:EdgeFieldRow>
+                    <edge:EdgeFieldRow Classes="dialog-form" Grid.Row="1" Label="{DynamicResource Navigation_Column_DeviceType}">
+                        <edge:EdgeTextBox Text="{Binding EditingSerialDevice.DeviceType}" />
+                    </edge:EdgeFieldRow>
+                    <edge:EdgeFieldRow Classes="dialog-form" Grid.Row="1" Grid.Column="1" Label="{DynamicResource Navigation_Column_PortName}">
+                        <edge:EdgeTextBox Text="{Binding EditingSerialDevice.PortName}" />
+                    </edge:EdgeFieldRow>
+                    <edge:EdgeFieldRow Classes="dialog-form" Grid.Row="1" Grid.Column="2" Label="{DynamicResource Navigation_Column_BaudRate}">
+                        <edge:EdgeTextBox Text="{Binding EditingSerialDevice.BaudRate}" />
+                    </edge:EdgeFieldRow>
+                    <edge:EdgeFieldRow Classes="dialog-form" Grid.Row="2" Label="{DynamicResource Navigation_Column_DataBits}">
+                        <edge:EdgeTextBox Text="{Binding EditingSerialDevice.DataBits}" />
+                    </edge:EdgeFieldRow>
+                    <edge:EdgeFieldRow Classes="dialog-form" Grid.Row="2" Grid.Column="1" Label="{DynamicResource Navigation_Column_StopBits}">
+                        <edge:EdgeFilterComboBox ItemsSource="{Binding StopBitOptions}" SelectedItem="{Binding EditingSerialDevice.StopBits, Mode=TwoWay}" />
+                    </edge:EdgeFieldRow>
+                    <edge:EdgeFieldRow Classes="dialog-form" Grid.Row="2" Grid.Column="2" Label="{DynamicResource Navigation_Column_Parity}">
+                        <edge:EdgeFilterComboBox ItemsSource="{Binding ParityOptions}" SelectedItem="{Binding EditingSerialDevice.Parity, Mode=TwoWay}" />
+                    </edge:EdgeFieldRow>
+                    <edge:EdgeFieldRow Classes="dialog-form" Grid.Row="3" Label="{DynamicResource Navigation_Column_Command1}">
+                        <edge:EdgeTextBox Text="{Binding EditingSerialDevice.SendCmd1}" />
+                    </edge:EdgeFieldRow>
+                    <edge:EdgeFieldRow Classes="dialog-form" Grid.Row="3" Grid.Column="1" Label="{DynamicResource Navigation_Column_Command2}">
+                        <edge:EdgeTextBox Text="{Binding EditingSerialDevice.SendCmd2}" />
+                    </edge:EdgeFieldRow>
+                    <edge:EdgeFieldRow Classes="dialog-form" Grid.Row="3" Grid.Column="2" Label="{DynamicResource Navigation_Column_Enable}">
+                        <edge:EdgeCheckBox
+                            Classes="boolean"
+                            Content="{DynamicResource Navigation_Column_Enable}"
+                            IsChecked="{Binding EditingSerialDevice.IsEnabled, Mode=TwoWay}" />
+                    </edge:EdgeFieldRow>
+                    <edge:EdgeFieldRow Classes="dialog-form" Grid.Row="4" Grid.ColumnSpan="3" Label="{DynamicResource Navigation_Column_Remark}">
+                        <edge:EdgeTextBox Text="{Binding EditingSerialDevice.Remark}" />
+                    </edge:EdgeFieldRow>
+                </Grid>
+
+                <edge:EdgeDialogChrome.FooterContent>
+                    <StackPanel Classes="edge-dialog-actions">
+                        <edge:EdgeActionButton
+                            Command="{Binding CancelSerialDeviceDialogCommand}"
+                            Content="{DynamicResource Navigation_Button_Cancel}"
+                            Icon="{StaticResource Edge.Icon.Close}"
+                            Kind="Secondary"
+                            Size="Compact" />
+                        <edge:EdgeActionButton
+                            Command="{Binding ConfirmSerialDeviceDialogCommand}"
+                            Content="{DynamicResource Navigation_Button_Save}"
+                            Icon="{StaticResource Edge.Icon.Save}"
+                            Kind="Primary"
+                            Size="Compact" />
+                    </StackPanel>
+                </edge:EdgeDialogChrome.FooterContent>
+            </edge:EdgeDialogChrome>
+        </Border>
+    </Grid>
 </UserControl>

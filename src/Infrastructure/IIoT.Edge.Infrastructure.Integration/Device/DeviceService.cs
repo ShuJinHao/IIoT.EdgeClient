@@ -4,6 +4,7 @@ using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Common.Device;
 using IIoT.Edge.Infrastructure.Integration.Device.Cache;
+using System.Diagnostics;
 
 namespace IIoT.Edge.Infrastructure.Integration.Device;
 
@@ -264,7 +265,9 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
         EdgeUploadGateSnapshot previousGate,
         CancellationToken ct)
     {
+        var stopwatch = Stopwatch.StartNew();
         var result = await _bootstrapClient.BootstrapAsync(ct).ConfigureAwait(false);
+        var latencyMs = ToLatencyMs(stopwatch.ElapsedMilliseconds);
         if (result.Kind == CloudDeviceBootstrapResultKind.Cancelled)
         {
             RestoreCancelledGate(previousGate, attemptedAtUtc);
@@ -274,7 +277,7 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
         if (result.Kind != CloudDeviceBootstrapResultKind.Success || result.Session is null)
         {
             _bootstrapEventLogger.LogBootstrapFailure(result);
-            GoOffline(result.ClientCode, null, _uploadGatePolicy.ResolveBootstrapFailureReason(result.Kind), attemptedAtUtc);
+            GoOffline(result.ClientCode, null, _uploadGatePolicy.ResolveBootstrapFailureReason(result.Kind), attemptedAtUtc, latencyMs);
             return;
         }
 
@@ -282,7 +285,8 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
             result.Session,
             attemptedAtUtc,
             successEventName: "edge.bootstrap.success",
-            invalidTokenEventName: "edge.bootstrap.invalid_token");
+            invalidTokenEventName: "edge.bootstrap.invalid_token",
+            latencyMs);
     }
 
     private async Task<DeviceRefreshResult> TryRefreshCurrentDeviceAsync(
@@ -295,7 +299,9 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
             return DeviceRefreshResult.FallbackToBootstrap;
         }
 
+        var stopwatch = Stopwatch.StartNew();
         var result = await _bootstrapClient.RefreshAsync(session, ct).ConfigureAwait(false);
+        var latencyMs = ToLatencyMs(stopwatch.ElapsedMilliseconds);
         if (result.Kind == CloudDeviceBootstrapResultKind.Cancelled)
         {
             return DeviceRefreshResult.Cancelled;
@@ -311,7 +317,8 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
             result.Session,
             attemptedAtUtc,
             successEventName: "edge.bootstrap.refresh.success",
-            invalidTokenEventName: "edge.bootstrap.refresh.invalid_token");
+            invalidTokenEventName: "edge.bootstrap.refresh.invalid_token",
+            latencyMs);
         return DeviceRefreshResult.Refreshed;
     }
 
@@ -319,20 +326,21 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
         DeviceSession session,
         DateTimeOffset attemptedAtUtc,
         string successEventName,
-        string invalidTokenEventName)
+        string invalidTokenEventName,
+        int? latencyMs)
     {
         if (!_uploadGatePolicy.TryResolveTokenBlockReason(session, out var invalidReason))
         {
             _bootstrapEventLogger.LogSessionAccepted(successEventName, session);
-            GoOnline(session, attemptedAtUtc);
+            GoOnline(session, attemptedAtUtc, latencyMs);
             return;
         }
 
         _bootstrapEventLogger.LogSessionRejected(invalidTokenEventName, session, invalidReason);
-        GoOffline(session.ClientCode, session, invalidReason, attemptedAtUtc);
+        GoOffline(session.ClientCode, session, invalidReason, attemptedAtUtc, latencyMs);
     }
 
-    private void GoOnline(DeviceSession session, DateTimeOffset attemptedAtUtc)
+    private void GoOnline(DeviceSession session, DateTimeOffset attemptedAtUtc, int? latencyMs)
     {
         var raiseStateChanged = false;
         var raiseDeviceIdentified = false;
@@ -370,14 +378,15 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
         }
 
         UpdateUploadGate(nextGate);
-        _heartbeatStateStore?.MarkReady(ExternalSystemKind.Cloud, attemptedAtUtc.UtcDateTime);
+        _heartbeatStateStore?.MarkReady(ExternalSystemKind.Cloud, attemptedAtUtc.UtcDateTime, latencyMs: latencyMs);
     }
 
     private void GoOffline(
         string clientCode,
         DeviceSession? identifiedSession,
         EdgeUploadBlockReason blockReason,
-        DateTimeOffset attemptedAtUtc)
+        DateTimeOffset attemptedAtUtc,
+        int? latencyMs)
     {
         var raiseStateChanged = false;
         var raiseDeviceIdentified = false;
@@ -426,7 +435,8 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
             ExternalSystemKind.Cloud,
             nextGate.Reason.ToReasonCode(),
             null,
-            attemptedAtUtc.UtcDateTime);
+            attemptedAtUtc.UtcDateTime,
+            latencyMs);
     }
 
     private bool TryLoadCachedDevice(string clientCode)
@@ -496,4 +506,6 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
                 LastBootstrapAttemptedAtUtc = attemptedAtUtc
             });
 
+    private static int ToLatencyMs(long elapsedMilliseconds)
+        => (int)Math.Min(int.MaxValue, Math.Max(0, elapsedMilliseconds));
 }

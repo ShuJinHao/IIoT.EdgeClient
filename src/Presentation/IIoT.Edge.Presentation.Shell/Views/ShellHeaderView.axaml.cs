@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
@@ -67,6 +68,7 @@ public partial class ShellHeaderView : UserControl
 
         var flyout = new Flyout();
         flyout.FlyoutPresenterClasses.Add("shell-account-flyout");
+        flyout.Placement = PlacementMode.BottomEdgeAlignedRight;
         flyout.Content = CreateAuthenticatedAccountMenu(authContext, flyout);
         flyout.ShowAt(target);
     }
@@ -131,7 +133,7 @@ public partial class ShellHeaderView : UserControl
     {
         var panel = new StackPanel
         {
-            Spacing = 10
+            Classes = { "shell-account-menu-panel" }
         };
 
         var shell = new EdgeCard
@@ -160,12 +162,13 @@ public partial class ShellHeaderView : UserControl
             Text = text
         };
 
-    private static Button CreateMenuButton(string text)
+    private static EdgeActionButton CreateMenuButton(string text)
         => new()
         {
             Classes = { "shell-account-action" },
             Content = text,
-            HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Left
+            Kind = EdgeActionButtonKind.Secondary,
+            Size = EdgeActionButtonSize.Compact
         };
 
     private static bool IsHeaderControl(AvaloniaObject? source)

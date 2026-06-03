@@ -1,0 +1,261 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
+        xmlns:views="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared">
+
+    <Style Selector="Button.edge-nav-button">
+        <Setter Property="Width" Value="40" />
+        <Setter Property="Height" Value="40" />
+        <Setter Property="MinHeight" Value="40" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Circle}" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Button.edge-nav-button:pointerover">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Surface.Card}" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+
+    <Style Selector="Button.edge-nav-button.selected">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Surface.Inverse}" />
+    </Style>
+
+    <Style Selector="Border.edge-nav-tile">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Surface.Card}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Edge.Brush.Border.Subtle}" />
+        <Setter Property="BorderThickness" Value="{DynamicResource Edge.Thickness.Border.Subtle}" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Medium}" />
+    </Style>
+
+    <Style Selector="Border.edge-nav-tile.selected">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Accent.Primary}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Edge.Brush.Accent.Primary}" />
+    </Style>
+
+    <Style Selector="PathIcon.edge-nav-icon">
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Muted}" />
+    </Style>
+
+    <Style Selector="PathIcon.edge-nav-icon.selected">
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.OnDark.Primary}" />
+    </Style>
+
+    <Style Selector="PathIcon.edge-nav-icon.disabled">
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Status.Offline}" />
+    </Style>
+
+    <Style Selector="Path.edge-nav-icon">
+        <Setter Property="Fill" Value="Transparent" />
+        <Setter Property="Stroke" Value="{DynamicResource Edge.Brush.Text.Secondary}" />
+        <Setter Property="StrokeThickness" Value="1.75" />
+        <Setter Property="StrokeLineCap" Value="Round" />
+        <Setter Property="StrokeJoin" Value="Round" />
+    </Style>
+
+    <Style Selector="Path.edge-nav-icon.selected">
+        <Setter Property="Stroke" Value="{DynamicResource Edge.Brush.OnDark.Primary}" />
+    </Style>
+
+    <Style Selector="Path.edge-nav-icon.disabled">
+        <Setter Property="Stroke" Value="{DynamicResource Edge.Brush.Status.Offline}" />
+    </Style>
+
+    <Style Selector="TextBlock.edge-nav-title">
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Caption}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Muted}" />
+    </Style>
+
+    <Style Selector="TextBlock.edge-nav-title.selected">
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.OnAccent}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style Selector="TextBlock.edge-nav-title.disabled">
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Status.Offline}" />
+    </Style>
+
+    <Style Selector="TabControl">
+        <Setter Property="FontFamily" Value="{DynamicResource Edge.FontFamily.Default}" />
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Body}" />
+    </Style>
+
+    <Style Selector="TabControl.edge-tabs">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="FontFamily" Value="{DynamicResource Edge.FontFamily.Default}" />
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Body}" />
+        <Setter Property="ItemsPanel">
+            <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Edge.Size.Spacing4}" />
+            </ItemsPanelTemplate>
+        </Setter>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Grid RowDefinitions="Auto,*">
+                    <Border
+                        HorizontalAlignment="Left"
+                        Padding="4"
+                        Background="{DynamicResource Edge.Brush.Segmented.Background}"
+                        CornerRadius="{DynamicResource Edge.CornerRadius.Pill}">
+                        <ItemsPresenter
+                            Name="PART_ItemsPresenter"
+                            ItemsPanel="{TemplateBinding ItemsPanel}" />
+                    </Border>
+
+                    <ContentPresenter
+                        Name="PART_SelectedContentHost"
+                        Grid.Row="1"
+                        Margin="0,12,0,0"
+                        Content="{TemplateBinding SelectedContent}"
+                        ContentTemplate="{TemplateBinding SelectedContentTemplate}" />
+                </Grid>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="TabControl.edge-tabs TabItem">
+        <Setter Property="MinHeight" Value="34" />
+        <Setter Property="MinWidth" Value="128" />
+        <Setter Property="Padding" Value="18,0" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Pill}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Segmented.ItemForeground}" />
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.BodyStrong}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border
+                    MinHeight="{TemplateBinding MinHeight}"
+                    MinWidth="{TemplateBinding MinWidth}"
+                    Padding="{TemplateBinding Padding}"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="{TemplateBinding CornerRadius}">
+                    <ContentPresenter
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Content="{TemplateBinding Header}" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="TabControl.edge-tabs TabItem:pointerover">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Segmented.ItemHover}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Primary}" />
+    </Style>
+
+    <Style Selector="TabControl.edge-tabs TabItem:selected">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Segmented.ItemSelected}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Segmented.ItemSelectedForeground}" />
+    </Style>
+
+    <Style Selector="controls|EdgeSegmentedNav">
+        <Setter Property="Padding" Value="4" />
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Segmented.Background}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Edge.Brush.Border.Subtle}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Pill}" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border
+                    Padding="{TemplateBinding Padding}"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    ClipToBounds="True"
+                    CornerRadius="{TemplateBinding CornerRadius}">
+                    <ScrollViewer
+                        HorizontalScrollBarVisibility="Disabled"
+                        VerticalScrollBarVisibility="Disabled">
+                        <ItemsPresenter
+                            Name="PART_ItemsPresenter"
+                            ItemsPanel="{TemplateBinding ItemsPanel}" />
+                    </ScrollViewer>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+        <Setter Property="ItemsPanel">
+            <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Edge.Size.Spacing4}" />
+            </ItemsPanelTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="controls|EdgeSegmentedNav ListBoxItem">
+        <Setter Property="Width" Value="96" />
+        <Setter Property="MinWidth" Value="96" />
+        <Setter Property="MinHeight" Value="30" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="Padding" Value="14,0" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Segmented.ItemForeground}" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Pill}" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border
+                    Padding="{TemplateBinding Padding}"
+                    Background="{TemplateBinding Background}"
+                    ClipToBounds="True"
+                    CornerRadius="{TemplateBinding CornerRadius}">
+                    <ContentPresenter
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Content="{TemplateBinding Content}" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="controls|EdgeSegmentedNav controls|EdgeSegmentedNavItem">
+        <Setter Property="Width" Value="96" />
+        <Setter Property="MinWidth" Value="96" />
+        <Setter Property="MinHeight" Value="30" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="Padding" Value="14,0" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Segmented.ItemForeground}" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Pill}" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border
+                    Padding="{TemplateBinding Padding}"
+                    Background="{TemplateBinding Background}"
+                    ClipToBounds="True"
+                    CornerRadius="{TemplateBinding CornerRadius}">
+                    <ContentPresenter
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Content="{TemplateBinding Content}" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="controls|EdgeSegmentedNav ListBoxItem:pointerover">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Segmented.ItemHover}" />
+    </Style>
+
+    <Style Selector="controls|EdgeSegmentedNav controls|EdgeSegmentedNavItem:pointerover">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Segmented.ItemHover}" />
+    </Style>
+
+    <Style Selector="controls|EdgeSegmentedNav ListBoxItem:selected">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Segmented.ItemSelected}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Segmented.ItemSelectedForeground}" />
+    </Style>
+
+    <Style Selector="controls|EdgeSegmentedNav controls|EdgeSegmentedNavItem:selected">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Segmented.ItemSelected}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Segmented.ItemSelectedForeground}" />
+    </Style>
+</Styles>

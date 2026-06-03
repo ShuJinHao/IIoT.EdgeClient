@@ -3,7 +3,7 @@ using IIoT.Edge.Application.Modules.Hardware;
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView;
 
 /// <summary>
-/// 新增 IO 点位时可选择的插件标准信号，来源于当前 PLC 所属模块的强类型信号 profile。
+/// 新增 IO 点位时可选择的插件标准信号，来源于当前插件库的强类型信号 profile。
 /// </summary>
 public sealed class IoStandardSignalOptionVm
 {
@@ -17,7 +17,6 @@ public sealed class IoStandardSignalOptionVm
         SortOrder = template.SortOrder;
         Category = template.Category;
         BusinessGroup = template.BusinessGroup;
-        SignalName = template.SignalName;
         Remark = template.Remark;
     }
 
@@ -37,9 +36,14 @@ public sealed class IoStandardSignalOptionVm
 
     public string BusinessGroup { get; }
 
-    public string SignalName { get; }
-
     public string? Remark { get; }
 
-    public string DisplayText => $"{SignalName}（{Direction} / {DataType} / {PlcAddress}）";
+    public string DisplayText
+    {
+        get
+        {
+            var title = string.IsNullOrWhiteSpace(BusinessGroup) ? SignalKey : BusinessGroup;
+            return $"{title}（{Direction} / {DataType} / {PlcAddress}）";
+        }
+    }
 }

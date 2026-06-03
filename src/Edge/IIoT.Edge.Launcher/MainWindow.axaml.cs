@@ -30,7 +30,7 @@ public partial class MainWindow : Window
 
     private void OnOpened(object? sender, EventArgs e)
     {
-        UserNameTextBox.FocusInput();
+        UserNameTextBox.Focus();
     }
 
     private void OnClosed(object? sender, EventArgs e)
@@ -83,7 +83,7 @@ public partial class MainWindow : Window
 
         if (!_viewModel.IsAuthenticated && IsVisible)
         {
-            UserNameTextBox.FocusInput();
+            UserNameTextBox.Focus();
         }
     }
 

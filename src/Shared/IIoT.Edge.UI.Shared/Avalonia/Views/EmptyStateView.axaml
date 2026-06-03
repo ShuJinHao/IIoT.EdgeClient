@@ -3,23 +3,15 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:views="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views">
-    <Border
-        Padding="20"
-        Background="{DynamicResource Edge.Surface.Panel}"
-        BorderBrush="{DynamicResource Edge.Border.Subtle}"
-        BorderThickness="1"
-        CornerRadius="8">
-        <StackPanel Spacing="8">
+    <Border Classes="edge-empty-state">
+        <StackPanel Classes="edge-empty-state-inline">
             <TextBlock
-                FontSize="16"
-                FontWeight="SemiBold"
-                Foreground="{DynamicResource Edge.Text.Primary}"
+                Classes="edge-empty-state-title"
                 Text="{Binding Title, RelativeSource={RelativeSource AncestorType=views:EmptyStateView}}" />
             <TextBlock
-                FontSize="13"
-                Foreground="{DynamicResource Edge.Text.Muted}"
+                Classes="edge-empty-state-message"
                 Text="{Binding Message, RelativeSource={RelativeSource AncestorType=views:EmptyStateView}}"
-                TextWrapping="Wrap" />
+                ToolTip.Tip="{Binding Message, RelativeSource={RelativeSource AncestorType=views:EmptyStateView}}" />
         </StackPanel>
     </Border>
 </UserControl>

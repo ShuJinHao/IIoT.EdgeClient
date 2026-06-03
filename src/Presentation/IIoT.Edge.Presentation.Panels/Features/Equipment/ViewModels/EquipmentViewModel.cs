@@ -5,7 +5,6 @@ using AvaloniaDispatcherTimer = Avalonia.Threading.DispatcherTimer;
 using IIoT.Edge.Application.Abstractions.Recipe;
 using IIoT.Edge.Application.Features.Production.Planning;
 using IIoT.Edge.Application.Features.Production.Equipment;
-using IIoT.Edge.Application.Features.Production.Equipment.Models;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
 using IIoT.Edge.UI.Shared.PluginSystem;
@@ -240,7 +239,18 @@ public class EquipmentViewModel : PresentationViewModelBase
             RecipeVersion = snapshot.RecipeVersion;
             ProcessName = snapshot.ProcessName;
             IsRecipeActive = snapshot.IsRecipeActive;
-            ReplaceItems<RecipeParamViewModel>(Parameters, snapshot.Parameters);
+            ReplaceItems(
+                Parameters,
+                snapshot.Parameters.Select(parameter => new RecipeParamViewModel
+                {
+                    ParamName = parameter.ParamName,
+                    CurrentValue = parameter.CurrentValue,
+                    MinValue = parameter.MinValue,
+                    MaxValue = parameter.MaxValue,
+                    Unit = parameter.Unit,
+                    WarnLow = parameter.WarnLow,
+                    WarnHigh = parameter.WarnHigh
+                }));
             NotifyRecipeParameterStateChanged();
         });
     }

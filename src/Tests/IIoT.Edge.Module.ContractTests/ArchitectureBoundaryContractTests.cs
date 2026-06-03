@@ -1,6 +1,7 @@
 namespace IIoT.Edge.Module.ContractTests;
 
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 
 public sealed class ArchitectureBoundaryContractTests
 {
@@ -15,11 +16,13 @@ public sealed class ArchitectureBoundaryContractTests
         var repoRoot = ContractTestPathHelper.FindRepoRoot();
         var directories = new[]
         {
+            Path.Combine(repoRoot, "src", "Core"),
             Path.Combine(repoRoot, "src", "Application", "IIoT.Edge.Application"),
             Path.Combine(repoRoot, "src", "Runtime"),
-            Path.Combine(repoRoot, "src", "Infrastructure", "IIoT.Edge.Infrastructure.Integration"),
+            Path.Combine(repoRoot, "src", "Infrastructure"),
             Path.Combine(repoRoot, "src", "Presentation"),
             Path.Combine(repoRoot, "src", "Shared", "IIoT.Edge.SharedKernel"),
+            Path.Combine(repoRoot, "src", "Shared", "IIoT.Edge.UI.Shared"),
             Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.Shell"),
             Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.Host.Bootstrap")
         };
@@ -39,6 +42,58 @@ public sealed class ArchitectureBoundaryContractTests
             .ToArray();
 
         Assert.Empty(offendingFiles);
+    }
+
+    [Fact]
+    public void ConcreteModuleNamespaces_ShouldOnlyAppearInModulesAndTests()
+    {
+        var repoRoot = ContractTestPathHelper.FindRepoRoot();
+        var allowedRoots = new[]
+        {
+            Path.Combine(repoRoot, "src", "Modules"),
+            Path.Combine(repoRoot, "src", "Tests")
+        };
+
+        var offendingFiles = Directory
+            .EnumerateFiles(Path.Combine(repoRoot, "src"), "*.*", SearchOption.AllDirectories)
+            .Where(path => path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
+                           || path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
+            .Where(path => !IsBuildArtifact(path))
+            .Where(path => !allowedRoots.Any(root => IsUnderDirectory(root, path)))
+            .Select(path => new
+            {
+                Path = path,
+                Text = File.ReadAllText(path)
+            })
+            .Where(file => ForbiddenModuleNamespaces.Any(namespaceName => file.Text.Contains(namespaceName, StringComparison.Ordinal)))
+            .Select(file => ToRepositoryPath(repoRoot, file.Path))
+            .ToArray();
+
+        Assert.Empty(offendingFiles);
+    }
+
+    [Fact]
+    public void ProcessModules_ShouldOnlyReferenceApprovedHostContracts()
+    {
+        var repoRoot = ContractTestPathHelper.FindRepoRoot();
+        var approvedReferences = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "src/Application/IIoT.Edge.Application/IIoT.Edge.Application.csproj",
+            "src/Runtime/IIoT.Edge.Runtime/IIoT.Edge.Runtime.csproj",
+            "src/Shared/IIoT.Edge.SharedKernel/IIoT.Edge.SharedKernel.csproj",
+            "src/Shared/IIoT.Edge.UI.Shared/IIoT.Edge.UI.Shared.csproj",
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/IIoT.Edge.Presentation.Navigation.csproj"
+        };
+
+        var offendingReferences = Directory
+            .EnumerateFiles(Path.Combine(repoRoot, "src", "Modules"), "*.csproj", SearchOption.AllDirectories)
+            .Where(path => !IsBuildArtifact(path))
+            .SelectMany(projectPath => ReadProjectReferences(repoRoot, projectPath)
+                .Where(referencePath => !approvedReferences.Contains(referencePath))
+                .Select(referencePath => $"{ToRepositoryPath(repoRoot, projectPath)} -> {referencePath}"))
+            .ToArray();
+
+        Assert.Empty(offendingReferences);
     }
 
     [Fact]
@@ -195,5 +250,39 @@ public sealed class ArchitectureBoundaryContractTests
             .ToArray();
 
         Assert.Empty(offenders);
+    }
+
+    private static string[] ReadProjectReferences(string repoRoot, string projectPath)
+    {
+        var projectDirectory = Path.GetDirectoryName(projectPath)!;
+        return XDocument
+            .Load(projectPath)
+            .Descendants("ProjectReference")
+            .Select(reference => reference.Attribute("Include")?.Value)
+            .Where(include => !string.IsNullOrWhiteSpace(include))
+            .Select(include => include!.Replace('\\', Path.DirectorySeparatorChar))
+            .Select(include => Path.GetFullPath(Path.Combine(projectDirectory, include)))
+            .Select(path => ToRepositoryPath(repoRoot, path))
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static bool IsBuildArtifact(string path)
+    {
+        return path.Contains(Path.DirectorySeparatorChar + "bin" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+               || path.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsUnderDirectory(string directory, string path)
+    {
+        var relativePath = Path.GetRelativePath(directory, path);
+        return !Path.IsPathRooted(relativePath)
+               && !relativePath.Equals("..", StringComparison.Ordinal)
+               && !relativePath.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal);
+    }
+
+    private static string ToRepositoryPath(string repoRoot, string path)
+    {
+        return Path.GetRelativePath(repoRoot, path).Replace('\\', '/');
     }
 }

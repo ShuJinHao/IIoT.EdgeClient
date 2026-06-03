@@ -89,7 +89,7 @@ public sealed class ModbusPlcServiceBehaviorTests
         serialDevice.UpdatePort("COM3", 19200, 8, "One", "None");
         var resolver = new PlcEndpointResolver(new SerialDeviceReadRepository(serialDevice));
         var plc = NetworkDeviceEntity.Create("PLC-RTU", DeviceType.PLC, "127.0.0.1", 7);
-        plc.AssignModule("TestModule", PlcType.ModbusRtu.ToString());
+        plc.UpdateDeviceModel(PlcType.ModbusRtu.ToString());
         plc.UpdateCommands("RTU-COM3", null);
         plc.UpdateEndpoint("127.0.0.1", 7, null, 5000);
 
@@ -107,7 +107,7 @@ public sealed class ModbusPlcServiceBehaviorTests
     {
         var resolver = new PlcEndpointResolver(new SerialDeviceReadRepository());
         var plc = NetworkDeviceEntity.Create("PLC-RTU", DeviceType.PLC, "127.0.0.1", 1);
-        plc.AssignModule("TestModule", PlcType.ModbusRtu.ToString());
+        plc.UpdateDeviceModel(PlcType.ModbusRtu.ToString());
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
             () => resolver.ResolveAsync(plc, PlcType.ModbusRtu));

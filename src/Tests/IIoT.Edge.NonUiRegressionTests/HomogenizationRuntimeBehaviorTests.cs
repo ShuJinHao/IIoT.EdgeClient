@@ -67,14 +67,14 @@ public sealed class HomogenizationRuntimeBehaviorTests
         await contributor.EnsureConfigurationSamplesAsync();
 
         var device = Assert.Single(networkDevices.Items);
-        Assert.Equal("Homogenization", device.ModuleId);
         Assert.Equal(DeviceType.PLC, device.DeviceType);
+        Assert.Equal("Mc", device.DeviceModel);
         Assert.Equal(SeedableSignals().Count, ioMappings.Items.Count);
         Assert.Equal(
             SeedableSignals().Select(static signal => signal.SignalKey).OrderBy(static signalKey => signalKey),
             ioMappings.Items.Select(static mapping => mapping.SignalKey).OrderBy(static signalKey => signalKey));
         Assert.Contains(ioMappings.Items, static mapping => mapping.Category == "信号交互" && mapping.BusinessGroup == "扫码进站");
-        Assert.Contains(ioMappings.Items, static mapping => mapping.Category == "连续读数据" && mapping.SignalName == "托盘码");
+        Assert.Contains(ioMappings.Items, static mapping => mapping.Category == "连续读数据" && mapping.SignalKey == "Homogenization.TrayCode");
         Assert.Contains(ioMappings.Items, static mapping => mapping.Category == "单点读数据" && mapping.BusinessGroup == "实时数据");
         Assert.Contains(ioMappings.Items, static mapping => mapping.SignalKey == "Homogenization.Interaction.Inbound" && mapping.Direction == "Read" && mapping.PlcAddress == "D701");
     }
@@ -104,7 +104,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
         var networkDevices = new InMemoryRepository<NetworkDeviceEntity>();
         var ioMappings = new InMemoryRepository<IoMappingEntity>();
         var device = NetworkDeviceEntity.Create("PLC-Homogenization-01", DeviceType.PLC, "127.0.0.1", 6000);
-        device.AssignModule("Homogenization", "Mc");
+        device.UpdateDeviceModel("Mc");
         device.UpdateEndpoint("127.0.0.1", 6000, null, 3000);
         device.Enable();
         networkDevices.Add(device);
@@ -117,8 +117,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
             "UInt16",
             "Read",
             "单点读数据",
-            "单点读数据",
-            "");
+            "单点读数据");
         legacyMapping.UpdateSortOrder(999);
         legacyMapping.UpdateMetadata(
             legacyMapping.SignalKey,
@@ -126,7 +125,6 @@ public sealed class HomogenizationRuntimeBehaviorTests
             legacyMapping.Direction,
             legacyMapping.Category,
             legacyMapping.BusinessGroup,
-            legacyMapping.SignalName,
             "旧分类");
         ioMappings.Add(legacyMapping);
 
@@ -146,7 +144,6 @@ public sealed class HomogenizationRuntimeBehaviorTests
         Assert.Equal("Read", preserved.Direction);
         Assert.Equal("单点读数据", preserved.Category);
         Assert.Equal("单点读数据", preserved.BusinessGroup);
-        Assert.Equal(string.Empty, preserved.SignalName);
         Assert.Equal(999, preserved.SortOrder);
     }
 
@@ -163,15 +160,15 @@ public sealed class HomogenizationRuntimeBehaviorTests
             var ioMappings = new InMemoryRepository<IoMappingEntity>();
             var runtimePaths = CreateRuntimePaths(tempDirectory);
             var device = NetworkDeviceEntity.Create("PLC-Homogenization-01", DeviceType.PLC, "127.0.0.1", 6000);
-            device.AssignModule("Homogenization", "Mc");
+            device.UpdateDeviceModel("Mc");
             device.UpdateEndpoint("127.0.0.1", 6000, null, 3000);
             device.Enable();
             networkDevices.Add(device);
 
-            var oldHeartbeat = IoMappingEntity.Create(device.Id, "Homogenization.HeartbeatIn", "D700", 1, "Int16", "Read", "信号交互", "心跳交互", "PLC 心跳");
+            var oldHeartbeat = IoMappingEntity.Create(device.Id, "Homogenization.HeartbeatIn", "D700", 1, "Int16", "Read", "信号交互", "心跳交互");
             oldHeartbeat.UpdateSortOrder(1);
             ioMappings.Add(oldHeartbeat);
-            var oldDebugWrite = IoMappingEntity.Create(device.Id, "TEST", "D801", 1, "Int16", "Write", "信号交互", "111", "TEST");
+            var oldDebugWrite = IoMappingEntity.Create(device.Id, "TEST", "D801", 1, "Int16", "Write", "信号交互", "111");
             oldDebugWrite.UpdateSortOrder(101);
             ioMappings.Add(oldDebugWrite);
 
@@ -242,7 +239,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
     }
 
     [Fact]
-    public async Task HomogenizationDevelopmentSampleContributor_WhenResetEnabled_ShouldOnlyReplaceHomogenizationData()
+    public async Task HomogenizationDevelopmentSampleContributor_WhenResetEnabled_ShouldReplaceCurrentPluginDatabaseData()
     {
         var configuration = CreateEnabledSeedConfiguration(resetBeforeImport: true);
 
@@ -250,13 +247,13 @@ public sealed class HomogenizationRuntimeBehaviorTests
         var ioMappings = new InMemoryRepository<IoMappingEntity>();
 
         var otherDevice = NetworkDeviceEntity.Create("PLC-Other", DeviceType.PLC, "10.0.0.2", 102);
-        otherDevice.AssignModule("OtherModule", "S7");
+        otherDevice.UpdateDeviceModel("S7");
         otherDevice.UpdateEndpoint("10.0.0.2", 102, null, 3000);
         otherDevice.Enable();
         networkDevices.Add(otherDevice);
 
         var oldHomogenizationDevice = NetworkDeviceEntity.Create("PLC-Old-H", DeviceType.PLC, "10.0.0.3", 6000);
-        oldHomogenizationDevice.AssignModule("Homogenization", "Mc");
+        oldHomogenizationDevice.UpdateDeviceModel("Mc");
         oldHomogenizationDevice.UpdateEndpoint("10.0.0.3", 6000, null, 3000);
         oldHomogenizationDevice.Enable();
         networkDevices.Add(oldHomogenizationDevice);
@@ -278,18 +275,13 @@ public sealed class HomogenizationRuntimeBehaviorTests
 
         await contributor.EnsureConfigurationSamplesAsync();
 
-        Assert.Contains(networkDevices.Items, static device => device.ModuleId == "OtherModule");
-        Assert.Contains(ioMappings.Items, static mapping => mapping.SignalKey == "Other.Signal");
-
-        var homogenizationDevices = networkDevices.Items
-            .Where(static device => device.ModuleId == "Homogenization")
-            .ToArray();
-
-        Assert.Single(homogenizationDevices);
-        Assert.Equal("PLC-Homogenization-01", homogenizationDevices[0].DeviceName);
+        var device = Assert.Single(networkDevices.Items);
+        Assert.Equal("PLC-Homogenization-01", device.DeviceName);
+        Assert.Equal("Mc", device.DeviceModel);
+        Assert.DoesNotContain(ioMappings.Items, static mapping => mapping.SignalKey == "Other.Signal");
         Assert.DoesNotContain(ioMappings.Items, static mapping => mapping.SignalKey == "Homogenization.Obsolete");
         Assert.Equal(
-            SeedableSignals().Count + 1,
+            SeedableSignals().Count,
             ioMappings.Items.Count);
     }
 
@@ -803,7 +795,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
 
         public string ProcessType => "Homogenization";
 
-        public MesUploadMode UploadMode => MesUploadMode.Single;
+        public ProcessUploadMode UploadMode => ProcessUploadMode.Single;
 
         public TaskCompletionSource<bool>? InboundGate { get; set; }
 
@@ -870,7 +862,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
             => Task.FromResult(MesCallResult<HomogenizationTraceBatchResult>.Success(null));
 
         public Task<MesCallResult> UploadAsync(
-            ProcessMesUploadContext context,
+            ProcessUploadContext context,
             IReadOnlyList<CellCompletedRecord> records,
             CancellationToken cancellationToken = default)
             => Task.FromResult(MesCallResult.Success());

@@ -22,7 +22,7 @@ public sealed class EfRepositoryBehaviorTests
                 DeviceType.PLC,
                 "127.0.0.1",
                 6000);
-            entity.AssignModule("Homogenization", "MC");
+            entity.UpdateDeviceModel("MC");
             entity.UpdateRemark("old");
 
             repository.Add(entity);
@@ -73,7 +73,7 @@ public sealed class EfRepositoryBehaviorTests
                     "127.0.0.1",
                     6000)
                 .WithId(999);
-            entity.AssignModule("Homogenization", "MC");
+            entity.UpdateDeviceModel("MC");
 
             repository.Update(entity);
 

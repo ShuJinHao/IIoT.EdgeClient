@@ -20,7 +20,8 @@ public sealed record ExternalHeartbeatSnapshot(
     string? Message,
     DateTime? LastAttemptAtUtc,
     DateTime? LastSuccessAtUtc,
-    DateTime? LastFailureAtUtc)
+    DateTime? LastFailureAtUtc,
+    int? LatencyMs = null)
 {
     public static ExternalHeartbeatSnapshot Unknown(ExternalSystemKind system, string reasonCode = "unknown")
         => new(system, ExternalHeartbeatState.Unknown, reasonCode, null, null, null, null);
@@ -32,13 +33,18 @@ public interface IExternalHeartbeatStateStore
 {
     ExternalHeartbeatSnapshot Get(ExternalSystemKind system);
 
-    void MarkReady(ExternalSystemKind system, DateTime? occurredAtUtc = null, string? message = null);
+    void MarkReady(
+        ExternalSystemKind system,
+        DateTime? occurredAtUtc = null,
+        string? message = null,
+        int? latencyMs = null);
 
     void MarkNotReady(
         ExternalSystemKind system,
         string reasonCode,
         string? message = null,
-        DateTime? occurredAtUtc = null);
+        DateTime? occurredAtUtc = null,
+        int? latencyMs = null);
 }
 
 public interface IMesHeartbeatProbe

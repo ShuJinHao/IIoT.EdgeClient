@@ -10,7 +10,6 @@ using IIoT.Edge.Infrastructure.DeviceComm.Signals;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.SharedKernel.Repository;
-using IIoT.Edge.Runtime.Plc;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Plc;
 
@@ -24,7 +23,7 @@ public sealed class PlcDeviceRuntimeBuilder
     private readonly PlcConnectionStatusStore _statusStore;
     private readonly IPlcSignalBlockPlanner _signalBlockPlanner;
     private readonly IPlcEndpointResolver _endpointResolver;
-    private readonly IReadOnlyDictionary<string, IModuleHardwareProfileProvider> _hardwareProfiles;
+    private readonly IModuleHardwareProfileProvider[] _hardwareProfiles;
 
     public PlcDeviceRuntimeBuilder(
         IRepository<IoMappingEntity> ioMappings,
@@ -45,7 +44,9 @@ public sealed class PlcDeviceRuntimeBuilder
         _statusStore = statusStore;
         _signalBlockPlanner = signalBlockPlanner;
         _endpointResolver = endpointResolver;
-        _hardwareProfiles = hardwareProfiles.ToDictionary(x => x.ModuleId, StringComparer.OrdinalIgnoreCase);
+        _hardwareProfiles = hardwareProfiles
+            .OrderBy(static x => x.ModuleId, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
     }
 
     public async Task<PlcDeviceRuntimeHandle> BuildAsync(
@@ -54,14 +55,18 @@ public sealed class PlcDeviceRuntimeBuilder
         CancellationToken ct)
     {
         var mappings = await _ioMappings.GetListAsync(x => x.NetworkDeviceId == device.Id, ct).ConfigureAwait(false);
-        var mappingArray = mappings.OrderBy(x => x.SortOrder).ToArray();
+        var mappingArray = mappings
+            .Where(static x => !string.IsNullOrWhiteSpace(x.PlcAddress))
+            .OrderBy(x => x.SortOrder)
+            .ToArray();
         var readCount = mappingArray.Where(x => x.Direction == "Read").Sum(x => x.AddressCount);
         var writeCount = mappingArray.Where(x => x.Direction == "Write").Sum(x => x.AddressCount);
         var signalBindings = BuildSignalBindings(mappingArray);
 
         _dataStore.Register(device.Id, readCount, writeCount, signalBindings);
         var buffer = _dataStore.GetBuffer(device.Id);
-        var context = _contextStore.GetOrCreate(device.DeviceName, device.ModuleId);
+        var hardwareProfile = ResolveHardwareProfile();
+        var context = _contextStore.GetOrCreate(device.DeviceName, hardwareProfile?.ModuleId ?? string.Empty);
         context.NetworkDeviceId = device.Id;
 
         if (!Enum.TryParse<PlcType>(device.DeviceModel, ignoreCase: true, out var plcType))
@@ -74,7 +79,7 @@ public sealed class PlcDeviceRuntimeBuilder
         var plcService = _plcServiceFactory.Create(plcType, device.DeviceName);
         var endpoint = await _endpointResolver.ResolveAsync(device, plcType, ct).ConfigureAwait(false);
         var deviceCts = new CancellationTokenSource();
-        var runtimePolicy = ResolveRuntimePolicy(device.ModuleId);
+        var runtimePolicy = hardwareProfile?.GetIoRuntimePolicy() ?? PlcIoRuntimePolicy.Default;
 
         var ioScanTask = new PlcIoScanTask(
             plcService,
@@ -104,11 +109,8 @@ public sealed class PlcDeviceRuntimeBuilder
         };
     }
 
-    private PlcIoRuntimePolicy ResolveRuntimePolicy(string? moduleId)
-        => !string.IsNullOrWhiteSpace(moduleId)
-           && _hardwareProfiles.TryGetValue(moduleId, out var provider)
-            ? provider.GetIoRuntimePolicy()
-            : PlcIoRuntimePolicy.Default;
+    private IModuleHardwareProfileProvider? ResolveHardwareProfile()
+        => _hardwareProfiles.Length == 1 ? _hardwareProfiles[0] : null;
 
     private static IReadOnlyCollection<PlcBufferSignalBinding> BuildSignalBindings(
         IReadOnlyCollection<IoMappingEntity> mappings)

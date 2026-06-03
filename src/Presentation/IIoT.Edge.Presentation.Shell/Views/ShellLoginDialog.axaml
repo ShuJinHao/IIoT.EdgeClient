@@ -13,19 +13,18 @@
     TransparencyLevelHint="Transparent"
     WindowDecorations="None"
     WindowStartupLocation="Manual">
-    <Grid Background="{DynamicResource Edge.Brush.Overlay.Modal}">
+    <Grid Classes="shell-login-overlay">
         <edge:EdgeCard
-            Width="520"
             HorizontalAlignment="Center"
             VerticalAlignment="Center"
             Classes="shell-login-panel"
             Elevation="Float"
             PaddingMode="None"
             Surface="Card">
-            <Grid RowDefinitions="Auto,*">
+            <Grid RowDefinitions="Auto,Auto">
                 <Grid
                     Grid.Row="0"
-                    Margin="28,24,20,0"
+                    Classes="shell-login-header"
                     ColumnDefinitions="*,Auto">
                     <StackPanel
                         Grid.Column="0"
@@ -41,12 +40,13 @@
                     <edge:EdgeWindowButton
                         Grid.Column="1"
                         Action="Close"
+                        Classes="shell-login-close"
                         Click="OnCancelClick" />
                 </Grid>
 
                 <Grid
                     Grid.Row="1"
-                    Margin="28,18,28,24"
+                    Classes="shell-login-body"
                     RowDefinitions="Auto,18,Auto,12,Auto,18,Auto">
                     <edge:EdgeSegmentedNav
                         x:Name="LoginModeTabs"
@@ -55,8 +55,8 @@
                         HorizontalAlignment="Stretch"
                         SelectionChanged="OnModeSelectionChanged"
                         SelectedIndex="0">
-                        <ListBoxItem Content="{DynamicResource Shell_Login_LocalEmergency}" />
-                        <ListBoxItem Content="{DynamicResource Shell_Login_CloudEmployee}" />
+                        <edge:EdgeSegmentedNavItem Content="{DynamicResource Shell_Login_LocalEmergency}" />
+                        <edge:EdgeSegmentedNavItem Content="{DynamicResource Shell_Login_CloudEmployee}" />
                     </edge:EdgeSegmentedNav>
 
                     <Grid
@@ -67,9 +67,10 @@
                             Grid.Row="0"
                             Classes="shell-login-form-label"
                             Text="{DynamicResource Shell_Login_LocalDescription}" />
-                        <edge:EdgeLoginInput
+                        <edge:EdgeTextBox
                             x:Name="LocalPasswordInput"
                             Grid.Row="2"
+                            Classes="edge-text-box shell-login-input"
                             HorizontalAlignment="Left"
                             PasswordChar="*"
                             PlaceholderText="{DynamicResource Shell_Login_LocalPasswordHint}"
@@ -85,15 +86,17 @@
                             Grid.Row="0"
                             Classes="shell-login-form-label"
                             Text="{DynamicResource Shell_Login_CloudDescription}" />
-                        <edge:EdgeLoginInput
+                        <edge:EdgeTextBox
                             x:Name="EmployeeNoInput"
                             Grid.Row="2"
+                            Classes="edge-text-box shell-login-input"
                             HorizontalAlignment="Left"
                             PlaceholderText="{DynamicResource Shell_Login_EmployeeNoHint}"
                             KeyDown="OnInputKeyDown" />
-                        <edge:EdgeLoginInput
+                        <edge:EdgeTextBox
                             x:Name="CloudPasswordInput"
                             Grid.Row="4"
+                            Classes="edge-text-box shell-login-input"
                             HorizontalAlignment="Left"
                             PasswordChar="*"
                             PlaceholderText="{DynamicResource Shell_Login_PasswordHint}"
@@ -113,23 +116,22 @@
                     <TextBlock
                         x:Name="ErrorText"
                         Grid.Row="4"
-                        MinHeight="20"
                         Classes="shell-login-error"
                         TextWrapping="Wrap" />
 
                     <StackPanel
                         Grid.Row="6"
-                        HorizontalAlignment="Right"
-                        Orientation="Horizontal"
-                        Spacing="{DynamicResource Edge.Size.Spacing8}">
+                        Classes="shell-login-actions">
                         <edge:EdgeActionButton
+                            Classes="shell-login-cancel"
                             Click="OnCancelClick"
                             Icon="{StaticResource Edge.Icon.Close}"
-                            Kind="Soft"
+                            Kind="Secondary"
                             Size="Compact"
                             Content="{DynamicResource Shell_Login_Cancel}" />
                         <edge:EdgeActionButton
                             x:Name="LoginButton"
+                            Classes="shell-login-submit"
                             Click="OnLoginClick"
                             Icon="{StaticResource Edge.Icon.Login}"
                             Kind="Primary"

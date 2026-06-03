@@ -18,7 +18,7 @@ public class CapacityViewModel : NavigationViewModelBase
     private const string ChartBadKey = "bad";
     private const string ChartYieldKey = "yield";
 
-    private readonly ICapacityViewService _capacityViewService;
+    private readonly ICapacityQueryFacade _capacityQueryFacade;
     private string _selectedDeviceName = string.Empty;
     private string _selectedQueryMode = CapacityQueryModes.Day;
     private CapacityQueryModeOption? _selectedQueryModeOption;
@@ -32,7 +32,7 @@ public class CapacityViewModel : NavigationViewModelBase
 
     public ObservableCollection<string> DeviceNames { get; } = [];
     public ObservableCollection<CapacityQueryModeOption> QueryModes { get; } = [];
-    public ObservableCollection<DailyCapacityVm> DailyRecords { get; } = [];
+    public ObservableCollection<DailyCapacitySnapshot> DailyRecords { get; } = [];
     public ObservableCollection<EdgeChartPoint> ChartPoints { get; } = [];
     public ObservableCollection<EdgeChartSeries> ChartSeries { get; } = [];
     public bool HasDailyRecords => DailyRecords.Count > 0;
@@ -169,9 +169,9 @@ public class CapacityViewModel : NavigationViewModelBase
     public ICommand QueryCommand { get; }
     public ICommand ExportCommand { get; }
 
-    public CapacityViewModel(ICapacityViewService capacityViewService, IAppLanguageService languageService)
+    public CapacityViewModel(ICapacityQueryFacade capacityQueryFacade, IAppLanguageService languageService)
         : this(
-            capacityViewService,
+            capacityQueryFacade,
             languageService,
             "Production.CapacityView",
             "Navigation_Title_CapacityQuery",
@@ -180,14 +180,14 @@ public class CapacityViewModel : NavigationViewModelBase
     }
 
     public CapacityViewModel(
-        ICapacityViewService capacityViewService,
+        ICapacityQueryFacade capacityQueryFacade,
         IAppLanguageService languageService,
         string viewId,
         string titleResourceKey,
         string titleFallback)
         : base(languageService, viewId, titleResourceKey, titleFallback)
     {
-        _capacityViewService = capacityViewService;
+        _capacityQueryFacade = capacityQueryFacade;
 
         QueryCommand = new AsyncCommand(() => RunViewTaskAsync(QueryHistoryAsync, GetText("Navigation_Capacity_QueryFailed", "产能查询失败。")));
         ExportCommand = new BaseCommand(_ => { });
@@ -195,13 +195,13 @@ public class CapacityViewModel : NavigationViewModelBase
         RefreshChartSeries();
         SetSelectedQueryMode(_selectedQueryMode, true);
 
-        _capacityViewService.UploadGateChanged += OnUploadGateChanged;
+        _capacityQueryFacade.UploadGateChanged += OnUploadGateChanged;
     }
 
     public override async Task OnActivatedAsync()
     {
         RefreshDeviceList();
-        IsOnline = _capacityViewService.IsOnline;
+        IsOnline = _capacityQueryFacade.IsOnline;
         await RunViewTaskAsync(LoadCurrentDataAsync, GetText("Navigation_Capacity_LoadFailed", "加载产能数据失败。"));
     }
 
@@ -219,7 +219,7 @@ public class CapacityViewModel : NavigationViewModelBase
 
     private void RefreshDeviceList()
     {
-        var names = _capacityViewService.GetDeviceNames();
+        var names = _capacityQueryFacade.GetDeviceNames();
         ReplaceItems(DeviceNames, names);
 
         if (!string.IsNullOrEmpty(_selectedDeviceName) && names.Contains(_selectedDeviceName))
@@ -235,13 +235,13 @@ public class CapacityViewModel : NavigationViewModelBase
     {
         if (!CanQueryCloud)
         {
-            SetDailyRecords(Array.Empty<DailyCapacityVm>());
+            SetDailyRecords(Array.Empty<DailyCapacitySnapshot>());
             ClearSummary();
             RefreshChart();
             return;
         }
 
-        var result = await _capacityViewService.LoadTodayAsync(_selectedDeviceName);
+        var result = await _capacityQueryFacade.LoadTodayAsync(_selectedDeviceName);
         ApplyResult(result);
     }
 
@@ -251,12 +251,12 @@ public class CapacityViewModel : NavigationViewModelBase
         {
             SetStatus(GetText("Navigation_Capacity_OfflineHint", "设备上传授权尚未就绪，暂时无法查询云端产能。"));
             ClearSummary();
-            SetDailyRecords(Array.Empty<DailyCapacityVm>());
+            SetDailyRecords(Array.Empty<DailyCapacitySnapshot>());
             RefreshChart();
             return;
         }
 
-        var result = await _capacityViewService.QueryHistoryAsync(
+        var result = await _capacityQueryFacade.QueryHistoryAsync(
             SelectedQueryMode,
             QueryDate,
             _selectedDeviceName);
@@ -275,7 +275,7 @@ public class CapacityViewModel : NavigationViewModelBase
         RefreshChart();
     }
 
-    private void SetDailyRecords(IEnumerable<DailyCapacityVm> records)
+    private void SetDailyRecords(IEnumerable<DailyCapacitySnapshot> records)
     {
         ReplaceItems(DailyRecords, records);
         OnPropertyChanged(nameof(HasDailyRecords));
@@ -291,6 +291,7 @@ public class CapacityViewModel : NavigationViewModelBase
             ChartPoints.Add(new EdgeChartPoint
             {
                 Label = string.IsNullOrWhiteSpace(row.Date) ? row.DateFull : row.Date,
+                TooltipLabel = string.IsNullOrWhiteSpace(row.DateFull) ? row.Date : row.DateFull,
                 Values = new Dictionary<string, double>(StringComparer.Ordinal)
                 {
                     [ChartTotalKey] = row.Total,
@@ -330,7 +331,8 @@ public class CapacityViewModel : NavigationViewModelBase
             Title = GetText("Navigation_Capacity_TotalOutput", "产量合计"),
             Kind = EdgeChartSeriesKind.Bar,
             Axis = EdgeChartAxis.Primary,
-            Brush = ResolveBrush("Edge.Brush.Chart.Accent")
+            Brush = ResolveBrush("Edge.Brush.Chart.Accent"),
+            TooltipValueFormat = "0"
         });
         ChartSeries.Add(new EdgeChartSeries
         {
@@ -338,7 +340,8 @@ public class CapacityViewModel : NavigationViewModelBase
             Title = GetText("Navigation_Capacity_Good", "良品"),
             Kind = EdgeChartSeriesKind.Bar,
             Axis = EdgeChartAxis.Primary,
-            Brush = ResolveBrush("Edge.Brush.Status.Running")
+            Brush = ResolveBrush("Edge.Brush.Status.Running"),
+            TooltipValueFormat = "0"
         });
         ChartSeries.Add(new EdgeChartSeries
         {
@@ -346,7 +349,8 @@ public class CapacityViewModel : NavigationViewModelBase
             Title = GetText("Navigation_Capacity_Bad", "不良"),
             Kind = EdgeChartSeriesKind.Bar,
             Axis = EdgeChartAxis.Primary,
-            Brush = ResolveBrush("Edge.Brush.Status.Warning")
+            Brush = ResolveBrush("Edge.Brush.Status.Warning"),
+            TooltipValueFormat = "0"
         });
         ChartSeries.Add(new EdgeChartSeries
         {
@@ -354,11 +358,12 @@ public class CapacityViewModel : NavigationViewModelBase
             Title = GetText("Navigation_Column_Yield", "良率"),
             Kind = EdgeChartSeriesKind.Line,
             Axis = EdgeChartAxis.Secondary,
-            Brush = ResolveBrush("Edge.Brush.Chart.Secondary")
+            Brush = ResolveBrush("Edge.Brush.Chart.Secondary"),
+            TooltipValueFormat = "0.0'%'"
         });
     }
 
-    private static double CalculateYieldPercent(DailyCapacityVm row)
+    private static double CalculateYieldPercent(DailyCapacitySnapshot row)
     {
         return row.Total <= 0 ? 0 : row.OkCount * 100d / row.Total;
     }

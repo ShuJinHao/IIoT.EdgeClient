@@ -23,8 +23,7 @@ public sealed record ModuleSignalDefinition<TSignalKey>(
     ModuleSignalDirection Direction,
     int SortOrder,
     string Category,
-    string BusinessGroup,
-    string SignalName)
+    string BusinessGroup)
     where TSignalKey : struct, Enum
 {
     /// <summary>

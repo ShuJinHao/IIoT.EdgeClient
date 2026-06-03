@@ -2,31 +2,14 @@
     x:Class="IIoT.Edge.Presentation.Navigation.Features.Shell.PlaceholderPageView"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
+    xmlns:sharedViews="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared"
     xmlns:views="clr-namespace:IIoT.Edge.Presentation.Navigation.Features.Shell">
     <Grid Margin="{DynamicResource Edge.Thickness.20}">
-        <edge:EdgeCard
-            CardPadding="{DynamicResource Edge.Thickness.24}"
-            Elevation="Card">
-            <StackPanel
-                MaxWidth="560"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center"
-                Spacing="{DynamicResource Edge.Size.Spacing12}">
-                <TextBlock
-                    HorizontalAlignment="Center"
-                    FontSize="{DynamicResource Edge.FontSize.Title24}"
-                    FontWeight="Bold"
-                    Foreground="{DynamicResource Edge.Text.Primary}"
-                    Text="{Binding Title, RelativeSource={RelativeSource AncestorType=views:PlaceholderPageView}}" />
-                <TextBlock
-                    HorizontalAlignment="Center"
-                    FontSize="14"
-                    Foreground="{DynamicResource Edge.Text.Muted}"
-                    Text="{Binding Description, RelativeSource={RelativeSource AncestorType=views:PlaceholderPageView}}"
-                    TextAlignment="Center"
-                    TextWrapping="Wrap" />
-            </StackPanel>
-        </edge:EdgeCard>
+        <sharedViews:EmptyStateView
+            MaxWidth="560"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Message="{Binding Description, RelativeSource={RelativeSource AncestorType=views:PlaceholderPageView}}"
+            Title="{Binding Title, RelativeSource={RelativeSource AncestorType=views:PlaceholderPageView}}" />
     </Grid>
 </UserControl>

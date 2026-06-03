@@ -1484,6 +1484,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
     private sealed class TestableMesRetryTask
     {
         private readonly MesRetryTask _inner;
+        private readonly MesRetryHousekeepingService _housekeepingService;
 
         public TestableMesRetryTask(
             FakeLogService logger,
@@ -1505,28 +1506,49 @@ public sealed class RetryTaskCloudMesBehaviorTests
                 mesHeartbeatStore.MarkReady(ExternalSystemKind.Mes);
             }
 
-            _inner = new MesRetryTask(
+            var mesDeadLetterStore = deadLetterStore ?? new FakeMesDeadLetterStore();
+            var fallbackWriter = criticalWriter ?? new FakeCriticalPersistenceFallbackWriter();
+            var mesCapacityGuard = capacityGuard ?? CreateCapacityGuard(
+                logger,
+                new FakeFailedRecordStore(),
+                retryStore,
+                new FakeCloudFallbackBufferStore(),
+                fallbackStore,
+                new FakeCloudDiagnosticsStore(),
+                mesDiagnosticsStore);
+            var deadLetterWriter = new DataPipelineDeadLetterWriter();
+            var consumerInvoker = new DefaultDataPipelineConsumerInvoker();
+            var cellDataJsonSerializer = CreateCellDataJsonSerializer();
+            _housekeepingService = new MesRetryHousekeepingService(
                 logger,
                 retryStore,
-                fallbackStore,
-                deadLetterStore ?? new FakeMesDeadLetterStore(),
-                criticalWriter ?? new FakeCriticalPersistenceFallbackWriter(),
-                mesConsumer,
+                mesDiagnosticsStore);
+
+            _inner = new MesRetryTask(
+                logger,
                 runtimeConfig ?? new FakeLocalSystemRuntimeConfigService(),
                 mesDiagnosticsStore,
-                capacityGuard ?? CreateCapacityGuard(
-                    logger,
-                    new FakeFailedRecordStore(),
-                    retryStore,
-                    new FakeCloudFallbackBufferStore(),
-                    fallbackStore,
-                    new FakeCloudDiagnosticsStore(),
-                    mesDiagnosticsStore),
+                mesCapacityGuard,
                 mesHeartbeatStore,
-                new DefaultRetryBackoffStrategy(),
-                new DataPipelineDeadLetterWriter(),
-                new DefaultDataPipelineConsumerInvoker(),
-                CreateCellDataJsonSerializer());
+                new MesFallbackRecoveryService(
+                    logger,
+                    fallbackStore,
+                    mesDeadLetterStore,
+                    fallbackWriter,
+                    mesCapacityGuard,
+                    deadLetterWriter,
+                    cellDataJsonSerializer),
+                new MesRetryRecordProcessor(
+                    logger,
+                    retryStore,
+                    mesDeadLetterStore,
+                    fallbackWriter,
+                    mesConsumer,
+                    new DefaultRetryBackoffStrategy(),
+                    deadLetterWriter,
+                    consumerInvoker,
+                    cellDataJsonSerializer),
+                _housekeepingService);
         }
 
         public Task ExecuteOnceAsync()
@@ -1537,9 +1559,9 @@ public sealed class RetryTaskCloudMesBehaviorTests
             typeof(MesRetryTask)
                 .GetField("_wasUnavailable", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
                 .SetValue(_inner, false);
-            typeof(MesRetryTask)
+            typeof(MesRetryHousekeepingService)
                 .GetField("_lastAbandonedCleanupDateUtc", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
-                .SetValue(_inner, DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1)));
+                .SetValue(_housekeepingService, DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1)));
         }
     }
 

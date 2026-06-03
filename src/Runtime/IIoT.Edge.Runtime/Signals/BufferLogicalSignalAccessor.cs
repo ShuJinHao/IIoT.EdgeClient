@@ -254,8 +254,7 @@ public sealed class BufferLogicalSignalAccessor<TSignalKey> : ILogicalSignalAcce
                 signal.DirectionText,
                 signal.SortOrder,
                 signal.Category,
-                signal.BusinessGroup,
-                signal.SignalName))
+                signal.BusinessGroup))
             .ToArray();
 
     private static string NormalizeSignalKey(string signalKey)

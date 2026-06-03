@@ -32,7 +32,8 @@
                             CommandParameter="{Binding}"
                             Icon="{Binding IconData}"
                             IsEnabled="{Binding IsEnabled}"
-                            Kind="Nav"
+                            Kind="Ghost"
+                            Role="Nav"
                             Size="Icon"
                             ToolTip.Tip="{Binding Title}" />
                     </DataTemplate>
@@ -46,7 +47,8 @@
                 Command="{Binding SwitchLanguageCommand}"
                 Content="{Binding LanguageButtonText}"
                 Icon="{StaticResource Edge.Icon.Language}"
-                Kind="Language"
+                Kind="Ghost"
+                Role="Language"
                 ToolTip.Tip="{Binding LanguageToolTip}" />
         </Grid>
     </Border>

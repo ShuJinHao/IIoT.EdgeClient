@@ -10,14 +10,15 @@ using IIoT.Edge.Application.Features.DataPipeline.DeadLetters;
 using IIoT.Edge.Application.Features.Config.LocalParameterConfig;
 using IIoT.Edge.Application.Features.Config.ModuleParameters;
 using IIoT.Edge.Application.Features.Config.ParamView;
+using IIoT.Edge.Application.Features.Config.SchemaReconciliation;
 using IIoT.Edge.Application.Features.Formula.RecipeView;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView;
+using IIoT.Edge.Application.Features.Hardware.IOView;
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 using IIoT.Edge.Application.Features.Production.CapacityView;
 using IIoT.Edge.Application.Features.Production.DataView;
 using IIoT.Edge.Application.Features.Production.Equipment;
 using IIoT.Edge.Application.Features.Production.Monitor;
-using IIoT.Edge.Application.Features.SysLog.LogView;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace IIoT.Edge.Application;
@@ -35,16 +36,49 @@ public static class DependencyInjection
         services.AddSingleton<ILocalSystemRuntimeConfigService>(sp => sp.GetRequiredService<LocalSystemRuntimeConfigService>());
         services.AddSingleton(typeof(IModuleParamProvider<,,>), typeof(ModuleParamProvider<,,>));
         services.AddSingleton<IModuleParamRoleProvider, ModuleParamRoleProvider>();
+        services.AddSingleton<IConfigSchemaReconciler, ConfigSchemaReconciler>();
+        services.AddSingleton<IConfigSchemaSource>(sp => new ModuleParamSchemaSource(
+            sp.GetRequiredService<IModuleParamRegistry>(),
+            ModuleParamCategory.Mes,
+            ModuleParamSchemaIds.Mes));
+        services.AddSingleton<IConfigSchemaSource>(sp => new ModuleParamSchemaSource(
+            sp.GetRequiredService<IModuleParamRegistry>(),
+            ModuleParamCategory.Cloud,
+            ModuleParamSchemaIds.Cloud));
+        services.AddSingleton<IConfigSchemaSource>(sp => new ModuleParamSchemaSource(
+            sp.GetRequiredService<IModuleParamRegistry>(),
+            ModuleParamCategory.Business,
+            ModuleParamSchemaIds.Business));
+        services.AddSingleton<IConfigValueStore>(sp => new ModuleParamConfigValueStore(
+            sp.GetRequiredService<ILocalParameterConfigService>(),
+            ModuleParamCategory.Mes,
+            ModuleParamSchemaIds.Mes));
+        services.AddSingleton<IConfigValueStore>(sp => new ModuleParamConfigValueStore(
+            sp.GetRequiredService<ILocalParameterConfigService>(),
+            ModuleParamCategory.Cloud,
+            ModuleParamSchemaIds.Cloud));
+        services.AddSingleton<IConfigValueStore>(sp => new ModuleParamConfigValueStore(
+            sp.GetRequiredService<ILocalParameterConfigService>(),
+            ModuleParamCategory.Business,
+            ModuleParamSchemaIds.Business));
+        services.AddSingleton<IConfigSchemaSource, CloudApiConfigSchemaSource>();
+        services.AddSingleton<IConfigValueStore, CloudApiConfigValueStore>();
+        services.AddSingleton<IConfigSchemaSource, IoMappingSchemaSource>();
+        services.AddSingleton<IConfigValueStore, IoMappingConfigValueStore>();
         services.AddSingleton<IDeadLetterMaintenanceService, DeadLetterMaintenanceService>();
         services.AddTransient<IParamViewCrudService, ParamViewCrudService>();
+        services.AddTransient<IIoViewQueryFacade, IoViewQueryFacade>();
         services.AddTransient<IHardwareConfigCrudService, HardwareConfigCrudService>();
         services.AddTransient<IPlcTaskBindingService, PlcTaskBindingService>();
         services.AddTransient<IRecipeViewCrudService, RecipeViewCrudService>();
-        services.AddTransient<ICapacityViewService, CapacityViewService>();
-        services.AddTransient<IDataViewService, DataViewService>();
-        services.AddTransient<IMonitorViewService, MonitorViewService>();
+        services.AddTransient<ICapacityQueryFacade, CapacityQueryFacade>();
+        services.AddTransient<IProductionDataQueryFacade, ProductionDataQueryFacade>();
+        services.AddTransient<IMonitorSnapshotQueryFacade, MonitorSnapshotQueryFacade>();
+        services.AddTransient<IMonitorConfiguredDeviceLoader, MonitorConfiguredDeviceLoader>();
+        services.AddTransient<IMonitorStateMachineTaskProjection, MonitorStateMachineTaskProjection>();
+        services.AddTransient<IMonitorSnapshotSourceMatcher, MonitorSnapshotSourceMatcher>();
+        services.AddTransient<IMonitorSnapshotProjectionBuilder, MonitorSnapshotProjectionBuilder>();
         services.AddTransient<IEquipmentPanelService, EquipmentPanelService>();
-        services.AddTransient<ILogViewService, LogViewService>();
         services.AddSingleton<IEdgeSyncDiagnosticsQuery, EdgeSyncDiagnosticsQuery>();
         services.AddSingleton<IBackgroundServiceCoordinator, BackgroundServiceCoordinator>();
         return services;

@@ -13,7 +13,7 @@ public static class HomogenizationPlcSignals
     public enum Interaction
     {
         /// <summary>心跳交互，PLC 写入心跳值，上位机把处理后的心跳值写回 PLC。</summary>
-        [PlcInteractionSignal("Homogenization.Interaction.Heartbeat", "心跳", "D700", "D600", 1, 101, ReadSignalName = "PLC 心跳", WriteSignalName = "上位机心跳")]
+        [PlcInteractionSignal("Homogenization.Interaction.Heartbeat", "心跳", "D700", "D600", 1, 101)]
         心跳,
 
         /// <summary>扫码进站交互，PLC 触发进站校验，上位机写回校验应答。</summary>

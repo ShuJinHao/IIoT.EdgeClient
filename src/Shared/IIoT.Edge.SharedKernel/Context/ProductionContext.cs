@@ -1,11 +1,12 @@
 using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
+using IIoT.Edge.SharedKernel.Identity;
 using System.Collections.Concurrent;
 using System.Text.Json.Serialization;
 
 namespace IIoT.Edge.SharedKernel.Context;
 
-public class ProductionContext
+public class ProductionContext : IDeviceIdentifiable
 {
     public string DeviceName { get; set; } = string.Empty;
 

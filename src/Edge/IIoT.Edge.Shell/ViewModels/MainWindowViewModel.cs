@@ -1,7 +1,6 @@
 using Avalonia.Threading;
 using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Device;
-using IIoT.Edge.Application.Common.Models;
 using IIoT.Edge.Presentation.Shell.Services;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;

@@ -185,7 +185,7 @@ internal sealed class EdgeProcessModuleBuilder : IEdgeProcessModuleBuilder
     public void RegisterCloudUploader(ProcessUploadMode uploadMode)
         => _integrationRegistry.RegisterCloudUploader(ProcessType, uploadMode);
 
-    public void RegisterMesUploader(MesUploadMode uploadMode)
+    public void RegisterMesUploader(ProcessUploadMode uploadMode)
         => _integrationRegistry.RegisterMesUploader(ProcessType, uploadMode);
 
     public void RegisterPlcSignalProfile<TSignalKey, TProfile>()

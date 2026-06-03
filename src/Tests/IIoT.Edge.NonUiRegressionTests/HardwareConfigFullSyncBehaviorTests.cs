@@ -1,11 +1,9 @@
 using System.Linq.Expressions;
-using AutoMapper;
 using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Common.Crud;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView;
-using IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Models;
 using IIoT.Edge.Application.Features.Hardware.Queries;
 using IIoT.Edge.Application.Features.Hardware.UseCases.IoMapping.Commands;
 using IIoT.Edge.Application.Features.Hardware.UseCases.NetworkDevice.Commands;
@@ -18,7 +16,6 @@ using IIoT.Edge.SharedKernel.Repository;
 using IIoT.Edge.SharedKernel.Result;
 using IIoT.Edge.SharedKernel.Specification;
 using MediatR;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 
@@ -35,16 +32,6 @@ public sealed class HardwareConfigFullSyncBehaviorTests
     {
         Assert.ThrowsAny<ArgumentException>(() =>
             NetworkDeviceEntity.Create(deviceName, DeviceType.PLC, ipAddress, port));
-    }
-
-    [Fact]
-    public void NetworkDeviceEntity_WhenPlcModuleMissing_ShouldRejectBinding()
-    {
-        var entity = NetworkDeviceEntity.Create("PLC-A", DeviceType.PLC, "192.168.0.10", 102);
-
-        var exception = Assert.Throws<ArgumentException>(() => entity.AssignModule(string.Empty, "S7"));
-
-        Assert.StartsWith("PLC 设备必须绑定模块。", exception.Message);
     }
 
     [Theory]
@@ -68,7 +55,6 @@ public sealed class HardwareConfigFullSyncBehaviorTests
     [Theory]
     [InlineData(0, "Signal.A", "D0", 1, "Int16", "Read")]
     [InlineData(1, "", "D0", 1, "Int16", "Read")]
-    [InlineData(1, "Signal.A", "", 1, "Int16", "Read")]
     [InlineData(1, "Signal.A", "D0", 0, "Int16", "Read")]
     [InlineData(1, "Signal.A", "D0", 1, "", "Read")]
     [InlineData(1, "Signal.A", "D0", 1, "Int16", "")]
@@ -82,6 +68,14 @@ public sealed class HardwareConfigFullSyncBehaviorTests
     {
         Assert.ThrowsAny<ArgumentException>(() =>
             IoMappingEntity.Create(networkDeviceId, signalKey, plcAddress, addressCount, dataType, direction));
+    }
+
+    [Fact]
+    public void IoMappingEntity_WhenPlcAddressEmpty_ShouldKeepUnconfiguredState()
+    {
+        var entity = IoMappingEntity.Create(1, "Signal.A", "", 1, "Int16", "Read");
+
+        Assert.Equal(string.Empty, entity.PlcAddress);
     }
 
     [Fact]
@@ -99,7 +93,6 @@ public sealed class HardwareConfigFullSyncBehaviorTests
                         DeviceType.PLC,
                         "S7",
                         string.Empty,
-                        "192.168.0.10",
                         102,
                         null,
                         null,
@@ -111,7 +104,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
             CancellationToken.None);
 
         Assert.False(result.IsSuccess);
-        Assert.StartsWith("PLC 设备必须绑定模块。", result.ErrorMessage);
+        Assert.StartsWith("网络设备地址不能为空。", result.ErrorMessage);
         Assert.Empty(repo.Items);
     }
 
@@ -132,7 +125,6 @@ public sealed class HardwareConfigFullSyncBehaviorTests
                         DeviceType.PLC,
                         "S7",
                         string.Empty,
-                        "192.168.0.10",
                         102,
                         null,
                         null,
@@ -163,7 +155,6 @@ public sealed class HardwareConfigFullSyncBehaviorTests
                         "PLC-A-UPDATED",
                         DeviceType.PLC,
                         "S7",
-                        "TestProcess",
                         "192.168.0.11",
                         102,
                         null,
@@ -254,7 +245,6 @@ public sealed class HardwareConfigFullSyncBehaviorTests
                         "Read",
                         "单点读数据",
                         string.Empty,
-                        string.Empty,
                         1,
                         "updated-remark")
                 ]),
@@ -283,7 +273,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
 
         var result = await handler.Handle(
             new SaveHardwareConfigCommand(
-                [CreateNetworkVm(id: 2, name: "PLC-B")],
+                [CreateNetworkDto(id: 2, name: "PLC-B")],
                 [],
                 2,
                 []),
@@ -314,22 +304,11 @@ public sealed class HardwareConfigFullSyncBehaviorTests
 
         var result = await handler.Handle(
             new SaveHardwareConfigCommand(
-                [CreateNetworkVm(id: 1, name: "PLC-A"), CreateNetworkVm(id: 2, name: "PLC-B")],
+                [CreateNetworkDto(id: 1, name: "PLC-A"), CreateNetworkDto(id: 2, name: "PLC-B")],
                 [],
                 1,
                 [
-                    new IoMappingVm
-                    {
-                        Id = 11,
-                        NetworkDeviceId = 1,
-                        SignalKey = "Signal.A",
-                        PlcAddress = "DB1.DBW0",
-                        AddressCount = 1,
-                        DataType = "Int16",
-                        Direction = "Read",
-                        SortOrder = 1,
-                        Remark = "new"
-                    }
+                    CreateIoMappingDto(id: 11, deviceId: 1, signalKey: "Signal.A", remark: "new")
                 ]),
             CancellationToken.None);
 
@@ -358,23 +337,11 @@ public sealed class HardwareConfigFullSyncBehaviorTests
 
         var result = await handler.Handle(
             new SaveHardwareConfigCommand(
-                [CreateNetworkVm(id: 1, name: "PLC-A"), CreateNetworkVm(id: 2, name: "PLC-B")],
+                [CreateNetworkDto(id: 1, name: "PLC-A"), CreateNetworkDto(id: 2, name: "PLC-B")],
                 [],
                 1,
                 [
-                    new IoMappingVm
-                    {
-                        Id = 11,
-                        NetworkDeviceId = 1,
-                        SignalKey = "Signal.A",
-                        PlcAddress = "DB1.DBW0",
-                        AddressCount = 1,
-                        DataType = "Int16",
-                        Direction = "Read",
-                        Category = "单点读数据",
-                        SortOrder = 1,
-                        Remark = "same"
-                    }
+                    CreateIoMappingDto(id: 11, deviceId: 1, signalKey: "Signal.A", remark: "same")
                 ]),
             CancellationToken.None);
 
@@ -400,8 +367,8 @@ public sealed class HardwareConfigFullSyncBehaviorTests
         var result = await handler.Handle(
             new SaveHardwareConfigCommand(
                 [
-                    CreateNetworkVm(id: 1, name: "PLC-DUP", ipAddress: "192.168.0.10", port1: 103),
-                    CreateNetworkVm(id: 2, name: "PLC-DUP", ipAddress: "192.168.0.11", port1: 104)
+                    CreateNetworkDto(id: 1, name: "PLC-DUP", ipAddress: "192.168.0.10", port1: 103),
+                    CreateNetworkDto(id: 2, name: "PLC-DUP", ipAddress: "192.168.0.11", port1: 104)
                 ],
                 [],
                 1,
@@ -432,7 +399,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
         var result = await handler.Handle(
             new SaveHardwareConfigCommand(
                 [
-                    CreateNetworkVm(id: 2, name: "PLC-B", port1: 103)
+                    CreateNetworkDto(id: 2, name: "PLC-B", port1: 103)
                 ],
                 [],
                 2,
@@ -452,18 +419,8 @@ public sealed class HardwareConfigFullSyncBehaviorTests
     private static SaveHardwareConfigHandler CreateSaveHandler(HardwareConfigSender sender, FakePlcConnectionManager plcManager)
         => new(
             sender,
-            CreateMapper(),
             new StubPermissionService { CanEditHardware = true },
             plcManager);
-
-    private static IMapper CreateMapper()
-    {
-        var configuration = new MapperConfiguration(
-            cfg => cfg.AddProfile<IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Mappings.HardwareConfigMappingProfile>(),
-            NullLoggerFactory.Instance);
-
-        return configuration.CreateMapper();
-    }
 
     private static NetworkDeviceEntity CreateNetworkDevice(
         int id,
@@ -473,29 +430,49 @@ public sealed class HardwareConfigFullSyncBehaviorTests
     {
         var entity = NetworkDeviceEntity.Create(name, DeviceType.PLC, ipAddress, port1);
         entity.WithId(id);
-        entity.AssignModule("TestProcess", "S7");
+        entity.UpdateDeviceModel("S7");
         entity.UpdateEndpoint(ipAddress, port1, null, 3000);
         entity.Enable();
         return entity;
     }
 
-    private static NetworkDeviceVm CreateNetworkVm(
+    private static NetworkDeviceDto CreateNetworkDto(
         int id,
         string name,
         string ipAddress = "192.168.0.10",
         int port1 = 102)
-        => new()
-        {
-            Id = id,
-            DeviceName = name,
-            DeviceType = DeviceType.PLC,
-            DeviceModel = "S7",
-            ModuleId = "TestProcess",
-            IpAddress = ipAddress,
-            Port1 = port1,
-            ConnectTimeout = 3000,
-            IsEnabled = true
-        };
+        => new(
+            id,
+            name,
+            DeviceType.PLC,
+            "S7",
+            ipAddress,
+            port1,
+            null,
+            null,
+            null,
+            3000,
+            true,
+            null);
+
+    private static IoMappingDto CreateIoMappingDto(
+        int id,
+        int deviceId,
+        string signalKey,
+        string plcAddress = "DB1.DBW0",
+        string? remark = null)
+        => new(
+            id,
+            deviceId,
+            signalKey,
+            plcAddress,
+            1,
+            "Int16",
+            "Read",
+            "单点读数据",
+            string.Empty,
+            1,
+            remark);
 
     private static SerialDeviceEntity CreateSerialDevice(int id, string name)
     {
@@ -516,7 +493,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
         var entity = IoMappingEntity.Create(deviceId, signalKey, plcAddress, 1, "Int16", "Read");
         entity.WithId(id);
         entity.UpdateSortOrder(1);
-        entity.UpdateMetadata(signalKey, "Int16", "Read", "单点读数据", string.Empty, string.Empty, remark);
+        entity.UpdateMetadata(signalKey, "Int16", "Read", "单点读数据", string.Empty, remark);
         return entity;
     }
 
@@ -673,7 +650,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
         {
             var clone = NetworkDeviceEntity.Create(entity.DeviceName, entity.DeviceType, entity.IpAddress, entity.Port1);
             clone.WithId(entity.Id);
-            clone.AssignModule(entity.ModuleId, entity.DeviceModel);
+            clone.UpdateDeviceModel(entity.DeviceModel);
             clone.UpdateEndpoint(entity.IpAddress, entity.Port1, entity.Port2, entity.ConnectTimeout);
             clone.UpdateCommands(entity.SendCmd1, entity.SendCmd2);
             clone.SetEnabled(entity.IsEnabled);
@@ -691,8 +668,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
                 entity.DataType,
                 entity.Direction,
                 entity.Category,
-                entity.BusinessGroup,
-                entity.SignalName);
+                entity.BusinessGroup);
             clone.WithId(entity.Id);
             clone.UpdateSortOrder(entity.SortOrder);
             clone.UpdateMetadata(
@@ -701,7 +677,6 @@ public sealed class HardwareConfigFullSyncBehaviorTests
                 entity.Direction,
                 entity.Category,
                 entity.BusinessGroup,
-                entity.SignalName,
                 entity.Remark);
             return clone;
         }

@@ -3,6 +3,7 @@ using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
+using IIoT.Edge.Module.Homogenization.Config.Hardware;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using IIoT.Edge.Runtime.Base;
 using Microsoft.Extensions.Options;
@@ -68,5 +69,57 @@ internal abstract class HomogenizationTaskBase : PlcTaskBase
     /// PLC 任务循环间隔，来源于匀浆运行配置。
     /// </summary>
     protected override int TaskLoopInterval => EventLoopInterval;
+
+    protected async Task ExecuteHandshakeAsync(
+        HomogenizationPlcSignals.Interaction trigger,
+        string triggeredLog,
+        string resetLog,
+        Func<CancellationToken, Task> processTriggerAsync,
+        Func<Exception, string> createExceptionMessage,
+        Action<string> recordException)
+    {
+        switch (Step)
+        {
+            case 0:
+                if (Interaction.IsTriggered(trigger))
+                {
+                    Logger.Info($"[{ModuleContext.DeviceName}] {TaskName} {triggeredLog}");
+                    Step = 10;
+                }
+
+                break;
+
+            case 10:
+                try
+                {
+                    await processTriggerAsync(TaskCancellationToken).ConfigureAwait(false);
+                    Step = 30;
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    var message = createExceptionMessage(ex);
+                    recordException(message);
+                    Interaction.ReplyException(trigger);
+                    Logger.Error($"[{ModuleContext.DeviceName}] {TaskName} {message}");
+                    Step = 30;
+                }
+
+                break;
+
+            case 30:
+                if (Interaction.IsReset(trigger))
+                {
+                    Interaction.ReplyReset(trigger);
+                    Logger.Info($"[{ModuleContext.DeviceName}] {TaskName} {resetLog}");
+                    Step = 0;
+                }
+
+                break;
+        }
+    }
 
 }

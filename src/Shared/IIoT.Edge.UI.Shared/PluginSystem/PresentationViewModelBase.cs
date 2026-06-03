@@ -13,6 +13,11 @@ public abstract class PresentationViewModelBase : ViewModelBase
         get => _isBusy;
         protected set
         {
+            if (_isBusy == value)
+            {
+                return;
+            }
+
             _isBusy = value;
             OnPropertyChanged();
         }
@@ -23,6 +28,11 @@ public abstract class PresentationViewModelBase : ViewModelBase
         get => _errorMessage;
         protected set
         {
+            if (string.Equals(_errorMessage, value, StringComparison.Ordinal))
+            {
+                return;
+            }
+
             _errorMessage = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(HasError));
@@ -34,6 +44,11 @@ public abstract class PresentationViewModelBase : ViewModelBase
         get => _statusMessage;
         protected set
         {
+            if (string.Equals(_statusMessage, value, StringComparison.Ordinal))
+            {
+                return;
+            }
+
             _statusMessage = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(HasStatus));
@@ -64,8 +79,15 @@ public abstract class PresentationViewModelBase : ViewModelBase
 
     protected static void ReplaceItems<TItem>(ObservableCollection<TItem> target, IEnumerable<TItem> items)
     {
+        var nextItems = items as IReadOnlyList<TItem> ?? items.ToList();
+        if (target.Count == nextItems.Count
+            && target.SequenceEqual(nextItems, EqualityComparer<TItem>.Default))
+        {
+            return;
+        }
+
         target.Clear();
-        foreach (var item in items)
+        foreach (var item in nextItems)
         {
             target.Add(item);
         }

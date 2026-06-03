@@ -21,6 +21,10 @@ internal sealed class DiagnosticsInitialSummaryFactory(
             EnabledModulesSummary = GetText("Navigation_Diagnostics_EnabledChecking", "正在检查已启用模块..."),
             ActivatedModulesSummary = GetText("Navigation_Diagnostics_ActivatedChecking", "正在检查已激活模块..."),
             ConfigurationProfileSummary = GetText("Navigation_Diagnostics_ConfigPlaceholder", "配置概况：-"),
+            ConfigurationEnvironment = GetText("Navigation_Unknown", "未知"),
+            ConfigurationMachineProfile = GetText("Navigation_Diagnostics_MachineProfileNotConfigured", "未配置"),
+            ConfigurationMachineProfileState = GetText("Navigation_Diagnostics_StartupPending", "启动诊断尚未生成。"),
+            ConfigurationRuntimeDataRoot = "--",
             LastUpdatedSummary = GetText("Navigation_Diagnostics_StartupPending", "启动诊断尚未生成。"),
             DeviceSummary = FormatText("Navigation_Diagnostics_DeviceFormat", "设备：{0}", GetText("Navigation_Unknown", "未知")),
             CloudGateSummary = FormatText("Navigation_Sync_UploadGateFormat", "上传门禁：{0}", "--"),
@@ -39,7 +43,9 @@ internal sealed class DiagnosticsInitialSummaryFactory(
             MesLastAttemptSummary = FormatText("Navigation_Sync_LastAttemptFormat", "最近尝试：{0}", "--"),
             MesLastSuccessSummary = FormatText("Navigation_Sync_LastSuccessFormat", "最近成功：{0}", "--"),
             MesLastFailureSummary = FormatText("Navigation_Sync_LastFailureFormat", "最近失败：{0}", "--"),
-            ContextPersistenceSummary = diagnosticsText.FormatContextPersistenceSummary(new ProductionContextPersistenceDiagnostics(0, null))
+            ContextPersistenceSummary = diagnosticsText.FormatContextPersistenceSummary(new ProductionContextPersistenceDiagnostics(0, null)),
+            ContextCorruptFileCount = "0",
+            ContextLastCorruptDetectedAt = "--"
         };
 
     private string GetText(string key, string fallback)

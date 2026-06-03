@@ -3,7 +3,6 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using IIoT.Edge.Application.Abstractions.Auth;
-using IIoT.Edge.Application.Common.Models;
 using IIoT.Edge.Infrastructure.Integration.Config;
 using IIoT.Edge.Infrastructure.Integration.Http;
 

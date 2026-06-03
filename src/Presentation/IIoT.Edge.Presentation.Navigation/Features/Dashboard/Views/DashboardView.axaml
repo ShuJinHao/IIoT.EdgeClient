@@ -2,8 +2,9 @@
     x:Class="IIoT.Edge.Presentation.Navigation.Features.Dashboard.DashboardView"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
-    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
+    xmlns:sharedViews="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared">
+    <edge:EdgeScrollHost>
         <StackPanel Margin="{DynamicResource Edge.Thickness.32}" Spacing="24">
             <edge:EdgeSectionHeader
                 Title="{DynamicResource Navigation_Dashboard_Title}"
@@ -14,273 +15,29 @@
             </edge:EdgeSectionHeader>
 
             <Grid
-                ColumnDefinitions="*,*"
-                RowDefinitions="Auto,Auto"
-                ColumnSpacing="20"
-                RowSpacing="20">
-                <edge:EdgeCard
-                    MinHeight="300"
-                    Surface="Card"
-                    PaddingMode="Spacious"
-                    Elevation="Card">
-                    <Grid RowDefinitions="Auto,*,Auto,Auto">
-                        <TextBlock
-                            Grid.Row="0"
-                            FontSize="{DynamicResource Edge.FontSize.Body}"
-                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                            Text="{DynamicResource Navigation_Dashboard_TodayOutput}" />
-                        <StackPanel
-                            Grid.Row="1"
-                            Margin="0,22,0,22"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center"
-                            Spacing="{DynamicResource Edge.Size.Spacing4}">
-                            <TextBlock
-                                FontSize="{DynamicResource Edge.FontSize.Display48}"
-                                FontWeight="Bold"
-                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                                Text="{Binding TodayOutput}"
-                                TextAlignment="Center" />
-                            <TextBlock
-                                HorizontalAlignment="Center"
-                                FontSize="{DynamicResource Edge.FontSize.Body}"
-                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                Text="{DynamicResource Navigation_DashboardPreview_UnitPiece}" />
-                        </StackPanel>
-                        <Border
-                            Grid.Row="2"
-                            Height="1"
-                            Margin="0,0,0,16"
-                            Background="{DynamicResource Edge.Brush.Border.Subtle}" />
-                        <Grid
-                            Grid.Row="3"
-                            ColumnDefinitions="*,Auto"
-                            RowDefinitions="Auto,Auto"
-                            RowSpacing="{DynamicResource Edge.Size.Spacing8}">
-                            <TextBlock
-                                FontSize="{DynamicResource Edge.FontSize.Body}"
-                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                Text="{DynamicResource Navigation_Monitor_DayShift}" />
-                            <TextBlock
-                                Grid.Column="1"
-                                FontSize="{DynamicResource Edge.FontSize.SubData18}"
-                                FontWeight="SemiBold"
-                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                                Text="—" />
-                            <TextBlock
-                                Grid.Row="1"
-                                FontSize="{DynamicResource Edge.FontSize.Body}"
-                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                Text="{DynamicResource Navigation_Monitor_NightShift}" />
-                            <TextBlock
-                                Grid.Row="1"
-                                Grid.Column="1"
-                                FontSize="{DynamicResource Edge.FontSize.SubData18}"
-                                FontWeight="SemiBold"
-                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                                Text="—" />
-                        </Grid>
-                    </Grid>
-                </edge:EdgeCard>
+                ColumnDefinitions="*,*,*"
+                ColumnSpacing="20">
+                <edge:EdgeMetricCard
+                    MinHeight="260"
+                    Description="{Binding RecentHourLabel}"
+                    SummaryItems="{Binding OutputSummaryItems}"
+                    Title="{DynamicResource Navigation_Dashboard_TodayOutput}"
+                    Unit="{DynamicResource Navigation_DashboardPreview_UnitPiece}"
+                    Value="{Binding TodayOutput}" />
 
-                <edge:EdgeCard
+                <edge:EdgeMetricCard
                     Grid.Column="1"
-                    MinHeight="300"
-                    Surface="Card"
-                    PaddingMode="Spacious"
-                    Elevation="Card">
-                    <Grid RowDefinitions="Auto,*,Auto,Auto">
-                        <TextBlock
-                            Grid.Row="0"
-                            FontSize="{DynamicResource Edge.FontSize.Body}"
-                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                            Text="{DynamicResource Navigation_Label_Yield}" />
-                        <StackPanel
-                            Grid.Row="1"
-                            Margin="0,22,0,22"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center"
-                            Spacing="{DynamicResource Edge.Size.Spacing4}">
-                            <TextBlock
-                                FontSize="{DynamicResource Edge.FontSize.Display48}"
-                                FontWeight="Bold"
-                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                                Text="{Binding TodayYield}"
-                                TextAlignment="Center" />
-                            <TextBlock
-                                HorizontalAlignment="Center"
-                                FontSize="{DynamicResource Edge.FontSize.Body}"
-                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                Text="{DynamicResource Navigation_Dashboard_TodayYield}" />
-                        </StackPanel>
-                        <Border
-                            Grid.Row="2"
-                            Height="1"
-                            Margin="0,0,0,16"
-                            Background="{DynamicResource Edge.Brush.Border.Subtle}" />
-                        <Grid
-                            Grid.Row="3"
-                            ColumnDefinitions="*,Auto"
-                            RowDefinitions="Auto,Auto"
-                            RowSpacing="{DynamicResource Edge.Size.Spacing8}">
-                            <TextBlock
-                                FontSize="{DynamicResource Edge.FontSize.Body}"
-                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                Text="{DynamicResource Navigation_Label_GoodCount}" />
-                            <TextBlock
-                                Grid.Column="1"
-                                FontSize="{DynamicResource Edge.FontSize.SubData18}"
-                                FontWeight="SemiBold"
-                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                                Text="—" />
-                            <TextBlock
-                                Grid.Row="1"
-                                FontSize="{DynamicResource Edge.FontSize.Body}"
-                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                Text="{DynamicResource Navigation_Label_BadCount}" />
-                            <TextBlock
-                                Grid.Row="1"
-                                Grid.Column="1"
-                                FontSize="{DynamicResource Edge.FontSize.SubData18}"
-                                FontWeight="SemiBold"
-                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                                Text="{Binding NgCount}" />
-                        </Grid>
-                    </Grid>
-                </edge:EdgeCard>
+                    MinHeight="260"
+                    SummaryItems="{Binding YieldSummaryItems}"
+                    Title="{DynamicResource Navigation_Label_Yield}"
+                    Value="{Binding TodayYield}" />
 
-                <edge:EdgeCard
-                    Grid.Row="1"
-                    MinHeight="300"
-                    Surface="Card"
-                    PaddingMode="Spacious"
-                    Elevation="Card">
-                    <Grid RowDefinitions="Auto,*,Auto,Auto">
-                        <TextBlock
-                            Grid.Row="0"
-                            FontSize="{DynamicResource Edge.FontSize.Body}"
-                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                            Text="{DynamicResource Navigation_Dashboard_DeviceOnline}" />
-                        <StackPanel
-                            Grid.Row="1"
-                            Margin="0,22,0,22"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center"
-                            Spacing="{DynamicResource Edge.Size.Spacing4}">
-                            <TextBlock
-                                FontSize="{DynamicResource Edge.FontSize.Display48}"
-                                FontWeight="Bold"
-                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                                Text="{Binding ConnectedDevices}"
-                                TextAlignment="Center" />
-                            <TextBlock
-                                HorizontalAlignment="Center"
-                                FontSize="{DynamicResource Edge.FontSize.Body}"
-                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                Text="{DynamicResource Navigation_Dashboard_DeviceUnit}" />
-                        </StackPanel>
-                        <Border
-                            Grid.Row="2"
-                            Height="1"
-                            Margin="0,0,0,16"
-                            Background="{DynamicResource Edge.Brush.Border.Subtle}" />
-                        <Grid
-                            Grid.Row="3"
-                            ColumnDefinitions="*,Auto"
-                            RowDefinitions="Auto,Auto"
-                            RowSpacing="{DynamicResource Edge.Size.Spacing8}">
-                            <TextBlock
-                                FontSize="{DynamicResource Edge.FontSize.Body}"
-                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                Text="{DynamicResource Navigation_Dashboard_DeviceOnlineShort}" />
-                            <TextBlock
-                                Grid.Column="1"
-                                FontSize="{DynamicResource Edge.FontSize.SubData18}"
-                                FontWeight="SemiBold"
-                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                                Text="—" />
-                            <TextBlock
-                                Grid.Row="1"
-                                FontSize="{DynamicResource Edge.FontSize.Body}"
-                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                Text="{DynamicResource Navigation_Dashboard_DeviceOfflineShort}" />
-                            <TextBlock
-                                Grid.Row="1"
-                                Grid.Column="1"
-                                FontSize="{DynamicResource Edge.FontSize.SubData18}"
-                                FontWeight="SemiBold"
-                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                                Text="—" />
-                        </Grid>
-                    </Grid>
-                </edge:EdgeCard>
-
-                <edge:EdgeCard
-                    Grid.Row="1"
-                    Grid.Column="1"
-                    MinHeight="300"
-                    Surface="Card"
-                    PaddingMode="Spacious"
-                    Elevation="Card">
-                    <Grid RowDefinitions="Auto,*,Auto,Auto">
-                        <TextBlock
-                            Grid.Row="0"
-                            FontSize="{DynamicResource Edge.FontSize.Body}"
-                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                            Text="{DynamicResource Navigation_DashboardPreview_KeyAlerts}" />
-                        <StackPanel
-                            Grid.Row="1"
-                            Margin="0,22,0,22"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center"
-                            Spacing="{DynamicResource Edge.Size.Spacing4}">
-                            <TextBlock
-                                FontSize="{DynamicResource Edge.FontSize.Display48}"
-                                FontWeight="Bold"
-                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                                Text="0"
-                                TextAlignment="Center" />
-                            <TextBlock
-                                HorizontalAlignment="Center"
-                                FontSize="{DynamicResource Edge.FontSize.Body}"
-                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                Text="{DynamicResource Navigation_Dashboard_AlertUnit}" />
-                        </StackPanel>
-                        <Border
-                            Grid.Row="2"
-                            Height="1"
-                            Margin="0,0,0,16"
-                            Background="{DynamicResource Edge.Brush.Border.Subtle}" />
-                        <Grid
-                            Grid.Row="3"
-                            ColumnDefinitions="*,Auto"
-                            RowDefinitions="Auto,Auto"
-                            RowSpacing="{DynamicResource Edge.Size.Spacing8}">
-                            <TextBlock
-                                FontSize="{DynamicResource Edge.FontSize.Body}"
-                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                Text="{DynamicResource Navigation_Dashboard_AlertPending}" />
-                            <TextBlock
-                                Grid.Column="1"
-                                FontSize="{DynamicResource Edge.FontSize.SubData18}"
-                                FontWeight="SemiBold"
-                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                                Text="—" />
-                            <TextBlock
-                                Grid.Row="1"
-                                FontSize="{DynamicResource Edge.FontSize.Body}"
-                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                Text="{DynamicResource Navigation_Dashboard_AlertHandled}" />
-                            <TextBlock
-                                Grid.Row="1"
-                                Grid.Column="1"
-                                FontSize="{DynamicResource Edge.FontSize.SubData18}"
-                                FontWeight="SemiBold"
-                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                                Text="—" />
-                        </Grid>
-                    </Grid>
-                </edge:EdgeCard>
+                <edge:EdgeMetricCard
+                    Grid.Column="2"
+                    MinHeight="260"
+                    Title="{DynamicResource Navigation_Dashboard_DeviceOnline}"
+                    Unit="{DynamicResource Navigation_Dashboard_DeviceUnit}"
+                    Value="{Binding ConnectedDevices}" />
             </Grid>
 
             <edge:EdgeCard
@@ -293,99 +50,11 @@
                         Subtitle="{DynamicResource Navigation_Dashboard_NoStableAlertSource}" />
                 </edge:EdgeCard.Header>
 
-                <StackPanel Margin="0,20,0,0">
-                    <Grid Height="56" ColumnDefinitions="Auto,Auto,Auto,*">
-                        <Ellipse
-                            Width="8"
-                            Height="8"
-                            Margin="0,0,16,0"
-                            VerticalAlignment="Center"
-                            Fill="{DynamicResource Edge.Brush.Border.Subtle}" />
-                        <TextBlock
-                            Grid.Column="1"
-                            Margin="0,0,24,0"
-                            VerticalAlignment="Center"
-                            FontSize="{DynamicResource Edge.FontSize.Body}"
-                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                            Text="—:—" />
-                        <TextBlock
-                            Grid.Column="2"
-                            Margin="0,0,24,0"
-                            VerticalAlignment="Center"
-                            FontSize="{DynamicResource Edge.FontSize.Body}"
-                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                            Text="—" />
-                        <TextBlock
-                            Grid.Column="3"
-                            VerticalAlignment="Center"
-                            FontSize="{DynamicResource Edge.FontSize.Body}"
-                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                            Text="{DynamicResource Navigation_Dashboard_NoAlertData}" />
-                    </Grid>
-                    <Grid Height="56" ColumnDefinitions="Auto,Auto,Auto,*">
-                        <Ellipse
-                            Width="8"
-                            Height="8"
-                            Margin="0,0,16,0"
-                            VerticalAlignment="Center"
-                            Fill="{DynamicResource Edge.Brush.Border.Subtle}" />
-                        <TextBlock
-                            Grid.Column="1"
-                            Margin="0,0,24,0"
-                            VerticalAlignment="Center"
-                            FontSize="{DynamicResource Edge.FontSize.Body}"
-                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                            Text="—:—" />
-                        <TextBlock
-                            Grid.Column="2"
-                            Margin="0,0,24,0"
-                            VerticalAlignment="Center"
-                            FontSize="{DynamicResource Edge.FontSize.Body}"
-                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                            Text="—" />
-                        <TextBlock
-                            Grid.Column="3"
-                            VerticalAlignment="Center"
-                            FontSize="{DynamicResource Edge.FontSize.Body}"
-                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                            Text="{DynamicResource Navigation_Dashboard_NoAlertData}" />
-                    </Grid>
-                    <Grid Height="56" ColumnDefinitions="Auto,Auto,Auto,*">
-                        <Ellipse
-                            Width="8"
-                            Height="8"
-                            Margin="0,0,16,0"
-                            VerticalAlignment="Center"
-                            Fill="{DynamicResource Edge.Brush.Border.Subtle}" />
-                        <TextBlock
-                            Grid.Column="1"
-                            Margin="0,0,24,0"
-                            VerticalAlignment="Center"
-                            FontSize="{DynamicResource Edge.FontSize.Body}"
-                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                            Text="—:—" />
-                        <TextBlock
-                            Grid.Column="2"
-                            Margin="0,0,24,0"
-                            VerticalAlignment="Center"
-                            FontSize="{DynamicResource Edge.FontSize.Body}"
-                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                            Text="—" />
-                        <TextBlock
-                            Grid.Column="3"
-                            VerticalAlignment="Center"
-                            FontSize="{DynamicResource Edge.FontSize.Body}"
-                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                            Text="{DynamicResource Navigation_Dashboard_NoAlertData}" />
-                    </Grid>
-                    <TextBlock
-                        Margin="0,12,0,0"
-                        HorizontalAlignment="Right"
-                        FontSize="{DynamicResource Edge.FontSize.Body}"
-                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                        Text="{DynamicResource Navigation_Dashboard_ViewAll}" />
-                </StackPanel>
+                <sharedViews:EmptyStateView
+                    Margin="0,20,0,0"
+                    Message="{DynamicResource Navigation_Dashboard_NoStableAlertSource}"
+                    Title="{DynamicResource Navigation_Dashboard_NoAlertData}" />
             </edge:EdgeCard>
         </StackPanel>
-    </ScrollViewer>
+    </edge:EdgeScrollHost>
 </UserControl>

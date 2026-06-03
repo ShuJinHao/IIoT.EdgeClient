@@ -180,7 +180,7 @@ internal sealed class TestEdgeProcessModuleBuilder(
     public void RegisterCloudUploader(ProcessUploadMode uploadMode)
         => integrationRegistry.RegisterCloudUploader(ProcessType, uploadMode);
 
-    public void RegisterMesUploader(MesUploadMode uploadMode)
+    public void RegisterMesUploader(ProcessUploadMode uploadMode)
         => integrationRegistry.RegisterMesUploader(ProcessType, uploadMode);
 
     public void RegisterParameters<TMes, TCloud, TBusiness>()

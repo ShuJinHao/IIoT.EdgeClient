@@ -9,8 +9,8 @@ using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Recipe;
 using IIoT.Edge.Application.Abstractions.Tasks;
-using IIoT.Edge.Application.Common.Models;
 using IIoT.Edge.Application.Features.Config.ModuleParameters;
+using IIoT.Edge.Application.Features.Config.SchemaReconciliation;
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
@@ -147,7 +147,7 @@ public sealed class ModuleRuntimeRegistrationTests
     }
 
     [Fact]
-    public async Task AppLifecycleManager_WhenBootstrapSecretIsMissing_ShouldFailStartupValidation()
+    public async Task AppLifecycleManager_WhenBootstrapSecretIsMissing_ShouldStartWithDiagnosticIssue()
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
             enabledModules: ["Homogenization"],
@@ -156,8 +156,7 @@ public sealed class ModuleRuntimeRegistrationTests
 
         var result = await harness.Manager.StartAsync();
 
-        Assert.False(result.Success);
-        Assert.Contains("CloudApi:BootstrapSecret", result.Message, StringComparison.Ordinal);
+        Assert.True(result.Success, result.Message);
         Assert.Contains(
             harness.StartupDiagnosticsStore.Current.Issues,
             issue => string.Equals(issue.Code, "CONFIG_INVALID", StringComparison.OrdinalIgnoreCase)
@@ -165,7 +164,47 @@ public sealed class ModuleRuntimeRegistrationTests
     }
 
     [Fact]
-    public async Task AppLifecycleManager_WhenCloudApiPathIsMissing_ShouldFailStartupValidation()
+    public async Task AppLifecycleManager_WhenIoMappingAddressIsEmpty_ShouldStartWithDiagnosticIssue()
+    {
+        await using var harness = await AppLifecycleHarness.CreateAsync(
+            enabledModules: ["Homogenization"],
+            deviceModuleIds: ["Homogenization"]);
+        var device = Assert.Single(await harness.GetNetworkDevicesAsync());
+        var mappings = await harness.GetIoMappingsAsync(device.Id);
+        var sourceMapping = mappings.OrderBy(static x => x.SortOrder).First();
+        var emptyAddressMapping = IoMappingEntity.Create(
+            device.Id,
+            sourceMapping.SignalKey,
+            string.Empty,
+            sourceMapping.AddressCount,
+            sourceMapping.DataType,
+            sourceMapping.Direction,
+            sourceMapping.Category,
+            sourceMapping.BusinessGroup);
+        emptyAddressMapping.UpdateSortOrder(sourceMapping.SortOrder);
+
+        await harness.ReplaceIoMappingsAsync(
+            device.Id,
+            mappings
+                .Where(x => x.Id != sourceMapping.Id)
+                .Append(emptyAddressMapping)
+                .ToArray());
+
+        var result = await harness.Manager.StartAsync();
+
+        Assert.True(result.Success, result.Message);
+        Assert.Contains(
+            harness.StartupDiagnosticsStore.Current.Issues,
+            issue => string.Equals(issue.Code, "DEVICE_MODULE_MISMATCH", StringComparison.OrdinalIgnoreCase)
+                     && issue.Message.Contains("PlcAddress 为空", StringComparison.Ordinal));
+        Assert.Contains(
+            harness.Logger.Entries,
+            entry => string.Equals(entry.Level, "Warn", StringComparison.OrdinalIgnoreCase)
+                     && entry.Message.Contains("非阻断", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AppLifecycleManager_WhenCloudApiPathIsMissing_ShouldStartWithDiagnosticIssue()
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
             enabledModules: ["Homogenization"],
@@ -174,8 +213,7 @@ public sealed class ModuleRuntimeRegistrationTests
 
         var result = await harness.Manager.StartAsync();
 
-        Assert.False(result.Success);
-        Assert.Contains("CloudApi:Paths:DeviceInstance", result.Message, StringComparison.Ordinal);
+        Assert.True(result.Success, result.Message);
         Assert.Contains(
             harness.StartupDiagnosticsStore.Current.Issues,
             issue => string.Equals(issue.Code, "CONFIG_INVALID", StringComparison.OrdinalIgnoreCase)
@@ -183,7 +221,7 @@ public sealed class ModuleRuntimeRegistrationTests
     }
 
     [Fact]
-    public async Task AppLifecycleManager_WhenProcessUploadPathIsMissing_ShouldFailStartupValidation()
+    public async Task AppLifecycleManager_WhenProcessUploadPathIsMissing_ShouldStartWithDiagnosticIssue()
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
             enabledModules: ["Homogenization"],
@@ -192,8 +230,7 @@ public sealed class ModuleRuntimeRegistrationTests
 
         var result = await harness.Manager.StartAsync();
 
-        Assert.False(result.Success);
-        Assert.Contains("CloudApi:Paths:ProcessUpload", result.Message, StringComparison.Ordinal);
+        Assert.True(result.Success, result.Message);
         Assert.Contains(
             harness.StartupDiagnosticsStore.Current.Issues,
             issue => string.Equals(issue.Code, "CONFIG_INVALID", StringComparison.OrdinalIgnoreCase)
@@ -220,7 +257,7 @@ public sealed class ModuleRuntimeRegistrationTests
     [InlineData("https://cloud.test/api/v1/bootstrap/device-instance")]
     [InlineData("http://cloud.test/api/v1/bootstrap/device-instance")]
     [InlineData("file://api/v1/bootstrap/device-instance")]
-    public async Task AppLifecycleManager_WhenCloudApiPathHasExplicitScheme_ShouldFailStartupValidation(string deviceInstancePath)
+    public async Task AppLifecycleManager_WhenCloudApiPathHasExplicitScheme_ShouldStartWithDiagnosticIssue(string deviceInstancePath)
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
             enabledModules: ["Homogenization"],
@@ -229,17 +266,16 @@ public sealed class ModuleRuntimeRegistrationTests
 
         var result = await harness.Manager.StartAsync();
 
-        Assert.False(result.Success);
-        Assert.Contains("CloudApi:Paths:DeviceInstance", result.Message, StringComparison.Ordinal);
-        Assert.Contains("相对 API 路径", result.Message, StringComparison.Ordinal);
+        Assert.True(result.Success, result.Message);
         Assert.Contains(
             harness.StartupDiagnosticsStore.Current.Issues,
             issue => string.Equals(issue.Code, "CONFIG_INVALID", StringComparison.OrdinalIgnoreCase)
-                     && issue.Message.Contains("CloudApi:Paths:DeviceInstance", StringComparison.Ordinal));
+                     && issue.Message.Contains("CloudApi:Paths:DeviceInstance", StringComparison.Ordinal)
+                     && issue.Message.Contains("相对 API 路径", StringComparison.Ordinal));
     }
 
     [Fact]
-    public async Task AppLifecycleManager_WhenCloudApiPathStartsWithDoubleSlash_ShouldFailStartupValidation()
+    public async Task AppLifecycleManager_WhenCloudApiPathStartsWithDoubleSlash_ShouldStartWithDiagnosticIssue()
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
             enabledModules: ["Homogenization"],
@@ -248,13 +284,16 @@ public sealed class ModuleRuntimeRegistrationTests
 
         var result = await harness.Manager.StartAsync();
 
-        Assert.False(result.Success);
-        Assert.Contains("CloudApi:Paths:DeviceInstance", result.Message, StringComparison.Ordinal);
-        Assert.Contains("单个 /", result.Message, StringComparison.Ordinal);
+        Assert.True(result.Success, result.Message);
+        Assert.Contains(
+            harness.StartupDiagnosticsStore.Current.Issues,
+            issue => string.Equals(issue.Code, "CONFIG_INVALID", StringComparison.OrdinalIgnoreCase)
+                     && issue.Message.Contains("CloudApi:Paths:DeviceInstance", StringComparison.Ordinal)
+                     && issue.Message.Contains("单个 /", StringComparison.Ordinal));
     }
 
     [Fact]
-    public async Task AppLifecycleManager_WhenRecipePathMissingDeviceIdPlaceholder_ShouldFailStartupValidation()
+    public async Task AppLifecycleManager_WhenRecipePathMissingDeviceIdPlaceholder_ShouldStartWithDiagnosticIssue()
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
             enabledModules: ["Homogenization"],
@@ -263,8 +302,7 @@ public sealed class ModuleRuntimeRegistrationTests
 
         var result = await harness.Manager.StartAsync();
 
-        Assert.False(result.Success);
-        Assert.Contains("{deviceId}", result.Message, StringComparison.Ordinal);
+        Assert.True(result.Success, result.Message);
         Assert.Contains(
             harness.StartupDiagnosticsStore.Current.Issues,
             issue => string.Equals(issue.Code, "CONFIG_INVALID", StringComparison.OrdinalIgnoreCase)
@@ -324,6 +362,46 @@ public sealed class ModuleRuntimeRegistrationTests
         Assert.Contains("任务绑定校验失败", fault.Error, StringComparison.Ordinal);
         Assert.Contains("Homogenization.Inbound", fault.Error, StringComparison.Ordinal);
         Assert.Contains("Homogenization.Interaction.Inbound/Write", fault.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AppLifecycleManager_WhenBackgroundStartupFails_ShouldStillStartShell()
+    {
+        await using var harness = await AppLifecycleHarness.CreateAsync(
+            enabledModules: ["Homogenization"],
+            deviceModuleIds: ["Homogenization"],
+            backgroundStartException: new InvalidOperationException("cloud task unavailable"));
+
+        var result = await harness.Manager.StartAsync();
+
+        Assert.True(result.Success, result.Message);
+        Assert.Equal(1, harness.BackgroundCoordinator.StartCallCount);
+        Assert.Contains(
+            harness.Logger.Entries,
+            entry => string.Equals(entry.Level, "Warn", StringComparison.OrdinalIgnoreCase)
+                     && entry.Message.Contains("后台服务启动失败", StringComparison.Ordinal)
+                     && entry.Message.Contains("非阻断", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AppLifecycleManager_WhenStartupDiagnosticValidatorFails_ShouldStillPublishConfigurationProfile()
+    {
+        await using var harness = await AppLifecycleHarness.CreateAsync(
+            enabledModules: ["Homogenization"],
+            deviceModuleIds: ["Homogenization"],
+            startupDiagnosticException: new InvalidOperationException("legacy signal property missing"));
+
+        var result = await harness.Manager.StartAsync();
+
+        Assert.True(result.Success, result.Message);
+        var report = harness.StartupDiagnosticsStore.Current;
+        Assert.NotEqual(DateTime.MinValue, report.GeneratedAt);
+        Assert.Equal("Production", report.ConfigurationProfile.EnvironmentName);
+        Assert.False(string.IsNullOrWhiteSpace(report.ConfigurationProfile.RuntimeDataRoot));
+        Assert.Contains(
+            report.Issues,
+            issue => string.Equals(issue.Code, "STARTUP_DIAGNOSTIC_VALIDATOR_FAILED", StringComparison.OrdinalIgnoreCase)
+                     && issue.Message.Contains(nameof(ThrowingStartupAsyncDiagnosticValidator), StringComparison.Ordinal));
     }
 
     [Fact]
@@ -526,7 +604,9 @@ public sealed class ModuleRuntimeRegistrationTests
         => new ShellModuleCatalog(CreateModuleCatalog());
 
     private static IModuleCatalog CreateModuleCatalog()
-        => new DirectoryModuleCatalog(new ModulePluginLoader(new ModulePluginAssemblyResolver()));
+        => new DirectoryModuleCatalog(
+            new ModulePluginLoader(new ModulePluginAssemblyResolver()),
+            new ModulePluginCompatibilityPolicy());
 
     private sealed class TestHostEnvironment(string environmentName) : IHostEnvironment
     {
@@ -737,7 +817,9 @@ public sealed class ModuleRuntimeRegistrationTests
             string? bootstrapSecret = "bootstrap-secret",
             string? omittedCloudPathKey = null,
             string? recipeByDeviceTemplate = null,
-            string? deviceInstancePath = null)
+            string? deviceInstancePath = null,
+            Exception? backgroundStartException = null,
+            Exception? startupDiagnosticException = null)
         {
             var tempDirectory = Path.Combine(Path.GetTempPath(), "edge-shell-tests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(tempDirectory);
@@ -766,7 +848,7 @@ public sealed class ModuleRuntimeRegistrationTests
 
             var plcManager = new SpyPlcConnectionManager();
             var contextStore = new SpyProductionContextStore();
-            var backgroundCoordinator = new SpyBackgroundServiceCoordinator();
+            var backgroundCoordinator = new SpyBackgroundServiceCoordinator(backgroundStartException);
             var logger = new SpyLogService();
             var recipeService = new SpyRecipeService();
 
@@ -817,25 +899,37 @@ public sealed class ModuleRuntimeRegistrationTests
             var developmentSampleInitializer = serviceProvider.GetRequiredService<IDevelopmentSampleInitializer>();
             var networkDevices = serviceProvider.GetRequiredService<IRepository<NetworkDeviceEntity>>();
             var ioMappings = serviceProvider.GetRequiredService<IRepository<IoMappingEntity>>();
+            var configurationProfileBuilder = new StartupConfigurationProfileBuilder(configuration, runtimePaths);
+            var syncValidators = new IStartupDiagnosticValidator[]
+            {
+                new StartupAppSettingsValidator(configuration, shiftConfig),
+                new StartupModuleRegistrationValidator(cellDataRegistry, runtimeRegistry, integrationRegistry)
+            };
+            IStartupAsyncDiagnosticValidator[] asyncValidators = startupDiagnosticException is null
+                ? [new StartupPlcConfigurationValidator(ioMappings, cellDataRegistry, runtimeRegistry)]
+                :
+                [
+                    new StartupPlcConfigurationValidator(ioMappings, cellDataRegistry, runtimeRegistry),
+                    new ThrowingStartupAsyncDiagnosticValidator(startupDiagnosticException)
+                ];
             var diagnosticsReportBuilder = new StartupDiagnosticsReportBuilder(
-                configuration,
-                runtimePaths,
-                shiftConfig,
                 networkDevices,
-                ioMappings,
-                cellDataRegistry,
-                runtimeRegistry,
-                integrationRegistry,
                 new StartupPluginLifecycleSnapshotBuilder(),
                 discovery.Modules,
                 [.. discovery.Issues, .. activation.Issues],
                 activation.EnabledModuleIds,
                 activation.Modules,
-                serviceProvider.GetServices<IModuleHardwareProfileProvider>());
+                serviceProvider.GetServices<IModuleHardwareProfileProvider>(),
+                syncValidators,
+                asyncValidators,
+                configurationProfileBuilder,
+                new StartupModuleRegistrationSnapshotBuilder(cellDataRegistry, runtimeRegistry, integrationRegistry),
+                serviceProvider.GetService<ILocalSystemRuntimeConfigService>());
             var manager = new AppLifecycleManager(
                 new AppStartupInitializer(
                     serviceProvider,
                     developmentSampleInitializer,
+                    new NoopConfigSchemaReconciler(),
                     logger),
                 diagnosticsReportBuilder,
                 diagnosticsStore,
@@ -895,7 +989,7 @@ public sealed class ModuleRuntimeRegistrationTests
             {
                 var deviceName = $"PLC-{(char)('A' + index)}";
                 var device = NetworkDeviceEntity.Create(deviceName, DeviceType.PLC, "127.0.0.1", 102 + index);
-                device.AssignModule(moduleIds[index], PlcType.S7.ToString());
+                device.UpdateDeviceModel(PlcType.S7.ToString());
                 device.UpdateEndpoint("127.0.0.1", 102 + index, null, 3000);
                 device.Enable();
 
@@ -1033,7 +1127,7 @@ public sealed class ModuleRuntimeRegistrationTests
         public Task StartAutoSaveAsync(CancellationToken ct, int intervalSeconds = 30) => Task.CompletedTask;
     }
 
-    private sealed class SpyBackgroundServiceCoordinator : IBackgroundServiceCoordinator
+    private sealed class SpyBackgroundServiceCoordinator(Exception? startException = null) : IBackgroundServiceCoordinator
     {
         public int StartCallCount { get; private set; }
 
@@ -1042,6 +1136,11 @@ public sealed class ModuleRuntimeRegistrationTests
         public Task StartAsync(CancellationToken cancellationToken = default)
         {
             StartCallCount++;
+            if (startException is not null)
+            {
+                throw startException;
+            }
+
             return Task.CompletedTask;
         }
 
@@ -1140,5 +1239,20 @@ public sealed class ModuleRuntimeRegistrationTests
             Entries.Add(entry);
             EntryAdded?.Invoke(entry);
         }
+    }
+
+    private sealed class NoopConfigSchemaReconciler : IConfigSchemaReconciler
+    {
+        public Task ReconcileAsync(CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+    }
+
+    private sealed class ThrowingStartupAsyncDiagnosticValidator(Exception exception) : IStartupAsyncDiagnosticValidator
+    {
+        public Task ValidateAsync(
+            StartupValidationContext context,
+            List<StartupDiagnosticIssue> issues,
+            CancellationToken cancellationToken)
+            => throw exception;
     }
 }

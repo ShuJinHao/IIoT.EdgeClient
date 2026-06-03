@@ -13,7 +13,7 @@ public static class DependencyInjection
         services.AddSingleton<ILogService, Log4NetLogService>();
 
         services.AddSingleton<LogDisplayService>();
-        services.AddSingleton<ILogDisplayService>(sp => sp.GetRequiredService<LogDisplayService>());
+        services.AddSingleton<ISystemLogDisplayStore>(sp => sp.GetRequiredService<LogDisplayService>());
 
         services.AddSingleton<EquipmentViewModel>();
         services.AddSingleton<LogViewModel>();

@@ -2,13 +2,12 @@ using System.Collections.ObjectModel;
 using System.Windows.Input;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
-using IIoT.Edge.Application.Features.Hardware.Queries;
+using IIoT.Edge.Application.Features.Hardware.IOView;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Presentation.Navigation.Localization;
 using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
-using MediatR;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
 
@@ -16,14 +15,13 @@ public class IoViewViewModel : NavigationViewModelBase
 {
     private readonly IPlcDataStore _dataStore;
     private readonly IPlcConnectionManager _plcConnectionManager;
-    private readonly ISender _sender;
+    private readonly IIoViewQueryFacade _queryFacade;
     private readonly AsyncCommand _manualReadCommand;
     private readonly IIoViewMappingBuilder _mappingBuilder;
     private readonly IIoViewSignalValueUpdater _signalValueUpdater;
     private readonly IIoViewBufferBindingCoordinator _bufferBindingCoordinator;
     private readonly IIoViewInteractionWriter _interactionWriter;
     private readonly IIoViewManualReadService _manualReadService;
-    private readonly string? _moduleIdFilter;
 
     public ObservableCollection<NetworkDeviceEntity> Devices { get; } = [];
 
@@ -103,7 +101,7 @@ public class IoViewViewModel : NavigationViewModelBase
     public IoViewViewModel(
         IPlcDataStore dataStore,
         IPlcConnectionManager plcConnectionManager,
-        ISender sender,
+        IIoViewQueryFacade queryFacade,
         IAppLanguageService languageService,
         IIoViewMappingBuilder mappingBuilder,
         IIoViewSignalValueUpdater signalValueUpdater,
@@ -113,7 +111,7 @@ public class IoViewViewModel : NavigationViewModelBase
         : this(
             dataStore,
             plcConnectionManager,
-            sender,
+            queryFacade,
             languageService,
             "Hardware.IOView",
             "Navigation_Title_IoInteract",
@@ -130,7 +128,7 @@ public class IoViewViewModel : NavigationViewModelBase
     public IoViewViewModel(
         IPlcDataStore dataStore,
         IPlcConnectionManager plcConnectionManager,
-        ISender sender,
+        IIoViewQueryFacade queryFacade,
         IAppLanguageService languageService,
         string viewId,
         string titleResourceKey,
@@ -144,7 +142,7 @@ public class IoViewViewModel : NavigationViewModelBase
         : this(
             dataStore,
             plcConnectionManager,
-            sender,
+            queryFacade,
             languageService,
             viewId,
             titleResourceKey,
@@ -161,7 +159,7 @@ public class IoViewViewModel : NavigationViewModelBase
     private IoViewViewModel(
         IPlcDataStore dataStore,
         IPlcConnectionManager plcConnectionManager,
-        ISender sender,
+        IIoViewQueryFacade queryFacade,
         IAppLanguageService languageService,
         string viewId,
         string titleResourceKey,
@@ -176,13 +174,12 @@ public class IoViewViewModel : NavigationViewModelBase
     {
         _dataStore = dataStore;
         _plcConnectionManager = plcConnectionManager;
-        _sender = sender;
+        _queryFacade = queryFacade;
         _mappingBuilder = mappingBuilder;
         _signalValueUpdater = signalValueUpdater;
         _bufferBindingCoordinator = bufferBindingCoordinator;
         _interactionWriter = interactionWriter;
         _manualReadService = manualReadService;
-        _moduleIdFilter = moduleIdFilter;
 
         RefreshDevicesCommand = new AsyncCommand(LoadDevicesAsync);
         _manualReadCommand = new AsyncCommand(ManualReadSelectedDataAsync, () => SelectedDevice is not null);
@@ -191,7 +188,7 @@ public class IoViewViewModel : NavigationViewModelBase
     public async Task LoadDevicesAsync()
     {
         var selectedDeviceId = SelectedDevice?.Id;
-        var result = await _sender.Send(new GetAllNetworkDevicesQuery());
+        var result = await _queryFacade.GetNetworkDevicesAsync();
 
         Devices.Clear();
         if (result.IsSuccess && result.Value != null)
@@ -232,7 +229,7 @@ public class IoViewViewModel : NavigationViewModelBase
             return;
         }
 
-        var result = await _sender.Send(new GetIoMappingsByDeviceQuery(SelectedDevice.Id, 0, int.MaxValue));
+        var result = await _queryFacade.GetIoMappingsAsync(SelectedDevice.Id, 0, int.MaxValue);
         if (!result.IsSuccess || result.Value is null)
         {
             BindSelectedBuffer();
@@ -312,8 +309,7 @@ public class IoViewViewModel : NavigationViewModelBase
             return false;
         }
 
-        return string.IsNullOrWhiteSpace(_moduleIdFilter)
-            || string.Equals(device.ModuleId, _moduleIdFilter, StringComparison.OrdinalIgnoreCase);
+        return true;
     }
 
     private void WriteInteractionRow(IoInteractionRowModel row)

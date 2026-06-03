@@ -2,6 +2,7 @@ using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
+using System.Diagnostics;
 
 namespace IIoT.Edge.Infrastructure.Integration.Mes;
 
@@ -49,6 +50,7 @@ public sealed class MesHeartbeatProbe : IMesHeartbeatProbe
         }
 
         var requestUrl = heartbeatPath;
+        Stopwatch? stopwatch = null;
         try
         {
             var client = _httpClientFactory.CreateClient("MesApi");
@@ -66,7 +68,9 @@ public sealed class MesHeartbeatProbe : IMesHeartbeatProbe
                 request.Headers.TryAddWithoutValidation(header.Key, header.Value);
             }
 
+            stopwatch = Stopwatch.StartNew();
             using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            var latencyMs = ToLatencyMs(stopwatch.ElapsedMilliseconds);
             if (response.IsSuccessStatusCode)
             {
                 return new ExternalHeartbeatSnapshot(
@@ -76,12 +80,13 @@ public sealed class MesHeartbeatProbe : IMesHeartbeatProbe
                     null,
                     attemptedAt,
                     attemptedAt,
-                    null);
+                    null,
+                    latencyMs);
             }
 
             var reason = $"http_{(int)response.StatusCode}";
             _logger.Warn($"[MES] 心跳失败：{requestUrl}，状态码={(int)response.StatusCode}。");
-            return NotReady(reason, response.ReasonPhrase, attemptedAt);
+            return NotReady(reason, response.ReasonPhrase, attemptedAt, latencyMs);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -90,16 +95,20 @@ public sealed class MesHeartbeatProbe : IMesHeartbeatProbe
         catch (OperationCanceledException ex)
         {
             _logger.Warn($"[MES] 心跳超时：{requestUrl}，{ex.Message}");
-            return NotReady("mes_heartbeat_timeout", ex.Message, attemptedAt);
+            return NotReady("mes_heartbeat_timeout", ex.Message, attemptedAt, ToLatencyMs(stopwatch?.ElapsedMilliseconds));
         }
         catch (Exception ex)
         {
             _logger.Warn($"[MES] 心跳异常：{requestUrl}，{ex.Message}");
-            return NotReady("mes_heartbeat_exception", ex.Message, attemptedAt);
+            return NotReady("mes_heartbeat_exception", ex.Message, attemptedAt, ToLatencyMs(stopwatch?.ElapsedMilliseconds));
         }
     }
 
-    private static ExternalHeartbeatSnapshot NotReady(string reasonCode, string? message, DateTime attemptedAt)
+    private static ExternalHeartbeatSnapshot NotReady(
+        string reasonCode,
+        string? message,
+        DateTime attemptedAt,
+        int? latencyMs = null)
         => new(
             ExternalSystemKind.Mes,
             ExternalHeartbeatState.NotReady,
@@ -107,5 +116,11 @@ public sealed class MesHeartbeatProbe : IMesHeartbeatProbe
             message,
             attemptedAt,
             null,
-            attemptedAt);
+            attemptedAt,
+            latencyMs);
+
+    private static int? ToLatencyMs(long? elapsedMilliseconds)
+        => elapsedMilliseconds.HasValue
+            ? (int)Math.Min(int.MaxValue, Math.Max(0, elapsedMilliseconds.Value))
+            : null;
 }

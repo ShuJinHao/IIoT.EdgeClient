@@ -66,6 +66,19 @@ public sealed class PlcConnectionStatusStore
     public void MarkRuntimeFault(int networkDeviceId, string deviceName, string error)
         => MarkDisconnected(networkDeviceId, deviceName, error);
 
+    public void MarkLatency(int networkDeviceId, string deviceName, int? latencyMs)
+    {
+        lock (_stateLock)
+        {
+            var existing = GetOrCreateSnapshot(networkDeviceId, deviceName);
+            _snapshots[networkDeviceId] = existing with
+            {
+                DeviceName = deviceName,
+                LatencyMs = latencyMs
+            };
+        }
+    }
+
     public PlcConnectionRuntimeSnapshot? GetSnapshot(int networkDeviceId)
     {
         lock (_stateLock)

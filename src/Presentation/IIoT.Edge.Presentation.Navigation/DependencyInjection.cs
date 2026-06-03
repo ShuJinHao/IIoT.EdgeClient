@@ -1,3 +1,6 @@
+using IIoT.Edge.Application.Common.Crud;
+using IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView.Models;
+using IIoT.Edge.Application.Features.Hardware.IoMappings;
 using IIoT.Edge.Presentation.Navigation.Features.Config.ParamView;
 using IIoT.Edge.Presentation.Navigation.Features.Configuration;
 using IIoT.Edge.Presentation.Navigation.Features.Dashboard;
@@ -24,6 +27,7 @@ public static class DependencyInjection
         services.AddSingleton<OverviewWorkspaceViewModel>();
         services.AddSingleton<ConfigurationWorkspaceViewModel>();
         services.AddSingleton<DashboardViewModel>();
+        services.AddSingleton<IParamViewModelMapper, ParamViewModelMapper>();
         services.AddSingleton<ParamViewModel>();
         services.AddSingleton<IIoViewMappingBuilder, IoViewMappingBuilder>();
         services.AddSingleton<IIoViewSignalValueUpdater, IoViewSignalValueUpdater>();
@@ -31,8 +35,12 @@ public static class DependencyInjection
         services.AddSingleton<IIoViewInteractionWriter, IoViewInteractionWriter>();
         services.AddSingleton<IIoViewManualReadService, IoViewManualReadService>();
         services.AddSingleton<IoViewViewModel>();
+        services.AddSingleton<IEditorValidator<NetworkDeviceVm>, NetworkDeviceValidator>();
+        services.AddSingleton<IEditorValidator<SerialDeviceVm>, SerialDeviceValidator>();
+        services.AddSingleton<IEditorValidator<IoMappingVm>, IoMappingValidator>();
         services.AddSingleton<IHardwareConfigValidationPresenter, HardwareConfigValidationPresenter>();
         services.AddSingleton<IHardwareConfigStandardSignalDraftService, HardwareConfigStandardSignalDraftService>();
+        services.AddSingleton<IHardwareConfigEditModelMapper, HardwareConfigEditModelMapper>();
         services.AddSingleton<IHardwareConfigMappingSaveBuilder, HardwareConfigMappingSaveBuilder>();
         services.AddSingleton<IHardwareConfigEditSession, HardwareConfigEditSession>();
         services.AddSingleton<IHardwareConfigDeviceSelectionCoordinator, HardwareConfigDeviceSelectionCoordinator>();
@@ -40,8 +48,12 @@ public static class DependencyInjection
         services.AddSingleton<HardwareConfigViewModel>();
         services.AddSingleton<IPlcTaskBindingConfirmationService, PlcTaskBindingConfirmationService>();
         services.AddSingleton<PlcTaskBindingViewModel>();
+        services.AddSingleton<IEditorValidator<LocalRecipeParamEditModel>, LocalRecipeParamValidator>();
         services.AddSingleton<RecipeViewModel>();
         services.AddSingleton<CapacityViewModel>();
+        services.AddSingleton<IMonitorViewModelSummaryFormatter, MonitorViewModelSummaryFormatter>();
+        services.AddSingleton<IMonitorStateMachineTaskItemFactory, MonitorStateMachineTaskItemFactory>();
+        services.AddSingleton<IMonitorViewModelCollaboratorFactory, MonitorViewModelCollaboratorFactory>();
         services.AddSingleton<MonitorViewModel>();
         services.AddSingleton<DataViewModel>();
         services.AddSingleton<IDiagnosticsModuleDisplayNameResolver, DiagnosticsModuleDisplayNameResolver>();
@@ -51,6 +63,7 @@ public static class DependencyInjection
         services.AddSingleton<IDiagnosticsRefreshCoordinator, DiagnosticsRefreshCoordinator>();
         services.AddSingleton<IDiagnosticsDeadLetterOperator, DiagnosticsDeadLetterOperator>();
         services.AddSingleton<IDiagnosticsDeadLetterConfirmationService, DiagnosticsDeadLetterConfirmationService>();
+        services.AddSingleton<IDiagnosticsViewModelCollaboratorFactory, DiagnosticsViewModelCollaboratorFactory>();
         services.AddSingleton<DiagnosticsViewModel>();
 
         services.AddTransient<NavigationRailView>();

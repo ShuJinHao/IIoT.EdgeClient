@@ -52,7 +52,6 @@ internal sealed class EdgeSqliteSchemaRepair : IEdgeSqliteSchemaRepair
         EnsureColumn(connection, columns, "category", "TEXT NOT NULL DEFAULT '单点读数据'");
         RenameOrCreateColumn(connection, columns, "label", "signal_key", "TEXT NOT NULL DEFAULT ''");
         RenameOrCreateColumn(connection, columns, "group_name", "business_group", "TEXT NOT NULL DEFAULT ''");
-        RenameOrCreateColumn(connection, columns, "display_role", "signal_name", "TEXT NOT NULL DEFAULT ''");
     }
 
     private static void RenameOrCreateColumn(

@@ -197,7 +197,9 @@ public sealed class ModuleDiscoveryContractTests
     }
 
     private static IModuleCatalog CreateModuleCatalog()
-        => new DirectoryModuleCatalog(new ModulePluginLoader(new ModulePluginAssemblyResolver()));
+        => new DirectoryModuleCatalog(
+            new ModulePluginLoader(new ModulePluginAssemblyResolver()),
+            new ModulePluginCompatibilityPolicy());
 
     private sealed class NonModuleEntry
     {

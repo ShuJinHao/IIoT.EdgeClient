@@ -18,7 +18,6 @@ public record IoMappingDto(
     string Direction,
     string Category,
     string BusinessGroup,
-    string SignalName,
     int SortOrder,
     string? Remark
 );
@@ -79,8 +78,7 @@ public class SaveIoMappingsHandler(
                         dto.DataType,
                         dto.Direction,
                         Normalize(dto.Category, "单点读数据"),
-                        dto.BusinessGroup ?? string.Empty,
-                        dto.SignalName ?? string.Empty);
+                        dto.BusinessGroup ?? string.Empty);
                     Apply(entity, request.NetworkDeviceId, dto);
                     repo.Add(entity);
                 }
@@ -110,7 +108,6 @@ public class SaveIoMappingsHandler(
             dto.Direction,
             Normalize(dto.Category, "单点读数据"),
             dto.BusinessGroup,
-            dto.SignalName,
             dto.Remark);
         entity.UpdateSortOrder(dto.SortOrder);
     }
@@ -127,8 +124,7 @@ public class SaveIoMappingsHandler(
                 dto.DataType,
                 dto.Direction,
                 Normalize(dto.Category, "单点读数据"),
-                dto.BusinessGroup,
-                dto.SignalName);
+                dto.BusinessGroup);
             Apply(entity, networkDeviceId, dto);
             return null;
         }

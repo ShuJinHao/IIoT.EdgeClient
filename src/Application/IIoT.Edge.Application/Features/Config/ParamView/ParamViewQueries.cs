@@ -2,26 +2,58 @@ using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Common.Crud;
+using IIoT.Edge.Application.Features.Config.CloudApi;
 using IIoT.Edge.Application.Features.Config.ModuleParameters;
-using IIoT.Edge.Application.Features.Config.ParamView.Models;
 using IIoT.Edge.Application.Features.Config.UseCases.ModuleParam;
+using IIoT.Edge.Application.Features.Config.UseCases.SystemConfig.Commands;
 using MediatR;
 
 namespace IIoT.Edge.Application.Features.Config.ParamView;
 
+public record ModuleParamSnapshot(
+    string ModuleId,
+    ModuleParamCategory Category,
+    string Key,
+    string Name,
+    string DisplayNameResourceKey,
+    string DisplayNameFallback,
+    string DescriptionResourceKey,
+    string DescriptionFallback,
+    ParamValueKind ValueKind,
+    string Value,
+    string DefaultValue,
+    string Unit,
+    string Min,
+    string Max);
+
+public record ModuleParamGroupSnapshot(
+    string ModuleId,
+    string ModuleDisplayName,
+    List<ModuleParamSnapshot> Params,
+    string ModuleDisplayNameResourceKey = "",
+    string ModuleDisplayNameFallback = "");
+
 public record ParamViewInitResult(
-    List<ModuleParamGroupVm> MesParamGroups,
-    List<ModuleParamGroupVm> CloudParamGroups,
-    List<ModuleParamGroupVm> BusinessParamGroups);
+    List<ModuleParamGroupSnapshot> MesParamGroups,
+    List<ModuleParamGroupSnapshot> CloudParamGroups,
+    List<ModuleParamGroupSnapshot> BusinessParamGroups);
 
 public record LoadParamViewQuery : IRequest<ParamViewInitResult>;
 
-public record SaveParamViewCommand(List<ModuleParamVm> ModuleParams) : IRequest<CrudOperationResult>;
+public sealed record ParamViewValueDto(
+    string Key,
+    string Value,
+    string? Description = null);
+
+public record SaveParamViewCommand(List<ParamViewValueDto> Params) : IRequest<CrudOperationResult>;
+
+public record ResetParamViewCommand : IRequest<CrudOperationResult>;
 
 public class LoadParamViewHandler(
     ILocalParameterConfigService localParameterConfigService,
     IModuleParamRegistry moduleParamRegistry,
-    IEnumerable<IEdgeProcessModule> modules)
+    IEnumerable<IEdgeProcessModule> modules,
+    ICloudApiConfigSnapshotProvider cloudApiConfigSnapshotProvider)
     : IRequestHandler<LoadParamViewQuery, ParamViewInitResult>
 {
     public async Task<ParamViewInitResult> Handle(LoadParamViewQuery request, CancellationToken ct)
@@ -40,11 +72,74 @@ public class LoadParamViewHandler(
 
         return new ParamViewInitResult(
             BuildModuleGroups(ModuleParamCategory.Mes, moduleParamRegistry, moduleNames, moduleValues),
-            BuildModuleGroups(ModuleParamCategory.Cloud, moduleParamRegistry, moduleNames, moduleValues),
+            BuildCloudGroups(moduleParamRegistry, moduleNames, moduleValues, systemSnapshots, cloudApiConfigSnapshotProvider.GetCurrent()),
             BuildModuleGroups(ModuleParamCategory.Business, moduleParamRegistry, moduleNames, moduleValues));
     }
 
-    private static List<ModuleParamGroupVm> BuildModuleGroups(
+    private static List<ModuleParamGroupSnapshot> BuildCloudGroups(
+        IModuleParamRegistry moduleParamRegistry,
+        IReadOnlyDictionary<string, string> moduleNames,
+        IReadOnlyDictionary<string, string> moduleValues,
+        IReadOnlyCollection<LocalSystemConfigSnapshot> systemSnapshots,
+        CloudApiConfigSnapshot cloudApiSnapshot)
+    {
+        var parameters = BuildCloudApiGroup(systemSnapshots, cloudApiSnapshot)
+            .Params
+            .Concat(BuildModuleGroups(ModuleParamCategory.Cloud, moduleParamRegistry, moduleNames, moduleValues)
+                .SelectMany(static group => group.Params))
+            .ToList();
+
+        return
+        [
+            new ModuleParamGroupSnapshot(
+                CloudApiConfigParamSchema.ModuleId,
+                CloudApiConfigParamSchema.GroupDisplayNameFallback,
+                parameters,
+                "Navigation_Tab_CloudParams",
+                "云端参数")
+        ];
+    }
+
+    private static ModuleParamGroupSnapshot BuildCloudApiGroup(
+        IReadOnlyCollection<LocalSystemConfigSnapshot> systemSnapshots,
+        CloudApiConfigSnapshot cloudApiSnapshot)
+    {
+        var values = systemSnapshots
+            .Where(static snapshot => CloudApiConfigParamSchema.IsCloudApiConfigKey(snapshot.Key))
+            .ToDictionary(
+                static snapshot => snapshot.Key,
+                static snapshot => snapshot.Value,
+                StringComparer.OrdinalIgnoreCase);
+        var parameters = CloudApiConfigParamSchema.Descriptors
+            .OrderBy(static descriptor => descriptor.SortOrder)
+            .Select(descriptor => new ModuleParamSnapshot(
+                CloudApiConfigParamSchema.ModuleId,
+                ModuleParamCategory.Cloud,
+                descriptor.Key,
+                descriptor.Name,
+                descriptor.DisplayNameResourceKey,
+                descriptor.DisplayNameFallback,
+                descriptor.DescriptionResourceKey,
+                descriptor.DescriptionFallback,
+                descriptor.ValueKind,
+                values.TryGetValue(descriptor.Key, out var configured)
+                    ? configured
+                    : CloudApiConfigParamSchema.GetDefaultValue(descriptor.Key, cloudApiSnapshot),
+                CloudApiConfigParamSchema.GetDefaultValue(descriptor.Key, cloudApiSnapshot),
+                string.Empty,
+                string.Empty,
+                string.Empty))
+            .ToList();
+
+        return new ModuleParamGroupSnapshot(
+            CloudApiConfigParamSchema.ModuleId,
+            CloudApiConfigParamSchema.GroupDisplayNameFallback,
+            parameters,
+            CloudApiConfigParamSchema.GroupDisplayNameResourceKey,
+            CloudApiConfigParamSchema.GroupDisplayNameFallback);
+    }
+
+    private static List<ModuleParamGroupSnapshot> BuildModuleGroups(
         ModuleParamCategory category,
         IModuleParamRegistry moduleParamRegistry,
         IReadOnlyDictionary<string, string> moduleNames,
@@ -53,40 +148,31 @@ public class LoadParamViewHandler(
             .GroupBy(x => x.ModuleId, StringComparer.OrdinalIgnoreCase)
             .Select(group =>
             {
-                var vm = new ModuleParamGroupVm
-                {
-                    ModuleId = group.Key,
-                    ModuleDisplayName = moduleNames.TryGetValue(group.Key, out var displayName)
-                        ? displayName
-                        : group.Key
-                };
-
-                foreach (var descriptor in group.OrderBy(x => x.SortOrder))
-                {
-                    vm.Params.Add(new ModuleParamVm
-                    {
-                        ModuleId = descriptor.ModuleId,
-                        Category = descriptor.Category,
-                        Key = descriptor.StorageKey,
-                        Name = descriptor.Name,
-                        DisplayNameResourceKey = descriptor.DisplayNameResourceKey ?? string.Empty,
-                        DisplayNameFallback = descriptor.DisplayNameFallback ?? descriptor.Name,
-                        DescriptionResourceKey = descriptor.DescriptionResourceKey ?? string.Empty,
-                        DescriptionFallback = descriptor.DescriptionFallback ?? string.Empty,
-                        DisplayName = descriptor.DisplayNameFallback ?? descriptor.Name,
-                        Description = descriptor.DescriptionFallback ?? string.Empty,
-                        ValueKind = descriptor.ValueKind,
-                        Value = moduleValues.TryGetValue(descriptor.StorageKey, out var configured)
+                var moduleDisplayName = moduleNames.TryGetValue(group.Key, out var displayName)
+                    ? displayName
+                    : group.Key;
+                var parameters = group
+                    .OrderBy(x => x.SortOrder)
+                    .Select(descriptor => new ModuleParamSnapshot(
+                        descriptor.ModuleId,
+                        descriptor.Category,
+                        descriptor.StorageKey,
+                        descriptor.Name,
+                        descriptor.DisplayNameResourceKey ?? string.Empty,
+                        descriptor.DisplayNameFallback ?? descriptor.Name,
+                        descriptor.DescriptionResourceKey ?? string.Empty,
+                        descriptor.DescriptionFallback ?? string.Empty,
+                        descriptor.ValueKind,
+                        moduleValues.TryGetValue(descriptor.StorageKey, out var configured)
                             ? configured
                             : descriptor.DefaultValue ?? string.Empty,
-                        DefaultValue = descriptor.DefaultValue ?? string.Empty,
-                        Unit = descriptor.Unit ?? string.Empty,
-                        Min = descriptor.MinValue ?? string.Empty,
-                        Max = descriptor.MaxValue ?? string.Empty
-                    });
-                }
+                        descriptor.DefaultValue ?? string.Empty,
+                        descriptor.Unit ?? string.Empty,
+                        descriptor.MinValue ?? string.Empty,
+                        descriptor.MaxValue ?? string.Empty))
+                    .ToList();
 
-                return vm;
+                return new ModuleParamGroupSnapshot(group.Key, moduleDisplayName, parameters);
             })
             .ToList();
 }
@@ -103,15 +189,99 @@ public class SaveParamViewHandler(
             return CrudOperationResult.Failure("当前用户没有参数配置权限。");
         }
 
-        var moduleParams = request.ModuleParams
-            .Select(item => new ModuleParamDto(item.Key, item.Value))
+        var moduleParams = request.Params
+            .Where(static x => ModuleParamKeys.IsModuleStorageKey(x.Key))
+            .Select(static x => new ModuleParamDto(x.Key, x.Value, x.Description))
             .ToList();
-        var moduleResult = await sender.Send(new SaveModuleParamsCommand(moduleParams), ct);
-        if (!moduleResult.IsSuccess)
+        var cloudApiParams = request.Params
+            .Where(static x => CloudApiConfigParamSchema.IsCloudApiConfigKey(x.Key))
+            .Select(static x => new CloudApiConfigParamDto(x.Key, x.Value, x.Description))
+            .ToList();
+        var invalidKeys = request.Params
+            .Where(static x => !ModuleParamKeys.IsModuleStorageKey(x.Key)
+                               && !CloudApiConfigParamSchema.IsCloudApiConfigKey(x.Key))
+            .Select(static x => x.Key)
+            .ToArray();
+        if (invalidKeys.Length > 0)
         {
-            return CrudOperationResult.Failure(moduleResult.ErrorMessage ?? "插件参数保存失败。");
+            return CrudOperationResult.Failure($"参数配置包含不允许保存的键：{string.Join(", ", invalidKeys)}。");
+        }
+
+        if (moduleParams.Count > 0)
+        {
+            var moduleResult = await sender.Send(new SaveModuleParamsCommand(moduleParams), ct);
+            if (!moduleResult.IsSuccess)
+            {
+                return CrudOperationResult.Failure(moduleResult.ErrorMessage ?? "插件参数保存失败。");
+            }
+        }
+
+        if (cloudApiParams.Count > 0)
+        {
+            var cloudApiResult = await sender.Send(new SaveCloudApiConfigParamsCommand(cloudApiParams), ct);
+            if (!cloudApiResult.IsSuccess)
+            {
+                return CrudOperationResult.Failure(cloudApiResult.ErrorMessage ?? "云端接口配置保存失败。");
+            }
         }
 
         return CrudOperationResult.Success("参数配置已保存。");
+    }
+}
+
+public class ResetParamViewHandler(
+    ISender sender,
+    IClientPermissionService permissionService,
+    IModuleParamRegistry moduleParamRegistry,
+    ICloudApiConfigSnapshotProvider cloudApiConfigSnapshotProvider)
+    : IRequestHandler<ResetParamViewCommand, CrudOperationResult>
+{
+    public async Task<CrudOperationResult> Handle(ResetParamViewCommand request, CancellationToken ct)
+    {
+        if (!permissionService.CanEditParams)
+        {
+            return CrudOperationResult.Failure("当前用户没有参数配置权限。");
+        }
+
+        var defaults = new[]
+            {
+                ModuleParamCategory.Mes,
+                ModuleParamCategory.Cloud,
+                ModuleParamCategory.Business
+            }
+            .SelectMany(category => moduleParamRegistry.GetDescriptors(category))
+            .OrderBy(static x => x.ModuleId, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(static x => x.Category)
+            .ThenBy(static x => x.SortOrder)
+            .Select(static x => new ModuleParamDto(
+                x.StorageKey,
+                x.DefaultValue ?? string.Empty,
+                x.DescriptionFallback ?? x.DisplayNameFallback ?? x.Name))
+            .ToList();
+
+        if (defaults.Count > 0)
+        {
+            var moduleResult = await sender.Send(new SaveModuleParamsCommand(defaults), ct);
+            if (!moduleResult.IsSuccess)
+            {
+                return CrudOperationResult.Failure(moduleResult.ErrorMessage ?? "插件参数重置失败。");
+            }
+        }
+
+        var cloudApiSnapshot = cloudApiConfigSnapshotProvider.GetCurrent();
+        var cloudApiDefaults = CloudApiConfigParamSchema.Descriptors
+            .OrderBy(static x => x.SortOrder)
+            .Select(x => new CloudApiConfigParamDto(
+                x.Key,
+                CloudApiConfigParamSchema.GetDefaultValue(x.Key, cloudApiSnapshot),
+                x.DescriptionFallback))
+            .ToList();
+        var cloudApiResult = await sender.Send(new SaveCloudApiConfigParamsCommand(cloudApiDefaults), ct);
+        if (!cloudApiResult.IsSuccess)
+        {
+            return CrudOperationResult.Failure(cloudApiResult.ErrorMessage ?? "云端接口配置重置失败。");
+        }
+
+        return CrudOperationResult.Success("参数配置已重置为默认值。");
     }
 }

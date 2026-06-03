@@ -49,7 +49,7 @@ public abstract class CloudUploadChannelBase<TCellData, TPayload>
     /// 插件侧唯一必须实现的 Cloud payload 映射点；字段含义应留在具体插件中说明。
     /// </summary>
     protected abstract TPayload BuildPayload(
-        ProcessCloudUploadContext context,
+        ProcessUploadContext context,
         IReadOnlyList<TCellData> cellData,
         IReadOnlyList<CellCompletedRecord> records);
 
@@ -57,7 +57,7 @@ public abstract class CloudUploadChannelBase<TCellData, TPayload>
     /// 上传成功后的插件钩子，用于写诊断或运行态，不参与 Cloud/MES 补偿调度。
     /// </summary>
     protected virtual Task OnUploadSucceededAsync(
-        ProcessCloudUploadContext context,
+        ProcessUploadContext context,
         IReadOnlyList<TCellData> cellData,
         IReadOnlyList<CellCompletedRecord> records,
         CancellationToken cancellationToken)
@@ -67,7 +67,7 @@ public abstract class CloudUploadChannelBase<TCellData, TPayload>
     /// 上传失败后的插件钩子，用于写诊断或运行态；实际 retry/fallback 由 Runtime DataPipeline 处理。
     /// </summary>
     protected virtual Task OnUploadFailedAsync(
-        ProcessCloudUploadContext context,
+        ProcessUploadContext context,
         IReadOnlyList<CellCompletedRecord> records,
         CloudCallResult result,
         string message,
@@ -75,7 +75,7 @@ public abstract class CloudUploadChannelBase<TCellData, TPayload>
         => Task.CompletedTask;
 
     public async Task<CloudCallResult> UploadAsync(
-        ProcessCloudUploadContext context,
+        ProcessUploadContext context,
         IReadOnlyList<CellCompletedRecord> records,
         CancellationToken cancellationToken = default)
     {
@@ -114,13 +114,13 @@ public abstract class CloudUploadChannelBase<TCellData, TPayload>
     }
 
     protected virtual Task<CloudCallResult?> CheckBeforeUploadAsync(
-        ProcessCloudUploadContext context,
+        ProcessUploadContext context,
         IReadOnlyList<CellCompletedRecord> records,
         CancellationToken cancellationToken)
         => Task.FromResult<CloudCallResult?>(null);
 
     private async Task<CloudCallResult> UploadSingleAsync(
-        ProcessCloudUploadContext context,
+        ProcessUploadContext context,
         IReadOnlyList<TCellData> cellData,
         IReadOnlyList<CellCompletedRecord> records,
         CancellationToken cancellationToken)
@@ -154,7 +154,7 @@ public abstract class CloudUploadChannelBase<TCellData, TPayload>
     }
 
     private async Task<CloudCallResult> UploadBatchAsync(
-        ProcessCloudUploadContext context,
+        ProcessUploadContext context,
         IReadOnlyList<TCellData> cellData,
         IReadOnlyList<CellCompletedRecord> records,
         CancellationToken cancellationToken)

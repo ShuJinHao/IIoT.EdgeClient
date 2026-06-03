@@ -50,7 +50,7 @@ public sealed class HomogenizationCloudUploaderBehaviorTests
         };
 
         var result = await uploader.UploadAsync(
-            new ProcessCloudUploadContext(device),
+            new ProcessUploadContext(device),
             [
                 new CellCompletedRecord
                 {

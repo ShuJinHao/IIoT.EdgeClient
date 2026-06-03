@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Data;
+using IIoT.Edge.UI.Shared.Avalonia.Controls;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
 
@@ -13,12 +14,12 @@ public static class DataTableBindingBehavior
     /// 绑定源矩阵分组。运行时值刷新只更新行内 cell，不重建列和 ItemsSource。
     /// </summary>
     public static readonly AttachedProperty<IoContinuousReadMatrixSectionModel?> SourceSectionProperty =
-        AvaloniaProperty.RegisterAttached<DataGrid, IoContinuousReadMatrixSectionModel?>(
+        AvaloniaProperty.RegisterAttached<EdgeDataGrid, IoContinuousReadMatrixSectionModel?>(
             "SourceSection", typeof(DataTableBindingBehavior));
 
     static DataTableBindingBehavior()
     {
-        SourceSectionProperty.Changed.AddClassHandler<DataGrid>(OnSourceSectionChanged);
+        SourceSectionProperty.Changed.AddClassHandler<EdgeDataGrid>(OnSourceSectionChanged);
     }
 
     public static IoContinuousReadMatrixSectionModel? GetSourceSection(AvaloniaObject obj)
@@ -27,7 +28,7 @@ public static class DataTableBindingBehavior
     public static void SetSourceSection(AvaloniaObject obj, IoContinuousReadMatrixSectionModel? value)
         => obj.SetValue(SourceSectionProperty, value);
 
-    private static void OnSourceSectionChanged(DataGrid grid, AvaloniaPropertyChangedEventArgs e)
+    private static void OnSourceSectionChanged(EdgeDataGrid grid, AvaloniaPropertyChangedEventArgs e)
     {
         grid.Columns.Clear();
 
@@ -37,7 +38,7 @@ public static class DataTableBindingBehavior
             return;
         }
 
-        grid.Columns.Add(new DataGridTextColumn
+        grid.Columns.Add(new EdgeTextColumn
         {
             Header = "#",
             Binding = new Binding(nameof(IoContinuousReadMatrixRowModel.Index)),
@@ -49,7 +50,7 @@ public static class DataTableBindingBehavior
         for (var index = 0; index < section.Columns.Count; index++)
         {
             var column = section.Columns[index];
-            grid.Columns.Add(new DataGridTextColumn
+            grid.Columns.Add(new EdgeTextColumn
             {
                 Header = column.MatrixColumnTitle,
                 Binding = new Binding($"{nameof(IoContinuousReadMatrixRowModel.Values)}[{index}].{nameof(IoContinuousReadMatrixCellModel.Value)}"),

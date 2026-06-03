@@ -10,4 +10,15 @@ public interface ILocalParameterConfigService
 
     Task<IReadOnlyList<LocalSystemConfigSnapshot>> GetSystemConfigsAsync(
         CancellationToken cancellationToken = default);
+
+    Task InsertSystemConfigAsync(
+        string key,
+        string value,
+        string? description = null,
+        int sortOrder = 0,
+        CancellationToken cancellationToken = default);
+
+    Task DeleteSystemConfigAsync(
+        string key,
+        CancellationToken cancellationToken = default);
 }

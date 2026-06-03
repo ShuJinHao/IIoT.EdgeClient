@@ -131,8 +131,7 @@ public abstract class StandardModuleHardwareProfileProviderBase<TInteraction, TS
             signal.SortOrder,
             $"{ModuleDisplayName} - {signal.DisplayName}",
             signal.Category,
-            signal.BusinessGroup,
-            signal.SignalName);
+            signal.BusinessGroup);
 
     private static void EnsureSameModuleId(string expectedModuleId, string actualModuleId, string profileName)
     {
@@ -155,8 +154,7 @@ public abstract class StandardModuleHardwareProfileProviderBase<TInteraction, TS
         string DirectionText,
         int SortOrder,
         string Category,
-        string BusinessGroup,
-        string SignalName)
+        string BusinessGroup)
     {
         public static SignalTemplate From<TSignalKey>(ModuleSignalDefinition<TSignalKey> signal)
             where TSignalKey : struct, Enum
@@ -169,7 +167,6 @@ public abstract class StandardModuleHardwareProfileProviderBase<TInteraction, TS
                 signal.DirectionText,
                 signal.SortOrder,
                 signal.Category,
-                signal.BusinessGroup,
-                signal.SignalName);
+                signal.BusinessGroup);
     }
 }

@@ -2,7 +2,6 @@
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Recipe;
 using IIoT.Edge.Application.Features.Hardware.Queries;
-using IIoT.Edge.Application.Features.Production.Equipment.Models;
 using MediatR;
 
 namespace IIoT.Edge.Application.Features.Production.Equipment;
@@ -18,13 +17,27 @@ public record RecipeSnapshot(
     string RecipeVersion,
     string ProcessName,
     bool IsRecipeActive,
-    List<RecipeParamViewModel> Parameters);
+    List<RecipeParamSnapshot> Parameters);
+
+public record RecipeParamSnapshot(
+    string ParamName,
+    string CurrentValue,
+    string MinValue,
+    string MaxValue,
+    string Unit,
+    string WarnLow,
+    string WarnHigh);
 
 public record CapacitySnapshot(
     int TodayOutput,
+    int OkCount,
     int NgCount,
     string TodayYield,
-    string CurrentBatch);
+    string CurrentBatch,
+    int RecentHourOutput,
+    int RecentHourOk,
+    int RecentHourNg,
+    string RecentHourLabel);
 
 public record GetHardwareStatusQuery() : IRequest<List<HardwareSnapshot>>;
 
@@ -86,16 +99,14 @@ public class GetRecipeSnapshotHandler(IRecipeService recipeService)
             : $"{recipe.RecipeName} ({tag})";
 
         var parameters = recipe.Parameters.Values
-            .Select(parameter => new RecipeParamViewModel
-            {
-                ParamName = parameter.Name,
-                CurrentValue = parameter.CustomValue ?? "--",
-                MinValue = parameter.Min?.ToString("G4") ?? "--",
-                MaxValue = parameter.Max?.ToString("G4") ?? "--",
-                Unit = parameter.Unit,
-                WarnLow = parameter.Min.HasValue ? (parameter.Min * 1.05)?.ToString("G4") ?? "--" : "--",
-                WarnHigh = parameter.Max.HasValue ? (parameter.Max * 0.95)?.ToString("G4") ?? "--" : "--"
-            })
+            .Select(parameter => new RecipeParamSnapshot(
+                parameter.Name,
+                parameter.CustomValue ?? "--",
+                parameter.Min?.ToString("G4") ?? "--",
+                parameter.Max?.ToString("G4") ?? "--",
+                parameter.Unit,
+                parameter.Min.HasValue ? (parameter.Min * 1.05)?.ToString("G4") ?? "--" : "--",
+                parameter.Max.HasValue ? (parameter.Max * 0.95)?.ToString("G4") ?? "--" : "--"))
             .ToList();
 
         return Task.FromResult<RecipeSnapshot?>(
@@ -117,12 +128,20 @@ public class GetCapacitySnapshotHandler(IProductionContextStore contextStore)
     {
         var ok = 0;
         var ng = 0;
+        var recentHourOk = 0;
+        var recentHourNg = 0;
         var currentBatch = "--";
+        var recentHourSlots = ResolveRecentHourSlots(DateTime.Now);
 
         foreach (var context in contextStore.GetAll())
         {
             ok += context.TodayCapacity.OkAll;
             ng += context.TodayCapacity.NgAll;
+            foreach (var bucket in context.TodayCapacity.HalfHourly.Where(bucket => recentHourSlots.Contains(bucket.SlotIndex)))
+            {
+                recentHourOk += bucket.OkCount;
+                recentHourNg += bucket.NgCount;
+            }
 
             if (context.DeviceBag.TryGetValue("CurrentBatch", out var batchValue) &&
                 batchValue is string batch)
@@ -133,7 +152,33 @@ public class GetCapacitySnapshotHandler(IProductionContextStore contextStore)
 
         var total = ok + ng;
         var yield = total > 0 ? $"{ok * 100.0 / total:F1}%" : "0.0%";
+        var recentHourTotal = recentHourOk + recentHourNg;
 
-        return Task.FromResult(new CapacitySnapshot(total, ng, yield, currentBatch));
+        return Task.FromResult(new CapacitySnapshot(
+            total,
+            ok,
+            ng,
+            yield,
+            currentBatch,
+            recentHourTotal,
+            recentHourOk,
+            recentHourNg,
+            BuildRecentHourLabel(DateTime.Now)));
+    }
+
+    private static HashSet<int> ResolveRecentHourSlots(DateTime now)
+    {
+        var currentSlot = now.Hour * 2 + (now.Minute >= 30 ? 1 : 0);
+        return
+        [
+            currentSlot,
+            (currentSlot + 47) % 48
+        ];
+    }
+
+    private static string BuildRecentHourLabel(DateTime now)
+    {
+        var start = now.AddHours(-1);
+        return $"{start:HH:mm}-{now:HH:mm}";
     }
 }

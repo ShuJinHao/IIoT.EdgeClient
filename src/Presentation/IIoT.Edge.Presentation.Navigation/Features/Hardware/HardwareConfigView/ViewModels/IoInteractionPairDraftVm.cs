@@ -8,25 +8,6 @@ namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView
 /// </summary>
 public sealed class IoInteractionPairDraftVm : BaseNotifyPropertyChanged
 {
-    private string _source = IoMappingOptionCatalog.PointSourceStandardSignal;
-    public string Source
-    {
-        get => _source;
-        set
-        {
-            _source = value;
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(IsStandardSource));
-            OnPropertyChanged(nameof(IsCustomSource));
-        }
-    }
-
-    public bool IsStandardSource
-        => string.Equals(Source, IoMappingOptionCatalog.PointSourceStandardSignal, StringComparison.OrdinalIgnoreCase);
-
-    public bool IsCustomSource
-        => string.Equals(Source, IoMappingOptionCatalog.PointSourceCustomDebug, StringComparison.OrdinalIgnoreCase);
-
     private string _businessGroup = string.Empty;
     public string BusinessGroup
     {
@@ -47,12 +28,15 @@ public sealed class IoInteractionPairDraftVm : BaseNotifyPropertyChanged
         get => _readAddressCount;
         set
         {
-            if (_readAddressCount == 1)
+            var normalized = IoMappingOptionCatalog.NormalizeAddressCount(
+                IoMappingOptionCatalog.CategoryInteraction,
+                value);
+            if (_readAddressCount == normalized)
             {
                 return;
             }
 
-            _readAddressCount = 1;
+            _readAddressCount = normalized;
             OnPropertyChanged();
         }
     }
@@ -62,13 +46,6 @@ public sealed class IoInteractionPairDraftVm : BaseNotifyPropertyChanged
     {
         get => _readDataType;
         set { _readDataType = value; OnPropertyChanged(); }
-    }
-
-    private string _readSignalName = "PLC 触发";
-    public string ReadSignalName
-    {
-        get => _readSignalName;
-        set { _readSignalName = value; OnPropertyChanged(); }
     }
 
     private string _writePlcAddress = string.Empty;
@@ -84,12 +61,15 @@ public sealed class IoInteractionPairDraftVm : BaseNotifyPropertyChanged
         get => _writeAddressCount;
         set
         {
-            if (_writeAddressCount == 1)
+            var normalized = IoMappingOptionCatalog.NormalizeAddressCount(
+                IoMappingOptionCatalog.CategoryInteraction,
+                value);
+            if (_writeAddressCount == normalized)
             {
                 return;
             }
 
-            _writeAddressCount = 1;
+            _writeAddressCount = normalized;
             OnPropertyChanged();
         }
     }
@@ -99,13 +79,6 @@ public sealed class IoInteractionPairDraftVm : BaseNotifyPropertyChanged
     {
         get => _writeDataType;
         set { _writeDataType = value; OnPropertyChanged(); }
-    }
-
-    private string _writeSignalName = "上位机应答";
-    public string WriteSignalName
-    {
-        get => _writeSignalName;
-        set { _writeSignalName = value; OnPropertyChanged(); }
     }
 
     private string? _remark;

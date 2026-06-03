@@ -48,15 +48,20 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
 
     public async Task BindAsync(CancellationToken cancellationToken = default)
     {
+        var factory = ResolveActiveRuntimeFactory();
+        if (factory is null)
+        {
+            _logger.Warn("PLC 运行任务绑定跳过：当前插件库未唯一确定运行时任务工厂。");
+            return;
+        }
+
         var plcDevices = await _networkDevices.GetListAsync(
             x => x.IsEnabled && x.DeviceType == DeviceType.PLC,
             cancellationToken).ConfigureAwait(false);
 
         foreach (var device in plcDevices)
         {
-            if (string.IsNullOrWhiteSpace(device.DeviceName)
-                || string.IsNullOrWhiteSpace(device.ModuleId)
-                || !_runtimeRegistry.TryGetFactory(device.ModuleId, out var factory))
+            if (string.IsNullOrWhiteSpace(device.DeviceName))
             {
                 continue;
             }
@@ -73,8 +78,7 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
                     mapping.Direction,
                     mapping.SortOrder,
                     mapping.Category,
-                    mapping.BusinessGroup,
-                    mapping.SignalName))
+                    mapping.BusinessGroup))
                 .ToArray();
             var candidates = factory.GetTaskCandidates();
             var enabledTaskKeys = await _taskBindingService.GetEnabledTaskKeysAsync(
@@ -100,6 +104,12 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
                     return factory.CreateTasks(_serviceProvider, buffer, context, enabledTaskKeys);
                 });
         }
+    }
+
+    private IStationRuntimeFactory? ResolveActiveRuntimeFactory()
+    {
+        var factories = _runtimeRegistry.GetRegistrations().Values.ToArray();
+        return factories.Length == 1 ? factories[0] : null;
     }
 
     private static string BuildValidationFailureMessage(

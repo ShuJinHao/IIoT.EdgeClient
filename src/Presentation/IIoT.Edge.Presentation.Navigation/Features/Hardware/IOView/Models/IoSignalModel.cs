@@ -14,8 +14,7 @@ public class IoSignalModel : BaseNotifyPropertyChanged
         ? GetText("Navigation_Io_Direction_HostToPlc", "上位机到 PLC")
         : GetText("Navigation_Io_Direction_PlcToHost", "PLC 到上位机");
     public string DataType { get; set; } = "Int16";
-    public string SignalName { get; set; } = "";
-    public string MatrixColumnTitle => string.IsNullOrWhiteSpace(SignalName) ? SignalKey : SignalName;
+    public string MatrixColumnTitle => SignalKey;
     public string? Remark { get; set; }
     public int StartIndex { get; set; }
     public int AddressCount { get; set; } = 1;

@@ -16,8 +16,13 @@ public sealed class DashboardViewModel : NavigationViewModelBase
     private string _recipeStatusFallback = "--";
     private string _todayOutput = "0";
     private string _todayYield = "0.0%";
+    private string _okCount = "0";
     private string _ngCount = "0";
     private string _currentBatch = "--";
+    private string _recentHourOutput = "0";
+    private string _recentHourOk = "0";
+    private string _recentHourNg = "0";
+    private string _recentHourLabel = "--";
 
     public DashboardViewModel(
         IEquipmentPanelService equipmentPanelService,
@@ -65,7 +70,24 @@ public sealed class DashboardViewModel : NavigationViewModelBase
     public string NgCount
     {
         get => _ngCount;
-        private set { _ngCount = value; OnPropertyChanged(); }
+        private set
+        {
+            _ngCount = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(YieldSummaryItems));
+            OnPropertyChanged(nameof(OutputSummaryItems));
+        }
+    }
+
+    public string OkCount
+    {
+        get => _okCount;
+        private set
+        {
+            _okCount = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(YieldSummaryItems));
+        }
     }
 
     public string CurrentBatch
@@ -78,6 +100,83 @@ public sealed class DashboardViewModel : NavigationViewModelBase
             OnPropertyChanged(nameof(ProductionSummaryItems));
         }
     }
+
+    public string RecentHourOutput
+    {
+        get => _recentHourOutput;
+        private set
+        {
+            _recentHourOutput = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(OutputSummaryItems));
+        }
+    }
+
+    public string RecentHourOk
+    {
+        get => _recentHourOk;
+        private set
+        {
+            _recentHourOk = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(OutputSummaryItems));
+        }
+    }
+
+    public string RecentHourNg
+    {
+        get => _recentHourNg;
+        private set
+        {
+            _recentHourNg = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(OutputSummaryItems));
+        }
+    }
+
+    public string RecentHourLabel
+    {
+        get => _recentHourLabel;
+        private set
+        {
+            _recentHourLabel = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(OutputSummaryItems));
+        }
+    }
+
+    public IReadOnlyList<EdgeSummaryItem> OutputSummaryItems =>
+    [
+        new()
+        {
+            Label = GetText("Navigation_DashboardPreview_RecentHourOutput", "最近1小时产能"),
+            Value = NormalizeSummaryValue(RecentHourOutput)
+        },
+        new()
+        {
+            Label = GetText("Navigation_Label_GoodCount", "良品数"),
+            Value = NormalizeSummaryValue(RecentHourOk)
+        },
+        new()
+        {
+            Label = GetText("Navigation_Label_BadCount", "不良数"),
+            Value = NormalizeSummaryValue(RecentHourNg)
+        }
+    ];
+
+    public IReadOnlyList<EdgeSummaryItem> YieldSummaryItems =>
+    [
+        new()
+        {
+            Label = GetText("Navigation_Label_GoodCount", "良品数"),
+            Value = NormalizeSummaryValue(OkCount)
+        },
+        new()
+        {
+            Label = GetText("Navigation_Label_BadCount", "不良数"),
+            Value = NormalizeSummaryValue(NgCount)
+        }
+    ];
 
     public IReadOnlyList<EdgeSummaryItem> ProductionSummaryItems =>
     [
@@ -159,12 +258,19 @@ public sealed class DashboardViewModel : NavigationViewModelBase
 
             TodayOutput = capacity.TodayOutput.ToString();
             TodayYield = capacity.TodayYield;
+            OkCount = capacity.OkCount.ToString();
             NgCount = capacity.NgCount.ToString();
             CurrentBatch = capacity.CurrentBatch ?? "--";
+            RecentHourOutput = capacity.RecentHourOutput.ToString();
+            RecentHourOk = capacity.RecentHourOk.ToString();
+            RecentHourNg = capacity.RecentHourNg.ToString();
+            RecentHourLabel = capacity.RecentHourLabel;
 
             OnPropertyChanged(nameof(HasDevices));
             OnPropertyChanged(nameof(IsDeviceEmpty));
             OnPropertyChanged(nameof(ProductionSummaryItems));
+            OnPropertyChanged(nameof(OutputSummaryItems));
+            OnPropertyChanged(nameof(YieldSummaryItems));
         });
     }
 
@@ -174,6 +280,8 @@ public sealed class DashboardViewModel : NavigationViewModelBase
         OnPropertyChanged(nameof(TrendStatus));
         OnPropertyChanged(nameof(RecipeStatus));
         OnPropertyChanged(nameof(ProductionSummaryItems));
+        OnPropertyChanged(nameof(OutputSummaryItems));
+        OnPropertyChanged(nameof(YieldSummaryItems));
     }
 
     private void SetRecipeStatus(string resourceKey, string fallback)

@@ -47,8 +47,7 @@ public sealed record ModuleIoTemplateEntry(
     int SortOrder,
     string? Remark = null,
     string Category = "单点读数据",
-    string BusinessGroup = "",
-    string SignalName = "");
+    string BusinessGroup = "");
 
 public sealed record ModuleIoSnapshot(
     string SignalKey,
@@ -58,8 +57,7 @@ public sealed record ModuleIoSnapshot(
     string Direction,
     int SortOrder,
     string Category = "单点读数据",
-    string BusinessGroup = "",
-    string SignalName = "");
+    string BusinessGroup = "");
 
 public sealed record ModuleHardwareValidationIssue(string Message);
 

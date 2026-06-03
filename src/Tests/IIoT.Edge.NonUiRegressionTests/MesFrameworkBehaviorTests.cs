@@ -23,6 +23,7 @@ public sealed class MesFrameworkBehaviorTests
             CreateOnlineDeviceService(),
             CreateReadyMesGate(),
             uploaders: [],
+            new FakeProcessIntegrationRegistry([]),
             new FakeMesUploadDiagnosticsStore(),
             new FakeLogService());
 
@@ -43,6 +44,7 @@ public sealed class MesFrameworkBehaviorTests
             deviceService,
             CreateReadyMesGate(),
             [uploader],
+            CreateMesRegistry(),
             diagnosticsStore,
             new FakeLogService());
 
@@ -65,6 +67,7 @@ public sealed class MesFrameworkBehaviorTests
             CreateOnlineDeviceService(),
             CreateReadyMesGate(),
             [uploader],
+            CreateMesRegistry(),
             diagnosticsStore,
             new FakeLogService());
 
@@ -77,6 +80,27 @@ public sealed class MesFrameworkBehaviorTests
         Assert.Equal("Success", diagnostics!.LastResult);
         Assert.NotNull(diagnostics.LastSuccessAt);
         Assert.Null(diagnostics.LastFailureReason);
+    }
+
+    [Fact]
+    public async Task MesConsumer_WhenRegistryHasUploaderButDiDoesNot_ShouldReturnFalse()
+    {
+        var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
+        var consumer = new MesConsumer(
+            CreateOnlineDeviceService(),
+            CreateReadyMesGate(),
+            uploaders: [],
+            CreateMesRegistry(),
+            diagnosticsStore,
+            new FakeLogService());
+
+        var success = await consumer.ProcessAsync(CreateRecord(TestProcessCellData.ProcessTypeKey));
+
+        Assert.False(success);
+        var diagnostics = diagnosticsStore.Get(TestProcessCellData.ProcessTypeKey);
+        Assert.NotNull(diagnostics);
+        Assert.Equal("Failed", diagnostics!.LastResult);
+        Assert.Equal("uploader_not_found", diagnostics.LastFailureReason);
     }
 
     [Fact]
@@ -95,6 +119,7 @@ public sealed class MesFrameworkBehaviorTests
             CreateOnlineDeviceService(),
             CreateReadyMesGate(runtimeConfig),
             [uploader],
+            CreateMesRegistry(),
             diagnosticsStore,
             new FakeLogService());
 
@@ -117,6 +142,7 @@ public sealed class MesFrameworkBehaviorTests
             CreateOnlineDeviceService(),
             CreateMesGate(heartbeatStore: heartbeatStore),
             [uploader],
+            CreateMesRegistry(),
             diagnosticsStore,
             new FakeLogService());
 
@@ -142,6 +168,7 @@ public sealed class MesFrameworkBehaviorTests
             CreateOnlineDeviceService(),
             CreateMesGate(heartbeatStore: heartbeatStore),
             [uploader],
+            CreateMesRegistry(),
             diagnosticsStore,
             new FakeLogService());
 
@@ -308,6 +335,9 @@ public sealed class MesFrameworkBehaviorTests
             runtimeConfig ?? new FakeLocalSystemRuntimeConfigService(),
             heartbeatStore ?? new FakeExternalHeartbeatStateStore());
 
+    private static FakeProcessIntegrationRegistry CreateMesRegistry()
+        => new([TestProcessCellData.ProcessTypeKey]);
+
     private static CellCompletedRecord CreateRecord(string processType)
     {
 
@@ -405,35 +435,35 @@ public sealed class MesFrameworkBehaviorTests
 
     private sealed class FakeProcessIntegrationRegistry(IEnumerable<string> mesProcessTypes) : IProcessIntegrationRegistry
     {
-        private readonly Dictionary<string, MesUploaderRegistration> _mesUploaders = mesProcessTypes
+        private readonly Dictionary<string, ProcessUploaderRegistration> _mesUploaders = mesProcessTypes
             .ToDictionary(
                 static processType => processType,
-                static processType => new MesUploaderRegistration(processType, MesUploadMode.Single),
+                static processType => new ProcessUploaderRegistration(processType, ProcessUploadMode.Single),
                 StringComparer.OrdinalIgnoreCase);
 
         public void RegisterCloudUploader(string processType, ProcessUploadMode uploadMode)
             => throw new NotSupportedException();
 
-        public void RegisterMesUploader(string processType, MesUploadMode uploadMode)
+        public void RegisterMesUploader(string processType, ProcessUploadMode uploadMode)
             => throw new NotSupportedException();
 
         public bool HasCloudUploader(string processType) => false;
 
         public bool HasMesUploader(string processType) => _mesUploaders.ContainsKey(processType);
 
-        public bool TryGetCloudUploader(string processType, out CloudUploaderRegistration registration)
+        public bool TryGetCloudUploader(string processType, out ProcessUploaderRegistration registration)
         {
             registration = default!;
             return false;
         }
 
-        public bool TryGetMesUploader(string processType, out MesUploaderRegistration registration)
+        public bool TryGetMesUploader(string processType, out ProcessUploaderRegistration registration)
             => _mesUploaders.TryGetValue(processType, out registration!);
 
-        public IReadOnlyDictionary<string, CloudUploaderRegistration> GetCloudUploaders()
-            => new Dictionary<string, CloudUploaderRegistration>();
+        public IReadOnlyDictionary<string, ProcessUploaderRegistration> GetCloudUploaders()
+            => new Dictionary<string, ProcessUploaderRegistration>();
 
-        public IReadOnlyDictionary<string, MesUploaderRegistration> GetMesUploaders()
+        public IReadOnlyDictionary<string, ProcessUploaderRegistration> GetMesUploaders()
             => _mesUploaders;
     }
 

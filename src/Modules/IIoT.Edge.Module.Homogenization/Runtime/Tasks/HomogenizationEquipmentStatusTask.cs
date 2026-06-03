@@ -64,50 +64,18 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
     {
         const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.设备状态上传;
 
-        switch (Step)
-        {
-            case 0:
-                if (Interaction.IsTriggered(trigger))
-                {
-                    Logger.Info($"[{ModuleContext.DeviceName}] {TaskName} 设备状态上传触发。");
-                    Step = 10;
-                }
-
-                break;
-
-            case 10:
-                try
-                {
-                    await ProcessTriggerAsync(TaskCancellationToken).ConfigureAwait(false);
-                    Step = 30;
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    var message = $"设备状态上传处理异常：{ex.Message}";
-                    _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.EquipmentStatus, message);
-                    ModuleContext.LastEquipmentStatusAt = ProductionTime.BusinessNow;
-                    ModuleContext.LastEquipmentStatusResult = message;
-                    Interaction.ReplyException(trigger);
-                    Logger.Error($"[{ModuleContext.DeviceName}] {TaskName} {message}");
-                    Step = 30;
-                }
-
-                break;
-
-            case 30:
-                if (Interaction.IsReset(trigger))
-                {
-                    Interaction.ReplyReset(trigger);
-                    Logger.Info($"[{ModuleContext.DeviceName}] {TaskName} 设备状态上传复位。");
-                    Step = 0;
-                }
-
-                break;
-        }
+        await ExecuteHandshakeAsync(
+            trigger,
+            "设备状态上传触发。",
+            "设备状态上传复位。",
+            ProcessTriggerAsync,
+            static ex => $"设备状态上传处理异常：{ex.Message}",
+            message =>
+            {
+                _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.EquipmentStatus, message);
+                ModuleContext.LastEquipmentStatusAt = ProductionTime.BusinessNow;
+                ModuleContext.LastEquipmentStatusResult = message;
+            }).ConfigureAwait(false);
     }
 
     private async Task ProcessTriggerAsync(CancellationToken cancellationToken)
@@ -168,4 +136,3 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
         }
     }
 }
-

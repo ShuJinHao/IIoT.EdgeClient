@@ -1,0 +1,405 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
+        xmlns:views="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared">
+
+    <Style Selector="PathIcon.edge-notice-icon">
+        <Setter Property="Width" Value="18" />
+        <Setter Property="Height" Value="18" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Status.Error}" />
+    </Style>
+
+    <Style Selector="TextBlock.edge-notice-message">
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Caption}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Secondary}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style Selector="TextBlock.edge-notice-message.prominent">
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Body}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Primary}" />
+    </Style>
+
+    <Style Selector="controls|EdgeCard.right-rail-equipment Border.edge-equipment-status-row">
+        <Setter Property="MinHeight" Value="29" />
+        <Setter Property="Padding" Value="10,5" />
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Surface.Raised}" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Control}" />
+    </Style>
+
+    <Style Selector="controls|EdgeCard.right-rail-equipment Grid.edge-equipment-status-grid">
+        <Setter Property="ColumnSpacing" Value="{DynamicResource Edge.Size.Spacing8}" />
+    </Style>
+
+    <Style Selector="controls|EdgeCard.right-rail-equipment controls|EdgeStatusDot.edge-equipment-status-dot">
+        <Setter Property="Size" Value="6" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusDot">
+        <Setter Property="Size" Value="8" />
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Info}" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border
+                    Width="{TemplateBinding Size}"
+                    Height="{TemplateBinding Size}"
+                    Background="{TemplateBinding Fill}"
+                    CornerRadius="{DynamicResource Edge.CornerRadius.Circle}" />
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="controls|EdgeStatusDot.default">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Offline}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusDot.running">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Running}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusDot.idle">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Idle}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusDot.stopped">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Stopped}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusDot.offline">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Offline}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusDot.info">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Info}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusDot.cache">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Cache}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusDot.warning">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Warning}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusDot.error">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Error}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusChip">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Surface.Panel}" />
+        <Setter Property="DotFill" Value="{DynamicResource Edge.Brush.Status.Offline}" />
+        <Setter Property="TextBrush" Value="{DynamicResource Edge.Brush.Text.Secondary}" />
+        <Setter Property="ChipPadding" Value="{DynamicResource Edge.Thickness.Chip}" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border
+                    Padding="{TemplateBinding ChipPadding}"
+                    Background="{TemplateBinding Fill}"
+                    CornerRadius="{DynamicResource Edge.CornerRadius.Pill}">
+                    <StackPanel
+                        Orientation="Horizontal"
+                        Spacing="{DynamicResource Edge.Size.Spacing6}">
+                        <Border
+                            Width="7"
+                            Height="7"
+                            VerticalAlignment="Center"
+                            Background="{TemplateBinding DotFill}"
+                            CornerRadius="{DynamicResource Edge.CornerRadius.Circle}"
+                            IsVisible="{TemplateBinding ShowDot}" />
+                        <TextBlock
+                            FontSize="{DynamicResource Edge.FontSize.Caption}"
+                            FontWeight="SemiBold"
+                            Foreground="{TemplateBinding TextBrush}"
+                            Text="{TemplateBinding Text}" />
+                    </StackPanel>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="controls|EdgeStatusChip.default">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Surface.Panel}" />
+        <Setter Property="TextBrush" Value="{DynamicResource Edge.Brush.Text.Muted}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusChip.running">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.RunningSurface}" />
+        <Setter Property="DotFill" Value="{DynamicResource Edge.Brush.Status.Running}" />
+        <Setter Property="TextBrush" Value="{DynamicResource Edge.Brush.Text.Primary}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusChip.idle">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Idle}" />
+        <Setter Property="DotFill" Value="{DynamicResource Edge.Brush.Status.Idle}" />
+        <Setter Property="TextBrush" Value="{DynamicResource Edge.Brush.Text.OnDanger}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusChip.stopped">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Stopped}" />
+        <Setter Property="DotFill" Value="{DynamicResource Edge.Brush.Status.Stopped}" />
+        <Setter Property="TextBrush" Value="{DynamicResource Edge.Brush.Text.OnDanger}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusChip.offline">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Offline}" />
+        <Setter Property="DotFill" Value="{DynamicResource Edge.Brush.Status.Offline}" />
+        <Setter Property="TextBrush" Value="{DynamicResource Edge.Brush.Text.OnDanger}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusChip.info">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Surface.Wash}" />
+        <Setter Property="DotFill" Value="{DynamicResource Edge.Brush.Status.Info}" />
+        <Setter Property="TextBrush" Value="{DynamicResource Edge.Brush.Text.Secondary}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusChip.cache">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Cache}" />
+        <Setter Property="DotFill" Value="{DynamicResource Edge.Brush.Status.Cache}" />
+        <Setter Property="TextBrush" Value="{DynamicResource Edge.Brush.Text.OnDanger}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusChip.warning">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Warning}" />
+        <Setter Property="DotFill" Value="{DynamicResource Edge.Brush.Status.Warning}" />
+        <Setter Property="TextBrush" Value="{DynamicResource Edge.Brush.Text.OnDanger}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusChip.error">
+        <Setter Property="Fill" Value="{DynamicResource Edge.Brush.Status.Error}" />
+        <Setter Property="DotFill" Value="{DynamicResource Edge.Brush.Status.Error}" />
+        <Setter Property="TextBrush" Value="{DynamicResource Edge.Brush.Text.OnDanger}" />
+    </Style>
+
+    <Style Selector="controls|EdgeNoticeBar">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border
+                    Padding="14,10"
+                    Background="{DynamicResource Edge.Brush.Surface.Wash}"
+                    CornerRadius="{DynamicResource Edge.CornerRadius.Control}">
+                    <Grid
+                        ColumnDefinitions="Auto,*,Auto"
+                        ColumnSpacing="{DynamicResource Edge.Size.Spacing10}">
+                        <ContentPresenter
+                            VerticalAlignment="Center"
+                            Content="{TemplateBinding Icon}" />
+                        <ContentPresenter
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            Content="{TemplateBinding Content}" />
+                        <ContentPresenter
+                            Grid.Column="2"
+                            VerticalAlignment="Center"
+                            Content="{TemplateBinding ActionContent}" />
+                    </Grid>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="controls|EdgeNoticeBar.running Border">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Surface.Highlight}" />
+    </Style>
+
+    <Style Selector="controls|EdgeNoticeBar.idle Border">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Surface.Wash}" />
+    </Style>
+
+    <Style Selector="controls|EdgeNoticeBar.info Border">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Surface.Wash}" />
+    </Style>
+
+    <Style Selector="controls|EdgeNoticeBar.cache Border">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Surface.Wash}" />
+    </Style>
+
+    <Style Selector="controls|EdgeNoticeBar.warning Border">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Surface.Wash}" />
+    </Style>
+
+    <Style Selector="controls|EdgeNoticeBar.error Border">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.WindowButton.CloseHover}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusListItem">
+        <Setter Property="ItemBackground" Value="{DynamicResource Edge.Brush.Surface.Panel}" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border
+                    x:Name="PART_EdgeStatusListItemRoot"
+                    Padding="{DynamicResource Edge.Thickness.12}"
+                    Background="{TemplateBinding ItemBackground}"
+                    CornerRadius="{DynamicResource Edge.CornerRadius.Medium}">
+                        <Grid x:Name="PART_EdgeStatusListItemGrid" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="{DynamicResource Edge.Size.Spacing10}">
+                            <controls:EdgeStatusDot
+                                VerticalAlignment="Center"
+                                Status="{TemplateBinding Status}" />
+                        <StackPanel
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            Spacing="{DynamicResource Edge.Size.Spacing4}">
+                            <TextBlock
+                                Classes="edge-status-title"
+                                FontSize="{DynamicResource Edge.FontSize.Body}"
+                                FontWeight="SemiBold"
+                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                Text="{TemplateBinding Title}"
+                                TextTrimming="CharacterEllipsis" />
+                            <TextBlock
+                                Classes="edge-status-description"
+                                IsVisible="{TemplateBinding HasDescription}"
+                                FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                Text="{TemplateBinding Description}"
+                                TextWrapping="Wrap" />
+                            <TextBlock
+                                Classes="edge-status-detail"
+                                IsVisible="{TemplateBinding HasDetail}"
+                                FontFamily="{DynamicResource Edge.FontFamily.Mono}"
+                                FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                Text="{TemplateBinding Detail}"
+                                TextWrapping="Wrap" />
+                        </StackPanel>
+                        <StackPanel
+                            Grid.Column="2"
+                            VerticalAlignment="Center"
+                            Spacing="{DynamicResource Edge.Size.Spacing6}">
+                            <controls:EdgeStatusChip
+                                HorizontalAlignment="Right"
+                                IsVisible="{TemplateBinding HasStatusText}"
+                                Status="{TemplateBinding Status}"
+                                Text="{TemplateBinding StatusText}" />
+                            <ContentPresenter
+                                IsVisible="{TemplateBinding HasActionContent}"
+                                Content="{TemplateBinding ActionContent}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="controls|EdgeStatusListItem:pointerover">
+        <Setter Property="ItemBackground" Value="{DynamicResource Edge.Brush.Surface.Card}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusListItem.compact">
+        <Setter Property="ItemBackground" Value="{DynamicResource Edge.Brush.Surface.Card}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusListItem.compact /template/ Border#PART_EdgeStatusListItemRoot">
+        <Setter Property="Padding" Value="10,4" />
+        <Setter Property="MinHeight" Value="30" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Control}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusListItem.compact /template/ Grid#PART_EdgeStatusListItemGrid">
+        <Setter Property="ColumnSpacing" Value="{DynamicResource Edge.Size.Spacing8}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusListItem.right-rail /template/ Border#PART_EdgeStatusListItemRoot">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Surface.Wash}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusListItem.compact.right-rail /template/ Border#PART_EdgeStatusListItemRoot">
+        <Setter Property="Padding" Value="9,3" />
+        <Setter Property="MinHeight" Value="28" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusListItem.right-rail controls|EdgeStatusChip">
+        <Setter Property="ChipPadding" Value="9,1" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusListItem.strip">
+        <Setter Property="ItemBackground" Value="{DynamicResource Edge.Brush.Surface.Wash}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusListItem.strip /template/ Border#PART_EdgeStatusListItemRoot">
+        <Setter Property="Padding" Value="10,3" />
+        <Setter Property="MinHeight" Value="28" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Control}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusListItem.strip /template/ Grid#PART_EdgeStatusListItemGrid">
+        <Setter Property="ColumnSpacing" Value="{DynamicResource Edge.Size.Spacing10}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusListItem.strip controls|EdgeStatusDot">
+        <Setter Property="Size" Value="6.5" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusListItem.strip controls|EdgeStatusChip">
+        <Setter Property="ChipPadding" Value="9,0" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusSegmentBar">
+        <Setter Property="ItemsPanel">
+            <ItemsPanelTemplate>
+                <StackPanel
+                    HorizontalAlignment="Left"
+                    Orientation="Horizontal"
+                    Spacing="0" />
+            </ItemsPanelTemplate>
+        </Setter>
+        <Setter Property="ItemTemplate">
+            <DataTemplate>
+                <controls:EdgeStatusSegment
+                    Label="{Binding Label}"
+                    Status="{Binding Status}" />
+            </DataTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="controls|EdgeStatusSegment">
+        <Setter Property="SegmentWidth" Value="28" />
+        <Setter Property="SegmentHeight" Value="8" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border
+                    Width="{TemplateBinding SegmentWidth}"
+                    Height="{TemplateBinding SegmentHeight}"
+                    Background="{DynamicResource Edge.Brush.Surface.Wash}"
+                    CornerRadius="{DynamicResource Edge.CornerRadius.Badge}"
+                    ToolTip.Tip="{TemplateBinding Label}" />
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="controls|EdgeStatusSegment.default Border">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Surface.Wash}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusSegment.running Border">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Status.Running}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusSegment.idle Border">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Status.Idle}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusSegment.stopped Border">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Status.Stopped}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusSegment.offline Border">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Status.Offline}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusSegment.info Border">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Status.Info}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusSegment.cache Border">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Status.Cache}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusSegment.warning Border">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Status.Warning}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusSegment.error Border">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Status.Error}" />
+    </Style>
+</Styles>

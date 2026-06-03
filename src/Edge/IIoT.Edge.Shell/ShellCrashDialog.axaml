@@ -4,62 +4,40 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
     Title="{DynamicResource Shell_CrashDialogWindowTitle}"
+    Classes="edge-dialog-overlay-window"
     Width="620"
     Height="360"
-    Background="{DynamicResource Edge.Brush.Overlay.Modal}"
     CanResize="False"
     WindowDecorations="None"
     WindowStartupLocation="CenterScreen">
-    <Grid PointerPressed="OnDialogPointerPressed">
-        <edge:EdgeCard
-            Width="460"
+    <Grid>
+        <edge:EdgeDialogChrome
+            Classes="crash-dialog"
             HorizontalAlignment="Center"
             VerticalAlignment="Center"
-            CardPadding="{DynamicResource Edge.Thickness.24}">
-            <StackPanel Spacing="{DynamicResource Edge.Size.Spacing12}">
-                <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Edge.Size.Spacing10}">
-                    <Border
-                        Width="{DynamicResource Edge.Size.HeaderIconButton}"
-                        Height="{DynamicResource Edge.Size.HeaderIconButton}"
-                        Background="{DynamicResource Edge.Brush.Status.Error}"
-                        CornerRadius="{DynamicResource Edge.CornerRadius.Circle}">
-                        <TextBlock
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center"
-                            FontSize="{DynamicResource Edge.FontSize.Title}"
-                            FontWeight="SemiBold"
-                            Foreground="{DynamicResource Edge.Brush.Text.OnDanger}"
-                            Text="!" />
-                    </Border>
-                    <StackPanel VerticalAlignment="Center" Spacing="{DynamicResource Edge.Size.Spacing4}">
-                        <TextBlock
-                            FontSize="{DynamicResource Edge.FontSize.Section}"
-                            FontWeight="SemiBold"
-                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                            Text="{DynamicResource Shell_CrashDialogTitle}" />
-                        <TextBlock
-                            FontSize="{DynamicResource Edge.FontSize.Caption}"
-                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                            Text="{DynamicResource Shell_CrashDialogDescription}" />
-                    </StackPanel>
-                </StackPanel>
-
-                <ScrollViewer MaxHeight="150" VerticalScrollBarVisibility="Auto">
+            Subtitle="{DynamicResource Shell_CrashDialogDescription}"
+            Title="{DynamicResource Shell_CrashDialogTitle}">
+            <edge:EdgeNoticeBar Status="Error">
+                <edge:EdgeNoticeBar.Icon>
+                    <PathIcon
+                        Classes="edge-notice-icon"
+                        Data="{StaticResource Edge.Icon.Warning}" />
+                </edge:EdgeNoticeBar.Icon>
+                <edge:EdgeScrollHost MaxHeight="150" Variant="Dialog">
                     <TextBlock
-                        FontSize="{DynamicResource Edge.FontSize.Body}"
-                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                        Text="{Binding Message}"
-                        TextWrapping="Wrap" />
-                </ScrollViewer>
+                        Classes="edge-text-dialog-message"
+                        Text="{Binding Message}" />
+                </edge:EdgeScrollHost>
+            </edge:EdgeNoticeBar>
 
+            <edge:EdgeDialogChrome.FooterContent>
                 <edge:EdgeActionButton
-                    HorizontalAlignment="Right"
                     Click="OnCloseClick"
                     Icon="{StaticResource Edge.Icon.Close}"
-                    Kind="Soft"
+                    Kind="Secondary"
                     Size="Compact"
                     Content="{DynamicResource Shell_CrashDialogClose}" />
-            </StackPanel>
-        </edge:EdgeCard>
+            </edge:EdgeDialogChrome.FooterContent>
+        </edge:EdgeDialogChrome>
     </Grid>
 </Window>

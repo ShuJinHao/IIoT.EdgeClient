@@ -30,6 +30,45 @@ public static class StandardModuleNavigationRegistration
         string? dataMenuTitle = null,
         string? dataMenuTitleResourceKey = null,
         bool cacheDataView = true)
+        => builder.RegisterStandardModuleViews(
+            moduleId,
+            dataViewTitle,
+            dataViewTitleResourceKey,
+            customDataViewType,
+            customDataViewModelType,
+            dataMenuTitle,
+            dataMenuTitleResourceKey,
+            cacheDataView,
+            supportsRecipe: true);
+
+    public static IEdgeProcessModuleBuilder RegisterStandardModuleViews(
+        this IEdgeProcessModuleBuilder builder,
+        string moduleId,
+        string dataViewTitle,
+        string dataViewTitleResourceKey,
+        bool supportsRecipe)
+        => builder.RegisterStandardModuleViews(
+            moduleId,
+            dataViewTitle,
+            dataViewTitleResourceKey,
+            customDataViewType: null,
+            customDataViewModelType: null,
+            dataMenuTitle: null,
+            dataMenuTitleResourceKey: null,
+            cacheDataView: true,
+            supportsRecipe);
+
+    public static IEdgeProcessModuleBuilder RegisterStandardModuleViews(
+        this IEdgeProcessModuleBuilder builder,
+        string moduleId,
+        string dataViewTitle,
+        string dataViewTitleResourceKey,
+        Type? customDataViewType,
+        Type? customDataViewModelType,
+        string? dataMenuTitle,
+        string? dataMenuTitleResourceKey,
+        bool cacheDataView,
+        bool supportsRecipe)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(moduleId);
         ArgumentException.ThrowIfNullOrWhiteSpace(dataViewTitle);
@@ -65,11 +104,17 @@ public static class StandardModuleNavigationRegistration
                 titleResourceKey: dataMenuTitleResourceKey ?? dataViewTitleResourceKey));
         }
 
-        return builder
+        var standardBuilder = builder
             .RegisterStandardCapacityView(viewIds.CapacityView)
             .RegisterStandardIoView(viewIds.IoView)
-            .RegisterStandardMonitorView(viewIds.Monitor)
-            .RegisterStandardRecipeView(viewIds.RecipeView)
+            .RegisterStandardMonitorView(viewIds.Monitor);
+
+        if (supportsRecipe)
+        {
+            standardBuilder.RegisterStandardRecipeView(viewIds.RecipeView);
+        }
+
+        return standardBuilder
             .RegisterStandardParamView(viewIds.ParamView)
             .RegisterStandardHardwareConfigView(viewIds.HardwareConfigView)
             .RegisterStandardPlcTaskBindingView(viewIds.PlcTaskBindingView);

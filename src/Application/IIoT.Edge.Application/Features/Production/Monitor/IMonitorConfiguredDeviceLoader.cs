@@ -1,0 +1,18 @@
+using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
+using IIoT.Edge.Domain.Hardware.Aggregates;
+
+namespace IIoT.Edge.Application.Features.Production.Monitor;
+
+/// <summary>
+/// 监控页 PLC 配置和任务绑定加载器。
+/// </summary>
+public interface IMonitorConfiguredDeviceLoader
+{
+    Task<IReadOnlyList<NetworkDeviceEntity>> LoadConfiguredPlcDevicesAsync(CancellationToken ct);
+
+    Task<IReadOnlyDictionary<int, PlcTaskBindingDeviceDto>> LoadTaskBindingsByDeviceAsync(
+        IReadOnlyCollection<NetworkDeviceEntity> configuredPlcs,
+        CancellationToken ct);
+
+    bool HasRuntimeFactory(string? moduleId);
+}

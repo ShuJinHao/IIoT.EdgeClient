@@ -5,6 +5,7 @@ using IIoT.Edge.Application.Common.Diagnostics;
 using IIoT.Edge.Application.Modules.Diagnostics;
 using IIoT.Edge.Presentation.Navigation.Localization;
 using IIoT.Edge.SharedKernel.DataPipeline;
+using IIoT.Edge.UI.Shared.Avalonia.Controls;
 using IIoT.Edge.UI.Shared.Localization;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
@@ -35,7 +36,9 @@ internal sealed class DiagnosticsRowsBuilder(
             BuildModuleRegistrations(report, moduleNameMap),
             BuildPluginStates(report),
             BuildDeviceBindings(report),
+            BuildModuleReadinessRows(report, moduleNameMap),
             BuildIssues(report),
+            report.Issues.Count,
             BuildMesUploadDiagnostics(syncDiagnostics),
             BuildSyncChannels(syncDiagnostics),
             cloudDeadLetters,
@@ -79,14 +82,109 @@ internal sealed class DiagnosticsRowsBuilder(
                 x.HasIoMappings))
             .ToArray();
 
-    private static IReadOnlyList<StartupDiagnosticIssueRow> BuildIssues(StartupDiagnosticsReport report)
-        => report.Issues
-            .Select(x => new StartupDiagnosticIssueRow(
-                x.Code,
-                DiagnosticsTextNormalizer.Normalize(x.ModuleId),
-                DiagnosticsTextNormalizer.Normalize(x.DeviceName),
-                DiagnosticsTextNormalizer.Normalize(x.Message)))
+    private IReadOnlyList<ModuleReadinessRow> BuildModuleReadinessRows(
+        StartupDiagnosticsReport report,
+        IReadOnlyDictionary<string, string> moduleNameMap)
+    {
+        var pluginStates = report.PluginStates
+            .GroupBy(x => NormalizeModuleId(x.ModuleId), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
+        var registrations = report.ModuleRegistrations
+            .GroupBy(x => NormalizeModuleId(x.ModuleId), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
+        var bindings = report.DeviceBindings
+            .GroupBy(x => NormalizeModuleId(x.ModuleId), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(x => x.Key, x => x.ToArray(), StringComparer.OrdinalIgnoreCase);
+        var moduleIds = pluginStates.Keys
+            .Concat(registrations.Keys)
+            .Concat(bindings.Keys)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(x => x, StringComparer.OrdinalIgnoreCase);
+
+        return moduleIds
+            .Select(moduleId =>
+            {
+                pluginStates.TryGetValue(moduleId, out var plugin);
+                registrations.TryGetValue(moduleId, out var registration);
+                bindings.TryGetValue(moduleId, out var moduleBindings);
+
+                var processType = plugin?.ProcessType ?? registration?.ProcessType ?? moduleId;
+                var displayName = plugin is not null
+                    ? displayNameResolver.ResolveProcessDisplayName(plugin.ProcessType, plugin.DisplayName)
+                    : displayNameResolver.ResolveProcessDisplayName(moduleId, processType, moduleNameMap);
+                var bindingRows = moduleBindings ?? [];
+                var deviceNames = bindingRows.Length == 0
+                    ? "--"
+                    : string.Join(
+                        GetText("Navigation_ListSeparator", "、"),
+                        bindingRows.Select(x => DiagnosticsTextNormalizer.Normalize(x.DeviceName)).Distinct(StringComparer.OrdinalIgnoreCase));
+
+                return new ModuleReadinessRow(
+                    moduleId,
+                    displayName,
+                    diagnosticsText.FormatProcessType(processType),
+                    DiagnosticsTextNormalizer.Normalize(plugin?.Version),
+                    plugin is null ? "--" : diagnosticsText.FormatPluginLifecycleState(plugin.State),
+                    deviceNames,
+                    registration is not null,
+                    plugin?.State == PluginLifecycleState.Activated,
+                    registration?.IsEnabled ?? bindingRows.Any(x => x.ModuleEnabled),
+                    registration?.HasRuntimeFactory ?? false,
+                    registration?.HasCloudUploader ?? false,
+                    registration?.HasMesUploader ?? false,
+                    bindingRows.Length == 0 || bindingRows.Any(x => x.HasIoMappings),
+                    DiagnosticsTextNormalizer.Normalize(plugin?.Message));
+            })
             .ToArray();
+    }
+
+    private static string NormalizeModuleId(string? moduleId)
+        => DiagnosticsTextNormalizer.Normalize(moduleId);
+
+    private IReadOnlyList<StartupDiagnosticIssueRow> BuildIssues(StartupDiagnosticsReport report)
+    {
+        var issueRows = report.Issues
+            .Select(x => new StartupDiagnosticIssueCandidate(
+                NormalizeIssueMessage(DiagnosticsTextNormalizer.Normalize(x.Message)),
+                EdgeVisualStatus.Error,
+                "ERROR"))
+            .ToArray();
+
+        return issueRows
+            .GroupBy(x => new { x.Message, x.Status, x.LevelText })
+            .Select(group =>
+            {
+                var row = group.First();
+                var duplicateCount = group.Count();
+
+                return new StartupDiagnosticIssueRow(
+                    row.Message,
+                    row.LevelText,
+                    row.Status,
+                    duplicateCount,
+                    duplicateCount > 1
+                        ? FormatText("Navigation_Diagnostics_DuplicateCountFormat", "×{0}", duplicateCount)
+                        : string.Empty);
+            })
+            .ToArray();
+    }
+
+    private static string NormalizeIssueMessage(string message)
+    {
+        var normalized = message;
+        var signalIndex = normalized.IndexOf("信号 ", StringComparison.Ordinal);
+        if (signalIndex > 0)
+        {
+            normalized = normalized[signalIndex..];
+        }
+
+        return normalized.Replace(" PLC 地址", " 地址", StringComparison.Ordinal);
+    }
+
+    private sealed record StartupDiagnosticIssueCandidate(
+        string Message,
+        EdgeVisualStatus Status,
+        string LevelText);
 
     private IReadOnlyList<MesChannelDiagnosticsRow> BuildMesUploadDiagnostics(
         EdgeSyncDiagnosticsSnapshot syncDiagnostics)
@@ -105,6 +203,7 @@ internal sealed class DiagnosticsRowsBuilder(
             new(
                 GetText("Navigation_Diagnostics_ChannelCloud", "云端"),
                 BuildCloudStatus(syncDiagnostics.Cloud),
+                BuildCloudVisualStatus(syncDiagnostics.Cloud),
                 FormatText(
                     "Navigation_Diagnostics_SyncCloudPendingFormat",
                     "过站={0}，日志={1}，产能={2}",
@@ -117,6 +216,7 @@ internal sealed class DiagnosticsRowsBuilder(
             new(
                 GetText("Navigation_Diagnostics_ChannelMes", "MES"),
                 BuildMesStatus(syncDiagnostics.Mes),
+                BuildMesVisualStatus(syncDiagnostics.Mes),
                 FormatText("Navigation_Diagnostics_SyncMesPendingFormat", "重试={0}", syncDiagnostics.Mes.PendingRetryCount),
                 syncDiagnostics.Mes.DeadLetters?.TotalCount ?? 0,
                 BuildMesLastError(syncDiagnostics.Mes),
@@ -134,6 +234,14 @@ internal sealed class DiagnosticsRowsBuilder(
             _ => FormatText("Navigation_Sync_StatusBlockedFormat", "已阻塞（{0}）", diagnosticsText.FormatBlockReason(cloud.BlockReason))
         };
 
+    private static EdgeVisualStatus BuildCloudVisualStatus(CloudSyncDiagnosticsSnapshot cloud)
+        => EdgeSyncDiagnosticStatusClassifier.ClassifyCloud(cloud) switch
+        {
+            CloudSyncDiagnosticStatus.Ready => EdgeVisualStatus.Running,
+            CloudSyncDiagnosticStatus.WaitingHeartbeat or CloudSyncDiagnosticStatus.WaitingRecovery or CloudSyncDiagnosticStatus.Blocked => EdgeVisualStatus.Warning,
+            _ => EdgeVisualStatus.Error
+        };
+
     private string BuildMesStatus(MesSyncDiagnosticsSnapshot mes)
         => EdgeSyncDiagnosticStatusClassifier.ClassifyMes(mes) switch
         {
@@ -141,6 +249,14 @@ internal sealed class DiagnosticsRowsBuilder(
             MesSyncDiagnosticStatus.CapacityBlocked => GetText("Navigation_Sync_StatusCapacityBlocked", "产能阻塞"),
             MesSyncDiagnosticStatus.WaitingHeartbeat => GetText("Navigation_Sync_StatusWaitingHeartbeat", "等待心跳恢复"),
             _ => diagnosticsText.FormatMesRuntimeState(mes.RuntimeState)
+        };
+
+    private static EdgeVisualStatus BuildMesVisualStatus(MesSyncDiagnosticsSnapshot mes)
+        => EdgeSyncDiagnosticStatusClassifier.ClassifyMes(mes) switch
+        {
+            MesSyncDiagnosticStatus.Idle or MesSyncDiagnosticStatus.Retrying => EdgeVisualStatus.Running,
+            MesSyncDiagnosticStatus.Backoff or MesSyncDiagnosticStatus.WaitingHeartbeat => EdgeVisualStatus.Warning,
+            _ => EdgeVisualStatus.Error
         };
 
     private string BuildCloudLastError(CloudSyncDiagnosticsSnapshot cloud)

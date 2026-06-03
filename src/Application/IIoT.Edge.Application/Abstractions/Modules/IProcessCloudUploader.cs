@@ -9,16 +9,20 @@ public enum ProcessUploadMode
     Batch = 1
 }
 
-public sealed record ProcessCloudUploadContext(DeviceSession Device);
+public sealed record ProcessUploadContext(DeviceSession Device);
 
-public interface IProcessCloudUploader
+public interface IProcessUploader<TResult>
 {
     string ProcessType { get; }
 
     ProcessUploadMode UploadMode { get; }
 
-    Task<CloudCallResult> UploadAsync(
-        ProcessCloudUploadContext context,
+    Task<TResult> UploadAsync(
+        ProcessUploadContext context,
         IReadOnlyList<CellCompletedRecord> records,
         CancellationToken cancellationToken = default);
+}
+
+public interface IProcessCloudUploader : IProcessUploader<CloudCallResult>
+{
 }

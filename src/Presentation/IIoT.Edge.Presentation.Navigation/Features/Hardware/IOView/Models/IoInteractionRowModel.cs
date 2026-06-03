@@ -134,9 +134,7 @@ public sealed class IoInteractionRowModel : BaseNotifyPropertyChanged
     }
 
     private static string FormatSignal(IoSignalModel signal)
-        => string.IsNullOrWhiteSpace(signal.SignalName)
-            ? signal.SignalKey
-            : signal.SignalName;
+        => signal.SignalKey;
 
     private string FormatSignalToolTip(
         IReadOnlyCollection<IoSignalModel> signals,
@@ -150,16 +148,12 @@ public sealed class IoInteractionRowModel : BaseNotifyPropertyChanged
         var separator = GetText("Navigation_Io_TooltipSeparator", "；");
         return string.Join(separator, signals.Select(signal =>
         {
-            var role = string.IsNullOrWhiteSpace(signal.SignalName)
-                ? GetText("Navigation_Io_RoleUnset", "未设置")
-                : signal.SignalName;
             var suffix = includeValue
                 ? FormatText("Navigation_Io_TooltipCurrentValueFormat", "，当前值：{0}", signal.DisplayValue)
                 : string.Empty;
             return FormatText(
                 "Navigation_Io_TooltipSignalFormat",
-                "{0}，信号键：{1}，地址：{2}{3}",
-                role,
+                "信号键：{0}，地址：{1}{2}",
                 signal.SignalKey,
                 signal.PlcAddress,
                 suffix);

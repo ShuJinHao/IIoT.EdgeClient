@@ -8,25 +8,6 @@ namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView
 /// </summary>
 public sealed class IoMappingDraftVm : BaseNotifyPropertyChanged
 {
-    private string _source = IoMappingOptionCatalog.PointSourceCustomDebug;
-    public string Source
-    {
-        get => _source;
-        set
-        {
-            _source = value;
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(IsStandardSource));
-            OnPropertyChanged(nameof(IsCustomSource));
-        }
-    }
-
-    public bool IsStandardSource
-        => string.Equals(Source, IoMappingOptionCatalog.PointSourceStandardSignal, StringComparison.OrdinalIgnoreCase);
-
-    public bool IsCustomSource
-        => string.Equals(Source, IoMappingOptionCatalog.PointSourceCustomDebug, StringComparison.OrdinalIgnoreCase);
-
     private string _category = IoMappingOptionCatalog.CategorySingleRead;
     public string Category
     {
@@ -89,13 +70,6 @@ public sealed class IoMappingDraftVm : BaseNotifyPropertyChanged
     {
         get => _businessGroup;
         set { _businessGroup = value; OnPropertyChanged(); }
-    }
-
-    private string _signalName = string.Empty;
-    public string SignalName
-    {
-        get => _signalName;
-        set { _signalName = value; OnPropertyChanged(); }
     }
 
     private string? _remark;

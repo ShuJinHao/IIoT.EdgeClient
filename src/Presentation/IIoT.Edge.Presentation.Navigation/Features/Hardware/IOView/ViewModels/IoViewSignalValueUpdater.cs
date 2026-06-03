@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Text;
 using IIoT.Edge.Application.Abstractions.Plc;
@@ -121,23 +122,22 @@ internal sealed class IoViewSignalValueUpdater : IIoViewSignalValueUpdater
         signal.DisplayValue = string.IsNullOrWhiteSpace(display) ? "-" : display;
         signal.PreviewValue = string.IsNullOrWhiteSpace(preview) ? "-" : preview;
         signal.Value = DecodeSingleEditValue(signal.DataType, words);
-        signal.ExpandedValues.Clear();
-
+        var hadExpandedValues = signal.ExpandedValues.Count > 0;
         if (signal.IsContinuous
             && values.Count > 0
             && !string.Equals(signal.DataType, "Ascii", StringComparison.OrdinalIgnoreCase))
         {
-            for (var index = 0; index < values.Count; index++)
-            {
-                signal.ExpandedValues.Add(new IoSignalValueModel
-                {
-                    Index = index + 1,
-                    Value = values[index]
-                });
-            }
+            SyncExpandedValues(signal.ExpandedValues, values);
+        }
+        else if (signal.ExpandedValues.Count > 0)
+        {
+            signal.ExpandedValues.Clear();
         }
 
-        signal.OnPropertyChanged(nameof(IoSignalModel.HasExpandedValues));
+        if (hadExpandedValues != signal.ExpandedValues.Count > 0)
+        {
+            signal.OnPropertyChanged(nameof(IoSignalModel.HasExpandedValues));
+        }
     }
 
     private static int DecodeSingleEditValue(string dataType, IReadOnlyList<ushort> words)
@@ -182,6 +182,41 @@ internal sealed class IoViewSignalValueUpdater : IIoViewSignalValueUpdater
         }
 
         return words.Select(static word => word.ToString(CultureInfo.InvariantCulture)).ToArray();
+    }
+
+    private static void SyncExpandedValues(
+        ObservableCollection<IoSignalValueModel> target,
+        IReadOnlyList<string> values)
+    {
+        while (target.Count > values.Count)
+        {
+            target.RemoveAt(target.Count - 1);
+        }
+
+        for (var index = 0; index < values.Count; index++)
+        {
+            var nextValue = values[index];
+            var nextIndex = index + 1;
+            if (index >= target.Count)
+            {
+                target.Add(new IoSignalValueModel
+                {
+                    Index = nextIndex,
+                    Value = nextValue
+                });
+                continue;
+            }
+
+            var current = target[index];
+            if (current.Index != nextIndex || current.Value != nextValue)
+            {
+                target[index] = new IoSignalValueModel
+                {
+                    Index = nextIndex,
+                    Value = nextValue
+                };
+            }
+        }
     }
 
     private static string DecodeAscii(IReadOnlyList<ushort> words)

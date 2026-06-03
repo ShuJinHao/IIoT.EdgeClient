@@ -1,5 +1,5 @@
 using System.ComponentModel;
-using IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Models;
+using IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView.Models;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView;
 
@@ -30,8 +30,7 @@ public sealed class HardwareConfigDeviceSelectionCoordinator : IHardwareConfigDe
         HardwareConfigViewModel viewModel,
         PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(NetworkDeviceVm.ModuleId)
-            or nameof(NetworkDeviceVm.DeviceType)
+        if (e.PropertyName is nameof(NetworkDeviceVm.DeviceType)
             or nameof(NetworkDeviceVm.Id))
         {
             _ = viewModel.RefreshModuleTemplateInfoAsync();

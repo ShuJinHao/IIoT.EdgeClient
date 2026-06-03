@@ -1,7 +1,7 @@
 using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Common.Crud;
 using IIoT.Edge.Application.Features.Config.ParamView;
-using IIoT.Edge.Application.Features.Config.ParamView.Models;
+using IIoT.Edge.Presentation.Navigation.Features.Config.ParamView.Models;
 using IIoT.Edge.Presentation.Navigation.Localization;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
@@ -17,7 +17,9 @@ public class ParamViewModel : LocalizedCrudPageViewModelBase
 {
     private readonly IParamViewCrudService _crudService;
     private readonly IClientPermissionService _permissionService;
+    private readonly IParamViewModelMapper _modelMapper;
     private readonly AsyncCommand _saveCommand;
+    private readonly AsyncCommand _resetCommand;
     private int _selectedTabIndex;
 
     public bool CanEdit => _permissionService.CanEditParams;
@@ -37,14 +39,17 @@ public class ParamViewModel : LocalizedCrudPageViewModelBase
     public ObservableCollection<ModuleParamGroupVm> BusinessParamGroups { get; } = new();
 
     public ICommand SaveCommand { get; }
+    public ICommand ResetCommand { get; }
 
     public ParamViewModel(
         IParamViewCrudService crudService,
         IClientPermissionService permissionService,
+        IParamViewModelMapper modelMapper,
         IAppLanguageService languageService)
         : this(
             crudService,
             permissionService,
+            modelMapper,
             languageService,
             "Config.ParamView",
             "Navigation_Title_ParamConfig",
@@ -55,6 +60,7 @@ public class ParamViewModel : LocalizedCrudPageViewModelBase
     public ParamViewModel(
         IParamViewCrudService crudService,
         IClientPermissionService permissionService,
+        IParamViewModelMapper modelMapper,
         IAppLanguageService languageService,
         string viewId,
         string titleResourceKey,
@@ -63,9 +69,12 @@ public class ParamViewModel : LocalizedCrudPageViewModelBase
     {
         _crudService = crudService;
         _permissionService = permissionService;
+        _modelMapper = modelMapper;
 
         _saveCommand = (AsyncCommand)CreateBusyCommand(SaveAsync, () => CanEdit);
+        _resetCommand = (AsyncCommand)CreateBusyCommand(ResetAsync, () => CanEdit);
         SaveCommand = _saveCommand;
+        ResetCommand = _resetCommand;
 
         _permissionService.PermissionStateChanged += HandlePermissionStateChanged;
     }
@@ -79,9 +88,9 @@ public class ParamViewModel : LocalizedCrudPageViewModelBase
     {
         var result = await _crudService.LoadAsync();
 
-        ReplaceItems(MesParamGroups, result.MesParamGroups);
-        ReplaceItems(CloudParamGroups, result.CloudParamGroups);
-        ReplaceItems(BusinessParamGroups, result.BusinessParamGroups);
+        ReplaceItems(MesParamGroups, result.MesParamGroups.Select(_modelMapper.ToGroup));
+        ReplaceItems(CloudParamGroups, result.CloudParamGroups.Select(_modelMapper.ToGroup));
+        ReplaceItems(BusinessParamGroups, result.BusinessParamGroups.Select(_modelMapper.ToGroup));
         ApplyParamLocalization();
     }
 
@@ -91,6 +100,7 @@ public class ParamViewModel : LocalizedCrudPageViewModelBase
             .Concat(CloudParamGroups)
             .Concat(BusinessParamGroups)
             .SelectMany(group => group.Params)
+            .Select(_modelMapper.ToDto)
             .ToList();
 
         var saveResult = await _crudService.SaveAsync(moduleParams);
@@ -104,12 +114,24 @@ public class ParamViewModel : LocalizedCrudPageViewModelBase
         return saveResult;
     }
 
+    private async Task<CrudOperationResult> ResetAsync()
+    {
+        var resetResult = await _crudService.ResetAsync();
+        if (!resetResult.IsSuccess)
+        {
+            return resetResult;
+        }
+
+        await RefreshAfterSaveAsync();
+        return resetResult;
+    }
+
     private async Task RefreshAfterSaveAsync()
     {
         var result = await _crudService.LoadAsync();
-        ReplaceItems(MesParamGroups, result.MesParamGroups);
-        ReplaceItems(CloudParamGroups, result.CloudParamGroups);
-        ReplaceItems(BusinessParamGroups, result.BusinessParamGroups);
+        ReplaceItems(MesParamGroups, result.MesParamGroups.Select(_modelMapper.ToGroup));
+        ReplaceItems(CloudParamGroups, result.CloudParamGroups.Select(_modelMapper.ToGroup));
+        ReplaceItems(BusinessParamGroups, result.BusinessParamGroups.Select(_modelMapper.ToGroup));
         ApplyParamLocalization();
     }
 
@@ -128,6 +150,7 @@ public class ParamViewModel : LocalizedCrudPageViewModelBase
     {
         OnPropertyChanged(nameof(CanEdit));
         _saveCommand.RaiseCanExecuteChanged();
+        _resetCommand.RaiseCanExecuteChanged();
     }
 
     protected override void RefreshLocalization()
@@ -138,6 +161,13 @@ public class ParamViewModel : LocalizedCrudPageViewModelBase
 
     private void ApplyParamLocalization()
     {
+        foreach (var group in MesParamGroups
+                     .Concat(CloudParamGroups)
+                     .Concat(BusinessParamGroups))
+        {
+            group.ModuleDisplayName = GetText(group.ModuleDisplayNameResourceKey, group.ModuleDisplayNameFallback);
+        }
+
         foreach (var param in MesParamGroups
                      .Concat(CloudParamGroups)
                      .Concat(BusinessParamGroups)

@@ -29,6 +29,38 @@ public sealed class PluginCatalogLifecycleContractTests
     }
 
     [Fact]
+    public void CreateEnabledModules_WhenHostApiVersionDoesNotMatch_ShouldReportCompatibilityIssue()
+    {
+        var pluginRoot = CreatePluginRoot("Homogenization");
+        try
+        {
+            var manifestPath = Path.Combine(pluginRoot, "Homogenization", "plugin.json");
+            var manifest = JsonNode.Parse(File.ReadAllText(manifestPath))!.AsObject();
+            manifest["hostApiVersion"] = "99.0.0";
+            File.WriteAllText(manifestPath, manifest.ToJsonString(new() { WriteIndented = true }));
+
+            var catalog = CreateModuleCatalog();
+            var discovery = catalog.DiscoverModules(pluginRoot);
+            var activation = catalog.CreateEnabledModules(
+                new ConfigurationBuilder()
+                    .AddInMemoryCollection(new Dictionary<string, string?>
+                    {
+                        ["Modules:Enabled:0"] = "Homogenization"
+                    })
+                    .Build(),
+                "Modules",
+                discovery.Modules);
+
+            Assert.Contains(activation.Issues, issue => string.Equals(issue.Code, "PLUGIN_HOST_VERSION_INCOMPATIBLE", StringComparison.OrdinalIgnoreCase));
+            Assert.Empty(activation.Modules);
+        }
+        finally
+        {
+            ContractTestPathHelper.DeleteDirectory(pluginRoot);
+        }
+    }
+
+    [Fact]
     public void CreateEnabledModules_WhenHostVersionIsOutsideSupportedRange_ShouldReportCompatibilityIssue()
     {
         var pluginRoot = CreatePluginRoot("Homogenization");
@@ -98,5 +130,7 @@ public sealed class PluginCatalogLifecycleContractTests
     }
 
     private static IModuleCatalog CreateModuleCatalog()
-        => new DirectoryModuleCatalog(new ModulePluginLoader(new ModulePluginAssemblyResolver()));
+        => new DirectoryModuleCatalog(
+            new ModulePluginLoader(new ModulePluginAssemblyResolver()),
+            new ModulePluginCompatibilityPolicy());
 }

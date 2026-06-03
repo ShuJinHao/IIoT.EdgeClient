@@ -1,0 +1,34 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
+        xmlns:views="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared">
+
+    <Style Selector="controls|EdgeBarLineChart">
+        <Setter Property="MinHeight" Value="280" />
+        <Setter Property="TrackBrush" Value="{DynamicResource Edge.Brush.Surface.Card}" />
+        <Setter Property="GridLineBrush" Value="{DynamicResource Edge.Brush.Border.Subtle}" />
+        <Setter Property="AxisTextBrush" Value="{DynamicResource Edge.Brush.Text.Muted}" />
+        <Setter Property="LegendTextBrush" Value="{DynamicResource Edge.Brush.Text.Secondary}" />
+        <Setter Property="DefaultBarBrush" Value="{DynamicResource Edge.Brush.Chart.Accent}" />
+        <Setter Property="DefaultLineBrush" Value="{DynamicResource Edge.Brush.Chart.Secondary}" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Grid ClipToBounds="True">
+                    <ContentPresenter
+                        Classes="edge-chart-empty"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Content="{TemplateBinding EmptyContent}" />
+                </Grid>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="controls|EdgeBarLineChart ContentPresenter.edge-chart-empty">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <Style Selector="controls|EdgeBarLineChart:empty ContentPresenter.edge-chart-empty">
+        <Setter Property="IsVisible" Value="True" />
+    </Style>
+</Styles>

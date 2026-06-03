@@ -27,10 +27,14 @@ public sealed class DirectoryModuleCatalog : IModuleCatalog
     };
 
     private readonly IModulePluginLoader _modulePluginLoader;
+    private readonly IModulePluginCompatibilityPolicy _compatibilityPolicy;
 
-    public DirectoryModuleCatalog(IModulePluginLoader modulePluginLoader)
+    public DirectoryModuleCatalog(
+        IModulePluginLoader modulePluginLoader,
+        IModulePluginCompatibilityPolicy compatibilityPolicy)
     {
         _modulePluginLoader = modulePluginLoader ?? throw new ArgumentNullException(nameof(modulePluginLoader));
+        _compatibilityPolicy = compatibilityPolicy ?? throw new ArgumentNullException(nameof(compatibilityPolicy));
     }
 
     public ModuleCatalogDiscoveryResult DiscoverModules(string pluginRootPath)
@@ -115,15 +119,10 @@ public sealed class DirectoryModuleCatalog : IModuleCatalog
                 continue;
             }
 
-            if (!IsHostCompatible(descriptor, out var compatibilityMessage))
+            var compatibility = _compatibilityPolicy.Evaluate(descriptor);
+            if (!compatibility.IsCompatible)
             {
-                issues.Add(new ModuleCatalogIssue(
-                    "PLUGIN_HOST_VERSION_INCOMPATIBLE",
-                    compatibilityMessage,
-                    descriptor.ModuleId,
-                    descriptor.ManifestPath,
-                    descriptor.EntryAssemblyPath,
-                    Path.GetFileName(descriptor.PluginDirectory)));
+                issues.Add(compatibility.Issue!);
                 continue;
             }
 
@@ -363,33 +362,6 @@ public sealed class DirectoryModuleCatalog : IModuleCatalog
         {
             throw new InvalidOperationException($"插件清单“{manifestPath}”缺少 entryType。");
         }
-    }
-
-    private bool IsHostCompatible(ModulePluginDescriptor descriptor, out string message)
-    {
-        if (!string.Equals(
-                descriptor.HostApiVersion,
-                ModulePluginHostRuntime.HostApiVersion,
-                StringComparison.OrdinalIgnoreCase))
-        {
-            message =
-                $"插件“{descriptor.ModuleId}”要求的运行 API 版本为 {descriptor.HostApiVersion}，当前宿主 API 版本为 {ModulePluginHostRuntime.HostApiVersion}。";
-            return false;
-        }
-
-        _ = ModulePluginHostRuntime.TryParseVersion(descriptor.MinHostVersion, out var minVersion);
-        _ = ModulePluginHostRuntime.TryParseVersion(descriptor.MaxHostVersion, out var maxVersion);
-        _ = ModulePluginHostRuntime.TryParseVersion(ModulePluginHostRuntime.HostVersion, out var hostVersion);
-
-        if (hostVersion < minVersion || hostVersion > maxVersion)
-        {
-            message =
-                $"插件“{descriptor.ModuleId}”支持的宿主版本范围为 {descriptor.MinHostVersion} - {descriptor.MaxHostVersion}，当前宿主版本为 {ModulePluginHostRuntime.HostVersion}。";
-            return false;
-        }
-
-        message = string.Empty;
-        return true;
     }
 
     private IReadOnlyList<ModuleCatalogIssue> ValidateUniqueDescriptors(IReadOnlyList<ModulePluginDescriptor> descriptors)

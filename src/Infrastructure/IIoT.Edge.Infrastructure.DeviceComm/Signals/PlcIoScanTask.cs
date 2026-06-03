@@ -4,13 +4,11 @@ using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc;
-using IIoT.Edge.Runtime.Base;
-using IIoT.Edge.Runtime.Plc;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Signals;
 
 /// <summary>
-/// 基于具体 PLC 通讯服务的 IO 扫描任务，状态上报留在基础设施层，扫描循环由 Runtime 基类承载。
+/// 基于具体 PLC 通讯服务的 IO 扫描任务，状态上报留在基础设施层。
 /// </summary>
 public sealed class PlcIoScanTask : PlcIoScanTaskBase
 {
@@ -36,7 +34,9 @@ public sealed class PlcIoScanTask : PlcIoScanTaskBase
                     deviceConfig.IpAddress,
                     deviceConfig.Port1,
                     deviceConfig.ConnectTimeout)),
-            ioMappings.Select(static mapping => new PlcIoScanMapping(
+            ioMappings
+                .Where(static mapping => !string.IsNullOrWhiteSpace(mapping.PlcAddress))
+                .Select(static mapping => new PlcIoScanMapping(
                 mapping.SignalKey,
                 mapping.PlcAddress,
                 mapping.AddressCount,
@@ -56,4 +56,7 @@ public sealed class PlcIoScanTask : PlcIoScanTaskBase
 
     protected override void MarkDisconnected(string reason)
         => _statusStore?.MarkDisconnected(DeviceId, DeviceName, reason);
+
+    protected override void MarkLatency(int? latencyMs)
+        => _statusStore?.MarkLatency(DeviceId, DeviceName, latencyMs);
 }

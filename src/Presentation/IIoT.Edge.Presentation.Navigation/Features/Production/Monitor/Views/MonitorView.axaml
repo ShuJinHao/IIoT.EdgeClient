@@ -2,8 +2,7 @@
     x:Class="IIoT.Edge.Presentation.Navigation.Features.Production.Monitor.MonitorViewPage"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:dg="using:Avalonia.Controls"
-    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
+        xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
 
     <Grid RowDefinitions="Auto,*">
         <Grid
@@ -11,7 +10,7 @@
             ColumnDefinitions="Auto,*"
             ColumnSpacing="{DynamicResource Edge.Size.Spacing12}">
             <edge:EdgeCard
-                Height="42"
+                Height="44"
                 Elevation="Flat"
                 PaddingMode="None"
                 Surface="Wash">
@@ -62,7 +61,7 @@
                 </edge:EdgeFilterComboBox.ItemTemplate>
             </edge:EdgeFilterComboBox>
         </Grid>
-        <ScrollViewer
+        <edge:EdgeScrollHost
             Grid.Row="1"
             HorizontalScrollBarVisibility="Disabled"
             VerticalScrollBarVisibility="Auto">
@@ -98,7 +97,7 @@
                     <StackPanel
                         IsVisible="{Binding IsDeviceStatusTabSelected}"
                         Spacing="{DynamicResource Edge.Size.Spacing12}">
-                        <edge:EdgeCard CardPadding="{DynamicResource Edge.Thickness.Card.Compact}">
+                        <edge:EdgeCard PaddingMode="Compact">
                             <edge:EdgeCard.Header>
                                 <edge:EdgeSectionHeader
                                     Title="{DynamicResource Navigation_Monitor_CellDebugTitle}"
@@ -146,10 +145,10 @@
                                                 SelectedItem="{Binding SelectedCell, Mode=TwoWay}"
                                                 ViewportMaxHeight="220">
                                                 <edge:EdgeDataGrid.Columns>
-                                                    <dg:DataGridTextColumn Binding="{Binding InternalKey}" Header="{DynamicResource Navigation_Monitor_ColumnInternalKey}" MinWidth="220" Width="2.2*" />
-                                                    <dg:DataGridTextColumn Binding="{Binding DisplayLabel}" Header="{DynamicResource Navigation_Monitor_ColumnBusinessId}" MinWidth="150" Width="1.2*" />
-                                                    <dg:DataGridTextColumn Binding="{Binding RuntimeStatusText}" Header="{DynamicResource Navigation_Monitor_ColumnRuntimeStatus}" MinWidth="120" Width="1*" />
-                                                    <dg:DataGridTextColumn Binding="{Binding CompletedTimeText}" Header="{DynamicResource Navigation_Monitor_ColumnCompletedAt}" MinWidth="150" Width="1*" />
+                                                    <edge:EdgeTextColumn Binding="{Binding InternalKey}" Header="{DynamicResource Navigation_Monitor_ColumnInternalKey}" MinWidth="220" Width="2.2*" />
+                                                    <edge:EdgeTextColumn Binding="{Binding DisplayLabel}" Header="{DynamicResource Navigation_Monitor_ColumnBusinessId}" MinWidth="150" Width="1.2*" />
+                                                    <edge:EdgeTextColumn Binding="{Binding RuntimeStatusText}" Header="{DynamicResource Navigation_Monitor_ColumnRuntimeStatus}" MinWidth="120" Width="1*" />
+                                                    <edge:EdgeTextColumn Binding="{Binding CompletedTimeText}" Header="{DynamicResource Navigation_Monitor_ColumnCompletedAt}" MinWidth="150" Width="1*" />
                                                 </edge:EdgeDataGrid.Columns>
                                             </edge:EdgeDataGrid>
                                             <StackPanel
@@ -193,16 +192,16 @@
                                                 IsReadOnly="True"
                                                 ItemsSource="{Binding SelectedCellFieldRows}">
                                                 <edge:EdgeDataGrid.Columns>
-                                                    <dg:DataGridTextColumn Binding="{Binding Name}" Header="{DynamicResource Navigation_Monitor_ColumnFieldPath}" MinWidth="260" Width="1.1*" />
-                                                    <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Monitor_ColumnValue}" MinWidth="420" Width="2.4*">
-                                                        <dg:DataGridTemplateColumn.CellTemplate>
+                                                    <edge:EdgeTextColumn Binding="{Binding Name}" Header="{DynamicResource Navigation_Monitor_ColumnFieldPath}" MinWidth="260" Width="1.1*" />
+                                                    <edge:EdgeTemplateColumn Header="{DynamicResource Navigation_Monitor_ColumnValue}" MinWidth="420" Width="2.4*">
+                                                        <edge:EdgeTemplateColumn.CellTemplate>
                                                             <DataTemplate>
                                                                 <TextBlock
                                                                     Text="{Binding Value}"
                                                                     TextWrapping="Wrap" />
                                                             </DataTemplate>
-                                                        </dg:DataGridTemplateColumn.CellTemplate>
-                                                    </dg:DataGridTemplateColumn>
+                                                        </edge:EdgeTemplateColumn.CellTemplate>
+                                                    </edge:EdgeTemplateColumn>
                                                 </edge:EdgeDataGrid.Columns>
                                             </edge:EdgeDataGrid>
                                             <StackPanel
@@ -234,12 +233,10 @@
                     <StackPanel
                         IsVisible="{Binding IsStateMachineTabSelected}"
                         Spacing="{DynamicResource Edge.Size.Spacing12}">
-                        <edge:EdgeCard CardPadding="{DynamicResource Edge.Thickness.Card.Compact}">
+                        <edge:EdgeCard Classes="summary" PaddingMode="Compact">
                             <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="{DynamicResource Edge.Size.Spacing8}">
                                 <TextBlock
-                                    FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
-                                    FontWeight="SemiBold"
-                                    Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                    Classes="edge-summary-card-title"
                                     Text="{DynamicResource Navigation_Monitor_StatusSummary}" />
 
                                 <ItemsControl
@@ -255,18 +252,13 @@
                                             <Border
                                                 MinWidth="152"
                                                 Margin="0,0,6,6"
-                                                Padding="10,6"
-                                                Background="{DynamicResource Edge.Brush.Surface.Wash}"
-                                                CornerRadius="{DynamicResource Edge.CornerRadius.Control}">
+                                                Classes="edge-summary-card-row">
                                                 <StackPanel Spacing="2">
                                                     <TextBlock
-                                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                                        Classes="edge-summary-card-label"
                                                         Text="{Binding Label}" />
                                                     <TextBlock
-                                                        FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
-                                                        FontWeight="SemiBold"
-                                                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                                        Classes="edge-summary-card-value"
                                                         Text="{Binding Value}"
                                                         TextWrapping="Wrap" />
                                                 </StackPanel>
@@ -277,60 +269,193 @@
 
                                 <Border
                                     Grid.Row="2"
-                                    Padding="10,6"
-                                    Background="{DynamicResource Edge.Brush.Surface.Wash}"
-                                    CornerRadius="{DynamicResource Edge.CornerRadius.Control}"
+                                    Classes="edge-summary-card-row"
                                     DataContext="{Binding LastErrorItem}">
                                     <Grid ColumnDefinitions="96,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing10}">
                                         <TextBlock
-                                            FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                            Classes="edge-summary-card-label"
                                             Text="{Binding Label}" />
                                         <TextBlock
                                             Grid.Column="1"
-                                            FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
-                                            FontWeight="SemiBold"
-                                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                            Classes="edge-summary-card-value"
                                             Text="{Binding Value}"
                                             TextWrapping="Wrap" />
                                     </Grid>
                                 </Border>
                             </Grid>
                         </edge:EdgeCard>
-                        <edge:EdgeCard CardPadding="{DynamicResource Edge.Thickness.Card.Compact}">
+                        <edge:EdgeCard PaddingMode="Compact">
                             <edge:EdgeCard.Header>
                                 <edge:EdgeSectionHeader
                                     Title="{DynamicResource Navigation_Monitor_StateMachineTasksTitle}"
                                     Subtitle="{DynamicResource Navigation_Monitor_StateMachineTasksSubtitle}" />
                             </edge:EdgeCard.Header>
                             <Grid MinHeight="84">
-                                <edge:EdgeDataGrid
-                                    AutoGenerateColumns="False"
-                                    CanUserReorderColumns="False"
-                                    CanUserResizeColumns="True"
-                                    CanUserSortColumns="False"
-                                    Density="Compact"
-                                    IsReadOnly="True"
+                                <StackPanel
                                     IsVisible="{Binding HasStateMachineTaskItems}"
-                                    ItemsSource="{Binding StateMachineTaskItems}">
-                                    <edge:EdgeDataGrid.Columns>
-                                        <dg:DataGridTextColumn Binding="{Binding DisplayName}" Header="{DynamicResource Navigation_Monitor_ColumnTask}" MinWidth="180" Width="1.1*" />
-                                        <dg:DataGridTextColumn Binding="{Binding StepText}" Header="{DynamicResource Navigation_Monitor_ColumnStepStatus}" MinWidth="180" Width="1.1*" />
-                                        <dg:DataGridTextColumn Binding="{Binding StepValueText}" Header="{DynamicResource Navigation_Monitor_ColumnStepValue}" MinWidth="90" Width="90" />
-                                        <dg:DataGridTextColumn Binding="{Binding AvailabilityStatusText}" Header="{DynamicResource Navigation_Monitor_ColumnRunCondition}" MinWidth="130" Width="130" />
-                                        <dg:DataGridTemplateColumn Header="{DynamicResource Navigation_Monitor_ColumnDescription}" MinWidth="260" Width="1.6*">
-                                            <dg:DataGridTemplateColumn.CellTemplate>
+                                    Spacing="0">
+                                    <StackPanel
+                                        IsVisible="{Binding HasStateMachineHeartbeatTaskItems}"
+                                        Spacing="0">
+                                        <Grid ColumnDefinitions="28,*" MinHeight="30">
+                                            <Border
+                                                Grid.Column="0"
+                                                Width="1"
+                                                HorizontalAlignment="Center"
+                                                Background="{DynamicResource Edge.Brush.Border.Subtle}" />
+                                            <TextBlock
+                                                Grid.Column="1"
+                                                VerticalAlignment="Center"
+                                                FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                                FontWeight="SemiBold"
+                                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                                Text="{DynamicResource Navigation_Monitor_StateMachineHeartbeatGroup}" />
+                                        </Grid>
+                                        <ItemsControl ItemsSource="{Binding StateMachineHeartbeatTaskItems}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Spacing="0" />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
-                                                    <TextBlock
-                                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                                        Text="{Binding DetailText}"
-                                                        TextWrapping="Wrap" />
+                                                    <Grid ColumnDefinitions="28,*" MinHeight="58">
+                                                        <Border
+                                                            Grid.Column="0"
+                                                            Width="1"
+                                                            HorizontalAlignment="Center"
+                                                            Background="{DynamicResource Edge.Brush.Border.Subtle}" />
+                                                        <edge:EdgeStatusDot
+                                                            Grid.Column="0"
+                                                            Margin="0,10,0,0"
+                                                            VerticalAlignment="Top"
+                                                            Size="10"
+                                                            Status="{Binding VisualStatus}" />
+                                                        <Grid
+                                                            Grid.Column="1"
+                                                            Margin="0,6,0,0"
+                                                            ColumnDefinitions="*,Auto"
+                                                            RowDefinitions="Auto,Auto,Auto,Auto"
+                                                            ColumnSpacing="{DynamicResource Edge.Size.Spacing12}">
+                                                            <TextBlock
+                                                                FontSize="{DynamicResource Edge.FontSize.Body}"
+                                                                FontWeight="SemiBold"
+                                                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                                                Text="{Binding DisplayName}"
+                                                                TextTrimming="CharacterEllipsis" />
+                                                            <edge:EdgeStatusChip
+                                                                Grid.Column="1"
+                                                                Status="{Binding VisualStatus}"
+                                                                Text="{Binding StepValueText}" />
+                                                            <TextBlock
+                                                                Grid.Row="1"
+                                                                Grid.ColumnSpan="2"
+                                                                FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                                                Text="{Binding StepText}"
+                                                                TextWrapping="Wrap" />
+                                                            <TextBlock
+                                                                Grid.Row="2"
+                                                                Grid.ColumnSpan="2"
+                                                                FontFamily="{DynamicResource Edge.FontFamily.Mono}"
+                                                                FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                                                Text="{Binding DetailText}"
+                                                                TextWrapping="Wrap" />
+                                                            <Border
+                                                                Grid.Row="3"
+                                                                Grid.ColumnSpan="2"
+                                                                Height="1"
+                                                                Margin="0,9,0,0"
+                                                                Background="{DynamicResource Edge.Brush.Border.Subtle}" />
+                                                        </Grid>
+                                                    </Grid>
                                                 </DataTemplate>
-                                            </dg:DataGridTemplateColumn.CellTemplate>
-                                        </dg:DataGridTemplateColumn>
-                                    </edge:EdgeDataGrid.Columns>
-                                </edge:EdgeDataGrid>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+
+                                    <StackPanel
+                                        IsVisible="{Binding HasStateMachineRuntimeTaskItems}"
+                                        Spacing="0">
+                                        <Grid ColumnDefinitions="28,*" MinHeight="34">
+                                            <Border
+                                                Grid.Column="0"
+                                                Width="1"
+                                                HorizontalAlignment="Center"
+                                                Background="{DynamicResource Edge.Brush.Border.Subtle}" />
+                                            <TextBlock
+                                                Grid.Column="1"
+                                                VerticalAlignment="Center"
+                                                FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                                FontWeight="SemiBold"
+                                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                                Text="{DynamicResource Navigation_Monitor_StateMachineRuntimeGroup}" />
+                                        </Grid>
+                                        <ItemsControl ItemsSource="{Binding StateMachineRuntimeTaskItems}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Spacing="0" />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid ColumnDefinitions="28,*" MinHeight="58">
+                                                        <Border
+                                                            Grid.Column="0"
+                                                            Width="1"
+                                                            HorizontalAlignment="Center"
+                                                            Background="{DynamicResource Edge.Brush.Border.Subtle}" />
+                                                        <edge:EdgeStatusDot
+                                                            Grid.Column="0"
+                                                            Margin="0,10,0,0"
+                                                            VerticalAlignment="Top"
+                                                            Size="10"
+                                                            Status="{Binding VisualStatus}" />
+                                                        <Grid
+                                                            Grid.Column="1"
+                                                            Margin="0,6,0,0"
+                                                            ColumnDefinitions="*,Auto"
+                                                            RowDefinitions="Auto,Auto,Auto,Auto"
+                                                            ColumnSpacing="{DynamicResource Edge.Size.Spacing12}">
+                                                            <TextBlock
+                                                                FontSize="{DynamicResource Edge.FontSize.Body}"
+                                                                FontWeight="SemiBold"
+                                                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                                                Text="{Binding DisplayName}"
+                                                                TextTrimming="CharacterEllipsis" />
+                                                            <edge:EdgeStatusChip
+                                                                Grid.Column="1"
+                                                                Status="{Binding VisualStatus}"
+                                                                Text="{Binding AvailabilityStatusText}" />
+                                                            <TextBlock
+                                                                Grid.Row="1"
+                                                                Grid.ColumnSpan="2"
+                                                                FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                                                Text="{Binding StepText}"
+                                                                TextWrapping="Wrap" />
+                                                            <TextBlock
+                                                                Grid.Row="2"
+                                                                Grid.ColumnSpan="2"
+                                                                FontFamily="{DynamicResource Edge.FontFamily.Mono}"
+                                                                FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                                                Text="{Binding DetailText}"
+                                                                TextWrapping="Wrap" />
+                                                            <Border
+                                                                Grid.Row="3"
+                                                                Grid.ColumnSpan="2"
+                                                                Height="1"
+                                                                Margin="0,9,0,0"
+                                                                Background="{DynamicResource Edge.Brush.Border.Subtle}" />
+                                                        </Grid>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </StackPanel>
 
                                 <StackPanel
                                     MaxWidth="420"
@@ -357,6 +482,6 @@
                     </StackPanel>
                 </StackPanel>
             </StackPanel>
-        </ScrollViewer>
+        </edge:EdgeScrollHost>
     </Grid>
 </UserControl>

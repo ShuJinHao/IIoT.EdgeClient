@@ -12,19 +12,19 @@ public abstract class ViewModelBase : BaseNotifyPropertyChanged, IViewModelContr
     public abstract string ViewTitle { get; }
 
     private int _row;
-    public int LayoutRow { get => _row; set { _row = value; OnPropertyChanged(); } }
+    public int LayoutRow { get => _row; set { if (_row == value) return; _row = value; OnPropertyChanged(); } }
 
     private int _col;
-    public int LayoutColumn { get => _col; set { _col = value; OnPropertyChanged(); } }
+    public int LayoutColumn { get => _col; set { if (_col == value) return; _col = value; OnPropertyChanged(); } }
 
     private int _rowSpan = 1;
-    public int RowSpan { get => _rowSpan; set { _rowSpan = value; OnPropertyChanged(); } }
+    public int RowSpan { get => _rowSpan; set { if (_rowSpan == value) return; _rowSpan = value; OnPropertyChanged(); } }
 
     private int _colSpan = 1;
-    public int ColumnSpan { get => _colSpan; set { _colSpan = value; OnPropertyChanged(); } }
+    public int ColumnSpan { get => _colSpan; set { if (_colSpan == value) return; _colSpan = value; OnPropertyChanged(); } }
 
     private bool _isVisible = true;
-    public bool IsVisible { get => _isVisible; set { _isVisible = value; OnPropertyChanged(); } }
+    public bool IsVisible { get => _isVisible; set { if (_isVisible == value) return; _isVisible = value; OnPropertyChanged(); } }
 
     public virtual Task OnActivatedAsync() => Task.CompletedTask;
 

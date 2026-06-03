@@ -48,8 +48,8 @@ public sealed class DependencyInjection : EdgeProcessModuleBase<HomogenizationCe
 
     protected override ProcessUploadMode CloudUploadMode => ProcessUploadMode.Batch;
 
-    protected override MesUploadMode? MesUploadMode
-        => IIoT.Edge.Application.Abstractions.Modules.MesUploadMode.Single;
+    protected override ProcessUploadMode? MesUploadMode
+        => IIoT.Edge.Application.Abstractions.Modules.ProcessUploadMode.Single;
 
     protected override IStationRuntimeFactory CreateRuntimeFactory()
         => new HomogenizationStationRuntimeFactory();
@@ -77,6 +77,7 @@ public sealed class DependencyInjection : EdgeProcessModuleBase<HomogenizationCe
             sp.GetRequiredService<HomogenizationCloudUploader>());
         builder.Services.AddSingleton<IProcessCloudUploader>(sp =>
             sp.GetRequiredService<HomogenizationCloudUploader>());
+        builder.Services.AddSingleton<IHomogenizationMesItemPayloadBuilder, HomogenizationMesItemPayloadBuilder>();
         builder.Services.AddSingleton<HomogenizationMesChannel>();
         builder.Services.AddSingleton<HomogenizationMesScenarioChannel>(sp =>
             sp.GetRequiredService<HomogenizationMesChannel>());
@@ -100,5 +101,3 @@ public sealed class DependencyInjection : EdgeProcessModuleBase<HomogenizationCe
     protected override void RegisterModuleViews(IEdgeProcessModuleBuilder builder)
         => builder.RegisterHomogenizationViews();
 }
-
-

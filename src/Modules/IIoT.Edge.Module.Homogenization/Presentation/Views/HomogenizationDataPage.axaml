@@ -2,8 +2,7 @@
     x:Class="IIoT.Edge.Module.Homogenization.Presentation.Views.HomogenizationDataPage"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:dg="using:Avalonia.Controls"
-    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
+        xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
     <edge:EdgeTablePanel
         Margin="18,14,22,22"
         EmptyMessage="{Binding EmptyMessage}"
@@ -13,16 +12,11 @@
         ShowContentWhenEmpty="True"
         Title="{Binding ViewTitle}">
         <edge:EdgeTablePanel.StatusContent>
-            <Border
-                Padding="14,8"
-                Background="{DynamicResource Edge.Brush.Surface.Wash}"
-                CornerRadius="{DynamicResource Edge.CornerRadius.Control}">
+            <edge:EdgeNoticeBar Status="Info">
                 <TextBlock
-                    FontSize="{DynamicResource Edge.FontSize.Caption}"
-                    Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                    Text="{Binding StatusMessage}"
-                    TextWrapping="Wrap" />
-            </Border>
+                    Classes="edge-notice-message"
+                    Text="{Binding StatusMessage}" />
+            </edge:EdgeNoticeBar>
         </edge:EdgeTablePanel.StatusContent>
 
         <edge:EdgeDataGrid
@@ -34,116 +28,116 @@
                 MinHeight="520"
                 VerticalScrollBarVisibility="Auto">
                 <edge:EdgeDataGrid.Columns>
-                    <dg:DataGridTextColumn Width="150" MinWidth="150" Binding="{Binding TrayCode}">
-                        <dg:DataGridTextColumn.Header>
+                    <edge:EdgeTextColumn Width="150" MinWidth="150" Binding="{Binding TrayCode}">
+                        <edge:EdgeTextColumn.Header>
                             <TextBlock Text="{Binding DataContext.TrayCodeHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                        </dg:DataGridTextColumn.Header>
-                    </dg:DataGridTextColumn>
-                    <dg:DataGridTextColumn Width="130" MinWidth="130" Binding="{Binding DeviceCode}">
-                        <dg:DataGridTextColumn.Header>
+                        </edge:EdgeTextColumn.Header>
+                    </edge:EdgeTextColumn>
+                    <edge:EdgeTextColumn Width="130" MinWidth="130" Binding="{Binding DeviceCode}">
+                        <edge:EdgeTextColumn.Header>
                             <TextBlock Text="{Binding DataContext.DeviceCodeHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                        </dg:DataGridTextColumn.Header>
-                    </dg:DataGridTextColumn>
-                    <dg:DataGridTextColumn Width="150" MinWidth="150" Binding="{Binding DeviceName}">
-                        <dg:DataGridTextColumn.Header>
+                        </edge:EdgeTextColumn.Header>
+                    </edge:EdgeTextColumn>
+                    <edge:EdgeTextColumn Width="150" MinWidth="150" Binding="{Binding DeviceName}">
+                        <edge:EdgeTextColumn.Header>
                             <TextBlock Text="{Binding DataContext.DeviceNameHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                        </dg:DataGridTextColumn.Header>
-                    </dg:DataGridTextColumn>
-                    <dg:DataGridTextColumn Width="170" MinWidth="170" Binding="{Binding InboundTime}">
-                        <dg:DataGridTextColumn.Header>
+                        </edge:EdgeTextColumn.Header>
+                    </edge:EdgeTextColumn>
+                    <edge:EdgeTextColumn Width="170" MinWidth="170" Binding="{Binding InboundTime}">
+                        <edge:EdgeTextColumn.Header>
                             <TextBlock Text="{Binding DataContext.InboundTimeHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                        </dg:DataGridTextColumn.Header>
-                    </dg:DataGridTextColumn>
-                    <dg:DataGridTextColumn Width="170" MinWidth="170" Binding="{Binding OutboundTime}">
-                        <dg:DataGridTextColumn.Header>
+                        </edge:EdgeTextColumn.Header>
+                    </edge:EdgeTextColumn>
+                    <edge:EdgeTextColumn Width="170" MinWidth="170" Binding="{Binding OutboundTime}">
+                        <edge:EdgeTextColumn.Header>
                             <TextBlock Text="{Binding DataContext.OutboundTimeHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                        </dg:DataGridTextColumn.Header>
-                    </dg:DataGridTextColumn>
-                    <dg:DataGridTextColumn Width="130" MinWidth="130" Binding="{Binding Status}">
-                        <dg:DataGridTextColumn.Header>
+                        </edge:EdgeTextColumn.Header>
+                    </edge:EdgeTextColumn>
+                    <edge:EdgeTextColumn Width="130" MinWidth="130" Binding="{Binding Status}">
+                        <edge:EdgeTextColumn.Header>
                             <TextBlock Text="{Binding DataContext.StatusHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                        </dg:DataGridTextColumn.Header>
-                    </dg:DataGridTextColumn>
-                    <dg:DataGridTextColumn Width="120" MinWidth="120" Binding="{Binding StirringSpeed}">
-                        <dg:DataGridTextColumn.Header>
+                        </edge:EdgeTextColumn.Header>
+                    </edge:EdgeTextColumn>
+                    <edge:EdgeTextColumn Width="120" MinWidth="120" Binding="{Binding StirringSpeed}">
+                        <edge:EdgeTextColumn.Header>
                             <TextBlock Text="{Binding DataContext.StirringSpeedHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                        </dg:DataGridTextColumn.Header>
-                    </dg:DataGridTextColumn>
-                    <dg:DataGridTextColumn Width="110" MinWidth="110" Binding="{Binding Temperature}">
-                        <dg:DataGridTextColumn.Header>
+                        </edge:EdgeTextColumn.Header>
+                    </edge:EdgeTextColumn>
+                    <edge:EdgeTextColumn Width="110" MinWidth="110" Binding="{Binding Temperature}">
+                        <edge:EdgeTextColumn.Header>
                             <TextBlock Text="{Binding DataContext.TemperatureHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                        </dg:DataGridTextColumn.Header>
-                    </dg:DataGridTextColumn>
-                    <dg:DataGridTextColumn Width="115" MinWidth="115" Binding="{Binding Vacuum}">
-                        <dg:DataGridTextColumn.Header>
+                        </edge:EdgeTextColumn.Header>
+                    </edge:EdgeTextColumn>
+                    <edge:EdgeTextColumn Width="115" MinWidth="115" Binding="{Binding Vacuum}">
+                        <edge:EdgeTextColumn.Header>
                             <TextBlock Text="{Binding DataContext.VacuumHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                        </dg:DataGridTextColumn.Header>
-                    </dg:DataGridTextColumn>
-                    <dg:DataGridTextColumn Width="120" MinWidth="120" Binding="{Binding CntActual}">
-                        <dg:DataGridTextColumn.Header>
+                        </edge:EdgeTextColumn.Header>
+                    </edge:EdgeTextColumn>
+                    <edge:EdgeTextColumn Width="120" MinWidth="120" Binding="{Binding CntActual}">
+                        <edge:EdgeTextColumn.Header>
                             <TextBlock Text="{Binding DataContext.CntActualHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                        </dg:DataGridTextColumn.Header>
-                    </dg:DataGridTextColumn>
-                    <dg:DataGridTextColumn Width="120" MinWidth="120" Binding="{Binding CntTarget}">
-                        <dg:DataGridTextColumn.Header>
+                        </edge:EdgeTextColumn.Header>
+                    </edge:EdgeTextColumn>
+                    <edge:EdgeTextColumn Width="120" MinWidth="120" Binding="{Binding CntTarget}">
+                        <edge:EdgeTextColumn.Header>
                             <TextBlock Text="{Binding DataContext.CntTargetHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                        </dg:DataGridTextColumn.Header>
-                    </dg:DataGridTextColumn>
-                    <dg:DataGridTextColumn Width="135" MinWidth="135" Binding="{Binding CntTankAWeight}">
-                        <dg:DataGridTextColumn.Header>
+                        </edge:EdgeTextColumn.Header>
+                    </edge:EdgeTextColumn>
+                    <edge:EdgeTextColumn Width="135" MinWidth="135" Binding="{Binding CntTankAWeight}">
+                        <edge:EdgeTextColumn.Header>
                             <TextBlock Text="{Binding DataContext.CntTankAWeightHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                        </dg:DataGridTextColumn.Header>
-                    </dg:DataGridTextColumn>
-                    <dg:DataGridTextColumn Width="135" MinWidth="135" Binding="{Binding CntTankBWeight}">
-                        <dg:DataGridTextColumn.Header>
+                        </edge:EdgeTextColumn.Header>
+                    </edge:EdgeTextColumn>
+                    <edge:EdgeTextColumn Width="135" MinWidth="135" Binding="{Binding CntTankBWeight}">
+                        <edge:EdgeTextColumn.Header>
                             <TextBlock Text="{Binding DataContext.CntTankBWeightHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                        </dg:DataGridTextColumn.Header>
-                    </dg:DataGridTextColumn>
-                    <dg:DataGridTextColumn Width="120" MinWidth="120" Binding="{Binding NmpActual}">
-                        <dg:DataGridTextColumn.Header>
+                        </edge:EdgeTextColumn.Header>
+                    </edge:EdgeTextColumn>
+                    <edge:EdgeTextColumn Width="120" MinWidth="120" Binding="{Binding NmpActual}">
+                        <edge:EdgeTextColumn.Header>
                             <TextBlock Text="{Binding DataContext.NmpActualHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                        </dg:DataGridTextColumn.Header>
-                    </dg:DataGridTextColumn>
-                    <dg:DataGridTextColumn Width="120" MinWidth="120" Binding="{Binding NmpTarget}">
-                        <dg:DataGridTextColumn.Header>
+                        </edge:EdgeTextColumn.Header>
+                    </edge:EdgeTextColumn>
+                    <edge:EdgeTextColumn Width="120" MinWidth="120" Binding="{Binding NmpTarget}">
+                        <edge:EdgeTextColumn.Header>
                             <TextBlock Text="{Binding DataContext.NmpTargetHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                        </dg:DataGridTextColumn.Header>
-                    </dg:DataGridTextColumn>
-                    <dg:DataGridTextColumn Width="125" MinWidth="125" Binding="{Binding GlueActual}">
-                        <dg:DataGridTextColumn.Header>
+                        </edge:EdgeTextColumn.Header>
+                    </edge:EdgeTextColumn>
+                    <edge:EdgeTextColumn Width="125" MinWidth="125" Binding="{Binding GlueActual}">
+                        <edge:EdgeTextColumn.Header>
                             <TextBlock Text="{Binding DataContext.GlueActualHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                        </dg:DataGridTextColumn.Header>
-                    </dg:DataGridTextColumn>
-                    <dg:DataGridTextColumn Width="135" MinWidth="135" Binding="{Binding SetStirringTime}">
-                        <dg:DataGridTextColumn.Header>
+                        </edge:EdgeTextColumn.Header>
+                    </edge:EdgeTextColumn>
+                    <edge:EdgeTextColumn Width="135" MinWidth="135" Binding="{Binding SetStirringTime}">
+                        <edge:EdgeTextColumn.Header>
                             <TextBlock Text="{Binding DataContext.SetStirringTimeHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                        </dg:DataGridTextColumn.Header>
-                    </dg:DataGridTextColumn>
-                    <dg:DataGridTextColumn Width="135" MinWidth="135" Binding="{Binding RemainingStirringTime}">
-                        <dg:DataGridTextColumn.Header>
+                        </edge:EdgeTextColumn.Header>
+                    </edge:EdgeTextColumn>
+                    <edge:EdgeTextColumn Width="135" MinWidth="135" Binding="{Binding RemainingStirringTime}">
+                        <edge:EdgeTextColumn.Header>
                             <TextBlock Text="{Binding DataContext.RemainingStirringTimeHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                        </dg:DataGridTextColumn.Header>
-                    </dg:DataGridTextColumn>
-                    <dg:DataGridTextColumn Width="135" MinWidth="135" Binding="{Binding SetDispersionTime}">
-                        <dg:DataGridTextColumn.Header>
+                        </edge:EdgeTextColumn.Header>
+                    </edge:EdgeTextColumn>
+                    <edge:EdgeTextColumn Width="135" MinWidth="135" Binding="{Binding SetDispersionTime}">
+                        <edge:EdgeTextColumn.Header>
                             <TextBlock Text="{Binding DataContext.SetDispersionTimeHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                        </dg:DataGridTextColumn.Header>
-                    </dg:DataGridTextColumn>
-                    <dg:DataGridTextColumn Width="135" MinWidth="135" Binding="{Binding RemainingDispersionTime}">
-                        <dg:DataGridTextColumn.Header>
+                        </edge:EdgeTextColumn.Header>
+                    </edge:EdgeTextColumn>
+                    <edge:EdgeTextColumn Width="135" MinWidth="135" Binding="{Binding RemainingDispersionTime}">
+                        <edge:EdgeTextColumn.Header>
                             <TextBlock Text="{Binding DataContext.RemainingDispersionTimeHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                        </dg:DataGridTextColumn.Header>
-                    </dg:DataGridTextColumn>
-                    <dg:DataGridTextColumn Width="150" MinWidth="150" Binding="{Binding MainBatchPlan}">
-                        <dg:DataGridTextColumn.Header>
+                        </edge:EdgeTextColumn.Header>
+                    </edge:EdgeTextColumn>
+                    <edge:EdgeTextColumn Width="150" MinWidth="150" Binding="{Binding MainBatchPlan}">
+                        <edge:EdgeTextColumn.Header>
                             <TextBlock Text="{Binding DataContext.MainBatchPlanHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                        </dg:DataGridTextColumn.Header>
-                    </dg:DataGridTextColumn>
-                    <dg:DataGridTextColumn Width="150" MinWidth="150" Binding="{Binding BatchNumber}">
-                        <dg:DataGridTextColumn.Header>
+                        </edge:EdgeTextColumn.Header>
+                    </edge:EdgeTextColumn>
+                    <edge:EdgeTextColumn Width="150" MinWidth="150" Binding="{Binding BatchNumber}">
+                        <edge:EdgeTextColumn.Header>
                             <TextBlock Text="{Binding DataContext.BatchNumberHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                        </dg:DataGridTextColumn.Header>
-                    </dg:DataGridTextColumn>
+                        </edge:EdgeTextColumn.Header>
+                    </edge:EdgeTextColumn>
                 </edge:EdgeDataGrid.Columns>
         </edge:EdgeDataGrid>
     </edge:EdgeTablePanel>

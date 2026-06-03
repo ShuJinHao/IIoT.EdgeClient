@@ -6,7 +6,7 @@
     HorizontalAlignment="Stretch">
     <Border
         x:Name="HeaderDragSurface"
-        Background="Transparent"
+        Classes="shell-header-drag-surface"
         HorizontalAlignment="Stretch"
         PointerPressed="OnHeaderPointerPressed">
         <Grid
@@ -27,31 +27,30 @@
                     <edge:EdgeHeaderDivider />
 
                     <edge:EdgeAccountChip
-                        Classes="one-line"
-                        MinWidth="128"
-                        MaxWidth="210"
-                        Margin="8,0,0,0"
+                        Classes="one-line shell-header-account"
                         Click="OnAccountChipClick"
                         DisplayName="{Binding OperatorName}" />
                 </StackPanel>
 
                 <StackPanel
                     Grid.Column="2"
-                    Height="40"
+                    Classes="shell-header-window-actions"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
-                    Orientation="Horizontal"
-                    Spacing="6">
+                    Orientation="Horizontal">
                     <edge:EdgeWindowButton
                         Action="Minimize"
+                        Classes="shell-header-button"
                         Click="OnMinimizeClick"
                         ToolTip.Tip="{DynamicResource Shell_Window_Minimize}" />
                     <edge:EdgeWindowButton
                         Action="MaximizeRestore"
+                        Classes="shell-header-button"
                         Click="OnMaximizeRestoreClick"
                         ToolTip.Tip="{DynamicResource Shell_Window_MaximizeRestore}" />
                     <edge:EdgeWindowButton
                         Action="Close"
+                        Classes="shell-header-button"
                         Click="OnCloseClick"
                         ToolTip.Tip="{DynamicResource Shell_Window_Close}" />
                 </StackPanel>

@@ -1,23 +1,22 @@
 namespace IIoT.Edge.Application.Abstractions.Modules;
 
-public sealed record CloudUploaderRegistration(string ProcessType, ProcessUploadMode UploadMode);
-public sealed record MesUploaderRegistration(string ProcessType, MesUploadMode UploadMode);
+public sealed record ProcessUploaderRegistration(string ProcessType, ProcessUploadMode UploadMode);
 
 public interface IProcessIntegrationRegistry
 {
     void RegisterCloudUploader(string processType, ProcessUploadMode uploadMode);
 
-    void RegisterMesUploader(string processType, MesUploadMode uploadMode);
+    void RegisterMesUploader(string processType, ProcessUploadMode uploadMode);
 
     bool HasCloudUploader(string processType);
 
     bool HasMesUploader(string processType);
 
-    bool TryGetCloudUploader(string processType, out CloudUploaderRegistration registration);
+    bool TryGetCloudUploader(string processType, out ProcessUploaderRegistration registration);
 
-    bool TryGetMesUploader(string processType, out MesUploaderRegistration registration);
+    bool TryGetMesUploader(string processType, out ProcessUploaderRegistration registration);
 
-    IReadOnlyDictionary<string, CloudUploaderRegistration> GetCloudUploaders();
+    IReadOnlyDictionary<string, ProcessUploaderRegistration> GetCloudUploaders();
 
-    IReadOnlyDictionary<string, MesUploaderRegistration> GetMesUploaders();
+    IReadOnlyDictionary<string, ProcessUploaderRegistration> GetMesUploaders();
 }

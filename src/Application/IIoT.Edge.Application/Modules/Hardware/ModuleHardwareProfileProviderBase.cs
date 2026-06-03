@@ -64,8 +64,7 @@ public abstract class ModulePlcSignalProfileBase<TSignalKey> : IModulePlcSignalP
         int sortOrder,
         string displayName,
         string category,
-        string businessGroup,
-        string signalName)
+        string businessGroup)
         => new(
             key,
             signalKey,
@@ -76,8 +75,7 @@ public abstract class ModulePlcSignalProfileBase<TSignalKey> : IModulePlcSignalP
             direction,
             sortOrder,
             category,
-            businessGroup,
-            signalName);
+            businessGroup);
 
     private IReadOnlyList<ModuleSignalDefinition<TSignalKey>> BuildAllSignals()
     {
@@ -195,6 +193,5 @@ public abstract class ModuleHardwareProfileProviderBase<TSignalKey> : IModuleHar
             signal.SortOrder,
             CreateTemplateRemark(signal),
             signal.Category,
-            signal.BusinessGroup,
-            signal.SignalName);
+            signal.BusinessGroup);
 }

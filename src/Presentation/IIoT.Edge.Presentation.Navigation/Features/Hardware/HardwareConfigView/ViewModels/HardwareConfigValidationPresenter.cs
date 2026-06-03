@@ -1,5 +1,5 @@
 using IIoT.Edge.Application.Common.Crud;
-using IIoT.Edge.Application.Features.Hardware.HardwareConfigView.Models;
+using IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView.Models;
 using IIoT.Edge.Application.Features.Hardware.IoMappings;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView;
@@ -25,18 +25,26 @@ public interface IHardwareConfigValidationPresenter
 
 public sealed class HardwareConfigValidationPresenter : IHardwareConfigValidationPresenter
 {
+    private readonly IEditorValidator<NetworkDeviceVm> _networkDeviceValidator;
+    private readonly IEditorValidator<SerialDeviceVm> _serialDeviceValidator;
+    private readonly IEditorValidator<IoMappingVm> _ioMappingValidator;
+
+    public HardwareConfigValidationPresenter(
+        IEditorValidator<NetworkDeviceVm> networkDeviceValidator,
+        IEditorValidator<SerialDeviceVm> serialDeviceValidator,
+        IEditorValidator<IoMappingVm> ioMappingValidator)
+    {
+        _networkDeviceValidator = networkDeviceValidator;
+        _serialDeviceValidator = serialDeviceValidator;
+        _ioMappingValidator = ioMappingValidator;
+    }
+
     public async Task<IReadOnlyCollection<ValidationIssue>> ValidateSaveAsync(HardwareConfigViewModel viewModel)
     {
         var issues = new List<ValidationIssue>();
-        issues.AddRange(await ValidateItemsAsync(
-            viewModel.NetworkDevices,
-            new NetworkDeviceValidator(viewModel.GetText, viewModel.FormatText)));
-        issues.AddRange(await ValidateItemsAsync(
-            viewModel.SerialDevices,
-            new SerialDeviceValidator(viewModel.GetText, viewModel.FormatText)));
-        issues.AddRange(await ValidateItemsAsync(
-            viewModel.IoMappings,
-            new IoMappingValidator(viewModel.GetText, viewModel.FormatText)));
+        issues.AddRange(await ValidateItemsAsync(viewModel.NetworkDevices, _networkDeviceValidator));
+        issues.AddRange(await ValidateItemsAsync(viewModel.SerialDevices, _serialDeviceValidator));
+        issues.AddRange(await ValidateItemsAsync(viewModel.IoMappings, _ioMappingValidator));
         issues.AddRange(ValidateInteractionPairs(viewModel.IoMappings));
 
         return issues;
@@ -60,87 +68,57 @@ public sealed class HardwareConfigValidationPresenter : IHardwareConfigValidatio
 
     public string? ValidateDraft(HardwareConfigViewModel viewModel, IoMappingDraftVm draft)
     {
-        if (!IoMappingOptionCatalog.IsKnownPointSource(draft.Source))
+        if (viewModel.SelectedStandardIoSignal is null)
         {
-            return viewModel.GetText("Navigation_Hardware_Validation_IoSourceRequired", "请选择点位来源。");
+            return viewModel.GetText("Navigation_Hardware_Validation_NoEnumSignalForCategory", "当前分类暂无插件枚举信号。");
         }
 
-        if (draft.IsStandardSource)
+        var draftCategory = IoMappingOptionCatalog.NormalizeCategory(draft.Category, draft.AddressCount);
+        var standardCategory = IoMappingOptionCatalog.NormalizeCategory(
+            viewModel.SelectedStandardIoSignal.Category,
+            viewModel.SelectedStandardIoSignal.AddressCount);
+
+        if (!IoMappingOptionCatalog.IsDataPointCategory(draftCategory))
         {
-            if (viewModel.SelectedStandardIoSignal is null)
-            {
-                return viewModel.GetText("Navigation_Hardware_Validation_NoEnumSignalForCategory", "当前分类暂无插件枚举信号。");
-            }
-
-            var draftCategory = IoMappingOptionCatalog.NormalizeCategory(draft.Category, draft.AddressCount);
-            var standardCategory = IoMappingOptionCatalog.NormalizeCategory(
-                viewModel.SelectedStandardIoSignal.Category,
-                viewModel.SelectedStandardIoSignal.AddressCount);
-
-            if (!IoMappingOptionCatalog.IsDataPointCategory(draftCategory))
-            {
-                return viewModel.GetText("Navigation_Hardware_Validation_DataPointOnly", "新增数据点不能选择信号交互点位。");
-            }
-
-            if (!string.Equals(draftCategory, standardCategory, StringComparison.OrdinalIgnoreCase))
-            {
-                return viewModel.GetText("Navigation_Hardware_Validation_DataCategoryMismatch", "请选择当前 IO 分类下的插件标准数据点。");
-            }
-
-            if (viewModel.IoMappings.Any(x => string.Equals(
-                    x.SignalKey,
-                    viewModel.SelectedStandardIoSignal.SignalKey,
-                    StringComparison.OrdinalIgnoreCase)
-                && string.Equals(x.Direction, IoMappingOptionCatalog.GetDirectionForCategory(draftCategory), StringComparison.OrdinalIgnoreCase)))
-            {
-                return viewModel.GetText("Navigation_Hardware_Validation_StandardSignalExists", "该插件标准信号已存在，不能重复添加。");
-            }
-
-            if (string.IsNullOrWhiteSpace(draft.PlcAddress))
-            {
-                return viewModel.GetText("Navigation_Hardware_Validation_IoAddressRequired", "PLC 地址不能为空。");
-            }
-
-            if (IoMappingOptionCatalog.IsFixedAddressCountCategory(draftCategory) && draft.AddressCount != 1)
-            {
-                return viewModel.GetText("Navigation_Hardware_Validation_FixedCountMustBeOne", "信号交互、单点读数据和单点写数据的数量必须为 1。");
-            }
-
-            if (draft.AddressCount <= 0)
-            {
-                return viewModel.GetText("Navigation_Hardware_Validation_IoAddressCountPositive", "地址数量必须大于 0。");
-            }
-
-            if (!IoMappingOptionCatalog.IsKnownDataType(draft.DataType))
-            {
-                return viewModel.GetText("Navigation_Hardware_Validation_IoDataTypeRequired", "请选择 IO 数据类型。");
-            }
-
-            if (string.IsNullOrWhiteSpace(draft.SignalName))
-            {
-                return viewModel.GetText("Navigation_Hardware_Validation_IoSignalNameRequired", "信号名称不能为空。");
-            }
-
-            return null;
+            return viewModel.GetText("Navigation_Hardware_Validation_DataPointOnly", "新增数据点不能选择信号交互点位。");
         }
 
-        return viewModel.GetText("Navigation_Hardware_Validation_DataPointOnly", "新增数据点只能选择插件枚举定义的单点读数据、连续读数据、单点写数据或连续写数据。");
+        if (!string.Equals(draftCategory, standardCategory, StringComparison.OrdinalIgnoreCase))
+        {
+            return viewModel.GetText("Navigation_Hardware_Validation_DataCategoryMismatch", "请选择当前 IO 分类下的插件标准数据点。");
+        }
+
+        if (viewModel.IoMappings.Any(x => string.Equals(
+                x.SignalKey,
+                viewModel.SelectedStandardIoSignal.SignalKey,
+                StringComparison.OrdinalIgnoreCase)
+            && string.Equals(x.Direction, IoMappingOptionCatalog.GetDirectionForCategory(draftCategory), StringComparison.OrdinalIgnoreCase)))
+        {
+            return viewModel.GetText("Navigation_Hardware_Validation_StandardSignalExists", "该插件标准信号已存在，不能重复添加。");
+        }
+
+        if (string.IsNullOrWhiteSpace(draft.PlcAddress))
+        {
+            return viewModel.GetText("Navigation_Hardware_Validation_IoAddressRequired", "PLC 地址不能为空。");
+        }
+
+        if (draft.AddressCount <= 0)
+        {
+            return viewModel.GetText("Navigation_Hardware_Validation_IoAddressCountPositive", "地址数量必须大于 0。");
+        }
+
+        if (!IoMappingOptionCatalog.IsKnownDataType(draft.DataType))
+        {
+            return viewModel.GetText("Navigation_Hardware_Validation_IoDataTypeRequired", "请选择 IO 数据类型。");
+        }
+
+        return null;
     }
 
     public string? ValidateInteractionPairDraft(
         HardwareConfigViewModel viewModel,
         IoInteractionPairDraftVm draft)
     {
-        if (!IoMappingOptionCatalog.IsKnownPointSource(draft.Source))
-        {
-            return viewModel.GetText("Navigation_Hardware_Validation_IoSourceRequired", "请选择点位来源。");
-        }
-
-        if (!draft.IsStandardSource)
-        {
-            return viewModel.GetText("Navigation_Hardware_Validation_InteractionGroupRequired", "信号交互只能选择插件定义的标准业务动作。");
-        }
-
         if (viewModel.SelectedStandardInteractionGroup is null)
         {
             return viewModel.GetText("Navigation_Hardware_Validation_InteractionGroupRequired", "请选择插件标准信号交互组。");
@@ -161,20 +139,10 @@ public sealed class HardwareConfigValidationPresenter : IHardwareConfigValidatio
             return viewModel.GetText("Navigation_Hardware_Validation_IoAddressCountPositive", "地址数量必须大于 0。");
         }
 
-        if (draft.ReadAddressCount != 1 || draft.WriteAddressCount != 1)
-        {
-            return viewModel.GetText("Navigation_Hardware_Validation_InteractionCountMustBeOne", "信号交互读点和写点数量必须固定为 1。");
-        }
-
         if (!IoMappingOptionCatalog.IsKnownDataType(draft.ReadDataType)
             || !IoMappingOptionCatalog.IsKnownDataType(draft.WriteDataType))
         {
             return viewModel.GetText("Navigation_Hardware_Validation_IoDataTypeRequired", "请选择 IO 数据类型。");
-        }
-
-        if (string.IsNullOrWhiteSpace(draft.ReadSignalName) || string.IsNullOrWhiteSpace(draft.WriteSignalName))
-        {
-            return viewModel.GetText("Navigation_Hardware_Validation_IoSignalNameRequired", "信号名称不能为空。");
         }
 
         return null;
@@ -188,11 +156,6 @@ public sealed class HardwareConfigValidationPresenter : IHardwareConfigValidatio
 
     public string CreateInteractionGroupKey(IoMappingVm mapping)
     {
-        if (IsStandardInteractionSignalKey(mapping.SignalKey))
-        {
-            return $"SIGNAL:{mapping.SignalKey.Trim()}";
-        }
-
         if (!string.IsNullOrWhiteSpace(mapping.BusinessGroup))
         {
             return $"GROUP:{mapping.BusinessGroup.Trim()}";
@@ -242,9 +205,6 @@ public sealed class HardwareConfigValidationPresenter : IHardwareConfigValidatio
 
         return issues;
     }
-
-    private static bool IsStandardInteractionSignalKey(string? signalKey)
-        => signalKey?.StartsWith("Homogenization.Interaction.", StringComparison.OrdinalIgnoreCase) ?? false;
 
     private static string CreateInteractionDisplayName(IoMappingVm mapping)
     {

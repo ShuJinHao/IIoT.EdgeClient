@@ -1,0 +1,730 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
+        xmlns:views="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared">
+
+    <Style Selector="controls|EdgeHeaderBrand">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <StackPanel
+                    Margin="28,0,0,0"
+                    VerticalAlignment="Center"
+                    Orientation="Horizontal"
+                    Spacing="{DynamicResource Edge.Size.Spacing10}">
+                    <Border
+                        Width="{DynamicResource Edge.Size.HeaderBrandMark}"
+                        Height="{DynamicResource Edge.Size.HeaderBrandMark}"
+                        Background="{DynamicResource Edge.Brush.Header.BrandBackground}"
+                        CornerRadius="{DynamicResource Edge.CornerRadius.Control}">
+                        <PathIcon
+                            Width="18"
+                            Height="18"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Data="{StaticResource Edge.Icon.BrandMark}"
+                            Foreground="{DynamicResource Edge.Brush.Text.Primary}" />
+                    </Border>
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        FontSize="{DynamicResource Edge.FontSize.Section}"
+                        FontWeight="SemiBold"
+                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                        Text="{TemplateBinding Title}" />
+                </StackPanel>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="controls|EdgeHeaderDivider">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border
+                    Width="1"
+                    Height="{DynamicResource Edge.Size.HeaderDividerHeight}"
+                    VerticalAlignment="Center"
+                    Background="{DynamicResource Edge.Brush.Header.Divider}" />
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="Border.shell-header-drag-surface">
+        <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="controls|EdgeAccountChip">
+        <Setter Property="MinWidth" Value="112" />
+        <Setter Property="Height" Value="38" />
+        <Setter Property="Padding" Value="7,0,10,0" />
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Header.ChipBackground}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Edge.Brush.Header.ChipBorder}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Pill}" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border
+                    Padding="{TemplateBinding Padding}"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="{TemplateBinding CornerRadius}">
+                    <StackPanel
+                        VerticalAlignment="Center"
+                        Orientation="Horizontal"
+                        Spacing="{DynamicResource Edge.Size.Spacing8}">
+                        <Border
+                            Width="24"
+                            Height="24"
+                            VerticalAlignment="Center"
+                            Background="{DynamicResource Edge.Brush.Header.AvatarBackground}"
+                            CornerRadius="{DynamicResource Edge.CornerRadius.Circle}">
+                            <PathIcon
+                                Width="13"
+                                Height="13"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Data="{StaticResource Edge.Icon.User}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Primary}" />
+                        </Border>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock
+                                FontSize="{DynamicResource Edge.FontSize.Body}"
+                                FontWeight="SemiBold"
+                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                Text="{TemplateBinding DisplayName}"
+                                TextTrimming="CharacterEllipsis" />
+                            <TextBlock
+                                FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                Text="{TemplateBinding Subtitle}"
+                                TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="controls|EdgeAccountChip:pointerover">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Header.ChipHover}" />
+    </Style>
+
+    <Style Selector="controls|EdgeAccountChip.one-line">
+        <Setter Property="MinWidth" Value="124" />
+        <Setter Property="Height" Value="44" />
+        <Setter Property="Padding" Value="7,0,12,0" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border
+                    Padding="{TemplateBinding Padding}"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="{TemplateBinding CornerRadius}">
+                    <Grid
+                        VerticalAlignment="Center"
+                        ColumnDefinitions="24,*">
+                        <Border
+                            Width="24"
+                            Height="24"
+                            VerticalAlignment="Center"
+                            Background="{DynamicResource Edge.Brush.Header.AvatarBackground}"
+                            CornerRadius="{DynamicResource Edge.CornerRadius.Circle}">
+                            <PathIcon
+                                Width="13"
+                                Height="13"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Data="{StaticResource Edge.Icon.User}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Primary}" />
+                        </Border>
+                        <TextBlock
+                            Grid.Column="1"
+                            Margin="8,0,0,0"
+                            VerticalAlignment="Center"
+                            FontSize="{DynamicResource Edge.FontSize.Body}"
+                            FontWeight="SemiBold"
+                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                            Text="{TemplateBinding DisplayName}"
+                            TextTrimming="CharacterEllipsis" />
+                    </Grid>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="controls|EdgeAccountChip.one-line.shell-header-account">
+        <Setter Property="MinWidth" Value="124" />
+        <Setter Property="MaxWidth" Value="196" />
+        <Setter Property="Height" Value="36" />
+        <Setter Property="Margin" Value="8,0,0,0" />
+        <Setter Property="Padding" Value="6,0,12,0" />
+    </Style>
+
+    <Style Selector="controls|EdgeWindowButton.shell-header-button">
+        <Setter Property="Width" Value="38" />
+        <Setter Property="Height" Value="38" />
+        <Setter Property="FontSize" Value="18" />
+    </Style>
+
+    <Style Selector="controls|EdgeWindowButton.shell-login-close">
+        <Setter Property="Width" Value="34" />
+        <Setter Property="Height" Value="34" />
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Surface.Wash}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Edge.Brush.Border.Subtle}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Secondary}" />
+    </Style>
+
+    <Style Selector="controls|EdgeWindowButton.shell-login-close:pointerover">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Header.ChipHover}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Primary}" />
+    </Style>
+
+    <Style Selector="controls|EdgeDialogChrome.shell-login-dialog">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <controls:EdgeCard
+                    Classes="shell-login-dialog-card"
+                    ClipToBounds="True"
+                    Elevation="Float"
+                    PaddingMode="None"
+                    Surface="Card">
+                    <Grid RowDefinitions="60,*,Auto">
+                        <Grid
+                            x:Name="PART_Header"
+                            Grid.Row="0"
+                            Background="Transparent"
+                            ColumnDefinitions="*,Auto"
+                            Margin="26,0,16,0">
+                            <StackPanel
+                                Grid.Column="0"
+                                VerticalAlignment="Center"
+                                Orientation="Horizontal"
+                                Spacing="{DynamicResource Edge.Size.Spacing10}">
+                                <Ellipse
+                                    Width="10"
+                                    Height="10"
+                                    VerticalAlignment="Center"
+                                    Fill="{DynamicResource Edge.Brush.Accent.Primary}" />
+                                <StackPanel Spacing="2">
+                                    <TextBlock
+                                        FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                                        FontWeight="Bold"
+                                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                        Text="{TemplateBinding Title}" />
+                                    <TextBlock
+                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                        Text="{TemplateBinding Subtitle}" />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <StackPanel
+                                Grid.Column="1"
+                                VerticalAlignment="Center"
+                                Orientation="Horizontal"
+                                Spacing="{DynamicResource Edge.Size.Spacing8}">
+                                <ContentPresenter
+                                    VerticalAlignment="Center"
+                                    Content="{TemplateBinding HeaderActionContent}" />
+                                <controls:EdgeWindowButton
+                                    x:Name="PART_CloseButton"
+                                    Kind="Close">
+                                    <TextBlock Classes="edge-window-symbol" Text="&#x2715;" />
+                                </controls:EdgeWindowButton>
+                            </StackPanel>
+                        </Grid>
+
+                        <ContentPresenter
+                            Grid.Row="1"
+                            Margin="26,0,26,26"
+                            Content="{TemplateBinding Content}" />
+
+                        <ContentPresenter
+                            Grid.Row="2"
+                            Margin="26,0,26,26"
+                            HorizontalAlignment="Right"
+                            Content="{TemplateBinding FooterContent}"
+                            IsVisible="{Binding FooterContent, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                    </Grid>
+                </controls:EdgeCard>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="controls|EdgeCard.shell-login-dialog-card /template/ Border#PART_EdgeCardRoot">
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Stage}" />
+    </Style>
+
+    <Style Selector="controls|EdgeCard.shell-login-panel">
+        <Setter Property="Width" Value="480" />
+    </Style>
+
+    <Style Selector="controls|EdgeCard.shell-login-panel /template/ Border#PART_EdgeCardRoot">
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Edge.Brush.Header.ChipBorder}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Stage}" />
+    </Style>
+
+    <Style Selector="Grid.shell-login-overlay">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Overlay.Modal}" />
+    </Style>
+
+    <Style Selector="Grid.shell-login-header">
+        <Setter Property="Margin" Value="24,20,18,0" />
+    </Style>
+
+    <Style Selector="Grid.shell-login-body">
+        <Setter Property="Margin" Value="24,14,24,20" />
+    </Style>
+
+    <Style Selector="TextBlock.shell-login-title">
+        <Setter Property="FontSize" Value="22" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Primary}" />
+    </Style>
+
+    <Style Selector="TextBlock.shell-login-subtitle">
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Body}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Muted}" />
+    </Style>
+
+    <Style Selector="TextBlock.shell-login-form-label">
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Body}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Secondary}" />
+    </Style>
+
+    <Style Selector="TextBlock.shell-login-error">
+        <Setter Property="MinHeight" Value="18" />
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Caption}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Status.Error}" />
+    </Style>
+
+    <Style Selector="Border.shell-login-notice">
+        <Setter Property="MinHeight" Value="44" />
+        <Setter Property="Padding" Value="14,10" />
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Surface.Wash}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Edge.Brush.Border.Subtle}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Control}" />
+    </Style>
+
+    <Style Selector="TextBlock.shell-login-notice-text">
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Caption}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Secondary}" />
+    </Style>
+
+    <Style Selector="controls|EdgeSegmentedNav.shell-login-mode-nav">
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="Padding" Value="4" />
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Segmented.Background}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="ItemsPanel">
+            <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Edge.Size.Spacing8}" />
+            </ItemsPanelTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="controls|EdgeSegmentedNav.shell-login-mode-nav ListBoxItem">
+        <Setter Property="Width" Value="204" />
+        <Setter Property="MinWidth" Value="204" />
+        <Setter Property="MinHeight" Value="40" />
+        <Setter Property="Padding" Value="14,0" />
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Surface.Wash}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Primary}" />
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Body}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style Selector="controls|EdgeSegmentedNav.shell-login-mode-nav controls|EdgeSegmentedNavItem">
+        <Setter Property="Width" Value="204" />
+        <Setter Property="MinWidth" Value="204" />
+        <Setter Property="MinHeight" Value="40" />
+        <Setter Property="Padding" Value="14,0" />
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Surface.Wash}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Primary}" />
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Body}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style Selector="controls|EdgeSegmentedNav.shell-login-mode-nav ListBoxItem:selected">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Segmented.ItemSelected}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Segmented.ItemSelectedForeground}" />
+    </Style>
+
+    <Style Selector="controls|EdgeSegmentedNav.shell-login-mode-nav controls|EdgeSegmentedNavItem:selected">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Segmented.ItemSelected}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Segmented.ItemSelectedForeground}" />
+    </Style>
+
+    <Style Selector="StackPanel.shell-login-actions">
+        <Setter Property="HorizontalAlignment" Value="Right" />
+        <Setter Property="Orientation" Value="Horizontal" />
+        <Setter Property="Spacing" Value="{DynamicResource Edge.Size.Spacing8}" />
+    </Style>
+
+    <Style Selector="StackPanel.shell-header-window-actions">
+        <Setter Property="Height" Value="40" />
+        <Setter Property="Spacing" Value="6" />
+    </Style>
+
+    <Style Selector="FlyoutPresenter.shell-account-flyout">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="0" />
+        <Setter Property="Padding" Value="0" />
+    </Style>
+
+    <Style Selector="controls|EdgeCard.shell-account-menu">
+        <Setter Property="MinWidth" Value="184" />
+        <Setter Property="MaxWidth" Value="220" />
+    </Style>
+
+    <Style Selector="controls|EdgeCard.shell-account-menu /template/ Border#PART_EdgeCardRoot">
+        <Setter Property="Padding" Value="14,12" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Edge.Brush.Header.ChipBorder}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Card}" />
+    </Style>
+
+    <Style Selector="Border.shell-account-menu">
+        <Setter Property="MinWidth" Value="180" />
+        <Setter Property="Padding" Value="14" />
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Surface.Card}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Edge.Brush.Header.ChipBorder}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Card}" />
+        <Setter Property="BoxShadow" Value="{DynamicResource Edge.Shadow.Card}" />
+    </Style>
+
+    <Style Selector="StackPanel.shell-account-menu-panel">
+        <Setter Property="Spacing" Value="{DynamicResource Edge.Size.Spacing8}" />
+    </Style>
+
+    <Style Selector="TextBlock.shell-account-menu-title">
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.BodyStrong}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Primary}" />
+    </Style>
+
+    <Style Selector="TextBlock.shell-account-menu-subtitle">
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Caption}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Muted}" />
+    </Style>
+
+    <Style Selector="Button.shell-account-action">
+        <Setter Property="Height" Value="36" />
+        <Setter Property="Padding" Value="12,0" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Control}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Primary}" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+    </Style>
+
+    <Style Selector="Button.shell-account-action:pointerover">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Header.ChipHover}" />
+    </Style>
+
+    <Style Selector="controls|EdgeActionButton.shell-account-action.size-compact">
+        <Setter Property="MinHeight" Value="32" />
+        <Setter Property="MinWidth" Value="0" />
+        <Setter Property="Padding" Value="10,4" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Primary}" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+    </Style>
+
+    <Style Selector="controls|EdgeActionButton.shell-account-action.size-compact:pointerover">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Header.ChipHover}" />
+    </Style>
+
+    <Style Selector="Button.header-account">
+        <Setter Property="Padding" Value="{DynamicResource Edge.Thickness.Zero}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Control}" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Button.header-account:pointerover">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.WindowButton.Hover}" />
+    </Style>
+
+    <Style Selector="Button.header-window-btn">
+        <Setter Property="Width" Value="40" />
+        <Setter Property="Height" Value="40" />
+        <Setter Property="Padding" Value="{DynamicResource Edge.Thickness.Zero}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Control}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Secondary}" />
+    </Style>
+
+    <Style Selector="Button.header-window-btn:pointerover">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.WindowButton.Hover}" />
+    </Style>
+
+    <Style Selector="Button.header-window-btn-close">
+        <Setter Property="Width" Value="40" />
+        <Setter Property="Height" Value="40" />
+        <Setter Property="Padding" Value="{DynamicResource Edge.Thickness.Zero}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Control}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Secondary}" />
+    </Style>
+
+    <Style Selector="Button.header-window-btn-close:pointerover">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.WindowButton.CloseHover}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.WindowButton.CloseHoverForeground}" />
+    </Style>
+
+    <Style Selector="Button.edge-language-button">
+        <Setter Property="Width" Value="40" />
+        <Setter Property="Height" Value="32" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Language.Background}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Edge.Brush.Language.Border}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Pill}" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Button.edge-language-button:pointerover">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Language.Hover}" />
+    </Style>
+
+    <Style Selector="Path.edge-language-icon">
+        <Setter Property="Fill" Value="Transparent" />
+        <Setter Property="Stroke" Value="{DynamicResource Edge.Brush.Text.Secondary}" />
+        <Setter Property="StrokeThickness" Value="1.55" />
+        <Setter Property="StrokeLineCap" Value="Round" />
+        <Setter Property="StrokeJoin" Value="Round" />
+    </Style>
+
+    <Style Selector="controls|EdgeActionButton.shell-login-cancel.size-compact">
+        <Setter Property="MinWidth" Value="88" />
+        <Setter Property="MinHeight" Value="32" />
+        <Setter Property="Padding" Value="12,5" />
+        <Setter Property="IconSize" Value="14" />
+    </Style>
+
+    <Style Selector="controls|EdgeActionButton.shell-login-submit.size-compact">
+        <Setter Property="MinWidth" Value="104" />
+        <Setter Property="MinHeight" Value="32" />
+        <Setter Property="Padding" Value="14,5" />
+        <Setter Property="IconSize" Value="14" />
+    </Style>
+
+    <Style Selector="TextBox.edge-text-box.shell-login-input">
+        <Setter Property="MinHeight" Value="42" />
+        <Setter Property="Width" Value="340" />
+        <Setter Property="Padding" Value="12,0" />
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Body}" />
+    </Style>
+
+    <Style Selector="controls|EdgeCard.launcher-hero-card">
+        <Setter Property="ClipToBounds" Value="True" />
+        <Setter Property="Elevation" Value="Card" />
+        <Setter Property="Surface" Value="Card" />
+    </Style>
+
+    <Style Selector="controls|EdgeCard.launcher-hero-card /template/ Border#PART_EdgeCardRoot">
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Stage}" />
+        <Setter Property="Padding" Value="{DynamicResource Edge.Thickness.Zero}" />
+    </Style>
+
+    <Style Selector="Border.launcher-hero-background">
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Stage}" />
+        <Setter Property="Background">
+            <Setter.Value>
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                    <GradientStop Color="{StaticResource Edge.Color.Ivory50}" Offset="0" />
+                    <GradientStop Color="{StaticResource Edge.Color.CardWarm}" Offset="0.48" />
+                    <GradientStop Color="{StaticResource Edge.Color.WashWarm}" Offset="1" />
+                </LinearGradientBrush>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style Selector="Grid.launcher-hero-shell">
+        <Setter Property="Margin" Value="32,24" />
+        <Setter Property="MinWidth" Value="560" />
+        <Setter Property="MaxWidth" Value="720" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="RowSpacing" Value="16" />
+    </Style>
+
+    <Style Selector="StackPanel.launcher-hero-top">
+        <Setter Property="Spacing" Value="12" />
+    </Style>
+
+    <Style Selector="Border.launcher-hero-icon-frame">
+        <Setter Property="Width" Value="58" />
+        <Setter Property="Height" Value="58" />
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Accent.Primary}" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Large}" />
+    </Style>
+
+    <Style Selector="PathIcon.launcher-hero-icon">
+        <Setter Property="Width" Value="32" />
+        <Setter Property="Height" Value="32" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.OnAccent}" />
+    </Style>
+
+    <Style Selector="controls|EdgeCard.launcher-info-tile">
+        <Setter Property="MinWidth" Value="168" />
+        <Setter Property="MinHeight" Value="64" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="Elevation" Value="Card" />
+        <Setter Property="Surface" Value="Raised" />
+    </Style>
+
+    <Style Selector="controls|EdgeCard.launcher-info-tile /template/ Border#PART_EdgeCardRoot">
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Card}" />
+        <Setter Property="Padding" Value="12,8" />
+    </Style>
+
+    <Style Selector="controls|EdgeCard.launcher-info-tile.launcher-version-tile">
+        <Setter Property="MinWidth" Value="180" />
+    </Style>
+
+    <Style Selector="StackPanel.launcher-info-tile-content">
+        <Setter Property="Spacing" Value="{DynamicResource Edge.Size.Spacing4}" />
+    </Style>
+
+    <Style Selector="TextBlock.launcher-info-tile-label">
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Caption}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Accent.Primary}" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <Style Selector="TextBlock.launcher-info-tile-value">
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Body}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Primary}" />
+        <Setter Property="MaxLines" Value="2" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style Selector="StackPanel.launcher-hero-main">
+        <Setter Property="Spacing" Value="14" />
+    </Style>
+
+    <Style Selector="TextBlock.launcher-hero-title">
+        <Setter Property="FontFamily" Value="{DynamicResource Edge.FontFamily.Display}" />
+        <Setter Property="FontSize" Value="30" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Primary}" />
+    </Style>
+
+    <Style Selector="Grid.launcher-hero-info-grid">
+        <Setter Property="Width" Value="620" />
+    </Style>
+
+    <Style Selector="StackPanel.launcher-hero-flow">
+        <Setter Property="Width" Value="620" />
+        <Setter Property="Spacing" Value="10" />
+    </Style>
+
+    <Style Selector="controls|EdgeCard.launcher-process-card">
+        <Setter Property="MinWidth" Value="360" />
+        <Setter Property="MinHeight" Value="232" />
+        <Setter Property="ClipToBounds" Value="True" />
+        <Setter Property="Elevation" Value="Card" />
+        <Setter Property="Surface" Value="Card" />
+    </Style>
+
+    <Style Selector="controls|EdgeCard.launcher-process-card /template/ Border#PART_EdgeCardRoot">
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Stage}" />
+        <Setter Property="Padding" Value="16" />
+    </Style>
+
+    <Style Selector="Grid.launcher-process-layout">
+        <Setter Property="RowSpacing" Value="12" />
+    </Style>
+
+    <Style Selector="Border.launcher-process-icon-frame">
+        <Setter Property="Width" Value="52" />
+        <Setter Property="Height" Value="52" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Accent.Primary}" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Circle}" />
+    </Style>
+
+    <Style Selector="Border.launcher-process-icon-inner">
+        <Setter Property="Width" Value="36" />
+        <Setter Property="Height" Value="36" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Surface.Card}" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Circle}" />
+    </Style>
+
+    <Style Selector="PathIcon.launcher-process-icon">
+        <Setter Property="Width" Value="22" />
+        <Setter Property="Height" Value="22" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Primary}" />
+    </Style>
+
+    <Style Selector="StackPanel.launcher-process-title-stack">
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Spacing" Value="{DynamicResource Edge.Size.Spacing6}" />
+    </Style>
+
+    <Style Selector="TextBlock.launcher-process-title">
+        <Setter Property="FontSize" Value="22" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Primary}" />
+        <Setter Property="MaxLines" Value="1" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <Style Selector="StackPanel.launcher-process-paths">
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Spacing" Value="{DynamicResource Edge.Size.Spacing8}" />
+    </Style>
+
+    <Style Selector="Border.launcher-process-path-row">
+        <Setter Property="Padding" Value="10,8" />
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Surface.Wash}" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Control}" />
+    </Style>
+
+    <Style Selector="TextBlock.launcher-process-path-label">
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Caption}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Accent.Primary}" />
+        <Setter Property="MaxLines" Value="1" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <Style Selector="TextBlock.launcher-process-path-value">
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Caption}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Primary}" />
+        <Setter Property="MaxLines" Value="1" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+</Styles>

@@ -1,0 +1,15 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="IIoT.Edge.Shell with modules" type="ShConfigurationType">
+    <option name="SCRIPT_TEXT" value="DOTNET_ENVIRONMENT=Development Shell__MachineProfile=HomogenizationLine NO_PROXY=10.98.101.247,localhost,127.0.0.1 no_proxy=10.98.101.247,localhost,127.0.0.1 dotnet run --project src/Edge/IIoT.Edge.Shell/IIoT.Edge.Shell.csproj -p:EnableLocalPluginModuleBuild=true -p:UseSharedCompilation=false" />
+    <option name="INDEPENDENT_SCRIPT_PATH" value="true" />
+    <option name="SCRIPT_PATH" value="" />
+    <option name="SCRIPT_OPTIONS" value="" />
+    <option name="INDEPENDENT_SCRIPT_WORKING_DIRECTORY" value="true" />
+    <option name="SCRIPT_WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+    <option name="INDEPENDENT_INTERPRETER_PATH" value="true" />
+    <option name="INTERPRETER_PATH" value="/bin/zsh" />
+    <option name="INTERPRETER_OPTIONS" value="-lc" />
+    <option name="EXECUTE_IN_TERMINAL" value="true" />
+    <method v="2" />
+  </configuration>
+</component>

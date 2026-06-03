@@ -69,49 +69,17 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
     {
         const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.扫码进站;
 
-        switch (Step)
-        {
-            case 0:
-                if (Interaction.IsTriggered(trigger))
-                {
-                    Logger.Info($"[{ModuleContext.DeviceName}] {TaskName} 进站触发。");
-                    Step = 10;
-                }
-
-                break;
-
-            case 10:
-                try
-                {
-                    await ProcessTriggerAsync(TaskCancellationToken).ConfigureAwait(false);
-                    Step = 30;
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    var message = $"进站处理异常：{ex.Message}";
-                    _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Inbound, message);
-                    RecordInboundResult(string.Empty, message);
-                    Interaction.ReplyException(trigger);
-                    Logger.Error($"[{ModuleContext.DeviceName}] {TaskName} {message}");
-                    Step = 30;
-                }
-
-                break;
-
-            case 30:
-                if (Interaction.IsReset(trigger))
-                {
-                    Interaction.ReplyReset(trigger);
-                    Logger.Info($"[{ModuleContext.DeviceName}] {TaskName} 进站复位。");
-                    Step = 0;
-                }
-
-                break;
-        }
+        await ExecuteHandshakeAsync(
+            trigger,
+            "进站触发。",
+            "进站复位。",
+            ProcessTriggerAsync,
+            static ex => $"进站处理异常：{ex.Message}",
+            message =>
+            {
+                _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Inbound, message);
+                RecordInboundResult(string.Empty, message);
+            }).ConfigureAwait(false);
     }
 
     private async Task ProcessTriggerAsync(CancellationToken cancellationToken)
@@ -182,4 +150,3 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
         ModuleContext.LastInboundResult = result;
     }
 }
-

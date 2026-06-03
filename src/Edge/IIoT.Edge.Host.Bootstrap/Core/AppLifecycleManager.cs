@@ -41,23 +41,21 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
 
             await _startupInitializer.InitializeAsync(cancellationToken).ConfigureAwait(false);
 
-            var diagnosticsReport = await BuildAndStoreDiagnosticsAsync(cancellationToken).ConfigureAwait(false);
-            if (_diagnosticsReportBuilder.HasBlockingIssues(diagnosticsReport.Issues))
-            {
-                var message = _diagnosticsReportBuilder.BuildValidationMessage(diagnosticsReport.Issues);
-                _logger.Error($"[生命周期] 启动校验失败。{Environment.NewLine}{message}");
-                return AppStartupResult.Failure(message);
-            }
+            await BuildStoreAndLogDiagnosticsAsync(cancellationToken).ConfigureAwait(false);
 
-            await _plcRuntimeTaskBinder.BindAsync(cancellationToken).ConfigureAwait(false);
-            _logger.Info("[生命周期] PLC 模块绑定完成。");
+            await RunNonBlockingStartupStepAsync(
+                "PLC 模块绑定",
+                () => _plcRuntimeTaskBinder.BindAsync(cancellationToken)).ConfigureAwait(false);
 
-            await _runtimeStateCoordinator.RestoreAsync(cancellationToken).ConfigureAwait(false);
+            await RunNonBlockingStartupStepAsync(
+                "运行时持久化状态恢复",
+                () => _runtimeStateCoordinator.RestoreAsync(cancellationToken)).ConfigureAwait(false);
 
-            await _backgroundServices.StartAsync(cancellationToken).ConfigureAwait(false);
-            _logger.Info("[生命周期] 后台服务已启动。");
+            await RunNonBlockingStartupStepAsync(
+                "后台服务启动",
+                () => _backgroundServices.StartAsync(cancellationToken)).ConfigureAwait(false);
 
-            await BuildAndStoreDiagnosticsAsync(cancellationToken).ConfigureAwait(false);
+            await BuildStoreAndLogDiagnosticsAsync(cancellationToken).ConfigureAwait(false);
             return AppStartupResult.Ok();
         }
         catch (Exception ex)
@@ -73,6 +71,36 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
 
         await _backgroundServices.StopAsync(cancellationToken).ConfigureAwait(false);
         _logger.Info("[生命周期] 后台服务已停止。");
+    }
+
+    private async Task BuildStoreAndLogDiagnosticsAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var diagnosticsReport = await BuildAndStoreDiagnosticsAsync(cancellationToken).ConfigureAwait(false);
+            if (diagnosticsReport.Issues.Count > 0)
+            {
+                var message = _diagnosticsReportBuilder.BuildValidationMessage(diagnosticsReport.Issues);
+                _logger.Warn($"[生命周期] 启动诊断发现问题，已按非阻断处理。{Environment.NewLine}{message}");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"[生命周期] 启动诊断生成失败，已跳过诊断并继续启动：{ex.Message}");
+        }
+    }
+
+    private async Task RunNonBlockingStartupStepAsync(string stepName, Func<Task> action)
+    {
+        try
+        {
+            await action().ConfigureAwait(false);
+            _logger.Info($"[生命周期] {stepName}完成。");
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"[生命周期] {stepName}失败，已按非阻断处理：{ex.Message}");
+        }
     }
 
     private async Task<StartupDiagnosticsReport> BuildAndStoreDiagnosticsAsync(CancellationToken cancellationToken)

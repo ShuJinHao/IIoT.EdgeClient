@@ -10,7 +10,6 @@ using IIoT.Edge.Module.Homogenization.Config.Parameters;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using Microsoft.Extensions.Options;
-using System.Text.Json;
 
 namespace IIoT.Edge.Module.Homogenization.Integration;
 
@@ -30,7 +29,7 @@ public sealed class HomogenizationMesChannel
         HomogenizationTraceBatchResult>
 {
     private readonly HomogenizationMesOptions _mesOptions;
-    private readonly HomogenizationMesCodeOptions _mesCodes;
+    private readonly IHomogenizationMesItemPayloadBuilder _payloadBuilder;
     private readonly IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> _parameters;
 
     public HomogenizationMesChannel(
@@ -40,12 +39,12 @@ public sealed class HomogenizationMesChannel
         ILogService logger,
         IProductionTimeProvider productionTime,
         IOptions<HomogenizationMesOptions> mesOptions,
-        IOptions<HomogenizationCodeOptions> codeOptions)
+        IHomogenizationMesItemPayloadBuilder payloadBuilder)
         : base(DependencyInjection.ModuleKey, logger, requestExecutor, moduleParamRoleProvider, productionTime)
     {
         _parameters = parameters;
         _mesOptions = mesOptions.Value;
-        _mesCodes = codeOptions.Value.Mes;
+        _payloadBuilder = payloadBuilder;
     }
 
     /// <summary>
@@ -78,7 +77,7 @@ public sealed class HomogenizationMesChannel
         return await ExecuteMesGetAsync(
                 relativePath,
                 query,
-                ParseMainPlan,
+                HomogenizationMesResponseParser.ParseMainPlan,
                 cancellationToken)
             .ConfigureAwait(false);
     }
@@ -113,7 +112,7 @@ public sealed class HomogenizationMesChannel
         return await ExecuteMesPostAsync(
                 relativePath,
                 payload,
-                ParseTraceBatch,
+                HomogenizationMesResponseParser.ParseTraceBatch,
                 cancellationToken)
             .ConfigureAwait(false);
     }
@@ -194,7 +193,7 @@ public sealed class HomogenizationMesChannel
                 {
                     boundNo = cellData.TrayCode,
                     lastBoundNo = cellData.TrayCode,
-                    produce = BuildOutboundProduce(cellData)
+                    produce = _payloadBuilder.BuildOutboundProduce(cellData, FormatTimestamp)
                 }
             },
             cancellationToken).ConfigureAwait(false);
@@ -232,7 +231,7 @@ public sealed class HomogenizationMesChannel
                         {
                             stationNo = envelope.StationNo,
                             collectTime = FormatTimestamp(snapshot.CapturedAt),
-                            data = BuildRealtimeItems(snapshot)
+                            data = _payloadBuilder.BuildRealtimeItems(snapshot)
                         }
                     }
                 }
@@ -266,7 +265,7 @@ public sealed class HomogenizationMesChannel
                 stationNo = envelope.StationNo,
                 data = new
                 {
-                    devices = BuildRecipeItems(snapshot)
+                    devices = _payloadBuilder.BuildRecipeItems(snapshot)
                 }
             },
             cancellationToken).ConfigureAwait(false);
@@ -328,176 +327,5 @@ public sealed class HomogenizationMesChannel
         return string.IsNullOrWhiteSpace(configuredPath)
             ? throw new InvalidOperationException($"Homogenization MES path is empty: {pathKey}.")
             : configuredPath.Trim();
-    }
-
-    private IReadOnlyList<object> BuildRealtimeItems(HomogenizationRealtimeSnapshot snapshot)
-        =>
-        [
-            CreateItem(_mesCodes.GetRealtimeItem(nameof(HomogenizationRealtimeSnapshot.StirringSpeed)), snapshot.StirringSpeed),
-            CreateItem(_mesCodes.GetRealtimeItem(nameof(HomogenizationRealtimeSnapshot.StirringCurrent)), snapshot.StirringCurrent),
-            CreateItem(_mesCodes.GetRealtimeItem(nameof(HomogenizationRealtimeSnapshot.DispersionSpeed)), snapshot.DispersionSpeed),
-            CreateItem(_mesCodes.GetRealtimeItem(nameof(HomogenizationRealtimeSnapshot.DispersionCurrent)), snapshot.DispersionCurrent),
-            CreateItem(_mesCodes.GetRealtimeItem(nameof(HomogenizationRealtimeSnapshot.Temperature)), snapshot.Temperature),
-            CreateItem(_mesCodes.GetRealtimeItem(nameof(HomogenizationRealtimeSnapshot.Vacuum)), snapshot.Vacuum)
-        ];
-
-    private IReadOnlyList<object> BuildRecipeItems(HomogenizationRecipeSnapshot snapshot)
-    {
-        var items = new List<object>();
-
-        AddIndexedRecipeItems(items, _mesCodes.GetRecipeItem(nameof(HomogenizationRecipeSnapshot.StirringSpeed)), snapshot.StirringSpeed);
-        AddIndexedRecipeItems(items, _mesCodes.GetRecipeItem(nameof(HomogenizationRecipeSnapshot.DispersionSpeed)), snapshot.DispersionSpeed);
-        AddIndexedRecipeItems(items, _mesCodes.GetRecipeItem(nameof(HomogenizationRecipeSnapshot.Ncm)), snapshot.Ncm);
-        AddIndexedRecipeItems(items, _mesCodes.GetRecipeItem(nameof(HomogenizationRecipeSnapshot.Sp1)), snapshot.Sp1);
-        AddIndexedRecipeItems(items, _mesCodes.GetRecipeItem(nameof(HomogenizationRecipeSnapshot.Nmp)), snapshot.Nmp);
-        AddIndexedRecipeItems(items, _mesCodes.GetRecipeItem(nameof(HomogenizationRecipeSnapshot.GlueSolution)), snapshot.GlueSolution);
-        AddIndexedRecipeItems(items, _mesCodes.GetRecipeItem(nameof(HomogenizationRecipeSnapshot.Cnt)), snapshot.Cnt);
-        AddIndexedRecipeItems(items, _mesCodes.GetRecipeItem(nameof(HomogenizationRecipeSnapshot.Vacuum)), snapshot.Vacuum.Select(static value => value ? 1 : 0).ToArray());
-        AddIndexedRecipeItems(items, _mesCodes.GetRecipeItem(nameof(HomogenizationRecipeSnapshot.Time)), snapshot.Time);
-        AddIndexedRecipeItems(items, _mesCodes.GetRecipeItem(nameof(HomogenizationRecipeSnapshot.Temperature)), snapshot.Temperature);
-        AddIndexedRecipeItems(items, _mesCodes.GetRecipeItem(nameof(HomogenizationRecipeSnapshot.StopStep)), snapshot.StopStep.Select(static value => value ? 1 : 0).ToArray());
-
-        return items;
-    }
-
-    private IReadOnlyList<object> BuildOutboundProduce(HomogenizationCellData cellData)
-    {
-        var produce = new List<object>();
-
-        AddProduceItem(produce, _mesCodes.GetOutboundItem("DeviceCode"), cellData.DeviceCode);
-        AddProduceItem(produce, _mesCodes.GetOutboundItem("DeviceName"), cellData.DeviceName);
-        AddProduceItem(produce, _mesCodes.GetOutboundItem("StartTime"), cellData.InboundTime);
-        AddProduceItem(produce, _mesCodes.GetOutboundItem("CompleteTime"), cellData.CompletedTime);
-        AddProduceItem(produce, _mesCodes.GetOutboundItem("StirringSpeed"), cellData.RealtimeSnapshot?.StirringSpeed);
-        AddProduceItem(produce, _mesCodes.GetOutboundItem("Temperature"), cellData.RealtimeSnapshot?.Temperature);
-        AddProduceItem(produce, _mesCodes.GetOutboundItem("Vacuum"), cellData.RealtimeSnapshot?.Vacuum);
-        AddProduceItem(produce, _mesCodes.GetOutboundItem("CntActual"), cellData.CntActualKg);
-        AddProduceItem(produce, _mesCodes.GetOutboundItem("CntTarget"), cellData.CntTargetKg);
-        AddProduceItem(produce, _mesCodes.GetOutboundItem("CntTankAWeight"), cellData.CntTankAWeightKg);
-        AddProduceItem(produce, _mesCodes.GetOutboundItem("CntTankBWeight"), cellData.CntTankBWeightKg);
-        AddProduceItem(produce, _mesCodes.GetOutboundItem("NmpActual"), cellData.NmpActualKg);
-        AddProduceItem(produce, _mesCodes.GetOutboundItem("NmpTarget"), cellData.NmpTargetKg);
-        AddProduceItem(produce, _mesCodes.GetOutboundItem("GlueActual"), cellData.GlueActualKg);
-        AddProduceItem(produce, _mesCodes.GetOutboundItem("SetStirringTime"), cellData.SetStirringTimeMinutes);
-        AddProduceItem(produce, _mesCodes.GetOutboundItem("RemainingStirringTime"), cellData.RemainingStirringTimeMinutes);
-        AddProduceItem(produce, _mesCodes.GetOutboundItem("SetDispersionTime"), cellData.SetDispersionTimeMinutes);
-        AddProduceItem(produce, _mesCodes.GetOutboundItem("RemainingDispersionTime"), cellData.RemainingDispersionTimeMinutes);
-
-        return produce;
-    }
-
-    private static object CreateItem(HomogenizationMesItemCodeOptions item, object? value)
-        => new
-        {
-            code = item.Code,
-            name = item.Name,
-            type = item.Type,
-            unit = item.Unit,
-            val = value?.ToString() ?? string.Empty
-        };
-
-    private static void AddIndexedRecipeItems<T>(
-        ICollection<object> items,
-        HomogenizationMesItemCodeOptions item,
-        IReadOnlyList<T> values)
-    {
-        for (var index = 0; index < values.Count; index++)
-        {
-            items.Add(new
-            {
-                code = $"{item.Code}_{index + 1:D2}",
-                name = $"{item.Name}_{index + 1:D2}",
-                type = item.Type,
-                unit = item.Unit,
-                val = values[index]?.ToString() ?? string.Empty
-            });
-        }
-    }
-
-    private void AddProduceItem(ICollection<object> produce, HomogenizationMesItemCodeOptions item, object? value)
-    {
-        if (value is null)
-        {
-            return;
-        }
-
-        var text = value switch
-        {
-            DateTime time => FormatTimestamp(time),
-            DateTimeOffset timeOffset => FormatTimestamp(timeOffset.DateTime),
-            _ => value.ToString()
-        };
-
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return;
-        }
-
-        produce.Add(new
-        {
-            code = item.Code,
-            name = item.Name,
-            val = text
-        });
-    }
-
-    private static HomogenizationMainPlan ParseMainPlan(JsonElement data)
-    {
-        var orders = new List<IReadOnlyList<HomogenizationMesField>>();
-        if (!data.TryGetProperty("orders", out var ordersElement)
-            || ordersElement.ValueKind != JsonValueKind.Array)
-        {
-            return new HomogenizationMainPlan(orders);
-        }
-
-        foreach (var orderElement in ordersElement.EnumerateArray())
-        {
-            if (orderElement.ValueKind != JsonValueKind.Array)
-            {
-                continue;
-            }
-
-            var fields = orderElement
-                .EnumerateArray()
-                .Where(static item => item.ValueKind == JsonValueKind.Object)
-                .Select(ParseMesField)
-                .ToArray();
-            orders.Add(fields);
-        }
-
-        return new HomogenizationMainPlan(orders);
-    }
-
-    private static HomogenizationMesField ParseMesField(JsonElement item)
-        => new(
-            TryGetString(item, "code") ?? string.Empty,
-            TryGetString(item, "name") ?? string.Empty,
-            TryGetString(item, "val"));
-
-    private static HomogenizationTraceBatchResult ParseTraceBatch(JsonElement data)
-    {
-        var batchNumber = data.ValueKind switch
-        {
-            JsonValueKind.String => data.GetString(),
-            JsonValueKind.Object => TryGetString(data, "batchNumber")
-                ?? TryGetString(data, "traceBatchNumber")
-                ?? TryGetString(data, "batchNo"),
-            _ => null
-        };
-
-        return new HomogenizationTraceBatchResult(batchNumber, data.Clone());
-    }
-
-    private static string? TryGetString(JsonElement element, string propertyName)
-    {
-        if (!element.TryGetProperty(propertyName, out var value)
-            || value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
-        {
-            return null;
-        }
-
-        return value.ValueKind == JsonValueKind.String
-            ? value.GetString()
-            : value.GetRawText();
     }
 }

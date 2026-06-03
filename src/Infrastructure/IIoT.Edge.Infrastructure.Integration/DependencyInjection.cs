@@ -24,6 +24,7 @@ using IIoT.Edge.Application.Modules;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http.Resilience;
+using Microsoft.Extensions.Options;
 using Polly;
 using System.Threading;
 
@@ -46,7 +47,10 @@ public static class DependencyInjection
         var mesTimeoutSecs = configuration.GetValue<int?>("MesApi:TimeoutSecs") ?? 3;
         var mesTimeout = TimeSpan.FromSeconds(mesTimeoutSecs);
 
-        services.AddSingleton<ICloudApiEndpointProvider, CloudApiEndpointProvider>();
+        services.AddSingleton<ICloudApiConfigSnapshotProvider, CloudApiConfigSnapshotProvider>();
+        services.AddSingleton<ICloudApiEndpointProvider>(sp => new CloudApiEndpointProvider(
+            sp.GetRequiredService<IOptionsMonitor<CloudApiConfig>>(),
+            sp.GetService<ILocalParameterConfigService>()));
         services.AddSingleton<ICloudApiPathProvider>(sp =>
             sp.GetRequiredService<ICloudApiEndpointProvider>());
         services.AddSingleton<IMesEndpointProvider, MesEndpointProvider>();

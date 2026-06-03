@@ -2,10 +2,9 @@
     x:Class="IIoT.Edge.Presentation.Navigation.Features.Formula.RecipeView.RecipeViewPage"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:dg="using:Avalonia.Controls"
-    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
+        xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
 
-    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+    <edge:EdgeScrollHost>
         <StackPanel Margin="{DynamicResource Edge.Thickness.20}" Spacing="{DynamicResource Edge.Size.Spacing12}">
             <edge:EdgeSectionHeader
                 Title="{Binding ViewTitle}"
@@ -88,27 +87,27 @@
                     HeadersVisibility="Column"
                     ItemsSource="{Binding Params}">
                     <edge:EdgeDataGrid.Columns>
-                        <dg:DataGridTextColumn Binding="{Binding Name}" Header="{DynamicResource Navigation_Column_ParamName}" MinWidth="220" Width="2*" />
-                        <dg:DataGridTextColumn Binding="{Binding Min}" Header="{DynamicResource Navigation_Column_LowerLimit}" MinWidth="120" Width="*" />
-                        <dg:DataGridTextColumn Binding="{Binding Max}" Header="{DynamicResource Navigation_Column_UpperLimit}" MinWidth="120" Width="*" />
-                        <dg:DataGridTextColumn Binding="{Binding Unit}" Header="{DynamicResource Navigation_Column_Unit}" MinWidth="100" Width="*" />
-                        <dg:DataGridTemplateColumn Header="" MinWidth="96" Width="96">
-                            <dg:DataGridTemplateColumn.CellTemplate>
+                        <edge:EdgeTextColumn Binding="{Binding Name}" Header="{DynamicResource Navigation_Column_ParamName}" MinWidth="220" Width="2*" />
+                        <edge:EdgeTextColumn Binding="{Binding Min}" Header="{DynamicResource Navigation_Column_LowerLimit}" MinWidth="120" Width="*" />
+                        <edge:EdgeTextColumn Binding="{Binding Max}" Header="{DynamicResource Navigation_Column_UpperLimit}" MinWidth="120" Width="*" />
+                        <edge:EdgeTextColumn Binding="{Binding Unit}" Header="{DynamicResource Navigation_Column_Unit}" MinWidth="100" Width="*" />
+                        <edge:EdgeActionColumn Header="" MinWidth="96" Width="96">
+                            <edge:EdgeActionColumn.CellTemplate>
                                 <DataTemplate>
                                     <edge:EdgeActionButton
                                         HorizontalAlignment="Right"
-                                        Classes="cell"
                                         Command="{Binding $parent[UserControl].DataContext.DeleteLocalParamCommand}"
                                         CommandParameter="{Binding Name}"
                                         Content="{DynamicResource Navigation_Button_Delete}"
                                         Icon="{StaticResource Edge.Icon.Delete}"
                                         IsVisible="{Binding $parent[UserControl].DataContext.IsLocalAdmin}"
                                         Kind="Danger"
+                                        Role="Cell"
                                         Size="Compact"
                                         ToolTip.Tip="{DynamicResource Navigation_Tooltip_DeleteParam}" />
                                 </DataTemplate>
-                            </dg:DataGridTemplateColumn.CellTemplate>
-                        </dg:DataGridTemplateColumn>
+                            </edge:EdgeActionColumn.CellTemplate>
+                        </edge:EdgeActionColumn>
                     </edge:EdgeDataGrid.Columns>
                 </edge:EdgeDataGrid>
             </edge:EdgeTablePanel>
@@ -149,5 +148,5 @@
                 </Grid>
             </edge:EdgeCard>
         </StackPanel>
-    </ScrollViewer>
+    </edge:EdgeScrollHost>
 </UserControl>

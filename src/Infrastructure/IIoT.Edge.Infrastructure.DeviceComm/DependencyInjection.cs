@@ -19,6 +19,7 @@ public static class DependencyInjection
         services.AddSingleton<IModbusAddressParser, ModbusAddressParser>();
         services.AddSingleton<IPlcEndpointResolver, PlcEndpointResolver>();
         services.AddSingleton<IPlcServiceFactory, PlcServiceFactory>();
+        services.AddSingleton<IPlcSignalBlockPlanner, DefaultPlcSignalBlockPlanner>();
         services.AddSingleton<PlcRuntimeRegistry>();
         services.AddSingleton<PlcConnectionStatusStore>();
         services.AddSingleton<PlcDeviceRuntimeBuilder>();

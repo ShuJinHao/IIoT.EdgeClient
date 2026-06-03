@@ -2,34 +2,37 @@
     x:Class="IIoT.Edge.Presentation.Navigation.Features.Production.DataView.DataViewPage"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:dg="using:Avalonia.Controls"
-    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
+        xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
 
-    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+    <edge:EdgeScrollHost>
         <StackPanel Margin="{DynamicResource Edge.Thickness.20}" Spacing="{DynamicResource Edge.Size.Spacing12}">
             <edge:EdgeSectionHeader
                 Title="{Binding ViewTitle}"
                 Subtitle="{Binding StatusMessage}" />
 
             <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing12}">
-                <edge:EdgeKpiCard
+                <edge:EdgeMetricCard
+                    Classes="kpi-compact"
+                    Status="Info"
                     Title="{DynamicResource Navigation_Label_TodayOutput}"
-                    TrendStatus="Info"
                     Value="{Binding TodayTotal}" />
-                <edge:EdgeKpiCard
+                <edge:EdgeMetricCard
                     Grid.Column="1"
+                    Classes="kpi-compact"
+                    Status="Running"
                     Title="{DynamicResource Navigation_Label_GoodCount}"
-                    TrendStatus="Running"
                     Value="{Binding TodayOk}" />
-                <edge:EdgeKpiCard
+                <edge:EdgeMetricCard
                     Grid.Column="2"
+                    Classes="kpi-compact"
+                    Status="Error"
                     Title="{DynamicResource Navigation_Label_BadCount}"
-                    TrendStatus="Error"
                     Value="{Binding TodayNg}" />
-                <edge:EdgeKpiCard
+                <edge:EdgeMetricCard
                     Grid.Column="3"
+                    Classes="kpi-compact"
+                    Status="Warning"
                     Title="{DynamicResource Navigation_Label_Yield}"
-                    TrendStatus="Warning"
                     Value="{Binding TodayYield}" />
             </Grid>
 
@@ -39,7 +42,7 @@
                 IsEmpty="{Binding IsRecordsEmpty}">
                 <edge:EdgeTablePanel.FilterContent>
                     <WrapPanel>
-                        <DatePicker
+                        <edge:EdgeFilterDatePicker
                             Width="150"
                             Margin="0,0,8,0"
                             SelectedDate="{Binding DateFrom}" />
@@ -48,7 +51,7 @@
                             VerticalAlignment="Center"
                             Foreground="{DynamicResource Edge.Brush.Text.Muted}"
                             Text="{DynamicResource Navigation_Label_To}" />
-                        <DatePicker
+                        <edge:EdgeFilterDatePicker
                             Width="150"
                             SelectedDate="{Binding DateTo}" />
                     </WrapPanel>
@@ -80,15 +83,15 @@
                         IsReadOnly="True"
                         ItemsSource="{Binding Records}">
                         <edge:EdgeDataGrid.Columns>
-                            <dg:DataGridTextColumn Binding="{Binding Time}" Header="{DynamicResource Navigation_Column_Time}" MinWidth="90" Width="90" />
-                            <dg:DataGridTextColumn Binding="{Binding BatchNo}" Header="{DynamicResource Navigation_Column_BatchNumber}" MinWidth="160" Width="2*" />
-                            <dg:DataGridTextColumn Binding="{Binding Total}" Header="{DynamicResource Navigation_Column_Total}" MinWidth="90" Width="*" />
-                            <dg:DataGridTextColumn Binding="{Binding OkCount}" Header="{DynamicResource Navigation_Column_Good}" MinWidth="90" Width="*" />
-                            <dg:DataGridTextColumn Binding="{Binding NgCount}" Header="{DynamicResource Navigation_Column_Bad}" MinWidth="90" Width="*" />
-                            <dg:DataGridTextColumn Binding="{Binding Yield}" Header="{DynamicResource Navigation_Column_Yield}" MinWidth="90" Width="*" />
+                            <edge:EdgeTextColumn Binding="{Binding Time}" Header="{DynamicResource Navigation_Column_Time}" MinWidth="90" Width="90" />
+                            <edge:EdgeTextColumn Binding="{Binding BatchNo}" Header="{DynamicResource Navigation_Column_BatchNumber}" MinWidth="160" Width="2*" />
+                            <edge:EdgeTextColumn Binding="{Binding Total}" Header="{DynamicResource Navigation_Column_Total}" MinWidth="90" Width="*" />
+                            <edge:EdgeTextColumn Binding="{Binding OkCount}" Header="{DynamicResource Navigation_Column_Good}" MinWidth="90" Width="*" />
+                            <edge:EdgeTextColumn Binding="{Binding NgCount}" Header="{DynamicResource Navigation_Column_Bad}" MinWidth="90" Width="*" />
+                            <edge:EdgeTextColumn Binding="{Binding Yield}" Header="{DynamicResource Navigation_Column_Yield}" MinWidth="90" Width="*" />
                         </edge:EdgeDataGrid.Columns>
                     </edge:EdgeDataGrid>
             </edge:EdgeTablePanel>
         </StackPanel>
-    </ScrollViewer>
+    </edge:EdgeScrollHost>
 </UserControl>

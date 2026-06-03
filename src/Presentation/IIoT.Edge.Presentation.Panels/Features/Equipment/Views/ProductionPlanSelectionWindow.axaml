@@ -2,8 +2,7 @@
     x:Class="IIoT.Edge.Presentation.Panels.Features.Equipment.ProductionPlanSelectionWindow"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:dg="using:Avalonia.Controls"
-    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
+        xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
     Width="1040"
     Height="640"
     MinWidth="920"
@@ -38,17 +37,13 @@
             </edge:EdgeTablePanel.ActionContent>
 
             <edge:EdgeTablePanel.StatusContent>
-                <Border
+                <edge:EdgeNoticeBar
                     IsVisible="{Binding HasStatus}"
-                    Background="{DynamicResource Edge.Brush.Surface.Wash}"
-                    CornerRadius="{DynamicResource Edge.CornerRadius.Control}"
-                    Padding="12,8">
+                    Status="Info">
                     <TextBlock
-                        FontSize="{DynamicResource Edge.FontSize.Caption}"
-                        Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
-                        Text="{Binding StatusMessage}"
-                        TextWrapping="Wrap" />
-                </Border>
+                        Classes="edge-notice-message"
+                        Text="{Binding StatusMessage}" />
+                </edge:EdgeNoticeBar>
             </edge:EdgeTablePanel.StatusContent>
 
             <edge:EdgeDataGrid
@@ -61,37 +56,37 @@
                 SelectionMode="Single"
                 VerticalScrollBarVisibility="Auto">
                 <edge:EdgeDataGrid.Columns>
-                    <dg:DataGridTextColumn
+                    <edge:EdgeTextColumn
                         Width="170"
                         MinWidth="170"
                         Binding="{Binding DisplayPlanCode}"
                         Header="{DynamicResource Panels_Plan_Column_MainPlan}" />
-                    <dg:DataGridTextColumn
+                    <edge:EdgeTextColumn
                         Width="150"
                         MinWidth="150"
                         Binding="{Binding DisplayWorkOrder}"
                         Header="{DynamicResource Panels_Plan_Column_WorkOrder}" />
-                    <dg:DataGridTextColumn
+                    <edge:EdgeTextColumn
                         Width="130"
                         MinWidth="130"
                         Binding="{Binding DisplayProduct}"
                         Header="{DynamicResource Panels_Plan_Column_Product}" />
-                    <dg:DataGridTextColumn
+                    <edge:EdgeTextColumn
                         Width="90"
                         MinWidth="90"
                         Binding="{Binding PlanStatus}"
                         Header="{DynamicResource Panels_Plan_Column_Status}" />
-                    <dg:DataGridTextColumn
+                    <edge:EdgeTextColumn
                         Width="105"
                         MinWidth="105"
                         Binding="{Binding DisplayQuantity}"
                         Header="{DynamicResource Panels_Plan_Column_Quantity}" />
-                    <dg:DataGridTextColumn
+                    <edge:EdgeTextColumn
                         Width="130"
                         MinWidth="130"
                         Binding="{Binding StartTime}"
                         Header="{DynamicResource Panels_Plan_Column_StartTime}" />
-                    <dg:DataGridTextColumn
+                    <edge:EdgeTextColumn
                         Width="130"
                         MinWidth="130"
                         Binding="{Binding EndTime}"
@@ -107,7 +102,7 @@
                     <edge:EdgeActionButton
                         Click="OnCancelClick"
                         Icon="{StaticResource Edge.Icon.Close}"
-                        Kind="Soft"
+                        Kind="Secondary"
                         Size="Compact"
                         Content="{DynamicResource Panels_Button_Cancel}" />
                     <edge:EdgeActionButton

@@ -10,9 +10,7 @@ public sealed record PlcInteractionSignalMetadata(
     int ReadSortOrder,
     int WriteSortOrder,
     int AddressCount,
-    string DataType,
-    string ReadSignalName,
-    string WriteSignalName);
+    string DataType);
 
 public sealed record PlcIoSignalMetadata(
     string SignalKey,
@@ -22,8 +20,7 @@ public sealed record PlcIoSignalMetadata(
     int SortOrder,
     string Category,
     string BusinessGroup,
-    string SignalName,
-    string? DisplayName);
+    string DisplayName);
 
 public static class EnumPlcSignalMetadata
 {
@@ -43,9 +40,7 @@ public static class EnumPlcSignalMetadata
                 attribute.ReadSortOrder,
                 attribute.WriteSortOrder,
                 attribute.AddressCount,
-                attribute.DataType,
-                attribute.ReadSignalName,
-                attribute.WriteSignalName)
+                attribute.DataType)
             : null;
 
     public static PlcIoSignalMetadata GetRead<TSignalKey>(TSignalKey signal)
@@ -64,7 +59,6 @@ public static class EnumPlcSignalMetadata
                 attribute.SortOrder,
                 attribute.Category,
                 attribute.BusinessGroup,
-                attribute.SignalName,
                 attribute.DisplayName)
             : null;
 
@@ -84,7 +78,6 @@ public static class EnumPlcSignalMetadata
                 attribute.SortOrder,
                 attribute.Category,
                 attribute.BusinessGroup,
-                attribute.SignalName,
                 attribute.DisplayName)
             : null;
 
