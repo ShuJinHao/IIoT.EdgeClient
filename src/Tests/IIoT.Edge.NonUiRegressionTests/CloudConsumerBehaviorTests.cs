@@ -20,6 +20,7 @@ public sealed class CloudConsumerBehaviorTests
                 "cloud_upload_disabled",
                 "云端上传已关闭。")),
             [uploader],
+            CreateCloudRegistry(),
             diagnostics,
             new FakeLogService());
 
@@ -48,6 +49,7 @@ public sealed class CloudConsumerBehaviorTests
                 "missing_upload_token",
                 "缺少上传令牌。")),
             [uploader],
+            CreateCloudRegistry(),
             diagnostics,
             new FakeLogService());
 
@@ -66,6 +68,32 @@ public sealed class CloudConsumerBehaviorTests
         Assert.Equal("OtherProcess", diagnostics.Snapshot.LastProcessType);
     }
 
+    [Fact]
+    public async Task ProcessWithResultAsync_WhenRegistryHasUploaderButDiDoesNot_ShouldReturnRetryableFailure()
+    {
+        var diagnostics = new FakeCloudDiagnosticsStore();
+        var consumer = new CloudConsumer(
+            CreateOnlineDeviceService(),
+            new FixedCloudUploadGate(UploadGateSnapshot.Ready(ExternalSystemKind.Cloud)),
+            uploaders: [],
+            CreateCloudRegistry(),
+            diagnostics,
+            new FakeLogService());
+
+        var result = await consumer.ProcessWithResultAsync(new CellCompletedRecord
+        {
+            CellData = new TestCellData
+            {
+                Barcode = "BAR-CLOUD-MISSING-DI"
+            }
+        });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(CloudCallOutcome.Exception, result.Outcome);
+        Assert.Equal("uploader_not_found", result.ReasonCode);
+        Assert.Equal("OtherProcess", diagnostics.Snapshot.LastProcessType);
+    }
+
     private static FakeDeviceService CreateOnlineDeviceService()
     {
         var deviceService = new FakeDeviceService();
@@ -77,6 +105,13 @@ public sealed class CloudConsumerBehaviorTests
             ProcessId = Guid.NewGuid()
         });
         return deviceService;
+    }
+
+    private static FakeProcessIntegrationRegistry CreateCloudRegistry()
+    {
+        var registry = new FakeProcessIntegrationRegistry();
+        registry.RegisterCloudUploader("OtherProcess", ProcessUploadMode.Single);
+        return registry;
     }
 
     private sealed class FixedCloudUploadGate(UploadGateSnapshot snapshot) : ICloudUploadGate
@@ -95,7 +130,7 @@ public sealed class CloudConsumerBehaviorTests
         public ProcessUploadMode UploadMode => ProcessUploadMode.Single;
 
         public Task<CloudCallResult> UploadAsync(
-            ProcessCloudUploadContext context,
+            ProcessUploadContext context,
             IReadOnlyList<CellCompletedRecord> records,
             CancellationToken cancellationToken = default)
         {

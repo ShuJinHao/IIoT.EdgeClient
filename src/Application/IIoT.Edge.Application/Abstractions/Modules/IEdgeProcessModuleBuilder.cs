@@ -58,7 +58,7 @@ public interface IEdgeProcessModuleBuilder
 
     void RegisterCloudUploader(ProcessUploadMode uploadMode);
 
-    void RegisterMesUploader(MesUploadMode uploadMode);
+    void RegisterMesUploader(ProcessUploadMode uploadMode);
 
     void RegisterPlcSignalProfile<TSignalKey, TProfile>()
         where TSignalKey : struct, Enum

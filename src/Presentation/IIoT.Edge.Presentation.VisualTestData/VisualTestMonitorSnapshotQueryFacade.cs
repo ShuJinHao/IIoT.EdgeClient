@@ -1,4 +1,3 @@
-using System.Data;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Abstractions.Modules;
@@ -105,27 +104,31 @@ public sealed class VisualTestMonitorSnapshotQueryFacade(VisualTestDataOptions o
             ContextPersistence: diagnostics.ContextPersistence);
     }
 
-    private static DataTable BuildCellTable(int offset, int tick)
+    private static MonitorCellTableSnapshot BuildCellTable(int offset, int tick)
     {
-        var table = new DataTable();
-        table.Columns.Add("TrayCode", typeof(string));
-        table.Columns.Add("BatchNo", typeof(string));
-        table.Columns.Add("RuntimeStatus", typeof(string));
-        table.Columns.Add("Temperature", typeof(string));
-        table.Columns.Add("CompletedTime", typeof(string));
+        string[] columns =
+        [
+            "TrayCode",
+            "BatchNo",
+            "RuntimeStatus",
+            "Temperature",
+            "CompletedTime"
+        ];
 
+        var rows = new List<MonitorCellTableRow>();
         for (var index = 0; index < 8; index++)
         {
-            var row = table.NewRow();
-            row["TrayCode"] = $"TR-{offset + 1:D2}-{index + 1:D3}";
-            row["BatchNo"] = $"CELL-{DateTime.Today:yyyyMMdd}-{offset + 1}{index + 1:D2}";
-            row["RuntimeStatus"] = index % 5 == 0 ? "待复核" : "正常";
-            row["Temperature"] = $"{41.5 + (tick + index) % 7 * 0.2:F1}";
-            row["CompletedTime"] = DateTime.Now.AddMinutes(-index * 6).ToString("HH:mm:ss");
-            table.Rows.Add(row);
+            rows.Add(new MonitorCellTableRow(
+            [
+                $"TR-{offset + 1:D2}-{index + 1:D3}",
+                $"CELL-{DateTime.Today:yyyyMMdd}-{offset + 1}{index + 1:D2}",
+                index % 5 == 0 ? "待复核" : "正常",
+                $"{41.5 + (tick + index) % 7 * 0.2:F1}",
+                DateTime.Now.AddMinutes(-index * 6).ToString("HH:mm:ss")
+            ]));
         }
 
-        return table;
+        return new MonitorCellTableSnapshot(columns, rows);
     }
 
     private IReadOnlyList<MonitorCellDebugSnapshot> BuildCellDebugRows(string deviceName, int offset, int tick)

@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Data;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Time;
@@ -121,7 +120,7 @@ internal sealed class MonitorSnapshotProjectionBuilder(
             LastHeartbeatText: "--",
             LastUpdatedText: MonitorValueFormatting.FormatTimestamp(latestRuntimeTimestamp, productionTime),
             CellCount: 0,
-            CellTable: new DataTable(),
+            CellTable: MonitorCellTableSnapshot.Empty,
             CellDebugRows: [],
             CloudSync: diagnostics.Cloud,
             MesSync: diagnostics.Mes,
@@ -154,7 +153,7 @@ internal sealed class MonitorSnapshotProjectionBuilder(
             LastHeartbeatText: "--",
             LastUpdatedText: "--",
             CellCount: 0,
-            CellTable: new DataTable(),
+            CellTable: MonitorCellTableSnapshot.Empty,
             CellDebugRows: [],
             CloudSync: diagnostics.Cloud,
             MesSync: diagnostics.Mes,

@@ -277,8 +277,6 @@ public static class DependencyInjection
 
             module.Configure(builder);
         }
-
-        ValidateModuleRegistrations(modules, cellDataRegistry, runtimeRegistry, integrationRegistry);
     }
 
     private static void ValidateModuleIdentity(IEnumerable<IEdgeProcessModule> modules)
@@ -296,34 +294,6 @@ public static class DependencyInjection
             if (!processTypes.Add(module.ProcessType))
             {
                 throw new InvalidOperationException($"Duplicate ProcessType detected: {module.ProcessType}");
-            }
-        }
-    }
-
-    private static void ValidateModuleRegistrations(
-        IEnumerable<IEdgeProcessModule> modules,
-        ICellDataRegistry cellDataRegistry,
-        IStationRuntimeRegistry runtimeRegistry,
-        IProcessIntegrationRegistry integrationRegistry)
-    {
-        foreach (var module in modules)
-        {
-            if (!cellDataRegistry.IsRegistered(module.ProcessType))
-            {
-                throw new InvalidOperationException(
-                    $"Module '{module.ModuleId}' is missing CellData registration for process type '{module.ProcessType}'.");
-            }
-
-            if (!runtimeRegistry.HasFactory(module.ModuleId))
-            {
-                throw new InvalidOperationException(
-                    $"Module '{module.ModuleId}' is missing PLC runtime factory registration.");
-            }
-
-            if (!integrationRegistry.HasCloudUploader(module.ProcessType))
-            {
-                throw new InvalidOperationException(
-                    $"Module '{module.ModuleId}' is missing cloud uploader registration for process type '{module.ProcessType}'.");
             }
         }
     }

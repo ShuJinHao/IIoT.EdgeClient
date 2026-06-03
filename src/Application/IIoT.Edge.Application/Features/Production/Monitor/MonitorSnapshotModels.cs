@@ -1,10 +1,18 @@
-using System.Data;
 using IIoT.Edge.Application.Context;
 using IIoT.Edge.Application.Abstractions.Modules;
 
 namespace IIoT.Edge.Application.Features.Production.Monitor;
 
 public record MonitorSnapshotRow(string DeviceName, string Name, string Value);
+
+public record MonitorCellTableRow(IReadOnlyList<string> Values);
+
+public record MonitorCellTableSnapshot(
+    IReadOnlyList<string> Columns,
+    IReadOnlyList<MonitorCellTableRow> Rows)
+{
+    public static MonitorCellTableSnapshot Empty { get; } = new([], []);
+}
 
 public enum MonitorSnapshotSource
 {
@@ -32,7 +40,7 @@ public record DeviceMonitorSnapshot(
     string LastHeartbeatText,
     string LastUpdatedText,
     int CellCount,
-    DataTable CellTable,
+    MonitorCellTableSnapshot CellTable,
     IReadOnlyList<MonitorCellDebugSnapshot> CellDebugRows,
     CloudSyncDiagnosticsSnapshot CloudSync,
     MesSyncDiagnosticsSnapshot MesSync,

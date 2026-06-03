@@ -1,5 +1,4 @@
 using System.Collections;
-using System.Data;
 using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
@@ -11,12 +10,11 @@ namespace IIoT.Edge.Application.Features.Production.Monitor;
 
 internal static class MonitorValueFormatting
 {
-    public static DataTable BuildCellTable(ProductionContext ctx, IProductionTimeProvider productionTime)
+    public static MonitorCellTableSnapshot BuildCellTable(ProductionContext ctx, IProductionTimeProvider productionTime)
     {
-        var table = new DataTable();
         if (ctx.CurrentCells.Count == 0)
         {
-            return table;
+            return MonitorCellTableSnapshot.Empty;
         }
 
         var firstCell = ctx.CurrentCells.Values.First();
@@ -26,23 +24,17 @@ internal static class MonitorValueFormatting
                 && p.Name != nameof(CellDataBase.DisplayLabel))
             .ToList();
 
-        foreach (var prop in properties)
-        {
-            table.Columns.Add(prop.Name, typeof(string));
-        }
-
+        var columns = properties.Select(static prop => prop.Name).ToList();
+        var rows = new List<MonitorCellTableRow>();
         foreach (var cell in ctx.CurrentCells.Values)
         {
-            var row = table.NewRow();
-            foreach (var prop in properties)
-            {
-                row[prop.Name] = FormatValue(prop.GetValue(cell), productionTime);
-            }
-
-            table.Rows.Add(row);
+            rows.Add(new MonitorCellTableRow(
+                properties
+                    .Select(prop => FormatValue(prop.GetValue(cell), productionTime))
+                    .ToList()));
         }
 
-        return table;
+        return new MonitorCellTableSnapshot(columns, rows);
     }
 
     public static IReadOnlyList<MonitorSnapshotRow> BuildContextProjectionRows(

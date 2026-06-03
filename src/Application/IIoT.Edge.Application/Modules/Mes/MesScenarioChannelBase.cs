@@ -61,7 +61,7 @@ public abstract class MesScenarioChannelBase<
 
     public string ProcessType => _processType;
 
-    public MesUploadMode UploadMode => MesUploadMode.Single;
+    public ProcessUploadMode UploadMode => ProcessUploadMode.Single;
 
     /// <summary>
     /// 生产业务时间服务，供插件 payload 在缺省业务时间时复用同一时区规则。
@@ -116,7 +116,7 @@ public abstract class MesScenarioChannelBase<
         CancellationToken cancellationToken);
 
     public async Task<MesCallResult> UploadAsync(
-        ProcessMesUploadContext context,
+        ProcessUploadContext context,
         IReadOnlyList<CellCompletedRecord> records,
         CancellationToken cancellationToken = default)
     {

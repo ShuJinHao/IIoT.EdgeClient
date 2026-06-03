@@ -1639,7 +1639,7 @@ internal sealed class FakeMesUploader : IProcessMesUploader
 {
     private readonly Queue<MesCallResult> _results = new();
 
-    public FakeMesUploader(string processType, MesUploadMode uploadMode = MesUploadMode.Single)
+    public FakeMesUploader(string processType, ProcessUploadMode uploadMode = ProcessUploadMode.Single)
     {
         ProcessType = processType;
         UploadMode = uploadMode;
@@ -1647,7 +1647,7 @@ internal sealed class FakeMesUploader : IProcessMesUploader
 
     public string ProcessType { get; }
 
-    public MesUploadMode UploadMode { get; }
+    public ProcessUploadMode UploadMode { get; }
 
     public int UploadCallCount { get; private set; }
 
@@ -1659,7 +1659,7 @@ internal sealed class FakeMesUploader : IProcessMesUploader
     public void EnqueueResult(MesCallResult result) => _results.Enqueue(result);
 
     public Task<MesCallResult> UploadAsync(
-        ProcessMesUploadContext context,
+        ProcessUploadContext context,
         IReadOnlyList<CellCompletedRecord> records,
         CancellationToken cancellationToken = default)
     {
@@ -1677,26 +1677,26 @@ internal sealed class FakeMesUploader : IProcessMesUploader
 
 internal sealed class FakeProcessIntegrationRegistry : IProcessIntegrationRegistry
 {
-    private readonly Dictionary<string, CloudUploaderRegistration> _cloud = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, MesUploaderRegistration> _mes = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, ProcessUploaderRegistration> _cloud = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, ProcessUploaderRegistration> _mes = new(StringComparer.OrdinalIgnoreCase);
 
     public void RegisterCloudUploader(string processType, ProcessUploadMode uploadMode)
-        => _cloud[processType] = new CloudUploaderRegistration(processType, uploadMode);
+        => _cloud[processType] = new ProcessUploaderRegistration(processType, uploadMode);
 
-    public void RegisterMesUploader(string processType, MesUploadMode uploadMode)
-        => _mes[processType] = new MesUploaderRegistration(processType, uploadMode);
+    public void RegisterMesUploader(string processType, ProcessUploadMode uploadMode)
+        => _mes[processType] = new ProcessUploaderRegistration(processType, uploadMode);
 
     public bool HasCloudUploader(string processType) => _cloud.ContainsKey(processType);
 
     public bool HasMesUploader(string processType) => _mes.ContainsKey(processType);
 
-    public bool TryGetCloudUploader(string processType, out CloudUploaderRegistration registration)
+    public bool TryGetCloudUploader(string processType, out ProcessUploaderRegistration registration)
         => _cloud.TryGetValue(processType, out registration!);
 
-    public bool TryGetMesUploader(string processType, out MesUploaderRegistration registration)
+    public bool TryGetMesUploader(string processType, out ProcessUploaderRegistration registration)
         => _mes.TryGetValue(processType, out registration!);
 
-    public IReadOnlyDictionary<string, CloudUploaderRegistration> GetCloudUploaders() => _cloud;
+    public IReadOnlyDictionary<string, ProcessUploaderRegistration> GetCloudUploaders() => _cloud;
 
-    public IReadOnlyDictionary<string, MesUploaderRegistration> GetMesUploaders() => _mes;
+    public IReadOnlyDictionary<string, ProcessUploaderRegistration> GetMesUploaders() => _mes;
 }

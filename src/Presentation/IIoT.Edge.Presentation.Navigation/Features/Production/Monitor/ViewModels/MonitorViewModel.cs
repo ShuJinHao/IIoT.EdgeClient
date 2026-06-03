@@ -311,9 +311,31 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
         ApplyStateMachineTaskItems(_stateMachineTaskItemFactory.CreateItems(snapshot.StateMachineTaskRows));
         _cellDebugRows = snapshot.CellDebugRows;
         ApplyCellDebugFilter();
-        _cellTable = snapshot.CellTable;
+        _cellTable = BuildCellDataTable(snapshot.CellTable);
         RefreshSyncDiagnostics(snapshot);
         RaiseSnapshotPropertiesChanged();
+    }
+
+    private static DataTable BuildCellDataTable(MonitorCellTableSnapshot snapshot)
+    {
+        var table = new DataTable();
+        foreach (var column in snapshot.Columns)
+        {
+            table.Columns.Add(column, typeof(string));
+        }
+
+        foreach (var snapshotRow in snapshot.Rows)
+        {
+            var row = table.NewRow();
+            for (var index = 0; index < snapshot.Columns.Count && index < snapshotRow.Values.Count; index++)
+            {
+                row[index] = snapshotRow.Values[index];
+            }
+
+            table.Rows.Add(row);
+        }
+
+        return table;
     }
 
     private DeviceMonitorSnapshot? FindSelectedSnapshot()

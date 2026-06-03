@@ -176,7 +176,7 @@ public sealed class HomogenizationMesIntegrationTests
         var uploader = (IProcessMesUploader)CreateChannel(httpClient, stationNo: "ST-H-06");
 
         var result = await uploader.UploadAsync(
-            new ProcessMesUploadContext(CreateDevice()),
+            new ProcessUploadContext(CreateDevice()),
             [
                 new IIoT.Edge.SharedKernel.DataPipeline.CellCompletedRecord
                 {

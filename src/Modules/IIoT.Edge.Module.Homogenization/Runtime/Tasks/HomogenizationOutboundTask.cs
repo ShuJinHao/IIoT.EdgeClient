@@ -65,50 +65,18 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
     {
         const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.出料上传;
 
-        switch (Step)
-        {
-            case 0:
-                if (Interaction.IsTriggered(trigger))
-                {
-                    Logger.Info($"[{ModuleContext.DeviceName}] {TaskName} 出料上传已触发。");
-                    Step = 10;
-                }
-
-                break;
-
-            case 10:
-                try
-                {
-                    await ProcessTriggerAsync(TaskCancellationToken).ConfigureAwait(false);
-                    Step = 30;
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    var message = $"出料处理异常：{ex.Message}";
-                    ModuleContext.LastOutboundAt = ProductionTime.BusinessNow;
-                    ModuleContext.LastOutboundResult = message;
-                    _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Outbound, message);
-                    Interaction.ReplyException(trigger);
-                    Logger.Error($"[{ModuleContext.DeviceName}] {TaskName} {message}");
-                    Step = 30;
-                }
-
-                break;
-
-            case 30:
-                if (Interaction.IsReset(trigger))
-                {
-                    Interaction.ReplyReset(trigger);
-                    Logger.Info($"[{ModuleContext.DeviceName}] {TaskName} 出料复位。");
-                    Step = 0;
-                }
-
-                break;
-        }
+        await ExecuteHandshakeAsync(
+            trigger,
+            "出料上传已触发。",
+            "出料复位。",
+            ProcessTriggerAsync,
+            static ex => $"出料处理异常：{ex.Message}",
+            message =>
+            {
+                ModuleContext.LastOutboundAt = ProductionTime.BusinessNow;
+                ModuleContext.LastOutboundResult = message;
+                _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Outbound, message);
+            }).ConfigureAwait(false);
     }
 
     private async Task ProcessTriggerAsync(CancellationToken cancellationToken)
@@ -226,4 +194,3 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
             : $"出料未接收，数据管道拒绝入队（{reason}）。";
     }
 }
-

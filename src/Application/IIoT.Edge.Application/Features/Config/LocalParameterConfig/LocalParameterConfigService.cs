@@ -2,11 +2,8 @@ using IIoT.Edge.Application.Abstractions.Cache;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Features.Config;
 using IIoT.Edge.Application.Features.Config.ModuleParameters;
-using IIoT.Edge.Application.Features.Config.UseCases.SystemConfig.Queries;
 using IIoT.Edge.Domain.Config.Aggregates;
 using IIoT.Edge.SharedKernel.Repository;
-using MediatR;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace IIoT.Edge.Application.Features.Config.LocalParameterConfig;
 
@@ -14,25 +11,25 @@ namespace IIoT.Edge.Application.Features.Config.LocalParameterConfig;
 /// 统一封装本地模块参数读取与变更通知。
 /// </summary>
 public sealed class LocalParameterConfigService(
-    IServiceScopeFactory scopeFactory)
+    IRepository<SystemConfigEntity> systemConfigs,
+    IEdgeCacheService cache)
     : ILocalParameterConfigService, ILocalParameterConfigChangePublisher
 {
-    private readonly IServiceScopeFactory _scopeFactory = scopeFactory;
+    private readonly IRepository<SystemConfigEntity> _systemConfigs = systemConfigs;
+    private readonly IEdgeCacheService _cache = cache;
 
     public event EventHandler<ParameterConfigChangedEventArgs>? ParameterConfigChanged;
 
     public async Task<IReadOnlyList<LocalSystemConfigSnapshot>> GetSystemConfigsAsync(
         CancellationToken cancellationToken = default)
     {
-        using var scope = _scopeFactory.CreateScope();
-        var sender = scope.ServiceProvider.GetRequiredService<ISender>();
-        var result = await sender.Send(new GetAllSystemConfigsQuery(), cancellationToken);
-        if (!result.IsSuccess || result.Value is null)
-        {
-            return [];
-        }
+        var result = await _cache.GetOrCreateAsync<List<SystemConfigEntity>>(
+                ParameterCacheKeys.SystemAll,
+                async ct => await _systemConfigs.GetListAsync(_ => true, ct).ConfigureAwait(false),
+                cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
 
-        return result.Value
+        return (result ?? [])
             .OrderBy(x => x.SortOrder)
             .Select(MapSystemConfig)
             .ToList();
@@ -46,18 +43,16 @@ public sealed class LocalParameterConfigService(
         CancellationToken cancellationToken = default)
     {
         var normalizedKey = NormalizeModuleParameterKey(key);
-        using var scope = _scopeFactory.CreateScope();
-        var repo = scope.ServiceProvider.GetRequiredService<IRepository<SystemConfigEntity>>();
-        await repo.ExecuteDeleteAsync(
+        await _systemConfigs.ExecuteDeleteAsync(
             x => x.Key == normalizedKey,
             cancellationToken).ConfigureAwait(false);
 
         var entity = SystemConfigEntity.Create(normalizedKey, value, description);
         entity.UpdateSortOrder(Math.Max(0, sortOrder));
-        repo.Add(entity);
-        await repo.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _systemConfigs.Add(entity);
+        await _systemConfigs.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        InvalidateModuleCaches(scope.ServiceProvider);
+        InvalidateModuleCaches();
     }
 
     public async Task DeleteSystemConfigAsync(
@@ -65,15 +60,13 @@ public sealed class LocalParameterConfigService(
         CancellationToken cancellationToken = default)
     {
         var normalizedKey = NormalizeModuleParameterKey(key);
-        using var scope = _scopeFactory.CreateScope();
-        var repo = scope.ServiceProvider.GetRequiredService<IRepository<SystemConfigEntity>>();
-        var deleted = await repo.ExecuteDeleteAsync(
+        var deleted = await _systemConfigs.ExecuteDeleteAsync(
             x => x.Key == normalizedKey,
             cancellationToken).ConfigureAwait(false);
 
         if (deleted > 0)
         {
-            InvalidateModuleCaches(scope.ServiceProvider);
+            InvalidateModuleCaches();
         }
     }
 
@@ -82,11 +75,10 @@ public sealed class LocalParameterConfigService(
             this,
             new ParameterConfigChangedEventArgs(ParameterConfigChangeScope.Module));
 
-    private void InvalidateModuleCaches(IServiceProvider serviceProvider)
+    private void InvalidateModuleCaches()
     {
-        var cache = serviceProvider.GetRequiredService<IEdgeCacheService>();
-        cache.Remove(ParameterCacheKeys.SystemAll);
-        cache.RemoveByPrefix(ParameterCacheKeys.ModuleSnapshotPrefix);
+        _cache.Remove(ParameterCacheKeys.SystemAll);
+        _cache.RemoveByPrefix(ParameterCacheKeys.ModuleSnapshotPrefix);
         NotifyModuleChanged();
     }
 

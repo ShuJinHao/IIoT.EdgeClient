@@ -174,38 +174,38 @@ public sealed class LocalSystemRuntimeConfigBehaviorTests
         IEnumerable<string> mesProcessTypes,
         IEnumerable<string>? cloudProcessTypes = null) : IProcessIntegrationRegistry
     {
-        private readonly Dictionary<string, CloudUploaderRegistration> _cloudUploaders = (cloudProcessTypes ?? [])
+        private readonly Dictionary<string, ProcessUploaderRegistration> _cloudUploaders = (cloudProcessTypes ?? [])
             .ToDictionary(
                 static processType => processType,
-                static processType => new CloudUploaderRegistration(processType, ProcessUploadMode.Batch),
+                static processType => new ProcessUploaderRegistration(processType, ProcessUploadMode.Batch),
                 StringComparer.OrdinalIgnoreCase);
 
-        private readonly Dictionary<string, MesUploaderRegistration> _mesUploaders = mesProcessTypes
+        private readonly Dictionary<string, ProcessUploaderRegistration> _mesUploaders = mesProcessTypes
             .ToDictionary(
                 static processType => processType,
-                static processType => new MesUploaderRegistration(processType, MesUploadMode.Single),
+                static processType => new ProcessUploaderRegistration(processType, ProcessUploadMode.Single),
                 StringComparer.OrdinalIgnoreCase);
 
         public void RegisterCloudUploader(string processType, ProcessUploadMode uploadMode)
             => throw new NotSupportedException();
 
-        public void RegisterMesUploader(string processType, MesUploadMode uploadMode)
+        public void RegisterMesUploader(string processType, ProcessUploadMode uploadMode)
             => throw new NotSupportedException();
 
         public bool HasCloudUploader(string processType) => _cloudUploaders.ContainsKey(processType);
 
         public bool HasMesUploader(string processType) => _mesUploaders.ContainsKey(processType);
 
-        public bool TryGetCloudUploader(string processType, out CloudUploaderRegistration registration)
+        public bool TryGetCloudUploader(string processType, out ProcessUploaderRegistration registration)
             => _cloudUploaders.TryGetValue(processType, out registration!);
 
-        public bool TryGetMesUploader(string processType, out MesUploaderRegistration registration)
+        public bool TryGetMesUploader(string processType, out ProcessUploaderRegistration registration)
             => _mesUploaders.TryGetValue(processType, out registration!);
 
-        public IReadOnlyDictionary<string, CloudUploaderRegistration> GetCloudUploaders()
+        public IReadOnlyDictionary<string, ProcessUploaderRegistration> GetCloudUploaders()
             => _cloudUploaders;
 
-        public IReadOnlyDictionary<string, MesUploaderRegistration> GetMesUploaders()
+        public IReadOnlyDictionary<string, ProcessUploaderRegistration> GetMesUploaders()
             => _mesUploaders;
     }
 }

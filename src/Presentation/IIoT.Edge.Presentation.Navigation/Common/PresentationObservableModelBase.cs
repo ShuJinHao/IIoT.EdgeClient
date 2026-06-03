@@ -1,14 +1,5 @@
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
+using IIoT.Edge.UI.Shared.Mvvm;
 
 namespace IIoT.Edge.Presentation.Navigation.Common;
 
-public abstract class PresentationObservableModelBase : INotifyPropertyChanged
-{
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-    {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-    }
-}
+public abstract class PresentationObservableModelBase : BaseNotifyPropertyChanged;

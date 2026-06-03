@@ -114,7 +114,7 @@ public sealed class StandardModuleNavigationRegistrationBehaviorTests
         {
         }
 
-        public void RegisterMesUploader(MesUploadMode uploadMode)
+        public void RegisterMesUploader(ProcessUploadMode uploadMode)
         {
         }
 

@@ -13,7 +13,7 @@ public abstract class EdgeProcessModuleBase<TCellData> : IEdgeProcessModule
 
     protected abstract ProcessUploadMode CloudUploadMode { get; }
 
-    protected virtual MesUploadMode? MesUploadMode => null;
+    protected virtual ProcessUploadMode? MesUploadMode => null;
 
     protected abstract IStationRuntimeFactory CreateRuntimeFactory();
 

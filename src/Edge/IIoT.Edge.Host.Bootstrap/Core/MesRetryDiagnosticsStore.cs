@@ -2,79 +2,52 @@ using IIoT.Edge.Application.Abstractions.Modules;
 
 namespace IIoT.Edge.Shell.Core;
 
-public sealed class MesRetryDiagnosticsStore : IMesRetryDiagnosticsStore
+public sealed class MesRetryDiagnosticsStore
+    : CapacityBlockableDiagnosticsStore<MesRetryDiagnosticsSnapshot, MesRetryRuntimeState>,
+        IMesRetryDiagnosticsStore
 {
-    private readonly object _sync = new();
-    private string? _blockedProcessType;
-    private MesRetryDiagnosticsSnapshot _snapshot = new(
-        MesRetryRuntimeState.Idle,
-        IsCapacityBlocked: false,
-        BlockedChannel: null,
-        BlockedReason: "none",
-        LastCapacityBlockAt: null);
-
-    public MesRetryDiagnosticsSnapshot Snapshot
+    public MesRetryDiagnosticsStore()
+        : base(new MesRetryDiagnosticsSnapshot(
+            MesRetryRuntimeState.Idle,
+            IsCapacityBlocked: false,
+            BlockedChannel: null,
+            BlockedReason: "none",
+            LastCapacityBlockAt: null))
     {
-        get
-        {
-            lock (_sync)
-            {
-                return _snapshot;
-            }
-        }
     }
+
+    public MesRetryDiagnosticsSnapshot Snapshot => GetSnapshot();
 
     public void SetRuntimeState(MesRetryRuntimeState state)
-    {
-        lock (_sync)
-        {
-            if (_snapshot.RuntimeState == state)
-            {
-                return;
-            }
-
-            _snapshot = _snapshot with
-            {
-                RuntimeState = state
-            };
-        }
-    }
+        => SetRuntimeStateCore(
+            state,
+            static snapshot => snapshot.RuntimeState,
+            static (snapshot, runtimeState) => snapshot with { RuntimeState = runtimeState });
 
     public void MarkCapacityBlocked(
         CapacityBlockedChannel channel,
         string blockedReason,
         string? processType = null,
         DateTime? occurredAt = null)
-    {
-        lock (_sync)
-        {
-            _blockedProcessType = processType;
-            _snapshot = _snapshot with
+        => MarkCapacityBlockedCore(
+            channel,
+            blockedReason,
+            occurredAt,
+            static (snapshot, blockedChannel, reason, blockTime) => snapshot with
             {
                 IsCapacityBlocked = true,
-                BlockedChannel = channel,
-                BlockedReason = string.IsNullOrWhiteSpace(blockedReason) ? "unknown" : blockedReason,
-                LastCapacityBlockAt = occurredAt ?? DateTime.UtcNow
-            };
-        }
-    }
+                BlockedChannel = blockedChannel,
+                BlockedReason = reason,
+                LastCapacityBlockAt = blockTime
+            });
 
     public void ClearCapacityBlocked()
-    {
-        lock (_sync)
-        {
-            if (!_snapshot.IsCapacityBlocked)
-            {
-                return;
-            }
-
-            _blockedProcessType = null;
-            _snapshot = _snapshot with
+        => ClearCapacityBlockedCore(
+            static snapshot => snapshot.IsCapacityBlocked,
+            static snapshot => snapshot with
             {
                 IsCapacityBlocked = false,
                 BlockedChannel = null,
                 BlockedReason = "none"
-            };
-        }
-    }
+            });
 }

@@ -795,7 +795,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
 
         public string ProcessType => "Homogenization";
 
-        public MesUploadMode UploadMode => MesUploadMode.Single;
+        public ProcessUploadMode UploadMode => ProcessUploadMode.Single;
 
         public TaskCompletionSource<bool>? InboundGate { get; set; }
 
@@ -862,7 +862,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
             => Task.FromResult(MesCallResult<HomogenizationTraceBatchResult>.Success(null));
 
         public Task<MesCallResult> UploadAsync(
-            ProcessMesUploadContext context,
+            ProcessUploadContext context,
             IReadOnlyList<CellCompletedRecord> records,
             CancellationToken cancellationToken = default)
             => Task.FromResult(MesCallResult.Success());

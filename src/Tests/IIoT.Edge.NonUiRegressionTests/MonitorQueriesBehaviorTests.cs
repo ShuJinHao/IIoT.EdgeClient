@@ -476,7 +476,7 @@ public sealed class MonitorQueriesBehaviorTests
         Assert.Empty(snapshot.EquipmentStatusRows);
         Assert.Empty(snapshot.RealtimeRows);
         Assert.Equal(0, snapshot.CellCount);
-        Assert.Equal(0, snapshot.CellTable.Rows.Count);
+        Assert.Empty(snapshot.CellTable.Rows);
         Assert.Empty(snapshot.CellDebugRows);
     }
 

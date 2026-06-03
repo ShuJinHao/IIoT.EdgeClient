@@ -799,7 +799,7 @@ public sealed class HomogenizationBusinessChainBehaviorTests
 
         public string ProcessType => "Homogenization";
 
-        public MesUploadMode UploadMode => MesUploadMode.Single;
+        public ProcessUploadMode UploadMode => ProcessUploadMode.Single;
 
         public MesCallResult InboundResult { get; set; } = MesCallResult.Success();
 
@@ -860,7 +860,7 @@ public sealed class HomogenizationBusinessChainBehaviorTests
             => Task.FromResult(MesCallResult<HomogenizationTraceBatchResult>.Success(null));
 
         public Task<MesCallResult> UploadAsync(
-            ProcessMesUploadContext context,
+            ProcessUploadContext context,
             IReadOnlyList<CellCompletedRecord> records,
             CancellationToken cancellationToken = default)
             => Task.FromResult(MesCallResult.Success());

@@ -3,105 +3,74 @@ using IIoT.Edge.Application.Abstractions.Modules;
 
 namespace IIoT.Edge.Shell.Core;
 
-public sealed class CloudUploadDiagnosticsStore : ICloudUploadDiagnosticsStore
+public sealed class CloudUploadDiagnosticsStore
+    : CapacityBlockableDiagnosticsStore<CloudUploadDiagnosticsSnapshot, CloudRetryRuntimeState>,
+        ICloudUploadDiagnosticsStore
 {
-    private readonly object _sync = new();
-    private string? _blockedProcessType;
-
-    private CloudUploadDiagnosticsSnapshot _snapshot = new(
-        LastAttemptAt: null,
-        LastSuccessAt: null,
-        LastFailureAt: null,
-        LastOutcome: CloudCallOutcome.Success,
-        LastReasonCode: "none",
-        LastProcessType: null,
-        RuntimeState: CloudRetryRuntimeState.Idle,
-        IsCapacityBlocked: false,
-        BlockedChannel: null,
-        BlockedReason: "none",
-        LastCapacityBlockAt: null);
-
-    public CloudUploadDiagnosticsSnapshot Snapshot
+    public CloudUploadDiagnosticsStore()
+        : base(new CloudUploadDiagnosticsSnapshot(
+            LastAttemptAt: null,
+            LastSuccessAt: null,
+            LastFailureAt: null,
+            LastOutcome: CloudCallOutcome.Success,
+            LastReasonCode: "none",
+            LastProcessType: null,
+            RuntimeState: CloudRetryRuntimeState.Idle,
+            IsCapacityBlocked: false,
+            BlockedChannel: null,
+            BlockedReason: "none",
+            LastCapacityBlockAt: null))
     {
-        get
-        {
-            lock (_sync)
-            {
-                return _snapshot;
-            }
-        }
     }
+
+    public CloudUploadDiagnosticsSnapshot Snapshot => GetSnapshot();
 
     public void RecordResult(string? processType, CloudCallResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
 
         var now = DateTime.UtcNow;
-        lock (_sync)
-        {
-            _snapshot = _snapshot with
+        UpdateSnapshot(snapshot => snapshot with
             {
                 LastAttemptAt = now,
-                LastSuccessAt = result.IsSuccess ? now : _snapshot.LastSuccessAt,
-                LastFailureAt = result.IsSuccess ? _snapshot.LastFailureAt : now,
+                LastSuccessAt = result.IsSuccess ? now : snapshot.LastSuccessAt,
+                LastFailureAt = result.IsSuccess ? snapshot.LastFailureAt : now,
                 LastOutcome = result.Outcome,
                 LastReasonCode = string.IsNullOrWhiteSpace(result.ReasonCode) ? "unknown" : result.ReasonCode,
                 LastProcessType = processType
-            };
-        }
+            });
     }
 
     public void SetRuntimeState(CloudRetryRuntimeState state)
-    {
-        lock (_sync)
-        {
-            if (_snapshot.RuntimeState == state)
-            {
-                return;
-            }
-
-            _snapshot = _snapshot with
-            {
-                RuntimeState = state
-            };
-        }
-    }
+        => SetRuntimeStateCore(
+            state,
+            static snapshot => snapshot.RuntimeState,
+            static (snapshot, runtimeState) => snapshot with { RuntimeState = runtimeState });
 
     public void MarkCapacityBlocked(
         CapacityBlockedChannel channel,
         string blockedReason,
         string? processType = null,
         DateTime? occurredAt = null)
-    {
-        lock (_sync)
-        {
-            _blockedProcessType = processType;
-            _snapshot = _snapshot with
+        => MarkCapacityBlockedCore(
+            channel,
+            blockedReason,
+            occurredAt,
+            static (snapshot, blockedChannel, reason, blockTime) => snapshot with
             {
                 IsCapacityBlocked = true,
-                BlockedChannel = channel,
-                BlockedReason = string.IsNullOrWhiteSpace(blockedReason) ? "unknown" : blockedReason,
-                LastCapacityBlockAt = occurredAt ?? DateTime.UtcNow
-            };
-        }
-    }
+                BlockedChannel = blockedChannel,
+                BlockedReason = reason,
+                LastCapacityBlockAt = blockTime
+            });
 
     public void ClearCapacityBlocked()
-    {
-        lock (_sync)
-        {
-            if (!_snapshot.IsCapacityBlocked)
-            {
-                return;
-            }
-
-            _blockedProcessType = null;
-            _snapshot = _snapshot with
+        => ClearCapacityBlockedCore(
+            static snapshot => snapshot.IsCapacityBlocked,
+            static snapshot => snapshot with
             {
                 IsCapacityBlocked = false,
                 BlockedChannel = null,
                 BlockedReason = "none"
-            };
-        }
-    }
+            });
 }

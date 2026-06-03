@@ -48,8 +48,8 @@ public sealed class DependencyInjection : EdgeProcessModuleBase<HomogenizationCe
 
     protected override ProcessUploadMode CloudUploadMode => ProcessUploadMode.Batch;
 
-    protected override MesUploadMode? MesUploadMode
-        => IIoT.Edge.Application.Abstractions.Modules.MesUploadMode.Single;
+    protected override ProcessUploadMode? MesUploadMode
+        => IIoT.Edge.Application.Abstractions.Modules.ProcessUploadMode.Single;
 
     protected override IStationRuntimeFactory CreateRuntimeFactory()
         => new HomogenizationStationRuntimeFactory();
@@ -101,4 +101,3 @@ public sealed class DependencyInjection : EdgeProcessModuleBase<HomogenizationCe
     protected override void RegisterModuleViews(IEdgeProcessModuleBuilder builder)
         => builder.RegisterHomogenizationViews();
 }
-

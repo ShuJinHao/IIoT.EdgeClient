@@ -55,6 +55,9 @@ public static class DependencyInjection
         services.AddSingleton<ICloudFallbackRecoveryService, CloudFallbackRecoveryService>();
         services.AddSingleton<ICloudRetryRecordProcessor, CloudRetryRecordProcessor>();
         services.AddSingleton<ICloudRetryHousekeepingService, CloudRetryHousekeepingService>();
+        services.AddSingleton<IMesFallbackRecoveryService, MesFallbackRecoveryService>();
+        services.AddSingleton<IMesRetryRecordProcessor, MesRetryRecordProcessor>();
+        services.AddSingleton<IMesRetryHousekeepingService, MesRetryHousekeepingService>();
         services.AddSingleton<DataPipelineService>();
         services.AddSingleton<IDataPipelineService>(sp => sp.GetRequiredService<DataPipelineService>());
 

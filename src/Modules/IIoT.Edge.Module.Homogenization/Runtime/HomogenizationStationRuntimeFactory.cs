@@ -250,7 +250,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
         {
             tasks.Add(new HomogenizationHeartbeatTask(
                 buffer,
-                interaction,
+                interactionSignals,
                 homogenizationContext,
                 logger,
                 productionTime,
