@@ -162,6 +162,7 @@
                                 Grid.Column="1"
                                 Classes="log-clear"
                                 Content="{TemplateBinding ClearText}"
+                                IsVisible="{TemplateBinding ShowClearButton}"
                                 MinWidth="44"
                                 Command="{TemplateBinding ClearCommand}"
                                 Kind="Ghost"
@@ -176,28 +177,50 @@
                             BorderThickness="0,0,0,1"
                             CornerRadius="{DynamicResource Edge.CornerRadius.Control}"
                             Padding="7,0,7,2">
-                            <Grid ColumnDefinitions="54,74,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
-                                <TextBlock
-                                    VerticalAlignment="Center"
-                                    FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                    Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                    Text="{TemplateBinding TimeHeader}" />
-                                <TextBlock
-                                    Grid.Column="1"
-                                    VerticalAlignment="Center"
-                                    FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                    Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                    Text="{TemplateBinding LevelHeader}" />
-                                <TextBlock
-                                    Grid.Column="2"
-                                    VerticalAlignment="Center"
-                                    FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                    Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                    Text="{TemplateBinding MessageHeader}" />
+                            <Grid>
+                                <Grid
+                                    ColumnDefinitions="54,74,*"
+                                    ColumnSpacing="{DynamicResource Edge.Size.Spacing8}"
+                                    IsVisible="{TemplateBinding ShowTimeColumn}">
+                                    <TextBlock
+                                        VerticalAlignment="Center"
+                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                        Text="{TemplateBinding TimeHeader}" />
+                                    <TextBlock
+                                        Grid.Column="1"
+                                        VerticalAlignment="Center"
+                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                        Text="{TemplateBinding LevelHeader}" />
+                                    <TextBlock
+                                        Grid.Column="2"
+                                        VerticalAlignment="Center"
+                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                        Text="{TemplateBinding MessageHeader}" />
+                                </Grid>
+
+                                <Grid
+                                    ColumnDefinitions="74,*"
+                                    ColumnSpacing="{DynamicResource Edge.Size.Spacing8}"
+                                    IsVisible="{Binding !ShowTimeColumn, RelativeSource={RelativeSource TemplatedParent}}">
+                                    <TextBlock
+                                        VerticalAlignment="Center"
+                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                        Text="{TemplateBinding LevelHeader}" />
+                                    <TextBlock
+                                        Grid.Column="1"
+                                        VerticalAlignment="Center"
+                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                        Text="{TemplateBinding MessageHeader}" />
+                                </Grid>
                             </Grid>
                         </Border>
 
-                        <Grid Grid.Row="2" MinHeight="284">
+                        <Grid Grid.Row="2" MinHeight="{TemplateBinding ListMinHeight}">
                             <StackPanel Classes="edge-data-panel-content">
                                 <ScrollViewer
                                     Classes="edge-scroll-host variant-panel"
@@ -229,45 +252,87 @@
                     Padding="7,3,7,4"
                     BorderBrush="{DynamicResource Edge.Brush.Surface.Wash}"
                     BorderThickness="0,0,0,0.35">
-                    <Grid ColumnDefinitions="54,74,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
-                        <TextBlock
-                            VerticalAlignment="Top"
-                            FontSize="{DynamicResource Edge.FontSize.Caption}"
-                            Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
-                            Text="{TemplateBinding TimeText}" />
+                    <Grid>
+                        <Grid
+                            ColumnDefinitions="54,74,*"
+                            ColumnSpacing="{DynamicResource Edge.Size.Spacing8}"
+                            IsVisible="{TemplateBinding ShowTimeColumn}">
+                            <TextBlock
+                                VerticalAlignment="Top"
+                                FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
+                                Text="{TemplateBinding TimeText}" />
+
+                            <Grid
+                                Grid.Column="1"
+                                ClipToBounds="True"
+                                ColumnDefinitions="Auto,*"
+                                ColumnSpacing="{DynamicResource Edge.Size.Spacing4}"
+                                VerticalAlignment="Top"
+                                HorizontalAlignment="Stretch">
+                                <controls:EdgeStatusDot
+                                    VerticalAlignment="Center"
+                                    Size="5.5"
+                                    Status="{TemplateBinding Status}" />
+                                <TextBlock
+                                    Grid.Column="1"
+                                    FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                    Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                    LineHeight="14"
+                                    MaxLines="1"
+                                    Text="{TemplateBinding LevelText}"
+                                    TextTrimming="CharacterEllipsis"
+                                    ToolTip.Tip="{TemplateBinding LevelText}" />
+                            </Grid>
+
+                            <TextBlock
+                                Grid.Column="2"
+                                FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                LineHeight="14"
+                                MaxLines="{TemplateBinding MaxMessageLines}"
+                                Text="{TemplateBinding Message}"
+                                TextTrimming="CharacterEllipsis"
+                                TextWrapping="Wrap"
+                                ToolTip.Tip="{TemplateBinding Message}" />
+                        </Grid>
 
                         <Grid
-                            Grid.Column="1"
-                            ClipToBounds="True"
-                            ColumnDefinitions="Auto,*"
-                            ColumnSpacing="{DynamicResource Edge.Size.Spacing4}"
-                            VerticalAlignment="Top"
-                            HorizontalAlignment="Stretch">
-                            <controls:EdgeStatusDot
-                                VerticalAlignment="Center"
-                                Size="5.5"
-                                Status="{TemplateBinding Status}" />
+                            ColumnDefinitions="74,*"
+                            ColumnSpacing="{DynamicResource Edge.Size.Spacing8}"
+                            IsVisible="{Binding !ShowTimeColumn, RelativeSource={RelativeSource TemplatedParent}}">
+                            <Grid
+                                ClipToBounds="True"
+                                ColumnDefinitions="Auto,*"
+                                ColumnSpacing="{DynamicResource Edge.Size.Spacing4}"
+                                VerticalAlignment="Top"
+                                HorizontalAlignment="Stretch">
+                                <controls:EdgeStatusDot
+                                    VerticalAlignment="Center"
+                                    Size="5.5"
+                                    Status="{TemplateBinding Status}" />
+                                <TextBlock
+                                    Grid.Column="1"
+                                    FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                    Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                    LineHeight="14"
+                                    MaxLines="1"
+                                    Text="{TemplateBinding LevelText}"
+                                    TextTrimming="CharacterEllipsis"
+                                    ToolTip.Tip="{TemplateBinding LevelText}" />
+                            </Grid>
+
                             <TextBlock
                                 Grid.Column="1"
                                 FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
                                 LineHeight="14"
-                                MaxLines="1"
-                                Text="{TemplateBinding LevelText}"
+                                MaxLines="{TemplateBinding MaxMessageLines}"
+                                Text="{TemplateBinding Message}"
                                 TextTrimming="CharacterEllipsis"
-                                ToolTip.Tip="{TemplateBinding LevelText}" />
+                                TextWrapping="Wrap"
+                                ToolTip.Tip="{TemplateBinding Message}" />
                         </Grid>
-
-                        <TextBlock
-                            Grid.Column="2"
-                            FontSize="{DynamicResource Edge.FontSize.Caption}"
-                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                            LineHeight="14"
-                            MaxLines="{TemplateBinding MaxMessageLines}"
-                            Text="{TemplateBinding Message}"
-                            TextTrimming="CharacterEllipsis"
-                            TextWrapping="Wrap"
-                            ToolTip.Tip="{TemplateBinding Message}" />
                     </Grid>
                 </Border>
             </ControlTemplate>

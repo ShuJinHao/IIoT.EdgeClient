@@ -10,6 +10,7 @@ using IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
 using IIoT.Edge.Presentation.Navigation.Localization;
 using IIoT.Edge.Presentation.Shell.Localization;
 using IIoT.Edge.SharedKernel.DataPipeline;
+using IIoT.Edge.UI.Shared.Avalonia.Controls;
 using IIoT.Edge.UI.Shared.Localization;
 using Xunit;
 
@@ -179,7 +180,7 @@ public sealed class DiagnosticsViewModelBehaviorTests
         });
 
     [Fact]
-    public Task DiagnosticsViewModel_ShouldPresentStartupIssuesAsOperatorListRows()
+    public Task DiagnosticsViewModel_ShouldPresentStartupIssuesAsLogRows()
         => RunOnStaThreadAsync(async () =>
         {
             var startupStore = new FakeStartupDiagnosticsStore();
@@ -225,19 +226,19 @@ public sealed class DiagnosticsViewModelBehaviorTests
             Assert.Equal(2, viewModel.Issues.Count);
 
             var plcRow = Assert.Single(viewModel.Issues, row => row.Message.Contains("PlcAddress", StringComparison.Ordinal));
-            Assert.Equal("PLC-Homogenization-01 · Homogenization", plcRow.IssueSubtitle);
-            Assert.DoesNotContain("DEVICE_MODULE_MISMATCH", plcRow.IssueSubtitle, StringComparison.Ordinal);
+            Assert.Equal("ERROR", plcRow.LevelText);
+            Assert.Equal(EdgeVisualStatus.Error, plcRow.Status);
+            Assert.Equal(plcRow.Message, plcRow.DisplayMessage);
             Assert.False(plcRow.HasDuplicateCount);
 
             var signalRow = Assert.Single(viewModel.Issues, row => row.Message.Contains("Interaction.test1", StringComparison.Ordinal));
             Assert.Equal("信号 Homogenization.Interaction.test1 地址不能为空。", signalRow.Message);
-            Assert.Equal("PLC-Homogenization-01 · Homogenization", signalRow.IssueSubtitle);
-            Assert.DoesNotContain("HARDWARE_PROFILE_INVALID", signalRow.IssueSubtitle, StringComparison.Ordinal);
+            Assert.Equal("ERROR", signalRow.LevelText);
+            Assert.Equal(EdgeVisualStatus.Error, signalRow.Status);
             Assert.Equal(2, signalRow.DuplicateCount);
             Assert.True(signalRow.HasDuplicateCount);
             Assert.Equal("×2", signalRow.DuplicateBadgeText);
-            Assert.True(signalRow.IsError);
-            Assert.False(signalRow.IsWarning);
+            Assert.Equal("信号 Homogenization.Interaction.test1 地址不能为空。 ×2", signalRow.DisplayMessage);
         });
 
     [Fact]

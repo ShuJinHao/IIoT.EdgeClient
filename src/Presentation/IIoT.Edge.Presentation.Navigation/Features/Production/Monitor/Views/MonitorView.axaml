@@ -233,12 +233,10 @@
                     <StackPanel
                         IsVisible="{Binding IsStateMachineTabSelected}"
                         Spacing="{DynamicResource Edge.Size.Spacing12}">
-                        <edge:EdgeCard PaddingMode="Compact">
+                        <edge:EdgeCard Classes="summary" PaddingMode="Compact">
                             <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="{DynamicResource Edge.Size.Spacing8}">
                                 <TextBlock
-                                    FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
-                                    FontWeight="SemiBold"
-                                    Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                    Classes="edge-summary-card-title"
                                     Text="{DynamicResource Navigation_Monitor_StatusSummary}" />
 
                                 <ItemsControl
@@ -254,18 +252,13 @@
                                             <Border
                                                 MinWidth="152"
                                                 Margin="0,0,6,6"
-                                                Padding="10,6"
-                                                Background="{DynamicResource Edge.Brush.Surface.Wash}"
-                                                CornerRadius="{DynamicResource Edge.CornerRadius.Control}">
+                                                Classes="edge-summary-card-row">
                                                 <StackPanel Spacing="2">
                                                     <TextBlock
-                                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                                        Classes="edge-summary-card-label"
                                                         Text="{Binding Label}" />
                                                     <TextBlock
-                                                        FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
-                                                        FontWeight="SemiBold"
-                                                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                                        Classes="edge-summary-card-value"
                                                         Text="{Binding Value}"
                                                         TextWrapping="Wrap" />
                                                 </StackPanel>
@@ -276,20 +269,15 @@
 
                                 <Border
                                     Grid.Row="2"
-                                    Padding="10,6"
-                                    Background="{DynamicResource Edge.Brush.Surface.Wash}"
-                                    CornerRadius="{DynamicResource Edge.CornerRadius.Control}"
+                                    Classes="edge-summary-card-row"
                                     DataContext="{Binding LastErrorItem}">
                                     <Grid ColumnDefinitions="96,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing10}">
                                         <TextBlock
-                                            FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                            Classes="edge-summary-card-label"
                                             Text="{Binding Label}" />
                                         <TextBlock
                                             Grid.Column="1"
-                                            FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
-                                            FontWeight="SemiBold"
-                                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                            Classes="edge-summary-card-value"
                                             Text="{Binding Value}"
                                             TextWrapping="Wrap" />
                                     </Grid>

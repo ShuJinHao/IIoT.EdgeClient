@@ -140,6 +140,25 @@ internal sealed class DashboardPreviewRuntimeViewModel : BaseNotifyPropertyChang
 
     public string UploadDeadLetterText => FormatCount(_deadLetterUploadCount);
 
+    public IReadOnlyList<EdgeSummaryItem> UploadHealthSummaryItems =>
+    [
+        new()
+        {
+            Label = GetText("Navigation_DashboardPreview_LastUploadSuccess", "最近成功"),
+            Value = LastUploadSuccessText
+        },
+        new()
+        {
+            Label = GetText("Navigation_DashboardPreview_LastUploadFailure", "最近失败"),
+            Value = LastUploadFailureText
+        },
+        new()
+        {
+            Label = GetText("Navigation_DashboardPreview_DeadLetters", "死信"),
+            Value = UploadDeadLetterText
+        }
+    ];
+
     public bool IsUploadHealthDisabled => !_cloudUploadEnabled && !_mesUploadEnabled;
 
     public bool IsUploadHealthBodyVisible => !IsUploadHealthDisabled && UploadHealthSegments.Count > 0;
@@ -680,6 +699,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : BaseNotifyPropertyChang
         OnPropertyChanged(nameof(LastUploadSuccessText));
         OnPropertyChanged(nameof(LastUploadFailureText));
         OnPropertyChanged(nameof(UploadDeadLetterText));
+        OnPropertyChanged(nameof(UploadHealthSummaryItems));
         OnPropertyChanged(nameof(IsUploadHealthDisabled));
         OnPropertyChanged(nameof(IsUploadHealthBodyVisible));
         OnPropertyChanged(nameof(IsUploadHealthEmpty));
@@ -874,6 +894,25 @@ internal sealed class DashboardPreviewDesignViewModel : BaseNotifyPropertyChange
 
     public string UploadDeadLetterText => FormatText("Navigation_DashboardPreview_CountFormat", "{0} 条", 0);
 
+    public IReadOnlyList<EdgeSummaryItem> UploadHealthSummaryItems =>
+    [
+        new()
+        {
+            Label = GetText("Navigation_DashboardPreview_LastUploadSuccess", "最近成功"),
+            Value = LastUploadSuccessText
+        },
+        new()
+        {
+            Label = GetText("Navigation_DashboardPreview_LastUploadFailure", "最近失败"),
+            Value = LastUploadFailureText
+        },
+        new()
+        {
+            Label = GetText("Navigation_DashboardPreview_DeadLetters", "死信"),
+            Value = UploadDeadLetterText
+        }
+    ];
+
     public bool IsUploadHealthDisabled => false;
 
     public bool IsUploadHealthBodyVisible => true;
@@ -992,11 +1031,4 @@ internal sealed record DashboardPreviewUploadMetricItem(
 
 internal sealed record DashboardPreviewUploadHealthSegment(
     EdgeVisualStatus Status,
-    string Label)
-{
-    public bool IsSuccess => Status == EdgeVisualStatus.Running;
-
-    public bool IsFailure => Status == EdgeVisualStatus.Error;
-
-    public bool IsNeutral => !IsSuccess && !IsFailure;
-}
+    string Label);

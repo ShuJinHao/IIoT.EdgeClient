@@ -483,6 +483,8 @@
     <sys:String x:Key="Navigation_Diagnostics_StartupSelfCheckOkMessage">No configuration or device binding issues are currently reported.</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_StartupIssueCountFormat">Startup diagnostics found {0} issues.</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_DuplicateCountFormat">×{0}</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_LevelColumn">Level</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_MessageColumn">Message</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_ConfigEnvironment">Environment</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_ConfigMachineProfile">Profile</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_ConfigRuntimeDataRoot">Runtime path</sys:String>

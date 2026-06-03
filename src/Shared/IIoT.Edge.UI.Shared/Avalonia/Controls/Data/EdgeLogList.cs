@@ -44,6 +44,15 @@ public class EdgeLogList : TemplatedControl
     public static readonly StyledProperty<string?> MessageHeaderProperty =
         AvaloniaProperty.Register<EdgeLogList, string?>(nameof(MessageHeader));
 
+    public static readonly StyledProperty<bool> ShowClearButtonProperty =
+        AvaloniaProperty.Register<EdgeLogList, bool>(nameof(ShowClearButton), true);
+
+    public static readonly StyledProperty<bool> ShowTimeColumnProperty =
+        AvaloniaProperty.Register<EdgeLogList, bool>(nameof(ShowTimeColumn), true);
+
+    public static readonly StyledProperty<double> ListMinHeightProperty =
+        AvaloniaProperty.Register<EdgeLogList, double>(nameof(ListMinHeight), 284d);
+
     public string? Title
     {
         get => GetValue(TitleProperty);
@@ -108,5 +117,23 @@ public class EdgeLogList : TemplatedControl
     {
         get => GetValue(MessageHeaderProperty);
         set => SetValue(MessageHeaderProperty, value);
+    }
+
+    public bool ShowClearButton
+    {
+        get => GetValue(ShowClearButtonProperty);
+        set => SetValue(ShowClearButtonProperty, value);
+    }
+
+    public bool ShowTimeColumn
+    {
+        get => GetValue(ShowTimeColumnProperty);
+        set => SetValue(ShowTimeColumnProperty, value);
+    }
+
+    public double ListMinHeight
+    {
+        get => GetValue(ListMinHeightProperty);
+        set => SetValue(ListMinHeightProperty, value);
     }
 }

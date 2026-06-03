@@ -81,6 +81,14 @@ public sealed class RepositoryHygieneTests
         @"\b(?:class|record(?:\s+class|\s+struct)?|struct|interface)\s+([A-Za-z_][A-Za-z0-9_]*(?:Vm|ViewModel))\b",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
+    private static readonly Regex BusinessXamlNativeVisibleControlPattern = new(
+        @"<\s*(?:Button|DataGrid|ScrollViewer|ListBox|TextBox|ComboBox|CalendarDatePicker|DatePicker|CheckBox|TabControl)\b",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex PageLevelVisualPropertyPattern = new(
+        @"\b(?:FontSize|FontWeight|Foreground|Background|BorderBrush|BorderThickness|CornerRadius|BoxShadow)\s*=",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
     private static readonly Regex RemovedMapperUsagePattern = new(
         @"\b(?:Add" + "Auto" + "Mapper|I" + "Mapper|Create" + "Map" + @")\b|:\s*Profile\b",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
@@ -645,6 +653,48 @@ public sealed class RepositoryHygieneTests
         Assert.Empty(matches);
     }
 
+    [Fact]
+    public void BusinessXaml_ShouldUseSharedVisibleControlsInsteadOfNativeControls()
+    {
+        var root = FindRepositoryRoot();
+        var xamlRoots = GetBusinessXamlRoots(root);
+
+        var matches = xamlRoots
+            .Where(Directory.Exists)
+            .SelectMany(path => EnumerateFiles(path, "*.axaml"))
+            .Where(path => !ToRepositoryPath(root, path).Contains("/Resources/Languages/", StringComparison.OrdinalIgnoreCase))
+            .SelectMany(path => BusinessXamlNativeVisibleControlPattern
+                .Matches(File.ReadAllText(path))
+                .Select(match => $"{ToRepositoryPath(root, path)} uses native visible control {match.Value} at offset {match.Index}"))
+            .ToArray();
+
+        Assert.Empty(matches);
+    }
+
+    [Fact]
+    public void ReworkedBusinessXaml_ShouldNotUsePageLevelVisualProperties()
+    {
+        var root = FindRepositoryRoot();
+        var reworkedFiles = new[]
+        {
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Dashboard/Views/DashboardView.axaml",
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Shell/Views/DashboardPreviewView.axaml",
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Configuration/Views/ConfigurationWorkspaceView.axaml",
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Shell/Views/PlaceholderPageView.axaml",
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Hardware/HardwareConfigView/Views/HardwareConfigPage.axaml",
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Hardware/IOView/Views/IOViewPage.axaml"
+        };
+
+        var matches = reworkedFiles
+            .Select(repositoryPath => ToFullPath(root, repositoryPath))
+            .SelectMany(path => PageLevelVisualPropertyPattern
+                .Matches(File.ReadAllText(path))
+                .Select(match => $"{ToRepositoryPath(root, path)} uses page-level visual property {match.Value} at offset {match.Index}"))
+            .ToArray();
+
+        Assert.Empty(matches);
+    }
+
     private static IReadOnlyList<string> GetProjectReferences(string projectPath)
         => XDocument.Load(projectPath)
             .Descendants("ProjectReference")
@@ -732,6 +782,14 @@ public sealed class RepositoryHygieneTests
 
     private static bool ContainsChineseText(string path)
         => File.ReadAllText(path).Any(ch => ch >= '\u4e00' && ch <= '\u9fff');
+
+    private static string[] GetBusinessXamlRoots(string root)
+        =>
+        [
+            Path.Combine(root, "src", "Edge"),
+            Path.Combine(root, "src", "Presentation"),
+            Path.Combine(root, "src", "Modules")
+        ];
 
     private static bool ShouldSkip(string path)
     {

@@ -145,26 +145,22 @@ internal sealed class DiagnosticsRowsBuilder(
     {
         var issueRows = report.Issues
             .Select(x => new StartupDiagnosticIssueCandidate(
-                x.Code,
-                DiagnosticsTextNormalizer.Normalize(x.ModuleId),
-                DiagnosticsTextNormalizer.Normalize(x.DeviceName),
                 NormalizeIssueMessage(DiagnosticsTextNormalizer.Normalize(x.Message)),
-                EdgeVisualStatus.Error))
+                EdgeVisualStatus.Error,
+                "ERROR"))
             .ToArray();
 
         return issueRows
-            .GroupBy(x => new { x.ModuleId, x.DeviceName, x.Message, x.Severity })
+            .GroupBy(x => new { x.Message, x.Status, x.LevelText })
             .Select(group =>
             {
                 var row = group.First();
                 var duplicateCount = group.Count();
 
                 return new StartupDiagnosticIssueRow(
-                    row.Code,
-                    row.ModuleId,
-                    row.DeviceName,
                     row.Message,
-                    row.Severity,
+                    row.LevelText,
+                    row.Status,
                     duplicateCount,
                     duplicateCount > 1
                         ? FormatText("Navigation_Diagnostics_DuplicateCountFormat", "×{0}", duplicateCount)
@@ -186,11 +182,9 @@ internal sealed class DiagnosticsRowsBuilder(
     }
 
     private sealed record StartupDiagnosticIssueCandidate(
-        string Code,
-        string ModuleId,
-        string DeviceName,
         string Message,
-        EdgeVisualStatus Severity);
+        EdgeVisualStatus Status,
+        string LevelText);
 
     private IReadOnlyList<MesChannelDiagnosticsRow> BuildMesUploadDiagnostics(
         EdgeSyncDiagnosticsSnapshot syncDiagnostics)

@@ -34,7 +34,7 @@
         <Setter Property="Template">
             <ControlTemplate>
                 <controls:EdgeCard Surface="Card" PaddingMode="Compact" Elevation="Flat">
-                    <Grid RowDefinitions="Auto,*,Auto" RowSpacing="{DynamicResource Edge.Size.Spacing6}">
+                    <Grid RowDefinitions="Auto,*,Auto,Auto" RowSpacing="{DynamicResource Edge.Size.Spacing6}">
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Edge.Size.Spacing12}">
                             <StackPanel Spacing="{DynamicResource Edge.Size.Spacing2}">
                                 <StackPanel
@@ -90,6 +90,33 @@
                             Foreground="{DynamicResource Edge.Brush.Text.Muted}"
                             Text="{TemplateBinding Description}"
                             TextWrapping="Wrap" />
+
+                        <ItemsControl
+                            Grid.Row="3"
+                            Classes="edge-metric-summary-items"
+                            IsVisible="{TemplateBinding HasSummaryItems}"
+                            ItemsSource="{TemplateBinding SummaryItems}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Spacing="{DynamicResource Edge.Size.Spacing6}" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Classes="edge-summary-card-row">
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Edge.Size.Spacing12}">
+                                            <TextBlock
+                                                Classes="edge-summary-card-label"
+                                                Text="{Binding Label}" />
+                                            <TextBlock
+                                                Grid.Column="1"
+                                                Classes="edge-summary-card-value"
+                                                Text="{Binding Value}" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </Grid>
                 </controls:EdgeCard>
             </ControlTemplate>
@@ -144,6 +171,32 @@
         <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Primary}" />
     </Style>
 
+    <Style Selector="controls|EdgeMetricCard ItemsControl.edge-metric-summary-items">
+        <Setter Property="Margin" Value="0,4,0,0" />
+    </Style>
+
+    <Style Selector="controls|EdgeMetricCard Border.edge-summary-card-row">
+        <Setter Property="MinHeight" Value="34" />
+        <Setter Property="Padding" Value="10,6" />
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Surface.Wash}" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Control}" />
+    </Style>
+
+    <Style Selector="controls|EdgeMetricCard TextBlock.edge-summary-card-label">
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Caption}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Muted}" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <Style Selector="controls|EdgeMetricCard TextBlock.edge-summary-card-value">
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Caption}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Primary}" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
     <Style Selector="TextBlock.edge-dashboard-preview-title">
         <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Title24}" />
         <Setter Property="FontWeight" Value="Bold" />
@@ -186,6 +239,12 @@
         <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Title24}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Primary}" />
+    </Style>
+
+    <Style Selector="TextBlock.edge-dashboard-mini-detail">
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Caption}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Muted}" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
     </Style>
 
     <Style Selector="Border.edge-dashboard-alert-header">

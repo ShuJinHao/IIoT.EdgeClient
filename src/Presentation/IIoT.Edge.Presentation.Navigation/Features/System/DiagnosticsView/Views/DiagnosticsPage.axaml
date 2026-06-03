@@ -209,86 +209,27 @@
                             Title="{DynamicResource Navigation_Diagnostics_StartupSelfCheckOk}" />
                     </controls:EdgeCard>
 
-                    <controls:EdgeCard
+                    <controls:EdgeLogList
                         IsVisible="{Binding HasStartupIssues}"
-                        PaddingMode="None">
-                        <StackPanel Margin="14,12" Spacing="{DynamicResource Edge.Size.Spacing4}">
-                            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
-                                <TextBlock
-                                    FontSize="{DynamicResource Edge.FontSize.Section}"
-                                    FontWeight="SemiBold"
-                                    Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                                    Text="{DynamicResource Navigation_Diagnostics_Issues}" />
-                                <controls:EdgeStatusChip
-                                    Grid.Column="1"
-                                    VerticalAlignment="Center"
-                                    ChipPadding="8,0"
-                                    ShowDot="False"
-                                    Status="Default"
-                                    Text="{Binding TotalIssueCount}" />
-                            </Grid>
-                            <ItemsControl ItemsSource="{Binding Issues}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <StackPanel />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border
-                                            HorizontalAlignment="Stretch"
-                                            BorderBrush="{DynamicResource Edge.Brush.Border.Subtle}"
-                                            BorderThickness="0,0,0,1"
-                                            Padding="0,7">
-                                            <Grid
-                                                ColumnDefinitions="Auto,*"
-                                                ColumnSpacing="{DynamicResource Edge.Size.Spacing12}"
-                                                HorizontalAlignment="Stretch"
-                                                MinHeight="50">
-                                                <Grid VerticalAlignment="Center">
-                                                    <Border
-                                                        Classes="edge-issue-rail error"
-                                                        IsVisible="{Binding IsError}" />
-                                                    <Border
-                                                        Classes="edge-issue-rail warning"
-                                                        IsVisible="{Binding IsWarning}" />
-                                                </Grid>
-
-                                                <StackPanel
-                                                    Grid.Column="1"
-                                                    VerticalAlignment="Center"
-                                                    Spacing="{DynamicResource Edge.Size.Spacing4}">
-                                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
-                                                        <TextBlock
-                                                            FontSize="{DynamicResource Edge.FontSize.Body}"
-                                                            FontWeight="Medium"
-                                                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                                                            LineHeight="20"
-                                                            Text="{Binding Message}"
-                                                            TextTrimming="None"
-                                                            TextWrapping="Wrap" />
-                                                        <TextBlock
-                                                            Grid.Column="1"
-                                                            VerticalAlignment="Center"
-                                                            FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                                            IsVisible="{Binding HasDuplicateCount}"
-                                                            Text="{Binding DuplicateBadgeText}" />
-                                                    </Grid>
-                                                    <TextBlock
-                                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                                        LineHeight="16"
-                                                        Text="{Binding IssueSubtitle}"
-                                                        TextWrapping="Wrap" />
-                                                </StackPanel>
-                                            </Grid>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </StackPanel>
-                    </controls:EdgeCard>
+                        Title="{DynamicResource Navigation_Diagnostics_Issues}"
+                        ItemsSource="{Binding Issues}"
+                        IsEmpty="False"
+                        ListMinHeight="0"
+                        ShowClearButton="False"
+                        ShowTimeColumn="False"
+                        LevelHeader="{DynamicResource Navigation_Diagnostics_LevelColumn}"
+                        MessageHeader="{DynamicResource Navigation_Diagnostics_MessageColumn}">
+                        <controls:EdgeLogList.ItemTemplate>
+                            <DataTemplate>
+                                <controls:EdgeLogListItem
+                                    LevelText="{Binding LevelText}"
+                                    MaxMessageLines="3"
+                                    Message="{Binding DisplayMessage}"
+                                    ShowTimeColumn="False"
+                                    Status="{Binding Status}" />
+                            </DataTemplate>
+                        </controls:EdgeLogList.ItemTemplate>
+                    </controls:EdgeLogList>
 
                     <controls:EdgeCard PaddingMode="Compact">
                         <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="{DynamicResource Edge.Size.Spacing16}">
@@ -328,75 +269,62 @@
                             RowDefinitions="Auto,Auto"
                             ColumnSpacing="{DynamicResource Edge.Size.Spacing12}"
                             RowSpacing="{DynamicResource Edge.Size.Spacing12}">
-                            <Border
+                            <controls:EdgeCard
                                 MinHeight="82"
-                                Padding="{DynamicResource Edge.Thickness.12}"
-                                Background="{DynamicResource Edge.Brush.Surface.Wash}"
-                                BorderBrush="{DynamicResource Edge.Brush.Border.Subtle}"
-                                BorderThickness="1"
-                                CornerRadius="{DynamicResource Edge.CornerRadius.Medium}">
+                                Classes="summary"
+                                Elevation="Flat"
+                                PaddingMode="Compact"
+                                Surface="Wash">
                                 <StackPanel Spacing="{DynamicResource Edge.Size.Spacing6}">
                                     <TextBlock
-                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                        Classes="edge-summary-card-label"
                                         Text="{DynamicResource Navigation_Diagnostics_ConfigEnvironment}" />
                                     <TextBlock
-                                        FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
-                                        FontWeight="SemiBold"
-                                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                        Classes="edge-summary-card-value"
                                         Text="{Binding ConfigurationEnvironment}"
                                         TextTrimming="CharacterEllipsis" />
                                 </StackPanel>
-                            </Border>
-                            <Border
+                            </controls:EdgeCard>
+                            <controls:EdgeCard
                                 Grid.Column="1"
                                 MinHeight="82"
-                                Padding="{DynamicResource Edge.Thickness.12}"
-                                Background="{DynamicResource Edge.Brush.Surface.Wash}"
-                                BorderBrush="{DynamicResource Edge.Brush.Border.Subtle}"
-                                BorderThickness="1"
-                                CornerRadius="{DynamicResource Edge.CornerRadius.Medium}">
+                                Classes="summary"
+                                Elevation="Flat"
+                                PaddingMode="Compact"
+                                Surface="Wash">
                                 <StackPanel Spacing="{DynamicResource Edge.Size.Spacing4}">
                                     <TextBlock
-                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                        Classes="edge-summary-card-label"
                                         Text="{DynamicResource Navigation_Diagnostics_ConfigMachineProfile}" />
                                     <TextBlock
-                                        FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
-                                        FontWeight="SemiBold"
-                                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                        Classes="edge-summary-card-value"
                                         Text="{Binding ConfigurationMachineProfile}"
                                         TextTrimming="CharacterEllipsis" />
                                     <TextBlock
-                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                        Classes="edge-summary-card-label"
                                         Text="{Binding ConfigurationMachineProfileState}"
                                         TextTrimming="CharacterEllipsis" />
                                 </StackPanel>
-                            </Border>
-                            <Border
+                            </controls:EdgeCard>
+                            <controls:EdgeCard
                                 Grid.Row="1"
                                 Grid.ColumnSpan="2"
                                 MinHeight="82"
-                                Padding="{DynamicResource Edge.Thickness.12}"
-                                Background="{DynamicResource Edge.Brush.Surface.Wash}"
-                                BorderBrush="{DynamicResource Edge.Brush.Border.Subtle}"
-                                BorderThickness="1"
-                                CornerRadius="{DynamicResource Edge.CornerRadius.Medium}">
+                                Classes="summary"
+                                Elevation="Flat"
+                                PaddingMode="Compact"
+                                Surface="Wash">
                                 <StackPanel Spacing="{DynamicResource Edge.Size.Spacing6}">
                                     <TextBlock
-                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                        Classes="edge-summary-card-label"
                                         Text="{DynamicResource Navigation_Diagnostics_ConfigRuntimeDataRoot}" />
                                     <TextBlock
-                                        FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
-                                        FontWeight="SemiBold"
-                                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                        Classes="edge-summary-card-value"
                                         Text="{Binding ConfigurationRuntimeDataRoot}"
                                         TextWrapping="Wrap"
                                         ToolTip.Tip="{Binding ConfigurationRuntimeDataRoot}" />
                                 </StackPanel>
-                            </Border>
+                            </controls:EdgeCard>
                         </Grid>
                     </StackPanel>
 

@@ -23,6 +23,9 @@ public class EdgeLogListItem : TemplatedControl
     public static readonly StyledProperty<EdgeVisualStatus> StatusProperty =
         AvaloniaProperty.Register<EdgeLogListItem, EdgeVisualStatus>(nameof(Status), EdgeVisualStatus.Default);
 
+    public static readonly StyledProperty<bool> ShowTimeColumnProperty =
+        AvaloniaProperty.Register<EdgeLogListItem, bool>(nameof(ShowTimeColumn), true);
+
     public string? TimeText
     {
         get => GetValue(TimeTextProperty);
@@ -51,5 +54,11 @@ public class EdgeLogListItem : TemplatedControl
     {
         get => GetValue(StatusProperty);
         set => SetValue(StatusProperty, value);
+    }
+
+    public bool ShowTimeColumn
+    {
+        get => GetValue(ShowTimeColumnProperty);
+        set => SetValue(ShowTimeColumnProperty, value);
     }
 }

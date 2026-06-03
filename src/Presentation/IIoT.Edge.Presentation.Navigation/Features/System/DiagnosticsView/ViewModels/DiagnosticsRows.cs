@@ -47,30 +47,17 @@ public sealed record ModuleReadinessRow(
     string Message);
 
 public sealed record StartupDiagnosticIssueRow(
-    string Code,
-    string ModuleId,
-    string DeviceName,
     string Message,
-    EdgeVisualStatus Severity,
+    string LevelText,
+    EdgeVisualStatus Status,
     int DuplicateCount,
     string DuplicateBadgeText)
 {
-    public bool IsError => Severity != EdgeVisualStatus.Warning;
-
-    public bool IsWarning => Severity == EdgeVisualStatus.Warning;
-
     public bool HasDuplicateCount => DuplicateCount > 1;
 
-    public string IssueSubtitle
-    {
-        get
-        {
-            var parts = new[] { DeviceName, ModuleId }
-                .Where(static x => !string.IsNullOrWhiteSpace(x) && x != "--")
-                .ToArray();
-            return parts.Length == 0 ? "--" : string.Join(" · ", parts);
-        }
-    }
+    public string DisplayMessage => HasDuplicateCount
+        ? $"{Message} {DuplicateBadgeText}"
+        : Message;
 }
 
 public sealed record MesChannelDiagnosticsRow(

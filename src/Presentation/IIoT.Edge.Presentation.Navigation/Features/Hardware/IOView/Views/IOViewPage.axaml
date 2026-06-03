@@ -10,19 +10,12 @@
         <StackPanel Margin="20" Spacing="16">
             <Grid ColumnDefinitions="*,Auto">
                 <StackPanel Spacing="4">
-                    <TextBlock
-                        FontSize="{DynamicResource Edge.FontSize.Title24}"
-                        FontWeight="SemiBold"
-                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                        Text="{Binding ViewTitle}" />
+                    <edge:EdgeSectionHeader
+                        Title="{Binding ViewTitle}"
+                        Subtitle="{Binding ConnectionStateText}" />
                     <StackPanel Orientation="Horizontal" Spacing="12">
                         <TextBlock
-                            FontSize="{DynamicResource Edge.FontSize.Caption}"
-                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                            Text="{Binding ConnectionStateText}" />
-                        <TextBlock
-                            FontSize="{DynamicResource Edge.FontSize.Caption}"
-                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                            Classes="edge-text-page-caption"
                             IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                             Text="{Binding StatusMessage}"
                             TextWrapping="Wrap" />

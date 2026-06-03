@@ -334,20 +334,72 @@
         <Setter Property="ChipPadding" Value="9,0" />
     </Style>
 
-    <Style Selector="Border.edge-issue-rail">
-        <Setter Property="Width" Value="3" />
-        <Setter Property="MinHeight" Value="42" />
-        <Setter Property="HorizontalAlignment" Value="Left" />
-        <Setter Property="VerticalAlignment" Value="Stretch" />
-        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Status.Warning}" />
-        <Setter Property="CornerRadius" Value="2" />
+    <Style Selector="controls|EdgeStatusSegmentBar">
+        <Setter Property="ItemsPanel">
+            <ItemsPanelTemplate>
+                <StackPanel
+                    HorizontalAlignment="Left"
+                    Orientation="Horizontal"
+                    Spacing="0" />
+            </ItemsPanelTemplate>
+        </Setter>
+        <Setter Property="ItemTemplate">
+            <DataTemplate>
+                <controls:EdgeStatusSegment
+                    Label="{Binding Label}"
+                    Status="{Binding Status}" />
+            </DataTemplate>
+        </Setter>
     </Style>
 
-    <Style Selector="Border.edge-issue-rail.error">
+    <Style Selector="controls|EdgeStatusSegment">
+        <Setter Property="SegmentWidth" Value="28" />
+        <Setter Property="SegmentHeight" Value="8" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border
+                    Width="{TemplateBinding SegmentWidth}"
+                    Height="{TemplateBinding SegmentHeight}"
+                    Background="{DynamicResource Edge.Brush.Surface.Wash}"
+                    CornerRadius="{DynamicResource Edge.CornerRadius.Badge}"
+                    ToolTip.Tip="{TemplateBinding Label}" />
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="controls|EdgeStatusSegment.default Border">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Surface.Wash}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusSegment.running Border">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Status.Running}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusSegment.idle Border">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Status.Idle}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusSegment.stopped Border">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Status.Stopped}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusSegment.offline Border">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Status.Offline}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusSegment.info Border">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Status.Info}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusSegment.cache Border">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Status.Cache}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusSegment.warning Border">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Status.Warning}" />
+    </Style>
+
+    <Style Selector="controls|EdgeStatusSegment.error Border">
         <Setter Property="Background" Value="{DynamicResource Edge.Brush.Status.Error}" />
-    </Style>
-
-    <Style Selector="Border.edge-issue-rail.warning">
-        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Status.Warning}" />
     </Style>
 </Styles>

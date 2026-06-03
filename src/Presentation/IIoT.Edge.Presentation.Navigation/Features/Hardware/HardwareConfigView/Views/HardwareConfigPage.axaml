@@ -7,17 +7,9 @@
 
     <Grid RowDefinitions="Auto,*" Margin="20">
         <Grid ColumnDefinitions="*,Auto">
-            <StackPanel Spacing="4">
-                <TextBlock
-                    FontSize="{DynamicResource Edge.FontSize.Title24}"
-                    FontWeight="SemiBold"
-                    Foreground="{DynamicResource Edge.Text.Primary}"
-                    Text="{Binding ViewTitle}" />
-                <TextBlock
-                    Foreground="{DynamicResource Edge.Text.Muted}"
-                    Text="{Binding StatusMessage}"
-                    TextWrapping="Wrap" />
-            </StackPanel>
+            <edge:EdgeSectionHeader
+                Title="{Binding ViewTitle}"
+                Subtitle="{Binding StatusMessage}" />
 
             <edge:EdgeActionButton
                 Grid.Column="1"

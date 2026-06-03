@@ -483,6 +483,8 @@
     <sys:String x:Key="Navigation_Diagnostics_StartupSelfCheckOkMessage">当前没有配置或设备绑定问题。</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_StartupIssueCountFormat">启动诊断发现 {0} 个问题。</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_DuplicateCountFormat">×{0}</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_LevelColumn">级别</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_MessageColumn">消息</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_ConfigEnvironment">环境</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_ConfigMachineProfile">机型</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_ConfigRuntimeDataRoot">运行目录</sys:String>
