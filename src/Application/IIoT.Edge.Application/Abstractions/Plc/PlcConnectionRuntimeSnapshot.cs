@@ -15,4 +15,6 @@ public sealed record PlcConnectionRuntimeSnapshot : IDeviceIdentifiable
     public DateTimeOffset? LastFailureAtUtc { get; init; }
 
     public string? LastError { get; init; }
+
+    public int? LatencyMs { get; init; }
 }

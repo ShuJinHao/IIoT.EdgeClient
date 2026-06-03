@@ -3,6 +3,7 @@ using IIoT.Edge.Application.Common.Diagnostics;
 using IIoT.Edge.Application.Modules.Diagnostics;
 using IIoT.Edge.Presentation.Navigation.Localization;
 using IIoT.Edge.UI.Shared.Localization;
+using System.Globalization;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
 
@@ -25,6 +26,7 @@ internal sealed class DiagnosticsSummaryBuilder(
         EdgeSyncDiagnosticsSnapshot syncDiagnostics,
         IReadOnlyDictionary<string, string> moduleNameMap)
     {
+        var hasStartupReport = report.GeneratedAt != DateTime.MinValue;
         return new DiagnosticsSummarySnapshot
         {
             DiscoveredModulesSummary = BuildModuleSummary(
@@ -43,6 +45,10 @@ internal sealed class DiagnosticsSummaryBuilder(
                 report.ActivatedModules,
                 moduleNameMap),
             ConfigurationProfileSummary = BuildConfigurationProfileSummary(report.ConfigurationProfile),
+            ConfigurationEnvironment = DiagnosticsTextNormalizer.Normalize(report.ConfigurationProfile.EnvironmentName),
+            ConfigurationMachineProfile = BuildConfigurationMachineProfile(report.ConfigurationProfile),
+            ConfigurationMachineProfileState = BuildConfigurationMachineProfileState(report.ConfigurationProfile),
+            ConfigurationRuntimeDataRoot = DiagnosticsTextNormalizer.Normalize(report.ConfigurationProfile.RuntimeDataRoot),
             LastUpdatedSummary = report.GeneratedAt == DateTime.MinValue
                 ? GetText("Navigation_Diagnostics_StartupPending", "启动诊断尚未生成。")
                 : FormatText("Navigation_Diagnostics_LastGeneratedFormat", "最近生成：{0:yyyy-MM-dd HH:mm:ss}", report.GeneratedAt),
@@ -95,6 +101,9 @@ internal sealed class DiagnosticsSummaryBuilder(
                 diagnosticsText.FormatTimestamp(syncDiagnostics.Mes.LastFailureAt),
                 DiagnosticsTextNormalizer.Normalize(syncDiagnostics.Mes.LastFailureReason)),
             ContextPersistenceSummary = diagnosticsText.FormatContextPersistenceSummary(syncDiagnostics.ContextPersistence),
+            ContextCorruptFileCount = syncDiagnostics.ContextPersistence.CorruptFileCount.ToString(CultureInfo.InvariantCulture),
+            ContextLastCorruptDetectedAt = diagnosticsText.FormatTimestamp(syncDiagnostics.ContextPersistence.LastCorruptDetectedAt),
+            HasStartupReport = hasStartupReport,
             StartupStatusMessage = BuildStartupStatus(report)
         };
     }
@@ -170,10 +179,30 @@ internal sealed class DiagnosticsSummaryBuilder(
             profile.RuntimeDataRoot);
     }
 
+    private string BuildConfigurationMachineProfile(ConfigurationProfileSnapshot profile)
+        => string.IsNullOrWhiteSpace(profile.MachineProfile)
+            ? GetText("Navigation_Diagnostics_MachineProfileNotConfigured", "未配置")
+            : DiagnosticsTextNormalizer.Normalize(profile.MachineProfile);
+
+    private string BuildConfigurationMachineProfileState(ConfigurationProfileSnapshot profile)
+    {
+        if (string.IsNullOrWhiteSpace(profile.MachineProfile))
+        {
+            return GetText("Navigation_Diagnostics_MachineProfileNotConfigured", "未配置");
+        }
+
+        var profileFileName = DiagnosticsTextNormalizer.Normalize(profile.MachineProfileFileName);
+        return profile.IsMachineProfileLoaded
+            ? FormatText("Navigation_Diagnostics_ProfileLoadedFormat", "已从 {0} 加载", profileFileName)
+            : FormatText("Navigation_Diagnostics_ProfileMissingFormat", "未找到 {0}", profileFileName);
+    }
+
     private string BuildStartupStatus(StartupDiagnosticsReport report)
-        => report.Issues.Count == 0
-            ? GetText("Navigation_Diagnostics_StartupOk", "启动诊断正常。")
-            : FormatText("Navigation_Diagnostics_StartupIssueCountFormat", "启动诊断发现 {0} 个问题。", report.Issues.Count);
+        => report.GeneratedAt == DateTime.MinValue
+            ? GetText("Navigation_Diagnostics_StartupPending", "启动诊断尚未生成。")
+            : report.Issues.Count == 0
+                ? GetText("Navigation_Diagnostics_StartupOk", "启动诊断正常。")
+                : FormatText("Navigation_Diagnostics_StartupIssueCountFormat", "启动诊断发现 {0} 个问题。", report.Issues.Count);
 
     private string GetText(string key, string fallback)
         => languageService.GetString(key, fallback);

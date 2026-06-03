@@ -8,8 +8,6 @@ public interface IDiagnosticsTabController
 {
     DiagnosticsTabItemViewModel SelectedTab { get; set; }
 
-    bool IsOverviewTabSelected { get; }
-
     bool IsSyncOpsTabSelected { get; }
 
     bool IsStartupTabSelected { get; }
@@ -27,7 +25,6 @@ internal sealed class DiagnosticsTabController(
     IDiagnosticsViewModelCallback callback)
     : IDiagnosticsTabController
 {
-    private const string OverviewKey = "Diag.Overview";
     private const string SyncOpsKey = "Diag.SyncOps";
     private const string StartupKey = "Diag.Startup";
 
@@ -39,13 +36,11 @@ internal sealed class DiagnosticsTabController(
         set => Select(value);
     }
 
-    public bool IsOverviewTabSelected => _selectedTab?.Key == OverviewKey;
     public bool IsSyncOpsTabSelected => _selectedTab?.Key == SyncOpsKey;
     public bool IsStartupTabSelected => _selectedTab?.Key == StartupKey;
 
     public void Initialize()
     {
-        tabs.Add(new(languageService, OverviewKey, "Navigation_Diagnostics_TabOverview", "系统概况"));
         tabs.Add(new(languageService, SyncOpsKey, "Navigation_Diagnostics_TabSyncOps", "同步运维"));
         tabs.Add(new(languageService, StartupKey, "Navigation_Diagnostics_TabStartup", "启动诊断"));
         Select(tabs[0]);
@@ -70,7 +65,6 @@ internal sealed class DiagnosticsTabController(
 
         _selectedTab = tab;
         callback.NotifyPropertyChanged(nameof(DiagnosticsViewModel.SelectedTab));
-        callback.NotifyPropertyChanged(nameof(DiagnosticsViewModel.IsOverviewTabSelected));
         callback.NotifyPropertyChanged(nameof(DiagnosticsViewModel.IsSyncOpsTabSelected));
         callback.NotifyPropertyChanged(nameof(DiagnosticsViewModel.IsStartupTabSelected));
     }

@@ -728,6 +728,7 @@
                         ColumnDefinitions="180,*"
                         ColumnSpacing="{DynamicResource Edge.Size.Spacing12}">
                         <StackPanel
+                            x:Name="PART_EdgeFieldRowLabelHost"
                             Grid.Column="0"
                             VerticalAlignment="Center"
                             Spacing="{DynamicResource Edge.Size.Spacing4}">
@@ -778,5 +779,45 @@
     <Style Selector="controls|EdgeFieldRow.boolean /template/ ContentPresenter#PART_EdgeFieldRowValueHost">
         <Setter Property="HorizontalAlignment" Value="Left" />
         <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="controls|EdgeFieldRow.dialog-form">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border
+                    MinHeight="48"
+                    Padding="9,5"
+                    Background="{DynamicResource Edge.Brush.Surface.Card}"
+                    CornerRadius="{DynamicResource Edge.CornerRadius.Control}">
+                    <Grid RowDefinitions="Auto,Auto" RowSpacing="{DynamicResource Edge.Size.Spacing4}">
+                        <StackPanel Spacing="{DynamicResource Edge.Size.Spacing4}">
+                            <TextBlock
+                                FontSize="{DynamicResource Edge.FontSize.Body}"
+                                FontWeight="SemiBold"
+                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                Text="{TemplateBinding Label}"
+                                TextTrimming="CharacterEllipsis"
+                                ToolTip.Tip="{TemplateBinding Label}" />
+                            <TextBlock
+                                Classes="edge-field-description"
+                                FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                LineHeight="13.5"
+                                MaxLines="2"
+                                Text="{TemplateBinding Description}"
+                                TextTrimming="CharacterEllipsis"
+                                TextWrapping="Wrap"
+                                ToolTip.Tip="{TemplateBinding Description}" />
+                        </StackPanel>
+
+                        <ContentPresenter
+                            Grid.Row="1"
+                            HorizontalAlignment="Stretch"
+                            VerticalAlignment="Center"
+                            Content="{TemplateBinding ValueContent}" />
+                    </Grid>
+                </Border>
+            </ControlTemplate>
+        </Setter>
     </Style>
 </Styles>

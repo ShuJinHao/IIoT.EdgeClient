@@ -77,8 +77,7 @@ internal sealed record HomogenizationTestSignalDefinition(
     string DirectionText,
     int SortOrder,
     string Category,
-    string BusinessGroup,
-    string SignalName)
+    string BusinessGroup)
 {
     public static HomogenizationTestSignalDefinition From<TSignalKey>(ModuleSignalDefinition<TSignalKey> signal)
         where TSignalKey : struct, Enum
@@ -92,6 +91,5 @@ internal sealed record HomogenizationTestSignalDefinition(
             signal.DirectionText,
             signal.SortOrder,
             signal.Category,
-            signal.BusinessGroup,
-            signal.SignalName);
+            signal.BusinessGroup);
 }

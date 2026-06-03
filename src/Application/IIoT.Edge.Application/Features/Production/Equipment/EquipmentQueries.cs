@@ -30,9 +30,14 @@ public record RecipeParamSnapshot(
 
 public record CapacitySnapshot(
     int TodayOutput,
+    int OkCount,
     int NgCount,
     string TodayYield,
-    string CurrentBatch);
+    string CurrentBatch,
+    int RecentHourOutput,
+    int RecentHourOk,
+    int RecentHourNg,
+    string RecentHourLabel);
 
 public record GetHardwareStatusQuery() : IRequest<List<HardwareSnapshot>>;
 
@@ -123,12 +128,20 @@ public class GetCapacitySnapshotHandler(IProductionContextStore contextStore)
     {
         var ok = 0;
         var ng = 0;
+        var recentHourOk = 0;
+        var recentHourNg = 0;
         var currentBatch = "--";
+        var recentHourSlots = ResolveRecentHourSlots(DateTime.Now);
 
         foreach (var context in contextStore.GetAll())
         {
             ok += context.TodayCapacity.OkAll;
             ng += context.TodayCapacity.NgAll;
+            foreach (var bucket in context.TodayCapacity.HalfHourly.Where(bucket => recentHourSlots.Contains(bucket.SlotIndex)))
+            {
+                recentHourOk += bucket.OkCount;
+                recentHourNg += bucket.NgCount;
+            }
 
             if (context.DeviceBag.TryGetValue("CurrentBatch", out var batchValue) &&
                 batchValue is string batch)
@@ -139,7 +152,33 @@ public class GetCapacitySnapshotHandler(IProductionContextStore contextStore)
 
         var total = ok + ng;
         var yield = total > 0 ? $"{ok * 100.0 / total:F1}%" : "0.0%";
+        var recentHourTotal = recentHourOk + recentHourNg;
 
-        return Task.FromResult(new CapacitySnapshot(total, ng, yield, currentBatch));
+        return Task.FromResult(new CapacitySnapshot(
+            total,
+            ok,
+            ng,
+            yield,
+            currentBatch,
+            recentHourTotal,
+            recentHourOk,
+            recentHourNg,
+            BuildRecentHourLabel(DateTime.Now)));
+    }
+
+    private static HashSet<int> ResolveRecentHourSlots(DateTime now)
+    {
+        var currentSlot = now.Hour * 2 + (now.Minute >= 30 ? 1 : 0);
+        return
+        [
+            currentSlot,
+            (currentSlot + 47) % 48
+        ];
+    }
+
+    private static string BuildRecentHourLabel(DateTime now)
+    {
+        var start = now.AddHours(-1);
+        return $"{start:HH:mm}-{now:HH:mm}";
     }
 }

@@ -22,7 +22,6 @@ public class IoViewViewModel : NavigationViewModelBase
     private readonly IIoViewBufferBindingCoordinator _bufferBindingCoordinator;
     private readonly IIoViewInteractionWriter _interactionWriter;
     private readonly IIoViewManualReadService _manualReadService;
-    private readonly string? _moduleIdFilter;
 
     public ObservableCollection<NetworkDeviceEntity> Devices { get; } = [];
 
@@ -181,7 +180,6 @@ public class IoViewViewModel : NavigationViewModelBase
         _bufferBindingCoordinator = bufferBindingCoordinator;
         _interactionWriter = interactionWriter;
         _manualReadService = manualReadService;
-        _moduleIdFilter = moduleIdFilter;
 
         RefreshDevicesCommand = new AsyncCommand(LoadDevicesAsync);
         _manualReadCommand = new AsyncCommand(ManualReadSelectedDataAsync, () => SelectedDevice is not null);
@@ -311,8 +309,7 @@ public class IoViewViewModel : NavigationViewModelBase
             return false;
         }
 
-        return string.IsNullOrWhiteSpace(_moduleIdFilter)
-            || string.Equals(device.ModuleId, _moduleIdFilter, StringComparison.OrdinalIgnoreCase);
+        return true;
     }
 
     private void WriteInteractionRow(IoInteractionRowModel row)

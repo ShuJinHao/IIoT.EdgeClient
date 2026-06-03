@@ -3,6 +3,7 @@ using System.Threading;
 using System.Windows.Input;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Presentation.Navigation.Localization;
+using IIoT.Edge.UI.Shared.Avalonia.Controls;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
 
@@ -25,6 +26,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase, IDiagnostics
     private readonly IDiagnosticsViewModelRefreshApplier _refreshApplier;
     private readonly IDiagnosticsDeadLetterCommandWorkflow _deadLetterWorkflow;
     private readonly IDiagnosticsPermissionObserver _permissionObserver;
+    private bool _isModuleReadinessExpanded;
     private bool _isObserving;
 
     public DiagnosticsViewModel(
@@ -54,6 +56,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase, IDiagnostics
                 ModuleRegistrations,
                 PluginStates,
                 DeviceBindings,
+                ModuleReadinessRows,
                 Issues,
                 MesUploadDiagnostics,
                 SyncChannels,
@@ -68,6 +71,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase, IDiagnostics
         _deleteDeadLetterCommand = new AsyncCommand<DeadLetterRow>(DeleteDeadLetterAsync, CanOperateDeadLetter);
         RequeueDeadLetterCommand = _requeueDeadLetterCommand;
         DeleteDeadLetterCommand = _deleteDeadLetterCommand;
+        ToggleModuleReadinessCommand = new BaseCommand(_ => ToggleModuleReadiness());
         _refreshTimer = new Avalonia.Threading.DispatcherTimer
         {
             Interval = TimeSpan.FromSeconds(1)
@@ -93,13 +97,13 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase, IDiagnostics
         set => SelectTab(value);
     }
 
-    public bool IsOverviewTabSelected => _tabController.IsOverviewTabSelected;
     public bool IsSyncOpsTabSelected => _tabController.IsSyncOpsTabSelected;
     public bool IsStartupTabSelected => _tabController.IsStartupTabSelected;
 
     public ObservableCollection<ModuleRegistrationRow> ModuleRegistrations { get; } = [];
     public ObservableCollection<PluginLifecycleRow> PluginStates { get; } = [];
     public ObservableCollection<DeviceModuleBindingRow> DeviceBindings { get; } = [];
+    public ObservableCollection<ModuleReadinessRow> ModuleReadinessRows { get; } = [];
     public ObservableCollection<StartupDiagnosticIssueRow> Issues { get; } = [];
     public ObservableCollection<MesChannelDiagnosticsRow> MesUploadDiagnostics { get; } = [];
     public ObservableCollection<SyncChannelRow> SyncChannels { get; } = [];
@@ -108,8 +112,14 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase, IDiagnostics
 
     public ICommand RequeueDeadLetterCommand { get; }
     public ICommand DeleteDeadLetterCommand { get; }
+    public ICommand ToggleModuleReadinessCommand { get; }
 
     public bool CanOperateDeadLetters => _permissionObserver.CanOperateDeadLetters;
+    public bool HasStartupReport => _summaryState.HasStartupReport;
+    public bool HasStartupIssues => HasStartupReport && Issues.Count > 0;
+    public bool IsStartupHealthy => HasStartupReport && Issues.Count == 0;
+    public bool IsModuleReadinessExpanded => _isModuleReadinessExpanded;
+    public bool IsModuleReadinessCollapsed => !_isModuleReadinessExpanded;
     public int CloudDeadLetterCount => _summaryState.CloudDeadLetterCount;
     public int MesDeadLetterCount => _summaryState.MesDeadLetterCount;
     public int TotalIssueCount => _summaryState.TotalIssueCount;
@@ -120,6 +130,10 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase, IDiagnostics
     public string EnabledModulesSummary => _summaryState.EnabledModulesSummary;
     public string ActivatedModulesSummary => _summaryState.ActivatedModulesSummary;
     public string ConfigurationProfileSummary => _summaryState.ConfigurationProfileSummary;
+    public string ConfigurationEnvironment => _summaryState.ConfigurationEnvironment;
+    public string ConfigurationMachineProfile => _summaryState.ConfigurationMachineProfile;
+    public string ConfigurationMachineProfileState => _summaryState.ConfigurationMachineProfileState;
+    public string ConfigurationRuntimeDataRoot => _summaryState.ConfigurationRuntimeDataRoot;
     public string LastUpdatedSummary => _summaryState.LastUpdatedSummary;
     public string DeviceSummary => _summaryState.DeviceSummary;
     public string CloudGateSummary => _summaryState.CloudGateSummary;
@@ -139,11 +153,32 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase, IDiagnostics
     public string MesLastSuccessSummary => _summaryState.MesLastSuccessSummary;
     public string MesLastFailureSummary => _summaryState.MesLastFailureSummary;
     public string ContextPersistenceSummary => _summaryState.ContextPersistenceSummary;
+    public string ContextCorruptFileCount => _summaryState.ContextCorruptFileCount;
+    public string ContextLastCorruptDetectedAt => _summaryState.ContextLastCorruptDetectedAt;
+    public EdgeVisualStatus ContextPersistenceVisualStatus => _summaryState.ContextCorruptFileCount == "0"
+        ? EdgeVisualStatus.Running
+        : EdgeVisualStatus.Warning;
+    public EdgeVisualStatus ModuleReadinessStatus => HasStartupIssues
+        ? EdgeVisualStatus.Warning
+        : EdgeVisualStatus.Running;
+    public string ModuleReadinessStatusText => HasStartupIssues
+        ? FormatText("Navigation_Diagnostics_IssueCountFormat", "{0} 个问题", Issues.Count)
+        : GetText("Navigation_Diagnostics_ModuleReadinessHealthy", "就绪");
+    public string ModuleReadinessSummary => string.Join(Environment.NewLine, [
+        DiscoveredModulesSummary,
+        EnabledModulesSummary,
+        ActivatedModulesSummary
+    ]);
+    public string ModuleReadinessToggleText => IsModuleReadinessExpanded
+        ? GetText("Navigation_Diagnostics_CollapseModuleReadiness", "收起明细")
+        : GetText("Navigation_Diagnostics_ExpandModuleReadiness", "展开明细");
 
     protected override void RefreshLocalization()
     {
         base.RefreshLocalization();
         _tabController.RefreshLanguage();
+        OnPropertyChanged(nameof(ModuleReadinessStatusText));
+        OnPropertyChanged(nameof(ModuleReadinessToggleText));
         _ = SafeRefreshAsync();
     }
 
@@ -164,6 +199,14 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase, IDiagnostics
 
     private void SelectTab(DiagnosticsTabItemViewModel? tab)
         => _tabController.Select(tab);
+
+    private void ToggleModuleReadiness()
+    {
+        _isModuleReadinessExpanded = !_isModuleReadinessExpanded;
+        OnPropertyChanged(nameof(IsModuleReadinessExpanded));
+        OnPropertyChanged(nameof(IsModuleReadinessCollapsed));
+        OnPropertyChanged(nameof(ModuleReadinessToggleText));
+    }
 
     private void StartObserving()
     {

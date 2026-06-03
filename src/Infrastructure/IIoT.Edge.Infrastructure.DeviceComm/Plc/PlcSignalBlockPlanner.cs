@@ -20,13 +20,17 @@ public sealed class DefaultPlcSignalBlockPlanner : IPlcSignalBlockPlanner
         PlcIoWriteGapPolicy writeGapPolicy,
         bool isWrite)
     {
-        if (mappings.Count == 0)
+        var activeMappings = mappings
+            .Where(static mapping => !string.IsNullOrWhiteSpace(mapping.PlcAddress))
+            .ToArray();
+
+        if (activeMappings.Length == 0)
         {
             return [];
         }
 
         var maxWords = maxBlockWordCount <= 0 ? 100 : maxBlockWordCount;
-        var groups = mappings
+        var groups = activeMappings
             .Select(static mapping => new PlannedMapping(mapping, PlcAddressRange.TryParse(
                 mapping.PlcAddress,
                 mapping.AddressCount)))

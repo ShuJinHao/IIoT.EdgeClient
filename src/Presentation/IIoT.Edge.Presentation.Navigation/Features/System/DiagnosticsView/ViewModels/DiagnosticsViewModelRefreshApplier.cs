@@ -25,6 +25,10 @@ internal sealed class DiagnosticsViewModelRefreshApplier(
         Set(nameof(DiagnosticsViewModel.EnabledModulesSummary), value => summaryState.EnabledModulesSummary = value, summary.EnabledModulesSummary);
         Set(nameof(DiagnosticsViewModel.ActivatedModulesSummary), value => summaryState.ActivatedModulesSummary = value, summary.ActivatedModulesSummary);
         Set(nameof(DiagnosticsViewModel.ConfigurationProfileSummary), value => summaryState.ConfigurationProfileSummary = value, summary.ConfigurationProfileSummary);
+        Set(nameof(DiagnosticsViewModel.ConfigurationEnvironment), value => summaryState.ConfigurationEnvironment = value, summary.ConfigurationEnvironment);
+        Set(nameof(DiagnosticsViewModel.ConfigurationMachineProfile), value => summaryState.ConfigurationMachineProfile = value, summary.ConfigurationMachineProfile);
+        Set(nameof(DiagnosticsViewModel.ConfigurationMachineProfileState), value => summaryState.ConfigurationMachineProfileState = value, summary.ConfigurationMachineProfileState);
+        Set(nameof(DiagnosticsViewModel.ConfigurationRuntimeDataRoot), value => summaryState.ConfigurationRuntimeDataRoot = value, summary.ConfigurationRuntimeDataRoot);
         Set(nameof(DiagnosticsViewModel.LastUpdatedSummary), value => summaryState.LastUpdatedSummary = value, summary.LastUpdatedSummary);
         Set(nameof(DiagnosticsViewModel.DeviceSummary), value => summaryState.DeviceSummary = value, summary.DeviceSummary);
         Set(nameof(DiagnosticsViewModel.CloudGateSummary), value => summaryState.CloudGateSummary = value, summary.CloudGateSummary);
@@ -44,6 +48,11 @@ internal sealed class DiagnosticsViewModelRefreshApplier(
         Set(nameof(DiagnosticsViewModel.MesLastSuccessSummary), value => summaryState.MesLastSuccessSummary = value, summary.MesLastSuccessSummary);
         Set(nameof(DiagnosticsViewModel.MesLastFailureSummary), value => summaryState.MesLastFailureSummary = value, summary.MesLastFailureSummary);
         Set(nameof(DiagnosticsViewModel.ContextPersistenceSummary), value => summaryState.ContextPersistenceSummary = value, summary.ContextPersistenceSummary);
+        Set(nameof(DiagnosticsViewModel.ContextCorruptFileCount), value => summaryState.ContextCorruptFileCount = value, summary.ContextCorruptFileCount);
+        Set(nameof(DiagnosticsViewModel.ContextLastCorruptDetectedAt), value => summaryState.ContextLastCorruptDetectedAt = value, summary.ContextLastCorruptDetectedAt);
+        Set(nameof(DiagnosticsViewModel.HasStartupReport), value => summaryState.HasStartupReport = value, summary.HasStartupReport);
+        callback.NotifyPropertyChanged(nameof(DiagnosticsViewModel.ContextPersistenceVisualStatus));
+        callback.NotifyPropertyChanged(nameof(DiagnosticsViewModel.ModuleReadinessSummary));
 
         if (!string.IsNullOrWhiteSpace(summary.StartupStatusMessage))
         {
@@ -56,6 +65,7 @@ internal sealed class DiagnosticsViewModelRefreshApplier(
         ReplaceItems(collections.ModuleRegistrations, rows.ModuleRegistrations);
         ReplaceItems(collections.PluginStates, rows.PluginStates);
         ReplaceItems(collections.DeviceBindings, rows.DeviceBindings);
+        ReplaceItems(collections.ModuleReadinessRows, rows.ModuleReadinessRows);
         ReplaceItems(collections.Issues, rows.Issues);
         ReplaceItems(collections.MesUploadDiagnostics, rows.MesUploadDiagnostics);
         ReplaceItems(collections.SyncChannels, rows.SyncChannels);
@@ -64,7 +74,11 @@ internal sealed class DiagnosticsViewModelRefreshApplier(
 
         Set(nameof(DiagnosticsViewModel.CloudDeadLetterCount), value => summaryState.CloudDeadLetterCount = value, collections.CloudDeadLetters.Count);
         Set(nameof(DiagnosticsViewModel.MesDeadLetterCount), value => summaryState.MesDeadLetterCount = value, collections.MesDeadLetters.Count);
-        Set(nameof(DiagnosticsViewModel.TotalIssueCount), value => summaryState.TotalIssueCount = value, collections.Issues.Count);
+        Set(nameof(DiagnosticsViewModel.TotalIssueCount), value => summaryState.TotalIssueCount = value, rows.StartupIssueCount);
+        callback.NotifyPropertyChanged(nameof(DiagnosticsViewModel.HasStartupIssues));
+        callback.NotifyPropertyChanged(nameof(DiagnosticsViewModel.IsStartupHealthy));
+        callback.NotifyPropertyChanged(nameof(DiagnosticsViewModel.ModuleReadinessStatus));
+        callback.NotifyPropertyChanged(nameof(DiagnosticsViewModel.ModuleReadinessStatusText));
     }
 
     public void ApplyModuleCounts(StartupDiagnosticsReport report)
@@ -101,6 +115,7 @@ internal sealed record DiagnosticsCollectionTargets(
     ObservableCollection<ModuleRegistrationRow> ModuleRegistrations,
     ObservableCollection<PluginLifecycleRow> PluginStates,
     ObservableCollection<DeviceModuleBindingRow> DeviceBindings,
+    ObservableCollection<ModuleReadinessRow> ModuleReadinessRows,
     ObservableCollection<StartupDiagnosticIssueRow> Issues,
     ObservableCollection<MesChannelDiagnosticsRow> MesUploadDiagnostics,
     ObservableCollection<SyncChannelRow> SyncChannels,
@@ -115,10 +130,15 @@ internal sealed class DiagnosticsSummaryState
     public int DiscoveredModuleCount { get; set; }
     public int EnabledModuleCount { get; set; }
     public int ActivatedModuleCount { get; set; }
+    public bool HasStartupReport { get; set; }
     public string DiscoveredModulesSummary { get; set; } = string.Empty;
     public string EnabledModulesSummary { get; set; } = string.Empty;
     public string ActivatedModulesSummary { get; set; } = string.Empty;
     public string ConfigurationProfileSummary { get; set; } = string.Empty;
+    public string ConfigurationEnvironment { get; set; } = string.Empty;
+    public string ConfigurationMachineProfile { get; set; } = string.Empty;
+    public string ConfigurationMachineProfileState { get; set; } = string.Empty;
+    public string ConfigurationRuntimeDataRoot { get; set; } = string.Empty;
     public string LastUpdatedSummary { get; set; } = string.Empty;
     public string DeviceSummary { get; set; } = string.Empty;
     public string CloudGateSummary { get; set; } = string.Empty;
@@ -138,4 +158,6 @@ internal sealed class DiagnosticsSummaryState
     public string MesLastSuccessSummary { get; set; } = string.Empty;
     public string MesLastFailureSummary { get; set; } = string.Empty;
     public string ContextPersistenceSummary { get; set; } = string.Empty;
+    public string ContextCorruptFileCount { get; set; } = string.Empty;
+    public string ContextLastCorruptDetectedAt { get; set; } = string.Empty;
 }

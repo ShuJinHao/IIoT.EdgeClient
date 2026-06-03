@@ -29,7 +29,6 @@ public sealed class HardwareConfigEditModelMapper : IHardwareConfigEditModelMapp
             DeviceName = dto.DeviceName,
             DeviceType = dto.DeviceType,
             DeviceModel = dto.DeviceModel,
-            ModuleId = dto.ModuleId,
             IpAddress = dto.IpAddress,
             Port1 = dto.Port1,
             Port2 = dto.Port2,
@@ -69,7 +68,6 @@ public sealed class HardwareConfigEditModelMapper : IHardwareConfigEditModelMapp
             Direction = dto.Direction,
             Category = dto.Category,
             BusinessGroup = dto.BusinessGroup,
-            SignalName = dto.SignalName,
             SortOrder = dto.SortOrder,
             Remark = dto.Remark
         };
@@ -80,7 +78,6 @@ public sealed class HardwareConfigEditModelMapper : IHardwareConfigEditModelMapp
             model.DeviceName,
             model.DeviceType,
             model.DeviceModel,
-            model.ModuleId,
             model.IpAddress,
             model.Port1,
             model.Port2,
@@ -116,7 +113,6 @@ public sealed class HardwareConfigEditModelMapper : IHardwareConfigEditModelMapp
             model.Direction,
             model.Category,
             model.BusinessGroup,
-            model.SignalName,
             model.SortOrder,
             model.Remark);
 }

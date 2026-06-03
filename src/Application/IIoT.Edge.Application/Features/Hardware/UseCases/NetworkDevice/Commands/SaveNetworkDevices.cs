@@ -14,7 +14,6 @@ public record NetworkDeviceDto(
     string DeviceName,
     DeviceType DeviceType,
     string? DeviceModel,
-    string ModuleId,
     string IpAddress,
     int Port1,
     int? Port2,
@@ -98,7 +97,7 @@ public class SaveNetworkDevicesHandler(
     {
         entity.Rename(dto.DeviceName);
         entity.ChangeType(dto.DeviceType);
-        entity.AssignModule(dto.ModuleId, dto.DeviceModel);
+        entity.UpdateDeviceModel(dto.DeviceModel);
         entity.UpdateEndpoint(dto.IpAddress, dto.Port1, dto.Port2, dto.ConnectTimeout);
         entity.UpdateCommands(dto.SendCmd1, dto.SendCmd2);
         entity.SetEnabled(dto.IsEnabled);

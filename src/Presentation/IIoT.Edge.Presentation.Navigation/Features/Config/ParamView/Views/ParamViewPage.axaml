@@ -56,13 +56,22 @@
                 Title="{Binding ViewTitle}"
                 Subtitle="{DynamicResource Navigation_Tab_PluginBusinessParams}">
                 <edge:EdgeSectionHeader.ActionContent>
-                    <edge:EdgeActionButton
-                        Command="{Binding SaveCommand}"
-                        Content="{DynamicResource Navigation_Button_Save}"
-                        Icon="{StaticResource Edge.Icon.Save}"
-                        IsEnabled="{Binding CanEdit}"
-                        Kind="Primary"
-                        Size="Compact" />
+                    <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Edge.Size.Spacing8}">
+                        <edge:EdgeActionButton
+                            Command="{Binding ResetCommand}"
+                            Content="{DynamicResource Navigation_Button_ResetDefaults}"
+                            Icon="{StaticResource Edge.Icon.Sync}"
+                            IsEnabled="{Binding CanEdit}"
+                            Kind="Ghost"
+                            Size="Compact" />
+                        <edge:EdgeActionButton
+                            Command="{Binding SaveCommand}"
+                            Content="{DynamicResource Navigation_Button_Save}"
+                            Icon="{StaticResource Edge.Icon.Save}"
+                            IsEnabled="{Binding CanEdit}"
+                            Kind="Primary"
+                            Size="Compact" />
+                    </StackPanel>
                 </edge:EdgeSectionHeader.ActionContent>
             </edge:EdgeSectionHeader>
 

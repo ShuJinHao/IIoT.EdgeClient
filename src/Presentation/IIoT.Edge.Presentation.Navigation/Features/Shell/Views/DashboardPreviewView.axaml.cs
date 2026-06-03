@@ -1,5 +1,9 @@
 using Avalonia.Controls;
+using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Presentation.Navigation.Features.Dashboard;
+using IIoT.Edge.Presentation.Panels.Features.SysLog;
 using IIoT.Edge.UI.Shared.Localization;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -19,7 +23,13 @@ public partial class DashboardPreviewView : UserControl
     }
 
     [ActivatorUtilitiesConstructor]
-    public DashboardPreviewView(DashboardViewModel viewModel, IAppLanguageService languageService)
+    public DashboardPreviewView(
+        DashboardViewModel viewModel,
+        IAppLanguageService languageService,
+        ISystemLogDisplayStore logDisplayStore,
+        ILocalSystemRuntimeConfigService runtimeConfig,
+        IEdgeSyncDiagnosticsQuery diagnosticsQuery,
+        IPlcConnectionManager plcConnectionManager)
         : this()
     {
         if (UseDesignPreviewData())
@@ -30,7 +40,13 @@ public partial class DashboardPreviewView : UserControl
             return;
         }
 
-        _runtimeViewModel = new DashboardPreviewRuntimeViewModel(viewModel, languageService);
+        _runtimeViewModel = new DashboardPreviewRuntimeViewModel(
+            viewModel,
+            languageService,
+            logDisplayStore,
+            runtimeConfig,
+            diagnosticsQuery,
+            plcConnectionManager);
         _previewDataContext = _runtimeViewModel;
         DataContext = _runtimeViewModel;
         AttachedToVisualTree += async (_, _) =>

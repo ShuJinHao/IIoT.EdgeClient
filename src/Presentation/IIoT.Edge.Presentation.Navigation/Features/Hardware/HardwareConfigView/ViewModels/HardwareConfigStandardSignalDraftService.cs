@@ -54,7 +54,7 @@ public sealed class HardwareConfigStandardSignalDraftService : IHardwareConfigSt
 
     public void ApplyStandardSignalToDraft(HardwareConfigViewModel viewModel, IoStandardSignalOptionVm? signal)
     {
-        if (viewModel.NewIoMapping is null || !viewModel.NewIoMapping.IsStandardSource)
+        if (viewModel.NewIoMapping is null)
         {
             return;
         }
@@ -82,13 +82,12 @@ public sealed class HardwareConfigStandardSignalDraftService : IHardwareConfigSt
         viewModel.NewIoMapping.AddressCount = signal.AddressCount;
         viewModel.NewIoMapping.DataType = signal.DataType;
         viewModel.NewIoMapping.BusinessGroup = signal.BusinessGroup;
-        viewModel.NewIoMapping.SignalName = signal.SignalName;
         viewModel.NewIoMapping.Remark = signal.Remark;
     }
 
     public void ClearStandardSignalDraftForCurrentCategory(HardwareConfigViewModel viewModel)
     {
-        if (viewModel.NewIoMapping is null || !viewModel.NewIoMapping.IsStandardSource)
+        if (viewModel.NewIoMapping is null)
         {
             return;
         }
@@ -105,7 +104,6 @@ public sealed class HardwareConfigStandardSignalDraftService : IHardwareConfigSt
             viewModel.NewIoMapping.AddressCount);
         viewModel.NewIoMapping.DataType = IoMappingOptionCatalog.DataTypeInt16;
         viewModel.NewIoMapping.BusinessGroup = string.Empty;
-        viewModel.NewIoMapping.SignalName = string.Empty;
         viewModel.NewIoMapping.Remark = null;
     }
 

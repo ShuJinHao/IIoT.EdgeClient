@@ -99,6 +99,19 @@ public sealed class LocalSystemRuntimeConfigBehaviorTests
             CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<LocalSystemConfigSnapshot>>([]);
 
+        public Task InsertSystemConfigAsync(
+            string key,
+            string value,
+            string? description = null,
+            int sortOrder = 0,
+            CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task DeleteSystemConfigAsync(
+            string key,
+            CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
         public void NotifyModuleChanged()
             => ParameterConfigChanged?.Invoke(
                 this,

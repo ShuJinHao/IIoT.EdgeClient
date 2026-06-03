@@ -6,6 +6,10 @@ public sealed record DiagnosticsSummarySnapshot
     public string EnabledModulesSummary { get; init; } = string.Empty;
     public string ActivatedModulesSummary { get; init; } = string.Empty;
     public string ConfigurationProfileSummary { get; init; } = string.Empty;
+    public string ConfigurationEnvironment { get; init; } = string.Empty;
+    public string ConfigurationMachineProfile { get; init; } = string.Empty;
+    public string ConfigurationMachineProfileState { get; init; } = string.Empty;
+    public string ConfigurationRuntimeDataRoot { get; init; } = string.Empty;
     public string LastUpdatedSummary { get; init; } = string.Empty;
     public string DeviceSummary { get; init; } = string.Empty;
     public string CloudGateSummary { get; init; } = string.Empty;
@@ -25,6 +29,8 @@ public sealed record DiagnosticsSummarySnapshot
     public string MesLastSuccessSummary { get; init; } = string.Empty;
     public string MesLastFailureSummary { get; init; } = string.Empty;
     public string ContextPersistenceSummary { get; init; } = string.Empty;
+    public string ContextCorruptFileCount { get; init; } = string.Empty;
+    public string ContextLastCorruptDetectedAt { get; init; } = string.Empty;
+    public bool HasStartupReport { get; init; }
     public string? StartupStatusMessage { get; init; }
 }
-

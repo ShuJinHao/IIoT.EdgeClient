@@ -120,13 +120,6 @@ public class IoMappingVm : HardwareConfigEditModelBase
         }
     }
 
-    private string _signalName = string.Empty;
-    public string SignalName
-    {
-        get => _signalName;
-        set { _signalName = value; OnPropertyChanged(); }
-    }
-
     private int _sortOrder;
     public int SortOrder
     {
@@ -156,7 +149,7 @@ public class IoMappingVm : HardwareConfigEditModelBase
     }
 
     /// <summary>
-    /// 硬件配置表格中地址数量是否允许现场修改；信号交互和单点读写固定为 1。
+    /// 硬件配置表格中地址长度允许现场修改，用于覆盖连续读写或现场合并点位。
     /// </summary>
     public bool IsAddressCountEditable
         => IoMappingOptionCatalog.CanEditAddressCount(Category);

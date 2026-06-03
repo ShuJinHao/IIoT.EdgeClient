@@ -19,6 +19,7 @@ public class ParamViewModel : LocalizedCrudPageViewModelBase
     private readonly IClientPermissionService _permissionService;
     private readonly IParamViewModelMapper _modelMapper;
     private readonly AsyncCommand _saveCommand;
+    private readonly AsyncCommand _resetCommand;
     private int _selectedTabIndex;
 
     public bool CanEdit => _permissionService.CanEditParams;
@@ -38,6 +39,7 @@ public class ParamViewModel : LocalizedCrudPageViewModelBase
     public ObservableCollection<ModuleParamGroupVm> BusinessParamGroups { get; } = new();
 
     public ICommand SaveCommand { get; }
+    public ICommand ResetCommand { get; }
 
     public ParamViewModel(
         IParamViewCrudService crudService,
@@ -70,7 +72,9 @@ public class ParamViewModel : LocalizedCrudPageViewModelBase
         _modelMapper = modelMapper;
 
         _saveCommand = (AsyncCommand)CreateBusyCommand(SaveAsync, () => CanEdit);
+        _resetCommand = (AsyncCommand)CreateBusyCommand(ResetAsync, () => CanEdit);
         SaveCommand = _saveCommand;
+        ResetCommand = _resetCommand;
 
         _permissionService.PermissionStateChanged += HandlePermissionStateChanged;
     }
@@ -110,6 +114,18 @@ public class ParamViewModel : LocalizedCrudPageViewModelBase
         return saveResult;
     }
 
+    private async Task<CrudOperationResult> ResetAsync()
+    {
+        var resetResult = await _crudService.ResetAsync();
+        if (!resetResult.IsSuccess)
+        {
+            return resetResult;
+        }
+
+        await RefreshAfterSaveAsync();
+        return resetResult;
+    }
+
     private async Task RefreshAfterSaveAsync()
     {
         var result = await _crudService.LoadAsync();
@@ -134,6 +150,7 @@ public class ParamViewModel : LocalizedCrudPageViewModelBase
     {
         OnPropertyChanged(nameof(CanEdit));
         _saveCommand.RaiseCanExecuteChanged();
+        _resetCommand.RaiseCanExecuteChanged();
     }
 
     protected override void RefreshLocalization()
@@ -144,6 +161,13 @@ public class ParamViewModel : LocalizedCrudPageViewModelBase
 
     private void ApplyParamLocalization()
     {
+        foreach (var group in MesParamGroups
+                     .Concat(CloudParamGroups)
+                     .Concat(BusinessParamGroups))
+        {
+            group.ModuleDisplayName = GetText(group.ModuleDisplayNameResourceKey, group.ModuleDisplayNameFallback);
+        }
+
         foreach (var param in MesParamGroups
                      .Concat(CloudParamGroups)
                      .Concat(BusinessParamGroups)

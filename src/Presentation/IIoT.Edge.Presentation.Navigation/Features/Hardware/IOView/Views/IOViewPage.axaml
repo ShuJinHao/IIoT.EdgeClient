@@ -8,7 +8,7 @@
 
     <edge:EdgeScrollHost>
         <StackPanel Margin="20" Spacing="16">
-            <Grid ColumnDefinitions="*">
+            <Grid ColumnDefinitions="*,Auto">
                 <StackPanel Spacing="4">
                     <TextBlock
                         FontSize="{DynamicResource Edge.FontSize.Title24}"
@@ -28,151 +28,183 @@
                             TextWrapping="Wrap" />
                     </StackPanel>
                 </StackPanel>
-            </Grid>
 
-            <edge:EdgeTablePanel
-                IsVisible="{Binding HasInteractionRows}"
-                Title="{DynamicResource Navigation_Title_IoInteractionGroup}">
-                <edge:EdgeTablePanel.FilterContent>
+                <StackPanel
+                    Grid.Column="1"
+                    VerticalAlignment="Top"
+                    Orientation="Horizontal"
+                    Spacing="8">
                     <edge:EdgeFilterComboBox
                         Width="260"
                         ItemsSource="{Binding Devices}"
                         PlaceholderText="{DynamicResource Navigation_Hint_SelectDevice}"
-                        SelectedItem="{Binding SelectedDevice}">
+                        SelectedItem="{Binding SelectedDevice, Mode=TwoWay}">
                         <edge:EdgeFilterComboBox.ItemTemplate>
                             <DataTemplate>
                                 <TextBlock Text="{Binding DeviceName}" />
                             </DataTemplate>
                         </edge:EdgeFilterComboBox.ItemTemplate>
                     </edge:EdgeFilterComboBox>
-                </edge:EdgeTablePanel.FilterContent>
-                <edge:EdgeTablePanel.ActionContent>
                     <edge:EdgeActionButton
                         Command="{Binding RefreshDevicesCommand}"
                         Content="{DynamicResource Navigation_Button_Refresh}"
                         Icon="{StaticResource Edge.Icon.Refresh}"
                         Kind="Primary"
                         Size="Compact" />
-                </edge:EdgeTablePanel.ActionContent>
-                <edge:EdgeDataGrid
-                    AutoGenerateColumns="False"
-                    CanUserReorderColumns="False"
-                    CanUserResizeColumns="True"
-                    CanUserSortColumns="False"
-                    HeadersVisibility="Column"
-                    IsReadOnly="False"
-                    ItemsSource="{Binding InteractionRows}"
-                    ViewportMaxHeight="320">
-                    <edge:EdgeDataGrid.Columns>
-                        <edge:EdgeTextColumn Binding="{Binding BusinessGroup}" Header="{DynamicResource Navigation_Column_InteractionItem}" IsReadOnly="True" MinWidth="90" Width="110" />
-                        <edge:EdgeTextColumn Binding="{Binding PlcAddressSummary}" Header="{DynamicResource Navigation_Column_PlcSignal}" IsReadOnly="True" MinWidth="140" Width="2*" />
-                        <edge:EdgeTextColumn Binding="{Binding PlcValueText}" Header="{DynamicResource Navigation_Column_PlcValue}" IsReadOnly="True" MinWidth="70" Width="70" />
-                        <edge:EdgeTextColumn Binding="{Binding HostReplyAddressText}" Header="{DynamicResource Navigation_Column_CurrentReply}" IsReadOnly="True" MinWidth="140" Width="2*" />
-                        <edge:EdgeTextColumn Binding="{Binding HostReplyValueText}" Header="{DynamicResource Navigation_Column_CurrentValue}" IsReadOnly="True" MinWidth="80" Width="80" />
-                        <edge:EdgeActionColumn Header="{DynamicResource Navigation_Column_PendingWriteOperation}" MinWidth="150" Width="150">
-                            <edge:EdgeActionColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <Grid ColumnDefinitions="*,6,Auto">
-                                            <edge:EdgeTextBox
-                                                Classes="flat"
-                                                MinWidth="60"
-                                                HorizontalContentAlignment="Right"
-                                                IsEnabled="{Binding CanWrite}"
-                                                Text="{Binding WriteValue, Mode=TwoWay}" />
-                                            <edge:EdgeActionButton
-                                                Grid.Column="2"
-                                                Command="{Binding WriteCommand}"
-                                                Content="{DynamicResource Navigation_Button_Write}"
-                                                Icon="{StaticResource Edge.Icon.Write}"
-                                                IsEnabled="{Binding CanWrite}"
-                                                Kind="Primary"
-                                                Role="Cell"
-                                                Size="Compact" />
-                                        </Grid>
-                                    </DataTemplate>
-                            </edge:EdgeActionColumn.CellTemplate>
-                        </edge:EdgeActionColumn>
-                    </edge:EdgeDataGrid.Columns>
-                </edge:EdgeDataGrid>
-            </edge:EdgeTablePanel>
+                </StackPanel>
+            </Grid>
 
-            <ItemsControl ItemsSource="{Binding DataSections}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
+            <edge:EdgeTabControl>
+                <TabItem Header="{DynamicResource Navigation_IoView_TabInteraction}">
+                    <StackPanel Spacing="12">
                         <edge:EdgeTablePanel
-                            Margin="0,0,0,14"
-                            Title="{Binding Title}">
-                            <edge:EdgeTablePanel.ActionContent>
-                                <edge:EdgeActionButton
-                                    Command="{Binding DataContext.ManualReadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                    Content="{DynamicResource Navigation_Button_ReadIoData}"
-                                    Icon="{StaticResource Edge.Icon.Read}"
-                                    IsVisible="{Binding CanManualRead}"
-                                    Kind="Primary"
-                                    Size="Compact" />
-                            </edge:EdgeTablePanel.ActionContent>
+                            IsVisible="{Binding HasInteractionRows}"
+                            Title="{DynamicResource Navigation_Title_IoInteractionGroup}">
                             <edge:EdgeDataGrid
                                 AutoGenerateColumns="False"
                                 CanUserReorderColumns="False"
                                 CanUserResizeColumns="True"
                                 CanUserSortColumns="False"
-                                IsReadOnly="True"
-                                ItemsSource="{Binding Signals}"
-                                ViewportMaxHeight="360">
+                                HeadersVisibility="Column"
+                                IsReadOnly="False"
+                                ItemsSource="{Binding InteractionRows}"
+                                ViewportMaxHeight="320">
                                 <edge:EdgeDataGrid.Columns>
-                                    <edge:EdgeTextColumn Binding="{Binding SignalName}" Header="{DynamicResource Navigation_Column_SignalName}" MinWidth="160" Width="2*" />
-                                    <edge:EdgeTextColumn Binding="{Binding PlcAddress}" Header="{DynamicResource Navigation_Column_Address}" MinWidth="120" Width="120" />
-                                    <edge:EdgeTextColumn Binding="{Binding DataType}" Header="{DynamicResource Navigation_Column_Type}" MinWidth="100" Width="100" />
-                                    <edge:EdgeTextColumn Binding="{Binding LengthText}" Header="{DynamicResource Navigation_Column_Length}" MinWidth="80" Width="80" />
-                                    <edge:EdgeTextColumn Binding="{Binding PreviewValue}" Header="{DynamicResource Navigation_Column_CurrentValue}" MinWidth="120" Width="*" />
+                                    <edge:EdgeTextColumn Binding="{Binding BusinessGroup}" Header="{DynamicResource Navigation_Column_InteractionItem}" IsReadOnly="True" MinWidth="90" Width="110" />
+                                    <edge:EdgeTextColumn Binding="{Binding PlcAddressSummary}" Header="{DynamicResource Navigation_Column_PlcSignal}" IsReadOnly="True" MinWidth="140" Width="2*" />
+                                    <edge:EdgeTextColumn Binding="{Binding PlcValueText}" Header="{DynamicResource Navigation_Column_PlcValue}" IsReadOnly="True" MinWidth="70" Width="70" />
+                                    <edge:EdgeTextColumn Binding="{Binding HostReplyAddressText}" Header="{DynamicResource Navigation_Column_CurrentReply}" IsReadOnly="True" MinWidth="140" Width="2*" />
+                                    <edge:EdgeTextColumn Binding="{Binding HostReplyValueText}" Header="{DynamicResource Navigation_Column_CurrentValue}" IsReadOnly="True" MinWidth="80" Width="80" />
+                                    <edge:EdgeActionColumn Header="{DynamicResource Navigation_Column_PendingWriteOperation}" MinWidth="150" Width="150">
+                                        <edge:EdgeActionColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <Grid ColumnDefinitions="*,6,Auto">
+                                                    <edge:EdgeTextBox
+                                                        Classes="flat"
+                                                        MinWidth="60"
+                                                        HorizontalContentAlignment="Right"
+                                                        IsEnabled="{Binding CanWrite}"
+                                                        Text="{Binding WriteValue, Mode=TwoWay}" />
+                                                    <edge:EdgeActionButton
+                                                        Grid.Column="2"
+                                                        Command="{Binding WriteCommand}"
+                                                        Content="{DynamicResource Navigation_Button_Write}"
+                                                        Icon="{StaticResource Edge.Icon.Write}"
+                                                        IsEnabled="{Binding CanWrite}"
+                                                        Kind="Primary"
+                                                        Role="Cell"
+                                                        Size="Compact" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </edge:EdgeActionColumn.CellTemplate>
+                                    </edge:EdgeActionColumn>
                                 </edge:EdgeDataGrid.Columns>
                             </edge:EdgeDataGrid>
                         </edge:EdgeTablePanel>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-            <ItemsControl ItemsSource="{Binding ArraySections}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <edge:EdgeTablePanel
-                            Margin="0,0,0,14"
-                            Subtitle="{Binding Summary}"
-                            Title="{Binding Title}">
-                            <edge:EdgeTablePanel.ActionContent>
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <edge:EdgeActionButton
-                                        Command="{Binding DataContext.ManualReadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                        Content="{DynamicResource Navigation_Button_ReadIoData}"
-                                        Icon="{StaticResource Edge.Icon.Read}"
-                                        IsVisible="{Binding CanManualRead}"
-                                        Kind="Primary"
-                                        Size="Compact" />
-                                    <edge:EdgeActionButton
-                                        Command="{Binding ToggleExpandedCommand}"
-                                        Content="{Binding ToggleText}"
-                                        Icon="{StaticResource Edge.Icon.Expand}"
-                                        Kind="Secondary"
-                                        Size="Compact" />
-                                </StackPanel>
-                            </edge:EdgeTablePanel.ActionContent>
-                            <edge:EdgeDataGrid
-                                ioview:DataTableBindingBehavior.SourceSection="{Binding}"
-                                AutoGenerateColumns="False"
-                                CanUserReorderColumns="False"
-                                CanUserResizeColumns="True"
-                                CanUserSortColumns="False"
-                                IsReadOnly="True"
-                                IsVisible="{Binding IsExpanded}"
-                                ViewportMaxHeight="360" />
-                        </edge:EdgeTablePanel>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
 
-            <sharedViews:EmptyStateView
-                IsVisible="{Binding HasNoSignals}"
-                Message="{DynamicResource Navigation_Empty_IoMappings}"
-                Title="{DynamicResource Navigation_Title_IoInteractionGroup}" />
+                        <sharedViews:EmptyStateView
+                            IsVisible="{Binding !HasInteractionRows}"
+                            Message="{DynamicResource Navigation_Empty_IoInteractionRows}"
+                            Title="{DynamicResource Navigation_IoView_TabInteraction}" />
+                    </StackPanel>
+                </TabItem>
+
+                <TabItem Header="{DynamicResource Navigation_IoView_TabData}">
+                    <StackPanel Spacing="12">
+                        <ItemsControl
+                            IsVisible="{Binding HasDataSections}"
+                            ItemsSource="{Binding DataSections}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <edge:EdgeTablePanel
+                                        Margin="0,0,0,14"
+                                        Title="{Binding Title}">
+                                        <edge:EdgeTablePanel.ActionContent>
+                                            <edge:EdgeActionButton
+                                                Command="{Binding DataContext.ManualReadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                Content="{DynamicResource Navigation_Button_ReadIoData}"
+                                                Icon="{StaticResource Edge.Icon.Read}"
+                                                IsVisible="{Binding CanManualRead}"
+                                                Kind="Primary"
+                                                Size="Compact" />
+                                        </edge:EdgeTablePanel.ActionContent>
+                                        <edge:EdgeDataGrid
+                                            AutoGenerateColumns="False"
+                                            CanUserReorderColumns="False"
+                                            CanUserResizeColumns="True"
+                                            CanUserSortColumns="False"
+                                            IsReadOnly="True"
+                                            ItemsSource="{Binding Signals}"
+                                            ViewportMaxHeight="360">
+                                            <edge:EdgeDataGrid.Columns>
+                                                <edge:EdgeTextColumn Binding="{Binding SignalKey}" Header="{DynamicResource Navigation_Column_SignalKey}" MinWidth="180" Width="2*" />
+                                                <edge:EdgeTextColumn Binding="{Binding PlcAddress}" Header="{DynamicResource Navigation_Column_Address}" MinWidth="120" Width="120" />
+                                                <edge:EdgeTextColumn Binding="{Binding DataType}" Header="{DynamicResource Navigation_Column_Type}" MinWidth="100" Width="100" />
+                                                <edge:EdgeTextColumn Binding="{Binding LengthText}" Header="{DynamicResource Navigation_Column_Length}" MinWidth="80" Width="80" />
+                                                <edge:EdgeTextColumn Binding="{Binding PreviewValue}" Header="{DynamicResource Navigation_Column_CurrentValue}" MinWidth="120" Width="*" />
+                                            </edge:EdgeDataGrid.Columns>
+                                        </edge:EdgeDataGrid>
+                                    </edge:EdgeTablePanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <sharedViews:EmptyStateView
+                            IsVisible="{Binding !HasDataSections}"
+                            Message="{DynamicResource Navigation_Empty_IoDataSections}"
+                            Title="{DynamicResource Navigation_IoView_TabData}" />
+                    </StackPanel>
+                </TabItem>
+
+                <TabItem Header="{DynamicResource Navigation_IoView_TabMatrix}">
+                    <StackPanel Spacing="12">
+                        <ItemsControl
+                            IsVisible="{Binding HasArraySections}"
+                            ItemsSource="{Binding ArraySections}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <edge:EdgeTablePanel
+                                        Margin="0,0,0,14"
+                                        Subtitle="{Binding Summary}"
+                                        Title="{Binding Title}">
+                                        <edge:EdgeTablePanel.ActionContent>
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <edge:EdgeActionButton
+                                                    Command="{Binding DataContext.ManualReadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    Content="{DynamicResource Navigation_Button_ReadIoData}"
+                                                    Icon="{StaticResource Edge.Icon.Read}"
+                                                    IsVisible="{Binding CanManualRead}"
+                                                    Kind="Primary"
+                                                    Size="Compact" />
+                                                <edge:EdgeActionButton
+                                                    Command="{Binding ToggleExpandedCommand}"
+                                                    Content="{Binding ToggleText}"
+                                                    Icon="{StaticResource Edge.Icon.Expand}"
+                                                    Kind="Secondary"
+                                                    Size="Compact" />
+                                            </StackPanel>
+                                        </edge:EdgeTablePanel.ActionContent>
+                                        <edge:EdgeDataGrid
+                                            ioview:DataTableBindingBehavior.SourceSection="{Binding}"
+                                            AutoGenerateColumns="False"
+                                            CanUserReorderColumns="False"
+                                            CanUserResizeColumns="True"
+                                            CanUserSortColumns="False"
+                                            IsReadOnly="True"
+                                            IsVisible="{Binding IsExpanded}"
+                                            ViewportMaxHeight="360" />
+                                    </edge:EdgeTablePanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <sharedViews:EmptyStateView
+                            IsVisible="{Binding !HasArraySections}"
+                            Message="{DynamicResource Navigation_Empty_IoArraySections}"
+                            Title="{DynamicResource Navigation_IoView_TabMatrix}" />
+                    </StackPanel>
+                </TabItem>
+            </edge:EdgeTabControl>
         </StackPanel>
     </edge:EdgeScrollHost>
 </UserControl>

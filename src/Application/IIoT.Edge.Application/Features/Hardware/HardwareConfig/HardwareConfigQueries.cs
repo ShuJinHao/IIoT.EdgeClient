@@ -22,7 +22,6 @@ public record IoMappingPageResult(
 
 public record ModuleTemplateInfoResult(
     bool IsAvailable,
-    string? ModuleId,
     IReadOnlyList<ModuleIoTemplateEntry> DefaultSignals,
     IReadOnlyList<ModuleIoTemplateEntry> CandidateSignals,
     string Message);
@@ -72,7 +71,6 @@ public class LoadHardwareConfigHandler(ISender sender)
             entity.DeviceName,
             entity.DeviceType,
             entity.DeviceModel,
-            entity.ModuleId,
             entity.IpAddress,
             entity.Port1,
             entity.Port2,
@@ -130,7 +128,6 @@ public class LoadIoMappingsHandler(ISender sender)
             entity.Direction,
             entity.Category,
             entity.BusinessGroup,
-            entity.SignalName,
             entity.SortOrder,
             entity.Remark);
 }
@@ -308,7 +305,6 @@ public class SaveHardwareConfigHandler(
     {
         return !string.Equals(existing.DeviceName?.Trim(), incoming.DeviceName?.Trim(), StringComparison.OrdinalIgnoreCase)
             || !string.Equals(existing.DeviceModel?.Trim(), incoming.DeviceModel?.Trim(), StringComparison.OrdinalIgnoreCase)
-            || !string.Equals(existing.ModuleId?.Trim(), incoming.ModuleId?.Trim(), StringComparison.OrdinalIgnoreCase)
             || !string.Equals(existing.IpAddress?.Trim(), incoming.IpAddress?.Trim(), StringComparison.OrdinalIgnoreCase)
             || existing.Port1 != incoming.Port1
             || existing.Port2 != incoming.Port2
@@ -334,7 +330,6 @@ public class SaveHardwareConfigHandler(
                 x.SortOrder,
                 Normalize(x.Category),
                 NormalizeNullable(x.BusinessGroup),
-                NormalizeNullable(x.SignalName),
                 NormalizeNullable(x.Remark)))
             .OrderBy(x => x.SortOrder)
             .ThenBy(x => x.SignalKey, StringComparer.OrdinalIgnoreCase)
@@ -351,7 +346,6 @@ public class SaveHardwareConfigHandler(
                 x.SortOrder,
                 Normalize(x.Category),
                 NormalizeNullable(x.BusinessGroup),
-                NormalizeNullable(x.SignalName),
                 NormalizeNullable(x.Remark)))
             .OrderBy(x => x.SortOrder)
             .ThenBy(x => x.SignalKey, StringComparer.OrdinalIgnoreCase)
@@ -375,6 +369,5 @@ public class SaveHardwareConfigHandler(
         int SortOrder,
         string Category,
         string? BusinessGroup,
-        string? SignalName,
         string? Remark);
 }

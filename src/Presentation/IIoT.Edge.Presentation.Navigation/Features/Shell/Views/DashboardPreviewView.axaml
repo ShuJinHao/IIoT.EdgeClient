@@ -5,7 +5,7 @@
     xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
     xmlns:sharedViews="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared">
     <Grid Margin="12,4,18,8" RowDefinitions="Auto,220,*" RowSpacing="8">
-        <Grid ColumnDefinitions="*,Auto">
+        <Grid>
             <StackPanel Spacing="2">
                 <TextBlock
                     Classes="edge-dashboard-preview-title"
@@ -14,14 +14,6 @@
                     Classes="edge-dashboard-preview-subtitle"
                     Text="{DynamicResource Navigation_DashboardPreview_Subtitle}" />
             </StackPanel>
-
-            <edge:EdgeStatusChip
-                Grid.Column="1"
-                VerticalAlignment="Center"
-                ChipPadding="{DynamicResource Edge.Thickness.Chip.Comfortable}"
-                ShowDot="True"
-                Status="Info"
-                Text="{Binding CurrentBatch, FallbackValue=—, TargetNullValue=—}" />
         </Grid>
 
         <Grid
@@ -29,13 +21,13 @@
             ColumnDefinitions="1.08*,0.82*,0.72*"
             ColumnSpacing="12">
             <edge:EdgeMetricCard
-                Description="{DynamicResource Navigation_DashboardPreview_FromCapacitySnapshot}"
+                Description="{Binding RecentHourDescription}"
                 Icon="{StaticResource Edge.Icon.Dashboard}"
                 MinHeight="0"
                 Status="Info"
-                Title="{DynamicResource Navigation_DashboardPreview_OutputOverview}"
+                Title="{DynamicResource Navigation_DashboardPreview_RecentHourOutput}"
                 Unit="{DynamicResource Navigation_DashboardPreview_UnitPiece}"
-                Value="{Binding TodayOutput}" />
+                Value="{Binding RecentHourOutput}" />
 
             <edge:EdgeCard
                 Grid.Column="1"
@@ -48,7 +40,7 @@
                 <Grid RowDefinitions="Auto,*" RowSpacing="{DynamicResource Edge.Size.Spacing10}">
                     <TextBlock
                         Classes="edge-summary-card-title"
-                        Text="{DynamicResource Navigation_DashboardPreview_TaskSummary}" />
+                        Text="{DynamicResource Navigation_DashboardPreview_RecipeAndPlc}" />
                     <ItemsControl
                         Grid.Row="1"
                         Classes="edge-summary-card-items"
@@ -93,7 +85,7 @@
                                 <TextBlock
                                     Classes="edge-dashboard-mini-label"
                                     Text="{DynamicResource Navigation_DashboardPreview_DeviceLinks}" />
-                                <edge:EdgeStatusDot VerticalAlignment="Center" Status="Info" />
+                                <edge:EdgeStatusDot VerticalAlignment="Center" Status="{Binding DeviceLinksStatus}" />
                             </StackPanel>
                             <TextBlock
                                 Classes="edge-dashboard-mini-value"
@@ -106,12 +98,12 @@
                             <StackPanel Classes="edge-dashboard-mini-label-row">
                                 <TextBlock
                                     Classes="edge-dashboard-mini-label"
-                                    Text="{DynamicResource Navigation_DashboardPreview_Yield}" />
-                                <edge:EdgeStatusDot VerticalAlignment="Center" Status="Running" />
+                                    Text="{DynamicResource Navigation_DashboardPreview_PlcAverageLatency}" />
+                                <edge:EdgeStatusDot VerticalAlignment="Center" Status="{Binding PlcLatencyStatus}" />
                             </StackPanel>
                             <TextBlock
                                 Classes="edge-dashboard-mini-value"
-                                Text="{Binding TodayYield}" />
+                                Text="{Binding PlcLatencyText}" />
                         </StackPanel>
                     </Grid>
 
@@ -120,12 +112,17 @@
                             <StackPanel Classes="edge-dashboard-mini-label-row">
                                 <TextBlock
                                     Classes="edge-dashboard-mini-label"
-                                    Text="{DynamicResource Navigation_DashboardPreview_OkCount}" />
-                                <edge:EdgeStatusDot VerticalAlignment="Center" Status="Info" />
+                                    Text="{DynamicResource Navigation_DashboardPreview_Mes}" />
+                                <edge:EdgeStatusDot VerticalAlignment="Center" Status="{Binding MesStatus}" />
                             </StackPanel>
                             <TextBlock
                                 Classes="edge-dashboard-mini-value"
-                                Text="{Binding OkCount}" />
+                                Text="{Binding MesStateText}" />
+                            <TextBlock
+                                FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                IsVisible="{Binding HasMesProbeText}"
+                                Text="{Binding MesProbeText}" />
                         </StackPanel>
                     </Grid>
 
@@ -134,12 +131,17 @@
                             <StackPanel Classes="edge-dashboard-mini-label-row">
                                 <TextBlock
                                     Classes="edge-dashboard-mini-label"
-                                    Text="{DynamicResource Navigation_DashboardPreview_NgCount}" />
-                                <edge:EdgeStatusDot VerticalAlignment="Center" Status="Warning" />
+                                    Text="{DynamicResource Navigation_DashboardPreview_Cloud}" />
+                                <edge:EdgeStatusDot VerticalAlignment="Center" Status="{Binding CloudStatus}" />
                             </StackPanel>
                             <TextBlock
                                 Classes="edge-dashboard-mini-value"
-                                Text="{Binding NgCount}" />
+                                Text="{Binding CloudStateText}" />
+                            <TextBlock
+                                FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                IsVisible="{Binding HasCloudProbeText}"
+                                Text="{Binding CloudProbeText}" />
                         </StackPanel>
                     </Grid>
                 </Grid>
@@ -217,38 +219,171 @@
                 <Grid RowDefinitions="Auto,*">
                     <TextBlock
                         Classes="edge-dashboard-data-panel-title"
-                        Text="{DynamicResource Navigation_DashboardPreview_Trend}" />
+                        Text="{Binding UploadHealthTitle}" />
                     <Grid Grid.Row="1" Classes="edge-dashboard-data-panel-body">
-                        <ItemsControl
-                            IsVisible="{Binding !IsTrendEmpty}"
-                            ItemsSource="{Binding TrendPoints}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <UniformGrid Rows="1" />
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Grid
-                                        Margin="2,0"
-                                        RowDefinitions="*,Auto"
-                                        RowSpacing="2">
+                        <StackPanel
+                            IsVisible="{Binding IsUploadHealthBodyVisible}"
+                            Spacing="{DynamicResource Edge.Size.Spacing12}"
+                            VerticalAlignment="Top">
+                            <StackPanel
+                                Orientation="Horizontal"
+                                Spacing="{DynamicResource Edge.Size.Spacing6}">
+                                <edge:EdgeStatusDot
+                                    VerticalAlignment="Center"
+                                    Status="{Binding UploadHealthStatus}" />
+                                <TextBlock
+                                    FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                                    FontWeight="SemiBold"
+                                    Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                    Text="{Binding UploadHealthStatusText}" />
+                            </StackPanel>
+
+                            <ItemsControl ItemsSource="{Binding UploadChannelItems}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel
+                                            Orientation="Horizontal"
+                                            Spacing="{DynamicResource Edge.Size.Spacing8}" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
                                         <Border
-                                            Grid.Row="0"
-                                            Height="{Binding BarHeight}"
-                                            Classes="edge-dashboard-trend-bar" />
-                                        <TextBlock
-                                            Grid.Row="1"
-                                            Classes="edge-dashboard-trend-label"
-                                            Text="{Binding Label}" />
-                                    </Grid>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+                                            MinWidth="132"
+                                            Padding="10,8"
+                                            Background="{DynamicResource Edge.Brush.Surface.Wash}"
+                                            CornerRadius="{DynamicResource Edge.CornerRadius.Control}">
+                                            <Grid RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="{DynamicResource Edge.Size.Spacing4}">
+                                                <StackPanel
+                                                    Orientation="Horizontal"
+                                                    Spacing="{DynamicResource Edge.Size.Spacing6}">
+                                                    <edge:EdgeStatusDot
+                                                        VerticalAlignment="Center"
+                                                        Status="{Binding Status}" />
+                                                    <TextBlock
+                                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                                        FontWeight="SemiBold"
+                                                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                                        Text="{Binding Name}" />
+                                                </StackPanel>
+                                                <TextBlock
+                                                    Grid.Row="1"
+                                                    FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                                                    FontWeight="SemiBold"
+                                                    Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                                    Text="{Binding StateText}" />
+                                                <TextBlock
+                                                    Grid.Row="2"
+                                                    FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                                    Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                                    IsVisible="{Binding HasDetailText}"
+                                                    Text="{Binding DetailText}"
+                                                    TextTrimming="CharacterEllipsis" />
+                                                <ItemsControl
+                                                    Grid.Row="3"
+                                                    IsVisible="{Binding HasMetrics}"
+                                                    ItemsSource="{Binding Metrics}">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate>
+                                                            <StackPanel Spacing="{DynamicResource Edge.Size.Spacing2}" />
+                                                        </ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
+                                                                <TextBlock
+                                                                    FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                                                    Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                                                    Text="{Binding Label}" />
+                                                                <TextBlock
+                                                                    Grid.Column="1"
+                                                                    FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                                                    FontWeight="SemiBold"
+                                                                    Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                                                    Text="{Binding Value}" />
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <ItemsControl ItemsSource="{Binding UploadHealthSegments}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel
+                                            HorizontalAlignment="Left"
+                                            Orientation="Horizontal"
+                                            Spacing="0" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid
+                                            Width="28"
+                                            Height="8"
+                                            ToolTip.Tip="{Binding Label}">
+                                            <Border
+                                                Background="{DynamicResource Edge.Brush.Status.Running}"
+                                                CornerRadius="{DynamicResource Edge.CornerRadius.Badge}"
+                                                IsVisible="{Binding IsSuccess}" />
+                                            <Border
+                                                Background="{DynamicResource Edge.Brush.Status.Error}"
+                                                CornerRadius="{DynamicResource Edge.CornerRadius.Badge}"
+                                                IsVisible="{Binding IsFailure}" />
+                                            <Border
+                                                Background="{DynamicResource Edge.Brush.Surface.Wash}"
+                                                CornerRadius="{DynamicResource Edge.CornerRadius.Badge}"
+                                                IsVisible="{Binding IsNeutral}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing12}">
+                                <StackPanel Spacing="{DynamicResource Edge.Size.Spacing4}">
+                                    <TextBlock
+                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                        Text="{DynamicResource Navigation_DashboardPreview_LastUploadSuccess}" />
+                                    <TextBlock
+                                        FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                                        FontWeight="SemiBold"
+                                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                        Text="{Binding LastUploadSuccessText}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="{DynamicResource Edge.Size.Spacing4}">
+                                    <TextBlock
+                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                        Text="{DynamicResource Navigation_DashboardPreview_LastUploadFailure}" />
+                                    <TextBlock
+                                        FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                                        FontWeight="SemiBold"
+                                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                        Text="{Binding LastUploadFailureText}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Spacing="{DynamicResource Edge.Size.Spacing4}">
+                                    <TextBlock
+                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                        Text="{DynamicResource Navigation_DashboardPreview_DeadLetters}" />
+                                    <TextBlock
+                                        FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                                        FontWeight="SemiBold"
+                                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                        Text="{Binding UploadDeadLetterText}" />
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+
                         <sharedViews:EmptyStateView
-                            IsVisible="{Binding IsTrendEmpty}"
-                            Message="{DynamicResource Navigation_DashboardPreview_NoTrendSource}"
-                            Title="{DynamicResource Navigation_DashboardPreview_NoTrendTitle}" />
+                            IsVisible="{Binding IsUploadHealthEmpty}"
+                            Message="{Binding UploadHealthEmptyMessage}"
+                            Title="{Binding UploadHealthEmptyTitle}" />
                     </Grid>
                 </Grid>
             </edge:EdgeCard>

@@ -33,7 +33,7 @@ public sealed class PlcTaskBindingService(
 
         var candidates = factory.GetTaskCandidates();
         var devices = await networkDevices.GetListAsync(
-            x => x.DeviceType == DeviceType.PLC && x.ModuleId == moduleId,
+            x => x.DeviceType == DeviceType.PLC,
             cancellationToken).ConfigureAwait(false);
 
         var results = new List<PlcTaskBindingDeviceDto>(devices.Count);
@@ -51,7 +51,7 @@ public sealed class PlcTaskBindingService(
             results.Add(new PlcTaskBindingDeviceDto(
                 device.Id,
                 device.DeviceName,
-                device.ModuleId,
+                moduleId,
                 device.IsEnabled,
                 taskItems));
         }
@@ -102,10 +102,6 @@ public sealed class PlcTaskBindingService(
 
         var device = await networkDevices.GetByIdAsync(networkDeviceId, cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidOperationException("未找到要保存任务绑定的 PLC 设备。");
-        if (!string.Equals(device.ModuleId, moduleId, StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException("PLC 设备所属模块与当前任务绑定页面不一致。");
-        }
 
         if (!runtimeRegistry.TryGetFactory(moduleId, out var factory))
         {
@@ -305,8 +301,7 @@ public sealed class PlcTaskBindingService(
                 row.Direction,
                 row.SortOrder,
                 row.Category,
-                row.BusinessGroup,
-                row.SignalName))
+                row.BusinessGroup))
             .ToArray();
     }
 

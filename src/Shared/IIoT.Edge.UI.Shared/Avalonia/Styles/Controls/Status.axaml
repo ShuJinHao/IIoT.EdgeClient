@@ -240,18 +240,21 @@
                             VerticalAlignment="Center"
                             Spacing="{DynamicResource Edge.Size.Spacing4}">
                             <TextBlock
+                                Classes="edge-status-title"
                                 FontSize="{DynamicResource Edge.FontSize.Body}"
                                 FontWeight="SemiBold"
                                 Foreground="{DynamicResource Edge.Brush.Text.Primary}"
                                 Text="{TemplateBinding Title}"
                                 TextTrimming="CharacterEllipsis" />
                             <TextBlock
+                                Classes="edge-status-description"
                                 IsVisible="{TemplateBinding HasDescription}"
                                 FontSize="{DynamicResource Edge.FontSize.Caption}"
                                 Foreground="{DynamicResource Edge.Brush.Text.Muted}"
                                 Text="{TemplateBinding Description}"
                                 TextWrapping="Wrap" />
                             <TextBlock
+                                Classes="edge-status-detail"
                                 IsVisible="{TemplateBinding HasDetail}"
                                 FontFamily="{DynamicResource Edge.FontFamily.Mono}"
                                 FontSize="{DynamicResource Edge.FontSize.Caption}"
@@ -329,5 +332,22 @@
 
     <Style Selector="controls|EdgeStatusListItem.strip controls|EdgeStatusChip">
         <Setter Property="ChipPadding" Value="9,0" />
+    </Style>
+
+    <Style Selector="Border.edge-issue-rail">
+        <Setter Property="Width" Value="3" />
+        <Setter Property="MinHeight" Value="42" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="VerticalAlignment" Value="Stretch" />
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Status.Warning}" />
+        <Setter Property="CornerRadius" Value="2" />
+    </Style>
+
+    <Style Selector="Border.edge-issue-rail.error">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Status.Error}" />
+    </Style>
+
+    <Style Selector="Border.edge-issue-rail.warning">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Status.Warning}" />
     </Style>
 </Styles>

@@ -62,10 +62,7 @@ public sealed class HardwareConfigEditSession : IHardwareConfigEditSession
             return;
         }
 
-        viewModel.NewInteractionPair = new IoInteractionPairDraftVm
-        {
-            Source = IoMappingOptionCatalog.PointSourceStandardSignal
-        };
+        viewModel.NewInteractionPair = new IoInteractionPairDraftVm();
         viewModel.NewIoMapping = null;
         viewModel.SelectedStandardIoSignal = null;
         viewModel.SelectedStandardInteractionGroup = standardGroup;
@@ -85,7 +82,6 @@ public sealed class HardwareConfigEditSession : IHardwareConfigEditSession
         viewModel.IsInteractionPairDialog = false;
         viewModel.NewIoMapping = new IoMappingDraftVm
         {
-            Source = IoMappingOptionCatalog.PointSourceStandardSignal,
             Category = _standardSignalDraftService.FindInitialDataPointCategory(viewModel)
         };
         viewModel.NewInteractionPair = null;
@@ -160,21 +156,9 @@ public sealed class HardwareConfigEditSession : IHardwareConfigEditSession
         object? sender,
         PropertyChangedEventArgs e)
     {
-        if (sender is not IoMappingDraftVm draft)
+        if (sender is not IoMappingDraftVm)
         {
             return;
-        }
-
-        if (e.PropertyName == nameof(IoMappingDraftVm.Source))
-        {
-            if (draft.IsStandardSource)
-            {
-                _standardSignalDraftService.SelectNextStandardDataSignal(viewModel);
-            }
-            else if (draft.IsCustomSource)
-            {
-                draft.Source = IoMappingOptionCatalog.PointSourceStandardSignal;
-            }
         }
 
         if (e.PropertyName == nameof(IoMappingDraftVm.Category))
@@ -188,23 +172,6 @@ public sealed class HardwareConfigEditSession : IHardwareConfigEditSession
         object? sender,
         PropertyChangedEventArgs e)
     {
-        if (sender is not IoInteractionPairDraftVm draft)
-        {
-            return;
-        }
-
-        if (e.PropertyName == nameof(IoInteractionPairDraftVm.Source))
-        {
-            if (draft.IsStandardSource)
-            {
-                viewModel.SelectedStandardInteractionGroup ??= viewModel.StandardInteractionGroups.FirstOrDefault(static x => x.HasReadAndWrite);
-                ApplyStandardInteractionGroupToDraft(viewModel, viewModel.SelectedStandardInteractionGroup);
-            }
-            else if (draft.IsCustomSource)
-            {
-                draft.Source = IoMappingOptionCatalog.PointSourceStandardSignal;
-            }
-        }
     }
 
     public void ApplyStandardSignalToDraft(
@@ -216,7 +183,7 @@ public sealed class HardwareConfigEditSession : IHardwareConfigEditSession
         HardwareConfigViewModel viewModel,
         IoStandardSignalGroupOptionVm? group)
     {
-        if (viewModel.NewInteractionPair is null || !viewModel.NewInteractionPair.IsStandardSource || group is null)
+        if (viewModel.NewInteractionPair is null || group is null)
         {
             return;
         }
@@ -227,11 +194,9 @@ public sealed class HardwareConfigEditSession : IHardwareConfigEditSession
         viewModel.NewInteractionPair.ReadPlcAddress = read?.PlcAddress ?? string.Empty;
         viewModel.NewInteractionPair.ReadAddressCount = read?.AddressCount ?? 1;
         viewModel.NewInteractionPair.ReadDataType = read?.DataType ?? IoMappingOptionCatalog.DataTypeInt16;
-        viewModel.NewInteractionPair.ReadSignalName = read?.SignalName ?? "PLC 触发";
         viewModel.NewInteractionPair.WritePlcAddress = write?.PlcAddress ?? string.Empty;
         viewModel.NewInteractionPair.WriteAddressCount = write?.AddressCount ?? 1;
         viewModel.NewInteractionPair.WriteDataType = write?.DataType ?? IoMappingOptionCatalog.DataTypeInt16;
-        viewModel.NewInteractionPair.WriteSignalName = write?.SignalName ?? "上位机应答";
         viewModel.NewInteractionPair.Remark = read?.Remark ?? write?.Remark;
     }
 
@@ -273,14 +238,14 @@ public sealed class HardwareConfigEditSession : IHardwareConfigEditSession
             viewModel.NewInteractionPair.ReadPlcAddress,
             viewModel.NewInteractionPair.ReadAddressCount,
             viewModel.NewInteractionPair.ReadDataType,
-            viewModel.NewInteractionPair.ReadSignalName));
+            viewModel.NewInteractionPair.Remark));
         viewModel.IoMappings.Add(CreateMappingFromTemplate(
             viewModel,
             writeTemplate,
             viewModel.NewInteractionPair.WritePlcAddress,
             viewModel.NewInteractionPair.WriteAddressCount,
             viewModel.NewInteractionPair.WriteDataType,
-            viewModel.NewInteractionPair.WriteSignalName));
+            viewModel.NewInteractionPair.Remark));
 
         viewModel.RefreshIoMappingGroups();
         CloseAddIoMappingDialog(viewModel);
@@ -316,7 +281,6 @@ public sealed class HardwareConfigEditSession : IHardwareConfigEditSession
             DataType = viewModel.NewIoMapping.DataType.Trim(),
             Direction = direction,
             BusinessGroup = standardSignal.BusinessGroup,
-            SignalName = viewModel.NewIoMapping.SignalName.Trim(),
             SortOrder = standardSignal.SortOrder,
             Remark = string.IsNullOrWhiteSpace(viewModel.NewIoMapping.Remark) ? null : viewModel.NewIoMapping.Remark.Trim()
         });
@@ -332,7 +296,7 @@ public sealed class HardwareConfigEditSession : IHardwareConfigEditSession
         string plcAddress,
         int? addressCount = null,
         string? dataType = null,
-        string? signalName = null)
+        string? remark = null)
     {
         var category = IoMappingOptionCatalog.NormalizeCategory(template.Category, addressCount ?? template.AddressCount);
         var normalizedCount = IoMappingOptionCatalog.NormalizeAddressCount(category, addressCount ?? template.AddressCount);
@@ -348,9 +312,8 @@ public sealed class HardwareConfigEditSession : IHardwareConfigEditSession
             DataType = string.IsNullOrWhiteSpace(dataType) ? template.DataType : dataType.Trim(),
             Direction = direction,
             BusinessGroup = template.BusinessGroup,
-            SignalName = string.IsNullOrWhiteSpace(signalName) ? template.SignalName : signalName.Trim(),
             SortOrder = template.SortOrder,
-            Remark = template.Remark
+            Remark = string.IsNullOrWhiteSpace(remark) ? template.Remark : remark.Trim()
         };
     }
 

@@ -1,5 +1,4 @@
 using IIoT.Edge.Application.Features.Config.ParamView;
-using IIoT.Edge.Application.Features.Config.UseCases.ModuleParam;
 using IIoT.Edge.Presentation.Navigation.Features.Config.ParamView.Models;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Config.ParamView;
@@ -8,7 +7,7 @@ public interface IParamViewModelMapper
 {
     ModuleParamGroupVm ToGroup(ModuleParamGroupSnapshot snapshot);
 
-    ModuleParamDto ToDto(ModuleParamVm model);
+    ParamViewValueDto ToDto(ModuleParamVm model);
 }
 
 public sealed class ParamViewModelMapper : IParamViewModelMapper
@@ -18,7 +17,13 @@ public sealed class ParamViewModelMapper : IParamViewModelMapper
         var group = new ModuleParamGroupVm
         {
             ModuleId = snapshot.ModuleId,
-            ModuleDisplayName = snapshot.ModuleDisplayName
+            ModuleDisplayName = snapshot.ModuleDisplayNameFallback.Length > 0
+                ? snapshot.ModuleDisplayNameFallback
+                : snapshot.ModuleDisplayName,
+            ModuleDisplayNameResourceKey = snapshot.ModuleDisplayNameResourceKey,
+            ModuleDisplayNameFallback = snapshot.ModuleDisplayNameFallback.Length > 0
+                ? snapshot.ModuleDisplayNameFallback
+                : snapshot.ModuleDisplayName
         };
 
         foreach (var parameter in snapshot.Params.Select(ToParam))
@@ -29,7 +34,7 @@ public sealed class ParamViewModelMapper : IParamViewModelMapper
         return group;
     }
 
-    public ModuleParamDto ToDto(ModuleParamVm model)
+    public ParamViewValueDto ToDto(ModuleParamVm model)
         => new(model.Key, model.Value);
 
     private static ModuleParamVm ToParam(ModuleParamSnapshot snapshot)

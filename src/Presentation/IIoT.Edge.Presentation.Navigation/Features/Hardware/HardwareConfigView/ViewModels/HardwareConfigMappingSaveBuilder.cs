@@ -29,7 +29,7 @@ public sealed class HardwareConfigMappingSaveBuilder : IHardwareConfigMappingSav
                 IoMappingOptionCatalog.DirectionWrite,
                 StringComparison.OrdinalIgnoreCase) ? 1 : 0)
             .ThenBy(static x => x.SortOrder <= 0 ? int.MaxValue : x.SortOrder)
-            .ThenBy(static x => x.SignalName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(static x => x.SignalKey, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
         for (var index = 0; index < manualOrdered.Length; index++)
@@ -57,7 +57,6 @@ public sealed class HardwareConfigMappingSaveBuilder : IHardwareConfigMappingSav
             DataType = source.DataType,
             Direction = source.Direction,
             BusinessGroup = source.BusinessGroup,
-            SignalName = source.SignalName,
             SortOrder = source.SortOrder,
             Remark = source.Remark
         };

@@ -17,7 +17,7 @@ namespace IIoT.Edge.NonUiRegressionTests;
 public sealed class IoViewViewModelBehaviorTests
 {
     [AvaloniaFact]
-    public Task LoadDevicesAsync_WhenModuleFilterSet_ShouldOnlyShowMatchingPlcs()
+    public Task LoadDevicesAsync_WhenDevicesLoaded_ShouldShowEnabledPlcs()
         => RunOnStaThreadAsync(async () =>
         {
             var devices = new[]
@@ -33,7 +33,7 @@ public sealed class IoViewViewModelBehaviorTests
             await viewModel.LoadDevicesAsync();
 
             Assert.Equal(
-                ["PLC-TestProcess-01", "PLC-TestProcess-02"],
+                ["PLC-Homogenization-01", "PLC-TestProcess-01", "PLC-TestProcess-02"],
                 viewModel.Devices.Select(static x => x.DeviceName).ToArray());
         });
 
@@ -46,9 +46,9 @@ public sealed class IoViewViewModelBehaviorTests
             {
                 [device.Id] =
                 [
-                    CreateMapping(device.Id, "进站触发", "D701", 1, "Int16", "Read", "信号交互", "扫码进站", "触发", 10),
-                    CreateMapping(device.Id, "进站应答", "D601", 1, "Int16", "Write", "信号交互", "扫码进站", "应答", 11),
-                    CreateMapping(device.Id, "搅拌速度", "D800", 1, "UInt16", "Read", "实时数据", "设备实时", "", 20)
+                    CreateMapping(device.Id, "进站触发", "D701", 1, "Int16", "Read", "信号交互", "扫码进站", 10),
+                    CreateMapping(device.Id, "进站应答", "D601", 1, "Int16", "Write", "信号交互", "扫码进站", 11),
+                    CreateMapping(device.Id, "搅拌速度", "D800", 1, "UInt16", "Read", "实时数据", "设备实时", 20)
                 ]
             };
             var viewModel = CreateViewModel([device], mappings);
@@ -58,8 +58,8 @@ public sealed class IoViewViewModelBehaviorTests
 
             var row = Assert.Single(viewModel.InteractionRows);
             Assert.Equal("扫码进站", row.BusinessGroup);
-            Assert.Equal("触发", row.PlcSignalText);
-            Assert.Equal("应答", row.HostSignalText);
+            Assert.Equal("进站触发", row.PlcSignalText);
+            Assert.Equal("进站应答", row.HostSignalText);
             Assert.Equal("D701", row.PlcAddressSummary);
             Assert.Equal("D601", row.HostReplyAddressText);
             Assert.DoesNotContain(Environment.NewLine, row.PlcSignalSummary);
@@ -84,10 +84,10 @@ public sealed class IoViewViewModelBehaviorTests
             {
                 [device.Id] =
                 [
-                    CreateMapping(device.Id, "触发A", "D701", 1, "Int16", "Read", "信号交互", "复合交互", "触发", 1),
-                    CreateMapping(device.Id, "触发B", "D702", 1, "Int16", "Read", "信号交互", "复合交互", "触发", 2),
-                    CreateMapping(device.Id, "应答A", "D601", 1, "Int16", "Write", "信号交互", "复合交互", "应答", 3),
-                    CreateMapping(device.Id, "应答B", "D602", 1, "Int16", "Write", "信号交互", "复合交互", "应答", 4)
+                    CreateMapping(device.Id, "触发A", "D701", 1, "Int16", "Read", "信号交互", "复合交互", 1),
+                    CreateMapping(device.Id, "触发B", "D702", 1, "Int16", "Read", "信号交互", "复合交互", 2),
+                    CreateMapping(device.Id, "应答A", "D601", 1, "Int16", "Write", "信号交互", "复合交互", 3),
+                    CreateMapping(device.Id, "应答B", "D602", 1, "Int16", "Write", "信号交互", "复合交互", 4)
                 ]
             };
             var viewModel = CreateViewModel([device], mappings);
@@ -114,8 +114,8 @@ public sealed class IoViewViewModelBehaviorTests
             var deviceB = CreateDevice(22, "PLC-TestProcess-02", "TestProcess");
             var mappings = new Dictionary<int, List<IoMappingEntity>>
             {
-                [deviceA.Id] = [CreateMapping(deviceA.Id, "层数", "D100", 1, "UInt16", "Read", "实时数据", "测试实时", "", 1)],
-                [deviceB.Id] = [CreateMapping(deviceB.Id, "层数", "D100", 1, "UInt16", "Read", "实时数据", "测试实时", "", 1)]
+                [deviceA.Id] = [CreateMapping(deviceA.Id, "层数", "D100", 1, "UInt16", "Read", "实时数据", "测试实时", 1)],
+                [deviceB.Id] = [CreateMapping(deviceB.Id, "层数", "D100", 1, "UInt16", "Read", "实时数据", "测试实时", 1)]
             };
             var dataStore = new PlcDataStore();
             dataStore.Register(deviceA.Id, readSize: 4, writeSize: 0);
@@ -153,7 +153,6 @@ public sealed class IoViewViewModelBehaviorTests
                         signal.DirectionText,
                         signal.Category,
                         signal.BusinessGroup,
-                        signal.SignalName,
                         signal.SortOrder)
                 ],
                 [deviceB.Id] =
@@ -167,7 +166,6 @@ public sealed class IoViewViewModelBehaviorTests
                         signal.DirectionText,
                         signal.Category,
                         signal.BusinessGroup,
-                        signal.SignalName,
                         signal.SortOrder)
                 ]
             };
@@ -192,10 +190,10 @@ public sealed class IoViewViewModelBehaviorTests
             {
                 [device.Id] =
                 [
-                    CreateMapping(device.Id, "有符号数", "D100", 1, "Int16", "Read", "实时数据", "解码", "", 1),
-                    CreateMapping(device.Id, "布尔量", "D101", 1, "Bool", "Read", "实时数据", "解码", "", 2),
-                    CreateMapping(device.Id, "条码", "D102", 4, "Ascii", "Read", "条码数据", "进站条码", "", 3),
-                    CreateMapping(device.Id, "浮点数组", "D106", 2, "Float", "Read", "配方数组", "配方", "", 4)
+                    CreateMapping(device.Id, "有符号数", "D100", 1, "Int16", "Read", "实时数据", "解码", 1),
+                    CreateMapping(device.Id, "布尔量", "D101", 1, "Bool", "Read", "实时数据", "解码", 2),
+                    CreateMapping(device.Id, "条码", "D102", 4, "Ascii", "Read", "条码数据", "进站条码", 3),
+                    CreateMapping(device.Id, "浮点数组", "D106", 2, "Float", "Read", "配方数组", "配方", 4)
                 ]
             };
             var dataStore = new PlcDataStore();
@@ -235,8 +233,8 @@ public sealed class IoViewViewModelBehaviorTests
             {
                 [device.Id] =
                 [
-                    CreateMapping(device.Id, "配方时间", "ZR0", 3, "UInt16", "Read", "连续读数据", "配方数组", "时间", 1),
-                    CreateMapping(device.Id, "配方温度", "ZR100", 3, "Int16", "Read", "连续读数据", "配方数组", "温度", 2)
+                    CreateMapping(device.Id, "配方时间", "ZR0", 3, "UInt16", "Read", "连续读数据", "配方数组", 1),
+                    CreateMapping(device.Id, "配方温度", "ZR100", 3, "Int16", "Read", "连续读数据", "配方数组", 2)
                 ]
             };
             var dataStore = new PlcDataStore();
@@ -267,8 +265,8 @@ public sealed class IoViewViewModelBehaviorTests
             {
                 [device.Id] =
                 [
-                    CreateMapping(device.Id, "配方时间", "ZR0", 3, "UInt16", "Read", "连续读数据", "配方数组", "时间", 1),
-                    CreateMapping(device.Id, "配方温度", "ZR100", 3, "UInt16", "Read", "连续读数据", "配方数组", "温度", 2)
+                    CreateMapping(device.Id, "配方时间", "ZR0", 3, "UInt16", "Read", "连续读数据", "配方数组", 1),
+                    CreateMapping(device.Id, "配方温度", "ZR100", 3, "UInt16", "Read", "连续读数据", "配方数组", 2)
                 ]
             };
             var dataStore = new PlcDataStore();
@@ -302,8 +300,8 @@ public sealed class IoViewViewModelBehaviorTests
             {
                 [device.Id] =
                 [
-                    CreateMapping(device.Id, "单点写入", "D200", 1, "UInt16", "Write", "单点写数据", "写入数据", "设定值", 1),
-                    CreateMapping(device.Id, "连续写入", "D220", 3, "UInt16", "Write", "连续写数据", "写入数据", "连续设定", 2)
+                    CreateMapping(device.Id, "单点写入", "D200", 1, "UInt16", "Write", "单点写数据", "写入数据", 1),
+                    CreateMapping(device.Id, "连续写入", "D220", 3, "UInt16", "Write", "连续写数据", "写入数据", 2)
                 ]
             };
             var dataStore = new PlcDataStore();
@@ -336,10 +334,10 @@ public sealed class IoViewViewModelBehaviorTests
             {
                 [device.Id] =
                 [
-                    CreateMapping(device.Id, "进站触发", "D701", 1, "Int16", "Read", "信号交互", "扫码进站", "触发", 1),
-                    CreateMapping(device.Id, "进站应答", "D601", 1, "Int16", "Write", "信号交互", "扫码进站", "应答", 2),
-                    CreateMapping(device.Id, "PLC 出料上传", "D702", 1, "Int16", "Read", "信号交互", "出料上传", "触发", 3),
-                    CreateMapping(device.Id, "上位机出料上传", "D602", 1, "Int16", "Write", "信号交互", "出料上传", "应答", 4)
+                    CreateMapping(device.Id, "进站触发", "D701", 1, "Int16", "Read", "信号交互", "扫码进站", 1),
+                    CreateMapping(device.Id, "进站应答", "D601", 1, "Int16", "Write", "信号交互", "扫码进站", 2),
+                    CreateMapping(device.Id, "PLC 出料上传", "D702", 1, "Int16", "Read", "信号交互", "出料上传", 3),
+                    CreateMapping(device.Id, "上位机出料上传", "D602", 1, "Int16", "Write", "信号交互", "出料上传", 4)
                 ]
             };
             var dataStore = new PlcDataStore();
@@ -388,7 +386,7 @@ public sealed class IoViewViewModelBehaviorTests
     {
         var entity = NetworkDeviceEntity.Create(deviceName, deviceType, "127.0.0.1", 102);
         entity.WithId(id);
-        entity.AssignModule(moduleId, "S7");
+        entity.UpdateDeviceModel("S7");
         entity.SetEnabled(isEnabled);
         return entity;
     }
@@ -402,10 +400,9 @@ public sealed class IoViewViewModelBehaviorTests
         string direction,
         string category,
         string businessGroup,
-        string signalName,
         int sortOrder)
     {
-        var entity = IoMappingEntity.Create(networkDeviceId, signalKey, address, count, dataType, direction, category, businessGroup, signalName);
+        var entity = IoMappingEntity.Create(networkDeviceId, signalKey, address, count, dataType, direction, category, businessGroup);
         entity.UpdateSortOrder(sortOrder);
         return entity;
     }

@@ -5,8 +5,7 @@ using IIoT.Edge.Domain.Hardware.Aggregates;
 
 namespace IIoT.Edge.Application.Features.Production.Monitor;
 
-internal sealed class MonitorStateMachineTaskProjection(IMonitorConfiguredDeviceLoader configuredDeviceLoader)
-    : IMonitorStateMachineTaskProjection
+internal sealed class MonitorStateMachineTaskProjection : IMonitorStateMachineTaskProjection
 {
     public static IReadOnlyDictionary<string, int> EmptyStepStates { get; } =
         new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -17,8 +16,6 @@ internal sealed class MonitorStateMachineTaskProjection(IMonitorConfiguredDevice
         IReadOnlyDictionary<int, PlcTaskBindingDeviceDto> taskBindingsByDevice)
     {
         if (device is null
-            || string.IsNullOrWhiteSpace(device.ModuleId)
-            || !configuredDeviceLoader.HasRuntimeFactory(device.ModuleId)
             || !taskBindingsByDevice.TryGetValue(device.Id, out var deviceBinding))
         {
             return [];

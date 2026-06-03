@@ -34,7 +34,9 @@ public sealed class PlcIoScanTask : PlcIoScanTaskBase
                     deviceConfig.IpAddress,
                     deviceConfig.Port1,
                     deviceConfig.ConnectTimeout)),
-            ioMappings.Select(static mapping => new PlcIoScanMapping(
+            ioMappings
+                .Where(static mapping => !string.IsNullOrWhiteSpace(mapping.PlcAddress))
+                .Select(static mapping => new PlcIoScanMapping(
                 mapping.SignalKey,
                 mapping.PlcAddress,
                 mapping.AddressCount,
@@ -54,4 +56,7 @@ public sealed class PlcIoScanTask : PlcIoScanTaskBase
 
     protected override void MarkDisconnected(string reason)
         => _statusStore?.MarkDisconnected(DeviceId, DeviceName, reason);
+
+    protected override void MarkLatency(int? latencyMs)
+        => _statusStore?.MarkLatency(DeviceId, DeviceName, latencyMs);
 }

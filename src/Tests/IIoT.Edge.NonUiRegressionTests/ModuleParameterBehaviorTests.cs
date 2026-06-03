@@ -1,5 +1,6 @@
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Features.Config.CloudApi;
 using IIoT.Edge.Application.Features.Config.ModuleParameters;
 using IIoT.Edge.Application.Features.Config.ParamView;
 using IIoT.Edge.Infrastructure.Persistence.EfCore.Caching.Memory;
@@ -70,13 +71,16 @@ public sealed class ModuleParameterBehaviorTests
         var handler = new LoadParamViewHandler(
             new CountingLocalParameterConfigService([]),
             registry,
-            [new StubEdgeProcessModule()]);
+            [new StubEdgeProcessModule()],
+            new StubCloudApiConfigSnapshotProvider());
 
         var result = await handler.Handle(new LoadParamViewQuery(), CancellationToken.None);
 
         var mesEnabled = Assert.Single(result.MesParamGroups).Params
             .Single(x => x.Name == nameof(HomogenizationMesParam.启用));
-        var cloudEnabled = Assert.Single(result.CloudParamGroups).Params
+        var cloudGroup = Assert.Single(result.CloudParamGroups);
+        var cloudParams = cloudGroup.Params;
+        var cloudEnabled = cloudParams
             .Single(x => x.Name == nameof(HomogenizationCloudParam.启用));
 
         Assert.Equal("Module:Homogenization:Mes:启用", mesEnabled.Key);
@@ -84,10 +88,21 @@ public sealed class ModuleParameterBehaviorTests
         Assert.Equal("MES上传启用", mesEnabled.DisplayNameFallback);
         Assert.Contains("不调用 MES", mesEnabled.DescriptionFallback, StringComparison.Ordinal);
 
+        Assert.Equal(CloudApiConfigParamSchema.ModuleId, cloudGroup.ModuleId);
+        Assert.Equal("Navigation_Tab_CloudParams", cloudGroup.ModuleDisplayNameResourceKey);
         Assert.Equal("Module:Homogenization:Cloud:启用", cloudEnabled.Key);
         Assert.Equal("启用", cloudEnabled.Name);
         Assert.Equal("云端上传启用", cloudEnabled.DisplayNameFallback);
         Assert.Contains("不访问 Cloud", cloudEnabled.DescriptionFallback, StringComparison.Ordinal);
+        Assert.Equal(
+            CloudApiConfigParamSchema.Descriptors.Count + Enum.GetNames<HomogenizationCloudParam>().Length,
+            cloudParams.Count);
+        Assert.Contains(cloudParams, x =>
+            x.Key == CloudApiConfigParamSchema.BaseUrl
+            && x.Value == "https://config-cloud.test");
+        Assert.Contains(cloudParams, x =>
+            x.Key == CloudApiConfigParamSchema.ProcessUploadPath
+            && x.Value == "/config/process");
     }
 
     [Fact]
@@ -227,6 +242,19 @@ public sealed class ModuleParameterBehaviorTests
             return Task.FromResult(systemConfigs);
         }
 
+        public Task InsertSystemConfigAsync(
+            string key,
+            string value,
+            string? description = null,
+            int sortOrder = 0,
+            CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task DeleteSystemConfigAsync(
+            string key,
+            CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
     }
 
     private sealed class StubEdgeProcessModule : IEdgeProcessModule
@@ -240,5 +268,24 @@ public sealed class ModuleParameterBehaviorTests
         public void Configure(IEdgeProcessModuleBuilder builder)
         {
         }
+    }
+
+    private sealed class StubCloudApiConfigSnapshotProvider : ICloudApiConfigSnapshotProvider
+    {
+        public CloudApiConfigSnapshot GetCurrent()
+            => new(
+                "https://config-cloud.test",
+                "CONFIG-CLIENT",
+                "secret",
+                "/config/device-instance",
+                "/config/bootstrap-refresh",
+                "/config/login",
+                "/config/human-refresh",
+                "/config/logs",
+                "/config/process",
+                "/config/capacity-hourly",
+                "/config/capacity-summary",
+                "/config/capacity-range",
+                "/config/recipes/{deviceId}");
     }
 }

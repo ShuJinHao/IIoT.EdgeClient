@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Features.Production.Monitor;
+using IIoT.Edge.UI.Shared.Avalonia.Controls;
 using IIoT.Edge.UI.Shared.Localization;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Production.Monitor;
@@ -36,7 +37,25 @@ internal sealed class MonitorStateMachineTaskItemFactory(IAppLanguageService lan
             FormatStepText(snapshot.StepValue),
             snapshot.StepValue?.ToString() ?? GetText("Navigation_Monitor_NoTaskStep", "暂无步骤"),
             detailText,
-            !snapshot.CanRun);
+            !snapshot.CanRun,
+            snapshot.IsHeartbeatLike,
+            ResolveVisualStatus(snapshot));
+    }
+
+    private static EdgeVisualStatus ResolveVisualStatus(MonitorStateMachineTaskSnapshot snapshot)
+    {
+        if (!snapshot.CanRun)
+        {
+            return EdgeVisualStatus.Error;
+        }
+
+        return snapshot.StepValue switch
+        {
+            10 => EdgeVisualStatus.Running,
+            30 => EdgeVisualStatus.Warning,
+            null => EdgeVisualStatus.Default,
+            _ => EdgeVisualStatus.Info
+        };
     }
 
     private string FormatStepText(int? stepValue)

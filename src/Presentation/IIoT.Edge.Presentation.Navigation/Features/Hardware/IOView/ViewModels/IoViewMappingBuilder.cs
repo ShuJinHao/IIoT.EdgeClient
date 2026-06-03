@@ -158,7 +158,6 @@ internal sealed class IoViewMappingBuilder : IIoViewMappingBuilder
             SignalKey = mapping.SignalKey,
             PlcAddress = mapping.PlcAddress,
             Direction = mapping.Direction,
-            SignalName = mapping.SignalName,
             Remark = mapping.Remark,
             DataType = mapping.DataType,
             StartIndex = startIndex,

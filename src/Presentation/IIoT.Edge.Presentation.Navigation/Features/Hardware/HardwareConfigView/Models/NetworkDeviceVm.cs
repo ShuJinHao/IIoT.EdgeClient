@@ -41,13 +41,6 @@ public class NetworkDeviceVm : HardwareConfigEditModelBase
         set { _deviceModel = value; OnPropertyChanged(); }
     }
 
-    private string _moduleId = string.Empty;
-    public string ModuleId
-    {
-        get => _moduleId;
-        set { _moduleId = value?.Trim() ?? string.Empty; OnPropertyChanged(); }
-    }
-
     public IEnumerable<string> AvailableModels => DeviceType switch
     {
         DeviceType.PLC => Enum.GetNames<PlcType>(),

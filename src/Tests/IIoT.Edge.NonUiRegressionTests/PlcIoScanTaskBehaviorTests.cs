@@ -35,14 +35,12 @@ public sealed class PlcIoScanTaskBehaviorTests
                     "Read",
                     2,
                     "信号交互",
-                    "扫码进站",
-                    "PLC 触发")
+                    "扫码进站")
             ]);
 
         var binding = Assert.Single(store.Get(context));
         Assert.Equal("信号交互", binding.Category);
         Assert.Equal("扫码进站", binding.BusinessGroup);
-        Assert.Equal("PLC 触发", binding.SignalName);
     }
 
     [Fact]
@@ -427,7 +425,7 @@ public sealed class PlcIoScanTaskBehaviorTests
     {
         var entity = NetworkDeviceEntity.Create(deviceName, DeviceType.PLC, "127.0.0.1", 102);
         entity.WithId(id);
-        entity.AssignModule("TestModule", "S7");
+        entity.UpdateDeviceModel("S7");
         return entity;
     }
 
@@ -447,8 +445,7 @@ public sealed class PlcIoScanTaskBehaviorTests
             "UInt16",
             direction,
             category ?? IoMappingOptionCatalog.CategoryInteraction,
-            "测试信号交互",
-            $"{direction}-{address}");
+            "测试信号交互");
         entity.UpdateSortOrder(sortOrder);
         return entity;
     }

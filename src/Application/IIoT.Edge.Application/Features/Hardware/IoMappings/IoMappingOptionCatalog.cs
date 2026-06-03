@@ -5,9 +5,6 @@ namespace IIoT.Edge.Application.Features.Hardware.IoMappings;
 /// </summary>
 public static class IoMappingOptionCatalog
 {
-    public const string PointSourceStandardSignal = "插件标准信号";
-    public const string PointSourceCustomDebug = "自定义调试点";
-
     public const string CategoryInteraction = "信号交互";
     public const string CategorySingleRead = "单点读数据";
     public const string CategoryContinuousRead = "连续读数据";
@@ -23,12 +20,6 @@ public static class IoMappingOptionCatalog
     public const string DataTypeInt32 = "Int32";
     public const string DataTypeFloat = "Float";
     public const string DataTypeAscii = "Ascii";
-
-    public static IReadOnlyList<string> PointSources { get; } =
-    [
-        PointSourceStandardSignal,
-        PointSourceCustomDebug
-    ];
 
     public static IReadOnlyList<string> Categories { get; } =
     [
@@ -81,25 +72,13 @@ public static class IoMappingOptionCatalog
            || string.Equals(NormalizeCategory(value, addressCount: 2), CategoryContinuousWrite, StringComparison.OrdinalIgnoreCase);
 
     public static bool IsFixedAddressCountCategory(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return false;
-        }
-
-        var normalized = NormalizeCategory(value, addressCount: 1);
-        return string.Equals(normalized, CategoryInteraction, StringComparison.OrdinalIgnoreCase)
-               || string.Equals(normalized, CategorySingleRead, StringComparison.OrdinalIgnoreCase)
-               || string.Equals(normalized, CategorySingleWrite, StringComparison.OrdinalIgnoreCase);
-    }
+        => false;
 
     public static bool CanEditAddressCount(string? value)
-        => !IsFixedAddressCountCategory(value);
+        => true;
 
     public static int NormalizeAddressCount(string? category, int addressCount)
-        => IsFixedAddressCountCategory(category)
-            ? 1
-            : Math.Max(1, addressCount);
+        => Math.Max(1, addressCount);
 
     public static string? GetDirectionForCategory(string? category)
     {
@@ -124,9 +103,6 @@ public static class IoMappingOptionCatalog
 
     public static bool IsKnownDataType(string? value)
         => Contains(DataTypes, value);
-
-    public static bool IsKnownPointSource(string? value)
-        => Contains(PointSources, value);
 
     public static int CategoryOrder(string? category)
     {

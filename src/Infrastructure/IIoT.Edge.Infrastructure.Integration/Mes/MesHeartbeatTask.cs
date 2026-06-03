@@ -122,7 +122,11 @@ public sealed class MesHeartbeatTask
             var snapshot = await _probe.ProbeAsync(cancellationToken).ConfigureAwait(false);
             if (snapshot.IsReady)
             {
-                _stateStore.MarkReady(ExternalSystemKind.Mes, snapshot.LastSuccessAtUtc, snapshot.Message);
+                _stateStore.MarkReady(
+                    ExternalSystemKind.Mes,
+                    snapshot.LastSuccessAtUtc,
+                    snapshot.Message,
+                    snapshot.LatencyMs);
                 return;
             }
 
@@ -130,7 +134,8 @@ public sealed class MesHeartbeatTask
                 ExternalSystemKind.Mes,
                 snapshot.ReasonCode,
                 snapshot.Message,
-                snapshot.LastFailureAtUtc ?? snapshot.LastAttemptAtUtc);
+                snapshot.LastFailureAtUtc ?? snapshot.LastAttemptAtUtc,
+                snapshot.LatencyMs);
         }
         catch (OperationCanceledException)
         {

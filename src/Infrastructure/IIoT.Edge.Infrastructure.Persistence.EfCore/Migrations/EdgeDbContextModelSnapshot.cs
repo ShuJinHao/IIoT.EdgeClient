@@ -132,12 +132,6 @@ namespace IIoT.Edge.Infrastructure.Persistence.EfCore.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("direction");
 
-                    b.Property<string>("SignalName")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("signal_name");
-
                     b.Property<string>("BusinessGroup")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -214,12 +208,6 @@ namespace IIoT.Edge.Infrastructure.Persistence.EfCore.Migrations
                     b.Property<bool>("IsEnabled")
                         .HasColumnType("INTEGER")
                         .HasColumnName("is_enabled");
-
-                    b.Property<string>("ModuleId")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("module_id");
 
                     b.Property<int>("Port1")
                         .HasColumnType("INTEGER")

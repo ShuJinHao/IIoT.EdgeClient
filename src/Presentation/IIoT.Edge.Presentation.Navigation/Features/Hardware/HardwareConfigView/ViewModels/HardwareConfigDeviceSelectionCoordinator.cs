@@ -30,8 +30,7 @@ public sealed class HardwareConfigDeviceSelectionCoordinator : IHardwareConfigDe
         HardwareConfigViewModel viewModel,
         PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(NetworkDeviceVm.ModuleId)
-            or nameof(NetworkDeviceVm.DeviceType)
+        if (e.PropertyName is nameof(NetworkDeviceVm.DeviceType)
             or nameof(NetworkDeviceVm.Id))
         {
             _ = viewModel.RefreshModuleTemplateInfoAsync();

@@ -115,6 +115,8 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
     public ObservableCollection<MonitorStatusItemVm> StateMachineSummaryItems { get; } = [];
 
     public ObservableCollection<MonitorStateMachineTaskItemViewModel> StateMachineTaskItems { get; } = [];
+    public ObservableCollection<MonitorStateMachineTaskItemViewModel> StateMachineHeartbeatTaskItems { get; } = [];
+    public ObservableCollection<MonitorStateMachineTaskItemViewModel> StateMachineRuntimeTaskItems { get; } = [];
 
     public MonitorStatusItemVm LastErrorItem
     {
@@ -195,6 +197,8 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
     public bool IsCellDebugEmpty => CellDebugItems.Count == 0;
     public bool HasStateMachineTaskItems => StateMachineTaskItems.Count > 0;
     public bool IsStateMachineTaskItemsEmpty => StateMachineTaskItems.Count == 0;
+    public bool HasStateMachineHeartbeatTaskItems => StateMachineHeartbeatTaskItems.Count > 0;
+    public bool HasStateMachineRuntimeTaskItems => StateMachineRuntimeTaskItems.Count > 0;
     public bool HasSelectedCell => SelectedCell is not null;
 
     public bool IsSelectedCellEmpty => SelectedCell is null;
@@ -287,7 +291,7 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
             ReplaceItems(RealtimeRows, []);
             ReplaceItems(StepRows, []);
             ReplaceItems(DeviceDataRows, []);
-            ReplaceItems(StateMachineTaskItems, []);
+            ApplyStateMachineTaskItems([]);
             _cellDebugRows = [];
             ApplyCellDebugFilter();
             _cellTable = new DataTable();
@@ -304,7 +308,7 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
         ReplaceItems(RealtimeRows, snapshot.RealtimeRows);
         ReplaceItems(StepRows, snapshot.StepRows);
         ReplaceItems(DeviceDataRows, snapshot.DeviceDataRows);
-        ReplaceItems(StateMachineTaskItems, _stateMachineTaskItemFactory.CreateItems(snapshot.StateMachineTaskRows));
+        ApplyStateMachineTaskItems(_stateMachineTaskItemFactory.CreateItems(snapshot.StateMachineTaskRows));
         _cellDebugRows = snapshot.CellDebugRows;
         ApplyCellDebugFilter();
         _cellTable = snapshot.CellTable;
@@ -314,6 +318,13 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
 
     private DeviceMonitorSnapshot? FindSelectedSnapshot()
         => MonitorViewModelSnapshotApplier.FindSelectedSnapshot(_lastSnapshots, _selectedDevice);
+
+    private void ApplyStateMachineTaskItems(IReadOnlyList<MonitorStateMachineTaskItemViewModel> items)
+    {
+        ReplaceItems(StateMachineTaskItems, items);
+        ReplaceItems(StateMachineHeartbeatTaskItems, items.Where(static x => x.IsHeartbeatLike));
+        ReplaceItems(StateMachineRuntimeTaskItems, items.Where(static x => !x.IsHeartbeatLike));
+    }
 
     private void ApplyCellDebugFilter()
     {
@@ -382,6 +393,8 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
         OnPropertyChanged(nameof(IsDeviceDataRowsEmpty));
         OnPropertyChanged(nameof(HasStateMachineTaskItems));
         OnPropertyChanged(nameof(IsStateMachineTaskItemsEmpty));
+        OnPropertyChanged(nameof(HasStateMachineHeartbeatTaskItems));
+        OnPropertyChanged(nameof(HasStateMachineRuntimeTaskItems));
         OnPropertyChanged(nameof(IsCellRowsEmpty));
         OnPropertyChanged(nameof(IsCellDebugEmpty));
         OnPropertyChanged(nameof(IsSelectedCellFieldRowsEmpty));

@@ -109,7 +109,7 @@ public sealed class PlcTaskBindingBehaviorTests
         var service = CreateService(defaultEnableAllTasks: true).Service;
         var mappings = new[]
         {
-            new ModuleIoSnapshot("Signal.Shared", "D100", 1, "Int16", "Read", 1, "信号交互", "共享信号", "读点")
+            new ModuleIoSnapshot("Signal.Shared", "D100", 1, "Int16", "Read", 1, "信号交互", "共享信号")
         };
 
         var result = service.ValidateEnabledTasks(
@@ -129,7 +129,7 @@ public sealed class PlcTaskBindingBehaviorTests
     {
         var harness = CreateService(defaultEnableAllTasks: true);
         var device = NetworkDeviceEntity.Create("PLC-A", DeviceType.PLC, "127.0.0.1", 102);
-        device.AssignModule("TestModule", PlcType.S7.ToString());
+        device.UpdateDeviceModel(PlcType.S7.ToString());
         harness.NetworkDevices.Add(device);
 
         await harness.Service.SaveDeviceBindingsAsync(
@@ -152,7 +152,7 @@ public sealed class PlcTaskBindingBehaviorTests
     {
         var harness = CreateService(defaultEnableAllTasks: false, seedIoMappings: false);
         var device = NetworkDeviceEntity.Create("PLC-A", DeviceType.PLC, "127.0.0.1", 102);
-        device.AssignModule("TestModule", PlcType.S7.ToString());
+        device.UpdateDeviceModel(PlcType.S7.ToString());
         harness.NetworkDevices.Add(device);
         AddTestIoMappings(harness.IoMappings, device.Id, includeBusinessSignal: false);
 
@@ -264,9 +264,9 @@ public sealed class PlcTaskBindingBehaviorTests
 
     private static readonly IReadOnlyCollection<ModuleIoSnapshot> AllTestMappings =
     [
-        new("Signal.Shared", "D100", 1, "Int16", "Read", 1, "信号交互", "共享信号", "读点"),
-        new("Signal.Shared", "D200", 1, "Int16", "Write", 2, "信号交互", "共享信号", "写点"),
-        new("Signal.Business", "D300", 1, "Int16", "Read", 3, "单点读数据", "业务信号", "读点")
+        new("Signal.Shared", "D100", 1, "Int16", "Read", 1, "信号交互", "共享信号"),
+        new("Signal.Shared", "D200", 1, "Int16", "Write", 2, "信号交互", "共享信号"),
+        new("Signal.Business", "D300", 1, "Int16", "Read", 3, "单点读数据", "业务信号")
     ];
 
     private static BindingServiceHarness CreateService(
@@ -318,8 +318,7 @@ public sealed class PlcTaskBindingBehaviorTests
             "Int16",
             "Read",
             "信号交互",
-            "共享信号",
-            "读点"));
+            "共享信号"));
         ioMappings.Add(IoMappingEntity.Create(
             networkDeviceId,
             "Signal.Shared",
@@ -328,8 +327,7 @@ public sealed class PlcTaskBindingBehaviorTests
             "Int16",
             "Write",
             "信号交互",
-            "共享信号",
-            "写点"));
+            "共享信号"));
         if (!includeBusinessSignal)
         {
             return;
@@ -343,14 +341,13 @@ public sealed class PlcTaskBindingBehaviorTests
             "Int16",
             "Read",
             "单点读数据",
-            "业务信号",
-            "读点"));
+            "业务信号"));
     }
 
     private static NetworkDeviceEntity CreateLifecyclePlc(string deviceName, int port)
     {
         var device = NetworkDeviceEntity.Create(deviceName, DeviceType.PLC, "127.0.0.1", port);
-        device.AssignModule("TestModule", PlcType.S7.ToString());
+        device.UpdateDeviceModel(PlcType.S7.ToString());
         return device;
     }
 

@@ -69,7 +69,6 @@ public sealed class HomogenizationHardwareProfileBehaviorTests
         Assert.Equal("Ascii", trayCode.DataType);
         Assert.Equal("连续读数据", trayCode.Category);
         Assert.Equal("托盘数据", trayCode.BusinessGroup);
-        Assert.Equal("托盘码", trayCode.SignalName);
         Assert.Equal("匀浆模块 - 托盘码", trayCode.Remark);
     }
 
@@ -190,8 +189,7 @@ public sealed class HomogenizationHardwareProfileBehaviorTests
                     binding.DirectionText,
                     binding.SortOrder,
                     binding.Category,
-                    binding.BusinessGroup,
-                    binding.SignalName)
+                    binding.BusinessGroup)
             ]);
 
         var exception = Assert.Throws<InvalidOperationException>(() => accessor.ReadAscii(HomogenizationPlcSignals.ContinuousRead.托盘码));
@@ -209,8 +207,7 @@ public sealed class HomogenizationHardwareProfileBehaviorTests
                 template.Direction,
                 template.SortOrder,
                 template.Category,
-                template.BusinessGroup,
-                template.SignalName))
+                template.BusinessGroup))
             .ToArray();
 
     private static BufferLogicalSignalAccessor<HomogenizationPlcSignals.Interaction> CreateInteractionAccessor(IReadOnlyCollection<ModuleIoSnapshot> bindings)

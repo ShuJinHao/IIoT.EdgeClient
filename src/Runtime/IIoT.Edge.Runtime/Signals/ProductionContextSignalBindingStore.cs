@@ -28,8 +28,7 @@ public sealed class ProductionContextSignalBindingStore : IProductionContextSign
                 binding.Direction,
                 binding.SortOrder,
                 binding.Category,
-                binding.BusinessGroup,
-                binding.SignalName))
+                binding.BusinessGroup))
             .ToArray();
 
         _bindingsByContext.Remove(context);

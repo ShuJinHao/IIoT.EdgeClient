@@ -78,8 +78,11 @@ public sealed class ModuleParamRegistry : IModuleParamRegistry
         {
             var name = values[index];
             var field = enumType.GetField(name, BindingFlags.Public | BindingFlags.Static);
-            var attribute = field?.GetCustomAttribute<ModuleParamAttribute>()
-                ?? new ModuleParamAttribute(ParamValueKind.String);
+            var attribute = field?.GetCustomAttribute<ModuleParamAttribute>();
+            if (attribute is null)
+            {
+                continue;
+            }
 
             yield return new ModuleParamDescriptor(
                 moduleId,

@@ -54,13 +54,15 @@ public sealed class HardwareConfigLoadSaveCoordinator : IHardwareConfigLoadSaveC
         HardwareConfigViewModel.ReplaceCollection(
             viewModel.SerialDevices,
             result.SerialDevices.Select(_modelMapper.ToSerialDeviceVm));
+        viewModel.RefreshIoMappingNetworkDevices();
 
-        if (viewModel.NetworkDevices.Count > 0)
+        if (viewModel.IoMappingNetworkDevices.Count > 0)
         {
-            viewModel.SelectedNetworkDevice = viewModel.NetworkDevices[0];
+            viewModel.SelectedNetworkDevice = viewModel.IoMappingNetworkDevices[0];
         }
         else
         {
+            viewModel.SelectedNetworkDevice = null;
             viewModel.SetModuleTemplateAvailable(false);
             HardwareConfigViewModel.ReplaceCollection(viewModel.IoMappings, Array.Empty<IoMappingVm>());
             viewModel.RefreshIoMappingGroups();
@@ -163,6 +165,7 @@ public sealed class HardwareConfigLoadSaveCoordinator : IHardwareConfigLoadSaveC
         {
             HardwareConfigViewModel.ReplaceCollection(viewModel.IoMappings, Array.Empty<IoMappingVm>());
             viewModel.SelectedIoMapping = null;
+            viewModel.SelectedInteractionPair = null;
             viewModel.RefreshIoMappingGroups();
             return;
         }
@@ -172,6 +175,7 @@ public sealed class HardwareConfigLoadSaveCoordinator : IHardwareConfigLoadSaveC
             viewModel.IoMappings,
             result.Items.Select(_modelMapper.ToIoMappingVm));
         viewModel.SelectedIoMapping = null;
+        viewModel.SelectedInteractionPair = null;
         viewModel.RefreshIoMappingGroups();
     }
 

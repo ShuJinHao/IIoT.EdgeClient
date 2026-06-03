@@ -4,6 +4,7 @@ using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Features.Hardware.IoMappings;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc;
+using System.Diagnostics;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Signals;
 
@@ -72,10 +73,13 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
 
     public async Task ConnectAsync()
     {
+        Stopwatch? stopwatch = null;
         try
         {
             _plcService.Init(_device.Endpoint);
+            stopwatch = Stopwatch.StartNew();
             var connected = await _plcService.ConnectAsync().ConfigureAwait(false);
+            MarkLatency(ToLatencyMs(stopwatch.ElapsedMilliseconds));
             if (connected)
             {
                 MarkConnected();
@@ -99,6 +103,7 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
         catch (Exception ex)
         {
             _retryCount++;
+            MarkLatency(ToLatencyMs(stopwatch?.ElapsedMilliseconds));
             MarkDisconnected(ex.Message);
             if (ShouldLogDisconnect())
             {
@@ -149,6 +154,10 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
     {
     }
 
+    protected virtual void MarkLatency(int? latencyMs)
+    {
+    }
+
     private async Task TaskCoreAsync(CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
@@ -181,9 +190,11 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
         {
             foreach (var block in _readBlocks)
             {
+                var stopwatch = Stopwatch.StartNew();
                 var data = await _plcService
                     .ReadDataAsync<ushort>(block.StartAddress, (ushort)block.WordCount)
                     .ConfigureAwait(false);
+                MarkLatency(ToLatencyMs(stopwatch.ElapsedMilliseconds));
                 var words = data.ToArray();
 
                 foreach (var item in block.Items)
@@ -231,7 +242,9 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
                     }
                 }
 
+                var stopwatch = Stopwatch.StartNew();
                 await _plcService.WriteDataAsync(block.StartAddress, blockWords.ToList()).ConfigureAwait(false);
+                MarkLatency(ToLatencyMs(stopwatch.ElapsedMilliseconds));
             }
         }
         catch (Exception ex)
@@ -266,6 +279,11 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
 
         return 30000;
     }
+
+    private static int? ToLatencyMs(long? elapsedMilliseconds)
+        => elapsedMilliseconds.HasValue
+            ? (int)Math.Min(int.MaxValue, Math.Max(0, elapsedMilliseconds.Value))
+            : null;
 
     private bool ShouldLogDisconnect()
     {

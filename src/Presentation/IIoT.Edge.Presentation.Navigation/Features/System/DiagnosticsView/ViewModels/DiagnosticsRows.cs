@@ -1,5 +1,6 @@
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline;
+using IIoT.Edge.UI.Shared.Avalonia.Controls;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
 
@@ -29,11 +30,48 @@ public sealed record DeviceModuleBindingRow(
     bool ModuleEnabled,
     bool HasIoMappings);
 
+public sealed record ModuleReadinessRow(
+    string ModuleId,
+    string DisplayName,
+    string ProcessType,
+    string Version,
+    string LifecycleState,
+    string DeviceNames,
+    bool ModuleRegistered,
+    bool PluginActivated,
+    bool ModuleEnabled,
+    bool HasRuntimeFactory,
+    bool HasCloudUploader,
+    bool HasMesUploader,
+    bool HasIoMappings,
+    string Message);
+
 public sealed record StartupDiagnosticIssueRow(
     string Code,
     string ModuleId,
     string DeviceName,
-    string Message);
+    string Message,
+    EdgeVisualStatus Severity,
+    int DuplicateCount,
+    string DuplicateBadgeText)
+{
+    public bool IsError => Severity != EdgeVisualStatus.Warning;
+
+    public bool IsWarning => Severity == EdgeVisualStatus.Warning;
+
+    public bool HasDuplicateCount => DuplicateCount > 1;
+
+    public string IssueSubtitle
+    {
+        get
+        {
+            var parts = new[] { DeviceName, ModuleId }
+                .Where(static x => !string.IsNullOrWhiteSpace(x) && x != "--")
+                .ToArray();
+            return parts.Length == 0 ? "--" : string.Join(" · ", parts);
+        }
+    }
+}
 
 public sealed record MesChannelDiagnosticsRow(
     string ProcessType,
@@ -45,10 +83,22 @@ public sealed record MesChannelDiagnosticsRow(
 public sealed record SyncChannelRow(
     string Channel,
     string Status,
+    EdgeVisualStatus VisualStatus,
     string Pending,
     int DeadLetterCount,
     string LastError,
-    string Note);
+    string Note)
+{
+    public string DetailText => BuildDetailText(LastError, Note);
+
+    private static string BuildDetailText(string lastError, string note)
+    {
+        var parts = new[] { lastError, note }
+            .Where(static x => !string.IsNullOrWhiteSpace(x) && x != "--")
+            .ToArray();
+        return parts.Length == 0 ? string.Empty : string.Join(" | ", parts);
+    }
+}
 
 public sealed record DeadLetterRow(
     DataPipelineRetryChannel Channel,
@@ -82,7 +132,9 @@ public sealed record DiagnosticsRowsSnapshot(
     IReadOnlyList<ModuleRegistrationRow> ModuleRegistrations,
     IReadOnlyList<PluginLifecycleRow> PluginStates,
     IReadOnlyList<DeviceModuleBindingRow> DeviceBindings,
+    IReadOnlyList<ModuleReadinessRow> ModuleReadinessRows,
     IReadOnlyList<StartupDiagnosticIssueRow> Issues,
+    int StartupIssueCount,
     IReadOnlyList<MesChannelDiagnosticsRow> MesUploadDiagnostics,
     IReadOnlyList<SyncChannelRow> SyncChannels,
     IReadOnlyList<DeadLetterRow> CloudDeadLetters,

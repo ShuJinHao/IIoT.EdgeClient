@@ -17,7 +17,11 @@ public sealed class ExternalHeartbeatStateStore : IExternalHeartbeatStateStore
         }
     }
 
-    public void MarkReady(ExternalSystemKind system, DateTime? occurredAtUtc = null, string? message = null)
+    public void MarkReady(
+        ExternalSystemKind system,
+        DateTime? occurredAtUtc = null,
+        string? message = null,
+        int? latencyMs = null)
     {
         var occurredAt = occurredAtUtc ?? DateTime.UtcNow;
         lock (_sync)
@@ -29,7 +33,8 @@ public sealed class ExternalHeartbeatStateStore : IExternalHeartbeatStateStore
                 ReasonCode = "ready",
                 Message = message,
                 LastAttemptAtUtc = occurredAt,
-                LastSuccessAtUtc = occurredAt
+                LastSuccessAtUtc = occurredAt,
+                LatencyMs = latencyMs
             };
         }
     }
@@ -38,7 +43,8 @@ public sealed class ExternalHeartbeatStateStore : IExternalHeartbeatStateStore
         ExternalSystemKind system,
         string reasonCode,
         string? message = null,
-        DateTime? occurredAtUtc = null)
+        DateTime? occurredAtUtc = null,
+        int? latencyMs = null)
     {
         var occurredAt = occurredAtUtc ?? DateTime.UtcNow;
         lock (_sync)
@@ -50,7 +56,8 @@ public sealed class ExternalHeartbeatStateStore : IExternalHeartbeatStateStore
                 ReasonCode = string.IsNullOrWhiteSpace(reasonCode) ? "not_ready" : reasonCode,
                 Message = message,
                 LastAttemptAtUtc = occurredAt,
-                LastFailureAtUtc = occurredAt
+                LastFailureAtUtc = occurredAt,
+                LatencyMs = latencyMs
             };
         }
     }

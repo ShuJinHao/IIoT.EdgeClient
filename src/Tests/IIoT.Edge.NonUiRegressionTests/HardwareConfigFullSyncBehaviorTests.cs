@@ -34,16 +34,6 @@ public sealed class HardwareConfigFullSyncBehaviorTests
             NetworkDeviceEntity.Create(deviceName, DeviceType.PLC, ipAddress, port));
     }
 
-    [Fact]
-    public void NetworkDeviceEntity_WhenPlcModuleMissing_ShouldRejectBinding()
-    {
-        var entity = NetworkDeviceEntity.Create("PLC-A", DeviceType.PLC, "192.168.0.10", 102);
-
-        var exception = Assert.Throws<ArgumentException>(() => entity.AssignModule(string.Empty, "S7"));
-
-        Assert.StartsWith("PLC 设备必须绑定模块。", exception.Message);
-    }
-
     [Theory]
     [InlineData("", 9600, 8, "One", "None")]
     [InlineData("COM1", 0, 8, "One", "None")]
@@ -65,7 +55,6 @@ public sealed class HardwareConfigFullSyncBehaviorTests
     [Theory]
     [InlineData(0, "Signal.A", "D0", 1, "Int16", "Read")]
     [InlineData(1, "", "D0", 1, "Int16", "Read")]
-    [InlineData(1, "Signal.A", "", 1, "Int16", "Read")]
     [InlineData(1, "Signal.A", "D0", 0, "Int16", "Read")]
     [InlineData(1, "Signal.A", "D0", 1, "", "Read")]
     [InlineData(1, "Signal.A", "D0", 1, "Int16", "")]
@@ -79,6 +68,14 @@ public sealed class HardwareConfigFullSyncBehaviorTests
     {
         Assert.ThrowsAny<ArgumentException>(() =>
             IoMappingEntity.Create(networkDeviceId, signalKey, plcAddress, addressCount, dataType, direction));
+    }
+
+    [Fact]
+    public void IoMappingEntity_WhenPlcAddressEmpty_ShouldKeepUnconfiguredState()
+    {
+        var entity = IoMappingEntity.Create(1, "Signal.A", "", 1, "Int16", "Read");
+
+        Assert.Equal(string.Empty, entity.PlcAddress);
     }
 
     [Fact]
@@ -96,7 +93,6 @@ public sealed class HardwareConfigFullSyncBehaviorTests
                         DeviceType.PLC,
                         "S7",
                         string.Empty,
-                        "192.168.0.10",
                         102,
                         null,
                         null,
@@ -108,7 +104,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
             CancellationToken.None);
 
         Assert.False(result.IsSuccess);
-        Assert.StartsWith("PLC 设备必须绑定模块。", result.ErrorMessage);
+        Assert.StartsWith("网络设备地址不能为空。", result.ErrorMessage);
         Assert.Empty(repo.Items);
     }
 
@@ -129,7 +125,6 @@ public sealed class HardwareConfigFullSyncBehaviorTests
                         DeviceType.PLC,
                         "S7",
                         string.Empty,
-                        "192.168.0.10",
                         102,
                         null,
                         null,
@@ -160,7 +155,6 @@ public sealed class HardwareConfigFullSyncBehaviorTests
                         "PLC-A-UPDATED",
                         DeviceType.PLC,
                         "S7",
-                        "TestProcess",
                         "192.168.0.11",
                         102,
                         null,
@@ -250,7 +244,6 @@ public sealed class HardwareConfigFullSyncBehaviorTests
                         "Int16",
                         "Read",
                         "单点读数据",
-                        string.Empty,
                         string.Empty,
                         1,
                         "updated-remark")
@@ -437,7 +430,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
     {
         var entity = NetworkDeviceEntity.Create(name, DeviceType.PLC, ipAddress, port1);
         entity.WithId(id);
-        entity.AssignModule("TestProcess", "S7");
+        entity.UpdateDeviceModel("S7");
         entity.UpdateEndpoint(ipAddress, port1, null, 3000);
         entity.Enable();
         return entity;
@@ -453,7 +446,6 @@ public sealed class HardwareConfigFullSyncBehaviorTests
             name,
             DeviceType.PLC,
             "S7",
-            "TestProcess",
             ipAddress,
             port1,
             null,
@@ -479,7 +471,6 @@ public sealed class HardwareConfigFullSyncBehaviorTests
             "Read",
             "单点读数据",
             string.Empty,
-            string.Empty,
             1,
             remark);
 
@@ -502,7 +493,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
         var entity = IoMappingEntity.Create(deviceId, signalKey, plcAddress, 1, "Int16", "Read");
         entity.WithId(id);
         entity.UpdateSortOrder(1);
-        entity.UpdateMetadata(signalKey, "Int16", "Read", "单点读数据", string.Empty, string.Empty, remark);
+        entity.UpdateMetadata(signalKey, "Int16", "Read", "单点读数据", string.Empty, remark);
         return entity;
     }
 
@@ -659,7 +650,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
         {
             var clone = NetworkDeviceEntity.Create(entity.DeviceName, entity.DeviceType, entity.IpAddress, entity.Port1);
             clone.WithId(entity.Id);
-            clone.AssignModule(entity.ModuleId, entity.DeviceModel);
+            clone.UpdateDeviceModel(entity.DeviceModel);
             clone.UpdateEndpoint(entity.IpAddress, entity.Port1, entity.Port2, entity.ConnectTimeout);
             clone.UpdateCommands(entity.SendCmd1, entity.SendCmd2);
             clone.SetEnabled(entity.IsEnabled);
@@ -677,8 +668,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
                 entity.DataType,
                 entity.Direction,
                 entity.Category,
-                entity.BusinessGroup,
-                entity.SignalName);
+                entity.BusinessGroup);
             clone.WithId(entity.Id);
             clone.UpdateSortOrder(entity.SortOrder);
             clone.UpdateMetadata(
@@ -687,7 +677,6 @@ public sealed class HardwareConfigFullSyncBehaviorTests
                 entity.Direction,
                 entity.Category,
                 entity.BusinessGroup,
-                entity.SignalName,
                 entity.Remark);
             return clone;
         }

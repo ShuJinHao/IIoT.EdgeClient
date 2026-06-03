@@ -10,6 +10,7 @@ using IIoT.Edge.Application.Features.DataPipeline.DeadLetters;
 using IIoT.Edge.Application.Features.Config.LocalParameterConfig;
 using IIoT.Edge.Application.Features.Config.ModuleParameters;
 using IIoT.Edge.Application.Features.Config.ParamView;
+using IIoT.Edge.Application.Features.Config.SchemaReconciliation;
 using IIoT.Edge.Application.Features.Formula.RecipeView;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView;
 using IIoT.Edge.Application.Features.Hardware.IOView;
@@ -35,6 +36,35 @@ public static class DependencyInjection
         services.AddSingleton<ILocalSystemRuntimeConfigService>(sp => sp.GetRequiredService<LocalSystemRuntimeConfigService>());
         services.AddSingleton(typeof(IModuleParamProvider<,,>), typeof(ModuleParamProvider<,,>));
         services.AddSingleton<IModuleParamRoleProvider, ModuleParamRoleProvider>();
+        services.AddSingleton<IConfigSchemaReconciler, ConfigSchemaReconciler>();
+        services.AddSingleton<IConfigSchemaSource>(sp => new ModuleParamSchemaSource(
+            sp.GetRequiredService<IModuleParamRegistry>(),
+            ModuleParamCategory.Mes,
+            ModuleParamSchemaIds.Mes));
+        services.AddSingleton<IConfigSchemaSource>(sp => new ModuleParamSchemaSource(
+            sp.GetRequiredService<IModuleParamRegistry>(),
+            ModuleParamCategory.Cloud,
+            ModuleParamSchemaIds.Cloud));
+        services.AddSingleton<IConfigSchemaSource>(sp => new ModuleParamSchemaSource(
+            sp.GetRequiredService<IModuleParamRegistry>(),
+            ModuleParamCategory.Business,
+            ModuleParamSchemaIds.Business));
+        services.AddSingleton<IConfigValueStore>(sp => new ModuleParamConfigValueStore(
+            sp.GetRequiredService<ILocalParameterConfigService>(),
+            ModuleParamCategory.Mes,
+            ModuleParamSchemaIds.Mes));
+        services.AddSingleton<IConfigValueStore>(sp => new ModuleParamConfigValueStore(
+            sp.GetRequiredService<ILocalParameterConfigService>(),
+            ModuleParamCategory.Cloud,
+            ModuleParamSchemaIds.Cloud));
+        services.AddSingleton<IConfigValueStore>(sp => new ModuleParamConfigValueStore(
+            sp.GetRequiredService<ILocalParameterConfigService>(),
+            ModuleParamCategory.Business,
+            ModuleParamSchemaIds.Business));
+        services.AddSingleton<IConfigSchemaSource, CloudApiConfigSchemaSource>();
+        services.AddSingleton<IConfigValueStore, CloudApiConfigValueStore>();
+        services.AddSingleton<IConfigSchemaSource, IoMappingSchemaSource>();
+        services.AddSingleton<IConfigValueStore, IoMappingConfigValueStore>();
         services.AddSingleton<IDeadLetterMaintenanceService, DeadLetterMaintenanceService>();
         services.AddTransient<IParamViewCrudService, ParamViewCrudService>();
         services.AddTransient<IIoViewQueryFacade, IoViewQueryFacade>();

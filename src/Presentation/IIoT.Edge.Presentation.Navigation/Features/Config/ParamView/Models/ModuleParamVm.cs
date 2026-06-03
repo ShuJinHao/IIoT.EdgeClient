@@ -4,7 +4,7 @@ using IIoT.Edge.Presentation.Navigation.Common;
 namespace IIoT.Edge.Presentation.Navigation.Features.Config.ParamView.Models;
 
 /// <summary>
-/// 插件枚举参数在参数页面中的编辑项。
+/// 参数页面中的编辑项，可能来自插件参数或宿主级配置白名单。
 /// </summary>
 public class ModuleParamVm : PresentationObservableModelBase
 {

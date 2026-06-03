@@ -16,8 +16,13 @@ public sealed class DashboardViewModel : NavigationViewModelBase
     private string _recipeStatusFallback = "--";
     private string _todayOutput = "0";
     private string _todayYield = "0.0%";
+    private string _okCount = "0";
     private string _ngCount = "0";
     private string _currentBatch = "--";
+    private string _recentHourOutput = "0";
+    private string _recentHourOk = "0";
+    private string _recentHourNg = "0";
+    private string _recentHourLabel = "--";
 
     public DashboardViewModel(
         IEquipmentPanelService equipmentPanelService,
@@ -68,6 +73,12 @@ public sealed class DashboardViewModel : NavigationViewModelBase
         private set { _ngCount = value; OnPropertyChanged(); }
     }
 
+    public string OkCount
+    {
+        get => _okCount;
+        private set { _okCount = value; OnPropertyChanged(); }
+    }
+
     public string CurrentBatch
     {
         get => _currentBatch;
@@ -77,6 +88,30 @@ public sealed class DashboardViewModel : NavigationViewModelBase
             OnPropertyChanged();
             OnPropertyChanged(nameof(ProductionSummaryItems));
         }
+    }
+
+    public string RecentHourOutput
+    {
+        get => _recentHourOutput;
+        private set { _recentHourOutput = value; OnPropertyChanged(); }
+    }
+
+    public string RecentHourOk
+    {
+        get => _recentHourOk;
+        private set { _recentHourOk = value; OnPropertyChanged(); }
+    }
+
+    public string RecentHourNg
+    {
+        get => _recentHourNg;
+        private set { _recentHourNg = value; OnPropertyChanged(); }
+    }
+
+    public string RecentHourLabel
+    {
+        get => _recentHourLabel;
+        private set { _recentHourLabel = value; OnPropertyChanged(); }
     }
 
     public IReadOnlyList<EdgeSummaryItem> ProductionSummaryItems =>
@@ -159,8 +194,13 @@ public sealed class DashboardViewModel : NavigationViewModelBase
 
             TodayOutput = capacity.TodayOutput.ToString();
             TodayYield = capacity.TodayYield;
+            OkCount = capacity.OkCount.ToString();
             NgCount = capacity.NgCount.ToString();
             CurrentBatch = capacity.CurrentBatch ?? "--";
+            RecentHourOutput = capacity.RecentHourOutput.ToString();
+            RecentHourOk = capacity.RecentHourOk.ToString();
+            RecentHourNg = capacity.RecentHourNg.ToString();
+            RecentHourLabel = capacity.RecentHourLabel;
 
             OnPropertyChanged(nameof(HasDevices));
             OnPropertyChanged(nameof(IsDeviceEmpty));

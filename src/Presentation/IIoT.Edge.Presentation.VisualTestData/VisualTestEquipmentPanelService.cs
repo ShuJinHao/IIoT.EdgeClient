@@ -44,7 +44,20 @@ public sealed class VisualTestEquipmentPanelService(VisualTestDataOptions option
         var ng = 12 + minuteOffset % 3;
         var total = ok + ng;
         var yield = $"{ok * 100.0 / total:F1}%";
+        var recentHourOk = 186 + minuteOffset * 2;
+        var recentHourNg = minuteOffset % 2;
+        var recentHourTotal = recentHourOk + recentHourNg;
+        var recentHourLabel = $"{DateTime.Now.AddHours(-1):HH:mm}-{DateTime.Now:HH:mm}";
 
-        return Task.FromResult(new CapacitySnapshot(total, ng, yield, options.BatchCode));
+        return Task.FromResult(new CapacitySnapshot(
+            total,
+            ok,
+            ng,
+            yield,
+            options.BatchCode,
+            recentHourTotal,
+            recentHourOk,
+            recentHourNg,
+            recentHourLabel));
     }
 }

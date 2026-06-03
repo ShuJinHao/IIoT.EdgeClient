@@ -16,12 +16,11 @@ public class IoMappingEntity : BaseEntity<int>, IAggregateRoot
         string dataType,
         string direction,
         string category = DefaultCategory,
-        string businessGroup = "",
-        string signalName = "")
+        string businessGroup = "")
     {
         BindNetworkDevice(networkDeviceId);
         UpdateAddress(plcAddress, addressCount);
-        UpdateMetadata(signalKey, dataType, direction, category, businessGroup, signalName, null);
+        UpdateMetadata(signalKey, dataType, direction, category, businessGroup, null);
     }
 
     public int NetworkDeviceId { get; private set; }
@@ -32,7 +31,6 @@ public class IoMappingEntity : BaseEntity<int>, IAggregateRoot
     public string Direction { get; private set; } = "Read";
     public string Category { get; private set; } = DefaultCategory;
     public string BusinessGroup { get; private set; } = string.Empty;
-    public string SignalName { get; private set; } = string.Empty;
     public int SortOrder { get; private set; }
     public string? Remark { get; private set; }
 
@@ -46,9 +44,8 @@ public class IoMappingEntity : BaseEntity<int>, IAggregateRoot
         string dataType,
         string direction,
         string category = DefaultCategory,
-        string businessGroup = "",
-        string signalName = "")
-        => new(networkDeviceId, signalKey, plcAddress, addressCount, dataType, direction, category, businessGroup, signalName);
+        string businessGroup = "")
+        => new(networkDeviceId, signalKey, plcAddress, addressCount, dataType, direction, category, businessGroup);
 
     public void BindNetworkDevice(int networkDeviceId)
     {
@@ -62,7 +59,7 @@ public class IoMappingEntity : BaseEntity<int>, IAggregateRoot
 
     public void UpdateAddress(string plcAddress, int addressCount)
     {
-        PlcAddress = Require(plcAddress, "PLC 地址不能为空。");
+        PlcAddress = NormalizeToEmpty(plcAddress);
         if (addressCount <= 0)
         {
             throw new ArgumentException("地址数量必须大于 0。");
@@ -77,7 +74,6 @@ public class IoMappingEntity : BaseEntity<int>, IAggregateRoot
         string direction,
         string? category,
         string? businessGroup,
-        string? signalName,
         string? remark)
     {
         SignalKey = Require(signalKey, "IO 内部信号键不能为空。");
@@ -85,7 +81,6 @@ public class IoMappingEntity : BaseEntity<int>, IAggregateRoot
         Direction = Require(direction, "IO 方向不能为空。");
         Category = string.IsNullOrWhiteSpace(category) ? DefaultCategory : category.Trim();
         BusinessGroup = NormalizeToEmpty(businessGroup);
-        SignalName = NormalizeToEmpty(signalName);
         Remark = Normalize(remark);
     }
 

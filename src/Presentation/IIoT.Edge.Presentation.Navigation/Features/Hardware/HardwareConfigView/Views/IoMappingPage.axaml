@@ -3,226 +3,289 @@
     x:Name="IoMappingRoot"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
     xmlns:sharedViews="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared">
 
-    <Grid RowDefinitions="Auto,*" Margin="0,12,0,0">
+    <UserControl.Resources>
+        <DataTemplate x:Key="IoMappingDataPointTableTemplate">
+            <edge:EdgeTablePanel
+                Margin="0,0,0,12"
+                Title="{Binding Title}">
+                <edge:EdgeDataGrid
+                    AutoGenerateColumns="False"
+                    CanUserReorderColumns="False"
+                    CanUserResizeColumns="True"
+                    CanUserSortColumns="False"
+                    IsReadOnly="True"
+                    ItemsSource="{Binding Mappings}"
+                    SelectedItem="{Binding DataContext.SelectedIoMapping, RelativeSource={RelativeSource AncestorType=UserControl}, Mode=TwoWay}">
+                    <edge:EdgeDataGrid.Columns>
+                        <edge:EdgeTextColumn Binding="{Binding PlcAddress}" Header="{DynamicResource Navigation_Column_PlcAddress}" MinWidth="120" Width="120" />
+                        <edge:EdgeTextColumn Binding="{Binding AddressCount}" Header="{DynamicResource Navigation_Column_Count}" MinWidth="80" Width="80" />
+                        <edge:EdgeTextColumn Binding="{Binding DataType}" Header="{DynamicResource Navigation_Column_DataType}" MinWidth="120" Width="120" />
+                        <edge:EdgeTextColumn Binding="{Binding Remark}" Header="{DynamicResource Navigation_Column_Remark}" MinWidth="220" Width="220" />
+                    </edge:EdgeDataGrid.Columns>
+                </edge:EdgeDataGrid>
+            </edge:EdgeTablePanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="IoInteractionPairTableTemplate">
+            <edge:EdgeTablePanel
+                Margin="0,0,0,12"
+                Title="{DynamicResource Navigation_IoMapping_TabInteraction}">
+                <edge:EdgeDataGrid
+                    AutoGenerateColumns="False"
+                    CanUserReorderColumns="False"
+                    CanUserResizeColumns="True"
+                    CanUserSortColumns="False"
+                    IsReadOnly="True"
+                    ItemsSource="{Binding InteractionIoMappingPairs}"
+                    SelectedItem="{Binding SelectedInteractionPair, Mode=TwoWay}">
+                    <edge:EdgeDataGrid.Columns>
+                        <edge:EdgeTextColumn Binding="{Binding BusinessGroup}" Header="{DynamicResource Navigation_Column_InteractionItem}" MinWidth="150" Width="150" />
+                        <edge:EdgeTextColumn Binding="{Binding ReadPlcAddress}" Header="{DynamicResource Navigation_Column_ReadPlcAddress}" MinWidth="120" Width="120" />
+                        <edge:EdgeTextColumn Binding="{Binding ReadAddressCount}" Header="{DynamicResource Navigation_Column_ReadCount}" MinWidth="80" Width="80" />
+                        <edge:EdgeTextColumn Binding="{Binding ReadDataType}" Header="{DynamicResource Navigation_Column_ReadDataType}" MinWidth="100" Width="100" />
+                        <edge:EdgeTextColumn Binding="{Binding WritePlcAddress}" Header="{DynamicResource Navigation_Column_WritePlcAddress}" MinWidth="120" Width="120" />
+                        <edge:EdgeTextColumn Binding="{Binding WriteAddressCount}" Header="{DynamicResource Navigation_Column_WriteCount}" MinWidth="80" Width="80" />
+                        <edge:EdgeTextColumn Binding="{Binding WriteDataType}" Header="{DynamicResource Navigation_Column_WriteDataType}" MinWidth="100" Width="100" />
+                        <edge:EdgeTextColumn Binding="{Binding Remark}" Header="{DynamicResource Navigation_Column_Remark}" MinWidth="220" Width="220" />
+                    </edge:EdgeDataGrid.Columns>
+                </edge:EdgeDataGrid>
+            </edge:EdgeTablePanel>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid RowDefinitions="Auto,Auto,*" Margin="0,12,0,0">
         <edge:EdgeSectionHeader Title="{DynamicResource Navigation_Tab_IoMapping}">
             <edge:EdgeSectionHeader.ActionContent>
                 <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Edge.Size.Spacing8}">
                     <edge:EdgeActionButton
                         Command="{Binding ApplyModuleTemplateCommand}"
                         Content="{DynamicResource Navigation_Button_ApplyTemplate}"
-                        Icon="{StaticResource Edge.Icon.Check}"
+                        Icon="{StaticResource Edge.Icon.Sync}"
                         Kind="Primary"
                         Size="Compact"
                         ToolTip.Tip="{Binding ModuleTemplateHint}" />
                     <edge:EdgeActionButton
-                        Command="{Binding OpenAddInteractionMappingDialogCommand}"
-                        Content="{DynamicResource Navigation_Button_AddInteraction}"
-                        Icon="{StaticResource Edge.Icon.Add}"
-                        Kind="Primary"
-                        Size="Compact" />
-                    <edge:EdgeActionButton
-                        Command="{Binding OpenAddDataPointMappingDialogCommand}"
-                        Content="{DynamicResource Navigation_Button_AddDataPoint}"
-                        Icon="{StaticResource Edge.Icon.Add}"
-                        Kind="Primary"
-                        Size="Compact" />
-                    <edge:EdgeActionButton
-                        Command="{Binding DeleteIoMappingCommand}"
-                        Content="{DynamicResource Navigation_Button_Delete}"
-                        Icon="{StaticResource Edge.Icon.Delete}"
-                        Kind="Danger"
+                        Command="{Binding OpenEditIoMappingDialogCommand}"
+                        Content="{DynamicResource Navigation_Button_Edit}"
+                        Icon="{StaticResource Edge.Icon.Write}"
+                        Kind="Secondary"
                         Size="Compact" />
                 </StackPanel>
             </edge:EdgeSectionHeader.ActionContent>
         </edge:EdgeSectionHeader>
 
-        <Grid Grid.Row="1" Margin="0,12,0,0" ColumnDefinitions="190,*">
-            <edge:EdgeCard
-                Margin="0,0,12,0"
-                PaddingMode="Compact">
-                <edge:EdgeCard.Header>
-                    <edge:EdgeSectionHeader Title="{DynamicResource Navigation_Tab_NetworkDevice}" />
-                </edge:EdgeCard.Header>
-                <Grid RowDefinitions="Auto,*">
-                    <edge:EdgeListBox
-                        Background="Transparent"
-                        BorderThickness="0"
-                        ItemsSource="{Binding NetworkDevices}"
-                        SelectedItem="{Binding SelectedNetworkDevice}">
-                        <edge:EdgeListBox.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock
-                                    Classes="edge-text-list-item"
-                                    Text="{Binding DeviceName}" />
-                            </DataTemplate>
-                        </edge:EdgeListBox.ItemTemplate>
-                    </edge:EdgeListBox>
-                </Grid>
-            </edge:EdgeCard>
-
-            <StackPanel
+        <Grid
+            Grid.Row="1"
+            Margin="0,12,0,0"
+            ColumnDefinitions="Auto,320,*">
+            <TextBlock
+                VerticalAlignment="Center"
+                Classes="edge-text-form-label"
+                Text="{DynamicResource Navigation_Tab_NetworkDevice}" />
+            <edge:EdgeFilterComboBox
                 Grid.Column="1"
-                Spacing="12">
-                    <ItemsControl ItemsSource="{Binding IoMappingGroups}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <edge:EdgeTablePanel
-                                    Margin="0,0,0,12"
-                                    Title="{Binding Title}">
-                                    <edge:EdgeDataGrid
-                                        AutoGenerateColumns="False"
-                                        CanUserReorderColumns="False"
-                                        CanUserResizeColumns="True"
-                                        CanUserSortColumns="False"
-                                        IsReadOnly="{Binding !DataContext.CanEdit, ElementName=IoMappingRoot}"
-                                        ItemsSource="{Binding Mappings}"
-                                        SelectedItem="{Binding DataContext.SelectedIoMapping, ElementName=IoMappingRoot, Mode=TwoWay}">
-                                        <edge:EdgeDataGrid.Columns>
-                                            <edge:EdgeTextColumn Binding="{Binding PlcAddress}" Header="{DynamicResource Navigation_Column_PlcAddress}" MinWidth="120" Width="120" />
-                                            <edge:EdgeTextColumn Binding="{Binding AddressCount}" Header="{DynamicResource Navigation_Column_Count}" MinWidth="80" Width="80" />
-                                            <edge:EdgeTextColumn Binding="{Binding BusinessGroup}" Header="{DynamicResource Navigation_Column_BusinessGroup}" IsReadOnly="True" MinWidth="150" Width="150" />
-                                            <edge:EdgeTextColumn Binding="{Binding SignalName}" Header="{DynamicResource Navigation_Column_SignalName}" MinWidth="180" Width="180" />
-                                            <edge:EdgeTemplateColumn Header="{DynamicResource Navigation_Column_DataType}" MinWidth="120" Width="120">
-                                                <edge:EdgeTemplateColumn.CellTemplate>
-                                                    <DataTemplate>
-                                                        <TextBlock Text="{Binding DataType}" />
-                                                    </DataTemplate>
-                                                </edge:EdgeTemplateColumn.CellTemplate>
-                                                <edge:EdgeTemplateColumn.CellEditingTemplate>
-                                                    <DataTemplate>
-                                                        <edge:EdgeFilterComboBox ItemsSource="{Binding DataContext.IoDataTypes, ElementName=IoMappingRoot}" SelectedItem="{Binding DataType}" />
-                                                    </DataTemplate>
-                                                </edge:EdgeTemplateColumn.CellEditingTemplate>
-                                            </edge:EdgeTemplateColumn>
-                                            <edge:EdgeTextColumn Binding="{Binding Direction}" Header="{DynamicResource Navigation_Column_Direction}" IsReadOnly="True" MinWidth="100" Width="100" />
-                                            <edge:EdgeTextColumn Binding="{Binding Remark}" Header="{DynamicResource Navigation_Column_Remark}" MinWidth="220" Width="220" />
-                                        </edge:EdgeDataGrid.Columns>
-                                    </edge:EdgeDataGrid>
-                                </edge:EdgeTablePanel>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                Margin="12,0,16,0"
+                ItemsSource="{Binding IoMappingNetworkDevices}"
+                SelectedItem="{Binding SelectedNetworkDevice}">
+                <edge:EdgeFilterComboBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding DeviceName}" />
+                    </DataTemplate>
+                </edge:EdgeFilterComboBox.ItemTemplate>
+            </edge:EdgeFilterComboBox>
+            <TextBlock
+                Grid.Column="2"
+                VerticalAlignment="Center"
+                Foreground="{DynamicResource Edge.Text.Muted}"
+                Text="{Binding ModuleTemplateHint}"
+                TextWrapping="Wrap" />
+        </Grid>
 
-                    <sharedViews:EmptyStateView
-                        IsVisible="{Binding HasNoIoMappingGroups}"
-                        Message="{DynamicResource Navigation_Empty_IoMappings}"
-                        Title="{DynamicResource Navigation_Tab_IoMapping}" />
-            </StackPanel>
+        <edge:EdgeTabControl Grid.Row="2" Margin="0,12,0,0">
+            <TabItem Header="{DynamicResource Navigation_IoMapping_TabInteraction}">
+                <edge:EdgeScrollHost Variant="Panel">
+                    <StackPanel>
+                        <ContentControl
+                            Content="{Binding}"
+                            ContentTemplate="{StaticResource IoInteractionPairTableTemplate}" />
+                        <sharedViews:EmptyStateView
+                            IsVisible="{Binding HasNoInteractionIoMappingGroups}"
+                            Message="{DynamicResource Navigation_Empty_IoInteractionRows}"
+                            Title="{DynamicResource Navigation_IoMapping_TabInteraction}" />
+                    </StackPanel>
+                </edge:EdgeScrollHost>
+            </TabItem>
 
-            <Border
-                Grid.ColumnSpan="2"
-                Classes="edge-dialog-overlay"
-                IsVisible="{Binding IsAddIoMappingDialogOpen}">
-                <edge:EdgeDialogChrome
-                    Classes="inline-dialog"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center"
-                    CloseCommand="{Binding CancelAddIoMappingDialogCommand}"
-                    CloseTopLevelOnClose="False"
-                    Title="{DynamicResource Navigation_Dialog_AddIoPoint}">
-                    <Grid>
-                        <Grid IsVisible="{Binding IsInteractionPairDialog}" ColumnDefinitions="*,16,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
-                            <StackPanel Grid.ColumnSpan="3" Margin="0,0,0,12" IsVisible="{Binding NewInteractionPair.IsStandardSource}">
-                                <TextBlock Classes="edge-text-form-label" Text="{DynamicResource Navigation_Label_InteractionGroup}" />
-                                <edge:EdgeFilterComboBox ItemsSource="{Binding StandardInteractionGroups}" SelectedItem="{Binding SelectedStandardInteractionGroup}">
-                                    <edge:EdgeFilterComboBox.ItemTemplate>
-                                        <DataTemplate>
-                                            <TextBlock Text="{Binding DisplayText}" />
-                                        </DataTemplate>
-                                    </edge:EdgeFilterComboBox.ItemTemplate>
-                                </edge:EdgeFilterComboBox>
-                            </StackPanel>
-                            <StackPanel Grid.Row="1" Grid.ColumnSpan="3" Margin="0,0,0,12">
-                                <TextBlock Classes="edge-text-form-label" Text="{DynamicResource Navigation_Column_BusinessGroup}" />
-                                <edge:EdgeTextBox IsReadOnly="{Binding NewInteractionPair.IsStandardSource}" Text="{Binding NewInteractionPair.BusinessGroup}" />
-                            </StackPanel>
-                            <TextBlock Grid.Row="2" Classes="edge-text-form-section-title" Text="{DynamicResource Navigation_Label_ReadSignal}" />
-                            <TextBlock Grid.Row="2" Grid.Column="2" Classes="edge-text-form-section-title" Text="{DynamicResource Navigation_Label_WriteSignal}" />
-                            <Grid Grid.Row="3" RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="*,8,80">
-                                <edge:EdgeTextBox Grid.ColumnSpan="3" Margin="0,6,0,8" Text="{Binding NewInteractionPair.ReadSignalName}" />
-                                <edge:EdgeTextBox Grid.Row="1" Margin="0,0,0,8" Text="{Binding NewInteractionPair.ReadPlcAddress}" />
-                                <edge:EdgeTextBox Grid.Row="1" Grid.Column="2" Margin="0,0,0,8" IsEnabled="False" Text="{Binding NewInteractionPair.ReadAddressCount}" />
-                                <edge:EdgeFilterComboBox Grid.Row="2" Grid.ColumnSpan="3" ItemsSource="{Binding IoDataTypes}" SelectedItem="{Binding NewInteractionPair.ReadDataType}" />
-                            </Grid>
-                            <Grid Grid.Row="3" Grid.Column="2" RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="*,8,80">
-                                <edge:EdgeTextBox Grid.ColumnSpan="3" Margin="0,6,0,8" Text="{Binding NewInteractionPair.WriteSignalName}" />
-                                <edge:EdgeTextBox Grid.Row="1" Margin="0,0,0,8" Text="{Binding NewInteractionPair.WritePlcAddress}" />
-                                <edge:EdgeTextBox Grid.Row="1" Grid.Column="2" Margin="0,0,0,8" IsEnabled="False" Text="{Binding NewInteractionPair.WriteAddressCount}" />
-                                <edge:EdgeFilterComboBox Grid.Row="2" Grid.ColumnSpan="3" ItemsSource="{Binding IoDataTypes}" SelectedItem="{Binding NewInteractionPair.WriteDataType}" />
-                            </Grid>
-                            <StackPanel Grid.Row="4" Grid.ColumnSpan="3" Margin="0,12,0,12">
-                                <TextBlock Classes="edge-text-form-label" Text="{DynamicResource Navigation_Column_Remark}" />
-                                <edge:EdgeTextBox Text="{Binding NewInteractionPair.Remark}" />
-                            </StackPanel>
+            <TabItem Header="{DynamicResource Navigation_IoMapping_TabSingleRead}">
+                <edge:EdgeScrollHost Variant="Panel">
+                    <StackPanel>
+                        <ItemsControl
+                            ItemTemplate="{StaticResource IoMappingDataPointTableTemplate}"
+                            ItemsSource="{Binding SingleReadIoMappingGroups}" />
+                        <sharedViews:EmptyStateView
+                            IsVisible="{Binding HasNoSingleReadIoMappingGroups}"
+                            Message="{DynamicResource Navigation_Empty_IoDataSections}"
+                            Title="{DynamicResource Navigation_IoMapping_TabSingleRead}" />
+                    </StackPanel>
+                </edge:EdgeScrollHost>
+            </TabItem>
+
+            <TabItem Header="{DynamicResource Navigation_IoMapping_TabContinuousRead}">
+                <edge:EdgeScrollHost Variant="Panel">
+                    <StackPanel>
+                        <ItemsControl
+                            ItemTemplate="{StaticResource IoMappingDataPointTableTemplate}"
+                            ItemsSource="{Binding ContinuousReadIoMappingGroups}" />
+                        <sharedViews:EmptyStateView
+                            IsVisible="{Binding HasNoContinuousReadIoMappingGroups}"
+                            Message="{DynamicResource Navigation_Empty_IoArraySections}"
+                            Title="{DynamicResource Navigation_IoMapping_TabContinuousRead}" />
+                    </StackPanel>
+                </edge:EdgeScrollHost>
+            </TabItem>
+
+            <TabItem Header="{DynamicResource Navigation_IoMapping_TabSingleWrite}">
+                <edge:EdgeScrollHost Variant="Panel">
+                    <StackPanel>
+                        <ItemsControl
+                            ItemTemplate="{StaticResource IoMappingDataPointTableTemplate}"
+                            ItemsSource="{Binding SingleWriteIoMappingGroups}" />
+                        <sharedViews:EmptyStateView
+                            IsVisible="{Binding HasNoSingleWriteIoMappingGroups}"
+                            Message="{DynamicResource Navigation_Empty_IoDataSections}"
+                            Title="{DynamicResource Navigation_IoMapping_TabSingleWrite}" />
+                    </StackPanel>
+                </edge:EdgeScrollHost>
+            </TabItem>
+
+            <TabItem Header="{DynamicResource Navigation_IoMapping_TabContinuousWrite}">
+                <edge:EdgeScrollHost Variant="Panel">
+                    <StackPanel>
+                        <ItemsControl
+                            ItemTemplate="{StaticResource IoMappingDataPointTableTemplate}"
+                            ItemsSource="{Binding ContinuousWriteIoMappingGroups}" />
+                        <sharedViews:EmptyStateView
+                            IsVisible="{Binding HasNoContinuousWriteIoMappingGroups}"
+                            Message="{DynamicResource Navigation_Empty_IoArraySections}"
+                            Title="{DynamicResource Navigation_IoMapping_TabContinuousWrite}" />
+                    </StackPanel>
+                </edge:EdgeScrollHost>
+            </TabItem>
+        </edge:EdgeTabControl>
+
+        <Border
+            Grid.RowSpan="3"
+            Classes="edge-dialog-overlay"
+            IsVisible="{Binding IsEditIoMappingDialogOpen}">
+            <edge:EdgeDialogChrome
+                Classes="inline-dialog hardware-form-dialog"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                CloseCommand="{Binding CancelEditIoMappingDialogCommand}"
+                CloseTopLevelOnClose="False"
+                Title="{Binding IoMappingEditDialogTitle}">
+                <Grid
+                    ColumnDefinitions="*,*"
+                    RowDefinitions="Auto,Auto"
+                    ColumnSpacing="{DynamicResource Edge.Size.Spacing12}"
+                    RowSpacing="{DynamicResource Edge.Size.Spacing8}">
+                    <Grid
+                        Grid.ColumnSpan="2"
+                        ColumnDefinitions="*,*"
+                        RowDefinitions="Auto,Auto,Auto"
+                        ColumnSpacing="{DynamicResource Edge.Size.Spacing12}"
+                        RowSpacing="{DynamicResource Edge.Size.Spacing8}"
+                        IsVisible="{Binding IsEditingInteractionPair}">
+                        <TextBlock
+                            Classes="edge-text-form-label"
+                            Text="{DynamicResource Navigation_Label_ReadSide}" />
+                        <TextBlock
+                            Grid.Column="1"
+                            Classes="edge-text-form-label"
+                            Text="{DynamicResource Navigation_Label_WriteSide}" />
+                        <edge:EdgeFieldRow Classes="dialog-form" Grid.Row="1" Label="{DynamicResource Navigation_Column_PlcAddress}">
+                            <edge:EdgeTextBox Text="{Binding EditingInteractionPair.ReadPlcAddress}" />
+                        </edge:EdgeFieldRow>
+                        <edge:EdgeFieldRow Classes="dialog-form" Grid.Row="1" Grid.Column="1" Label="{DynamicResource Navigation_Column_PlcAddress}">
+                            <edge:EdgeTextBox Text="{Binding EditingInteractionPair.WritePlcAddress}" />
+                        </edge:EdgeFieldRow>
+                        <Grid
+                            Grid.Row="2"
+                            ColumnDefinitions="*,*"
+                            ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
+                            <edge:EdgeFieldRow Classes="dialog-form" Label="{DynamicResource Navigation_Column_Count}">
+                                <edge:EdgeTextBox Text="{Binding EditingInteractionPair.ReadAddressCount}" />
+                            </edge:EdgeFieldRow>
+                            <edge:EdgeFieldRow Classes="dialog-form" Grid.Column="1" Label="{DynamicResource Navigation_Column_DataType}">
+                                <edge:EdgeFilterComboBox
+                                    ItemsSource="{Binding IoDataTypes}"
+                                    SelectedItem="{Binding EditingInteractionPair.ReadDataType}" />
+                            </edge:EdgeFieldRow>
                         </Grid>
-
-                        <Grid IsVisible="{Binding IsDataPointDialog}" ColumnDefinitions="*,16,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
-                            <StackPanel Grid.ColumnSpan="3" Margin="0,0,0,12" IsVisible="{Binding NewIoMapping.IsStandardSource}">
-                                <TextBlock Classes="edge-text-form-label" Text="{DynamicResource Navigation_Label_StandardSignal}" />
-                                <edge:EdgeFilterComboBox ItemsSource="{Binding FilteredStandardDataSignals}" SelectedItem="{Binding SelectedStandardIoSignal}">
-                                    <edge:EdgeFilterComboBox.ItemTemplate>
-                                        <DataTemplate>
-                                            <TextBlock Text="{Binding DisplayText}" />
-                                        </DataTemplate>
-                                    </edge:EdgeFilterComboBox.ItemTemplate>
-                                </edge:EdgeFilterComboBox>
-                            </StackPanel>
-                            <StackPanel Grid.Row="1" Margin="0,0,0,12">
-                                <TextBlock Classes="edge-text-form-label" Text="{DynamicResource Navigation_Label_IoCategory}" />
-                                <edge:EdgeFilterComboBox ItemsSource="{Binding IoDataPointCategories}" SelectedItem="{Binding NewIoMapping.Category}" />
-                            </StackPanel>
-                            <StackPanel Grid.Row="1" Grid.Column="2" Margin="0,0,0,12">
-                                <TextBlock Classes="edge-text-form-label" Text="{DynamicResource Navigation_Column_Direction}" />
-                                <edge:EdgeFilterComboBox IsEnabled="False" ItemsSource="{Binding IoDirections}" SelectedItem="{Binding NewIoMapping.Direction}" />
-                            </StackPanel>
-                            <StackPanel Grid.Row="2" Margin="0,0,0,12">
-                                <TextBlock Classes="edge-text-form-label" Text="{DynamicResource Navigation_Column_PlcAddress}" />
-                                <edge:EdgeTextBox Text="{Binding NewIoMapping.PlcAddress}" />
-                            </StackPanel>
-                            <StackPanel Grid.Row="2" Grid.Column="2" Margin="0,0,0,12">
-                                <TextBlock Classes="edge-text-form-label" Text="{DynamicResource Navigation_Column_Count}" />
-                                <edge:EdgeTextBox IsEnabled="{Binding NewIoMapping.IsAddressCountEditable}" Text="{Binding NewIoMapping.AddressCount}" />
-                            </StackPanel>
-                            <StackPanel Grid.Row="3" Margin="0,0,0,12">
-                                <TextBlock Classes="edge-text-form-label" Text="{DynamicResource Navigation_Column_DataType}" />
-                                <edge:EdgeFilterComboBox IsEnabled="{Binding NewIoMapping.IsCustomSource}" ItemsSource="{Binding IoDataTypes}" SelectedItem="{Binding NewIoMapping.DataType}" />
-                            </StackPanel>
-                            <StackPanel Grid.Row="3" Grid.Column="2" Margin="0,0,0,12">
-                                <TextBlock Classes="edge-text-form-label" Text="{DynamicResource Navigation_Column_BusinessGroup}" />
-                                <edge:EdgeTextBox IsReadOnly="True" Text="{Binding NewIoMapping.BusinessGroup}" />
-                            </StackPanel>
-                            <StackPanel Grid.Row="4" Margin="0,0,0,12">
-                                <TextBlock Classes="edge-text-form-label" Text="{DynamicResource Navigation_Column_SignalName}" />
-                                <edge:EdgeTextBox IsEnabled="{Binding NewIoMapping.IsCustomSource}" Text="{Binding NewIoMapping.SignalName}" />
-                            </StackPanel>
-                            <StackPanel Grid.Row="4" Grid.Column="2" Margin="0,0,0,12">
-                                <TextBlock Classes="edge-text-form-label" Text="{DynamicResource Navigation_Column_Remark}" />
-                                <edge:EdgeTextBox Text="{Binding NewIoMapping.Remark}" />
-                            </StackPanel>
+                        <Grid
+                            Grid.Row="2"
+                            Grid.Column="1"
+                            ColumnDefinitions="*,*"
+                            ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
+                            <edge:EdgeFieldRow Classes="dialog-form" Label="{DynamicResource Navigation_Column_Count}">
+                                <edge:EdgeTextBox Text="{Binding EditingInteractionPair.WriteAddressCount}" />
+                            </edge:EdgeFieldRow>
+                            <edge:EdgeFieldRow Classes="dialog-form" Grid.Column="1" Label="{DynamicResource Navigation_Column_DataType}">
+                                <edge:EdgeFilterComboBox
+                                    ItemsSource="{Binding IoDataTypes}"
+                                    SelectedItem="{Binding EditingInteractionPair.WriteDataType}" />
+                            </edge:EdgeFieldRow>
                         </Grid>
                     </Grid>
 
-                    <edge:EdgeDialogChrome.FooterContent>
-                        <StackPanel Classes="edge-dialog-actions">
-                            <edge:EdgeActionButton
-                                Command="{Binding CancelAddIoMappingDialogCommand}"
-                                Content="{DynamicResource Navigation_Button_Cancel}"
-                                Icon="{StaticResource Edge.Icon.Close}"
-                                Kind="Secondary"
-                                Size="Compact" />
-                            <edge:EdgeActionButton
-                                Command="{Binding ConfirmAddIoMappingCommand}"
-                                Content="{DynamicResource Navigation_Button_ConfirmAddIoPoint}"
-                                Icon="{StaticResource Edge.Icon.Check}"
-                                Kind="Primary"
-                                Size="Compact" />
-                        </StackPanel>
-                    </edge:EdgeDialogChrome.FooterContent>
-                </edge:EdgeDialogChrome>
-            </Border>
-        </Grid>
+                    <Grid
+                        Grid.ColumnSpan="2"
+                        ColumnDefinitions="*,*"
+                        RowDefinitions="Auto,Auto,Auto"
+                        ColumnSpacing="{DynamicResource Edge.Size.Spacing12}"
+                        RowSpacing="{DynamicResource Edge.Size.Spacing8}"
+                        IsVisible="{Binding IsEditingSingleIoMapping}">
+                        <edge:EdgeFieldRow Classes="dialog-form" Label="{DynamicResource Navigation_Column_PlcAddress}">
+                            <edge:EdgeTextBox Text="{Binding EditingIoMapping.PlcAddress}" />
+                        </edge:EdgeFieldRow>
+                        <edge:EdgeFieldRow Classes="dialog-form" Grid.Column="1" Label="{DynamicResource Navigation_Column_Count}">
+                            <edge:EdgeTextBox Text="{Binding EditingIoMapping.AddressCount}" />
+                        </edge:EdgeFieldRow>
+                        <edge:EdgeFieldRow Classes="dialog-form" Grid.Row="1" Label="{DynamicResource Navigation_Column_DataType}">
+                            <edge:EdgeFilterComboBox
+                                ItemsSource="{Binding IoDataTypes}"
+                                SelectedItem="{Binding EditingIoMapping.DataType}" />
+                        </edge:EdgeFieldRow>
+                    </Grid>
+
+                    <edge:EdgeFieldRow Classes="dialog-form" Grid.Row="1" Grid.ColumnSpan="2" Label="{DynamicResource Navigation_Column_Remark}">
+                        <Grid>
+                            <edge:EdgeTextBox Text="{Binding EditingInteractionPair.Remark}" IsVisible="{Binding IsEditingInteractionPair}" />
+                            <edge:EdgeTextBox Text="{Binding EditingIoMapping.Remark}" IsVisible="{Binding IsEditingSingleIoMapping}" />
+                        </Grid>
+                    </edge:EdgeFieldRow>
+                </Grid>
+
+                <edge:EdgeDialogChrome.FooterContent>
+                    <StackPanel Classes="edge-dialog-actions">
+                        <edge:EdgeActionButton
+                            Command="{Binding CancelEditIoMappingDialogCommand}"
+                            Content="{DynamicResource Navigation_Button_Cancel}"
+                            Icon="{StaticResource Edge.Icon.Close}"
+                            Kind="Secondary"
+                            Size="Compact" />
+                        <edge:EdgeActionButton
+                            Command="{Binding ConfirmEditIoMappingCommand}"
+                            Content="{DynamicResource Navigation_Button_Save}"
+                            Icon="{StaticResource Edge.Icon.Save}"
+                            Kind="Primary"
+                            Size="Compact" />
+                    </StackPanel>
+                </edge:EdgeDialogChrome.FooterContent>
+            </edge:EdgeDialogChrome>
+        </Border>
     </Grid>
 </UserControl>

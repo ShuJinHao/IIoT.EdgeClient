@@ -46,8 +46,9 @@ public sealed class HardwareConfigCrudService(
     IEnumerable<IModuleHardwareProfileProvider> hardwareProfiles,
     IClientPermissionService permissionService) : IHardwareConfigCrudService
 {
-    private readonly Dictionary<string, IModuleHardwareProfileProvider> _hardwareProfiles = hardwareProfiles
-        .ToDictionary(x => x.ModuleId, StringComparer.OrdinalIgnoreCase);
+    private readonly IModuleHardwareProfileProvider[] _hardwareProfiles = hardwareProfiles
+        .OrderBy(static x => x.ModuleId, StringComparer.OrdinalIgnoreCase)
+        .ToArray();
 
     public Task<HardwareConfigInitResult> LoadAsync(CancellationToken cancellationToken = default)
         => sender.Send(new LoadHardwareConfigQuery(), cancellationToken);
@@ -67,7 +68,6 @@ public sealed class HardwareConfigCrudService(
         {
             return Task.FromResult(new ModuleTemplateInfoResult(
                 false,
-                null,
                 [],
                 [],
                 "请选择一个 PLC 设备。"));
@@ -77,21 +77,19 @@ public sealed class HardwareConfigCrudService(
         {
             return Task.FromResult(new ModuleTemplateInfoResult(
                 false,
-                selectedNetworkDevice.ModuleId,
                 [],
                 [],
                 "插件标准点位只支持 PLC 设备。"));
         }
 
-        if (string.IsNullOrWhiteSpace(selectedNetworkDevice.ModuleId)
-            || !_hardwareProfiles.TryGetValue(selectedNetworkDevice.ModuleId, out var provider))
+        var provider = ResolveHardwareProfile(out var profileError);
+        if (provider is null)
         {
             return Task.FromResult(new ModuleTemplateInfoResult(
                 false,
-                selectedNetworkDevice.ModuleId,
                 [],
                 [],
-                "当前 PLC 未绑定可用的插件标准点位。"));
+                profileError ?? "当前插件库没有可用的标准 IO 点位。"));
         }
 
         var defaultSignals = provider.GetDefaultIoTemplate()
@@ -106,15 +104,13 @@ public sealed class HardwareConfigCrudService(
         {
             return Task.FromResult(new ModuleTemplateInfoResult(
                 false,
-                provider.ModuleId,
                 [],
                 [],
-                "当前模块没有插件标准 IO 点位。"));
+                "当前插件没有标准 IO 点位。"));
         }
 
         return Task.FromResult(new ModuleTemplateInfoResult(
             true,
-            provider.ModuleId,
             defaultSignals,
             candidateSignals,
             "重置当前 PLC 的 IO 映射为插件标准点位，会清理旧手工错误点位。"));
@@ -144,14 +140,13 @@ public sealed class HardwareConfigCrudService(
             return CrudOperationResult.Failure("请先保存设备，再重置插件标准点位。");
         }
 
-        if (string.IsNullOrWhiteSpace(selectedNetworkDevice.ModuleId)
-            || !_hardwareProfiles.TryGetValue(selectedNetworkDevice.ModuleId, out var provider))
+        var provider = ResolveHardwareProfile(out var profileError);
+        if (provider is null)
         {
-            return CrudOperationResult.Failure("当前 PLC 未绑定可用的插件标准点位。");
+            return CrudOperationResult.Failure(profileError ?? "当前插件库没有可用的标准 IO 点位。");
         }
 
-        var resetMappings = provider.GetDefaultIoTemplate()
-            .Where(static x => !string.IsNullOrWhiteSpace(x.PlcAddress))
+        var resetMappings = provider.GetIoMappingCandidates()
             .OrderBy(x => x.SortOrder)
             .Select(template => new IoMappingDto(
                 0,
@@ -163,7 +158,6 @@ public sealed class HardwareConfigCrudService(
                 template.Direction,
                 template.Category,
                 template.BusinessGroup,
-                template.SignalName,
                 template.SortOrder,
                 template.Remark))
             .ToList();
@@ -194,5 +188,23 @@ public sealed class HardwareConfigCrudService(
                 selectedNetworkDeviceId,
                 ioMappings.ToList()),
             cancellationToken);
+    }
+
+    private IModuleHardwareProfileProvider? ResolveHardwareProfile(out string? errorMessage)
+    {
+        if (_hardwareProfiles.Length == 0)
+        {
+            errorMessage = "当前插件库没有注册标准 IO 点位模板。";
+            return null;
+        }
+
+        if (_hardwareProfiles.Length > 1)
+        {
+            errorMessage = "当前数据库应只对应一个插件模板；请按插件独立库运行，不能在设备表里用模块 ID 区分工序。";
+            return null;
+        }
+
+        errorMessage = null;
+        return _hardwareProfiles[0];
     }
 }

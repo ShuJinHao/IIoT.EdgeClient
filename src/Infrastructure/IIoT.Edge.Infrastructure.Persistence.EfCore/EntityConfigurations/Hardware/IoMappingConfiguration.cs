@@ -47,11 +47,6 @@ public class IoMappingConfiguration : IEntityTypeConfiguration<IoMappingEntity>
             .HasMaxLength(100)
             .HasColumnName("business_group");
 
-        builder.Property(x => x.SignalName)
-            .IsRequired()
-            .HasMaxLength(50)
-            .HasColumnName("signal_name");
-
         builder.Property(x => x.SortOrder).HasColumnName("sort_order");
         builder.Property(x => x.Remark).HasMaxLength(500).HasColumnName("remark");
 

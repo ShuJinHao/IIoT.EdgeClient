@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Features.Production.Monitor;
+using IIoT.Edge.UI.Shared.Avalonia.Controls;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
 
@@ -92,4 +93,6 @@ public sealed record MonitorStateMachineTaskItemViewModel(
     string StepText,
     string StepValueText,
     string DetailText,
-    bool IsUnavailable);
+    bool IsUnavailable,
+    bool IsHeartbeatLike,
+    EdgeVisualStatus VisualStatus);

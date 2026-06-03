@@ -8,7 +8,7 @@ namespace IIoT.Edge.NonUiRegressionTests;
 public sealed class EdgeDbMigrationBehaviorTests
 {
     [Fact]
-    public async Task Migrate_WhenCreatingFreshDatabase_ShouldCreateIoMappingDisplayColumns()
+    public async Task Migrate_WhenCreatingFreshDatabase_ShouldCreateCurrentHardwareColumns()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "edge-ef-migration-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
@@ -36,7 +36,10 @@ public sealed class EdgeDbMigrationBehaviorTests
             Assert.Contains("category", columns);
             Assert.Contains("signal_key", columns);
             Assert.Contains("business_group", columns);
-            Assert.Contains("signal_name", columns);
+            Assert.DoesNotContain("signal_name", columns);
+
+            var networkColumns = await LoadColumnsAsync(connection, "hw_network_device");
+            Assert.DoesNotContain("module_id", networkColumns);
         }
         finally
         {
@@ -100,11 +103,11 @@ public sealed class EdgeDbMigrationBehaviorTests
             var columns = await LoadColumnsAsync(connection);
             Assert.Contains("signal_key", columns);
             Assert.Contains("business_group", columns);
-            Assert.Contains("signal_name", columns);
+            Assert.DoesNotContain("signal_name", columns);
 
             await using var command = connection.CreateCommand();
             command.CommandText = """
-                SELECT signal_key, business_group, signal_name
+                SELECT signal_key, business_group
                 FROM hw_io_mapping
                 WHERE id = 1;
                 """;
@@ -113,7 +116,6 @@ public sealed class EdgeDbMigrationBehaviorTests
             Assert.True(await reader.ReadAsync());
             Assert.Equal("Homogenization.Interaction.Inbound", reader.GetString(0));
             Assert.Equal("扫码进站", reader.GetString(1));
-            Assert.Equal("PLC 触发", reader.GetString(2));
         }
         finally
         {
@@ -181,7 +183,8 @@ public sealed class EdgeDbMigrationBehaviorTests
                 ('20260323091143_RemoveAuditFields', '10.0.0'),
                 ('20260324015923_AddConfigTables', '10.0.0'),
                 ('20260416060225_AddNetworkDeviceModuleId', '10.0.0'),
-                ('20260423143000_AddIoMappingDisplayFields', '10.0.0');
+                ('20260423143000_AddIoMappingDisplayFields', '10.0.0'),
+                ('20260603090000_RemoveHardwareConfigBindingFields', '10.0.0');
 
             CREATE TABLE "hw_io_mapping" (
                 "id" INTEGER NOT NULL CONSTRAINT "PK_hw_io_mapping" PRIMARY KEY AUTOINCREMENT,
@@ -229,10 +232,12 @@ public sealed class EdgeDbMigrationBehaviorTests
         await command.ExecuteNonQueryAsync();
     }
 
-    private static async Task<HashSet<string>> LoadColumnsAsync(SqliteConnection connection)
+    private static async Task<HashSet<string>> LoadColumnsAsync(
+        SqliteConnection connection,
+        string tableName = "hw_io_mapping")
     {
         await using var command = connection.CreateCommand();
-        command.CommandText = "PRAGMA table_info('hw_io_mapping');";
+        command.CommandText = $"PRAGMA table_info('{tableName}');";
 
         var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         await using var reader = await command.ExecuteReaderAsync();

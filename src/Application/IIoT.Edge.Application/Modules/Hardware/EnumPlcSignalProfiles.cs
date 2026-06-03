@@ -32,8 +32,7 @@ public sealed class EnumInteractionSignalProfile<TSignalKey>(string moduleId)
             metadata.ReadSortOrder,
             $"{metadata.BusinessGroup} PLC 读点",
             IoMappingOptionCatalog.CategoryInteraction,
-            metadata.BusinessGroup,
-            metadata.ReadSignalName);
+            metadata.BusinessGroup);
 
         yield return Signal(
             signal,
@@ -45,8 +44,7 @@ public sealed class EnumInteractionSignalProfile<TSignalKey>(string moduleId)
             metadata.WriteSortOrder,
             $"{metadata.BusinessGroup} 上位机写点",
             IoMappingOptionCatalog.CategoryInteraction,
-            metadata.BusinessGroup,
-            metadata.WriteSignalName);
+            metadata.BusinessGroup);
     }
 }
 
@@ -79,10 +77,9 @@ public sealed class EnumReadSignalProfile<TSignalKey>(string moduleId, string ca
             IoMappingOptionCatalog.NormalizeAddressCount(effectiveCategory, metadata.AddressCount),
             metadata.DataType,
             metadata.SortOrder,
-            metadata.DisplayName ?? metadata.SignalName,
+            metadata.DisplayName,
             effectiveCategory,
-            metadata.BusinessGroup,
-            metadata.SignalName);
+            metadata.BusinessGroup);
     }
 }
 
@@ -115,9 +112,8 @@ public sealed class EnumWriteSignalProfile<TSignalKey>(string moduleId, string c
             IoMappingOptionCatalog.NormalizeAddressCount(effectiveCategory, metadata.AddressCount),
             metadata.DataType,
             metadata.SortOrder,
-            metadata.DisplayName ?? metadata.SignalName,
+            metadata.DisplayName,
             effectiveCategory,
-            metadata.BusinessGroup,
-            metadata.SignalName);
+            metadata.BusinessGroup);
     }
 }

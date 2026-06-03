@@ -44,7 +44,7 @@
                     BoxShadow="{DynamicResource Edge.Shadow.Float}"
                     ClipToBounds="True"
                     CornerRadius="{DynamicResource Edge.CornerRadius.Stage}">
-                    <Grid RowDefinitions="60,*,Auto">
+                    <Grid RowDefinitions="60,Auto,Auto">
                         <Grid
                             x:Name="PART_Header"
                             Grid.Row="0"
@@ -118,6 +118,10 @@
     <Style Selector="controls|EdgeDialogChrome.inline-dialog">
         <Setter Property="Width" Value="560" />
         <Setter Property="MoveTopLevelOnHeaderDrag" Value="False" />
+    </Style>
+
+    <Style Selector="controls|EdgeDialogChrome.hardware-form-dialog">
+        <Setter Property="Width" Value="760" />
     </Style>
 
     <Style Selector="controls|EdgeDialogChrome.crash-dialog">

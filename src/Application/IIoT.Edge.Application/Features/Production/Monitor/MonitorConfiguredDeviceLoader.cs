@@ -33,26 +33,18 @@ internal sealed class MonitorConfiguredDeviceLoader(
         CancellationToken ct)
     {
         var result = new Dictionary<int, PlcTaskBindingDeviceDto>();
-        var moduleIds = configuredPlcs
-            .Select(static device => device.ModuleId)
-            .Where(static moduleId => !string.IsNullOrWhiteSpace(moduleId))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-
-        foreach (var moduleId in moduleIds)
+        var moduleIds = runtimeRegistry.GetRegistrations().Keys.ToArray();
+        if (moduleIds.Length != 1 || !HasRuntimeFactory(moduleIds[0]))
         {
-            if (!HasRuntimeFactory(moduleId))
-            {
-                continue;
-            }
+            return result;
+        }
 
-            var moduleBindings = await taskBindingService
-                .GetModuleDeviceBindingsAsync(moduleId, ct)
-                .ConfigureAwait(false);
-            foreach (var deviceBinding in moduleBindings)
-            {
-                result[deviceBinding.NetworkDeviceId] = deviceBinding;
-            }
+        var moduleBindings = await taskBindingService
+            .GetModuleDeviceBindingsAsync(moduleIds[0], ct)
+            .ConfigureAwait(false);
+        foreach (var deviceBinding in moduleBindings)
+        {
+            result[deviceBinding.NetworkDeviceId] = deviceBinding;
         }
 
         return result;

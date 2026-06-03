@@ -31,88 +31,55 @@
                 </controls:EdgeSegmentedNav.ItemTemplate>
             </controls:EdgeSegmentedNav>
         </controls:EdgeCard>
+
         <controls:EdgeScrollHost
             Grid.Row="1"
             HorizontalScrollBarVisibility="Disabled"
             VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="20,12,20,20" Spacing="16">
-                <StackPanel IsVisible="{Binding IsOverviewTabSelected}" Spacing="16">
-                    <UniformGrid Columns="4" Rows="1">
-                        <controls:EdgeMetricCard
-                            Margin="0,0,8,0"
-                            Title="{DynamicResource Navigation_Diagnostics_DiscoveredLabel}"
-                            Value="{Binding DiscoveredModuleCount}" />
-                        <controls:EdgeMetricCard
-                            Margin="4,0"
-                            Title="{DynamicResource Navigation_Diagnostics_EnabledLabel}"
-                            Value="{Binding EnabledModuleCount}" />
-                        <controls:EdgeMetricCard
-                            Margin="4,0"
-                            Title="{DynamicResource Navigation_Diagnostics_ActivatedLabel}"
-                            Value="{Binding ActivatedModuleCount}" />
-                        <controls:EdgeMetricCard
-                            Margin="8,0,0,0"
-                            Title="{DynamicResource Navigation_Diagnostics_DeadLetterAndIssues}"
-                            Value="{Binding TotalIssueCount}" />
-                    </UniformGrid>
-                    <controls:EdgeCard Classes="status-summary-card">
-                        <StackPanel Classes="edge-status-summary-root">
-                            <TextBlock
-                                Classes="edge-status-summary-title"
-                                Text="{DynamicResource Navigation_Diagnostics_ModuleOverview}" />
-                            <StackPanel Classes="edge-status-summary-body">
-                                <TextBlock
-                                    Classes="edge-status-summary-primary"
-                                    Text="{Binding DiscoveredModulesSummary}" />
-                                <TextBlock
-                                    Classes="edge-status-summary-secondary"
-                                    Text="{Binding EnabledModulesSummary}" />
-                                <TextBlock
-                                    Classes="edge-status-summary-tertiary"
-                                    Text="{Binding ActivatedModulesSummary}" />
-                            </StackPanel>
-                        </StackPanel>
-                    </controls:EdgeCard>
-                    <controls:EdgeCard Classes="status-summary-card">
-                        <StackPanel Classes="edge-status-summary-root">
-                            <TextBlock
-                                Classes="edge-status-summary-title"
-                                Text="{DynamicResource Navigation_Diagnostics_ConfigLabel}" />
-                            <StackPanel Classes="edge-status-summary-body">
-                                <TextBlock
-                                    Classes="edge-status-summary-primary"
-                                    Text="{Binding ConfigurationProfileSummary}" />
-                            </StackPanel>
-                        </StackPanel>
-                    </controls:EdgeCard>
-                    <controls:EdgeCard Classes="status-summary-card">
-                        <StackPanel Classes="edge-status-summary-root">
-                            <TextBlock
-                                Classes="edge-status-summary-title"
-                                Text="{DynamicResource Navigation_Diagnostics_Context}" />
-                            <StackPanel Classes="edge-status-summary-body">
-                                <TextBlock
-                                    Classes="edge-status-summary-primary"
-                                    Text="{Binding ContextPersistenceSummary}" />
-                            </StackPanel>
-                        </StackPanel>
-                    </controls:EdgeCard>
-                </StackPanel>
                 <StackPanel IsVisible="{Binding IsSyncOpsTabSelected}" Spacing="16">
+                    <controls:EdgeCard PaddingMode="Compact">
+                        <controls:EdgeCard.Header>
+                            <controls:EdgeSectionHeader
+                                Title="{DynamicResource Navigation_Diagnostics_SyncStatusTable}"
+                                Subtitle="{DynamicResource Navigation_Diagnostics_SyncStatusSubtitle}" />
+                        </controls:EdgeCard.Header>
+                        <ItemsControl ItemsSource="{Binding SyncChannels}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Spacing="{DynamicResource Edge.Size.Spacing8}" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <controls:EdgeStatusListItem
+                                        Classes="strip"
+                                        Description="{Binding Pending}"
+                                        Detail="{Binding DetailText}"
+                                        Status="{Binding VisualStatus}"
+                                        StatusText="{Binding Status}"
+                                        Title="{Binding Channel}" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </controls:EdgeCard>
+
                     <controls:EdgeTablePanel
-                        Title="{DynamicResource Navigation_Diagnostics_SyncStatusTable}">
+                        Title="{DynamicResource Navigation_Diagnostics_MesUpload}"
+                        IsEmpty="{Binding !MesUploadDiagnostics.Count}"
+                        EmptyTitle="{DynamicResource Navigation_Diagnostics_NoMesUploadDiagnostics}"
+                        EmptyMessage="{DynamicResource Navigation_Diagnostics_NoMesUploadDiagnosticsMessage}">
                         <controls:EdgeDataGrid
                             Density="Compact"
                             AutoGenerateColumns="False"
                             CanUserSortColumns="False"
-                            ItemsSource="{Binding SyncChannels}">
+                            ItemsSource="{Binding MesUploadDiagnostics}">
                             <controls:EdgeDataGrid.Columns>
-                                <controls:EdgeTextColumn Binding="{Binding Channel}" Header="{DynamicResource Navigation_Column_Channel}" MinWidth="110" Width="110" />
-                                <controls:EdgeTextColumn Binding="{Binding Status}" Header="{DynamicResource Navigation_Column_State}" MinWidth="140" Width="140" />
-                                <controls:EdgeTextColumn Binding="{Binding Pending}" Header="{DynamicResource Navigation_Column_Pending}" MinWidth="100" Width="100" />
-                                <controls:EdgeTextColumn Binding="{Binding DeadLetterCount}" Header="{DynamicResource Navigation_Column_DeadLetters}" MinWidth="110" Width="110" />
-                                <controls:EdgeTextColumn Binding="{Binding LastError}" Header="{DynamicResource Navigation_Column_LastError}" MinWidth="260" Width="2*" />
-                                <controls:EdgeTextColumn Binding="{Binding Note}" Header="{DynamicResource Navigation_Column_Focus}" MinWidth="260" Width="2*" />
+                                <controls:EdgeTextColumn Binding="{Binding ProcessType}" Header="{DynamicResource Navigation_Column_Process}" MinWidth="150" Width="150" />
+                                <controls:EdgeTextColumn Binding="{Binding LastResult}" Header="{DynamicResource Navigation_Column_LastResult}" MinWidth="150" Width="150" />
+                                <controls:EdgeTextColumn Binding="{Binding LastAttemptAt}" Header="{DynamicResource Navigation_Column_LastAttempt}" MinWidth="160" Width="160" />
+                                <controls:EdgeTextColumn Binding="{Binding LastSuccessAt}" Header="{DynamicResource Navigation_Column_LastSuccess}" MinWidth="160" Width="160" />
+                                <controls:EdgeTextColumn Binding="{Binding LastFailureReason}" Header="{DynamicResource Navigation_Column_FailureReason}" MinWidth="300" Width="2*" />
                             </controls:EdgeDataGrid.Columns>
                         </controls:EdgeDataGrid>
                     </controls:EdgeTablePanel>
@@ -123,8 +90,7 @@
                         EmptyTitle="{DynamicResource Navigation_Diagnostics_NoDeadLetters}"
                         EmptyMessage="{DynamicResource Navigation_Diagnostics_NoDeadLettersMessage}">
                         <controls:EdgeTablePanel.ActionContent>
-                            <controls:EdgeNoticeBar
-                                IsVisible="{Binding !CanOperateDeadLetters}">
+                            <controls:EdgeNoticeBar IsVisible="{Binding !CanOperateDeadLetters}">
                                 <controls:EdgeNoticeBar.Content>
                                     <TextBlock
                                         Classes="edge-notice-message"
@@ -181,8 +147,7 @@
                         EmptyTitle="{DynamicResource Navigation_Diagnostics_NoDeadLetters}"
                         EmptyMessage="{DynamicResource Navigation_Diagnostics_NoDeadLettersMessage}">
                         <controls:EdgeTablePanel.ActionContent>
-                            <controls:EdgeNoticeBar
-                                IsVisible="{Binding !CanOperateDeadLetters}">
+                            <controls:EdgeNoticeBar IsVisible="{Binding !CanOperateDeadLetters}">
                                 <controls:EdgeNoticeBar.Content>
                                     <TextBlock
                                         Classes="edge-notice-message"
@@ -233,116 +198,209 @@
                         </controls:EdgeDataGrid>
                     </controls:EdgeTablePanel>
                 </StackPanel>
+
                 <StackPanel IsVisible="{Binding IsStartupTabSelected}" Spacing="16">
-                    <controls:EdgeCard Classes="status-summary-card">
-                        <StackPanel Classes="edge-status-summary-root">
-                            <TextBlock
-                                Classes="edge-status-summary-title"
-                                Text="{DynamicResource Navigation_Diagnostics_ModuleOverview}" />
-                            <StackPanel Classes="edge-status-summary-body">
+                    <controls:EdgeCard IsVisible="{Binding IsStartupHealthy}" PaddingMode="Compact">
+                        <controls:EdgeStatusListItem
+                            Classes="strip"
+                            Description="{DynamicResource Navigation_Diagnostics_StartupSelfCheckOkMessage}"
+                            Status="Running"
+                            StatusText="{DynamicResource Navigation_Diagnostics_StartupOk}"
+                            Title="{DynamicResource Navigation_Diagnostics_StartupSelfCheckOk}" />
+                    </controls:EdgeCard>
+
+                    <controls:EdgeCard
+                        IsVisible="{Binding HasStartupIssues}"
+                        PaddingMode="None">
+                        <StackPanel Margin="14,12" Spacing="{DynamicResource Edge.Size.Spacing4}">
+                            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
                                 <TextBlock
-                                    Classes="edge-status-summary-primary"
-                                    Text="{Binding DiscoveredModulesSummary}" />
-                                <TextBlock
-                                    Classes="edge-status-summary-secondary"
-                                    Text="{Binding EnabledModulesSummary}" />
-                                <TextBlock
-                                    Classes="edge-status-summary-tertiary"
-                                    Text="{Binding ActivatedModulesSummary}" />
-                                <Border Classes="edge-status-summary-footer">
-                                    <TextBlock
-                                        Classes="edge-status-summary-footer-text"
-                                        Text="{Binding LastUpdatedSummary}" />
-                                </Border>
-                            </StackPanel>
+                                    FontSize="{DynamicResource Edge.FontSize.Section}"
+                                    FontWeight="SemiBold"
+                                    Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                    Text="{DynamicResource Navigation_Diagnostics_Issues}" />
+                                <controls:EdgeStatusChip
+                                    Grid.Column="1"
+                                    VerticalAlignment="Center"
+                                    ChipPadding="8,0"
+                                    ShowDot="False"
+                                    Status="Default"
+                                    Text="{Binding TotalIssueCount}" />
+                            </Grid>
+                            <ItemsControl ItemsSource="{Binding Issues}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border
+                                            HorizontalAlignment="Stretch"
+                                            BorderBrush="{DynamicResource Edge.Brush.Border.Subtle}"
+                                            BorderThickness="0,0,0,1"
+                                            Padding="0,7">
+                                            <Grid
+                                                ColumnDefinitions="Auto,*"
+                                                ColumnSpacing="{DynamicResource Edge.Size.Spacing12}"
+                                                HorizontalAlignment="Stretch"
+                                                MinHeight="50">
+                                                <Grid VerticalAlignment="Center">
+                                                    <Border
+                                                        Classes="edge-issue-rail error"
+                                                        IsVisible="{Binding IsError}" />
+                                                    <Border
+                                                        Classes="edge-issue-rail warning"
+                                                        IsVisible="{Binding IsWarning}" />
+                                                </Grid>
+
+                                                <StackPanel
+                                                    Grid.Column="1"
+                                                    VerticalAlignment="Center"
+                                                    Spacing="{DynamicResource Edge.Size.Spacing4}">
+                                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
+                                                        <TextBlock
+                                                            FontSize="{DynamicResource Edge.FontSize.Body}"
+                                                            FontWeight="Medium"
+                                                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                                            LineHeight="20"
+                                                            Text="{Binding Message}"
+                                                            TextTrimming="None"
+                                                            TextWrapping="Wrap" />
+                                                        <TextBlock
+                                                            Grid.Column="1"
+                                                            VerticalAlignment="Center"
+                                                            FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                                            IsVisible="{Binding HasDuplicateCount}"
+                                                            Text="{Binding DuplicateBadgeText}" />
+                                                    </Grid>
+                                                    <TextBlock
+                                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                                        LineHeight="16"
+                                                        Text="{Binding IssueSubtitle}"
+                                                        TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                         </StackPanel>
                     </controls:EdgeCard>
-                    <controls:EdgeTablePanel
-Title="{DynamicResource Navigation_Diagnostics_MesUpload}">
-                        <controls:EdgeDataGrid
-                            Density="Compact"
-                            AutoGenerateColumns="False"
-                            CanUserSortColumns="False"
-                            ItemsSource="{Binding MesUploadDiagnostics}">
-                            <controls:EdgeDataGrid.Columns>
-                                <controls:EdgeTextColumn Binding="{Binding ProcessType}" Header="{DynamicResource Navigation_Column_Process}" MinWidth="150" Width="150" />
-                                <controls:EdgeTextColumn Binding="{Binding LastResult}" Header="{DynamicResource Navigation_Column_LastResult}" MinWidth="150" Width="150" />
-                                <controls:EdgeTextColumn Binding="{Binding LastAttemptAt}" Header="{DynamicResource Navigation_Column_LastAttempt}" MinWidth="160" Width="160" />
-                                <controls:EdgeTextColumn Binding="{Binding LastSuccessAt}" Header="{DynamicResource Navigation_Column_LastSuccess}" MinWidth="160" Width="160" />
-                                <controls:EdgeTextColumn Binding="{Binding LastFailureReason}" Header="{DynamicResource Navigation_Column_FailureReason}" MinWidth="300" Width="2*" />
-                            </controls:EdgeDataGrid.Columns>
-                        </controls:EdgeDataGrid>
-                    </controls:EdgeTablePanel>
-                    <controls:EdgeTablePanel
-Title="{DynamicResource Navigation_Diagnostics_PluginLifecycle}">
-                        <controls:EdgeDataGrid
-                            Density="Compact"
-                            AutoGenerateColumns="False"
-                            CanUserSortColumns="False"
-                            ItemsSource="{Binding PluginStates}">
-                            <controls:EdgeDataGrid.Columns>
-                                <controls:EdgeTextColumn Binding="{Binding ModuleId}" Header="{DynamicResource Navigation_Column_ModuleId}" MinWidth="150" Width="150" />
-                                <controls:EdgeTextColumn Binding="{Binding DisplayName}" Header="{DynamicResource Navigation_Column_DisplayName}" MinWidth="150" Width="150" />
-                                <controls:EdgeTextColumn Binding="{Binding ProcessType}" Header="{DynamicResource Navigation_Column_Process}" MinWidth="150" Width="150" />
-                                <controls:EdgeTextColumn Binding="{Binding Version}" Header="{DynamicResource Navigation_Column_Version}" MinWidth="110" Width="110" />
-                                <controls:EdgeTextColumn Binding="{Binding State}" Header="{DynamicResource Navigation_Column_State}" MinWidth="120" Width="120" />
-                                <controls:EdgeTextColumn Binding="{Binding Message}" Header="{DynamicResource Navigation_Column_Message}" MinWidth="300" Width="2*" />
-                            </controls:EdgeDataGrid.Columns>
-                        </controls:EdgeDataGrid>
-                    </controls:EdgeTablePanel>
-                    <controls:EdgeTablePanel
-Title="{DynamicResource Navigation_Diagnostics_Modules}">
-                        <controls:EdgeDataGrid
-                            Density="Compact"
-                            AutoGenerateColumns="False"
-                            CanUserSortColumns="False"
-                            ItemsSource="{Binding ModuleRegistrations}">
-                            <controls:EdgeDataGrid.Columns>
-                                <controls:EdgeTextColumn Binding="{Binding ModuleId}" Header="{DynamicResource Navigation_Column_ModuleId}" MinWidth="150" Width="150" />
-                                <controls:EdgeTextColumn Binding="{Binding ProcessType}" Header="{DynamicResource Navigation_Column_Process}" MinWidth="150" Width="150" />
-                                <controls:EdgeTextColumn Binding="{Binding AssemblyName}" Header="{DynamicResource Navigation_Column_Assembly}" MinWidth="220" Width="220" />
-                                <controls:EdgeCheckColumn Binding="{Binding IsEnabled}" Header="{DynamicResource Navigation_Column_Enabled}" MinWidth="80" Width="80" />
-                                <controls:EdgeCheckColumn Binding="{Binding HasCellDataRegistration}" Header="{DynamicResource Navigation_Column_CellData}" MinWidth="90" Width="90" />
-                                <controls:EdgeCheckColumn Binding="{Binding HasRuntimeFactory}" Header="{DynamicResource Navigation_Column_Runtime}" MinWidth="90" Width="90" />
-                                <controls:EdgeCheckColumn Binding="{Binding HasCloudUploader}" Header="{DynamicResource Navigation_Column_CloudUpload}" MinWidth="90" Width="90" />
-                                <controls:EdgeCheckColumn Binding="{Binding HasMesUploader}" Header="{DynamicResource Navigation_Column_MesUpload}" MinWidth="90" Width="90" />
-                                <controls:EdgeCheckColumn Binding="{Binding HasHardwareProfile}" Header="{DynamicResource Navigation_Column_HardwareProfile}" MinWidth="110" Width="110" />
-                            </controls:EdgeDataGrid.Columns>
-                        </controls:EdgeDataGrid>
-                    </controls:EdgeTablePanel>
-                    <controls:EdgeTablePanel
-Title="{DynamicResource Navigation_Diagnostics_DeviceBinding}">
-                        <controls:EdgeDataGrid
-                            Density="Compact"
-                            AutoGenerateColumns="False"
-                            CanUserSortColumns="False"
-                            ItemsSource="{Binding DeviceBindings}">
-                            <controls:EdgeDataGrid.Columns>
-                                <controls:EdgeTextColumn Binding="{Binding DeviceName}" Header="{DynamicResource Navigation_Column_Device}" MinWidth="180" Width="180" />
-                                <controls:EdgeTextColumn Binding="{Binding ModuleId}" Header="{DynamicResource Navigation_Column_ModuleId}" MinWidth="160" Width="160" />
-                                <controls:EdgeCheckColumn Binding="{Binding ModuleExists}" Header="{DynamicResource Navigation_Column_ModuleExists}" MinWidth="110" Width="110" />
-                                <controls:EdgeCheckColumn Binding="{Binding ModuleEnabled}" Header="{DynamicResource Navigation_Column_ModuleEnabled}" MinWidth="110" Width="110" />
-                                <controls:EdgeCheckColumn Binding="{Binding HasIoMappings}" Header="{DynamicResource Navigation_Column_HasIo}" MinWidth="110" Width="110" />
-                            </controls:EdgeDataGrid.Columns>
-                        </controls:EdgeDataGrid>
-                    </controls:EdgeTablePanel>
-                    <controls:EdgeTablePanel
-Title="{DynamicResource Navigation_Diagnostics_Issues}">
-                        <controls:EdgeDataGrid
-                            Density="Compact"
-                            AutoGenerateColumns="False"
-                            CanUserSortColumns="False"
-                            ItemsSource="{Binding Issues}">
-                            <controls:EdgeDataGrid.Columns>
-                                <controls:EdgeTextColumn Binding="{Binding Code}" Header="{DynamicResource Navigation_Column_Code}" MinWidth="180" Width="180" />
-                                <controls:EdgeTextColumn Binding="{Binding ModuleId}" Header="{DynamicResource Navigation_Column_ModuleId}" MinWidth="160" Width="160" />
-                                <controls:EdgeTextColumn Binding="{Binding DeviceName}" Header="{DynamicResource Navigation_Column_Device}" MinWidth="180" Width="180" />
-                                <controls:EdgeTextColumn Binding="{Binding Message}" Header="{DynamicResource Navigation_Column_Message}" MinWidth="360" Width="2*" />
-                            </controls:EdgeDataGrid.Columns>
-                        </controls:EdgeDataGrid>
-                    </controls:EdgeTablePanel>
-                </StackPanel>
 
+                    <controls:EdgeCard PaddingMode="Compact">
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="{DynamicResource Edge.Size.Spacing16}">
+                            <controls:EdgeSectionHeader Title="{DynamicResource Navigation_Diagnostics_Context}" />
+                            <StackPanel
+                                Grid.Column="1"
+                                MinWidth="120"
+                                VerticalAlignment="Center"
+                                Spacing="{DynamicResource Edge.Size.Spacing2}">
+                                <TextBlock
+                                    FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                    Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                    Text="{DynamicResource Navigation_Diagnostics_ContextCorruptCount}" />
+                                <TextBlock
+                                    FontSize="{DynamicResource Edge.FontSize.Title}"
+                                    FontWeight="SemiBold"
+                                    Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                    Text="{Binding ContextCorruptFileCount}" />
+                            </StackPanel>
+                            <controls:EdgeStatusListItem
+                                Grid.Column="2"
+                                MinWidth="260"
+                                Classes="strip"
+                                Description="{Binding ContextLastCorruptDetectedAt}"
+                                Status="{Binding ContextPersistenceVisualStatus}"
+                                StatusText="{DynamicResource Navigation_Diagnostics_FileCountUnit}"
+                                Title="{DynamicResource Navigation_Diagnostics_ContextLastCorrupt}" />
+                        </Grid>
+                    </controls:EdgeCard>
+
+                    <StackPanel Spacing="{DynamicResource Edge.Size.Spacing8}">
+                        <controls:EdgeSectionHeader
+                            Title="{DynamicResource Navigation_Diagnostics_ConfigLabel}"
+                            Subtitle="{Binding LastUpdatedSummary}" />
+                        <Grid
+                            ColumnDefinitions="1.05*,1.15*"
+                            RowDefinitions="Auto,Auto"
+                            ColumnSpacing="{DynamicResource Edge.Size.Spacing12}"
+                            RowSpacing="{DynamicResource Edge.Size.Spacing12}">
+                            <Border
+                                MinHeight="82"
+                                Padding="{DynamicResource Edge.Thickness.12}"
+                                Background="{DynamicResource Edge.Brush.Surface.Wash}"
+                                BorderBrush="{DynamicResource Edge.Brush.Border.Subtle}"
+                                BorderThickness="1"
+                                CornerRadius="{DynamicResource Edge.CornerRadius.Medium}">
+                                <StackPanel Spacing="{DynamicResource Edge.Size.Spacing6}">
+                                    <TextBlock
+                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                        Text="{DynamicResource Navigation_Diagnostics_ConfigEnvironment}" />
+                                    <TextBlock
+                                        FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                                        FontWeight="SemiBold"
+                                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                        Text="{Binding ConfigurationEnvironment}"
+                                        TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                            </Border>
+                            <Border
+                                Grid.Column="1"
+                                MinHeight="82"
+                                Padding="{DynamicResource Edge.Thickness.12}"
+                                Background="{DynamicResource Edge.Brush.Surface.Wash}"
+                                BorderBrush="{DynamicResource Edge.Brush.Border.Subtle}"
+                                BorderThickness="1"
+                                CornerRadius="{DynamicResource Edge.CornerRadius.Medium}">
+                                <StackPanel Spacing="{DynamicResource Edge.Size.Spacing4}">
+                                    <TextBlock
+                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                        Text="{DynamicResource Navigation_Diagnostics_ConfigMachineProfile}" />
+                                    <TextBlock
+                                        FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                                        FontWeight="SemiBold"
+                                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                        Text="{Binding ConfigurationMachineProfile}"
+                                        TextTrimming="CharacterEllipsis" />
+                                    <TextBlock
+                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                        Text="{Binding ConfigurationMachineProfileState}"
+                                        TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                            </Border>
+                            <Border
+                                Grid.Row="1"
+                                Grid.ColumnSpan="2"
+                                MinHeight="82"
+                                Padding="{DynamicResource Edge.Thickness.12}"
+                                Background="{DynamicResource Edge.Brush.Surface.Wash}"
+                                BorderBrush="{DynamicResource Edge.Brush.Border.Subtle}"
+                                BorderThickness="1"
+                                CornerRadius="{DynamicResource Edge.CornerRadius.Medium}">
+                                <StackPanel Spacing="{DynamicResource Edge.Size.Spacing6}">
+                                    <TextBlock
+                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
+                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                                        Text="{DynamicResource Navigation_Diagnostics_ConfigRuntimeDataRoot}" />
+                                    <TextBlock
+                                        FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                                        FontWeight="SemiBold"
+                                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                        Text="{Binding ConfigurationRuntimeDataRoot}"
+                                        TextWrapping="Wrap"
+                                        ToolTip.Tip="{Binding ConfigurationRuntimeDataRoot}" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </StackPanel>
+
+                </StackPanel>
             </StackPanel>
         </controls:EdgeScrollHost>
     </Grid>

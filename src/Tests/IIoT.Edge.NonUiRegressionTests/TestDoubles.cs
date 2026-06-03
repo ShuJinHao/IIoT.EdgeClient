@@ -290,7 +290,11 @@ internal sealed class FakeExternalHeartbeatStateStore : IExternalHeartbeatStateS
             ? snapshot
             : ExternalHeartbeatSnapshot.Unknown(system);
 
-    public void MarkReady(ExternalSystemKind system, DateTime? occurredAtUtc = null, string? message = null)
+    public void MarkReady(
+        ExternalSystemKind system,
+        DateTime? occurredAtUtc = null,
+        string? message = null,
+        int? latencyMs = null)
     {
         var occurredAt = occurredAtUtc ?? DateTime.UtcNow;
         _snapshots[system] = Get(system) with
@@ -299,7 +303,8 @@ internal sealed class FakeExternalHeartbeatStateStore : IExternalHeartbeatStateS
             ReasonCode = "ready",
             Message = message,
             LastAttemptAtUtc = occurredAt,
-            LastSuccessAtUtc = occurredAt
+            LastSuccessAtUtc = occurredAt,
+            LatencyMs = latencyMs
         };
     }
 
@@ -307,7 +312,8 @@ internal sealed class FakeExternalHeartbeatStateStore : IExternalHeartbeatStateS
         ExternalSystemKind system,
         string reasonCode,
         string? message = null,
-        DateTime? occurredAtUtc = null)
+        DateTime? occurredAtUtc = null,
+        int? latencyMs = null)
     {
         var occurredAt = occurredAtUtc ?? DateTime.UtcNow;
         _snapshots[system] = Get(system) with
@@ -316,7 +322,8 @@ internal sealed class FakeExternalHeartbeatStateStore : IExternalHeartbeatStateS
             ReasonCode = reasonCode,
             Message = message,
             LastAttemptAtUtc = occurredAt,
-            LastFailureAtUtc = occurredAt
+            LastFailureAtUtc = occurredAt,
+            LatencyMs = latencyMs
         };
     }
 }
