@@ -95,4 +95,15 @@ public sealed record MonitorStateMachineTaskItemViewModel(
     string DetailText,
     bool IsUnavailable,
     bool IsHeartbeatLike,
-    EdgeVisualStatus VisualStatus);
+    EdgeVisualStatus VisualStatus)
+{
+    public string Title => DisplayName;
+
+    public string StatusText => IsHeartbeatLike ? StepValueText : AvailabilityStatusText;
+
+    public string Description => StepText;
+
+    public string Detail => DetailText;
+
+    public EdgeVisualStatus Status => VisualStatus;
+}

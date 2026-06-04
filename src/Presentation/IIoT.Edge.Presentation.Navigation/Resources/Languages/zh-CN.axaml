@@ -487,6 +487,7 @@
     <sys:String x:Key="Navigation_Diagnostics_MessageColumn">消息</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_ConfigEnvironment">环境</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_ConfigMachineProfile">机型</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_ConfigMachineProfileState">机型状态</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_ConfigRuntimeDataRoot">运行目录</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_MachineProfileNotConfigured">未配置</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_ProfileNoMachineFormat">环境：{0}；机型：未配置；运行目录：{1}</sys:String>

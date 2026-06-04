@@ -2,7 +2,8 @@
     x:Class="IIoT.Edge.Presentation.Navigation.Features.Production.Monitor.MonitorViewPage"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
+    xmlns:views="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared">
 
     <Grid RowDefinitions="Auto,*">
         <Grid
@@ -26,9 +27,7 @@
                     </edge:EdgeSegmentedNav.ItemsPanel>
                     <edge:EdgeSegmentedNav.ItemTemplate>
                         <DataTemplate>
-                            <TextBlock
-                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                                Text="{Binding Title}" />
+                            <TextBlock Text="{Binding Title}" />
                         </DataTemplate>
                     </edge:EdgeSegmentedNav.ItemTemplate>
                 </edge:EdgeSegmentedNav>
@@ -73,23 +72,9 @@
                     IsVisible="{Binding IsDevicesEmpty}"
                     PaddingMode="Normal"
                     Surface="Card">
-                    <StackPanel
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Center"
-                        Spacing="{DynamicResource Edge.Size.Spacing4}">
-                        <TextBlock
-                            FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
-                            FontWeight="SemiBold"
-                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                            HorizontalAlignment="Center"
-                            Text="{DynamicResource Navigation_Monitor_EmptyTitle}" />
-                        <TextBlock
-                            FontSize="{DynamicResource Edge.FontSize.Body}"
-                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                            HorizontalAlignment="Center"
-                            Text="{DynamicResource Navigation_Monitor_EmptyMessage}"
-                            TextWrapping="Wrap" />
-                    </StackPanel>
+                    <views:EmptyStateView
+                        Message="{DynamicResource Navigation_Monitor_EmptyMessage}"
+                        Title="{DynamicResource Navigation_Monitor_EmptyTitle}" />
                 </edge:EdgeCard>
                 <StackPanel
                     IsVisible="{Binding HasDevices}"
@@ -110,10 +95,9 @@
                                         PlaceholderText="{DynamicResource Navigation_Monitor_CellQueryWatermark}"
                                         Text="{Binding CellQueryText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                     <TextBlock
+                                        Classes="edge-text-page-caption"
                                         Grid.Column="1"
-                                        VerticalAlignment="Center"
-                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}">
+                                        VerticalAlignment="Center">
                                         <Run Text="{DynamicResource Navigation_Monitor_CellQueryMatchedPrefix}" />
                                         <Run Text="{Binding FilteredCellCount}" />
                                         <Run Text="{DynamicResource Navigation_Monitor_CellQueryMatchedMiddle}" />
@@ -126,11 +110,7 @@
                                     Grid.Row="1"
                                     Spacing="{DynamicResource Edge.Size.Spacing10}">
                                     <StackPanel Spacing="{DynamicResource Edge.Size.Spacing6}">
-                                        <TextBlock
-                                            FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
-                                            FontWeight="SemiBold"
-                                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                                            Text="{DynamicResource Navigation_Monitor_CurrentCellsTableTitle}" />
+                                        <edge:EdgeSectionHeader Title="{DynamicResource Navigation_Monitor_CurrentCellsTableTitle}" />
                                         <Grid MinHeight="150">
                                             <edge:EdgeDataGrid
                                                 AutoGenerateColumns="False"
@@ -151,35 +131,18 @@
                                                     <edge:EdgeTextColumn Binding="{Binding CompletedTimeText}" Header="{DynamicResource Navigation_Monitor_ColumnCompletedAt}" MinWidth="150" Width="1*" />
                                                 </edge:EdgeDataGrid.Columns>
                                             </edge:EdgeDataGrid>
-                                            <StackPanel
+                                            <views:EmptyStateView
                                                 MaxWidth="420"
                                                 HorizontalAlignment="Center"
                                                 VerticalAlignment="Center"
                                                 IsVisible="{Binding IsCellDebugEmpty}"
-                                                Spacing="{DynamicResource Edge.Size.Spacing6}">
-                                                <TextBlock
-                                                    HorizontalAlignment="Center"
-                                                    FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
-                                                    FontWeight="SemiBold"
-                                                    Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                                                    Text="{DynamicResource Navigation_Monitor_CellDebugEmptyTitle}" />
-                                                <TextBlock
-                                                    HorizontalAlignment="Center"
-                                                    FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                                    Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                                    Text="{DynamicResource Navigation_Monitor_CellDebugEmptyMessage}"
-                                                    TextAlignment="Center"
-                                                    TextWrapping="Wrap" />
-                                            </StackPanel>
+                                                Message="{DynamicResource Navigation_Monitor_CellDebugEmptyMessage}"
+                                                Title="{DynamicResource Navigation_Monitor_CellDebugEmptyTitle}" />
                                         </Grid>
                                     </StackPanel>
 
                                     <StackPanel Spacing="{DynamicResource Edge.Size.Spacing6}">
-                                        <TextBlock
-                                            FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
-                                            FontWeight="SemiBold"
-                                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                                            Text="{DynamicResource Navigation_Monitor_CellFieldsTableTitle}" />
+                                        <edge:EdgeSectionHeader Title="{DynamicResource Navigation_Monitor_CellFieldsTableTitle}" />
                                         <Grid MinHeight="260">
                                             <edge:EdgeDataGrid
                                                 AutoGenerateColumns="False"
@@ -204,26 +167,13 @@
                                                     </edge:EdgeTemplateColumn>
                                                 </edge:EdgeDataGrid.Columns>
                                             </edge:EdgeDataGrid>
-                                            <StackPanel
+                                            <views:EmptyStateView
                                                 MaxWidth="420"
                                                 HorizontalAlignment="Center"
                                                 VerticalAlignment="Center"
                                                 IsVisible="{Binding IsSelectedCellEmpty}"
-                                                Spacing="{DynamicResource Edge.Size.Spacing6}">
-                                                <TextBlock
-                                                    HorizontalAlignment="Center"
-                                                    FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
-                                                    FontWeight="SemiBold"
-                                                    Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                                                    Text="{DynamicResource Navigation_Monitor_SelectedCellEmptyTitle}" />
-                                                <TextBlock
-                                                    HorizontalAlignment="Center"
-                                                    FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                                    Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                                    Text="{DynamicResource Navigation_Monitor_SelectedCellEmptyMessage}"
-                                                    TextAlignment="Center"
-                                                    TextWrapping="Wrap" />
-                                            </StackPanel>
+                                                Message="{DynamicResource Navigation_Monitor_SelectedCellEmptyMessage}"
+                                                Title="{DynamicResource Navigation_Monitor_SelectedCellEmptyTitle}" />
                                         </Grid>
                                     </StackPanel>
                                 </StackPanel>
@@ -233,57 +183,10 @@
                     <StackPanel
                         IsVisible="{Binding IsStateMachineTabSelected}"
                         Spacing="{DynamicResource Edge.Size.Spacing12}">
-                        <edge:EdgeCard Classes="summary" PaddingMode="Compact">
-                            <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="{DynamicResource Edge.Size.Spacing8}">
-                                <TextBlock
-                                    Classes="edge-summary-card-title"
-                                    Text="{DynamicResource Navigation_Monitor_StatusSummary}" />
-
-                                <ItemsControl
-                                    Grid.Row="1"
-                                    ItemsSource="{Binding StateMachineSummaryItems}">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <WrapPanel />
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border
-                                                MinWidth="152"
-                                                Margin="0,0,6,6"
-                                                Classes="edge-summary-card-row">
-                                                <StackPanel Spacing="2">
-                                                    <TextBlock
-                                                        Classes="edge-summary-card-label"
-                                                        Text="{Binding Label}" />
-                                                    <TextBlock
-                                                        Classes="edge-summary-card-value"
-                                                        Text="{Binding Value}"
-                                                        TextWrapping="Wrap" />
-                                                </StackPanel>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-
-                                <Border
-                                    Grid.Row="2"
-                                    Classes="edge-summary-card-row"
-                                    DataContext="{Binding LastErrorItem}">
-                                    <Grid ColumnDefinitions="96,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing10}">
-                                        <TextBlock
-                                            Classes="edge-summary-card-label"
-                                            Text="{Binding Label}" />
-                                        <TextBlock
-                                            Grid.Column="1"
-                                            Classes="edge-summary-card-value"
-                                            Text="{Binding Value}"
-                                            TextWrapping="Wrap" />
-                                    </Grid>
-                                </Border>
-                            </Grid>
-                        </edge:EdgeCard>
+                        <edge:EdgeInfoSummaryCard
+                            SummaryItemMinWidth="152"
+                            SummaryItems="{Binding StateMachineOverviewItems}"
+                            Title="{DynamicResource Navigation_Monitor_StatusSummary}" />
                         <edge:EdgeCard PaddingMode="Compact">
                             <edge:EdgeCard.Header>
                                 <edge:EdgeSectionHeader
@@ -293,190 +196,25 @@
                             <Grid MinHeight="84">
                                 <StackPanel
                                     IsVisible="{Binding HasStateMachineTaskItems}"
-                                    Spacing="0">
-                                    <StackPanel
+                                    Spacing="{DynamicResource Edge.Size.Spacing8}">
+                                    <edge:EdgeStatusTimeline
                                         IsVisible="{Binding HasStateMachineHeartbeatTaskItems}"
-                                        Spacing="0">
-                                        <Grid ColumnDefinitions="28,*" MinHeight="30">
-                                            <Border
-                                                Grid.Column="0"
-                                                Width="1"
-                                                HorizontalAlignment="Center"
-                                                Background="{DynamicResource Edge.Brush.Border.Subtle}" />
-                                            <TextBlock
-                                                Grid.Column="1"
-                                                VerticalAlignment="Center"
-                                                FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                                FontWeight="SemiBold"
-                                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                                Text="{DynamicResource Navigation_Monitor_StateMachineHeartbeatGroup}" />
-                                        </Grid>
-                                        <ItemsControl ItemsSource="{Binding StateMachineHeartbeatTaskItems}">
-                                            <ItemsControl.ItemsPanel>
-                                                <ItemsPanelTemplate>
-                                                    <StackPanel Spacing="0" />
-                                                </ItemsPanelTemplate>
-                                            </ItemsControl.ItemsPanel>
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate>
-                                                    <Grid ColumnDefinitions="28,*" MinHeight="58">
-                                                        <Border
-                                                            Grid.Column="0"
-                                                            Width="1"
-                                                            HorizontalAlignment="Center"
-                                                            Background="{DynamicResource Edge.Brush.Border.Subtle}" />
-                                                        <edge:EdgeStatusDot
-                                                            Grid.Column="0"
-                                                            Margin="0,10,0,0"
-                                                            VerticalAlignment="Top"
-                                                            Size="10"
-                                                            Status="{Binding VisualStatus}" />
-                                                        <Grid
-                                                            Grid.Column="1"
-                                                            Margin="0,6,0,0"
-                                                            ColumnDefinitions="*,Auto"
-                                                            RowDefinitions="Auto,Auto,Auto,Auto"
-                                                            ColumnSpacing="{DynamicResource Edge.Size.Spacing12}">
-                                                            <TextBlock
-                                                                FontSize="{DynamicResource Edge.FontSize.Body}"
-                                                                FontWeight="SemiBold"
-                                                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                                                                Text="{Binding DisplayName}"
-                                                                TextTrimming="CharacterEllipsis" />
-                                                            <edge:EdgeStatusChip
-                                                                Grid.Column="1"
-                                                                Status="{Binding VisualStatus}"
-                                                                Text="{Binding StepValueText}" />
-                                                            <TextBlock
-                                                                Grid.Row="1"
-                                                                Grid.ColumnSpan="2"
-                                                                FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                                                Text="{Binding StepText}"
-                                                                TextWrapping="Wrap" />
-                                                            <TextBlock
-                                                                Grid.Row="2"
-                                                                Grid.ColumnSpan="2"
-                                                                FontFamily="{DynamicResource Edge.FontFamily.Mono}"
-                                                                FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                                                Text="{Binding DetailText}"
-                                                                TextWrapping="Wrap" />
-                                                            <Border
-                                                                Grid.Row="3"
-                                                                Grid.ColumnSpan="2"
-                                                                Height="1"
-                                                                Margin="0,9,0,0"
-                                                                Background="{DynamicResource Edge.Brush.Border.Subtle}" />
-                                                        </Grid>
-                                                    </Grid>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                    </StackPanel>
+                                        ItemsSource="{Binding StateMachineHeartbeatTaskItems}"
+                                        Title="{DynamicResource Navigation_Monitor_StateMachineHeartbeatGroup}" />
 
-                                    <StackPanel
+                                    <edge:EdgeStatusTimeline
                                         IsVisible="{Binding HasStateMachineRuntimeTaskItems}"
-                                        Spacing="0">
-                                        <Grid ColumnDefinitions="28,*" MinHeight="34">
-                                            <Border
-                                                Grid.Column="0"
-                                                Width="1"
-                                                HorizontalAlignment="Center"
-                                                Background="{DynamicResource Edge.Brush.Border.Subtle}" />
-                                            <TextBlock
-                                                Grid.Column="1"
-                                                VerticalAlignment="Center"
-                                                FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                                FontWeight="SemiBold"
-                                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                                Text="{DynamicResource Navigation_Monitor_StateMachineRuntimeGroup}" />
-                                        </Grid>
-                                        <ItemsControl ItemsSource="{Binding StateMachineRuntimeTaskItems}">
-                                            <ItemsControl.ItemsPanel>
-                                                <ItemsPanelTemplate>
-                                                    <StackPanel Spacing="0" />
-                                                </ItemsPanelTemplate>
-                                            </ItemsControl.ItemsPanel>
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate>
-                                                    <Grid ColumnDefinitions="28,*" MinHeight="58">
-                                                        <Border
-                                                            Grid.Column="0"
-                                                            Width="1"
-                                                            HorizontalAlignment="Center"
-                                                            Background="{DynamicResource Edge.Brush.Border.Subtle}" />
-                                                        <edge:EdgeStatusDot
-                                                            Grid.Column="0"
-                                                            Margin="0,10,0,0"
-                                                            VerticalAlignment="Top"
-                                                            Size="10"
-                                                            Status="{Binding VisualStatus}" />
-                                                        <Grid
-                                                            Grid.Column="1"
-                                                            Margin="0,6,0,0"
-                                                            ColumnDefinitions="*,Auto"
-                                                            RowDefinitions="Auto,Auto,Auto,Auto"
-                                                            ColumnSpacing="{DynamicResource Edge.Size.Spacing12}">
-                                                            <TextBlock
-                                                                FontSize="{DynamicResource Edge.FontSize.Body}"
-                                                                FontWeight="SemiBold"
-                                                                Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                                                                Text="{Binding DisplayName}"
-                                                                TextTrimming="CharacterEllipsis" />
-                                                            <edge:EdgeStatusChip
-                                                                Grid.Column="1"
-                                                                Status="{Binding VisualStatus}"
-                                                                Text="{Binding AvailabilityStatusText}" />
-                                                            <TextBlock
-                                                                Grid.Row="1"
-                                                                Grid.ColumnSpan="2"
-                                                                FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                                                Text="{Binding StepText}"
-                                                                TextWrapping="Wrap" />
-                                                            <TextBlock
-                                                                Grid.Row="2"
-                                                                Grid.ColumnSpan="2"
-                                                                FontFamily="{DynamicResource Edge.FontFamily.Mono}"
-                                                                FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                                                Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                                                Text="{Binding DetailText}"
-                                                                TextWrapping="Wrap" />
-                                                            <Border
-                                                                Grid.Row="3"
-                                                                Grid.ColumnSpan="2"
-                                                                Height="1"
-                                                                Margin="0,9,0,0"
-                                                                Background="{DynamicResource Edge.Brush.Border.Subtle}" />
-                                                        </Grid>
-                                                    </Grid>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                    </StackPanel>
+                                        ItemsSource="{Binding StateMachineRuntimeTaskItems}"
+                                        Title="{DynamicResource Navigation_Monitor_StateMachineRuntimeGroup}" />
                                 </StackPanel>
 
-                                <StackPanel
+                                <views:EmptyStateView
                                     MaxWidth="420"
                                     HorizontalAlignment="Center"
                                     VerticalAlignment="Center"
                                     IsVisible="{Binding IsStateMachineTaskItemsEmpty}"
-                                    Spacing="{DynamicResource Edge.Size.Spacing6}">
-                                    <TextBlock
-                                        HorizontalAlignment="Center"
-                                        FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
-                                        FontWeight="SemiBold"
-                                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                                        Text="{DynamicResource Navigation_Monitor_StateMachineTasksEmptyTitle}" />
-                                    <TextBlock
-                                        HorizontalAlignment="Center"
-                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                        Text="{DynamicResource Navigation_Monitor_StateMachineTasksEmptyMessage}"
-                                        TextAlignment="Center"
-                                        TextWrapping="Wrap" />
-                                </StackPanel>
+                                    Message="{DynamicResource Navigation_Monitor_StateMachineTasksEmptyMessage}"
+                                    Title="{DynamicResource Navigation_Monitor_StateMachineTasksEmptyTitle}" />
                             </Grid>
                         </edge:EdgeCard>
                     </StackPanel>

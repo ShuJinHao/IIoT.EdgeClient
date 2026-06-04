@@ -197,6 +197,95 @@
         <Setter Property="TextTrimming" Value="CharacterEllipsis" />
     </Style>
 
+    <Style Selector="controls|EdgeSummaryItemsControl">
+        <Setter Property="ItemsPanel">
+            <ItemsPanelTemplate>
+                <WrapPanel />
+            </ItemsPanelTemplate>
+        </Setter>
+        <Setter Property="ItemTemplate">
+            <DataTemplate>
+                <Border
+                    MinWidth="{Binding ItemMinWidth, RelativeSource={RelativeSource AncestorType=controls:EdgeSummaryItemsControl}}"
+                    Margin="0,0,6,6"
+                    Classes="edge-summary-card-row">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Edge.Size.Spacing10}">
+                        <TextBlock
+                            Classes="edge-summary-card-label"
+                            Text="{Binding Label}" />
+                        <TextBlock
+                            Grid.Column="1"
+                            Classes="edge-summary-card-value"
+                            Text="{Binding Value}"
+                            TextWrapping="Wrap" />
+                    </Grid>
+                </Border>
+            </DataTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="controls|EdgeSummaryItemsControl.vertical">
+        <Setter Property="ItemsPanel">
+            <ItemsPanelTemplate>
+                <StackPanel Spacing="{DynamicResource Edge.Size.Spacing6}" />
+            </ItemsPanelTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="controls|EdgeSummaryItemsControl Border.edge-summary-card-row">
+        <Setter Property="MinHeight" Value="34" />
+        <Setter Property="Padding" Value="10,6" />
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Surface.Wash}" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Control}" />
+    </Style>
+
+    <Style Selector="controls|EdgeSummaryItemsControl TextBlock.edge-summary-card-label">
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Caption}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Muted}" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <Style Selector="controls|EdgeSummaryItemsControl TextBlock.edge-summary-card-value">
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Caption}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Primary}" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <Style Selector="controls|EdgeInfoSummaryCard">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <controls:EdgeCard
+                    Classes="summary"
+                    Elevation="Flat"
+                    PaddingMode="Compact"
+                    Surface="Card">
+                    <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="{DynamicResource Edge.Size.Spacing8}">
+                        <controls:EdgeSectionHeader
+                            Title="{TemplateBinding Title}"
+                            Subtitle="{TemplateBinding Subtitle}" />
+
+                        <controls:EdgeSummaryItemsControl
+                            Grid.Row="1"
+                            ItemMinWidth="{TemplateBinding SummaryItemMinWidth}"
+                            ItemsSource="{TemplateBinding SummaryItems}" />
+
+                        <controls:EdgeNoticeBar
+                            Grid.Row="2"
+                            IsVisible="{TemplateBinding HasNotice}"
+                            Status="{TemplateBinding NoticeStatus}">
+                            <TextBlock
+                                Classes="edge-notice-message"
+                                Text="{TemplateBinding NoticeMessage}" />
+                        </controls:EdgeNoticeBar>
+                    </Grid>
+                </controls:EdgeCard>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
     <Style Selector="TextBlock.edge-dashboard-preview-title">
         <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Title24}" />
         <Setter Property="FontWeight" Value="Bold" />

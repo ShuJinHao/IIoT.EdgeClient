@@ -24,9 +24,7 @@
                 </controls:EdgeSegmentedNav.ItemsPanel>
                 <controls:EdgeSegmentedNav.ItemTemplate>
                     <DataTemplate>
-                        <TextBlock
-                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                            Text="{Binding Title}" />
+                        <TextBlock Text="{Binding Title}" />
                     </DataTemplate>
                 </controls:EdgeSegmentedNav.ItemTemplate>
             </controls:EdgeSegmentedNav>
@@ -231,102 +229,16 @@
                         </controls:EdgeLogList.ItemTemplate>
                     </controls:EdgeLogList>
 
-                    <controls:EdgeCard PaddingMode="Compact">
-                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="{DynamicResource Edge.Size.Spacing16}">
-                            <controls:EdgeSectionHeader Title="{DynamicResource Navigation_Diagnostics_Context}" />
-                            <StackPanel
-                                Grid.Column="1"
-                                MinWidth="120"
-                                VerticalAlignment="Center"
-                                Spacing="{DynamicResource Edge.Size.Spacing2}">
-                                <TextBlock
-                                    FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                    Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                                    Text="{DynamicResource Navigation_Diagnostics_ContextCorruptCount}" />
-                                <TextBlock
-                                    FontSize="{DynamicResource Edge.FontSize.Title}"
-                                    FontWeight="SemiBold"
-                                    Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                                    Text="{Binding ContextCorruptFileCount}" />
-                            </StackPanel>
-                            <controls:EdgeStatusListItem
-                                Grid.Column="2"
-                                MinWidth="260"
-                                Classes="strip"
-                                Description="{Binding ContextLastCorruptDetectedAt}"
-                                Status="{Binding ContextPersistenceVisualStatus}"
-                                StatusText="{DynamicResource Navigation_Diagnostics_FileCountUnit}"
-                                Title="{DynamicResource Navigation_Diagnostics_ContextLastCorrupt}" />
-                        </Grid>
-                    </controls:EdgeCard>
+                    <controls:EdgeInfoSummaryCard
+                        SummaryItemMinWidth="220"
+                        SummaryItems="{Binding ContextSummaryItems}"
+                        Title="{DynamicResource Navigation_Diagnostics_Context}" />
 
-                    <StackPanel Spacing="{DynamicResource Edge.Size.Spacing8}">
-                        <controls:EdgeSectionHeader
-                            Title="{DynamicResource Navigation_Diagnostics_ConfigLabel}"
-                            Subtitle="{Binding LastUpdatedSummary}" />
-                        <Grid
-                            ColumnDefinitions="1.05*,1.15*"
-                            RowDefinitions="Auto,Auto"
-                            ColumnSpacing="{DynamicResource Edge.Size.Spacing12}"
-                            RowSpacing="{DynamicResource Edge.Size.Spacing12}">
-                            <controls:EdgeCard
-                                MinHeight="82"
-                                Classes="summary"
-                                Elevation="Flat"
-                                PaddingMode="Compact"
-                                Surface="Wash">
-                                <StackPanel Spacing="{DynamicResource Edge.Size.Spacing6}">
-                                    <TextBlock
-                                        Classes="edge-summary-card-label"
-                                        Text="{DynamicResource Navigation_Diagnostics_ConfigEnvironment}" />
-                                    <TextBlock
-                                        Classes="edge-summary-card-value"
-                                        Text="{Binding ConfigurationEnvironment}"
-                                        TextTrimming="CharacterEllipsis" />
-                                </StackPanel>
-                            </controls:EdgeCard>
-                            <controls:EdgeCard
-                                Grid.Column="1"
-                                MinHeight="82"
-                                Classes="summary"
-                                Elevation="Flat"
-                                PaddingMode="Compact"
-                                Surface="Wash">
-                                <StackPanel Spacing="{DynamicResource Edge.Size.Spacing4}">
-                                    <TextBlock
-                                        Classes="edge-summary-card-label"
-                                        Text="{DynamicResource Navigation_Diagnostics_ConfigMachineProfile}" />
-                                    <TextBlock
-                                        Classes="edge-summary-card-value"
-                                        Text="{Binding ConfigurationMachineProfile}"
-                                        TextTrimming="CharacterEllipsis" />
-                                    <TextBlock
-                                        Classes="edge-summary-card-label"
-                                        Text="{Binding ConfigurationMachineProfileState}"
-                                        TextTrimming="CharacterEllipsis" />
-                                </StackPanel>
-                            </controls:EdgeCard>
-                            <controls:EdgeCard
-                                Grid.Row="1"
-                                Grid.ColumnSpan="2"
-                                MinHeight="82"
-                                Classes="summary"
-                                Elevation="Flat"
-                                PaddingMode="Compact"
-                                Surface="Wash">
-                                <StackPanel Spacing="{DynamicResource Edge.Size.Spacing6}">
-                                    <TextBlock
-                                        Classes="edge-summary-card-label"
-                                        Text="{DynamicResource Navigation_Diagnostics_ConfigRuntimeDataRoot}" />
-                                    <TextBlock
-                                        Classes="edge-summary-card-value"
-                                        Text="{Binding ConfigurationRuntimeDataRoot}"
-                                        TextWrapping="Wrap"
-                                        ToolTip.Tip="{Binding ConfigurationRuntimeDataRoot}" />
-                                </StackPanel>
-                            </controls:EdgeCard>
-                        </Grid>
-                    </StackPanel>
+                    <controls:EdgeInfoSummaryCard
+                        SummaryItemMinWidth="260"
+                        SummaryItems="{Binding ConfigurationSummaryItems}"
+                        Subtitle="{Binding LastUpdatedSummary}"
+                        Title="{DynamicResource Navigation_Diagnostics_ConfigLabel}" />
 
                 </StackPanel>
             </StackPanel>

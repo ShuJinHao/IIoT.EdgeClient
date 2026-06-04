@@ -114,6 +114,8 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
 
     public ObservableCollection<MonitorStatusItemVm> StateMachineSummaryItems { get; } = [];
 
+    public ObservableCollection<MonitorStatusItemVm> StateMachineOverviewItems { get; } = [];
+
     public ObservableCollection<MonitorStateMachineTaskItemViewModel> StateMachineTaskItems { get; } = [];
     public ObservableCollection<MonitorStateMachineTaskItemViewModel> StateMachineHeartbeatTaskItems { get; } = [];
     public ObservableCollection<MonitorStateMachineTaskItemViewModel> StateMachineRuntimeTaskItems { get; } = [];
@@ -286,6 +288,7 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
         {
             ReplaceItems(PrimarySummaryItems, []);
             ReplaceItems(StateMachineSummaryItems, []);
+            ReplaceItems(StateMachineOverviewItems, []);
             LastErrorItem = new(string.Empty, string.Empty);
             ReplaceItems(EquipmentStatusRows, []);
             ReplaceItems(RealtimeRows, []);
@@ -302,8 +305,10 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
 
         var summaryItems = _summaryFormatter.CreateSummaryItems(snapshot);
         ReplaceItems(PrimarySummaryItems, summaryItems.Take(Math.Max(0, summaryItems.Count - 1)));
-        ReplaceItems(StateMachineSummaryItems, _summaryFormatter.CreateStateMachineSummaryItems(summaryItems));
+        var stateMachineSummaryItems = _summaryFormatter.CreateStateMachineSummaryItems(summaryItems);
+        ReplaceItems(StateMachineSummaryItems, stateMachineSummaryItems);
         LastErrorItem = summaryItems[^1];
+        ReplaceItems(StateMachineOverviewItems, stateMachineSummaryItems.Append(LastErrorItem));
         ReplaceItems(EquipmentStatusRows, snapshot.EquipmentStatusRows);
         ReplaceItems(RealtimeRows, snapshot.RealtimeRows);
         ReplaceItems(StepRows, snapshot.StepRows);

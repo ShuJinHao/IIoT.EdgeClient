@@ -28,54 +28,13 @@
                 </edge:EdgeSectionHeader.ActionContent>
             </edge:EdgeSectionHeader>
 
-            <edge:EdgeCard>
-                <Grid ColumnDefinitions="2*,*,*,*" RowDefinitions="Auto,Auto">
-                    <TextBlock
-                        FontSize="{DynamicResource Edge.FontSize.Title}"
-                        FontWeight="SemiBold"
-                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                        Text="{Binding RecipeName}" />
-
-                    <StackPanel Grid.Column="1" Spacing="{DynamicResource Edge.Size.Spacing4}">
-                        <TextBlock
-                            FontSize="{DynamicResource Edge.FontSize.Caption}"
-                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                            Text="{DynamicResource Navigation_Label_Version}" />
-                        <TextBlock
-                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                            Text="{Binding RecipeVersion}" />
-                    </StackPanel>
-
-                    <StackPanel Grid.Column="2" Spacing="{DynamicResource Edge.Size.Spacing4}">
-                        <TextBlock
-                            FontSize="{DynamicResource Edge.FontSize.Caption}"
-                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                            Text="{DynamicResource Navigation_Label_Process}" />
-                        <TextBlock
-                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                            Text="{Binding ProcessName}" />
-                    </StackPanel>
-
-                    <StackPanel Grid.Column="3" Spacing="{DynamicResource Edge.Size.Spacing4}">
-                        <TextBlock
-                            FontSize="{DynamicResource Edge.FontSize.Caption}"
-                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                            Text="{DynamicResource Navigation_Label_Update}" />
-                        <TextBlock
-                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
-                            Text="{Binding UpdatedAt}" />
-                    </StackPanel>
-
-                    <TextBlock
-                        Grid.Row="1"
-                        Grid.ColumnSpan="4"
-                        Margin="0,12,0,0"
-                        Foreground="{DynamicResource Edge.Brush.Status.Error}"
-                        IsVisible="{Binding HasError}"
-                        Text="{Binding ErrorMessage}"
-                        TextWrapping="Wrap" />
-                </Grid>
-            </edge:EdgeCard>
+            <edge:EdgeInfoSummaryCard
+                NoticeMessage="{Binding ErrorMessage}"
+                NoticeStatus="Error"
+                SummaryItemMinWidth="180"
+                SummaryItems="{Binding RecipeSummaryItems}"
+                Subtitle="{Binding SourceLabel}"
+                Title="{Binding RecipeName}" />
 
             <edge:EdgeTablePanel Title="{DynamicResource Navigation_Title_ProductRecipe}">
                 <edge:EdgeDataGrid
