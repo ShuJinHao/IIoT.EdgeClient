@@ -184,6 +184,7 @@ public sealed class HomogenizationDataViewModel : PresentationViewModelBase
     private static HomogenizationDataRow[] BuildVisualTestRows(string batchCode)
     {
         var baseTime = DateTime.Now.Date.AddHours(8);
+        const string mainPlanCode = "MES-HG-MAIN-20260604-A";
         return Enumerable.Range(0, 18)
             .Select(index =>
             {
@@ -196,14 +197,19 @@ public sealed class HomogenizationDataViewModel : PresentationViewModelBase
                 var cntActual = 120.0 + index % 8 * 0.7;
                 var nmpActual = 82.0 + index % 6 * 0.5;
                 var glueActual = 56.0 + index % 5 * 0.4;
+                var status = index % 8 == 0
+                    ? "待复核"
+                    : index % 5 == 0
+                        ? "混料中"
+                        : "已出料";
 
                 return new HomogenizationDataRow(
-                    $"TR-VT-{trayIndex:D3}",
-                    "HG-DEV-01",
-                    "匀浆视觉验收设备",
+                    $"TR-HG-01-{trayIndex:D3}",
+                    "PLC-HG-A01",
+                    "匀浆 A 线 PLC",
                     FormatDate(inboundTime),
                     FormatDate(completedTime),
-                    index % 6 == 0 ? "待复核" : "已出料",
+                    status,
                     stirringSpeed.ToString(CultureInfo.InvariantCulture),
                     temperature.ToString("0.0", CultureInfo.InvariantCulture),
                     vacuum.ToString("0.0", CultureInfo.InvariantCulture),
@@ -218,7 +224,7 @@ public sealed class HomogenizationDataViewModel : PresentationViewModelBase
                     Math.Max(0, 45 - index % 9 * 4).ToString(CultureInfo.InvariantCulture),
                     "30",
                     Math.Max(0, 30 - index % 6 * 5).ToString(CultureInfo.InvariantCulture),
-                    batchCode,
+                    mainPlanCode,
                     $"{batchCode}-{trayIndex:D2}");
             })
             .ToArray();

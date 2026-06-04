@@ -17,7 +17,7 @@ public sealed class VisualTestCapacityQueryFacade(VisualTestDataOptions options)
     public bool IsOnline => true;
 
     public IReadOnlyList<string> GetDeviceNames()
-        => [options.PrimaryDeviceName, "PLC-Homogenization-02"];
+        => [options.PrimaryDeviceName, VisualTestScenario.SecondaryDeviceName];
 
     public Task<CapacityViewResult> LoadTodayAsync(
         string plcName,
@@ -46,13 +46,13 @@ public sealed class VisualTestCapacityQueryFacade(VisualTestDataOptions options)
     private static List<DailyCapacitySnapshot> BuildDayRows(DateTime queryDate)
     {
         var rows = new List<DailyCapacitySnapshot>();
-        var baseTotal = 420;
+        var baseTotal = 520;
 
         for (var index = 0; index < 16; index++)
         {
             var time = queryDate.Date.AddHours(8).AddMinutes(index * 45);
-            var total = baseTotal + index * 18 + DateTimeOffset.Now.Minute % 11;
-            var ng = index % 5 == 0 ? 2 : index % 3;
+            var total = baseTotal + index * 17 + DateTimeOffset.Now.Minute % 11;
+            var ng = index % 5 == 0 ? 5 : 2 + index % 4;
             rows.Add(CreateRow(
                 time.ToString("MM-dd"),
                 $"{time:HH:mm}-{time.AddMinutes(45):HH:mm}",
@@ -72,8 +72,8 @@ public sealed class VisualTestCapacityQueryFacade(VisualTestDataOptions options)
         for (var day = 1; day <= Math.Min(days, 18); day++)
         {
             var date = new DateTime(queryDate.Year, queryDate.Month, day);
-            var total = 7600 + day * 137;
-            var ng = 18 + day % 7;
+            var total = 11800 + day * 146;
+            var ng = 28 + day % 8;
             rows.Add(CreateRow(
                 date.ToString("MM-dd"),
                 date.ToString("yyyy-MM-dd"),
@@ -91,8 +91,8 @@ public sealed class VisualTestCapacityQueryFacade(VisualTestDataOptions options)
         for (var month = 1; month <= 12; month++)
         {
             var date = new DateTime(queryDate.Year, month, 1);
-            var total = 210000 + month * 4800;
-            var ng = 520 + month * 9;
+            var total = 260000 + month * 5200;
+            var ng = 680 + month * 11;
             rows.Add(CreateRow(
                 date.ToString("yyyy-MM"),
                 date.ToString("yyyy-MM"),
