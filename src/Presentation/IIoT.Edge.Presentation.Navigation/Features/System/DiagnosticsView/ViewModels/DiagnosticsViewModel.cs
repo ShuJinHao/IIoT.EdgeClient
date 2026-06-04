@@ -155,6 +155,44 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase, IDiagnostics
     public string ContextPersistenceSummary => _summaryState.ContextPersistenceSummary;
     public string ContextCorruptFileCount => _summaryState.ContextCorruptFileCount;
     public string ContextLastCorruptDetectedAt => _summaryState.ContextLastCorruptDetectedAt;
+    public IReadOnlyList<EdgeSummaryItem> ContextSummaryItems =>
+    [
+        new()
+        {
+            Label = GetText("Navigation_Diagnostics_ContextCorruptCount", "损坏文件数"),
+            Value = ContextCorruptFileCount
+        },
+        new()
+        {
+            Label = GetText("Navigation_Diagnostics_ContextLastCorrupt", "最近损坏"),
+            Value = ContextLastCorruptDetectedAt
+        }
+    ];
+
+    public IReadOnlyList<EdgeSummaryItem> ConfigurationSummaryItems =>
+    [
+        new()
+        {
+            Label = GetText("Navigation_Diagnostics_ConfigEnvironment", "环境"),
+            Value = ConfigurationEnvironment
+        },
+        new()
+        {
+            Label = GetText("Navigation_Diagnostics_ConfigMachineProfile", "机型 Profile"),
+            Value = ConfigurationMachineProfile
+        },
+        new()
+        {
+            Label = GetText("Navigation_Diagnostics_ConfigMachineProfileState", "机型状态"),
+            Value = ConfigurationMachineProfileState
+        },
+        new()
+        {
+            Label = GetText("Navigation_Diagnostics_ConfigRuntimeDataRoot", "运行数据根目录"),
+            Value = ConfigurationRuntimeDataRoot
+        }
+    ];
+
     public EdgeVisualStatus ContextPersistenceVisualStatus => _summaryState.ContextCorruptFileCount == "0"
         ? EdgeVisualStatus.Running
         : EdgeVisualStatus.Warning;
@@ -179,6 +217,8 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase, IDiagnostics
         _tabController.RefreshLanguage();
         OnPropertyChanged(nameof(ModuleReadinessStatusText));
         OnPropertyChanged(nameof(ModuleReadinessToggleText));
+        OnPropertyChanged(nameof(ContextSummaryItems));
+        OnPropertyChanged(nameof(ConfigurationSummaryItems));
         _ = SafeRefreshAsync();
     }
 

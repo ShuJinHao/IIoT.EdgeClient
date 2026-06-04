@@ -304,6 +304,22 @@ public sealed class RepositoryHygieneTests
     }
 
     [Fact]
+    public void RuntimeLayoutSync_ShouldRemoveStaleShellAssembliesFromLauncherRoot()
+    {
+        var root = FindRepositoryRoot();
+        var fileSystem = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "Tools",
+            "IIoT.Edge.RuntimeLayoutSync",
+            "RuntimeLayoutSyncFileSystem.cs"));
+
+        Assert.Contains("\"IIoT.Edge.Application.dll\"", fileSystem, StringComparison.Ordinal);
+        Assert.Contains("\"IIoT.Edge.Runtime.dll\"", fileSystem, StringComparison.Ordinal);
+        Assert.Contains("\"Modules\"", fileSystem, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void IntegrationDependencyInjection_ShouldNotCacheTypedHttpClientsAsSingletons()
     {
         var root = FindRepositoryRoot();
@@ -682,7 +698,10 @@ public sealed class RepositoryHygieneTests
             "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Configuration/Views/ConfigurationWorkspaceView.axaml",
             "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Shell/Views/PlaceholderPageView.axaml",
             "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Hardware/HardwareConfigView/Views/HardwareConfigPage.axaml",
-            "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Hardware/IOView/Views/IOViewPage.axaml"
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Hardware/IOView/Views/IOViewPage.axaml",
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Formula/RecipeView/Views/RecipeViewPage.axaml",
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/System/DiagnosticsView/Views/DiagnosticsPage.axaml",
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Production/Monitor/Views/MonitorView.axaml"
         };
 
         var matches = reworkedFiles
@@ -693,6 +712,34 @@ public sealed class RepositoryHygieneTests
             .ToArray();
 
         Assert.Empty(matches);
+    }
+
+    [Fact]
+    public void SharedUi_ShouldProvidePropertyDrivenSummaryAndTimelineControls()
+    {
+        var root = FindRepositoryRoot();
+        var requiredFiles = new[]
+        {
+            "src/Shared/IIoT.Edge.UI.Shared/Avalonia/Controls/Metrics/EdgeInfoSummaryCard.cs",
+            "src/Shared/IIoT.Edge.UI.Shared/Avalonia/Controls/Metrics/EdgeSummaryItemsControl.cs",
+            "src/Shared/IIoT.Edge.UI.Shared/Avalonia/Controls/Status/EdgeStatusTimeline.cs",
+            "src/Shared/IIoT.Edge.UI.Shared/Avalonia/Controls/Status/EdgeStatusSegmentBar.cs"
+        };
+
+        Assert.All(requiredFiles, repositoryPath =>
+            Assert.True(File.Exists(ToFullPath(root, repositoryPath)), $"{repositoryPath} should exist."));
+
+        var metricsStyles = File.ReadAllText(ToFullPath(
+            root,
+            "src/Shared/IIoT.Edge.UI.Shared/Avalonia/Styles/Controls/Metrics.axaml"));
+        var statusStyles = File.ReadAllText(ToFullPath(
+            root,
+            "src/Shared/IIoT.Edge.UI.Shared/Avalonia/Styles/Controls/Status.axaml"));
+
+        Assert.Contains("controls|EdgeInfoSummaryCard", metricsStyles, StringComparison.Ordinal);
+        Assert.Contains("controls|EdgeSummaryItemsControl", metricsStyles, StringComparison.Ordinal);
+        Assert.Contains("controls|EdgeStatusTimeline", statusStyles, StringComparison.Ordinal);
+        Assert.Contains("SegmentWidth", statusStyles, StringComparison.Ordinal);
     }
 
     private static IReadOnlyList<string> GetProjectReferences(string projectPath)

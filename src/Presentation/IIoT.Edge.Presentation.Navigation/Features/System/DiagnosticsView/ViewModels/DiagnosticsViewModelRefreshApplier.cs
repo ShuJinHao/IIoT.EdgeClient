@@ -52,6 +52,8 @@ internal sealed class DiagnosticsViewModelRefreshApplier(
         Set(nameof(DiagnosticsViewModel.ContextLastCorruptDetectedAt), value => summaryState.ContextLastCorruptDetectedAt = value, summary.ContextLastCorruptDetectedAt);
         Set(nameof(DiagnosticsViewModel.HasStartupReport), value => summaryState.HasStartupReport = value, summary.HasStartupReport);
         callback.NotifyPropertyChanged(nameof(DiagnosticsViewModel.ContextPersistenceVisualStatus));
+        callback.NotifyPropertyChanged(nameof(DiagnosticsViewModel.ContextSummaryItems));
+        callback.NotifyPropertyChanged(nameof(DiagnosticsViewModel.ConfigurationSummaryItems));
         callback.NotifyPropertyChanged(nameof(DiagnosticsViewModel.ModuleReadinessSummary));
 
         if (!string.IsNullOrWhiteSpace(summary.StartupStatusMessage))

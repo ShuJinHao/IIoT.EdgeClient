@@ -3,6 +3,7 @@ using IIoT.Edge.Application.Common.Crud;
 using IIoT.Edge.Application.Features.Formula.RecipeView;
 using IIoT.Edge.Presentation.Navigation.Localization;
 using IIoT.Edge.SharedKernel.DataPipeline.Recipe;
+using IIoT.Edge.UI.Shared.Avalonia.Controls;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
 using System.Collections.ObjectModel;
@@ -25,9 +26,9 @@ public class RecipeViewModel : LocalizedCrudPageViewModelBase
     private string _updatedAt = "";
 
     public string RecipeName { get => _recipeName; set { _recipeName = value; OnPropertyChanged(); } }
-    public string RecipeVersion { get => _recipeVersion; set { _recipeVersion = value; OnPropertyChanged(); } }
-    public string ProcessName { get => _processName; set { _processName = value; OnPropertyChanged(); } }
-    public string UpdatedAt { get => _updatedAt; set { _updatedAt = value; OnPropertyChanged(); } }
+    public string RecipeVersion { get => _recipeVersion; set { _recipeVersion = value; OnPropertyChanged(); OnPropertyChanged(nameof(RecipeSummaryItems)); } }
+    public string ProcessName { get => _processName; set { _processName = value; OnPropertyChanged(); OnPropertyChanged(nameof(RecipeSummaryItems)); } }
+    public string UpdatedAt { get => _updatedAt; set { _updatedAt = value; OnPropertyChanged(); OnPropertyChanged(nameof(RecipeSummaryItems)); } }
 
     private bool _isCloudSource = true;
     public bool IsCloudSource
@@ -38,12 +39,32 @@ public class RecipeViewModel : LocalizedCrudPageViewModelBase
             _isCloudSource = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(SourceLabel));
+            OnPropertyChanged(nameof(RecipeSummaryItems));
         }
     }
 
     public string SourceLabel => IsCloudSource
         ? GetText("Navigation_Recipe_CloudSource", "云端配方")
         : GetText("Navigation_Recipe_LocalSource", "本地配方");
+
+    public IReadOnlyList<EdgeSummaryItem> RecipeSummaryItems =>
+    [
+        new()
+        {
+            Label = GetText("Navigation_Label_Version", "版本"),
+            Value = RecipeVersion
+        },
+        new()
+        {
+            Label = GetText("Navigation_Label_Process", "工序"),
+            Value = ProcessName
+        },
+        new()
+        {
+            Label = GetText("Navigation_Label_Update", "更新"),
+            Value = UpdatedAt
+        }
+    ];
 
     private bool _isLocalAdmin;
     public bool IsLocalAdmin
@@ -255,6 +276,7 @@ public class RecipeViewModel : LocalizedCrudPageViewModelBase
     {
         base.RefreshLocalization();
         OnPropertyChanged(nameof(SourceLabel));
+        OnPropertyChanged(nameof(RecipeSummaryItems));
         if (string.IsNullOrWhiteSpace(RecipeName)
             || RecipeName is "未加载" or "Not Loaded")
         {
