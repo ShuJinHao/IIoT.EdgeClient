@@ -4,20 +4,11 @@ using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
+using IIoT.Edge.Module.Homogenization.Integration;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using IIoT.Edge.Runtime.Base;
 using Microsoft.Extensions.Options;
-using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesScenarioChannel<
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
-    string,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRealtimeSnapshot,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRecipeSnapshot,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlanRequest,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlan,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchRequest,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchResult>;
 
 namespace IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 
@@ -28,7 +19,7 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
 {
     private readonly HomogenizationContext _context;
     private readonly IDeviceService _deviceService;
-    private readonly HomogenizationMesScenarioChannel _mesChannel;
+    private readonly IHomogenizationMesScenarioChannel _mesChannel;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
     private readonly IHomogenizationProductionGate _productionGate;
     private readonly HomogenizationCodeOptions _codeOptions;
@@ -43,7 +34,7 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
         HomogenizationSignalCodec codec,
         HomogenizationContext context,
         IDeviceService deviceService,
-        HomogenizationMesScenarioChannel mesChannel,
+        IHomogenizationMesScenarioChannel mesChannel,
         IMesUploadDiagnosticsStore diagnosticsStore,
         IHomogenizationProductionGate productionGate,
         ILogService logger,

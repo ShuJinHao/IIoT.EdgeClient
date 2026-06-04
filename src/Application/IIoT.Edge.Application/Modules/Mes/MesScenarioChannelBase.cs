@@ -15,26 +15,7 @@ namespace IIoT.Edge.Application.Modules.Mes;
 /// <summary>
 /// MES 多场景通道基类。负责类型校验、出料补传适配、工站号、信封、签名和请求执行，插件只实现场景字段映射。
 /// </summary>
-public abstract class MesScenarioChannelBase<
-        TCellData,
-        TInbound,
-        TRealtime,
-        TRecipe,
-        TEquipmentStatus,
-        TMainPlanRequest,
-        TMainPlanResult,
-        TTraceBatchRequest,
-        TTraceBatchResult>
-    : IMesScenarioChannel<
-        TCellData,
-        TInbound,
-        TRealtime,
-        TRecipe,
-        TEquipmentStatus,
-        TMainPlanRequest,
-        TMainPlanResult,
-        TTraceBatchRequest,
-        TTraceBatchResult>
+public abstract class MesScenarioChannelBase<TCellData> : IProcessMesUploader
     where TCellData : CellDataBase
 {
     private readonly MesRequestExecutor _requestExecutor;
@@ -67,44 +48,6 @@ public abstract class MesScenarioChannelBase<
     /// 生产业务时间服务，供插件 payload 在缺省业务时间时复用同一时区规则。
     /// </summary>
     protected IProductionTimeProvider ProductionTime => _productionTime;
-
-    /// <summary>
-    /// MES 签名令牌，由插件配置提供，Application 只使用它计算 sign。
-    /// </summary>
-    protected abstract string SignToken { get; }
-
-    public abstract Task<MesCallResult> UploadInboundAsync(
-        DeviceSession? device,
-        TInbound inbound,
-        CancellationToken cancellationToken = default);
-
-    public abstract Task<MesCallResult> UploadOutboundAsync(
-        DeviceSession? device,
-        TCellData cellData,
-        CancellationToken cancellationToken = default);
-
-    public abstract Task<MesCallResult> UploadRealtimeAsync(
-        DeviceSession? device,
-        TRealtime snapshot,
-        CancellationToken cancellationToken = default);
-
-    public abstract Task<MesCallResult> UploadRecipeAsync(
-        DeviceSession? device,
-        TRecipe snapshot,
-        CancellationToken cancellationToken = default);
-
-    public abstract Task<MesCallResult> UploadEquipmentStatusAsync(
-        DeviceSession? device,
-        TEquipmentStatus snapshot,
-        CancellationToken cancellationToken = default);
-
-    public abstract Task<MesCallResult<TMainPlanResult>> GetMainPlanAsync(
-        TMainPlanRequest request,
-        CancellationToken cancellationToken = default);
-
-    public abstract Task<MesCallResult<TTraceBatchResult>> GenerateTraceBatchNumberAsync(
-        TTraceBatchRequest request,
-        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 出料补传入口。DataPipeline 补偿链路反序列化完整 CellDataJson 后，会回到这里继续调用插件映射。
@@ -164,7 +107,8 @@ public abstract class MesScenarioChannelBase<
             async (currentDevice, ct) =>
             {
                 var stationNo = await ResolveStationNoAsync(currentDevice, ct).ConfigureAwait(false);
-                var envelope = CreateEnvelope(currentDevice, stationNo, SignToken);
+                var signToken = await ResolveSignTokenAsync(ct).ConfigureAwait(false);
+                var envelope = CreateEnvelope(currentDevice, stationNo, signToken);
                 // payloadFactory 是插件侧字段映射边界，Application 不知道也不保存具体业务字段。
                 return payloadFactory(envelope);
             },
@@ -211,9 +155,8 @@ public abstract class MesScenarioChannelBase<
     protected async Task<string> ResolveStationNoAsync(DeviceSession device, CancellationToken cancellationToken)
     {
         var configuredValue = await _moduleParamRoleProvider
-            .GetStringAsync(
+            .GetMesStringAsync(
                 ProcessType,
-                ModuleParamCategory.Mes,
                 ModuleParamRole.StationNo,
                 cancellationToken: cancellationToken)
             .ConfigureAwait(false);
@@ -226,6 +169,22 @@ public abstract class MesScenarioChannelBase<
         return string.IsNullOrWhiteSpace(device.DeviceName)
             ? device.ClientCode
             : device.DeviceName;
+    }
+
+    /// <summary>
+    /// MES 签名令牌走模块参数角色读取，避免插件再维护一套平行 Options 配置。
+    /// </summary>
+    protected async Task<string> ResolveSignTokenAsync(CancellationToken cancellationToken)
+    {
+        var configuredValue = await _moduleParamRoleProvider
+            .GetMesStringAsync(
+                ProcessType,
+                ModuleParamRole.MesSignToken,
+                defaultValue: string.Empty,
+                cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+
+        return configuredValue?.Trim() ?? string.Empty;
     }
 
     protected string FormatTimestamp(DateTime time)

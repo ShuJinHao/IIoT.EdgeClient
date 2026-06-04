@@ -1,6 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Cache;
 using IIoT.Edge.Application.Abstractions.Config;
-using IIoT.Edge.Application.Features.Config;
 
 namespace IIoT.Edge.Application.Features.Config.ModuleParameters;
 
@@ -9,8 +7,7 @@ namespace IIoT.Edge.Application.Features.Config.ModuleParameters;
 /// </summary>
 public sealed class ModuleParamRoleProvider(
     IModuleParamRegistry registry,
-    ILocalParameterConfigService localParameterConfigService,
-    IEdgeCacheService cache)
+    ModuleParamValueSnapshotLoader snapshotLoader)
     : IModuleParamRoleProvider
 {
     public async Task<ModuleParamRoleValue?> GetAsync(
@@ -43,7 +40,7 @@ public sealed class ModuleParamRoleProvider(
         var values = new List<ModuleParamRoleValue>();
         foreach (var descriptor in descriptors)
         {
-            var snapshot = await LoadSnapshotAsync(descriptor.ModuleId, cancellationToken).ConfigureAwait(false);
+            var snapshot = await snapshotLoader.LoadAsync(descriptor.ModuleId, cancellationToken).ConfigureAwait(false);
             var value = snapshot.Values.TryGetValue(descriptor.StorageKey, out var configured)
                 ? configured
                 : descriptor.DefaultValue ?? string.Empty;
@@ -110,36 +107,6 @@ public sealed class ModuleParamRoleProvider(
         }
 
         return values.Any(value => ParseBool(value.Value, defaultValue: false));
-    }
-
-    internal async Task<ModuleParamValueSnapshot> LoadSnapshotAsync(
-        string moduleId,
-        CancellationToken cancellationToken)
-    {
-        var snapshot = await cache.GetOrCreateAsync(
-                ParameterCacheKeys.ModuleSnapshot(moduleId),
-                ct => LoadSnapshotFromStoreAsync(moduleId, ct),
-                cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
-
-        return snapshot ?? new ModuleParamValueSnapshot(moduleId, new Dictionary<string, string>());
-    }
-
-    private async Task<ModuleParamValueSnapshot?> LoadSnapshotFromStoreAsync(
-        string moduleId,
-        CancellationToken cancellationToken)
-    {
-        var prefix = $"{ModuleParamKeys.StoragePrefix}{moduleId}:";
-        var values = (await localParameterConfigService
-                .GetSystemConfigsAsync(cancellationToken)
-                .ConfigureAwait(false))
-            .Where(x => x.Key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-            .ToDictionary(
-                static x => x.Key,
-                static x => x.Value,
-                StringComparer.OrdinalIgnoreCase);
-
-        return new ModuleParamValueSnapshot(moduleId, values);
     }
 
     private static bool ParseBool(string? value, bool defaultValue)

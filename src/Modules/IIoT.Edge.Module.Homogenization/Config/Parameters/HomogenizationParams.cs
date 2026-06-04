@@ -146,6 +146,7 @@ public static class HomogenizationParams
         /// <summary>MES 签名令牌。</summary>
         [ModuleParam(
             ParamValueKind.String,
+            Role = ModuleParamRole.MesSignToken,
             DisplayNameResourceKey = "Homogenization_Param_MesSignToken_DisplayName",
             DisplayNameFallback = "MES签名令牌",
             DescriptionResourceKey = "Homogenization_Param_MesSignToken_Description",

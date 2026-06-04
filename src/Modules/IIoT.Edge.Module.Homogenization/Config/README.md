@@ -14,8 +14,7 @@ Cloud 上传相关类型放在 `Integration/Cloud`。当前云端匀浆过站契
 
 - `Modules:Homogenization:Module:Presentation`：匀浆 UI 刷新和页面缓存配置，`DataViewRefreshIntervalMs` 控制数据页刷新间隔，`MaxOutboundRecords` 控制内存中保留的最近出料记录数量。
 - `Modules:Homogenization:Module:Runtime`：匀浆 PLC 任务循环配置，握手、心跳、实时上传任务都会从这里读取循环间隔和最小间隔。
-- `Modules:Homogenization:Mes:SignToken`：匀浆 MES 签名令牌，`HomogenizationMesChannel` 用它和 `ClientCode/timestamp` 生成 `sign`。
-- `Modules:Homogenization:Mes:Paths`：匀浆使用的 5 个 MES 接口路径，分别对应进站、出料、配方、实时数据、设备状态。
+- MES 开关、服务地址、工站号、签名令牌和接口路径统一维护在 `Config/Parameters/HomogenizationParams.cs` 的 MES 参数枚举特性上，由宿主参数系统播种、编辑和读取，不再维护平行 Options 配置。
 - `Modules:Homogenization:Codes:Plc`：PLC 触发码和上位机应答码。运行时任务用这些码判断触发、正常应答、异常应答和 MES 拒绝应答。
 - `Modules:Homogenization:Codes:Mes:Channels`：诊断面板使用的 MES 业务通道名，不参与接口路径拼接。
 - `Modules:Homogenization:Codes:Mes:RealtimeItems`：实时数据上传的 MES 字段码表。

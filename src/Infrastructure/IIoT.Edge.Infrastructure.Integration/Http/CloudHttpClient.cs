@@ -55,157 +55,149 @@ public class CloudHttpClient : ICloudHttpClient
     {
         var requestUrl = _endpointProvider.BuildUrl(url);
 
-        try
-        {
-            var sanitizedPayload = _payloadSanitizer.Sanitize(payload);
-            var sendResult = await SendWithRetryAsync(
-                HttpMethod.Post,
-                requestUrl,
-                () => JsonContent.Create(sanitizedPayload),
-                options).ConfigureAwait(false);
-
-            if (sendResult.ShortCircuitResult is not null)
+        return await ExecuteCloudRequestAsync(
+            "POST 请求",
+            "POST ",
+            requestUrl,
+            () =>
             {
-                return sendResult.ShortCircuitResult;
-            }
-
-            using var response = sendResult.Response!;
-            if (response.IsSuccessStatusCode)
-            {
-                return CloudCallResult.Success();
-            }
-
-            _logger.Warn($"[CloudHttp] POST 请求失败：{requestUrl}，状态码={(int)response.StatusCode} {response.ReasonPhrase}");
-            return CloudCallResult.Failure(
-                CloudCallOutcome.HttpFailure,
-                BuildHttpReasonCode(response.StatusCode),
-                response.StatusCode);
-        }
-        catch (TaskCanceledException ex)
-        {
-            _logger.Warn($"[CloudHttp] POST 请求超时：{requestUrl}，{ex.Message}");
-            return CloudCallResult.Failure(CloudCallOutcome.NetworkFailure, "timeout");
-        }
-        catch (TimeoutRejectedException ex)
-        {
-            _logger.Warn($"[CloudHttp] POST 请求超时：{requestUrl}，{ex.Message}");
-            return CloudCallResult.Failure(CloudCallOutcome.NetworkFailure, "timeout");
-        }
-        catch (HttpRequestException ex)
-        {
-            _logger.Error($"[CloudHttp] POST 网络异常：{requestUrl}，{ex.Message}");
-            return CloudCallResult.Failure(CloudCallOutcome.NetworkFailure, "network_exception");
-        }
-        catch (Exception ex)
-        {
-            _logger.Error($"[CloudHttp] POST 异常：{requestUrl}，{ex.Message}");
-            return CloudCallResult.Failure(CloudCallOutcome.Exception, "exception");
-        }
+                var sanitizedPayload = _payloadSanitizer.Sanitize(payload);
+                return SendAndCreateResultAsync(
+                    "POST 请求",
+                    HttpMethod.Post,
+                    requestUrl,
+                    () => JsonContent.Create(sanitizedPayload),
+                    options,
+                    static result => result,
+                    static _ => Task.FromResult(CloudCallResult.Success()),
+                    CloudCallResult.Failure);
+            },
+            CloudCallResult.Failure).ConfigureAwait(false);
     }
 
     public async Task<CloudCallResult<string>> PostWithResponseAsync(string url, object payload, CloudRequestOptions? options = null)
     {
         var requestUrl = _endpointProvider.BuildUrl(url);
 
-        try
-        {
-            var sanitizedPayload = _payloadSanitizer.Sanitize(payload);
-            var sendResult = await SendWithRetryAsync(
-                HttpMethod.Post,
-                requestUrl,
-                () => JsonContent.Create(sanitizedPayload),
-                options).ConfigureAwait(false);
-
-            if (sendResult.ShortCircuitResult is not null)
+        return await ExecuteCloudRequestAsync(
+            "POST 响应请求",
+            "POST 响应请求",
+            requestUrl,
+            () =>
             {
-                return ToTypedResult<string>(sendResult.ShortCircuitResult);
-            }
-
-            using var response = sendResult.Response!;
-            if (response.IsSuccessStatusCode)
-            {
-                return CloudCallResult<string>.Success(
-                    await response.Content.ReadAsStringAsync().ConfigureAwait(false));
-            }
-
-            _logger.Warn($"[CloudHttp] POST 响应请求失败：{requestUrl}，状态码={(int)response.StatusCode} {response.ReasonPhrase}");
-            return CloudCallResult<string>.Failure(
-                CloudCallOutcome.HttpFailure,
-                BuildHttpReasonCode(response.StatusCode),
-                response.StatusCode);
-        }
-        catch (TaskCanceledException ex)
-        {
-            _logger.Warn($"[CloudHttp] POST 响应请求超时：{requestUrl}，{ex.Message}");
-            return CloudCallResult<string>.Failure(CloudCallOutcome.NetworkFailure, "timeout");
-        }
-        catch (TimeoutRejectedException ex)
-        {
-            _logger.Warn($"[CloudHttp] POST 响应请求超时：{requestUrl}，{ex.Message}");
-            return CloudCallResult<string>.Failure(CloudCallOutcome.NetworkFailure, "timeout");
-        }
-        catch (HttpRequestException ex)
-        {
-            _logger.Error($"[CloudHttp] POST 响应请求网络异常：{requestUrl}，{ex.Message}");
-            return CloudCallResult<string>.Failure(CloudCallOutcome.NetworkFailure, "network_exception");
-        }
-        catch (Exception ex)
-        {
-            _logger.Error($"[CloudHttp] POST 响应请求异常：{requestUrl}，{ex.Message}");
-            return CloudCallResult<string>.Failure(CloudCallOutcome.Exception, "exception");
-        }
+                var sanitizedPayload = _payloadSanitizer.Sanitize(payload);
+                return SendAndCreateResultAsync(
+                    "POST 响应请求",
+                    HttpMethod.Post,
+                    requestUrl,
+                    () => JsonContent.Create(sanitizedPayload),
+                    options,
+                    ToTypedResult<string>,
+                    CreateStringResultAsync,
+                    CloudCallResult<string>.Failure);
+            },
+            CloudCallResult<string>.Failure).ConfigureAwait(false);
     }
 
     public async Task<CloudCallResult<string>> GetAsync(string url, CloudRequestOptions? options = null)
     {
         var requestUrl = _endpointProvider.BuildUrl(url);
 
-        try
-        {
-            var sendResult = await SendWithRetryAsync(
+        return await ExecuteCloudRequestAsync<CloudCallResult<string>>(
+            "GET 请求",
+            "GET ",
+            requestUrl,
+            () => SendAndCreateResultAsync(
+                "GET 请求",
                 HttpMethod.Get,
                 requestUrl,
                 contentFactory: null,
-                options).ConfigureAwait(false);
+                options,
+                ToTypedResult<string>,
+                CreateStringResultAsync,
+                CloudCallResult<string>.Failure),
+            CloudCallResult<string>.Failure).ConfigureAwait(false);
+    }
 
-            if (sendResult.ShortCircuitResult is not null)
-            {
-                return ToTypedResult<string>(sendResult.ShortCircuitResult);
-            }
+    private async Task<TResult> SendAndCreateResultAsync<TResult>(
+        string operationName,
+        HttpMethod method,
+        string requestUrl,
+        Func<HttpContent?>? contentFactory,
+        CloudRequestOptions? options,
+        Func<CloudCallResult, TResult> convertShortCircuit,
+        Func<HttpResponseMessage, Task<TResult>> createSuccess,
+        Func<CloudCallOutcome, string, HttpStatusCode?, TResult> createFailure)
+        where TResult : CloudCallResult
+    {
+        var sendResult = await SendWithRetryAsync(
+            method,
+            requestUrl,
+            contentFactory,
+            options).ConfigureAwait(false);
 
-            using var response = sendResult.Response!;
-            if (response.IsSuccessStatusCode)
-            {
-                return CloudCallResult<string>.Success(
-                    await response.Content.ReadAsStringAsync().ConfigureAwait(false));
-            }
+        if (sendResult.ShortCircuitResult is not null)
+        {
+            return convertShortCircuit(sendResult.ShortCircuitResult);
+        }
 
-            _logger.Warn($"[CloudHttp] GET 请求失败：{requestUrl}，状态码={(int)response.StatusCode} {response.ReasonPhrase}");
-            return CloudCallResult<string>.Failure(
-                CloudCallOutcome.HttpFailure,
-                BuildHttpReasonCode(response.StatusCode),
-                response.StatusCode);
+        using var response = sendResult.Response!;
+        return response.IsSuccessStatusCode
+            ? await createSuccess(response).ConfigureAwait(false)
+            : CreateHttpFailureResult(
+                operationName,
+                requestUrl,
+                response,
+                createFailure);
+    }
+
+    private async Task<TResult> ExecuteCloudRequestAsync<TResult>(
+        string operationName,
+        string exceptionOperationName,
+        string requestUrl,
+        Func<Task<TResult>> sendAsync,
+        Func<CloudCallOutcome, string, HttpStatusCode?, TResult> createFailure)
+        where TResult : CloudCallResult
+    {
+        try
+        {
+            return await sendAsync().ConfigureAwait(false);
         }
         catch (TaskCanceledException ex)
         {
-            _logger.Warn($"[CloudHttp] GET 请求超时：{requestUrl}，{ex.Message}");
-            return CloudCallResult<string>.Failure(CloudCallOutcome.NetworkFailure, "timeout");
+            _logger.Warn($"[CloudHttp] {operationName}超时：{requestUrl}，{ex.Message}");
+            return createFailure(CloudCallOutcome.NetworkFailure, "timeout", null);
         }
         catch (TimeoutRejectedException ex)
         {
-            _logger.Warn($"[CloudHttp] GET 请求超时：{requestUrl}，{ex.Message}");
-            return CloudCallResult<string>.Failure(CloudCallOutcome.NetworkFailure, "timeout");
+            _logger.Warn($"[CloudHttp] {operationName}超时：{requestUrl}，{ex.Message}");
+            return createFailure(CloudCallOutcome.NetworkFailure, "timeout", null);
         }
         catch (HttpRequestException ex)
         {
-            _logger.Error($"[CloudHttp] GET 网络异常：{requestUrl}，{ex.Message}");
-            return CloudCallResult<string>.Failure(CloudCallOutcome.NetworkFailure, "network_exception");
+            _logger.Error($"[CloudHttp] {exceptionOperationName}网络异常：{requestUrl}，{ex.Message}");
+            return createFailure(CloudCallOutcome.NetworkFailure, "network_exception", null);
         }
         catch (Exception ex)
         {
-            _logger.Error($"[CloudHttp] GET 异常：{requestUrl}，{ex.Message}");
-            return CloudCallResult<string>.Failure(CloudCallOutcome.Exception, "exception");
+            _logger.Error($"[CloudHttp] {exceptionOperationName}异常：{requestUrl}，{ex.Message}");
+            return createFailure(CloudCallOutcome.Exception, "exception", null);
         }
+    }
+
+    private TResult CreateHttpFailureResult<TResult>(
+        string operationName,
+        string requestUrl,
+        HttpResponseMessage response,
+        Func<CloudCallOutcome, string, HttpStatusCode?, TResult> createFailure)
+        where TResult : CloudCallResult
+    {
+        _logger.Warn(
+            $"[CloudHttp] {operationName}失败：{requestUrl}，状态码={(int)response.StatusCode} {response.ReasonPhrase}");
+        return createFailure(
+            CloudCallOutcome.HttpFailure,
+            BuildHttpReasonCode(response.StatusCode),
+            response.StatusCode);
     }
 
     private async Task<SendWithRetryResult> SendWithRetryAsync(
@@ -386,6 +378,9 @@ public class CloudHttpClient : ICloudHttpClient
 
     private static CloudCallResult<T> ToTypedResult<T>(CloudCallResult result)
         => CloudCallResult<T>.Failure(result.Outcome, result.ReasonCode, result.HttpStatusCode);
+
+    private static async Task<CloudCallResult<string>> CreateStringResultAsync(HttpResponseMessage response)
+        => CloudCallResult<string>.Success(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
 
     private static string BuildHttpReasonCode(HttpStatusCode statusCode)
         => $"http_status_{(int)statusCode}";

@@ -18,16 +18,6 @@ using Microsoft.Extensions.Options;
 using HomogenizationCloudUploadChannel = IIoT.Edge.Application.Modules.Cloud.ICloudUploadChannel<
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
     object>;
-using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesScenarioChannel<
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
-    string,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRealtimeSnapshot,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRecipeSnapshot,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlanRequest,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlan,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchRequest,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchResult>;
 
 namespace IIoT.Edge.Module.ContractTests;
 
@@ -46,7 +36,7 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
         AddDefaultRuntimeServices(services);
         services.AddSingleton<IDeviceService, ContractDeviceService>();
         services.AddSingleton<IMesUploadDiagnosticsStore, ContractMesUploadDiagnosticsStore>();
-        services.AddSingleton<HomogenizationMesScenarioChannel, ContractHomogenizationMesChannel>();
+        services.AddSingleton<IHomogenizationMesScenarioChannel, ContractHomogenizationMesChannel>();
         services.AddSingleton<HomogenizationCellDataValidator>();
         services.AddSingleton<IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>, ContractHomogenizationModuleParamProvider>();
         services.AddSingleton<IProductionPlanSelectionService, ContractProductionPlanSelectionService>();
@@ -96,7 +86,7 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
                           && descriptor.ImplementationType == typeof(HomogenizationMesChannel));
         Assert.Contains(
             result.Services,
-            descriptor => descriptor.ServiceType == typeof(HomogenizationMesScenarioChannel)
+            descriptor => descriptor.ServiceType == typeof(IHomogenizationMesScenarioChannel)
                           && descriptor.ImplementationFactory is not null);
         Assert.Contains(
             result.Services,
@@ -140,9 +130,12 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
         using var provider = result.Services.BuildServiceProvider();
 
         Assert.Equal(500, provider.GetRequiredService<IOptions<HomogenizationModuleOptions>>().Value.Presentation.MaxOutboundRecords);
-        Assert.Equal("hdc2023", provider.GetRequiredService<IOptions<HomogenizationMesOptions>>().Value.SignToken);
         Assert.Equal(11, provider.GetRequiredService<IOptions<HomogenizationCodeOptions>>().Value.Plc.SignalTrigger);
         Assert.Equal("ERROR", provider.GetRequiredService<IOptions<HomogenizationCodeOptions>>().Value.Cloud.EquipmentStatusLevels["-1"]);
+        Assert.Contains(
+            result.ModuleParamRegistry.GetDescriptors(DependencyInjection.ModuleKey, ModuleParamCategory.Mes),
+            descriptor => descriptor.Role == ModuleParamRole.MesSignToken
+                          && descriptor.Name == nameof(HomogenizationParams.Mes.签名令牌));
     }
 
     [Fact]
@@ -252,7 +245,7 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
                     warn: null)));
     }
 
-    private sealed class ContractHomogenizationMesChannel : HomogenizationMesScenarioChannel
+    private sealed class ContractHomogenizationMesChannel : IHomogenizationMesScenarioChannel
     {
         public string ProcessType => "Homogenization";
         public ProcessUploadMode UploadMode => ProcessUploadMode.Single;

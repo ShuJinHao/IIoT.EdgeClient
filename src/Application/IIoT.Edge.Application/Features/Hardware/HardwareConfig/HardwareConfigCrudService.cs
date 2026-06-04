@@ -43,13 +43,9 @@ public interface IHardwareConfigCrudService
 /// </summary>
 public sealed class HardwareConfigCrudService(
     ISender sender,
-    IEnumerable<IModuleHardwareProfileProvider> hardwareProfiles,
+    ModuleHardwareProfileResolver hardwareProfileResolver,
     IClientPermissionService permissionService) : IHardwareConfigCrudService
 {
-    private readonly IModuleHardwareProfileProvider[] _hardwareProfiles = hardwareProfiles
-        .OrderBy(static x => x.ModuleId, StringComparer.OrdinalIgnoreCase)
-        .ToArray();
-
     public Task<HardwareConfigInitResult> LoadAsync(CancellationToken cancellationToken = default)
         => sender.Send(new LoadHardwareConfigQuery(), cancellationToken);
 
@@ -82,7 +78,7 @@ public sealed class HardwareConfigCrudService(
                 "插件标准点位只支持 PLC 设备。"));
         }
 
-        var provider = ResolveHardwareProfile(out var profileError);
+        var provider = hardwareProfileResolver.Resolve(out var profileError);
         if (provider is null)
         {
             return Task.FromResult(new ModuleTemplateInfoResult(
@@ -140,7 +136,7 @@ public sealed class HardwareConfigCrudService(
             return CrudOperationResult.Failure("请先保存设备，再重置插件标准点位。");
         }
 
-        var provider = ResolveHardwareProfile(out var profileError);
+        var provider = hardwareProfileResolver.Resolve(out var profileError);
         if (provider is null)
         {
             return CrudOperationResult.Failure(profileError ?? "当前插件库没有可用的标准 IO 点位。");
@@ -188,23 +184,5 @@ public sealed class HardwareConfigCrudService(
                 selectedNetworkDeviceId,
                 ioMappings.ToList()),
             cancellationToken);
-    }
-
-    private IModuleHardwareProfileProvider? ResolveHardwareProfile(out string? errorMessage)
-    {
-        if (_hardwareProfiles.Length == 0)
-        {
-            errorMessage = "当前插件库没有注册标准 IO 点位模板。";
-            return null;
-        }
-
-        if (_hardwareProfiles.Length > 1)
-        {
-            errorMessage = "当前数据库应只对应一个插件模板；请按插件独立库运行，不能在设备表里用模块 ID 区分工序。";
-            return null;
-        }
-
-        errorMessage = null;
-        return _hardwareProfiles[0];
     }
 }

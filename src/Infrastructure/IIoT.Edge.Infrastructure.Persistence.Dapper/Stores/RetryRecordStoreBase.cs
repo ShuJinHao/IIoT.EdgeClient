@@ -2,16 +2,14 @@ using Dapper;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Connection;
-using IIoT.Edge.Infrastructure.Persistence.Dapper.Repository;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 
 namespace IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
 
-public abstract class RetryRecordStoreBase : DapperRepositoryBase<FailedCellRecord>
+public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellRecord>
 {
     private static readonly DateTime AbandonedRetryTimeUtc = DateTime.SpecifyKind(DateTime.MaxValue, DateTimeKind.Utc);
-    private static readonly TimeSpan ClaimTimeout = TimeSpan.FromMinutes(10);
     private readonly ICellDataJsonSerializer _cellDataJsonSerializer;
 
     protected abstract string ChannelName { get; }
@@ -98,16 +96,10 @@ public abstract class RetryRecordStoreBase : DapperRepositoryBase<FailedCellReco
 
     public async Task<ClaimedFailedCellBatch?> ClaimPendingBatchAsync(int batchSize = 10)
     {
-        return await ExecuteInTransactionAsync<ClaimedFailedCellBatch?>(async (conn, tx) =>
-        {
-            var nowUtc = DateTime.UtcNow;
-            await conn.ExecuteAsync(
-                $"DELETE FROM {ClaimTableName} WHERE ClaimedAt <= @ExpiredAt",
-                new { ExpiredAt = nowUtc.Subtract(ClaimTimeout).ToString("O") },
-                tx,
-                commandTimeout: CommandTimeout);
-
-            var ids = (await conn.QueryAsync<long>(
+        return await ClaimBatchCoreAsync<FailedCellRecord, ClaimedFailedCellBatch>(
+            ClaimTableName,
+            batchSize,
+            async (conn, tx, size, nowUtc) => (await conn.QueryAsync<long>(
                 $@"
                 SELECT r.Id
                 FROM {TableName} r
@@ -119,31 +111,11 @@ public abstract class RetryRecordStoreBase : DapperRepositoryBase<FailedCellReco
                 new
                 {
                     Now = nowUtc.ToString("O"),
-                    BatchSize = batchSize
+                    BatchSize = size
                 },
                 tx,
-                commandTimeout: CommandTimeout)).ToList();
-
-            if (ids.Count == 0)
-            {
-                return null;
-            }
-
-            var claimToken = Guid.NewGuid().ToString("N");
-            var claimRows = ids.Select(id => new
-            {
-                RecordId = id,
-                ClaimToken = claimToken,
-                ClaimedAt = nowUtc.ToString("O")
-            });
-
-            await conn.ExecuteAsync(
-                $"INSERT INTO {ClaimTableName} (RecordId, ClaimToken, ClaimedAt) VALUES (@RecordId, @ClaimToken, @ClaimedAt)",
-                claimRows,
-                tx,
-                commandTimeout: CommandTimeout);
-
-            var records = (await conn.QueryAsync<FailedCellRecord>(
+                commandTimeout: CommandTimeout)).ToList(),
+            async (conn, tx, claimToken) => (await conn.QueryAsync<FailedCellRecord>(
                 $@"
                 SELECT
                     r.Id,
@@ -165,64 +137,28 @@ public abstract class RetryRecordStoreBase : DapperRepositoryBase<FailedCellReco
                     ClaimToken = claimToken
                 },
                 tx,
-                commandTimeout: CommandTimeout)).ToList();
-
-            if (records.Count == 0)
-            {
-                await conn.ExecuteAsync(
-                    $"DELETE FROM {ClaimTableName} WHERE ClaimToken = @ClaimToken",
-                    new { ClaimToken = claimToken },
-                    tx,
-                    commandTimeout: CommandTimeout);
-                return null;
-            }
-
-            return new ClaimedFailedCellBatch
+                commandTimeout: CommandTimeout)).ToList(),
+            (claimToken, records) => new ClaimedFailedCellBatch
             {
                 ClaimToken = claimToken,
                 Records = records
-            };
-        }).ConfigureAwait(false);
+            }).ConfigureAwait(false);
     }
 
     public async Task DeleteClaimedBatchAsync(string claimToken)
     {
-        await ExecuteInTransactionAsync<int>(async (conn, tx) =>
-        {
-            var ids = (await conn.QueryAsync<long>(
-                $"SELECT RecordId FROM {ClaimTableName} WHERE ClaimToken = @ClaimToken",
-                new { ClaimToken = claimToken },
-                tx,
-                commandTimeout: CommandTimeout)).ToList();
-
-            if (ids.Count == 0)
-            {
-                throw new InvalidOperationException($"No claimed {ChannelName} retry rows found for claim {claimToken}.");
-            }
-
-            await conn.ExecuteAsync(
-                $"DELETE FROM {TableName} WHERE Id IN @Ids",
-                new { Ids = ids },
-                tx,
-                commandTimeout: CommandTimeout);
-
-            await conn.ExecuteAsync(
-                $"DELETE FROM {ClaimTableName} WHERE RecordId IN @Ids",
-                new { Ids = ids },
-                tx,
-                commandTimeout: CommandTimeout);
-
-            return ids.Count;
-        }).ConfigureAwait(false);
+        await DeleteClaimedRowsByClaimAsync(
+            ClaimTableName,
+            claimToken,
+            $"No claimed {ChannelName} retry rows found for claim {claimToken}.").ConfigureAwait(false);
     }
 
     public async Task ReleaseClaimAsync(string claimToken)
     {
-        await StrictExecuteAsync(
-            $"DELETE FROM {ClaimTableName} WHERE ClaimToken = @ClaimToken",
-            new { ClaimToken = claimToken },
-            requireAffectedRows: true,
-            failureMessage: $"Failed to release {ChannelName} retry claim {claimToken}.").ConfigureAwait(false);
+        await ReleaseClaimCoreAsync(
+            ClaimTableName,
+            claimToken,
+            $"Failed to release {ChannelName} retry claim {claimToken}.").ConfigureAwait(false);
     }
 
     public async Task UpdateRetryAsync(

@@ -106,8 +106,6 @@ public sealed class HomogenizationHardwareProfileBehaviorTests
         Assert.Contains(template, static mapping => mapping.Category == "信号交互");
         Assert.Contains(template, static mapping => mapping.Category == "单点读数据");
         Assert.Contains(template, static mapping => mapping.Category == "连续读数据");
-        Assert.DoesNotContain(template, static mapping => mapping.BusinessGroup == "test1");
-
         foreach (var group in template.Where(static mapping => mapping.Category == "信号交互").GroupBy(static mapping => mapping.BusinessGroup))
         {
             Assert.Contains(group, static mapping => mapping.Direction == "Read");
@@ -116,31 +114,16 @@ public sealed class HomogenizationHardwareProfileBehaviorTests
     }
 
     [Fact]
-    public void HomogenizationHardwareProfileProvider_ShouldExposeEnumCandidatesWithoutSeedingNoAttributeSignals()
+    public void HomogenizationHardwareProfileProvider_ShouldExposeOnlyBusinessSignalCandidates()
     {
         var provider = new HomogenizationHardwareProfileProvider();
 
         var defaults = provider.GetDefaultIoTemplate();
         var candidates = provider.GetIoMappingCandidates();
 
-        Assert.DoesNotContain(defaults, static mapping => mapping.SignalKey == "Homogenization.Interaction.test1");
-
-        var testCandidates = candidates
-            .Where(static mapping => mapping.SignalKey == "Homogenization.Interaction.test1")
-            .ToArray();
-        Assert.Equal(2, testCandidates.Length);
-        Assert.Contains(testCandidates, static mapping =>
-            mapping.Direction == "Read"
-            && mapping.Category == "信号交互"
-            && mapping.BusinessGroup == "test1"
-            && mapping.PlcAddress == string.Empty
-            && mapping.AddressCount == 1);
-        Assert.Contains(testCandidates, static mapping =>
-            mapping.Direction == "Write"
-            && mapping.Category == "信号交互"
-            && mapping.BusinessGroup == "test1"
-            && mapping.PlcAddress == string.Empty
-            && mapping.AddressCount == 1);
+        Assert.All(defaults, static mapping => Assert.False(string.IsNullOrWhiteSpace(mapping.PlcAddress)));
+        Assert.All(candidates, static mapping => Assert.False(string.IsNullOrWhiteSpace(mapping.PlcAddress)));
+        Assert.DoesNotContain(candidates, static mapping => mapping.SignalKey.Contains("test", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

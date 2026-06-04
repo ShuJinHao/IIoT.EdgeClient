@@ -26,16 +26,6 @@ using IIoT.Edge.SharedKernel.Specification;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesScenarioChannel<
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
-    string,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRealtimeSnapshot,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRecipeSnapshot,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlanRequest,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlan,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchRequest,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchResult>;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 
@@ -308,7 +298,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
         services.AddSingleton<ILogService>(logger);
         services.AddSingleton<IDeviceService>(deviceService);
         services.AddSingleton<IMesUploadDiagnosticsStore>(diagnostics);
-        services.AddSingleton<HomogenizationMesScenarioChannel>(mesApi);
+        services.AddSingleton<IHomogenizationMesScenarioChannel>(mesApi);
         services.AddSingleton<IDataPipelineService>(pipeline);
         services.AddSingleton<IProductionTimeProvider>(new FakeProductionTimeProvider());
         services.AddSingleton<IProductionContextSignalBindingStore, ProductionContextSignalBindingStore>();
@@ -467,7 +457,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
         services.AddSingleton<ILogService>(logger);
         services.AddSingleton<IDeviceService>(deviceService);
         services.AddSingleton<IMesUploadDiagnosticsStore>(diagnostics);
-        services.AddSingleton<HomogenizationMesScenarioChannel>(mesApi);
+        services.AddSingleton<IHomogenizationMesScenarioChannel>(mesApi);
         services.AddSingleton<IDataPipelineService>(pipeline);
         services.AddSingleton<IProductionTimeProvider>(new FakeProductionTimeProvider());
         services.AddSingleton<IProductionContextSignalBindingStore, ProductionContextSignalBindingStore>();
@@ -789,7 +779,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
                 warn: null);
     }
 
-    private sealed class CapturingHomogenizationMesChannel : HomogenizationMesScenarioChannel
+    private sealed class CapturingHomogenizationMesChannel : IHomogenizationMesScenarioChannel
     {
         public List<string> InboundTrayCodes { get; } = [];
 

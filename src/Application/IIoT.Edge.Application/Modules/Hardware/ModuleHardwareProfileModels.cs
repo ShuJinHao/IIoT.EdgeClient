@@ -1,3 +1,5 @@
+using IIoT.Edge.Application.Abstractions.Plc.Signals;
+
 namespace IIoT.Edge.Application.Modules.Hardware;
 
 /// <summary>
@@ -37,6 +39,32 @@ public sealed record ModulePlcDefaults(
     string? DeviceModel,
     int? ConnectTimeout,
     int? Port1 = null);
+
+public sealed record ModuleHardwareSignalTemplate(
+    string SignalKey,
+    string DisplayName,
+    string DefaultAddress,
+    int AddressCount,
+    string DataType,
+    string Direction,
+    int SortOrder,
+    string Category,
+    string BusinessGroup)
+{
+    public static ModuleHardwareSignalTemplate From<TSignalKey>(
+        ModuleSignalDefinition<TSignalKey> signal)
+        where TSignalKey : struct, Enum
+        => new(
+            signal.SignalKey,
+            signal.DisplayName,
+            signal.DefaultAddress,
+            signal.AddressCount,
+            signal.DataType,
+            signal.DirectionText,
+            signal.SortOrder,
+            signal.Category,
+            signal.BusinessGroup);
+}
 
 public sealed record ModuleIoTemplateEntry(
     string SignalKey,

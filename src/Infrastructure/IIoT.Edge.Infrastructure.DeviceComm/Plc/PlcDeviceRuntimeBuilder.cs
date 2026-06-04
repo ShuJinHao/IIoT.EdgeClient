@@ -1,6 +1,5 @@
 using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Logging;
-using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Factory;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
@@ -23,7 +22,7 @@ public sealed class PlcDeviceRuntimeBuilder
     private readonly PlcConnectionStatusStore _statusStore;
     private readonly IPlcSignalBlockPlanner _signalBlockPlanner;
     private readonly IPlcEndpointResolver _endpointResolver;
-    private readonly IModuleHardwareProfileProvider[] _hardwareProfiles;
+    private readonly ModuleHardwareProfileResolver _hardwareProfileResolver;
 
     public PlcDeviceRuntimeBuilder(
         IRepository<IoMappingEntity> ioMappings,
@@ -34,7 +33,7 @@ public sealed class PlcDeviceRuntimeBuilder
         PlcConnectionStatusStore statusStore,
         IPlcSignalBlockPlanner signalBlockPlanner,
         IPlcEndpointResolver endpointResolver,
-        IEnumerable<IModuleHardwareProfileProvider> hardwareProfiles)
+        ModuleHardwareProfileResolver hardwareProfileResolver)
     {
         _ioMappings = ioMappings;
         _dataStore = dataStore;
@@ -44,9 +43,7 @@ public sealed class PlcDeviceRuntimeBuilder
         _statusStore = statusStore;
         _signalBlockPlanner = signalBlockPlanner;
         _endpointResolver = endpointResolver;
-        _hardwareProfiles = hardwareProfiles
-            .OrderBy(static x => x.ModuleId, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+        _hardwareProfileResolver = hardwareProfileResolver;
     }
 
     public async Task<PlcDeviceRuntimeHandle> BuildAsync(
@@ -65,7 +62,7 @@ public sealed class PlcDeviceRuntimeBuilder
 
         _dataStore.Register(device.Id, readCount, writeCount, signalBindings);
         var buffer = _dataStore.GetBuffer(device.Id);
-        var hardwareProfile = ResolveHardwareProfile();
+        var hardwareProfile = _hardwareProfileResolver.Resolve();
         var context = _contextStore.GetOrCreate(device.DeviceName, hardwareProfile?.ModuleId ?? string.Empty);
         context.NetworkDeviceId = device.Id;
 
@@ -108,9 +105,6 @@ public sealed class PlcDeviceRuntimeBuilder
             Tasks = tasks
         };
     }
-
-    private IModuleHardwareProfileProvider? ResolveHardwareProfile()
-        => _hardwareProfiles.Length == 1 ? _hardwareProfiles[0] : null;
 
     private static IReadOnlyCollection<PlcBufferSignalBinding> BuildSignalBindings(
         IReadOnlyCollection<IoMappingEntity> mappings)

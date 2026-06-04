@@ -1,4 +1,5 @@
-﻿using IIoT.Edge.SharedKernel.Enums;
+﻿using IIoT.Edge.Application.Common.Crud;
+using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.SharedKernel.Messaging;
 using IIoT.Edge.SharedKernel.Repository;
 using IIoT.Edge.SharedKernel.Result;
@@ -41,57 +42,22 @@ public class SaveNetworkDevicesHandler(
     public async Task<Result> Handle(
         SaveNetworkDevicesCommand request,
         CancellationToken cancellationToken)
-    {
-        var existingDevices = await repo.GetListAsync(_ => true, cancellationToken);
-        var existingById = existingDevices.ToDictionary(x => x.Id);
-        var submittedIds = request.Devices
-            .Where(x => x.Id > 0)
-            .Select(x => x.Id)
-            .ToHashSet();
+        => await SubmittedEntityListSaveHelper.ReplaceSubmittedAsync(
+            repo,
+            request.Devices,
+            ct => repo.GetListAsync(_ => true, ct),
+            static dto => dto.Id,
+            Validate,
+            Create,
+            Apply,
+            cancellationToken).ConfigureAwait(false);
 
-        foreach (var dto in request.Devices)
-        {
-            var validationError = Validate(dto);
-            if (validationError is not null)
-            {
-                return Result.Failure(validationError);
-            }
-        }
-
-        foreach (var entity in existingDevices.Where(x => !submittedIds.Contains(x.Id)))
-        {
-            repo.Delete(entity);
-        }
-
-        foreach (var dto in request.Devices)
-        {
-            try
-            {
-                if (dto.Id == 0)
-                {
-                    var entity = NetworkDeviceEntity.Create(
-                        dto.DeviceName,
-                        dto.DeviceType,
-                        dto.IpAddress,
-                        dto.Port1);
-                    Apply(entity, dto);
-                    repo.Add(entity);
-                }
-                else if (existingById.TryGetValue(dto.Id, out var entity))
-                {
-                    Apply(entity, dto);
-                    repo.Update(entity);
-                }
-            }
-            catch (ArgumentException ex)
-            {
-                return Result.Failure(ex.Message);
-            }
-        }
-
-        await repo.SaveChangesAsync(cancellationToken);
-        return Result.Success();
-    }
+    private static NetworkDeviceEntity Create(NetworkDeviceDto dto)
+        => NetworkDeviceEntity.Create(
+            dto.DeviceName,
+            dto.DeviceType,
+            dto.IpAddress,
+            dto.Port1);
 
     private static void Apply(NetworkDeviceEntity entity, NetworkDeviceDto dto)
     {
@@ -108,11 +74,7 @@ public class SaveNetworkDevicesHandler(
     {
         try
         {
-            var entity = NetworkDeviceEntity.Create(
-                dto.DeviceName,
-                dto.DeviceType,
-                dto.IpAddress,
-                dto.Port1);
+            var entity = Create(dto);
             Apply(entity, dto);
             return null;
         }

@@ -1,9 +1,11 @@
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
+using IIoT.Edge.Module.Homogenization.Config.Parameters;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using IIoT.Edge.Runtime.Base;
 using Microsoft.Extensions.Options;
@@ -70,6 +72,25 @@ internal abstract class HomogenizationTaskBase : PlcTaskBase
     /// </summary>
     protected override int TaskLoopInterval => EventLoopInterval;
 
+    protected static string FormatDuplicateTrayMessage(HomogenizationTrayCodeStage stage, string trayCode)
+    {
+        var stageName = stage == HomogenizationTrayCodeStage.Inbound ? "进站" : "出站";
+        return $"托盘码重复，已按业务 NG 拒绝{stageName}：{trayCode.Trim()}。";
+    }
+
+    protected async Task<string?> ResolveDuplicateTrayMessageAsync(
+        IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> parameters,
+        HomogenizationTrayCodeStage stage,
+        string trayCode,
+        CancellationToken cancellationToken)
+    {
+        var snapshot = await parameters.GetAsync(cancellationToken).ConfigureAwait(false);
+        return snapshot.Business<bool>(HomogenizationParams.Business.启用托盘码重码验证)
+               && ModuleContext.HasProcessedTray(stage, trayCode)
+            ? FormatDuplicateTrayMessage(stage, trayCode)
+            : null;
+    }
+
     protected async Task ExecuteHandshakeAsync(
         HomogenizationPlcSignals.Interaction trigger,
         string triggeredLog,
@@ -120,6 +141,76 @@ internal abstract class HomogenizationTaskBase : PlcTaskBase
 
                 break;
         }
+    }
+
+    protected Task ExecuteMesSnapshotHandshakeAsync<TSnapshot>(
+        HomogenizationPlcSignals.Interaction trigger,
+        string triggeredLog,
+        string resetLog,
+        string exceptionPrefix,
+        string channel,
+        IHomogenizationProductionGate productionGate,
+        IMesUploadDiagnosticsStore diagnosticsStore,
+        Func<TSnapshot> captureSnapshot,
+        Func<TSnapshot, CancellationToken, Task<MesCallResult>> uploadAsync,
+        Action<string> recordFailure,
+        Action<TSnapshot, MesCallResult> recordResult,
+        Action<TSnapshot>? beforeUpload = null)
+        => ExecuteHandshakeAsync(
+            trigger,
+            triggeredLog,
+            resetLog,
+            _ => UploadMesSnapshotWithGateAsync(
+                trigger,
+                channel,
+                productionGate,
+                diagnosticsStore,
+                captureSnapshot,
+                uploadAsync,
+                recordFailure,
+                recordResult,
+                beforeUpload),
+            ex => $"{exceptionPrefix}：{ex.Message}",
+            message =>
+            {
+                diagnosticsStore.RecordFailure(channel, message);
+                recordFailure(message);
+            });
+
+    protected async Task UploadMesSnapshotWithGateAsync<TSnapshot>(
+        HomogenizationPlcSignals.Interaction trigger,
+        string channel,
+        IHomogenizationProductionGate productionGate,
+        IMesUploadDiagnosticsStore diagnosticsStore,
+        Func<TSnapshot> captureSnapshot,
+        Func<TSnapshot, CancellationToken, Task<MesCallResult>> uploadAsync,
+        Action<string> recordGateFailure,
+        Action<TSnapshot, MesCallResult> recordResult,
+        Action<TSnapshot>? beforeUpload = null)
+    {
+        var gateResult = await productionGate.EnsureReadyAsync(ModuleContext, TaskCancellationToken).ConfigureAwait(false);
+        if (!gateResult.IsSuccess)
+        {
+            diagnosticsStore.RecordFailure(channel, gateResult.Message);
+            recordGateFailure(gateResult.Message);
+            Interaction.ReplyResult(trigger, gateResult);
+            return;
+        }
+
+        var snapshot = captureSnapshot();
+        beforeUpload?.Invoke(snapshot);
+        var result = await uploadAsync(snapshot, TaskCancellationToken).ConfigureAwait(false);
+        if (result.IsSuccess)
+        {
+            diagnosticsStore.RecordSuccess(channel);
+        }
+        else
+        {
+            diagnosticsStore.RecordFailure(channel, result.Message);
+        }
+
+        recordResult(snapshot, result);
+        Interaction.ReplyResult(trigger, result);
     }
 
 }

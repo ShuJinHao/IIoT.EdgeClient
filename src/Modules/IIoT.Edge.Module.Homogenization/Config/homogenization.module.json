@@ -13,16 +13,6 @@
           "MinRealtimeLoopIntervalMs": 200
         }
       },
-      "Mes": {
-        "SignToken": "hdc2023",
-        "Paths": {
-          "Inbound": "/dev/dev/getIn/check",
-          "Outbound": "/dev/dev/electrode/exit/push",
-          "Recipe": "/dev/dev/process/param",
-          "Realtime": "/dev/dev/run/info",
-          "EquipmentStatus": "/dev/dev/realTime/status"
-        }
-      },
       "Codes": {
         "Plc": {
           "SignalReset": 10,

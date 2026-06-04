@@ -30,11 +30,7 @@ public static class HomogenizationPlcSignals
 
         /// <summary>设备状态上传交互，PLC 触发设备状态读取，上位机写回处理结果。</summary>
         [PlcInteractionSignal("Homogenization.Interaction.EquipmentStatus", "设备状态上传", "D707", "D607", 5, 105)]
-        设备状态上传,
-
-        /// <summary>调试验证用交互动作；默认地址为空，新增时必须手工填写读地址和写地址。</summary>
-        [PlcInteractionSignal("Homogenization.Interaction.test1", "test1", "", "", 10005, 20005)]
-        test1
+        设备状态上传
     }
 
     /// <summary>

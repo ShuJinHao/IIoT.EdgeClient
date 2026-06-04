@@ -1,8 +1,5 @@
-using IIoT.Edge.SharedKernel.DataPipeline;
-
 namespace IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 
-public interface IMesDeadLetterStore : IDeadLetterDiagnosticsStore
+public interface IMesDeadLetterStore : IDeadLetterStore
 {
-    Task SaveAsync(DeadLetterRecord record);
 }

@@ -209,8 +209,7 @@ public sealed class ModuleParameterBehaviorTests
         FakeLogService? logger = null)
         => new(
             registry,
-            config,
-            new EdgeMemoryCacheService(),
+            new ModuleParamValueSnapshotLoader(config, new EdgeMemoryCacheService()),
             logger ?? new FakeLogService());
 
     private static ModuleParamRegistry CreateHomogenizationRegistry()

@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.SharedKernel.Repository;
@@ -7,18 +8,14 @@ namespace IIoT.Edge.Application.Features.Config.SchemaReconciliation;
 
 public sealed class IoMappingSchemaSource(
     IRepository<NetworkDeviceEntity> networkDevices,
-    IEnumerable<IModuleHardwareProfileProvider> hardwareProfiles) : IConfigSchemaSource
+    ModuleHardwareProfileResolver hardwareProfileResolver) : IConfigSchemaSource
 {
-    private readonly IModuleHardwareProfileProvider[] _hardwareProfiles = hardwareProfiles
-        .OrderBy(static x => x.ModuleId, StringComparer.OrdinalIgnoreCase)
-        .ToArray();
-
     public string SchemaId => IoMappingSchemaIds.Signals;
 
     public async Task<IReadOnlyCollection<ConfigSchemaItem>> GetItemsAsync(
         CancellationToken cancellationToken = default)
     {
-        var profile = ResolveHardwareProfile();
+        var profile = hardwareProfileResolver.Resolve();
         if (profile is null)
         {
             return [];
@@ -55,7 +52,4 @@ public sealed class IoMappingSchemaSource(
             .Select(static x => x.First())
             .ToArray();
     }
-
-    private IModuleHardwareProfileProvider? ResolveHardwareProfile()
-        => _hardwareProfiles.Length == 1 ? _hardwareProfiles[0] : null;
 }

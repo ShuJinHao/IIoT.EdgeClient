@@ -66,8 +66,7 @@ public sealed class LocalSystemRuntimeConfigService(
                 .Keys
                 .ToArray();
             var mesEnabled = await _moduleParamRoleProvider
-                .AnyBoolAsync(
-                    ModuleParamCategory.Mes,
+                .AnyMesBoolAsync(
                     ModuleParamRole.MesEnabled,
                     mesProcessTypes,
                     defaultValue: false,

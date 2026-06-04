@@ -19,16 +19,6 @@ using IIoT.Edge.SharedKernel.DataPipeline;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesScenarioChannel<
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
-    string,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRealtimeSnapshot,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRecipeSnapshot,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlanRequest,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlan,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchRequest,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchResult>;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 
@@ -628,7 +618,7 @@ public sealed class HomogenizationBusinessChainBehaviorTests
             services.AddSingleton<ILogService>(logger);
             services.AddSingleton<IDeviceService>(deviceService);
             services.AddSingleton<IMesUploadDiagnosticsStore>(diagnostics);
-            services.AddSingleton<HomogenizationMesScenarioChannel>(mes);
+            services.AddSingleton<IHomogenizationMesScenarioChannel>(mes);
             services.AddSingleton<IDataPipelineService>(pipeline);
             services.AddSingleton<IProductionTimeProvider>(productionTime);
             services.AddSingleton<IProductionContextSignalBindingStore>(signalBindingStore);
@@ -793,7 +783,7 @@ public sealed class HomogenizationBusinessChainBehaviorTests
                 warn: null);
     }
 
-    private sealed class CapturingHomogenizationMesChannel : HomogenizationMesScenarioChannel
+    private sealed class CapturingHomogenizationMesChannel : IHomogenizationMesScenarioChannel
     {
         public List<string> InboundTrayCodes { get; } = [];
 

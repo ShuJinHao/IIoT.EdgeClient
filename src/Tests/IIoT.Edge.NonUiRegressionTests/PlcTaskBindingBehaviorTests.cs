@@ -216,7 +216,7 @@ public sealed class PlcTaskBindingBehaviorTests
             statusStore,
             new DefaultPlcSignalBlockPlanner(),
             new StaticPlcEndpointResolver(),
-            []);
+            new ModuleHardwareProfileResolver([]));
         var coordinator = new PlcLifecycleCoordinator(
             networkDevices,
             contextStore,

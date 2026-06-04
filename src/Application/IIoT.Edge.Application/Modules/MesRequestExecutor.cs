@@ -36,40 +36,24 @@ public sealed class MesRequestExecutor
         ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
         ArgumentNullException.ThrowIfNull(payloadFactory);
 
-        var preflight = await CheckCommonPreflightAsync(processType, cancellationToken).ConfigureAwait(false);
-        if (preflight is not null)
-        {
-            return preflight;
-        }
-
-        if (device is null)
-        {
-            return MesCallResult.InvalidContext("设备尚未完成云端身份初始化。");
-        }
-
-        try
-        {
-            var payload = await payloadFactory(device, cancellationToken).ConfigureAwait(false);
-            var response = await _mesHttpClient
-                .PostWithResponseAsync(processType, relativePath, payload, cancellationToken: cancellationToken)
-                .ConfigureAwait(false);
-
-            if (string.IsNullOrWhiteSpace(response))
-            {
-                return MesCallResult.TransportFailure("MES 返回空响应。");
-            }
-
-            return ParseResponse(relativePath, response);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.Error($"[MES] 调用接口 {relativePath} 失败：{ex.Message}");
-            return MesCallResult.TransportFailure($"MES 调用异常：{ex.Message}");
-        }
+        return await ExecuteMesCallCoreAsync(
+                processType,
+                relativePath,
+                () => device is null
+                    ? MesCallResult.InvalidContext("设备尚未完成云端身份初始化。")
+                    : null,
+                async () =>
+                {
+                    var payload = await payloadFactory(device!, cancellationToken).ConfigureAwait(false);
+                    return await _mesHttpClient
+                        .PostWithResponseAsync(processType, relativePath, payload, cancellationToken: cancellationToken)
+                        .ConfigureAwait(false);
+                },
+                response => ParseResponse(relativePath, response),
+                static result => result,
+                MesCallResult.TransportFailure,
+                cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<MesCallResult<TData>> ExecuteGetAsync<TData>(
@@ -83,35 +67,17 @@ public sealed class MesRequestExecutor
         ArgumentNullException.ThrowIfNull(query);
         ArgumentNullException.ThrowIfNull(dataParser);
 
-        var preflight = await CheckCommonPreflightAsync(processType, cancellationToken).ConfigureAwait(false);
-        if (preflight is not null)
-        {
-            return ToTypedPreflight<TData>(preflight);
-        }
-
         var url = BuildRelativeUrl(relativePath, query);
-        try
-        {
-            var response = await _mesHttpClient
-                .GetAsync(processType, url, cancellationToken: cancellationToken)
-                .ConfigureAwait(false);
-
-            if (string.IsNullOrWhiteSpace(response))
-            {
-                return MesCallResult<TData>.TransportFailure("MES 返回空响应。");
-            }
-
-            return ParseResponse(relativePath, response, dataParser);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.Error($"[MES] 调用接口 {relativePath} 失败：{ex.Message}");
-            return MesCallResult<TData>.TransportFailure($"MES 调用异常：{ex.Message}");
-        }
+        return await ExecuteMesCallCoreAsync(
+                processType,
+                relativePath,
+                static () => null,
+                () => _mesHttpClient.GetAsync(processType, url, cancellationToken: cancellationToken),
+                response => ParseResponse(relativePath, response, dataParser),
+                ToTypedPreflight<TData>,
+                MesCallResult<TData>.TransportFailure,
+                cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<MesCallResult<TData>> ExecutePostAsync<TData>(
@@ -125,24 +91,47 @@ public sealed class MesRequestExecutor
         ArgumentNullException.ThrowIfNull(payload);
         ArgumentNullException.ThrowIfNull(dataParser);
 
+        return await ExecuteMesCallCoreAsync(
+                processType,
+                relativePath,
+                static () => null,
+                () => _mesHttpClient.PostWithResponseAsync(processType, relativePath, payload, cancellationToken: cancellationToken),
+                response => ParseResponse(relativePath, response, dataParser),
+                ToTypedPreflight<TData>,
+                MesCallResult<TData>.TransportFailure,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private async Task<TResult> ExecuteMesCallCoreAsync<TResult>(
+        string processType,
+        string relativePath,
+        Func<TResult?> validateContext,
+        Func<Task<string?>> httpCall,
+        Func<string, TResult> parseResponse,
+        Func<MesCallResult, TResult> preflightConverter,
+        Func<string, TResult> transportFailure,
+        CancellationToken cancellationToken)
+        where TResult : class
+    {
         var preflight = await CheckCommonPreflightAsync(processType, cancellationToken).ConfigureAwait(false);
         if (preflight is not null)
         {
-            return ToTypedPreflight<TData>(preflight);
+            return preflightConverter(preflight);
+        }
+
+        var contextFailure = validateContext();
+        if (contextFailure is not null)
+        {
+            return contextFailure;
         }
 
         try
         {
-            var response = await _mesHttpClient
-                .PostWithResponseAsync(processType, relativePath, payload, cancellationToken: cancellationToken)
-                .ConfigureAwait(false);
-
-            if (string.IsNullOrWhiteSpace(response))
-            {
-                return MesCallResult<TData>.TransportFailure("MES 返回空响应。");
-            }
-
-            return ParseResponse(relativePath, response, dataParser);
+            var response = await httpCall().ConfigureAwait(false);
+            return string.IsNullOrWhiteSpace(response)
+                ? transportFailure("MES 返回空响应。")
+                : parseResponse(response);
         }
         catch (OperationCanceledException)
         {
@@ -151,7 +140,7 @@ public sealed class MesRequestExecutor
         catch (Exception ex)
         {
             _logger.Error($"[MES] 调用接口 {relativePath} 失败：{ex.Message}");
-            return MesCallResult<TData>.TransportFailure($"MES 调用异常：{ex.Message}");
+            return transportFailure($"MES 调用异常：{ex.Message}");
         }
     }
 
@@ -160,9 +149,8 @@ public sealed class MesRequestExecutor
         CancellationToken cancellationToken)
     {
         var mesEnabled = await _moduleParamRoleProvider
-            .GetBoolAsync(
+            .GetMesBoolAsync(
                 processType,
-                ModuleParamCategory.Mes,
                 ModuleParamRole.MesEnabled,
                 defaultValue: false,
                 cancellationToken)
@@ -181,36 +169,59 @@ public sealed class MesRequestExecutor
     }
 
     private MesCallResult ParseResponse(string relativePath, string response)
-    {
-        try
-        {
-            using var document = JsonDocument.Parse(response);
-            var root = document.RootElement;
-            var code = TryReadCode(root);
-            var message = TryReadMessage(root);
-
-            if (code == 200)
+        => ParseResponseCore(
+            relativePath,
+            response,
+            (_, code, message) =>
             {
-                return MesCallResult.Success(
-                    string.IsNullOrWhiteSpace(message) ? "MES 调用成功。" : message);
-            }
+                if (code == 200)
+                {
+                    return MesCallResult.Success(
+                        string.IsNullOrWhiteSpace(message) ? "MES 调用成功。" : message);
+                }
 
-            return MesCallResult.BusinessRejected(
-                string.IsNullOrWhiteSpace(message)
-                    ? $"MES 拒绝接口 {relativePath}，返回码：{code}。"
-                    : message);
-        }
-        catch (Exception ex)
-        {
-            _logger.Warn($"[MES] 解析接口 {relativePath} 响应失败：{ex.Message}");
-            return MesCallResult.TransportFailure($"MES 响应解析失败：{ex.Message}");
-        }
-    }
+                return MesCallResult.BusinessRejected(
+                    string.IsNullOrWhiteSpace(message)
+                        ? $"MES 拒绝接口 {relativePath}，返回码：{code}。"
+                        : message);
+            },
+            MesCallResult.TransportFailure);
 
     private MesCallResult<TData> ParseResponse<TData>(
         string relativePath,
         string response,
         Func<JsonElement, TData> dataParser)
+        => ParseResponseCore(
+            relativePath,
+            response,
+            (root, code, message) =>
+            {
+                if (code != 200)
+                {
+                    return MesCallResult<TData>.BusinessRejected(
+                        string.IsNullOrWhiteSpace(message)
+                            ? $"MES 拒绝接口 {relativePath}，返回码：{code}。"
+                            : message);
+                }
+
+                if (!root.TryGetProperty("data", out var dataElement)
+                    || dataElement.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+                {
+                    return MesCallResult<TData>.TransportFailure($"MES 接口 {relativePath} 响应缺少 data。");
+                }
+
+                var data = dataParser(dataElement);
+                return MesCallResult<TData>.Success(
+                    data,
+                    string.IsNullOrWhiteSpace(message) ? "MES 调用成功。" : message);
+            },
+            MesCallResult<TData>.TransportFailure);
+
+    private TResult ParseResponseCore<TResult>(
+        string relativePath,
+        string response,
+        Func<JsonElement, int, string, TResult> createResult,
+        Func<string, TResult> transportFailure)
     {
         try
         {
@@ -218,30 +229,12 @@ public sealed class MesRequestExecutor
             var root = document.RootElement;
             var code = TryReadCode(root);
             var message = TryReadMessage(root);
-
-            if (code != 200)
-            {
-                return MesCallResult<TData>.BusinessRejected(
-                    string.IsNullOrWhiteSpace(message)
-                        ? $"MES 拒绝接口 {relativePath}，返回码：{code}。"
-                        : message);
-            }
-
-            if (!root.TryGetProperty("data", out var dataElement)
-                || dataElement.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
-            {
-                return MesCallResult<TData>.TransportFailure($"MES 接口 {relativePath} 响应缺少 data。");
-            }
-
-            var data = dataParser(dataElement);
-            return MesCallResult<TData>.Success(
-                data,
-                string.IsNullOrWhiteSpace(message) ? "MES 调用成功。" : message);
+            return createResult(root, code, message);
         }
         catch (Exception ex)
         {
             _logger.Warn($"[MES] 解析接口 {relativePath} 响应失败：{ex.Message}");
-            return MesCallResult<TData>.TransportFailure($"MES 响应解析失败：{ex.Message}");
+            return transportFailure($"MES 响应解析失败：{ex.Message}");
         }
     }
 

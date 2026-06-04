@@ -15,11 +15,9 @@ public sealed record MesRetryDiagnosticsSnapshot(
     string BlockedReason,
     DateTime? LastCapacityBlockAt);
 
-public interface IMesRetryDiagnosticsStore
+public interface IMesRetryDiagnosticsStore : IRetryDiagnosticsStore<MesRetryRuntimeState>
 {
     MesRetryDiagnosticsSnapshot Snapshot { get; }
-
-    void SetRuntimeState(MesRetryRuntimeState state);
 
     void MarkCapacityBlocked(
         CapacityBlockedChannel channel,

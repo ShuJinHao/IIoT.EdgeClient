@@ -131,20 +131,11 @@ public abstract class ModulePlcSignalProfileBase<TSignalKey> : IModulePlcSignalP
 /// <summary>
 /// 硬件模板提供者基类，把插件强类型信号 profile 转换为宿主可保存的 IO 模板。
 /// </summary>
-/// <typeparam name="TSignalKey">插件声明的 PLC 信号枚举。</typeparam>
-public abstract class ModuleHardwareProfileProviderBase<TSignalKey> : IModuleHardwareProfileProvider
-    where TSignalKey : struct, Enum
+public abstract class ModuleHardwareProfileProviderBase : IModuleHardwareProfileProvider
 {
-    private readonly IModulePlcSignalProfile<TSignalKey> _signalProfile;
+    public abstract string ModuleId { get; }
 
-    protected ModuleHardwareProfileProviderBase(IModulePlcSignalProfile<TSignalKey> signalProfile)
-    {
-        _signalProfile = signalProfile ?? throw new ArgumentNullException(nameof(signalProfile));
-    }
-
-    public string ModuleId => _signalProfile.ModuleId;
-
-    protected IReadOnlyList<ModuleSignalDefinition<TSignalKey>> Signals => _signalProfile.Signals;
+    protected abstract IReadOnlyList<ModuleHardwareSignalTemplate> TemplateSignals { get; }
 
     protected virtual bool RequireCategory => false;
 
@@ -156,12 +147,14 @@ public abstract class ModuleHardwareProfileProviderBase<TSignalKey> : IModuleHar
         => PlcIoRuntimePolicy.Default;
 
     public IReadOnlyList<ModuleIoTemplateEntry> GetDefaultIoTemplate()
-        => Signals
+        => GetDefaultTemplateSignals()
             .Select(CreateTemplateEntry)
             .ToArray();
 
     public virtual IReadOnlyList<ModuleIoTemplateEntry> GetIoMappingCandidates()
-        => GetDefaultIoTemplate();
+        => GetIoMappingCandidateSignals()
+            .Select(CreateTemplateEntry)
+            .ToArray();
 
     public ModuleHardwareValidationResult ValidatePlcConfiguration(
         string deviceName,
@@ -170,28 +163,82 @@ public abstract class ModuleHardwareProfileProviderBase<TSignalKey> : IModuleHar
         => ModuleHardwareProfileValidator.Validate(
             deviceName,
             mappings,
-            Signals.Select(static signal => new ModuleHardwareSignalRequirement(
-                    signal.SignalKey,
-                    signal.AddressCount,
-                    signal.DataType,
-                    signal.DirectionText,
-                    signal.SortOrder,
-                    signal.Category))
-                .ToArray(),
+            CreateValidationRequirements(mappings),
             RequireCategory,
             ValidateSequentialOrder);
 
-    protected abstract string CreateTemplateRemark(ModuleSignalDefinition<TSignalKey> signal);
+    protected virtual IEnumerable<ModuleHardwareSignalTemplate> GetDefaultTemplateSignals()
+        => TemplateSignals;
 
-    private ModuleIoTemplateEntry CreateTemplateEntry(ModuleSignalDefinition<TSignalKey> signal)
+    protected virtual IEnumerable<ModuleHardwareSignalTemplate> GetIoMappingCandidateSignals()
+        => GetDefaultTemplateSignals();
+
+    protected virtual IReadOnlyCollection<ModuleHardwareSignalRequirement> CreateValidationRequirements(
+        IReadOnlyCollection<ModuleIoSnapshot> mappings)
+        => TemplateSignals
+            .Select(CreateRequirement)
+            .ToArray();
+
+    protected abstract string CreateTemplateRemark(ModuleHardwareSignalTemplate signal);
+
+    protected static string CreateDirectionSignalKey(string signalKey, string direction)
+        => $"{direction.Trim().ToUpperInvariant()}:{signalKey.Trim().ToUpperInvariant()}";
+
+    private ModuleIoTemplateEntry CreateTemplateEntry(ModuleHardwareSignalTemplate signal)
         => new(
             signal.SignalKey,
             signal.DefaultAddress,
             signal.AddressCount,
             signal.DataType,
-            signal.DirectionText,
+            signal.Direction,
             signal.SortOrder,
             CreateTemplateRemark(signal),
             signal.Category,
             signal.BusinessGroup);
+
+    private static ModuleHardwareSignalRequirement CreateRequirement(ModuleHardwareSignalTemplate signal)
+        => new(
+            signal.SignalKey,
+            signal.AddressCount,
+            signal.DataType,
+            signal.Direction,
+            signal.SortOrder,
+            signal.Category);
+}
+
+/// <summary>
+/// 硬件模板提供者基类，把插件强类型信号 profile 转换为宿主可保存的 IO 模板。
+/// </summary>
+/// <typeparam name="TSignalKey">插件声明的 PLC 信号枚举。</typeparam>
+public abstract class ModuleHardwareProfileProviderBase<TSignalKey> : ModuleHardwareProfileProviderBase
+    where TSignalKey : struct, Enum
+{
+    private readonly IModulePlcSignalProfile<TSignalKey> _signalProfile;
+    private readonly Lazy<IReadOnlyList<ModuleHardwareSignalTemplate>> _templateSignals;
+
+    protected ModuleHardwareProfileProviderBase(IModulePlcSignalProfile<TSignalKey> signalProfile)
+    {
+        _signalProfile = signalProfile ?? throw new ArgumentNullException(nameof(signalProfile));
+        _templateSignals = new Lazy<IReadOnlyList<ModuleHardwareSignalTemplate>>(() =>
+            _signalProfile.Signals.Select(ModuleHardwareSignalTemplate.From).ToArray());
+    }
+
+    public override string ModuleId => _signalProfile.ModuleId;
+
+    protected IReadOnlyList<ModuleSignalDefinition<TSignalKey>> Signals => _signalProfile.Signals;
+
+    protected override IReadOnlyList<ModuleHardwareSignalTemplate> TemplateSignals => _templateSignals.Value;
+
+    protected abstract string CreateTemplateRemark(ModuleSignalDefinition<TSignalKey> signal);
+
+    protected sealed override string CreateTemplateRemark(ModuleHardwareSignalTemplate signal)
+    {
+        var source = Signals.FirstOrDefault(candidate =>
+            string.Equals(candidate.SignalKey, signal.SignalKey, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(candidate.DirectionText, signal.Direction, StringComparison.OrdinalIgnoreCase));
+
+        return source is null
+            ? string.Empty
+            : CreateTemplateRemark(source);
+    }
 }

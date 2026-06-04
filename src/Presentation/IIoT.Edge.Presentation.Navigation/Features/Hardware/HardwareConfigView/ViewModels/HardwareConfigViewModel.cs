@@ -636,64 +636,21 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
 
     internal void RefreshIoMappingGroups()
     {
-        var orderedMappings = IoMappings
-            .OrderBy(static x => x.SortOrder)
-            .ThenBy(static x => x.PlcAddress, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-        var groups = BuildIoMappingGroups(orderedMappings);
-        var interactionPairs = BuildInteractionPairs(orderedMappings);
-        var interactionGroups = BuildIoMappingGroups(orderedMappings, IoMappingDisplay.InteractionCategory);
-        var singleReadGroups = BuildIoMappingGroups(orderedMappings, IoMappingDisplay.SingleReadCategory);
-        var continuousReadGroups = BuildIoMappingGroups(orderedMappings, IoMappingDisplay.ContinuousReadCategory);
-        var singleWriteGroups = BuildIoMappingGroups(orderedMappings, IoMappingDisplay.SingleWriteCategory);
-        var continuousWriteGroups = BuildIoMappingGroups(orderedMappings, IoMappingDisplay.ContinuousWriteCategory);
+        var groups = HardwareConfigIoMappingGrouper.Build(IoMappings);
 
-        ReplaceCollection(IoMappingGroups, groups);
-        ReplaceCollection(InteractionIoMappingPairs, interactionPairs);
-        ReplaceCollection(InteractionIoMappingGroups, interactionGroups);
-        ReplaceCollection(SingleReadIoMappingGroups, singleReadGroups);
-        ReplaceCollection(ContinuousReadIoMappingGroups, continuousReadGroups);
-        ReplaceCollection(SingleWriteIoMappingGroups, singleWriteGroups);
-        ReplaceCollection(ContinuousWriteIoMappingGroups, continuousWriteGroups);
+        ReplaceCollection(IoMappingGroups, groups.AllGroups);
+        ReplaceCollection(InteractionIoMappingPairs, groups.InteractionPairs);
+        ReplaceCollection(InteractionIoMappingGroups, groups.InteractionGroups);
+        ReplaceCollection(SingleReadIoMappingGroups, groups.SingleReadGroups);
+        ReplaceCollection(ContinuousReadIoMappingGroups, groups.ContinuousReadGroups);
+        ReplaceCollection(SingleWriteIoMappingGroups, groups.SingleWriteGroups);
+        ReplaceCollection(ContinuousWriteIoMappingGroups, groups.ContinuousWriteGroups);
         OnPropertyChanged(nameof(HasNoIoMappingGroups));
         OnPropertyChanged(nameof(HasNoInteractionIoMappingGroups));
         OnPropertyChanged(nameof(HasNoSingleReadIoMappingGroups));
         OnPropertyChanged(nameof(HasNoContinuousReadIoMappingGroups));
         OnPropertyChanged(nameof(HasNoSingleWriteIoMappingGroups));
         OnPropertyChanged(nameof(HasNoContinuousWriteIoMappingGroups));
-    }
-
-    private static IoInteractionPairVm[] BuildInteractionPairs(IEnumerable<IoMappingVm> mappings)
-        => mappings
-            .Where(static x => string.Equals(
-                IoMappingDisplay.ResolveCategory(x.Category, x.AddressCount),
-                IoMappingDisplay.InteractionCategory,
-                StringComparison.OrdinalIgnoreCase))
-            .GroupBy(CreateInteractionPairKey, StringComparer.OrdinalIgnoreCase)
-            .Select(static group => new IoInteractionPairVm(group))
-            .OrderBy(static x => x.SortOrder)
-            .ThenBy(static x => x.BusinessGroup, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-
-    private static string CreateInteractionPairKey(IoMappingVm mapping)
-        => string.IsNullOrWhiteSpace(mapping.BusinessGroup)
-            ? mapping.SignalKey.Trim()
-            : mapping.BusinessGroup.Trim();
-
-    private static IoMappingGroupVm[] BuildIoMappingGroups(IEnumerable<IoMappingVm> mappings, string? category = null)
-    {
-        var filteredMappings = category is null
-            ? mappings
-            : mappings.Where(x =>
-                string.Equals(
-                    IoMappingDisplay.ResolveCategory(x.Category, x.AddressCount),
-                    category,
-                    StringComparison.OrdinalIgnoreCase));
-
-        return filteredMappings
-            .GroupBy(static x => x.GroupTitle, StringComparer.OrdinalIgnoreCase)
-            .Select(static x => new IoMappingGroupVm(x.Key, x))
-            .ToArray();
     }
 
     internal void RefreshIoMappingNetworkDevices()
@@ -736,7 +693,7 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
 
         _networkDeviceEditingSource = selected;
         IsNetworkDeviceEditMode = true;
-        EditingNetworkDevice = CloneNetworkDevice(selected);
+        EditingNetworkDevice = HardwareConfigDraftMapper.CloneNetworkDevice(selected);
         IsNetworkDeviceDialogOpen = true;
         _confirmNetworkDeviceDialogCommand.RaiseCanExecuteChanged();
     }
@@ -750,11 +707,11 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
 
         if (_networkDeviceEditingSource is null)
         {
-            NetworkDevices.Add(CloneNetworkDevice(EditingNetworkDevice));
+            NetworkDevices.Add(HardwareConfigDraftMapper.CloneNetworkDevice(EditingNetworkDevice));
         }
         else
         {
-            CopyNetworkDevice(EditingNetworkDevice, _networkDeviceEditingSource);
+            HardwareConfigDraftMapper.CopyNetworkDevice(EditingNetworkDevice, _networkDeviceEditingSource);
         }
 
         RefreshIoMappingDeviceSelection();
@@ -813,7 +770,7 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
 
         _serialDeviceEditingSource = selected;
         IsSerialDeviceEditMode = true;
-        EditingSerialDevice = CloneSerialDevice(selected);
+        EditingSerialDevice = HardwareConfigDraftMapper.CloneSerialDevice(selected);
         IsSerialDeviceDialogOpen = true;
         _confirmSerialDeviceDialogCommand.RaiseCanExecuteChanged();
     }
@@ -827,11 +784,11 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
 
         if (_serialDeviceEditingSource is null)
         {
-            SerialDevices.Add(CloneSerialDevice(EditingSerialDevice));
+            SerialDevices.Add(HardwareConfigDraftMapper.CloneSerialDevice(EditingSerialDevice));
         }
         else
         {
-            CopySerialDevice(EditingSerialDevice, _serialDeviceEditingSource);
+            HardwareConfigDraftMapper.CopySerialDevice(EditingSerialDevice, _serialDeviceEditingSource);
         }
 
         CloseSerialDeviceDialog();
@@ -852,7 +809,7 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         if (SelectedInteractionPair is not null)
         {
             _ioInteractionPairEditingSource = SelectedInteractionPair;
-            EditingInteractionPair = CloneInteractionPair(SelectedInteractionPair);
+            EditingInteractionPair = HardwareConfigDraftMapper.CloneInteractionPair(SelectedInteractionPair);
             EditingIoMapping = null;
             IsEditIoMappingDialogOpen = true;
             _confirmEditIoMappingCommand.RaiseCanExecuteChanged();
@@ -865,7 +822,7 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         }
 
         _ioMappingEditingSource = SelectedIoMapping;
-        EditingIoMapping = CloneIoMapping(SelectedIoMapping);
+        EditingIoMapping = HardwareConfigDraftMapper.CloneIoMapping(SelectedIoMapping);
         EditingInteractionPair = null;
         IsEditIoMappingDialogOpen = true;
         _confirmEditIoMappingCommand.RaiseCanExecuteChanged();
@@ -882,7 +839,7 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
                 return;
             }
 
-            CopyInteractionPair(EditingInteractionPair, _ioInteractionPairEditingSource);
+            HardwareConfigDraftMapper.CopyInteractionPair(EditingInteractionPair, _ioInteractionPairEditingSource);
             RefreshIoMappingGroups();
             CloseEditIoMappingDialog();
             ClearUserFeedback();
@@ -901,7 +858,7 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
             return;
         }
 
-        CopyIoMapping(EditingIoMapping, _ioMappingEditingSource);
+        HardwareConfigDraftMapper.CopyIoMapping(EditingIoMapping, _ioMappingEditingSource);
         RefreshIoMappingGroups();
         CloseEditIoMappingDialog();
         ClearUserFeedback();
@@ -917,232 +874,13 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         _confirmEditIoMappingCommand.RaiseCanExecuteChanged();
     }
 
-    private static NetworkDeviceVm CloneNetworkDevice(NetworkDeviceVm source)
-    {
-        var target = new NetworkDeviceVm
-        {
-            Id = source.Id,
-            DeviceName = source.DeviceName,
-            DeviceType = source.DeviceType,
-            IpAddress = source.IpAddress,
-            Port1 = source.Port1,
-            Port2 = source.Port2,
-            SendCmd1 = source.SendCmd1,
-            SendCmd2 = source.SendCmd2,
-            ConnectTimeout = source.ConnectTimeout,
-            IsEnabled = source.IsEnabled,
-            Remark = source.Remark
-        };
-        target.DeviceModel = source.DeviceModel;
-        return target;
-    }
-
-    private static void CopyNetworkDevice(NetworkDeviceVm source, NetworkDeviceVm target)
-    {
-        target.DeviceName = source.DeviceName;
-        target.DeviceType = source.DeviceType;
-        target.DeviceModel = source.DeviceModel;
-        target.IpAddress = source.IpAddress;
-        target.Port1 = source.Port1;
-        target.Port2 = source.Port2;
-        target.SendCmd1 = source.SendCmd1;
-        target.SendCmd2 = source.SendCmd2;
-        target.ConnectTimeout = source.ConnectTimeout;
-        target.IsEnabled = source.IsEnabled;
-        target.Remark = source.Remark;
-    }
-
-    private static SerialDeviceVm CloneSerialDevice(SerialDeviceVm source)
-        => new()
-        {
-            Id = source.Id,
-            DeviceName = source.DeviceName,
-            DeviceType = source.DeviceType,
-            PortName = source.PortName,
-            BaudRate = source.BaudRate,
-            DataBits = source.DataBits,
-            StopBits = source.StopBits,
-            Parity = source.Parity,
-            SendCmd1 = source.SendCmd1,
-            SendCmd2 = source.SendCmd2,
-            IsEnabled = source.IsEnabled,
-            Remark = source.Remark
-        };
-
-    private static void CopySerialDevice(SerialDeviceVm source, SerialDeviceVm target)
-    {
-        target.DeviceName = source.DeviceName;
-        target.DeviceType = source.DeviceType;
-        target.PortName = source.PortName;
-        target.BaudRate = source.BaudRate;
-        target.DataBits = source.DataBits;
-        target.StopBits = source.StopBits;
-        target.Parity = source.Parity;
-        target.SendCmd1 = source.SendCmd1;
-        target.SendCmd2 = source.SendCmd2;
-        target.IsEnabled = source.IsEnabled;
-        target.Remark = source.Remark;
-    }
-
-    private static IoMappingVm CloneIoMapping(IoMappingVm source)
-        => new()
-        {
-            Id = source.Id,
-            NetworkDeviceId = source.NetworkDeviceId,
-            SignalKey = source.SignalKey,
-            PlcAddress = source.PlcAddress,
-            AddressCount = source.AddressCount,
-            DataType = source.DataType,
-            Direction = source.Direction,
-            Category = source.Category,
-            BusinessGroup = source.BusinessGroup,
-            SortOrder = source.SortOrder,
-            Remark = source.Remark
-        };
-
-    private static IoInteractionPairDraftVm CloneInteractionPair(IoInteractionPairVm source)
-        => new()
-        {
-            BusinessGroup = source.BusinessGroup,
-            ReadPlcAddress = source.ReadPlcAddress,
-            ReadAddressCount = source.ReadAddressCount,
-            ReadDataType = source.ReadDataType,
-            WritePlcAddress = source.WritePlcAddress,
-            WriteAddressCount = source.WriteAddressCount,
-            WriteDataType = source.WriteDataType,
-            Remark = source.Remark
-        };
-
-    private static void CopyIoMapping(IoMappingVm source, IoMappingVm target)
-    {
-        target.PlcAddress = source.PlcAddress;
-        target.AddressCount = source.AddressCount;
-        target.DataType = source.DataType;
-        target.BusinessGroup = source.BusinessGroup;
-        target.Remark = source.Remark;
-    }
-
-    private static void CopyInteractionPair(IoInteractionPairDraftVm source, IoInteractionPairVm target)
-    {
-        if (target.ReadMapping is not null)
-        {
-            target.ReadMapping.PlcAddress = source.ReadPlcAddress;
-            target.ReadMapping.AddressCount = source.ReadAddressCount;
-            target.ReadMapping.DataType = source.ReadDataType;
-            target.ReadMapping.Remark = string.IsNullOrWhiteSpace(source.Remark) ? null : source.Remark.Trim();
-        }
-
-        if (target.WriteMapping is not null)
-        {
-            target.WriteMapping.PlcAddress = source.WritePlcAddress;
-            target.WriteMapping.AddressCount = source.WriteAddressCount;
-            target.WriteMapping.DataType = source.WriteDataType;
-            target.WriteMapping.Remark = string.IsNullOrWhiteSpace(source.Remark) ? null : source.Remark.Trim();
-        }
-    }
-
     private string? ValidateEditingIoMapping(IoMappingVm mapping)
-    {
-        if (string.IsNullOrWhiteSpace(mapping.PlcAddress))
-        {
-            return GetText("Navigation_Hardware_Validation_IoAddressRequired", "PLC 地址不能为空。");
-        }
-
-        if (mapping.AddressCount <= 0)
-        {
-            return GetText("Navigation_Hardware_Validation_IoAddressCountPositive", "地址数量必须大于 0。");
-        }
-
-        if (!IoMappingOptionCatalog.IsKnownDataType(mapping.DataType))
-        {
-            return GetText("Navigation_Hardware_Validation_IoDataTypeRequired", "请选择 IO 数据类型。");
-        }
-
-        return null;
-    }
+        => HardwareConfigDraftValidator.ValidateIoMapping(mapping, GetText);
 
     private string? ValidateEditingInteractionPair(IoInteractionPairDraftVm pair)
-    {
-        if (_ioInteractionPairEditingSource?.ReadMapping is null || _ioInteractionPairEditingSource.WriteMapping is null)
-        {
-            return GetText("Navigation_Hardware_Validation_InteractionGroupIncomplete", "交互组必须同时包含读信号和写信号。");
-        }
-
-        if (string.IsNullOrWhiteSpace(pair.ReadPlcAddress) || string.IsNullOrWhiteSpace(pair.WritePlcAddress))
-        {
-            return GetText("Navigation_Hardware_Validation_InteractionAddressRequired", "交互点位 PLC 地址不能为空。");
-        }
-
-        if (pair.ReadAddressCount <= 0 || pair.WriteAddressCount <= 0)
-        {
-            return GetText("Navigation_Hardware_Validation_IoAddressCountPositive", "IO 地址数量必须大于 0。");
-        }
-
-        if (!IoMappingOptionCatalog.IsKnownDataType(pair.ReadDataType)
-            || !IoMappingOptionCatalog.IsKnownDataType(pair.WriteDataType))
-        {
-            return GetText("Navigation_Hardware_Validation_IoDataTypeRequired", "请选择 IO 数据类型。");
-        }
-
-        return null;
-    }
-}
-
-public sealed class IoMappingGroupVm
-{
-    public IoMappingGroupVm(string title, IEnumerable<IoMappingVm> mappings)
-    {
-        Title = title;
-        Mappings = new ObservableCollection<IoMappingVm>(mappings);
-    }
-
-    public string Title { get; }
-
-    public ObservableCollection<IoMappingVm> Mappings { get; }
-}
-
-public sealed class IoInteractionPairVm
-{
-    public IoInteractionPairVm(IEnumerable<IoMappingVm> mappings)
-    {
-        var items = mappings
-            .OrderBy(static x => x.SortOrder)
-            .ThenBy(static x => x.PlcAddress, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-        ReadMapping = items.FirstOrDefault(static x => string.Equals(
-            x.Direction,
-            IoMappingOptionCatalog.DirectionRead,
-            StringComparison.OrdinalIgnoreCase));
-        WriteMapping = items.FirstOrDefault(static x => string.Equals(
-            x.Direction,
-            IoMappingOptionCatalog.DirectionWrite,
-            StringComparison.OrdinalIgnoreCase));
-        var first = items.FirstOrDefault();
-        BusinessGroup = string.IsNullOrWhiteSpace(first?.BusinessGroup)
-            ? first?.SignalKey ?? "--"
-            : first.BusinessGroup.Trim();
-        SortOrder = items.Length == 0 ? int.MaxValue : items.Min(static x => x.SortOrder);
-    }
-
-    public string BusinessGroup { get; }
-
-    public int SortOrder { get; }
-
-    public IoMappingVm? ReadMapping { get; }
-
-    public IoMappingVm? WriteMapping { get; }
-
-    public string ReadPlcAddress => ReadMapping?.PlcAddress ?? "--";
-
-    public int ReadAddressCount => ReadMapping?.AddressCount ?? 0;
-
-    public string ReadDataType => ReadMapping?.DataType ?? "--";
-
-    public string WritePlcAddress => WriteMapping?.PlcAddress ?? "--";
-
-    public int WriteAddressCount => WriteMapping?.AddressCount ?? 0;
-
-    public string WriteDataType => WriteMapping?.DataType ?? "--";
-
-    public string? Remark => ReadMapping?.Remark ?? WriteMapping?.Remark;
+        => HardwareConfigDraftValidator.ValidateInteractionPair(
+            pair,
+            _ioInteractionPairEditingSource?.ReadMapping is not null
+                && _ioInteractionPairEditingSource.WriteMapping is not null,
+            GetText);
 }

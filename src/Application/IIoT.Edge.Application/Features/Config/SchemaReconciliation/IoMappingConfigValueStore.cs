@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.SharedKernel.Repository;
@@ -8,12 +9,8 @@ namespace IIoT.Edge.Application.Features.Config.SchemaReconciliation;
 public sealed class IoMappingConfigValueStore(
     IRepository<NetworkDeviceEntity> networkDevices,
     IRepository<IoMappingEntity> ioMappings,
-    IEnumerable<IModuleHardwareProfileProvider> hardwareProfiles) : IConfigValueStore
+    ModuleHardwareProfileResolver hardwareProfileResolver) : IConfigValueStore
 {
-    private readonly IModuleHardwareProfileProvider[] _hardwareProfiles = hardwareProfiles
-        .OrderBy(static x => x.ModuleId, StringComparer.OrdinalIgnoreCase)
-        .ToArray();
-
     public string SchemaId => IoMappingSchemaIds.Signals;
 
     public async Task<IReadOnlyCollection<string>> GetExistingKeysAsync(
@@ -94,7 +91,7 @@ public sealed class IoMappingConfigValueStore(
 
     private async Task<IReadOnlyCollection<int>> LoadManagedDeviceIdsAsync(CancellationToken cancellationToken)
     {
-        if (_hardwareProfiles.Length != 1)
+        if (hardwareProfileResolver.Resolve() is null)
         {
             return [];
         }

@@ -7,19 +7,10 @@ using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
 using IIoT.Edge.Module.Homogenization.Config.Parameters;
+using IIoT.Edge.Module.Homogenization.Integration;
 using IIoT.Edge.Module.Homogenization.Resources;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using Microsoft.Extensions.Options;
-using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesScenarioChannel<
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
-    string,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRealtimeSnapshot,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRecipeSnapshot,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlanRequest,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlan,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchRequest,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchResult>;
 
 namespace IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 
@@ -29,7 +20,7 @@ namespace IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
 {
     private readonly IDeviceService _deviceService;
-    private readonly HomogenizationMesScenarioChannel _mesChannel;
+    private readonly IHomogenizationMesScenarioChannel _mesChannel;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
     private readonly IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> _parameters;
     private readonly IHomogenizationProductionGate _productionGate;
@@ -43,7 +34,7 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
         HomogenizationSignalCodec codec,
         HomogenizationContext context,
         IDeviceService deviceService,
-        HomogenizationMesScenarioChannel mesChannel,
+        IHomogenizationMesScenarioChannel mesChannel,
         IMesUploadDiagnosticsStore diagnosticsStore,
         IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> parameters,
         IHomogenizationProductionGate productionGate,
@@ -95,14 +86,16 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
             return;
         }
 
-        var parameters = await _parameters.GetAsync(cancellationToken).ConfigureAwait(false);
-        if (parameters.Business<bool>(HomogenizationParams.Business.启用托盘码重码验证)
-            && ModuleContext.HasProcessedTray(HomogenizationTrayCodeStage.Inbound, trayCode))
+        var duplicateMessage = await ResolveDuplicateTrayMessageAsync(
+            _parameters,
+            HomogenizationTrayCodeStage.Inbound,
+            trayCode,
+            cancellationToken).ConfigureAwait(false);
+        if (duplicateMessage is not null)
         {
-            var message = FormatDuplicateMessage(HomogenizationTrayCodeStage.Inbound, trayCode);
             Interaction.ReplyMesNg(trigger);
-            _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Inbound, message);
-            RecordInboundResult(trayCode, message);
+            _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Inbound, duplicateMessage);
+            RecordInboundResult(trayCode, duplicateMessage);
             return;
         }
 
@@ -135,12 +128,6 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
 
         RecordInboundResult(trayCode, result.Message);
         Interaction.ReplyResult(trigger, result);
-    }
-
-    private static string FormatDuplicateMessage(HomogenizationTrayCodeStage stage, string trayCode)
-    {
-        var stageName = stage == HomogenizationTrayCodeStage.Inbound ? "进站" : "出站";
-        return $"托盘码重复，已按业务 NG 拒绝{stageName}：{trayCode.Trim()}。";
     }
 
     private void RecordInboundResult(string trayCode, string result)

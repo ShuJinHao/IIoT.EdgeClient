@@ -13,12 +13,11 @@ using IIoT.Edge.Presentation.Navigation.Features.Dashboard;
 using IIoT.Edge.Presentation.Panels.Features.SysLog;
 using IIoT.Edge.UI.Shared.Avalonia.Controls;
 using IIoT.Edge.UI.Shared.Localization;
-using IIoT.Edge.UI.Shared.Mvvm;
 using AvaloniaDispatcher = Avalonia.Threading.Dispatcher;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Shell;
 
-internal sealed class DashboardPreviewRuntimeViewModel : BaseNotifyPropertyChanged, IDisposable
+internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocalizedViewModel
 {
     private const string EmptyValue = "—";
     private const int AlertLimit = 50;
@@ -27,7 +26,6 @@ internal sealed class DashboardPreviewRuntimeViewModel : BaseNotifyPropertyChang
     private static readonly TimeSpan DiagnosticsRefreshInterval = TimeSpan.FromSeconds(5);
 
     private readonly DashboardViewModel _source;
-    private readonly IAppLanguageService _languageService;
     private readonly ISystemLogDisplayStore _logDisplayStore;
     private readonly ILocalSystemRuntimeConfigService _runtimeConfig;
     private readonly IEdgeSyncDiagnosticsQuery _diagnosticsQuery;
@@ -63,9 +61,9 @@ internal sealed class DashboardPreviewRuntimeViewModel : BaseNotifyPropertyChang
         ILocalSystemRuntimeConfigService runtimeConfig,
         IEdgeSyncDiagnosticsQuery diagnosticsQuery,
         IPlcConnectionManager plcConnectionManager)
+        : base(languageService)
     {
         _source = source;
-        _languageService = languageService;
         _logDisplayStore = logDisplayStore;
         _runtimeConfig = runtimeConfig;
         _diagnosticsQuery = diagnosticsQuery;
@@ -78,7 +76,6 @@ internal sealed class DashboardPreviewRuntimeViewModel : BaseNotifyPropertyChang
         _mesUploadEnabled = runtimeSnapshot.MesUploadEnabled;
 
         _source.PropertyChanged += OnSourcePropertyChanged;
-        _languageService.LanguageChanged += OnLanguageChanged;
     }
 
     public ObservableCollection<DashboardPreviewAlertItem> AlertItems { get; } = [];
@@ -140,24 +137,11 @@ internal sealed class DashboardPreviewRuntimeViewModel : BaseNotifyPropertyChang
 
     public string UploadDeadLetterText => FormatCount(_deadLetterUploadCount);
 
-    public IReadOnlyList<EdgeSummaryItem> UploadHealthSummaryItems =>
-    [
-        new()
-        {
-            Label = GetText("Navigation_DashboardPreview_LastUploadSuccess", "最近成功"),
-            Value = LastUploadSuccessText
-        },
-        new()
-        {
-            Label = GetText("Navigation_DashboardPreview_LastUploadFailure", "最近失败"),
-            Value = LastUploadFailureText
-        },
-        new()
-        {
-            Label = GetText("Navigation_DashboardPreview_DeadLetters", "死信"),
-            Value = UploadDeadLetterText
-        }
-    ];
+    public IReadOnlyList<EdgeSummaryItem> UploadHealthSummaryItems
+        => BuildUploadHealthSummaryItems(
+            LastUploadSuccessText,
+            LastUploadFailureText,
+            UploadDeadLetterText);
 
     public bool IsUploadHealthDisabled => !_cloudUploadEnabled && !_mesUploadEnabled;
 
@@ -214,12 +198,11 @@ internal sealed class DashboardPreviewRuntimeViewModel : BaseNotifyPropertyChang
         await _source.OnDeactivatedAsync();
     }
 
-    public void Dispose()
+    protected override void DisposeCore()
     {
         _diagnosticsTimer.Stop();
         _diagnosticsTimer.Tick -= OnDiagnosticsTimerTick;
         _source.PropertyChanged -= OnSourcePropertyChanged;
-        _languageService.LanguageChanged -= OnLanguageChanged;
         UnsubscribeLogStore();
     }
 
@@ -668,7 +651,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : BaseNotifyPropertyChang
     private void OnSourcePropertyChanged(object? sender, PropertyChangedEventArgs e)
         => OnPropertyChanged(string.Empty);
 
-    private void OnLanguageChanged(object? sender, EventArgs e)
+    protected override void OnLanguageChanged()
     {
         RefreshUploadHealthSegmentLabels();
         OnPropertyChanged(string.Empty);
@@ -732,9 +715,6 @@ internal sealed class DashboardPreviewRuntimeViewModel : BaseNotifyPropertyChang
             ? FormatText("Navigation_DashboardPreview_ProbeLatencyFormat", "探测 {0} ms", latencyMs.Value)
             : string.Empty;
 
-    private string FormatCount(int count)
-        => FormatText("Navigation_DashboardPreview_CountFormat", "{0} 条", count);
-
     private string GetDisabledText()
         => GetText("Navigation_DashboardPreview_Disabled", "未启用");
 
@@ -771,38 +751,12 @@ internal sealed class DashboardPreviewRuntimeViewModel : BaseNotifyPropertyChang
     }
 
     private string ResolveUploadHealthStatusText()
-    {
-        if (IsUploadHealthDisabled)
-        {
-            return GetText("Navigation_DashboardPreview_UploadDisabled", "上传未启用");
-        }
-
-        return _uploadHealthStatus switch
-        {
-            EdgeVisualStatus.Running => GetText("Navigation_DashboardPreview_UploadHealthy", "正常"),
-            EdgeVisualStatus.Error => GetText("Navigation_DashboardPreview_UploadFailure", "失败"),
-            _ => GetText("Navigation_DashboardPreview_NoUploadEvent", "无上传事件")
-        };
-    }
-
-    private string ResolveUploadHealthSegmentLabel(EdgeVisualStatus status)
-        => status switch
-        {
-            EdgeVisualStatus.Running => GetText("Navigation_DashboardPreview_UploadHealthy", "正常"),
-            EdgeVisualStatus.Error => GetText("Navigation_DashboardPreview_UploadFailure", "失败"),
-            _ => GetText("Navigation_DashboardPreview_NoUploadEvent", "无上传事件")
-        };
+        => ResolveUploadHealthStatusText(_uploadHealthStatus, IsUploadHealthDisabled);
 
     private string FormatTimestamp(DateTime? timestamp)
         => timestamp.HasValue
             ? timestamp.Value.ToString("HH:mm:ss")
             : EmptyValue;
-
-    private string GetText(string key, string fallback)
-        => _languageService.GetString(key, fallback);
-
-    private string FormatText(string key, string fallback, params object[] args)
-        => string.Format(GetText(key, fallback), args);
 
     private static DateTime? Latest(params DateTime?[] timestamps)
     {
@@ -829,14 +783,11 @@ internal sealed class DashboardPreviewRuntimeViewModel : BaseNotifyPropertyChang
         bool IsReady);
 }
 
-internal sealed class DashboardPreviewDesignViewModel : BaseNotifyPropertyChanged, IDisposable
+internal sealed class DashboardPreviewDesignViewModel : DashboardPreviewLocalizedViewModel
 {
-    private readonly IAppLanguageService _languageService;
-
     public DashboardPreviewDesignViewModel(IAppLanguageService languageService)
+        : base(languageService)
     {
-        _languageService = languageService;
-        _languageService.LanguageChanged += OnLanguageChanged;
         ResetUploadHealthSegments();
         ResetUploadChannelItems();
     }
@@ -892,26 +843,13 @@ internal sealed class DashboardPreviewDesignViewModel : BaseNotifyPropertyChange
 
     public string LastUploadFailureText => "15:04:17";
 
-    public string UploadDeadLetterText => FormatText("Navigation_DashboardPreview_CountFormat", "{0} 条", 0);
+    public string UploadDeadLetterText => FormatCount(0);
 
-    public IReadOnlyList<EdgeSummaryItem> UploadHealthSummaryItems =>
-    [
-        new()
-        {
-            Label = GetText("Navigation_DashboardPreview_LastUploadSuccess", "最近成功"),
-            Value = LastUploadSuccessText
-        },
-        new()
-        {
-            Label = GetText("Navigation_DashboardPreview_LastUploadFailure", "最近失败"),
-            Value = LastUploadFailureText
-        },
-        new()
-        {
-            Label = GetText("Navigation_DashboardPreview_DeadLetters", "死信"),
-            Value = UploadDeadLetterText
-        }
-    ];
+    public IReadOnlyList<EdgeSummaryItem> UploadHealthSummaryItems
+        => BuildUploadHealthSummaryItems(
+            LastUploadSuccessText,
+            LastUploadFailureText,
+            UploadDeadLetterText);
 
     public bool IsUploadHealthDisabled => false;
 
@@ -954,10 +892,7 @@ internal sealed class DashboardPreviewDesignViewModel : BaseNotifyPropertyChange
 
     public bool IsAlertEmpty => false;
 
-    public void Dispose()
-        => _languageService.LanguageChanged -= OnLanguageChanged;
-
-    private void OnLanguageChanged(object? sender, EventArgs e)
+    protected override void OnLanguageChanged()
     {
         ResetUploadHealthSegments();
         ResetUploadChannelItems();
@@ -967,12 +902,12 @@ internal sealed class DashboardPreviewDesignViewModel : BaseNotifyPropertyChange
     private void ResetUploadHealthSegments()
     {
         UploadHealthSegments.Clear();
-        UploadHealthSegments.Add(new(EdgeVisualStatus.Error, GetText("Navigation_DashboardPreview_UploadFailure", "失败")));
-        UploadHealthSegments.Add(new(EdgeVisualStatus.Error, GetText("Navigation_DashboardPreview_UploadFailure", "失败")));
-        UploadHealthSegments.Add(new(EdgeVisualStatus.Running, GetText("Navigation_DashboardPreview_UploadHealthy", "正常")));
-        UploadHealthSegments.Add(new(EdgeVisualStatus.Error, GetText("Navigation_DashboardPreview_UploadFailure", "失败")));
-        UploadHealthSegments.Add(new(EdgeVisualStatus.Running, GetText("Navigation_DashboardPreview_UploadHealthy", "正常")));
-        UploadHealthSegments.Add(new(EdgeVisualStatus.Error, GetText("Navigation_DashboardPreview_UploadFailure", "失败")));
+        UploadHealthSegments.Add(new(EdgeVisualStatus.Error, ResolveUploadHealthSegmentLabel(EdgeVisualStatus.Error)));
+        UploadHealthSegments.Add(new(EdgeVisualStatus.Error, ResolveUploadHealthSegmentLabel(EdgeVisualStatus.Error)));
+        UploadHealthSegments.Add(new(EdgeVisualStatus.Running, ResolveUploadHealthSegmentLabel(EdgeVisualStatus.Running)));
+        UploadHealthSegments.Add(new(EdgeVisualStatus.Error, ResolveUploadHealthSegmentLabel(EdgeVisualStatus.Error)));
+        UploadHealthSegments.Add(new(EdgeVisualStatus.Running, ResolveUploadHealthSegmentLabel(EdgeVisualStatus.Running)));
+        UploadHealthSegments.Add(new(EdgeVisualStatus.Error, ResolveUploadHealthSegmentLabel(EdgeVisualStatus.Error)));
     }
 
     private void ResetUploadChannelItems()
@@ -983,8 +918,8 @@ internal sealed class DashboardPreviewDesignViewModel : BaseNotifyPropertyChange
             GetText("Navigation_DashboardPreview_NotConnected", "未连接"),
             FormatText("Navigation_DashboardPreview_ProbeLatencyFormat", "探测 {0} ms", 3002),
             [
-                new(GetText("Navigation_DashboardPreview_MesRetryPending", "补传"), FormatText("Navigation_DashboardPreview_CountFormat", "{0} 条", 0)),
-                new(GetText("Navigation_DashboardPreview_DeadLetters", "死信"), FormatText("Navigation_DashboardPreview_CountFormat", "{0} 条", 0))
+                new(GetText("Navigation_DashboardPreview_MesRetryPending", "补传"), FormatCount(0)),
+                new(GetText("Navigation_DashboardPreview_DeadLetters", "死信"), FormatCount(0))
             ],
             EdgeVisualStatus.Error));
         UploadChannelItems.Add(new(
@@ -992,19 +927,14 @@ internal sealed class DashboardPreviewDesignViewModel : BaseNotifyPropertyChange
             GetText("Navigation_DashboardPreview_NotActivated", "未激活"),
             string.Empty,
             [
-                new(GetText("Navigation_DashboardPreview_CloudLogPending", "日志"), FormatText("Navigation_DashboardPreview_CountFormat", "{0} 条", 130)),
-                new(GetText("Navigation_DashboardPreview_CloudPassStationPending", "过站"), FormatText("Navigation_DashboardPreview_CountFormat", "{0} 条", 0)),
-                new(GetText("Navigation_DashboardPreview_CloudCapacityPending", "产能"), FormatText("Navigation_DashboardPreview_CountFormat", "{0} 条", 0)),
-                new(GetText("Navigation_DashboardPreview_DeadLetters", "死信"), FormatText("Navigation_DashboardPreview_CountFormat", "{0} 条", 0))
+                new(GetText("Navigation_DashboardPreview_CloudLogPending", "日志"), FormatCount(130)),
+                new(GetText("Navigation_DashboardPreview_CloudPassStationPending", "过站"), FormatCount(0)),
+                new(GetText("Navigation_DashboardPreview_CloudCapacityPending", "产能"), FormatCount(0)),
+                new(GetText("Navigation_DashboardPreview_DeadLetters", "死信"), FormatCount(0))
             ],
             EdgeVisualStatus.Offline));
     }
 
-    private string GetText(string key, string fallback)
-        => _languageService.GetString(key, fallback);
-
-    private string FormatText(string key, string fallback, params object[] args)
-        => string.Format(GetText(key, fallback), args);
 }
 
 internal sealed record DashboardPreviewAlertItem(

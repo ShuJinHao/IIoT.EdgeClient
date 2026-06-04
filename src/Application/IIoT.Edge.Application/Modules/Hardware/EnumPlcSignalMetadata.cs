@@ -45,31 +45,30 @@ public static class EnumPlcSignalMetadata
 
     public static PlcIoSignalMetadata GetRead<TSignalKey>(TSignalKey signal)
         where TSignalKey : struct, Enum
-        => TryGetRead(signal)
-            ?? throw MissingMetadata<TSignalKey>(signal, nameof(PlcReadSignalAttribute));
+        => GetIo<TSignalKey, PlcReadSignalAttribute>(signal);
 
     public static PlcIoSignalMetadata? TryGetRead<TSignalKey>(TSignalKey signal)
         where TSignalKey : struct, Enum
-        => GetField(signal)?.GetCustomAttribute<PlcReadSignalAttribute>() is { } attribute
-            ? new PlcIoSignalMetadata(
-                attribute.SignalKey,
-                attribute.DefaultAddress,
-                attribute.AddressCount,
-                attribute.DataType,
-                attribute.SortOrder,
-                attribute.Category,
-                attribute.BusinessGroup,
-                attribute.DisplayName)
-            : null;
+        => TryGetIo<TSignalKey, PlcReadSignalAttribute>(signal);
 
     public static PlcIoSignalMetadata GetWrite<TSignalKey>(TSignalKey signal)
         where TSignalKey : struct, Enum
-        => TryGetWrite(signal)
-            ?? throw MissingMetadata<TSignalKey>(signal, nameof(PlcWriteSignalAttribute));
+        => GetIo<TSignalKey, PlcWriteSignalAttribute>(signal);
 
     public static PlcIoSignalMetadata? TryGetWrite<TSignalKey>(TSignalKey signal)
         where TSignalKey : struct, Enum
-        => GetField(signal)?.GetCustomAttribute<PlcWriteSignalAttribute>() is { } attribute
+        => TryGetIo<TSignalKey, PlcWriteSignalAttribute>(signal);
+
+    public static PlcIoSignalMetadata GetIo<TSignalKey, TAttribute>(TSignalKey signal)
+        where TSignalKey : struct, Enum
+        where TAttribute : PlcIoSignalAttribute
+        => TryGetIo<TSignalKey, TAttribute>(signal)
+            ?? throw MissingMetadata<TSignalKey>(signal, typeof(TAttribute).Name);
+
+    public static PlcIoSignalMetadata? TryGetIo<TSignalKey, TAttribute>(TSignalKey signal)
+        where TSignalKey : struct, Enum
+        where TAttribute : PlcIoSignalAttribute
+        => GetField(signal)?.GetCustomAttribute<TAttribute>() is { } attribute
             ? new PlcIoSignalMetadata(
                 attribute.SignalKey,
                 attribute.DefaultAddress,

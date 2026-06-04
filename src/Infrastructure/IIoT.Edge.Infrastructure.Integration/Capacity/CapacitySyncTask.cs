@@ -129,20 +129,14 @@ public class CapacitySyncTask : ICapacitySyncTask
         await _syncGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            if (!_deviceService.CanUploadToCloud)
-            {
-                return;
-            }
-
-            var device = _deviceService.CurrentDevice;
-            if (device is null)
+            if (!TryGetCloudDeviceId(out var deviceId))
             {
                 return;
             }
 
             try
             {
-                await SyncAllDevicesAsync(device.DeviceId).ConfigureAwait(false);
+                await SyncAllDevicesAsync(deviceId).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -194,22 +188,30 @@ public class CapacitySyncTask : ICapacitySyncTask
         int ngCount,
         string plcName)
     {
-        var payload = CreatePayload(deviceId, date, hour, minute, shiftCode, totalCount, okCount, ngCount, plcName);
-        var result = await _cloudHttp.PostAsync(_endpointProvider.GetCapacityHourlyPath(), payload).ConfigureAwait(false);
-        _diagnosticsStore.RecordResult("Capacity", result);
+        var result = await PostCapacityAsync(
+            deviceId,
+            date,
+            hour,
+            minute,
+            shiftCode,
+            totalCount,
+            okCount,
+            ngCount,
+            plcName).ConfigureAwait(false);
+        var slotLabel = FormatCapacitySlot(date, hour, minute, shiftCode);
         if (result.IsSuccess)
         {
             _logger.Info(
-                $"[CapacitySync] [{plcName}] {date} {hour:D2}:{minute:D2}/{shiftCode} 已同步。总数：{totalCount}，OK：{okCount}，NG：{ngCount}");
+                $"[CapacitySync] [{plcName}] {slotLabel} 已同步。总数：{totalCount}，OK：{okCount}，NG：{ngCount}");
         }
-        else if (result.Outcome is CloudCallOutcome.SkippedUploadNotReady or CloudCallOutcome.UnauthorizedAfterRetry)
+        else if (IsUploadPaused(result))
         {
             _logger.Warn(
-                $"[CapacitySync] [{plcName}] {date} {hour:D2}:{minute:D2}/{shiftCode} 等待云端恢复，原因：{result.ReasonCode}");
+                $"[CapacitySync] [{plcName}] {slotLabel} 等待云端恢复，原因：{result.ReasonCode}");
         }
         else
         {
-            _logger.Warn($"[CapacitySync] [{plcName}] {date} {hour:D2}:{minute:D2}/{shiftCode} 同步失败。");
+            _logger.Warn($"[CapacitySync] [{plcName}] {slotLabel} 同步失败。");
         }
 
         return result.IsSuccess;
@@ -220,13 +222,7 @@ public class CapacitySyncTask : ICapacitySyncTask
         await _syncGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            if (!_deviceService.CanUploadToCloud)
-            {
-                return false;
-            }
-
-            var device = _deviceService.CurrentDevice;
-            if (device is null)
+            if (!TryGetCloudDeviceId(out var deviceId))
             {
                 return false;
             }
@@ -244,8 +240,8 @@ public class CapacitySyncTask : ICapacitySyncTask
                 {
                     foreach (var summary in claimedBatch.Summaries)
                     {
-                        var payload = CreatePayload(
-                            device.DeviceId,
+                        var result = await PostCapacityAsync(
+                            deviceId,
                             summary.Date,
                             summary.Hour,
                             summary.MinuteBucket,
@@ -253,25 +249,25 @@ public class CapacitySyncTask : ICapacitySyncTask
                             summary.Total,
                             summary.OkCount,
                             summary.NgCount,
-                            summary.PlcName);
-
-                        var result = await _cloudHttp
-                            .PostAsync(_endpointProvider.GetCapacityHourlyPath(), payload)
-                            .ConfigureAwait(false);
-                        _diagnosticsStore.RecordResult("Capacity", result);
+                            summary.PlcName).ConfigureAwait(false);
                         if (!result.IsSuccess)
                         {
                             await _bufferStore.ReleaseClaimAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
                             claimReleased = true;
-                            if (result.Outcome is CloudCallOutcome.SkippedUploadNotReady or CloudCallOutcome.UnauthorizedAfterRetry)
+                            var slotLabel = FormatCapacitySlot(
+                                summary.Date,
+                                summary.Hour,
+                                summary.MinuteBucket,
+                                summary.ShiftCode);
+                            if (IsUploadPaused(result))
                             {
                                 _logger.Warn(
-                                    $"[Retry-Cloud] 产能补传已暂停，等待云端恢复：{summary.Date} {summary.Hour:D2}:{summary.MinuteBucket:D2}/{summary.ShiftCode}（{result.ReasonCode}）");
+                                    $"[Retry-Cloud] 产能补传已暂停，等待云端恢复：{slotLabel}（{result.ReasonCode}）");
                             }
                             else
                             {
                                 _logger.Warn(
-                                    $"[Retry-Cloud] 产能补传失败：{summary.Date} {summary.Hour:D2}:{summary.MinuteBucket:D2}/{summary.ShiftCode}");
+                                    $"[Retry-Cloud] 产能补传失败：{slotLabel}");
                             }
                             return false;
                         }
@@ -314,6 +310,41 @@ public class CapacitySyncTask : ICapacitySyncTask
         }
     }
 
+    private bool TryGetCloudDeviceId(out Guid deviceId)
+    {
+        deviceId = default;
+        if (!_deviceService.CanUploadToCloud)
+        {
+            return false;
+        }
+
+        var device = _deviceService.CurrentDevice;
+        if (device is null)
+        {
+            return false;
+        }
+
+        deviceId = device.DeviceId;
+        return true;
+    }
+
+    private async Task<CloudCallResult> PostCapacityAsync(
+        Guid deviceId,
+        string date,
+        int hour,
+        int minute,
+        string shiftCode,
+        int totalCount,
+        int okCount,
+        int ngCount,
+        string plcName)
+    {
+        var payload = CreatePayload(deviceId, date, hour, minute, shiftCode, totalCount, okCount, ngCount, plcName);
+        var result = await _cloudHttp.PostAsync(_endpointProvider.GetCapacityHourlyPath(), payload).ConfigureAwait(false);
+        _diagnosticsStore.RecordResult("Capacity", result);
+        return result;
+    }
+
     private object CreatePayload(
         Guid deviceId,
         string date,
@@ -349,4 +380,10 @@ public class CapacitySyncTask : ICapacitySyncTask
         var isDay = time >= _shiftConfig.DayStartTime && time < _shiftConfig.DayEndTime;
         return isDay ? "D" : "N";
     }
+
+    private static bool IsUploadPaused(CloudCallResult result)
+        => result.Outcome is CloudCallOutcome.SkippedUploadNotReady or CloudCallOutcome.UnauthorizedAfterRetry;
+
+    private static string FormatCapacitySlot(string date, int hour, int minute, string shiftCode)
+        => $"{date} {hour:D2}:{minute:D2}/{shiftCode}";
 }

@@ -133,26 +133,12 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
             ContextPersistence: _productionContextStore.GetPersistenceDiagnostics());
     }
 
-    private async Task<PendingDiagnosticsSnapshot> GetCloudPendingDiagnosticsAsync(CancellationToken ct)
-    {
-        var retryTask = TryGetCountAsync(() => _cloudRetryStore.GetCountAsync(), ct);
-        var deviceLogTask = TryGetCountAsync(() => _deviceLogBufferStore.GetCountAsync(), ct);
-        var capacityTask = TryGetCountAsync(() => _capacityBufferStore.GetCountAsync(), ct);
-        await Task.WhenAll(retryTask, deviceLogTask, capacityTask).ConfigureAwait(false);
-
-        var retryCount = await retryTask.ConfigureAwait(false);
-        var deviceLogCount = await deviceLogTask.ConfigureAwait(false);
-        var capacityCount = await capacityTask.ConfigureAwait(false);
-        var fault = CountResult.Merge(retryCount, deviceLogCount, capacityCount);
-
-        return new PendingDiagnosticsSnapshot(
-            retryCount.Count,
-            deviceLogCount.Count,
-            capacityCount.Count,
-            fault.IsFaulted,
-            fault.LastFaultAt,
-            fault.FaultMessage);
-    }
+    private Task<PendingDiagnosticsSnapshot> GetCloudPendingDiagnosticsAsync(CancellationToken ct)
+        => GetPendingDiagnosticsAsync(
+            ct,
+            () => _cloudRetryStore.GetCountAsync(),
+            () => _deviceLogBufferStore.GetCountAsync(),
+            () => _capacityBufferStore.GetCountAsync());
 
     private ExternalHeartbeatSnapshot? GetHeartbeat(ExternalSystemKind kind)
         => _heartbeatStateStore?.Get(kind);
@@ -184,17 +170,37 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
     private MesChannelDiagnostics WithProcessDisplayName(MesChannelDiagnostics diagnostics)
         => diagnostics with { ProcessDisplayName = ResolveProcessDisplayName(diagnostics.ProcessType) };
 
-    private async Task<PendingDiagnosticsSnapshot> GetMesPendingDiagnosticsAsync(CancellationToken ct)
+    private Task<PendingDiagnosticsSnapshot> GetMesPendingDiagnosticsAsync(CancellationToken ct)
+        => GetPendingDiagnosticsAsync(ct, () => _mesRetryStore.GetCountAsync());
+
+    private static async Task<PendingDiagnosticsSnapshot> GetPendingDiagnosticsAsync(
+        CancellationToken ct,
+        Func<Task<int>> retryCountAction,
+        Func<Task<int>>? deviceLogCountAction = null,
+        Func<Task<int>>? capacityCountAction = null)
     {
-        var retryCount = await TryGetCountAsync(() => _mesRetryStore.GetCountAsync(), ct).ConfigureAwait(false);
+        var retryTask = TryGetCountAsync(retryCountAction, ct);
+        var deviceLogTask = deviceLogCountAction is null
+            ? Task.FromResult(CountResult.Empty)
+            : TryGetCountAsync(deviceLogCountAction, ct);
+        var capacityTask = capacityCountAction is null
+            ? Task.FromResult(CountResult.Empty)
+            : TryGetCountAsync(capacityCountAction, ct);
+
+        await Task.WhenAll(retryTask, deviceLogTask, capacityTask).ConfigureAwait(false);
+
+        var retryCount = await retryTask.ConfigureAwait(false);
+        var deviceLogCount = await deviceLogTask.ConfigureAwait(false);
+        var capacityCount = await capacityTask.ConfigureAwait(false);
+        var fault = CountResult.Merge(retryCount, deviceLogCount, capacityCount);
 
         return new PendingDiagnosticsSnapshot(
             retryCount.Count,
-            0,
-            0,
-            retryCount.IsFaulted,
-            retryCount.LastFaultAt,
-            retryCount.FaultMessage);
+            deviceLogCount.Count,
+            capacityCount.Count,
+            fault.IsFaulted,
+            fault.LastFaultAt,
+            fault.FaultMessage);
     }
 
     private static async Task<CountResult> TryGetCountAsync(Func<Task<int>> action, CancellationToken ct)
@@ -281,6 +287,12 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
         DateTime? LastFaultAt,
         string? FaultMessage)
     {
+        public static CountResult Empty { get; } = new(
+            Count: 0,
+            IsFaulted: false,
+            LastFaultAt: null,
+            FaultMessage: null);
+
         public static CountResult Merge(params CountResult[] results)
         {
             var lastFaultAt = results

@@ -9,6 +9,11 @@ namespace IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
 public class CapacityBufferStore : ClaimBufferStoreBase<CapacityRecord>, ICapacityBufferStore
 {
     private const string ClaimTableName = "capacity_buffer_claims";
+    private const string InsertCapacitySql = @"
+            INSERT INTO capacity_buffer
+                (Barcode, CellResult, ShiftCode, CompletedTime, CreatedAt, PlcName)
+            VALUES
+                (@Barcode, @CellResult, @ShiftCode, @CompletedTime, @CreatedAt, @PlcName)";
 
     public override string DbName => "pipeline_cloud";
     protected override string TableName => "capacity_buffer";
@@ -48,41 +53,14 @@ public class CapacityBufferStore : ClaimBufferStoreBase<CapacityRecord>, ICapaci
 
     public async Task SaveAsync(CapacityRecord record)
     {
-        const string sql = @"
-            INSERT INTO capacity_buffer
-                (Barcode, CellResult, ShiftCode, CompletedTime, CreatedAt, PlcName)
-            VALUES
-                (@Barcode, @CellResult, @ShiftCode, @CompletedTime, @CreatedAt, @PlcName)";
-
-        await SafeExecuteAsync(sql, new
-        {
-            record.Barcode,
-            record.CellResult,
-            CompletedTime = record.CompletedTime.ToString("O"),
-            record.ShiftCode,
-            CreatedAt = DateTime.UtcNow.ToString("O"),
-            record.PlcName
-        });
+        var createdAt = DateTime.UtcNow.ToString("O");
+        await SafeExecuteAsync(InsertCapacitySql, CreateInsertRow(record, createdAt));
     }
 
     public async Task SaveBatchAsync(IEnumerable<CapacityRecord> records)
     {
-        const string sql = @"
-            INSERT INTO capacity_buffer
-                (Barcode, CellResult, ShiftCode, CompletedTime, CreatedAt, PlcName)
-            VALUES
-                (@Barcode, @CellResult, @ShiftCode, @CompletedTime, @CreatedAt, @PlcName)";
-
         var now = DateTime.UtcNow.ToString("O");
-        var rows = records.Select(r => new
-        {
-            r.Barcode,
-            r.CellResult,
-            r.ShiftCode,
-            CompletedTime = r.CompletedTime.ToString("O"),
-            CreatedAt = now,
-            r.PlcName
-        }).ToList();
+        var rows = records.Select(r => CreateInsertRow(r, now)).ToList();
 
         if (rows.Count == 0)
         {
@@ -91,11 +69,24 @@ public class CapacityBufferStore : ClaimBufferStoreBase<CapacityRecord>, ICapaci
 
         await ExecuteInTransactionAsync<int>(async (conn, tx) =>
         {
-            await conn.ExecuteAsync(sql, rows, tx, commandTimeout: CommandTimeout);
+            await conn.ExecuteAsync(InsertCapacitySql, rows, tx, commandTimeout: CommandTimeout);
             return rows.Count;
         });
 
         Logger.Info($"[CapacityBuffer] Batch saved: {rows.Count} row(s).");
+    }
+
+    private static object CreateInsertRow(CapacityRecord record, string createdAt)
+    {
+        return new
+        {
+            record.Barcode,
+            record.CellResult,
+            record.ShiftCode,
+            CompletedTime = record.CompletedTime.ToString("O"),
+            CreatedAt = createdAt,
+            record.PlcName
+        };
     }
 
     public async Task<List<BufferSummaryDto>> GetShiftSummaryAsync()
@@ -116,108 +107,40 @@ public class CapacityBufferStore : ClaimBufferStoreBase<CapacityRecord>, ICapaci
 
     public async Task<List<BufferHourlySummaryDto>> GetHourlySummaryAsync()
     {
-        const string sql = @"
-            SELECT
-                substr(CompletedTime, 1, 10)                          AS Date,
-                CAST(substr(CompletedTime, 12, 2) AS INTEGER)         AS Hour,
-                CASE
-                    WHEN CAST(substr(CompletedTime, 15, 2) AS INTEGER) >= 30
-                    THEN 30 ELSE 0
-                END                                                   AS MinuteBucket,
-                ShiftCode,
-                PlcName,
-                COUNT(*)                                              AS Total,
-                SUM(CASE WHEN CellResult = 1 THEN 1 ELSE 0 END)       AS OkCount,
-                SUM(CASE WHEN CellResult = 0 THEN 1 ELSE 0 END)       AS NgCount
-            FROM capacity_buffer
-            GROUP BY
-                substr(CompletedTime, 1, 10),
-                CAST(substr(CompletedTime, 12, 2) AS INTEGER),
-                CASE
-                    WHEN CAST(substr(CompletedTime, 15, 2) AS INTEGER) >= 30
-                    THEN 30 ELSE 0
-                END,
-                ShiftCode,
-                PlcName
-            ORDER BY Date ASC, Hour ASC, MinuteBucket ASC, ShiftCode ASC";
-
-        return await SafeQueryListAsync<BufferHourlySummaryDto>(sql);
+        return await SafeQueryListAsync<BufferHourlySummaryDto>(
+            BuildHourlySummarySql(
+                "FROM capacity_buffer",
+                completedTimeColumn: "CompletedTime",
+                shiftCodeColumn: "ShiftCode",
+                plcNameColumn: "PlcName",
+                cellResultColumn: "CellResult",
+                orderShiftCodeColumn: "ShiftCode"));
     }
 
     public async Task<ClaimedCapacityBufferBatch?> ClaimHourlySummaryBatchAsync(int batchSize = 200)
     {
-        return await ExecuteInTransactionAsync<ClaimedCapacityBufferBatch?>(async (conn, tx) =>
-        {
-            var now = DateTime.UtcNow;
-            await DeleteExpiredClaimsAsync(conn, tx, ClaimTableName, now).ConfigureAwait(false);
-
-            var ids = (await conn.QueryAsync<long>(
-                @"
-                SELECT b.Id
-                FROM capacity_buffer b
-                LEFT JOIN capacity_buffer_claims c ON c.RecordId = b.Id
-                WHERE c.RecordId IS NULL
-                ORDER BY b.Id ASC
-                LIMIT @BatchSize",
-                new { BatchSize = batchSize },
-                tx,
-                commandTimeout: CommandTimeout)).ToList();
-
-            if (ids.Count == 0)
-            {
-                return null;
-            }
-
-            var claimToken = Guid.NewGuid().ToString("N");
-            await InsertClaimRowsAsync(conn, tx, ClaimTableName, ids, claimToken, now).ConfigureAwait(false);
-
-            var summaries = (await conn.QueryAsync<BufferHourlySummaryDto>(
-                @"
-                SELECT
-                    substr(b.CompletedTime, 1, 10)                          AS Date,
-                    CAST(substr(b.CompletedTime, 12, 2) AS INTEGER)         AS Hour,
-                    CASE
-                        WHEN CAST(substr(b.CompletedTime, 15, 2) AS INTEGER) >= 30
-                        THEN 30 ELSE 0
-                    END                                                     AS MinuteBucket,
-                    b.ShiftCode,
-                    b.PlcName,
-                    COUNT(*)                                                AS Total,
-                    SUM(CASE WHEN b.CellResult = 1 THEN 1 ELSE 0 END)       AS OkCount,
-                    SUM(CASE WHEN b.CellResult = 0 THEN 1 ELSE 0 END)       AS NgCount
-                FROM capacity_buffer b
-                INNER JOIN capacity_buffer_claims c ON c.RecordId = b.Id
-                WHERE c.ClaimToken = @ClaimToken
-                GROUP BY
-                    substr(b.CompletedTime, 1, 10),
-                    CAST(substr(b.CompletedTime, 12, 2) AS INTEGER),
-                    CASE
-                        WHEN CAST(substr(b.CompletedTime, 15, 2) AS INTEGER) >= 30
-                        THEN 30 ELSE 0
-                    END,
-                    b.ShiftCode,
-                    b.PlcName
-                ORDER BY Date ASC, Hour ASC, MinuteBucket ASC, b.ShiftCode ASC",
+        return await ClaimBatchCoreAsync<BufferHourlySummaryDto, ClaimedCapacityBufferBatch>(
+            ClaimTableName,
+            batchSize,
+            (conn, tx, size, _) => SelectUnclaimedIdsByIdAscendingAsync(conn, tx, ClaimTableName, size),
+            async (conn, tx, claimToken) => (await conn.QueryAsync<BufferHourlySummaryDto>(
+                BuildHourlySummarySql(
+                    @"FROM capacity_buffer b
+                INNER JOIN capacity_buffer_claims c ON c.RecordId = b.Id",
+                    completedTimeColumn: "b.CompletedTime",
+                    shiftCodeColumn: "b.ShiftCode",
+                    plcNameColumn: "b.PlcName",
+                    cellResultColumn: "b.CellResult",
+                    orderShiftCodeColumn: "b.ShiftCode",
+                    whereClause: "c.ClaimToken = @ClaimToken"),
                 new { ClaimToken = claimToken },
                 tx,
-                commandTimeout: CommandTimeout)).ToList();
-
-            if (summaries.Count == 0)
-            {
-                await conn.ExecuteAsync(
-                    $"DELETE FROM {ClaimTableName} WHERE ClaimToken = @ClaimToken",
-                    new { ClaimToken = claimToken },
-                    tx,
-                    commandTimeout: CommandTimeout);
-                return null;
-            }
-
-            return new ClaimedCapacityBufferBatch
+                commandTimeout: CommandTimeout)).ToList(),
+            (claimToken, summaries) => new ClaimedCapacityBufferBatch
             {
                 ClaimToken = claimToken,
                 Summaries = summaries
-            };
-        });
+            }).ConfigureAwait(false);
     }
 
     public async Task DeleteClaimedSummaryAsync(string claimToken, string date, int hour, int minuteBucket, string shiftCode, string plcName)
@@ -230,12 +153,9 @@ public class CapacityBufferStore : ClaimBufferStoreBase<CapacityRecord>, ICapaci
                 FROM capacity_buffer b
                 INNER JOIN capacity_buffer_claims c ON c.RecordId = b.Id
                 WHERE c.ClaimToken = @ClaimToken
-                  AND substr(b.CompletedTime, 1, 10) = @Date
-                  AND CAST(substr(b.CompletedTime, 12, 2) AS INTEGER) = @Hour
-                  AND CASE
-                          WHEN CAST(substr(b.CompletedTime, 15, 2) AS INTEGER) >= 30
-                          THEN 30 ELSE 0
-                      END = @MinuteBucket
+                  AND " + CapacityDateExpression("b.CompletedTime") + @" = @Date
+                  AND " + CapacityHourExpression("b.CompletedTime") + @" = @Hour
+                  AND " + CapacityMinuteBucketExpression("b.CompletedTime") + @" = @MinuteBucket
                   AND b.ShiftCode = @ShiftCode
                   AND b.PlcName = @PlcName",
                 new
@@ -281,4 +201,53 @@ public class CapacityBufferStore : ClaimBufferStoreBase<CapacityRecord>, ICapaci
 
     public async Task<int> GetCountAsync()
         => await SafeCountAsync($"SELECT COUNT(*) FROM {TableName}");
+
+    private static string BuildHourlySummarySql(
+        string fromClause,
+        string completedTimeColumn,
+        string shiftCodeColumn,
+        string plcNameColumn,
+        string cellResultColumn,
+        string orderShiftCodeColumn,
+        string? whereClause = null)
+    {
+        var dateExpression = CapacityDateExpression(completedTimeColumn);
+        var hourExpression = CapacityHourExpression(completedTimeColumn);
+        var minuteBucketExpression = CapacityMinuteBucketExpression(completedTimeColumn);
+        var whereSql = string.IsNullOrWhiteSpace(whereClause)
+            ? string.Empty
+            : $@"
+                WHERE {whereClause}";
+
+        return $@"
+                SELECT
+                    {dateExpression}                                    AS Date,
+                    {hourExpression}                                    AS Hour,
+                    {minuteBucketExpression}                            AS MinuteBucket,
+                    {shiftCodeColumn}                                   AS ShiftCode,
+                    {plcNameColumn}                                     AS PlcName,
+                    COUNT(*)                                            AS Total,
+                    SUM(CASE WHEN {cellResultColumn} = 1 THEN 1 ELSE 0 END) AS OkCount,
+                    SUM(CASE WHEN {cellResultColumn} = 0 THEN 1 ELSE 0 END) AS NgCount
+                {fromClause}{whereSql}
+                GROUP BY
+                    {dateExpression},
+                    {hourExpression},
+                    {minuteBucketExpression},
+                    {shiftCodeColumn},
+                    {plcNameColumn}
+                ORDER BY Date ASC, Hour ASC, MinuteBucket ASC, {orderShiftCodeColumn} ASC";
+    }
+
+    private static string CapacityDateExpression(string completedTimeColumn)
+        => $"substr({completedTimeColumn}, 1, 10)";
+
+    private static string CapacityHourExpression(string completedTimeColumn)
+        => $"CAST(substr({completedTimeColumn}, 12, 2) AS INTEGER)";
+
+    private static string CapacityMinuteBucketExpression(string completedTimeColumn)
+        => $@"CASE
+                        WHEN CAST(substr({completedTimeColumn}, 15, 2) AS INTEGER) >= 30
+                        THEN 30 ELSE 0
+                    END";
 }

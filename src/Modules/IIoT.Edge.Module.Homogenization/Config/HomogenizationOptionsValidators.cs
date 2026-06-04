@@ -48,27 +48,6 @@ public sealed class HomogenizationModuleOptionsValidator : IValidateOptions<Homo
 }
 
 /// <summary>
-/// 匀浆 MES 接口配置校验器，确保签名令牌和五类接口路径在启动时可用。
-/// </summary>
-public sealed class HomogenizationMesOptionsValidator : IValidateOptions<HomogenizationMesOptions>
-{
-    public ValidateOptionsResult Validate(string? name, HomogenizationMesOptions options)
-    {
-        var errors = new List<string>();
-        if (string.IsNullOrWhiteSpace(options.SignToken))
-        {
-            errors.Add(HomogenizationText.Get(
-                "Homogenization_Validate_MesSignTokenRequired",
-                "匀浆 MES 签名令牌不能为空。"));
-        }
-
-        return errors.Count == 0
-            ? ValidateOptionsResult.Success
-            : ValidateOptionsResult.Fail(errors);
-    }
-}
-
-/// <summary>
 /// 匀浆 PLC/MES code 配置校验器，确保触发应答码和 MES 字段码表完整。
 /// </summary>
 public sealed class HomogenizationCodeOptionsValidator : IValidateOptions<HomogenizationCodeOptions>

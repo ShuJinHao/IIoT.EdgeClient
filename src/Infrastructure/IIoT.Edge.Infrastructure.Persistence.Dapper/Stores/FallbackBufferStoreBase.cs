@@ -54,13 +54,7 @@ public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TE
 
     public async Task<List<TEntity>> GetPendingAsync(int batchSize = 50)
     {
-        var sql = $@"
-            SELECT * FROM {TableName}
-            ORDER BY Id ASC
-            LIMIT @BatchSize";
-
-        var result = await SafeQueryAsync(sql, new { BatchSize = batchSize }).ConfigureAwait(false);
-        return result.ToList();
+        return await SafeQueryByIdAscendingAsync<TEntity>(batchSize).ConfigureAwait(false);
     }
 
     public async Task MovePendingToRetryAsync(IEnumerable<long> ids)

@@ -146,24 +146,21 @@ public sealed class HomogenizationProductionPlanSelectionService(
                 || message.Contains("超时", StringComparison.OrdinalIgnoreCase));
 
     private Task<bool> IsMesEnabledAsync(CancellationToken cancellationToken)
-        => _moduleParamRoleProvider.GetBoolAsync(
+        => _moduleParamRoleProvider.GetMesBoolAsync(
             DependencyInjection.ModuleKey,
-            ModuleParamCategory.Mes,
             ModuleParamRole.MesEnabled,
             defaultValue: true,
             cancellationToken);
 
     private Task<string?> GetUpperComputerNoAsync(CancellationToken cancellationToken)
-        => _moduleParamRoleProvider.GetStringAsync(
+        => _moduleParamRoleProvider.GetMesStringAsync(
             DependencyInjection.ModuleKey,
-            ModuleParamCategory.Mes,
             ModuleParamRole.MesUpperComputerNo,
             cancellationToken: cancellationToken);
 
     private Task<string?> GetOperationCodeAsync(CancellationToken cancellationToken)
-        => _moduleParamRoleProvider.GetStringAsync(
+        => _moduleParamRoleProvider.GetMesStringAsync(
             DependencyInjection.ModuleKey,
-            ModuleParamCategory.Mes,
             ModuleParamRole.MesOperationCode,
             cancellationToken: cancellationToken);
 

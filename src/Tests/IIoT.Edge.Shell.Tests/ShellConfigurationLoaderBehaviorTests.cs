@@ -195,8 +195,10 @@ public sealed class ShellConfigurationLoaderBehaviorTests
                 {
                   "Modules": {
                     "Homogenization": {
-                      "Mes": {
-                        "SignToken": "hdc2023"
+                      "Module": {
+                        "Runtime": {
+                          "EventLoopIntervalMs": 50
+                        }
                       }
                     }
                   }
@@ -205,7 +207,7 @@ public sealed class ShellConfigurationLoaderBehaviorTests
 
             var result = new ShellConfigurationLoader().Load(tempDirectory);
 
-            Assert.Equal("hdc2023", result.Configuration["Modules:Homogenization:Mes:SignToken"]);
+            Assert.Equal("50", result.Configuration["Modules:Homogenization:Module:Runtime:EventLoopIntervalMs"]);
         }
         finally
         {

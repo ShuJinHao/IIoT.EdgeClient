@@ -7,7 +7,7 @@ namespace IIoT.Edge.Application.Modules.Hardware;
 /// 标准 PLC 插件硬件模板提供者，聚合交互、单点读、连续读、单点写、连续写五类枚举 profile。
 /// </summary>
 public abstract class StandardModuleHardwareProfileProviderBase<TInteraction, TSingleRead, TContinuousRead, TSingleWrite, TContinuousWrite>
-    : IModuleHardwareProfileProvider
+    : ModuleHardwareProfileProviderBase
     where TInteraction : struct, Enum
     where TSingleRead : struct, Enum
     where TContinuousRead : struct, Enum
@@ -19,6 +19,7 @@ public abstract class StandardModuleHardwareProfileProviderBase<TInteraction, TS
     private readonly IModulePlcSignalProfile<TContinuousRead> _continuousReadProfile;
     private readonly IModulePlcSignalProfile<TSingleWrite> _singleWriteProfile;
     private readonly IModulePlcSignalProfile<TContinuousWrite> _continuousWriteProfile;
+    private readonly Lazy<IReadOnlyList<ModuleHardwareSignalTemplate>> _templateSignals;
 
     protected StandardModuleHardwareProfileProviderBase(
         IModulePlcSignalProfile<TInteraction> interactionProfile,
@@ -37,70 +38,59 @@ public abstract class StandardModuleHardwareProfileProviderBase<TInteraction, TS
         EnsureSameModuleId(_interactionProfile.ModuleId, _continuousReadProfile.ModuleId, nameof(continuousReadProfile));
         EnsureSameModuleId(_interactionProfile.ModuleId, _singleWriteProfile.ModuleId, nameof(singleWriteProfile));
         EnsureSameModuleId(_interactionProfile.ModuleId, _continuousWriteProfile.ModuleId, nameof(continuousWriteProfile));
+
+        _templateSignals = new Lazy<IReadOnlyList<ModuleHardwareSignalTemplate>>(BuildAllSignals);
     }
 
-    public string ModuleId => _interactionProfile.ModuleId;
+    public override string ModuleId => _interactionProfile.ModuleId;
 
     protected abstract string ModuleDisplayName { get; }
 
-    public abstract ModulePlcDefaults GetDefaultPlcSettings();
+    protected override IReadOnlyList<ModuleHardwareSignalTemplate> TemplateSignals => _templateSignals.Value;
 
-    public virtual PlcIoRuntimePolicy GetIoRuntimePolicy()
-        => PlcIoRuntimePolicy.Default;
+    protected override bool RequireCategory => true;
 
-    public IReadOnlyList<ModuleIoTemplateEntry> GetDefaultIoTemplate()
-        => AllSignals()
+    protected override IEnumerable<ModuleHardwareSignalTemplate> GetDefaultTemplateSignals()
+        => TemplateSignals
             .Where(static signal => !string.IsNullOrWhiteSpace(signal.DefaultAddress))
+            .OrderBy(static signal => signal.SortOrder);
+
+    protected override IEnumerable<ModuleHardwareSignalTemplate> GetIoMappingCandidateSignals()
+        => TemplateSignals
             .OrderBy(static signal => signal.SortOrder)
-            .Select(CreateTemplateEntry)
-            .ToArray();
+            .ThenBy(static signal => signal.SignalKey, StringComparer.OrdinalIgnoreCase);
 
-    public virtual IReadOnlyList<ModuleIoTemplateEntry> GetIoMappingCandidates()
-        => AllSignals()
-            .OrderBy(static signal => signal.SortOrder)
-            .ThenBy(static signal => signal.SignalKey, StringComparer.OrdinalIgnoreCase)
-            .Select(CreateTemplateEntry)
-            .ToArray();
-
-    public ModuleHardwareValidationResult ValidatePlcConfiguration(
-        string deviceName,
-        string? deviceModel,
-        IReadOnlyCollection<ModuleIoSnapshot> mappings)
-        => ModuleHardwareProfileValidator.Validate(
-            deviceName,
-            mappings,
-            CreateRequirementsForExistingMappings(mappings),
-            requireCategory: true,
-            validateSequentialOrder: false);
-
-    private IReadOnlyCollection<ModuleHardwareSignalRequirement> CreateRequirementsForExistingMappings(
+    protected override IReadOnlyCollection<ModuleHardwareSignalRequirement> CreateValidationRequirements(
         IReadOnlyCollection<ModuleIoSnapshot> mappings)
     {
         var existingKeys = mappings
             .Select(static mapping => CreateDirectionSignalKey(mapping.SignalKey, mapping.Direction))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        return AllSignals()
-            .Where(signal => existingKeys.Contains(CreateDirectionSignalKey(signal.SignalKey, signal.DirectionText)))
+        return TemplateSignals
+            .Where(signal => existingKeys.Contains(CreateDirectionSignalKey(signal.SignalKey, signal.Direction)))
             .Select(static signal => new ModuleHardwareSignalRequirement(
                     signal.SignalKey,
                     signal.AddressCount,
                     signal.DataType,
-                    signal.DirectionText,
+                    signal.Direction,
                     signal.SortOrder,
                     signal.Category))
             .ToArray();
     }
 
-    private IEnumerable<SignalTemplate> AllSignals()
+    protected override string CreateTemplateRemark(ModuleHardwareSignalTemplate signal)
+        => $"{ModuleDisplayName} - {signal.DisplayName}";
+
+    private IReadOnlyList<ModuleHardwareSignalTemplate> BuildAllSignals()
     {
         var signals = new[]
             {
-                _interactionProfile.Signals.Select(SignalTemplate.From),
-                _singleReadProfile.Signals.Select(SignalTemplate.From),
-                _continuousReadProfile.Signals.Select(SignalTemplate.From),
-                _singleWriteProfile.Signals.Select(SignalTemplate.From),
-                _continuousWriteProfile.Signals.Select(SignalTemplate.From)
+                _interactionProfile.Signals.Select(ModuleHardwareSignalTemplate.From),
+                _singleReadProfile.Signals.Select(ModuleHardwareSignalTemplate.From),
+                _continuousReadProfile.Signals.Select(ModuleHardwareSignalTemplate.From),
+                _singleWriteProfile.Signals.Select(ModuleHardwareSignalTemplate.From),
+                _continuousWriteProfile.Signals.Select(ModuleHardwareSignalTemplate.From)
             }
             .SelectMany(static signal => signal)
             .ToArray();
@@ -109,10 +99,10 @@ public abstract class StandardModuleHardwareProfileProviderBase<TInteraction, TS
         return signals;
     }
 
-    private void EnsureUniqueDirectionSignalKeys(IReadOnlyCollection<SignalTemplate> signals)
+    private void EnsureUniqueDirectionSignalKeys(IReadOnlyCollection<ModuleHardwareSignalTemplate> signals)
     {
         var duplicate = signals
-            .GroupBy(static signal => CreateDirectionSignalKey(signal.SignalKey, signal.DirectionText))
+            .GroupBy(static signal => CreateDirectionSignalKey(signal.SignalKey, signal.Direction))
             .FirstOrDefault(static group => group.Count() > 1);
 
         if (duplicate is not null)
@@ -120,18 +110,6 @@ public abstract class StandardModuleHardwareProfileProviderBase<TInteraction, TS
             throw new InvalidOperationException($"模块【{ModuleId}】PLC 信号存在重复 SignalKey/方向：{duplicate.Key}");
         }
     }
-
-    private ModuleIoTemplateEntry CreateTemplateEntry(SignalTemplate signal)
-        => new(
-            signal.SignalKey,
-            signal.DefaultAddress,
-            signal.AddressCount,
-            signal.DataType,
-            signal.DirectionText,
-            signal.SortOrder,
-            $"{ModuleDisplayName} - {signal.DisplayName}",
-            signal.Category,
-            signal.BusinessGroup);
 
     private static void EnsureSameModuleId(string expectedModuleId, string actualModuleId, string profileName)
     {
@@ -142,31 +120,4 @@ public abstract class StandardModuleHardwareProfileProviderBase<TInteraction, TS
         }
     }
 
-    private static string CreateDirectionSignalKey(string signalKey, string direction)
-        => $"{direction.Trim().ToUpperInvariant()}:{signalKey.Trim().ToUpperInvariant()}";
-
-    private sealed record SignalTemplate(
-        string SignalKey,
-        string DisplayName,
-        string DefaultAddress,
-        int AddressCount,
-        string DataType,
-        string DirectionText,
-        int SortOrder,
-        string Category,
-        string BusinessGroup)
-    {
-        public static SignalTemplate From<TSignalKey>(ModuleSignalDefinition<TSignalKey> signal)
-            where TSignalKey : struct, Enum
-            => new(
-                signal.SignalKey,
-                signal.DisplayName,
-                signal.DefaultAddress,
-                signal.AddressCount,
-                signal.DataType,
-                signal.DirectionText,
-                signal.SortOrder,
-                signal.Category,
-                signal.BusinessGroup);
-    }
 }

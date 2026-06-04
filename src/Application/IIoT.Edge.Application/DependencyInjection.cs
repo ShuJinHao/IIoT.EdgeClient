@@ -19,6 +19,7 @@ using IIoT.Edge.Application.Features.Production.CapacityView;
 using IIoT.Edge.Application.Features.Production.DataView;
 using IIoT.Edge.Application.Features.Production.Equipment;
 using IIoT.Edge.Application.Features.Production.Monitor;
+using IIoT.Edge.Application.Modules.Hardware;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace IIoT.Edge.Application;
@@ -34,33 +35,24 @@ public static class DependencyInjection
         services.AddSingleton<ILocalParameterConfigChangePublisher>(sp => sp.GetRequiredService<LocalParameterConfigService>());
         services.AddSingleton<LocalSystemRuntimeConfigService>();
         services.AddSingleton<ILocalSystemRuntimeConfigService>(sp => sp.GetRequiredService<LocalSystemRuntimeConfigService>());
+        services.AddSingleton<ModuleParamValueSnapshotLoader>();
+        services.AddSingleton<ModuleHardwareProfileResolver>();
         services.AddSingleton(typeof(IModuleParamProvider<,,>), typeof(ModuleParamProvider<,,>));
         services.AddSingleton<IModuleParamRoleProvider, ModuleParamRoleProvider>();
         services.AddSingleton<IConfigSchemaReconciler, ConfigSchemaReconciler>();
-        services.AddSingleton<IConfigSchemaSource>(sp => new ModuleParamSchemaSource(
-            sp.GetRequiredService<IModuleParamRegistry>(),
-            ModuleParamCategory.Mes,
-            ModuleParamSchemaIds.Mes));
-        services.AddSingleton<IConfigSchemaSource>(sp => new ModuleParamSchemaSource(
-            sp.GetRequiredService<IModuleParamRegistry>(),
-            ModuleParamCategory.Cloud,
-            ModuleParamSchemaIds.Cloud));
-        services.AddSingleton<IConfigSchemaSource>(sp => new ModuleParamSchemaSource(
-            sp.GetRequiredService<IModuleParamRegistry>(),
-            ModuleParamCategory.Business,
-            ModuleParamSchemaIds.Business));
-        services.AddSingleton<IConfigValueStore>(sp => new ModuleParamConfigValueStore(
-            sp.GetRequiredService<ILocalParameterConfigService>(),
-            ModuleParamCategory.Mes,
-            ModuleParamSchemaIds.Mes));
-        services.AddSingleton<IConfigValueStore>(sp => new ModuleParamConfigValueStore(
-            sp.GetRequiredService<ILocalParameterConfigService>(),
-            ModuleParamCategory.Cloud,
-            ModuleParamSchemaIds.Cloud));
-        services.AddSingleton<IConfigValueStore>(sp => new ModuleParamConfigValueStore(
-            sp.GetRequiredService<ILocalParameterConfigService>(),
-            ModuleParamCategory.Business,
-            ModuleParamSchemaIds.Business));
+        foreach (var category in new[] { ModuleParamCategory.Mes, ModuleParamCategory.Cloud, ModuleParamCategory.Business })
+        {
+            var schemaId = ModuleParamSchemaIds.ForCategory(category);
+            services.AddSingleton<IConfigSchemaSource>(sp => new ModuleParamSchemaSource(
+                sp.GetRequiredService<IModuleParamRegistry>(),
+                category,
+                schemaId));
+            services.AddSingleton<IConfigValueStore>(sp => new ModuleParamConfigValueStore(
+                sp.GetRequiredService<ILocalParameterConfigService>(),
+                category,
+                schemaId));
+        }
+
         services.AddSingleton<IConfigSchemaSource, CloudApiConfigSchemaSource>();
         services.AddSingleton<IConfigValueStore, CloudApiConfigValueStore>();
         services.AddSingleton<IConfigSchemaSource, IoMappingSchemaSource>();
