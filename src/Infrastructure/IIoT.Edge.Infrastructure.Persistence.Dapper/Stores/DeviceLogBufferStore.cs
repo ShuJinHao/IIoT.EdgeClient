@@ -63,43 +63,16 @@ public class DeviceLogBufferStore : ClaimBufferStoreBase<DeviceLogRecord>, IDevi
 
     public async Task<List<DeviceLogRecord>> GetPendingAsync(int batchSize = 100)
     {
-        var sql = $@"
-            SELECT * FROM {TableName}
-            ORDER BY Id ASC
-            LIMIT @BatchSize";
-
-        var result = await SafeQueryAsync(sql, new { BatchSize = batchSize });
-        return result.ToList();
+        return await SafeQueryByIdAscendingAsync<DeviceLogRecord>(batchSize).ConfigureAwait(false);
     }
 
     public async Task<ClaimedDeviceLogBatch?> ClaimPendingBatchAsync(int batchSize = 100)
     {
-        return await ExecuteInTransactionAsync<ClaimedDeviceLogBatch?>(async (conn, tx) =>
-        {
-            var now = DateTime.UtcNow;
-            await DeleteExpiredClaimsAsync(conn, tx, ClaimTableName, now).ConfigureAwait(false);
-
-            var ids = (await conn.QueryAsync<long>(
-                @"
-                SELECT b.Id
-                FROM device_log_buffer b
-                LEFT JOIN device_log_buffer_claims c ON c.RecordId = b.Id
-                WHERE c.RecordId IS NULL
-                ORDER BY b.Id ASC
-                LIMIT @BatchSize",
-                new { BatchSize = batchSize },
-                tx,
-                commandTimeout: CommandTimeout)).ToList();
-
-            if (ids.Count == 0)
-            {
-                return null;
-            }
-
-            var claimToken = Guid.NewGuid().ToString("N");
-            await InsertClaimRowsAsync(conn, tx, ClaimTableName, ids, claimToken, now).ConfigureAwait(false);
-
-            var records = (await conn.QueryAsync<DeviceLogRecord>(
+        return await ClaimBatchCoreAsync<DeviceLogRecord, ClaimedDeviceLogBatch>(
+            ClaimTableName,
+            batchSize,
+            (conn, tx, size, _) => SelectUnclaimedIdsByIdAscendingAsync(conn, tx, ClaimTableName, size),
+            async (conn, tx, claimToken) => (await conn.QueryAsync<DeviceLogRecord>(
                 @"
                 SELECT b.*
                 FROM device_log_buffer b
@@ -108,47 +81,20 @@ public class DeviceLogBufferStore : ClaimBufferStoreBase<DeviceLogRecord>, IDevi
                 ORDER BY b.Id ASC",
                 new { ClaimToken = claimToken },
                 tx,
-                commandTimeout: CommandTimeout)).ToList();
-
-            if (records.Count == 0)
-            {
-                await conn.ExecuteAsync(
-                    $"DELETE FROM {ClaimTableName} WHERE ClaimToken = @ClaimToken",
-                    new { ClaimToken = claimToken },
-                    tx,
-                    commandTimeout: CommandTimeout);
-                return null;
-            }
-
-            return new ClaimedDeviceLogBatch
+                commandTimeout: CommandTimeout)).ToList(),
+            (claimToken, records) => new ClaimedDeviceLogBatch
             {
                 ClaimToken = claimToken,
                 Records = records
-            };
-        });
+            }).ConfigureAwait(false);
     }
 
     public async Task DeleteClaimedBatchAsync(string claimToken)
     {
-        await ExecuteInTransactionAsync<int>(async (conn, tx) =>
-        {
-            var ids = await GetClaimedIdsAsync(conn, tx, ClaimTableName, claimToken).ConfigureAwait(false);
-
-            if (ids.Count == 0)
-            {
-                throw new InvalidOperationException($"No claimed device log rows found for claim {claimToken}.");
-            }
-
-            await conn.ExecuteAsync(
-                "DELETE FROM device_log_buffer WHERE Id IN @Ids",
-                new { Ids = ids },
-                tx,
-                commandTimeout: CommandTimeout);
-
-            await DeleteClaimRowsByIdsAsync(conn, tx, ClaimTableName, ids).ConfigureAwait(false);
-
-            return ids.Count;
-        });
+        await DeleteClaimedRowsByClaimAsync(
+            ClaimTableName,
+            claimToken,
+            $"No claimed device log rows found for claim {claimToken}.").ConfigureAwait(false);
     }
 
     public async Task ReleaseClaimAsync(string claimToken)
@@ -159,26 +105,9 @@ public class DeviceLogBufferStore : ClaimBufferStoreBase<DeviceLogRecord>, IDevi
 
     public async Task DeleteBatchAsync(IEnumerable<long> ids)
     {
-        var idList = ids.ToList();
-        if (idList.Count == 0)
-        {
-            return;
-        }
-
-        foreach (var batch in ChunkBy(idList, 500))
-        {
-            await SafeExecuteAsync($"DELETE FROM {TableName} WHERE Id IN @Ids", new { Ids = batch });
-        }
+        await DeleteRowsByIdsInChunksAsync(ids).ConfigureAwait(false);
     }
 
     public async Task<int> GetCountAsync()
         => await SafeCountAsync($"SELECT COUNT(*) FROM {TableName}");
-
-    private static IEnumerable<List<T>> ChunkBy<T>(List<T> source, int chunkSize)
-    {
-        for (var i = 0; i < source.Count; i += chunkSize)
-        {
-            yield return source.GetRange(i, Math.Min(chunkSize, source.Count - i));
-        }
-    }
 }

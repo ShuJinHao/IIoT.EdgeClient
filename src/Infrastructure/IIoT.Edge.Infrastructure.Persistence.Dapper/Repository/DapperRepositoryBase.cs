@@ -68,6 +68,16 @@ public abstract class DapperRepositoryBase<TEntity> : ITableInitializer
             async connection => (await connection.QueryAsync<T>(sql, param, commandTimeout: CommandTimeout).ConfigureAwait(false)).ToList());
     }
 
+    protected Task<List<TProjection>> SafeQueryByIdAscendingAsync<TProjection>(int batchSize)
+    {
+        var sql = $@"
+            SELECT * FROM {TableName}
+            ORDER BY Id ASC
+            LIMIT @BatchSize";
+
+        return SafeQueryListAsync<TProjection>(sql, new { BatchSize = batchSize });
+    }
+
     protected Task<TEntity?> SafeQueryFirstOrDefaultAsync(string sql, object? param = null)
     {
         return ExecuteReadAsync(

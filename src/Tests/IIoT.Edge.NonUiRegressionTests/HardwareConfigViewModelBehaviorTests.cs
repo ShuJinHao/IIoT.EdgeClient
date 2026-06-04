@@ -142,34 +142,34 @@ public sealed class HardwareConfigViewModelBehaviorTests
         var viewModel = CreateViewModel();
         viewModel.SelectedNetworkDevice = CreatePlc();
         viewModel.StandardInteractionGroups.Add(new IoStandardSignalGroupOptionVm(
-            "test1",
+            "手工地址测试",
             [
                 new ModuleIoTemplateEntry(
-                    "Homogenization.Interaction.test1",
+                    "Test.Interaction.Manual",
                     string.Empty,
                     1,
                     "Int16",
                     "Read",
-                    10005,
-                    "test1 读点",
+                    901,
+                    "手工地址测试读点",
                     IoMappingOptionCatalog.CategoryInteraction,
-                    "test1"),
+                    "手工地址测试"),
                 new ModuleIoTemplateEntry(
-                    "Homogenization.Interaction.test1",
+                    "Test.Interaction.Manual",
                     string.Empty,
                     1,
                     "Int16",
                     "Write",
-                    20005,
-                    "test1 写点",
+                    902,
+                    "手工地址测试写点",
                     IoMappingOptionCatalog.CategoryInteraction,
-                    "test1")
+                    "手工地址测试")
             ]));
 
         viewModel.OpenAddInteractionMappingDialogCommand.Execute(null);
 
         Assert.NotNull(viewModel.NewInteractionPair);
-        Assert.Equal("test1", viewModel.NewInteractionPair!.BusinessGroup);
+        Assert.Equal("手工地址测试", viewModel.NewInteractionPair!.BusinessGroup);
         viewModel.ConfirmAddIoMappingCommand.Execute(null);
         Assert.Empty(viewModel.IoMappings);
         Assert.Contains("读地址和写地址", viewModel.ErrorMessage);
@@ -179,8 +179,8 @@ public sealed class HardwareConfigViewModelBehaviorTests
         viewModel.ConfirmAddIoMappingCommand.Execute(null);
 
         Assert.Equal(2, viewModel.IoMappings.Count);
-        Assert.Contains(viewModel.IoMappings, x => x.SignalKey == "Homogenization.Interaction.test1" && x.Direction == "Read" && x.PlcAddress == "D300");
-        Assert.Contains(viewModel.IoMappings, x => x.SignalKey == "Homogenization.Interaction.test1" && x.Direction == "Write" && x.PlcAddress == "D200");
+        Assert.Contains(viewModel.IoMappings, x => x.SignalKey == "Test.Interaction.Manual" && x.Direction == "Read" && x.PlcAddress == "D300");
+        Assert.Contains(viewModel.IoMappings, x => x.SignalKey == "Test.Interaction.Manual" && x.Direction == "Write" && x.PlcAddress == "D200");
         return Task.CompletedTask;
     });
 

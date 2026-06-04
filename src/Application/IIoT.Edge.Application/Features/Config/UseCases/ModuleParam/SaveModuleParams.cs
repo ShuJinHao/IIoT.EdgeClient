@@ -1,5 +1,6 @@
 using IIoT.Edge.Application.Abstractions.Cache;
 using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Application.Common.Config;
 using IIoT.Edge.Application.Features.Config;
 using IIoT.Edge.Application.Features.Config.ModuleParameters;
 using IIoT.Edge.Domain.Config.Aggregates;
@@ -33,45 +34,29 @@ public sealed class SaveModuleParamsHandler(
         SaveModuleParamsCommand request,
         CancellationToken cancellationToken)
     {
-        List<SystemConfigEntity> configs;
-        try
-        {
-            configs = request.Params
-                .GroupBy(x => x.Key?.Trim() ?? string.Empty, StringComparer.OrdinalIgnoreCase)
-                .Select(g => g.Last())
-                .Select((dto, index) =>
+        var configsResult = SystemConfigParamSaveHelper.BuildDistinctConfigs(
+            request.Params,
+            static dto => dto.Key,
+            static (dto, key, index) =>
+            {
+                if (!ModuleParamKeys.IsModuleStorageKey(key))
                 {
-                    var key = dto.Key?.Trim() ?? string.Empty;
-                    if (!ModuleParamKeys.IsModuleStorageKey(key))
-                    {
-                        throw new ArgumentException("插件参数键必须以 Module: 开头。");
-                    }
+                    throw new ArgumentException("插件参数键必须以 Module: 开头。");
+                }
 
-                    var entity = SystemConfigEntity.Create(key, dto.Value, dto.Description);
-                    entity.UpdateSortOrder(index + 1);
-                    return entity;
-                })
-                .ToList();
-        }
-        catch (ArgumentException ex)
+                var entity = SystemConfigEntity.Create(key, dto.Value, dto.Description);
+                entity.UpdateSortOrder(index + 1);
+                return entity;
+            });
+        if (!configsResult.IsSuccess)
         {
-            return Result.Failure(ex.Message);
+            return Result.Failure(configsResult.ErrorMessage ?? "插件参数保存失败。");
         }
 
-        var keys = configs
-            .Select(x => x.Key)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (keys.Count > 0)
-        {
-            await repo.ExecuteDeleteAsync(x => keys.Contains(x.Key), cancellationToken);
-        }
-
-        foreach (var config in configs)
-        {
-            repo.Add(config);
-        }
-
-        await repo.SaveChangesAsync(cancellationToken);
+        await SystemConfigParamSaveHelper.ReplaceByKeysAsync(
+            repo,
+            configsResult.Value ?? [],
+            cancellationToken);
 
         cache.Remove(ParameterCacheKeys.SystemAll);
         cache.RemoveByPrefix(ParameterCacheKeys.ModuleSnapshotPrefix);

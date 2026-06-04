@@ -64,69 +64,84 @@ public sealed class S7PlcService : IPlcService, IDisposable
     public void Disconnect() => _plc?.Close();
 
     public async Task<List<T>> ReadDataAsync<T>(string address, ushort length)
-    {
-        var plc = EnsureConnected();
-
-        await _semaphore.WaitAsync().ConfigureAwait(false);
-        try
-        {
-            using var timeoutCts = new CancellationTokenSource(OperationTimeout);
-
-            if (typeof(T) == typeof(ushort)
-                && TryParseDbWordAddress(address, out var dbNumber, out var startByteAddress))
+        => await ExecutePlcOperationAsync(
+            "Read",
+            address,
+            async (plc, cancellationToken) =>
             {
-                var rawBytes = await plc
-                    .ReadBytesAsync(
-                        DataType.DataBlock,
-                        dbNumber,
-                        startByteAddress,
-                        checked(length * 2),
-                        timeoutCts.Token)
-                    .ConfigureAwait(false);
-
-                var words = Word.ToArray(rawBytes);
-                if (words.Length < length)
+                if (typeof(T) == typeof(ushort)
+                    && TryParseDbWordAddress(address, out var dbNumber, out var startByteAddress))
                 {
-                    throw new InvalidOperationException(
-                        $"Read {address} returned {words.Length} word(s), expected {length}.");
+                    var rawBytes = await plc
+                        .ReadBytesAsync(
+                            DataType.DataBlock,
+                            dbNumber,
+                            startByteAddress,
+                            checked(length * 2),
+                            cancellationToken)
+                        .ConfigureAwait(false);
+
+                    var words = Word.ToArray(rawBytes);
+                    if (words.Length < length)
+                    {
+                        throw new InvalidOperationException(
+                            $"Read {address} returned {words.Length} word(s), expected {length}.");
+                    }
+
+                    return words
+                        .Take(length)
+                        .Select(value => (T)(object)value)
+                        .ToList();
                 }
 
-                return words
-                    .Take(length)
-                    .Select(value => (T)(object)value)
-                    .ToList();
-            }
-
-            var result = new List<T>(length);
-            for (var i = 0; i < length; i++)
-            {
-                var currentAddress = GetIndexedAddress(address, i);
-                var value = await plc.ReadAsync(currentAddress, timeoutCts.Token).ConfigureAwait(false);
-                if (value is null)
+                var result = new List<T>(length);
+                for (var i = 0; i < length; i++)
                 {
-                    throw new InvalidOperationException($"Read {currentAddress} returned null.");
+                    var currentAddress = GetIndexedAddress(address, i);
+                    var value = await plc.ReadAsync(currentAddress, cancellationToken).ConfigureAwait(false);
+                    if (value is null)
+                    {
+                        throw new InvalidOperationException($"Read {currentAddress} returned null.");
+                    }
+
+                    result.Add(ConvertValue<T>(value));
                 }
 
-                result.Add(ConvertValue<T>(value));
-            }
-
-            return result;
-        }
-        catch (OperationCanceledException ex)
-        {
-            throw new TimeoutException($"Read {address} timed out after {OperationTimeout.TotalSeconds:0}s.", ex);
-        }
-        catch (Exception ex) when (ex is not TimeoutException)
-        {
-            throw new InvalidOperationException($"Read {address} failed.", ex);
-        }
-        finally
-        {
-            _semaphore.Release();
-        }
-    }
+                return result;
+            })
+            .ConfigureAwait(false);
 
     public async Task WriteDataAsync<T>(string address, List<T> data)
+        => await ExecutePlcOperationAsync<object?>(
+            "Write",
+            address,
+            async (plc, cancellationToken) =>
+            {
+                if (typeof(T) == typeof(ushort)
+                    && TryParseDbWordAddress(address, out var dbNumber, out var startByteAddress))
+                {
+                    var words = data.Cast<ushort>().ToArray();
+                    var bytes = Word.ToByteArray(words);
+                    await plc
+                        .WriteBytesAsync(DataType.DataBlock, dbNumber, startByteAddress, bytes, cancellationToken)
+                        .ConfigureAwait(false);
+                    return null;
+                }
+
+                for (var i = 0; i < data.Count; i++)
+                {
+                    var currentAddress = GetIndexedAddress(address, i);
+                    await plc.WriteAsync(currentAddress, data[i]!, cancellationToken).ConfigureAwait(false);
+                }
+
+                return null;
+            })
+            .ConfigureAwait(false);
+
+    private async Task<TResult> ExecutePlcOperationAsync<TResult>(
+        string operation,
+        string address,
+        Func<PlcClient, CancellationToken, Task<TResult>> action)
     {
         var plc = EnsureConnected();
 
@@ -134,31 +149,15 @@ public sealed class S7PlcService : IPlcService, IDisposable
         try
         {
             using var timeoutCts = new CancellationTokenSource(OperationTimeout);
-
-            if (typeof(T) == typeof(ushort)
-                && TryParseDbWordAddress(address, out var dbNumber, out var startByteAddress))
-            {
-                var words = data.Cast<ushort>().ToArray();
-                var bytes = Word.ToByteArray(words);
-                await plc
-                    .WriteBytesAsync(DataType.DataBlock, dbNumber, startByteAddress, bytes, timeoutCts.Token)
-                    .ConfigureAwait(false);
-                return;
-            }
-
-            for (var i = 0; i < data.Count; i++)
-            {
-                var currentAddress = GetIndexedAddress(address, i);
-                await plc.WriteAsync(currentAddress, data[i]!, timeoutCts.Token).ConfigureAwait(false);
-            }
+            return await action(plc, timeoutCts.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException ex)
         {
-            throw new TimeoutException($"Write {address} timed out after {OperationTimeout.TotalSeconds:0}s.", ex);
+            throw new TimeoutException($"{operation} {address} timed out after {OperationTimeout.TotalSeconds:0}s.", ex);
         }
         catch (Exception ex) when (ex is not TimeoutException)
         {
-            throw new InvalidOperationException($"Write {address} failed.", ex);
+            throw new InvalidOperationException($"{operation} {address} failed.", ex);
         }
         finally
         {

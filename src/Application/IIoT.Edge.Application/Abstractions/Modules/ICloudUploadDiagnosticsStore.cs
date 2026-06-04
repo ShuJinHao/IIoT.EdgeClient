@@ -29,13 +29,11 @@ public sealed record CloudUploadDiagnosticsSnapshot(
     string BlockedReason,
     DateTime? LastCapacityBlockAt);
 
-public interface ICloudUploadDiagnosticsStore
+public interface ICloudUploadDiagnosticsStore : IRetryDiagnosticsStore<CloudRetryRuntimeState>
 {
     CloudUploadDiagnosticsSnapshot Snapshot { get; }
 
     void RecordResult(string? processType, CloudCallResult result);
-
-    void SetRuntimeState(CloudRetryRuntimeState state);
 
     void MarkCapacityBlocked(
         CapacityBlockedChannel channel,

@@ -29,9 +29,10 @@ public sealed class IoMappingSchemaReconciliationBehaviorTests
         var staleMapping = CreateMapping(11, device.Id, "Legacy.Signal", "D1", "Read", sortOrder: 900);
         var ioRepo = new InMemoryRepository<IoMappingEntity>(customizedInbound, staleMapping);
         var profiles = new IModuleHardwareProfileProvider[] { new HomogenizationHardwareProfileProvider() };
+        var profileResolver = new ModuleHardwareProfileResolver(profiles);
         var reconciler = new ConfigSchemaReconciler(
-            [new IoMappingSchemaSource(networkRepo, profiles)],
-            [new IoMappingConfigValueStore(networkRepo, ioRepo, profiles)]);
+            [new IoMappingSchemaSource(networkRepo, profileResolver)],
+            [new IoMappingConfigValueStore(networkRepo, ioRepo, profileResolver)]);
 
         await reconciler.ReconcileAsync(TestContext.Current.CancellationToken);
 
@@ -46,16 +47,7 @@ public sealed class IoMappingSchemaReconciliationBehaviorTests
             && x.SignalKey == "Homogenization.Interaction.Inbound"
             && x.Direction == "Read"
             && x.PlcAddress == "D999");
-        Assert.Contains(ioRepo.Items, x =>
-            x.NetworkDeviceId == device.Id
-            && x.SignalKey == "Homogenization.Interaction.test1"
-            && x.Direction == "Read"
-            && x.PlcAddress == string.Empty);
-        Assert.Contains(ioRepo.Items, x =>
-            x.NetworkDeviceId == device.Id
-            && x.SignalKey == "Homogenization.Interaction.test1"
-            && x.Direction == "Write"
-            && x.PlcAddress == string.Empty);
+        Assert.DoesNotContain(ioRepo.Items, x => string.IsNullOrWhiteSpace(x.PlcAddress));
     }
 
     private static NetworkDeviceEntity CreatePlc(int id, string deviceName)

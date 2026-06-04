@@ -5,18 +5,9 @@ using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
+using IIoT.Edge.Module.Homogenization.Integration;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using Microsoft.Extensions.Options;
-using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesScenarioChannel<
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
-    string,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRealtimeSnapshot,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRecipeSnapshot,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlanRequest,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlan,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchRequest,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchResult>;
 
 namespace IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 
@@ -26,7 +17,7 @@ namespace IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
 {
     private readonly IDeviceService _deviceService;
-    private readonly HomogenizationMesScenarioChannel _mesChannel;
+    private readonly IHomogenizationMesScenarioChannel _mesChannel;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
     private readonly IHomogenizationProductionGate _productionGate;
 
@@ -39,7 +30,7 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
         HomogenizationSignalCodec codec,
         HomogenizationContext context,
         IDeviceService deviceService,
-        HomogenizationMesScenarioChannel mesChannel,
+        IHomogenizationMesScenarioChannel mesChannel,
         IMesUploadDiagnosticsStore diagnosticsStore,
         IHomogenizationProductionGate productionGate,
         ILogService logger,
@@ -63,51 +54,26 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
     {
         const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.工艺参数上传;
 
-        await ExecuteHandshakeAsync(
+        await ExecuteMesSnapshotHandshakeAsync(
             trigger,
             "工艺参数上传已触发。",
             "配方上传复位。",
-            ProcessTriggerAsync,
-            static ex => $"配方上传处理异常：{ex.Message}",
+            "配方上传处理异常",
+            CodeOptions.Mes.Channels.Recipe,
+            _productionGate,
+            _diagnosticsStore,
+            Codec.CaptureRecipeSnapshot,
+            (snapshot, ct) => _mesChannel.UploadRecipeAsync(_deviceService.CurrentDevice, snapshot, ct),
             message =>
             {
-                _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Recipe, message);
                 ModuleContext.LastRecipeAt = ProductionTime.BusinessNow;
                 ModuleContext.LastRecipeResult = message;
+            },
+            (snapshot, result) =>
+            {
+                ModuleContext.LastRecipeAt = snapshot.CapturedAt;
+                ModuleContext.LastRecipeResult = result.Message;
+                ModuleContext.LastRecipeSnapshot = snapshot;
             }).ConfigureAwait(false);
-    }
-
-    private async Task ProcessTriggerAsync(CancellationToken cancellationToken)
-    {
-        const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.工艺参数上传;
-        var gateResult = await _productionGate.EnsureReadyAsync(ModuleContext, cancellationToken).ConfigureAwait(false);
-        if (!gateResult.IsSuccess)
-        {
-            _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Recipe, gateResult.Message);
-            ModuleContext.LastRecipeAt = ProductionTime.BusinessNow;
-            ModuleContext.LastRecipeResult = gateResult.Message;
-            Interaction.ReplyResult(trigger, gateResult);
-            return;
-        }
-
-        var snapshot = Codec.CaptureRecipeSnapshot();
-        var result = await _mesChannel
-            .UploadRecipeAsync(_deviceService.CurrentDevice, snapshot, cancellationToken)
-            .ConfigureAwait(false);
-
-        if (result.IsSuccess)
-        {
-            _diagnosticsStore.RecordSuccess(CodeOptions.Mes.Channels.Recipe);
-        }
-        else
-        {
-            _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Recipe, result.Message);
-        }
-
-        ModuleContext.LastRecipeAt = snapshot.CapturedAt;
-        ModuleContext.LastRecipeResult = result.Message;
-        ModuleContext.LastRecipeSnapshot = snapshot;
-
-        Interaction.ReplyResult(trigger, result);
     }
 }

@@ -78,61 +78,7 @@ public sealed class McPlcService : IPlcService, IDisposable
         await _semaphore.WaitAsync().ConfigureAwait(false);
         try
         {
-            if (typeof(T) == typeof(bool))
-            {
-                var data = await protocol
-                    .BatchReadAsync<bool>(parsedAddress.Prefix, parsedAddress.Address, length)
-                    .WaitAsync(OperationTimeout)
-                    .ConfigureAwait(false);
-                return ((T[])(object)data).ToList();
-            }
-
-            if (typeof(T) == typeof(short))
-            {
-                var data = await protocol
-                    .BatchReadAsync<short>(parsedAddress.Prefix, parsedAddress.Address, length)
-                    .WaitAsync(OperationTimeout)
-                    .ConfigureAwait(false);
-                return ((T[])(object)data).ToList();
-            }
-
-            if (typeof(T) == typeof(ushort))
-            {
-                var data = await protocol
-                    .BatchReadAsync<ushort>(parsedAddress.Prefix, parsedAddress.Address, length)
-                    .WaitAsync(OperationTimeout)
-                    .ConfigureAwait(false);
-                return ((T[])(object)data).ToList();
-            }
-
-            if (typeof(T) == typeof(int))
-            {
-                var data = await protocol
-                    .BatchReadAsync<int>(parsedAddress.Prefix, parsedAddress.Address, length)
-                    .WaitAsync(OperationTimeout)
-                    .ConfigureAwait(false);
-                return ((T[])(object)data).ToList();
-            }
-
-            if (typeof(T) == typeof(uint))
-            {
-                var data = await protocol
-                    .BatchReadAsync<uint>(parsedAddress.Prefix, parsedAddress.Address, length)
-                    .WaitAsync(OperationTimeout)
-                    .ConfigureAwait(false);
-                return ((T[])(object)data).ToList();
-            }
-
-            if (typeof(T) == typeof(float))
-            {
-                var data = await protocol
-                    .BatchReadAsync<float>(parsedAddress.Prefix, parsedAddress.Address, length)
-                    .WaitAsync(OperationTimeout)
-                    .ConfigureAwait(false);
-                return ((T[])(object)data).ToList();
-            }
-
-            throw UnsupportedType<T>();
+            return await ReadSupportedAsync<T>(protocol, parsedAddress, length).ConfigureAwait(false);
         }
         catch (TimeoutException ex)
         {
@@ -156,61 +102,7 @@ public sealed class McPlcService : IPlcService, IDisposable
         await _semaphore.WaitAsync().ConfigureAwait(false);
         try
         {
-            if (typeof(T) == typeof(bool))
-            {
-                await protocol
-                    .BatchWriteAsync(parsedAddress.Prefix, parsedAddress.Address, (bool[])(object)data.ToArray())
-                    .WaitAsync(OperationTimeout)
-                    .ConfigureAwait(false);
-                return;
-            }
-
-            if (typeof(T) == typeof(short))
-            {
-                await protocol
-                    .BatchWriteAsync(parsedAddress.Prefix, parsedAddress.Address, (short[])(object)data.ToArray())
-                    .WaitAsync(OperationTimeout)
-                    .ConfigureAwait(false);
-                return;
-            }
-
-            if (typeof(T) == typeof(ushort))
-            {
-                await protocol
-                    .BatchWriteAsync(parsedAddress.Prefix, parsedAddress.Address, (ushort[])(object)data.ToArray())
-                    .WaitAsync(OperationTimeout)
-                    .ConfigureAwait(false);
-                return;
-            }
-
-            if (typeof(T) == typeof(int))
-            {
-                await protocol
-                    .BatchWriteAsync(parsedAddress.Prefix, parsedAddress.Address, (int[])(object)data.ToArray())
-                    .WaitAsync(OperationTimeout)
-                    .ConfigureAwait(false);
-                return;
-            }
-
-            if (typeof(T) == typeof(uint))
-            {
-                await protocol
-                    .BatchWriteAsync(parsedAddress.Prefix, parsedAddress.Address, (uint[])(object)data.ToArray())
-                    .WaitAsync(OperationTimeout)
-                    .ConfigureAwait(false);
-                return;
-            }
-
-            if (typeof(T) == typeof(float))
-            {
-                await protocol
-                    .BatchWriteAsync(parsedAddress.Prefix, parsedAddress.Address, (float[])(object)data.ToArray())
-                    .WaitAsync(OperationTimeout)
-                    .ConfigureAwait(false);
-                return;
-            }
-
-            throw UnsupportedType<T>();
+            await WriteSupportedAsync(protocol, parsedAddress, data).ConfigureAwait(false);
         }
         catch (TimeoutException ex)
         {
@@ -311,6 +203,46 @@ public sealed class McPlcService : IPlcService, IDisposable
 
         return (ushort)Math.Min(milliseconds, ushort.MaxValue);
     }
+
+    private static Task<List<T>> ReadSupportedAsync<T>(McpX protocol, McDeviceAddress address, ushort length)
+        => typeof(T) switch
+        {
+            var type when type == typeof(bool) => ReadTypedAsync<T, bool>(protocol, address, length),
+            var type when type == typeof(short) => ReadTypedAsync<T, short>(protocol, address, length),
+            var type when type == typeof(ushort) => ReadTypedAsync<T, ushort>(protocol, address, length),
+            var type when type == typeof(int) => ReadTypedAsync<T, int>(protocol, address, length),
+            var type when type == typeof(uint) => ReadTypedAsync<T, uint>(protocol, address, length),
+            var type when type == typeof(float) => ReadTypedAsync<T, float>(protocol, address, length),
+            _ => throw UnsupportedType<T>()
+        };
+
+    private static async Task<List<T>> ReadTypedAsync<T, TValue>(McpX protocol, McDeviceAddress address, ushort length)
+        where TValue : unmanaged
+    {
+        var data = await protocol
+            .BatchReadAsync<TValue>(address.Prefix, address.Address, length)
+            .WaitAsync(OperationTimeout)
+            .ConfigureAwait(false);
+        return data.Select(static value => (T)(object)value).ToList();
+    }
+
+    private static Task WriteSupportedAsync<T>(McpX protocol, McDeviceAddress address, IReadOnlyCollection<T> data)
+        => typeof(T) switch
+        {
+            var type when type == typeof(bool) => WriteTypedAsync<T, bool>(protocol, address, data),
+            var type when type == typeof(short) => WriteTypedAsync<T, short>(protocol, address, data),
+            var type when type == typeof(ushort) => WriteTypedAsync<T, ushort>(protocol, address, data),
+            var type when type == typeof(int) => WriteTypedAsync<T, int>(protocol, address, data),
+            var type when type == typeof(uint) => WriteTypedAsync<T, uint>(protocol, address, data),
+            var type when type == typeof(float) => WriteTypedAsync<T, float>(protocol, address, data),
+            _ => throw UnsupportedType<T>()
+        };
+
+    private static Task WriteTypedAsync<T, TValue>(McpX protocol, McDeviceAddress address, IEnumerable<T> data)
+        where TValue : unmanaged
+        => protocol
+            .BatchWriteAsync(address.Prefix, address.Address, data.Select(static value => (TValue)(object)value!).ToArray())
+            .WaitAsync(OperationTimeout);
 
     private static NotSupportedException UnsupportedType<T>()
         => new($"Unsupported type: {typeof(T).Name}");

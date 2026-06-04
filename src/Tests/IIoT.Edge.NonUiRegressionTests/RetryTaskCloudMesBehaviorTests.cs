@@ -1556,10 +1556,10 @@ public sealed class RetryTaskCloudMesBehaviorTests
 
         public void MarkAvailableForCleanupTest()
         {
-            typeof(MesRetryTask)
+            typeof(RetryTaskBase<MesRetryRuntimeState, MesRetryProcessResult>)
                 .GetField("_wasUnavailable", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
                 .SetValue(_inner, false);
-            typeof(MesRetryHousekeepingService)
+            typeof(RetryHousekeepingServiceBase<MesRetryRuntimeState>)
                 .GetField("_lastAbandonedCleanupDateUtc", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
                 .SetValue(_housekeepingService, DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1)));
         }

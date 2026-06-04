@@ -3,13 +3,12 @@ using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.Runtime.Base;
 using IIoT.Edge.Runtime.DataPipeline.Services;
 using IIoT.Edge.SharedKernel.DataPipeline;
 
 namespace IIoT.Edge.Runtime.DataPipeline.Tasks;
 
-public sealed class CloudRetryTask : ScheduledTaskBase
+public sealed class CloudRetryTask : RetryTaskBase<CloudRetryRuntimeState, CloudRetryProcessResult>
 {
     private readonly IDeviceService _deviceService;
     private readonly IDeviceLogSyncTask _deviceLogSync;
@@ -17,10 +16,7 @@ public sealed class CloudRetryTask : ScheduledTaskBase
     private readonly ILocalSystemRuntimeConfigService? _runtimeConfig;
     private readonly ICloudUploadDiagnosticsStore _diagnosticsStore;
     private readonly DataPipelineCapacityGuard _capacityGuard;
-    private readonly ICloudFallbackRecoveryService _fallbackRecoveryService;
-    private readonly ICloudRetryRecordProcessor _retryRecordProcessor;
     private readonly ICloudRetryHousekeepingService _housekeepingService;
-    private bool _wasUnavailable = true;
 
     public override string TaskName => "CloudRetryTask";
     protected override int ExecuteInterval => 5000;
@@ -36,7 +32,13 @@ public sealed class CloudRetryTask : ScheduledTaskBase
         ICloudRetryRecordProcessor retryRecordProcessor,
         ICloudRetryHousekeepingService housekeepingService,
         ILocalSystemRuntimeConfigService? runtimeConfig = null)
-        : base(logger)
+        : base(
+            logger,
+            diagnosticsStore,
+            fallbackRecoveryService,
+            retryRecordProcessor,
+            housekeepingService,
+            CloudRetryRuntimeState.Retrying)
     {
         _deviceService = deviceService;
         _deviceLogSync = deviceLogSync;
@@ -44,64 +46,47 @@ public sealed class CloudRetryTask : ScheduledTaskBase
         _runtimeConfig = runtimeConfig;
         _diagnosticsStore = diagnosticsStore;
         _capacityGuard = capacityGuard;
-        _fallbackRecoveryService = fallbackRecoveryService;
-        _retryRecordProcessor = retryRecordProcessor;
         _housekeepingService = housekeepingService;
     }
 
-    internal Task ExecuteOneIterationAsync(CancellationToken ct = default)
-    {
-        ct.ThrowIfCancellationRequested();
-        return ExecuteAsync().WaitAsync(ct);
-    }
+    protected override bool SetRetryingBeforeRecovery => true;
 
-    protected override async Task ExecuteAsync()
+    protected override ValueTask<RetryTaskAvailability> CheckAvailabilityAsync(CancellationToken cancellationToken)
     {
         if (_runtimeConfig?.Current.CloudUploadEnabled == false)
         {
-            _diagnosticsStore.SetRuntimeState(CloudRetryRuntimeState.Idle);
-            _wasUnavailable = true;
-            return;
+            return ValueTask.FromResult(RetryTaskAvailability.Unavailable(CloudRetryRuntimeState.Idle));
         }
 
         if (!_deviceService.CanUploadToCloud)
         {
-            _diagnosticsStore.SetRuntimeState(CloudRetryRuntimeState.WaitingForRecovery);
-            _wasUnavailable = true;
-            return;
+            return ValueTask.FromResult(RetryTaskAvailability.Unavailable(CloudRetryRuntimeState.WaitingForRecovery));
         }
 
-        _diagnosticsStore.SetRuntimeState(CloudRetryRuntimeState.Retrying);
+        return ValueTask.FromResult(RetryTaskAvailability.Available());
+    }
 
-        if (_wasUnavailable)
+    protected override Task<bool> HandleRetryResultAsync(CloudRetryProcessResult result)
+    {
+        if (result == CloudRetryProcessResult.PauseForRecovery)
         {
-            _wasUnavailable = false;
-            await _housekeepingService.RecoverAbandonedRecordsAsync().ConfigureAwait(false);
+            SetRuntimeState(CloudRetryRuntimeState.WaitingForRecovery);
+            return Task.FromResult(false);
         }
 
-        await _housekeepingService.CleanupExpiredAbandonedRecordsAsync().ConfigureAwait(false);
-        await _fallbackRecoveryService.RecoverAsync().ConfigureAwait(false);
+        return Task.FromResult(result != CloudRetryProcessResult.Failed);
+    }
 
-        var retryResult = await _retryRecordProcessor.ProcessAsync(CurrentCancellationToken).ConfigureAwait(false);
-        if (retryResult == CloudRetryProcessResult.PauseForRecovery)
-        {
-            _diagnosticsStore.SetRuntimeState(CloudRetryRuntimeState.WaitingForRecovery);
-            return;
-        }
-
-        if (retryResult == CloudRetryProcessResult.Failed)
-        {
-            return;
-        }
-
+    protected override async Task<bool> AfterRetryProcessingAsync()
+    {
         var deviceLogSnapshotBefore = _diagnosticsStore.Snapshot;
         var retriedLogs = await _deviceLogSync.RetryBufferAsync().ConfigureAwait(false);
         if (!retriedLogs)
         {
             if (_housekeepingService.DidPauseForRecovery(deviceLogSnapshotBefore, "DeviceLog"))
             {
-                _diagnosticsStore.SetRuntimeState(CloudRetryRuntimeState.WaitingForRecovery);
-                return;
+                SetRuntimeState(CloudRetryRuntimeState.WaitingForRecovery);
+                return false;
             }
 
             Logger.Warn("[Retry-Cloud] 设备日志缓冲补传已暂停或失败。");
@@ -113,16 +98,19 @@ public sealed class CloudRetryTask : ScheduledTaskBase
         {
             if (_housekeepingService.DidPauseForRecovery(capacitySnapshotBefore, "Capacity"))
             {
-                _diagnosticsStore.SetRuntimeState(CloudRetryRuntimeState.WaitingForRecovery);
-                return;
+                SetRuntimeState(CloudRetryRuntimeState.WaitingForRecovery);
+                return false;
             }
 
             Logger.Warn("[Retry-Cloud] 产能缓冲补传已暂停或失败。");
         }
 
+        return true;
+    }
+
+    protected override async Task RefreshCapacityStatusAsync()
+    {
         await _capacityGuard.RefreshCloudRetryCapacityStatusAsync().ConfigureAwait(false);
         await _capacityGuard.RefreshCloudFallbackCapacityStatusAsync().ConfigureAwait(false);
-
-        await _housekeepingService.ApplyIdleOrBackoffStateAsync().ConfigureAwait(false);
     }
 }

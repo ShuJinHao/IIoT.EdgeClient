@@ -1,6 +1,6 @@
 namespace IIoT.Edge.SharedKernel.DataPipeline;
 
-public class MesFallbackRecord
+public class MesFallbackRecord : IFallbackRecord
 {
     public long Id { get; set; }
     public string ProcessType { get; set; } = string.Empty;

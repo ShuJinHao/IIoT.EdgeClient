@@ -1,7 +1,6 @@
 using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Features.Production.Planning;
-using IIoT.Edge.Application.Modules.Mes;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
 using IIoT.Edge.Module.Homogenization.Config.Parameters;
@@ -18,16 +17,6 @@ using Microsoft.Extensions.Options;
 using HomogenizationCloudUploadChannel = IIoT.Edge.Application.Modules.Cloud.ICloudUploadChannel<
     IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
     object>;
-using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesScenarioChannel<
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
-    string,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRealtimeSnapshot,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRecipeSnapshot,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlanRequest,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlan,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchRequest,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchResult>;
 
 namespace IIoT.Edge.Module.Homogenization;
 
@@ -64,12 +53,9 @@ public sealed class DependencyInjection : EdgeProcessModuleBase<HomogenizationCe
         var section = builder.Configuration.GetSection($"Modules:{ModuleKey}");
         builder.Services.AddOptions<HomogenizationModuleOptions>()
             .Bind(section.GetSection("Module"));
-        builder.Services.AddOptions<HomogenizationMesOptions>()
-            .Bind(section.GetSection("Mes"));
         builder.Services.AddOptions<HomogenizationCodeOptions>()
             .Bind(section.GetSection("Codes"));
         builder.Services.AddSingleton<IValidateOptions<HomogenizationModuleOptions>, HomogenizationModuleOptionsValidator>();
-        builder.Services.AddSingleton<IValidateOptions<HomogenizationMesOptions>, HomogenizationMesOptionsValidator>();
         builder.Services.AddSingleton<IValidateOptions<HomogenizationCodeOptions>, HomogenizationCodeOptionsValidator>();
 
         builder.Services.AddSingleton<HomogenizationCloudUploader>();
@@ -79,7 +65,7 @@ public sealed class DependencyInjection : EdgeProcessModuleBase<HomogenizationCe
             sp.GetRequiredService<HomogenizationCloudUploader>());
         builder.Services.AddSingleton<IHomogenizationMesItemPayloadBuilder, HomogenizationMesItemPayloadBuilder>();
         builder.Services.AddSingleton<HomogenizationMesChannel>();
-        builder.Services.AddSingleton<HomogenizationMesScenarioChannel>(sp =>
+        builder.Services.AddSingleton<IHomogenizationMesScenarioChannel>(sp =>
             sp.GetRequiredService<HomogenizationMesChannel>());
         builder.Services.AddSingleton<IProcessMesUploader>(sp =>
             sp.GetRequiredService<HomogenizationMesChannel>());

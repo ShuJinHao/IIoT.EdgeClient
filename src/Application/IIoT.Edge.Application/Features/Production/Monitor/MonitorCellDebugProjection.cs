@@ -44,8 +44,10 @@ internal static class MonitorCellDebugProjection
         var displayLabel = string.IsNullOrWhiteSpace(cellData.DisplayLabel)
             ? internalKey
             : cellData.DisplayLabel;
-        var runtimeStatus = FormatValue(TryReadProperty(cellData, "RuntimeStatus"), productionTime);
-        var completedTime = FormatValue(cellData.CompletedTime, productionTime);
+        var runtimeStatus = MonitorValueFormatting.FormatValue(
+            MonitorValueFormatting.TryReadProperty(cellData, "RuntimeStatus"),
+            productionTime);
+        var completedTime = MonitorValueFormatting.FormatValue(cellData.CompletedTime, productionTime);
 
         var rows = new List<MonitorSnapshotRow>
         {
@@ -83,7 +85,7 @@ internal static class MonitorCellDebugProjection
     {
         if (value is null || IsSimpleValue(value) || depth >= MaxFlattenDepth)
         {
-            rows.Add(new MonitorSnapshotRow(deviceName, path, FormatValue(value, productionTime)));
+            rows.Add(new MonitorSnapshotRow(deviceName, path, MonitorValueFormatting.FormatValue(value, productionTime)));
             return;
         }
 
@@ -101,7 +103,7 @@ internal static class MonitorCellDebugProjection
 
         if (nestedProperties.Count == 0)
         {
-            rows.Add(new MonitorSnapshotRow(deviceName, path, FormatValue(value, productionTime)));
+            rows.Add(new MonitorSnapshotRow(deviceName, path, MonitorValueFormatting.FormatValue(value, productionTime)));
             return;
         }
 
@@ -201,54 +203,4 @@ internal static class MonitorCellDebugProjection
         return type.IsPrimitive || type.IsEnum || type == typeof(decimal);
     }
 
-    private static string FormatValue(object? value, IProductionTimeProvider productionTime) => value switch
-    {
-        null => "--",
-        JsonElement element => FormatJsonElement(element, productionTime),
-        DateTime dt => productionTime.ToBusinessTime(dt).ToString("HH:mm:ss.fff"),
-        DateTimeOffset dto => productionTime.ToBusinessTime(dto.UtcDateTime).ToString("HH:mm:ss.fff"),
-        bool b => b ? "OK" : "NG",
-        double d => d.ToString("F3", CultureInfo.InvariantCulture),
-        float f => f.ToString("F3", CultureInfo.InvariantCulture),
-        decimal m => m.ToString("F3", CultureInfo.InvariantCulture),
-        string text => string.IsNullOrWhiteSpace(text) ? "--" : text,
-        IEnumerable enumerable => FormatEnumerable(enumerable, productionTime),
-        IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture) ?? "--",
-        _ => value?.ToString() ?? "--"
-    };
-
-    private static string FormatEnumerable(IEnumerable values, IProductionTimeProvider productionTime)
-    {
-        var formattedValues = values
-            .Cast<object?>()
-            .Select(value => FormatValue(value, productionTime))
-            .Where(static value => !string.IsNullOrWhiteSpace(value))
-            .ToList();
-
-        return formattedValues.Count == 0
-            ? "--"
-            : string.Join("；", formattedValues);
-    }
-
-    private static string FormatJsonElement(JsonElement element, IProductionTimeProvider productionTime)
-    {
-        return element.ValueKind switch
-        {
-            JsonValueKind.String when element.TryGetDateTime(out var dateTime)
-                => productionTime.ToBusinessTime(dateTime).ToString("HH:mm:ss.fff"),
-            JsonValueKind.String => element.GetString() ?? "--",
-            JsonValueKind.True => "OK",
-            JsonValueKind.False => "NG",
-            JsonValueKind.Number when element.TryGetDouble(out var number)
-                => number.ToString("F3", CultureInfo.InvariantCulture),
-            JsonValueKind.Null => "--",
-            JsonValueKind.Undefined => "--",
-            _ => element.ToString()
-        };
-    }
-
-    private static object? TryReadProperty(object source, string propertyName)
-        => source.GetType()
-            .GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance)
-            ?.GetValue(source);
 }

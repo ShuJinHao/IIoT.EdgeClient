@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Common.Crud;
 using IIoT.Edge.SharedKernel.Messaging;
 using IIoT.Edge.SharedKernel.Repository;
 using IIoT.Edge.SharedKernel.Result;
@@ -40,63 +41,26 @@ public class SaveIoMappingsHandler(
     public async Task<Result> Handle(
         SaveIoMappingsCommand request,
         CancellationToken cancellationToken)
-    {
-        var existingMappings = await repo.GetListAsync(
-            x => x.NetworkDeviceId == request.NetworkDeviceId,
-            cancellationToken);
-        var existingById = existingMappings.ToDictionary(x => x.Id);
-        var submittedIds = request.Mappings
-            .Where(x => x.Id > 0)
-            .Select(x => x.Id)
-            .ToHashSet();
+        => await SubmittedEntityListSaveHelper.ReplaceSubmittedAsync(
+            repo,
+            request.Mappings,
+            ct => repo.GetListAsync(x => x.NetworkDeviceId == request.NetworkDeviceId, ct),
+            static dto => dto.Id,
+            dto => Validate(request.NetworkDeviceId, dto),
+            dto => Create(request.NetworkDeviceId, dto),
+            (entity, dto) => Apply(entity, request.NetworkDeviceId, dto),
+            cancellationToken).ConfigureAwait(false);
 
-        foreach (var dto in request.Mappings)
-        {
-            var validationError = Validate(request.NetworkDeviceId, dto);
-            if (validationError is not null)
-            {
-                return Result.Failure(validationError);
-            }
-        }
-
-        foreach (var entity in existingMappings.Where(x => !submittedIds.Contains(x.Id)))
-        {
-            repo.Delete(entity);
-        }
-
-        foreach (var dto in request.Mappings)
-        {
-            try
-            {
-                if (dto.Id == 0)
-                {
-                    var entity = IoMappingEntity.Create(
-                        request.NetworkDeviceId,
-                        dto.SignalKey,
-                        dto.PlcAddress,
-                        dto.AddressCount,
-                        dto.DataType,
-                        dto.Direction,
-                        Normalize(dto.Category, "单点读数据"),
-                        dto.BusinessGroup ?? string.Empty);
-                    Apply(entity, request.NetworkDeviceId, dto);
-                    repo.Add(entity);
-                }
-                else if (existingById.TryGetValue(dto.Id, out var entity))
-                {
-                    Apply(entity, request.NetworkDeviceId, dto);
-                    repo.Update(entity);
-                }
-            }
-            catch (ArgumentException ex)
-            {
-                return Result.Failure(ex.Message);
-            }
-        }
-
-        await repo.SaveChangesAsync(cancellationToken);
-        return Result.Success();
-    }
+    private static IoMappingEntity Create(int networkDeviceId, IoMappingDto dto)
+        => IoMappingEntity.Create(
+            networkDeviceId,
+            dto.SignalKey,
+            dto.PlcAddress,
+            dto.AddressCount,
+            dto.DataType,
+            dto.Direction,
+            Normalize(dto.Category, "单点读数据"),
+            dto.BusinessGroup ?? string.Empty);
 
     private static void Apply(IoMappingEntity entity, int networkDeviceId, IoMappingDto dto)
     {
@@ -116,15 +80,7 @@ public class SaveIoMappingsHandler(
     {
         try
         {
-            var entity = IoMappingEntity.Create(
-                networkDeviceId,
-                dto.SignalKey,
-                dto.PlcAddress,
-                dto.AddressCount,
-                dto.DataType,
-                dto.Direction,
-                Normalize(dto.Category, "单点读数据"),
-                dto.BusinessGroup);
+            var entity = Create(networkDeviceId, dto);
             Apply(entity, networkDeviceId, dto);
             return null;
         }

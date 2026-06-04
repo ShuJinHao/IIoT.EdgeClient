@@ -142,61 +142,41 @@ public static class DependencyInjection
         RegisterModules(services, viewRegistry, configuration, enabledModules, cellDataTypeRegistry);
         viewRegistry.RegisterPanelViews();
 
-        services.AddSingleton<IManagedBackgroundService>(sp =>
-            new LongRunningBackgroundTaskService(
-                new DelegatingBackgroundTask(
-                    "RuntimeState.AutoSave",
-                    ct => sp.GetRequiredService<IProductionContextStore>()
-                        .StartAutoSaveAsync(ct, intervalSeconds: 30))));
-
-        services.AddSingleton<IManagedBackgroundService>(sp =>
-            new DelegatingBackgroundService(
-                "Config.RuntimeWarmup",
-                ct => sp.GetRequiredService<ILocalSystemRuntimeConfigService>().EnsureInitializedAsync(ct),
-                _ => Task.CompletedTask));
-
-        services.AddSingleton<IManagedBackgroundService>(sp =>
-            new DelegatingBackgroundService(
-                "Device.Heartbeat",
-                ct => sp.GetRequiredService<IDeviceService>().StartAsync(ct),
-                _ => sp.GetRequiredService<IDeviceService>().StopAsync()));
-
-        services.AddSingleton<IManagedBackgroundService>(sp =>
-            new DelegatingBackgroundService(
-                "MES.Heartbeat",
-                ct => sp.GetRequiredService<MesHeartbeatTask>().StartAsync(ct),
-                _ => sp.GetRequiredService<MesHeartbeatTask>().StopAsync()));
-
-        services.AddSingleton<IManagedBackgroundService>(sp =>
-            new DelegatingBackgroundService(
-                "PLC.Runtime",
-                ct => sp.GetRequiredService<IPlcConnectionManager>().InitializeAsync(ct),
-                ct => sp.GetRequiredService<IPlcConnectionManager>().StopAsync(ct)));
-
-        services.AddSingleton<IManagedBackgroundService>(sp =>
-            new LongRunningBackgroundTaskGroupService(
-                "DataPipeline.Runtime",
-                [
-                    sp.GetRequiredService<ProcessQueueTask>(),
-                    sp.GetRequiredService<CloudRetryTask>(),
-                    sp.GetRequiredService<MesRetryTask>()
-                ]));
-
-        services.AddSingleton<IManagedBackgroundService>(sp =>
-            new DelegatingBackgroundService(
-                "Cloud.CapacitySync",
-                ct => sp.GetRequiredService<ICapacitySyncTask>().StartAsync(ct),
-                _ => sp.GetRequiredService<ICapacitySyncTask>().StopAsync()));
-
-        services.AddSingleton<IManagedBackgroundService>(sp =>
-            new DelegatingBackgroundService(
-                "Cloud.DeviceLogSync",
-                ct => sp.GetRequiredService<IDeviceLogSyncTask>().StartAsync(ct),
-                _ => sp.GetRequiredService<IDeviceLogSyncTask>().StopAsync()));
-
-        services.AddSingleton<IManagedBackgroundService>(sp =>
-            new LongRunningBackgroundTaskService(
-                sp.GetRequiredService<RecipeSyncTask>()));
+        AddLongRunningManagedBackgroundTask(
+            services,
+            sp => new DelegatingBackgroundTask(
+                "RuntimeState.AutoSave",
+                ct => sp.GetRequiredService<IProductionContextStore>()
+                    .StartAutoSaveAsync(ct, intervalSeconds: 30)));
+        AddManagedBackgroundService(services, "Config.RuntimeWarmup",
+            (sp, ct) => sp.GetRequiredService<ILocalSystemRuntimeConfigService>().EnsureInitializedAsync(ct));
+        AddManagedBackgroundService(services, "Device.Heartbeat",
+            (sp, ct) => sp.GetRequiredService<IDeviceService>().StartAsync(ct),
+            (sp, _) => sp.GetRequiredService<IDeviceService>().StopAsync());
+        AddManagedBackgroundService(services, "MES.Heartbeat",
+            (sp, ct) => sp.GetRequiredService<MesHeartbeatTask>().StartAsync(ct),
+            (sp, _) => sp.GetRequiredService<MesHeartbeatTask>().StopAsync());
+        AddManagedBackgroundService(services, "PLC.Runtime",
+            (sp, ct) => sp.GetRequiredService<IPlcConnectionManager>().InitializeAsync(ct),
+            (sp, ct) => sp.GetRequiredService<IPlcConnectionManager>().StopAsync(ct));
+        AddLongRunningManagedBackgroundTaskGroup(
+            services,
+            "DataPipeline.Runtime",
+            sp =>
+            [
+                sp.GetRequiredService<ProcessQueueTask>(),
+                sp.GetRequiredService<CloudRetryTask>(),
+                sp.GetRequiredService<MesRetryTask>()
+            ]);
+        AddManagedBackgroundService(services, "Cloud.CapacitySync",
+            (sp, ct) => sp.GetRequiredService<ICapacitySyncTask>().StartAsync(ct),
+            (sp, _) => sp.GetRequiredService<ICapacitySyncTask>().StopAsync());
+        AddManagedBackgroundService(services, "Cloud.DeviceLogSync",
+            (sp, ct) => sp.GetRequiredService<IDeviceLogSyncTask>().StartAsync(ct),
+            (sp, _) => sp.GetRequiredService<IDeviceLogSyncTask>().StopAsync());
+        AddLongRunningManagedBackgroundTask(
+            services,
+            sp => sp.GetRequiredService<RecipeSyncTask>());
 
         services.AddSingleton<IAppStartupInitializer, AppStartupInitializer>();
         services.AddSingleton<IStartupPluginLifecycleSnapshotBuilder, StartupPluginLifecycleSnapshotBuilder>();
@@ -220,6 +200,24 @@ public static class DependencyInjection
             Environment.GetEnvironmentVariable("MediatR__LicenseKey"),
             Environment.GetEnvironmentVariable("MEDIATR_LICENSE_KEY"),
             configuration["MediatR:LicenseKey"]);
+
+    private static void AddManagedBackgroundService(IServiceCollection services, string serviceName,
+        Func<IServiceProvider, CancellationToken, Task> startAsync,
+        Func<IServiceProvider, CancellationToken, Task>? stopAsync = null)
+        => services.AddSingleton<IManagedBackgroundService>(sp =>
+            new DelegatingBackgroundService(
+                serviceName,
+                ct => startAsync(sp, ct),
+                stopAsync is null ? null : ct => stopAsync(sp, ct)));
+
+    private static void AddLongRunningManagedBackgroundTask(IServiceCollection services, Func<IServiceProvider, IBackgroundTask> taskFactory)
+        => services.AddSingleton<IManagedBackgroundService>(sp =>
+            new LongRunningBackgroundTaskService(taskFactory(sp)));
+
+    private static void AddLongRunningManagedBackgroundTaskGroup(IServiceCollection services, string serviceName,
+        Func<IServiceProvider, IEnumerable<IBackgroundTask>> taskFactory)
+        => services.AddSingleton<IManagedBackgroundService>(sp =>
+            new LongRunningBackgroundTaskGroupService(serviceName, taskFactory(sp)));
 
     private static string? FirstNonEmpty(params string?[] values)
         => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();

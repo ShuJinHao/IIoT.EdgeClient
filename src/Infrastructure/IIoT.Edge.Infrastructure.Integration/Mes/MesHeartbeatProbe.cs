@@ -38,8 +38,7 @@ public sealed class MesHeartbeatProbe : IMesHeartbeatProbe
         }
 
         var heartbeatPath = await _moduleParamRoleProvider
-            .FirstStringAsync(
-                ModuleParamCategory.Mes,
+            .FirstMesStringAsync(
                 ModuleParamRole.MesHealthPath,
                 mesProcessTypes,
                 cancellationToken: cancellationToken)

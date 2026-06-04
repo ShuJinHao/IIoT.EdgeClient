@@ -96,7 +96,7 @@ public sealed class ConfigPermissionGuardBehaviorTests
         var sender = new CountingSender();
         var service = new HardwareConfigCrudService(
             sender,
-            [],
+            new ModuleHardwareProfileResolver([]),
             new StubPermissionService { CanEditHardware = false });
 
         var result = await service.SaveAsync(
@@ -115,7 +115,7 @@ public sealed class ConfigPermissionGuardBehaviorTests
         var sender = new CountingSender();
         var service = new HardwareConfigCrudService(
             sender,
-            [],
+            new ModuleHardwareProfileResolver([]),
             new StubPermissionService { CanEditHardware = false });
 
         var result = await service.ApplyModuleTemplateAsync(CreateNetworkDeviceDto(1, "PLC-A"));
@@ -135,7 +135,7 @@ public sealed class ConfigPermissionGuardBehaviorTests
         });
         var service = new HardwareConfigCrudService(
             sender,
-            [new ResetTemplateProfile()],
+            new ModuleHardwareProfileResolver([new ResetTemplateProfile()]),
             new StubPermissionService { CanEditHardware = true });
 
         var result = await service.ApplyModuleTemplateAsync(CreateNetworkDeviceDto(7, "PLC-A"));

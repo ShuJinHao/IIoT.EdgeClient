@@ -1,7 +1,5 @@
-using IIoT.Edge.Application.Abstractions.Cache;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Logging;
-using IIoT.Edge.Application.Features.Config;
 
 namespace IIoT.Edge.Application.Features.Config.ModuleParameters;
 
@@ -10,8 +8,7 @@ namespace IIoT.Edge.Application.Features.Config.ModuleParameters;
 /// </summary>
 public sealed class ModuleParamProvider<TMes, TCloud, TBusiness>(
     IModuleParamRegistry registry,
-    ILocalParameterConfigService localParameterConfigService,
-    IEdgeCacheService cache,
+    ModuleParamValueSnapshotLoader snapshotLoader,
     ILogService logger)
     : IModuleParamProvider<TMes, TCloud, TBusiness>
     where TMes : struct, Enum
@@ -27,39 +24,14 @@ public sealed class ModuleParamProvider<TMes, TCloud, TBusiness>(
                 $"插件参数枚举未注册：{typeof(TMes).Name}/{typeof(TCloud).Name}/{typeof(TBusiness).Name}。");
         }
 
-        var valueSnapshot = await cache.GetOrCreateAsync(
-                ParameterCacheKeys.ModuleSnapshot(registration.ModuleId),
-                ct => LoadValueSnapshotAsync(registration.ModuleId, ct),
-                cancellationToken: cancellationToken)
+        var valueSnapshot = await snapshotLoader.LoadAsync(registration.ModuleId, cancellationToken)
             .ConfigureAwait(false);
-
-        if (valueSnapshot is null)
-        {
-            throw new InvalidOperationException($"插件参数快照加载失败：{registration.ModuleId}。");
-        }
 
         return new ModuleParamSnapshot<TMes, TCloud, TBusiness>(
             registration.ModuleId,
             CreateGroup<TMes>(registration.ModuleId, ModuleParamCategory.Mes, valueSnapshot.Values),
             CreateGroup<TCloud>(registration.ModuleId, ModuleParamCategory.Cloud, valueSnapshot.Values),
             CreateGroup<TBusiness>(registration.ModuleId, ModuleParamCategory.Business, valueSnapshot.Values));
-    }
-
-    private async Task<ModuleParamValueSnapshot?> LoadValueSnapshotAsync(
-        string moduleId,
-        CancellationToken cancellationToken)
-    {
-        var prefix = $"{ModuleParamKeys.StoragePrefix}{moduleId}:";
-        var configuredValues = (await localParameterConfigService
-                .GetSystemConfigsAsync(cancellationToken)
-                .ConfigureAwait(false))
-            .Where(x => x.Key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-            .ToDictionary(
-                static x => x.Key,
-                static x => x.Value,
-                StringComparer.OrdinalIgnoreCase);
-
-        return new ModuleParamValueSnapshot(moduleId, configuredValues);
     }
 
     private ModuleParamGroup<TEnum> CreateGroup<TEnum>(

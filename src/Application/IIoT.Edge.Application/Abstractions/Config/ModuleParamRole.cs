@@ -11,6 +11,7 @@ public enum ModuleParamRole
     MesHealthPath,
     MesUpperComputerNo,
     MesOperationCode,
+    MesSignToken,
     StationNo,
     CloudEnabled
 }

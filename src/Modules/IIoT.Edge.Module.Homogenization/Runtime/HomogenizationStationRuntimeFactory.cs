@@ -10,22 +10,13 @@ using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
 using IIoT.Edge.Module.Homogenization.Config.Parameters;
+using IIoT.Edge.Module.Homogenization.Integration;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 using IIoT.Edge.Runtime.Signals;
 using IIoT.Edge.SharedKernel.Context;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesScenarioChannel<
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
-    string,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRealtimeSnapshot,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRecipeSnapshot,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlanRequest,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlan,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchRequest,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchResult>;
 
 namespace IIoT.Edge.Module.Homogenization.Runtime;
 
@@ -170,7 +161,27 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
         var interaction = new HomogenizationPlcHandshakeAccessor(interactionSignals, codeOptions.Value.Plc);
         var codec = new HomogenizationSignalCodec(singleReadSignals, continuousReadSignals, productionTime);
         var tasks = new List<IPlcTask>();
+        IDeviceService? deviceService = null;
+        IHomogenizationMesScenarioChannel? mesChannel = null;
+        IMesUploadDiagnosticsStore? diagnosticsStore = null;
+        IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>? moduleParameters = null;
+        IDataPipelineService? dataPipelineService = null;
         IHomogenizationProductionGate? productionGate = null;
+
+        IDeviceService GetDeviceService()
+            => deviceService ??= serviceProvider.GetRequiredService<IDeviceService>();
+
+        IHomogenizationMesScenarioChannel GetMesChannel()
+            => mesChannel ??= serviceProvider.GetRequiredService<IHomogenizationMesScenarioChannel>();
+
+        IMesUploadDiagnosticsStore GetDiagnosticsStore()
+            => diagnosticsStore ??= serviceProvider.GetRequiredService<IMesUploadDiagnosticsStore>();
+
+        IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> GetModuleParameters()
+            => moduleParameters ??= serviceProvider.GetRequiredService<IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>>();
+
+        IDataPipelineService GetDataPipelineService()
+            => dataPipelineService ??= serviceProvider.GetRequiredService<IDataPipelineService>();
 
         IHomogenizationProductionGate GetProductionGate()
             => productionGate ??= serviceProvider.GetRequiredService<IHomogenizationProductionGate>();
@@ -182,10 +193,10 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 interaction,
                 codec,
                 homogenizationContext,
-                serviceProvider.GetRequiredService<IDeviceService>(),
-                serviceProvider.GetRequiredService<HomogenizationMesScenarioChannel>(),
-                serviceProvider.GetRequiredService<IMesUploadDiagnosticsStore>(),
-                serviceProvider.GetRequiredService<IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>>(),
+                GetDeviceService(),
+                GetMesChannel(),
+                GetDiagnosticsStore(),
+                GetModuleParameters(),
                 GetProductionGate(),
                 logger,
                 productionTime,
@@ -200,11 +211,11 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 interaction,
                 codec,
                 homogenizationContext,
-                serviceProvider.GetRequiredService<IDeviceService>(),
-                serviceProvider.GetRequiredService<IDataPipelineService>(),
+                GetDeviceService(),
+                GetDataPipelineService(),
                 validator,
-                serviceProvider.GetRequiredService<IMesUploadDiagnosticsStore>(),
-                serviceProvider.GetRequiredService<IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>>(),
+                GetDiagnosticsStore(),
+                GetModuleParameters(),
                 GetProductionGate(),
                 logger,
                 productionTime,
@@ -219,9 +230,9 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 interaction,
                 codec,
                 homogenizationContext,
-                serviceProvider.GetRequiredService<IDeviceService>(),
-                serviceProvider.GetRequiredService<HomogenizationMesScenarioChannel>(),
-                serviceProvider.GetRequiredService<IMesUploadDiagnosticsStore>(),
+                GetDeviceService(),
+                GetMesChannel(),
+                GetDiagnosticsStore(),
                 GetProductionGate(),
                 logger,
                 productionTime,
@@ -236,9 +247,9 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 interaction,
                 codec,
                 homogenizationContext,
-                serviceProvider.GetRequiredService<IDeviceService>(),
-                serviceProvider.GetRequiredService<HomogenizationMesScenarioChannel>(),
-                serviceProvider.GetRequiredService<IMesUploadDiagnosticsStore>(),
+                GetDeviceService(),
+                GetMesChannel(),
+                GetDiagnosticsStore(),
                 GetProductionGate(),
                 logger,
                 productionTime,
@@ -263,9 +274,9 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 buffer,
                 codec,
                 homogenizationContext,
-                serviceProvider.GetRequiredService<IDeviceService>(),
-                serviceProvider.GetRequiredService<HomogenizationMesScenarioChannel>(),
-                serviceProvider.GetRequiredService<IMesUploadDiagnosticsStore>(),
+                GetDeviceService(),
+                GetMesChannel(),
+                GetDiagnosticsStore(),
                 GetProductionGate(),
                 logger,
                 moduleOptions,

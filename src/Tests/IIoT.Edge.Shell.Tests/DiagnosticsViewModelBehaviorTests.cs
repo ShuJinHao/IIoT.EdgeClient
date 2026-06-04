@@ -207,12 +207,12 @@ public sealed class DiagnosticsViewModelBehaviorTests
                         "PLC-Homogenization-01"),
                     new StartupDiagnosticIssue(
                         "HARDWARE_PROFILE_INVALID",
-                        "PLC[PLC-Homogenization-01] 的信号 Homogenization.Interaction.test1 PLC 地址不能为空。",
+                        "PLC[PLC-Homogenization-01] 的信号 Test.Interaction.Manual PLC 地址不能为空。",
                         "Homogenization",
                         "PLC-Homogenization-01"),
                     new StartupDiagnosticIssue(
                         "HARDWARE_PROFILE_INVALID",
-                        "PLC[PLC-Homogenization-01] 的信号 Homogenization.Interaction.test1 PLC 地址不能为空。",
+                        "PLC[PLC-Homogenization-01] 的信号 Test.Interaction.Manual PLC 地址不能为空。",
                         "Homogenization",
                         "PLC-Homogenization-01")
                 ]));
@@ -231,14 +231,14 @@ public sealed class DiagnosticsViewModelBehaviorTests
             Assert.Equal(plcRow.Message, plcRow.DisplayMessage);
             Assert.False(plcRow.HasDuplicateCount);
 
-            var signalRow = Assert.Single(viewModel.Issues, row => row.Message.Contains("Interaction.test1", StringComparison.Ordinal));
-            Assert.Equal("信号 Homogenization.Interaction.test1 地址不能为空。", signalRow.Message);
+            var signalRow = Assert.Single(viewModel.Issues, row => row.Message.Contains("Test.Interaction.Manual", StringComparison.Ordinal));
+            Assert.Equal("信号 Test.Interaction.Manual 地址不能为空。", signalRow.Message);
             Assert.Equal("ERROR", signalRow.LevelText);
             Assert.Equal(EdgeVisualStatus.Error, signalRow.Status);
             Assert.Equal(2, signalRow.DuplicateCount);
             Assert.True(signalRow.HasDuplicateCount);
             Assert.Equal("×2", signalRow.DuplicateBadgeText);
-            Assert.Equal("信号 Homogenization.Interaction.test1 地址不能为空。 ×2", signalRow.DisplayMessage);
+            Assert.Equal("信号 Test.Interaction.Manual 地址不能为空。 ×2", signalRow.DisplayMessage);
         });
 
     [Fact]

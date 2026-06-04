@@ -65,9 +65,8 @@ public sealed class MesEndpointProvider(
     private Task<string?> GetBaseUrlAsync(
         string processType,
         CancellationToken cancellationToken)
-        => moduleParamRoleProvider.GetStringAsync(
+        => moduleParamRoleProvider.GetMesStringAsync(
             processType,
-            ModuleParamCategory.Mes,
             ModuleParamRole.MesBaseUrl,
             cancellationToken: cancellationToken);
 }

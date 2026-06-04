@@ -354,53 +354,20 @@ internal sealed class FakeFailedRecordStore : ICloudRetryRecordStore, IMesRetryR
     public DateTime? LastDeleteExpiredOlderThanUtc { get; private set; }
     public int DeleteExpiredAbandonedResult { get; set; }
 
-    Task ICloudRetryRecordStore.SaveAsync(CellCompletedRecord record, string failedTarget, string errorMessage)
-        => SaveAsync(record, failedTarget, errorMessage, "Cloud");
+    public Task SaveAsync(CellCompletedRecord record, string failedTarget, string errorMessage)
+        => SaveAsync(record, failedTarget, errorMessage, failedTarget);
 
-    Task IMesRetryRecordStore.SaveAsync(CellCompletedRecord record, string failedTarget, string errorMessage)
-        => SaveAsync(record, failedTarget, errorMessage, "MES");
+    public Task SaveRawAsync(string processType, string cellDataJson, string failedTarget, string errorMessage)
+        => SaveRawAsync(processType, cellDataJson, failedTarget, errorMessage, failedTarget);
 
-    Task ICloudRetryRecordStore.SaveRawAsync(string processType, string cellDataJson, string failedTarget, string errorMessage)
-        => SaveRawAsync(processType, cellDataJson, failedTarget, errorMessage, "Cloud");
+    public Task<List<FailedCellRecord>> GetPendingAsync(int batchSize = 10)
+        => GetPendingAsync(channel: null, batchSize);
 
-    Task IMesRetryRecordStore.SaveRawAsync(string processType, string cellDataJson, string failedTarget, string errorMessage)
-        => SaveRawAsync(processType, cellDataJson, failedTarget, errorMessage, "MES");
+    public Task<ClaimedFailedCellBatch?> ClaimPendingBatchAsync(int batchSize = 10)
+        => ClaimPendingBatchAsync(channel: null, batchSize);
 
-    Task<List<FailedCellRecord>> ICloudRetryRecordStore.GetPendingAsync(int batchSize)
-        => GetPendingAsync("Cloud", batchSize);
-
-    Task<List<FailedCellRecord>> IMesRetryRecordStore.GetPendingAsync(int batchSize)
-        => GetPendingAsync("MES", batchSize);
-
-    Task<ClaimedFailedCellBatch?> ICloudRetryRecordStore.ClaimPendingBatchAsync(int batchSize)
-        => ClaimPendingBatchAsync("Cloud", batchSize);
-
-    Task<ClaimedFailedCellBatch?> IMesRetryRecordStore.ClaimPendingBatchAsync(int batchSize)
-        => ClaimPendingBatchAsync("MES", batchSize);
-
-    Task ICloudRetryRecordStore.DeleteClaimedBatchAsync(string claimToken)
-        => DeleteClaimedBatchAsync(claimToken);
-
-    Task IMesRetryRecordStore.DeleteClaimedBatchAsync(string claimToken)
-        => DeleteClaimedBatchAsync(claimToken);
-
-    Task ICloudRetryRecordStore.ReleaseClaimAsync(string claimToken)
-        => ReleaseClaimAsync(claimToken);
-
-    Task IMesRetryRecordStore.ReleaseClaimAsync(string claimToken)
-        => ReleaseClaimAsync(claimToken);
-
-    Task<int> ICloudRetryRecordStore.GetCountAsync()
-        => GetCountAsync("Cloud");
-
-    Task<int> IMesRetryRecordStore.GetCountAsync()
-        => GetCountAsync("MES");
-
-    Task<int> ICloudRetryRecordStore.GetCountAsync(string processType)
-        => GetCountAsync("Cloud", processType);
-
-    Task<int> IMesRetryRecordStore.GetCountAsync(string processType)
-        => GetCountAsync("MES", processType);
+    public Task<int> GetCountAsync(string processType)
+        => GetCountByProcessTypeAsync(processType);
 
     public Task SaveAsync(CellCompletedRecord record, string failedTarget, string errorMessage, string channel)
         => SaveRawAsync(record.CellData.ProcessType, "{}", failedTarget, errorMessage, channel);
@@ -432,11 +399,11 @@ internal sealed class FakeFailedRecordStore : ICloudRetryRecordStore, IMesRetryR
         return Task.CompletedTask;
     }
 
-    public Task<List<FailedCellRecord>> GetPendingAsync(string channel, int batchSize = 10)
+    public Task<List<FailedCellRecord>> GetPendingAsync(string? channel, int batchSize = 10)
     {
         var now = DateTime.UtcNow;
         var rows = PendingRecords
-            .Where(r => r.Channel == channel && r.NextRetryTime <= now)
+            .Where(r => (channel is null || r.Channel == channel) && r.NextRetryTime <= now)
             .OrderBy(r => r.Id)
             .Take(batchSize)
             .ToList();
@@ -444,11 +411,11 @@ internal sealed class FakeFailedRecordStore : ICloudRetryRecordStore, IMesRetryR
         return Task.FromResult(rows);
     }
 
-    public Task<ClaimedFailedCellBatch?> ClaimPendingBatchAsync(string channel, int batchSize = 10)
+    public Task<ClaimedFailedCellBatch?> ClaimPendingBatchAsync(string? channel, int batchSize = 10)
     {
         var now = DateTime.UtcNow;
         var rows = PendingRecords
-            .Where(r => r.Channel == channel && r.NextRetryTime <= now && !_claimedRecordIds.Contains(r.Id))
+            .Where(r => (channel is null || r.Channel == channel) && r.NextRetryTime <= now && !_claimedRecordIds.Contains(r.Id))
             .OrderBy(r => r.Id)
             .Take(batchSize)
             .ToList();
@@ -515,9 +482,19 @@ internal sealed class FakeFailedRecordStore : ICloudRetryRecordStore, IMesRetryR
         return Task.CompletedTask;
     }
 
-    public Task<int> GetCountAsync() => Task.FromResult(PendingRecords.Count);
+    public async Task<int> GetCountAsync()
+    {
+        var channel = CountControlChannel;
+        if (TryGetCountException(channel) is { } ex)
+        {
+            throw ex;
+        }
 
-    public async Task<int> GetCountAsync(string channel)
+        await MaybeWaitAsync(channel);
+        return PendingRecords.Count;
+    }
+
+    public async Task<int> GetChannelCountAsync(string channel)
     {
         if (TryGetCountException(channel) is { } ex)
         {
@@ -528,7 +505,7 @@ internal sealed class FakeFailedRecordStore : ICloudRetryRecordStore, IMesRetryR
         return PendingRecords.Count(x => x.Channel == channel);
     }
 
-    public async Task<int> GetCountAsync(string channel, string processType)
+    public async Task<int> GetChannelCountAsync(string channel, string processType)
     {
         if (TryGetCountException(channel) is { } ex)
         {
@@ -540,6 +517,24 @@ internal sealed class FakeFailedRecordStore : ICloudRetryRecordStore, IMesRetryR
             x.Channel == channel
             && string.Equals(x.ProcessType, processType, StringComparison.OrdinalIgnoreCase));
     }
+
+    private async Task<int> GetCountByProcessTypeAsync(string processType)
+    {
+        var channel = CountControlChannel;
+        if (TryGetCountException(channel) is { } ex)
+        {
+            throw ex;
+        }
+
+        await MaybeWaitAsync(channel);
+        return PendingRecords.Count(x =>
+            string.Equals(x.ProcessType, processType, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private string CountControlChannel =>
+        MesCountException is not null || MesCountStarted is not null || MesCountWait is not null
+            ? "MES"
+            : "Cloud";
 
     public Task ResetAllAbandonedAsync()
     {

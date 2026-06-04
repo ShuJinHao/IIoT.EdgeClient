@@ -10,16 +10,6 @@ using IIoT.Edge.Module.Homogenization.Integration;
 using IIoT.Edge.Module.Homogenization.Payload;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
-using HomogenizationMesScenarioChannel = IIoT.Edge.Application.Modules.Mes.IMesScenarioChannel<
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
-    string,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRealtimeSnapshot,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationRecipeSnapshot,
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationEquipmentStatusSnapshot,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlanRequest,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationMainPlan,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchRequest,
-    IIoT.Edge.Module.Homogenization.Integration.HomogenizationTraceBatchResult>;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 
@@ -30,7 +20,7 @@ public sealed class HomogenizationMesIntegrationTests
     {
         var channel = CreateChannel(new CapturingMesHttpClient(), stationNo: "ST-H-00");
 
-        Assert.IsAssignableFrom<HomogenizationMesScenarioChannel>(channel);
+        Assert.IsAssignableFrom<IHomogenizationMesScenarioChannel>(channel);
         Assert.IsAssignableFrom<IProcessMesUploader>(channel);
     }
 
@@ -471,7 +461,6 @@ public sealed class HomogenizationMesIntegrationTests
             parameters,
             logger,
             new FakeProductionTimeProvider(),
-            Options.Create(CreateMesOptions()),
             new HomogenizationMesItemPayloadBuilder(Options.Create(CreateCodeOptions())));
     }
 
@@ -502,20 +491,6 @@ public sealed class HomogenizationMesIntegrationTests
             },
             CntActualKg = 15,
             NmpActualKg = 18
-        };
-
-    private static HomogenizationMesOptions CreateMesOptions()
-        => new()
-        {
-            SignToken = "hdc2023",
-            Paths = new HomogenizationMesPathOptions
-            {
-                Inbound = "/legacy/inbound",
-                Outbound = "/legacy/outbound",
-                Recipe = "/legacy/recipe",
-                Realtime = "/legacy/realtime",
-                EquipmentStatus = "/legacy/equipment-status"
-            }
         };
 
     private static HomogenizationCodeOptions CreateCodeOptions()
@@ -802,6 +777,7 @@ public sealed class HomogenizationMesIntegrationTests
                 ModuleParamRole.StationNo => Build("工站编号", stationNo, ParamValueKind.String),
                 ModuleParamRole.MesUpperComputerNo => Build("UpperComputerNo", upperComputerNo, ParamValueKind.String),
                 ModuleParamRole.MesOperationCode when operationCode is not null => Build("OperationCode", operationCode, ParamValueKind.String),
+                ModuleParamRole.MesSignToken => Build("签名令牌", "hdc2023", ParamValueKind.String),
                 _ => null
             };
 

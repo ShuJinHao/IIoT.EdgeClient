@@ -52,43 +52,30 @@ public sealed class EnumInteractionSignalProfile<TSignalKey>(string moduleId)
 /// 基于枚举特性的标准读 profile。
 /// </summary>
 public sealed class EnumReadSignalProfile<TSignalKey>(string moduleId, string category)
-    : ModulePlcSignalProfileBase<TSignalKey>
+    : EnumIoSignalProfile<TSignalKey, PlcReadSignalAttribute>(moduleId, category, ModuleSignalDirection.Read)
     where TSignalKey : struct, Enum
 {
-    public override string ModuleId { get; } = moduleId;
-
-    protected override IEnumerable<ModuleSignalGroup<TSignalKey>> BuildGroups()
-        => Enum.GetValues<TSignalKey>()
-            .Select(BuildSignal)
-            .GroupBy(static signal => signal.BusinessGroup, StringComparer.OrdinalIgnoreCase)
-            .OrderBy(static group => group.Min(static signal => signal.SortOrder))
-            .Select(group => Group(group.Key, [.. group.OrderBy(static signal => signal.SortOrder)]));
-
-    private ModuleSignalDefinition<TSignalKey> BuildSignal(TSignalKey signal)
-    {
-        var metadata = EnumPlcSignalMetadata.GetRead(signal);
-        var effectiveCategory = string.IsNullOrWhiteSpace(metadata.Category) ? category : metadata.Category;
-
-        return Signal(
-            signal,
-            metadata.SignalKey,
-            metadata.DefaultAddress,
-            ModuleSignalDirection.Read,
-            IoMappingOptionCatalog.NormalizeAddressCount(effectiveCategory, metadata.AddressCount),
-            metadata.DataType,
-            metadata.SortOrder,
-            metadata.DisplayName,
-            effectiveCategory,
-            metadata.BusinessGroup);
-    }
 }
 
 /// <summary>
 /// 基于枚举特性的标准写 profile。
 /// </summary>
 public sealed class EnumWriteSignalProfile<TSignalKey>(string moduleId, string category)
+    : EnumIoSignalProfile<TSignalKey, PlcWriteSignalAttribute>(moduleId, category, ModuleSignalDirection.Write)
+    where TSignalKey : struct, Enum
+{
+}
+
+/// <summary>
+/// 基于枚举特性的标准 IO profile 模板，读写只通过特性类型和方向区分。
+/// </summary>
+public abstract class EnumIoSignalProfile<TSignalKey, TAttribute>(
+    string moduleId,
+    string category,
+    ModuleSignalDirection direction)
     : ModulePlcSignalProfileBase<TSignalKey>
     where TSignalKey : struct, Enum
+    where TAttribute : PlcIoSignalAttribute
 {
     public override string ModuleId { get; } = moduleId;
 
@@ -101,14 +88,14 @@ public sealed class EnumWriteSignalProfile<TSignalKey>(string moduleId, string c
 
     private ModuleSignalDefinition<TSignalKey> BuildSignal(TSignalKey signal)
     {
-        var metadata = EnumPlcSignalMetadata.GetWrite(signal);
+        var metadata = EnumPlcSignalMetadata.GetIo<TSignalKey, TAttribute>(signal);
         var effectiveCategory = string.IsNullOrWhiteSpace(metadata.Category) ? category : metadata.Category;
 
         return Signal(
             signal,
             metadata.SignalKey,
             metadata.DefaultAddress,
-            ModuleSignalDirection.Write,
+            direction,
             IoMappingOptionCatalog.NormalizeAddressCount(effectiveCategory, metadata.AddressCount),
             metadata.DataType,
             metadata.SortOrder,

@@ -112,11 +112,12 @@ internal static class MonitorValueFormatting
         DateTime dt => productionTime.ToBusinessTime(dt).ToString("HH:mm:ss.fff"),
         DateTimeOffset dto => productionTime.ToBusinessTime(dto.UtcDateTime).ToString("HH:mm:ss.fff"),
         bool b => b ? "OK" : "NG",
-        double d => d.ToString("F3"),
-        float f => f.ToString("F3"),
-        decimal m => m.ToString("F3"),
-        string text => text,
+        double d => d.ToString("F3", CultureInfo.InvariantCulture),
+        float f => f.ToString("F3", CultureInfo.InvariantCulture),
+        decimal m => m.ToString("F3", CultureInfo.InvariantCulture),
+        string text => string.IsNullOrWhiteSpace(text) ? "--" : text,
         IEnumerable enumerable => FormatEnumerable(enumerable, productionTime),
+        IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture) ?? "--",
         _ => value?.ToString() ?? "--"
     };
 
@@ -142,7 +143,8 @@ internal static class MonitorValueFormatting
             JsonValueKind.String => element.GetString() ?? "--",
             JsonValueKind.True => "OK",
             JsonValueKind.False => "NG",
-            JsonValueKind.Number when element.TryGetDouble(out var number) => number.ToString("F3"),
+            JsonValueKind.Number when element.TryGetDouble(out var number)
+                => number.ToString("F3", CultureInfo.InvariantCulture),
             JsonValueKind.Null => "--",
             JsonValueKind.Undefined => "--",
             _ => element.ToString()
@@ -173,7 +175,7 @@ internal static class MonitorValueFormatting
     private static DateTime? TryReadDateTimeProperty(ProductionContext context, string propertyName)
         => TryConvertDateTime(TryReadProperty(context, propertyName));
 
-    private static object? TryReadProperty(object source, string propertyName)
+    public static object? TryReadProperty(object source, string propertyName)
         => source.GetType()
             .GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance)
             ?.GetValue(source);
