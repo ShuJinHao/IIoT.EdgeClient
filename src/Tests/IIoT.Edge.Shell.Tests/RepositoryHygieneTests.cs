@@ -123,6 +123,17 @@ public sealed class RepositoryHygieneTests
                 "src/Core/IIoT.Edge.Domain/IIoT.Edge.Domain.csproj",
                 "src/Shared/IIoT.Edge.SharedKernel/IIoT.Edge.SharedKernel.csproj"
             ],
+            ["src/Modules/IIoT.Edge.Module.Sdk/IIoT.Edge.Module.Sdk.csproj"] =
+            [
+                "src/Application/IIoT.Edge.Application/IIoT.Edge.Application.csproj",
+                "src/Shared/IIoT.Edge.SharedKernel/IIoT.Edge.SharedKernel.csproj"
+            ],
+            ["src/Edge/IIoT.Edge.Host.DataPipeline/IIoT.Edge.Host.DataPipeline.csproj"] =
+            [
+                "src/Application/IIoT.Edge.Application/IIoT.Edge.Application.csproj",
+                "src/Modules/IIoT.Edge.Module.Sdk/IIoT.Edge.Module.Sdk.csproj",
+                "src/Shared/IIoT.Edge.SharedKernel/IIoT.Edge.SharedKernel.csproj"
+            ],
             ["src/Infrastructure/IIoT.Edge.Infrastructure.DeviceComm/IIoT.Edge.Infrastructure.DeviceComm.csproj"] =
             [
                 "src/Application/IIoT.Edge.Application/IIoT.Edge.Application.csproj"
@@ -152,26 +163,33 @@ public sealed class RepositoryHygieneTests
             ["src/Core/IIoT.Edge.Domain"] =
             [
                 "IIoT.Edge.Application",
+                "IIoT.Edge.Host.DataPipeline",
                 "IIoT.Edge.Infrastructure",
+                "IIoT.Edge.Module.Sdk",
                 "IIoT.Edge.Runtime",
                 "IIoT.Edge.Presentation",
                 "IIoT.Edge.UI.Shared"
             ],
             ["src/Application/IIoT.Edge.Application"] =
             [
+                "IIoT.Edge.Host.DataPipeline",
                 "IIoT.Edge.Infrastructure",
+                "IIoT.Edge.Module.Sdk",
                 "IIoT.Edge.Runtime",
                 "IIoT.Edge.Presentation",
                 "IIoT.Edge.UI.Shared"
             ],
             ["src/Infrastructure/IIoT.Edge.Infrastructure.DeviceComm"] =
             [
+                "IIoT.Edge.Host.DataPipeline",
                 "IIoT.Edge.Runtime"
             ],
             ["src/Shared/IIoT.Edge.SharedKernel"] =
             [
                 "IIoT.Edge.Application",
+                "IIoT.Edge.Host.DataPipeline",
                 "IIoT.Edge.Infrastructure",
+                "IIoT.Edge.Module.Sdk",
                 "IIoT.Edge.Runtime",
                 "IIoT.Edge.Presentation",
                 "IIoT.Edge.UI.Shared"
@@ -315,7 +333,8 @@ public sealed class RepositoryHygieneTests
             "RuntimeLayoutSyncFileSystem.cs"));
 
         Assert.Contains("\"IIoT.Edge.Application.dll\"", fileSystem, StringComparison.Ordinal);
-        Assert.Contains("\"IIoT.Edge.Runtime.dll\"", fileSystem, StringComparison.Ordinal);
+        Assert.Contains("\"IIoT.Edge.Host.DataPipeline.dll\"", fileSystem, StringComparison.Ordinal);
+        Assert.Contains("\"IIoT.Edge.Module.Sdk.dll\"", fileSystem, StringComparison.Ordinal);
         Assert.Contains("\"Modules\"", fileSystem, StringComparison.Ordinal);
     }
 

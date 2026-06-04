@@ -1,9 +1,10 @@
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
-using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Infrastructure.Integration.Mes;
 using IIoT.Edge.Infrastructure.Integration.PassStation;
 
+using IIoT.Edge.Application.Abstractions.Cloud;
+using IIoT.Edge.Application.Abstractions.Shared;
 namespace IIoT.Edge.NonUiRegressionTests;
 
 public sealed class UploadGateBehaviorTests

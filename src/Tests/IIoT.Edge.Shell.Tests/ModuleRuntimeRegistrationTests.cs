@@ -27,7 +27,7 @@ using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using IIoT.Edge.SharedKernel.DataPipeline.Recipe;
 using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.SharedKernel.Repository;
-using IIoT.Edge.Runtime.Signals;
+using IIoT.Edge.Module.Sdk.Signals;
 using IIoT.Edge.Shell.Core;
 using IIoT.Edge.Shell.Modules;
 using IIoT.Edge.UI.Shared.PluginSystem;

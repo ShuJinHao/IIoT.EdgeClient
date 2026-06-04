@@ -2,6 +2,7 @@ using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Features.Production.Planning;
 using IIoT.Edge.Module.Homogenization.Runtime;
 
+using IIoT.Edge.Application.Abstractions.Mes;
 namespace IIoT.Edge.NonUiRegressionTests;
 
 public sealed class HomogenizationMesProductionGateTests

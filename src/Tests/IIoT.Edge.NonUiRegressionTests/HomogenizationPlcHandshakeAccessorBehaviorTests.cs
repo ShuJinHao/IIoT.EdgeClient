@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Abstractions.Mes;
 ﻿using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc.Signals;
 using IIoT.Edge.Module.Homogenization.Config;

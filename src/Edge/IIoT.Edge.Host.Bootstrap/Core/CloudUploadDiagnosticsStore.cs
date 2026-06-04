@@ -1,6 +1,8 @@
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
 
+using IIoT.Edge.Application.Abstractions.Cloud;
+using IIoT.Edge.Application.Abstractions.Shared;
 namespace IIoT.Edge.Shell.Core;
 
 public sealed class CloudUploadDiagnosticsStore

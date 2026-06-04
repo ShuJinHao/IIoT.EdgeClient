@@ -1,4 +1,4 @@
-using IIoT.Edge.Runtime.DataPipeline.Services;
+using IIoT.Edge.Host.DataPipeline.Services;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 

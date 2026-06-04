@@ -1,9 +1,11 @@
+using IIoT.Edge.Application.Abstractions.Cloud;
+using IIoT.Edge.Application.Abstractions.Mes;
 ﻿using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.Runtime.Signals;
+using IIoT.Edge.Module.Sdk.Signals;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.DataPipeline;
 

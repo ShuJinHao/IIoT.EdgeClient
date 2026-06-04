@@ -20,6 +20,8 @@ using IIoT.Edge.SharedKernel.Result;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 
+using IIoT.Edge.Application.Abstractions.Cloud;
+using IIoT.Edge.Application.Abstractions.Mes;
 namespace IIoT.Edge.NonUiRegressionTests;
 
 public sealed class MonitorQueriesBehaviorTests

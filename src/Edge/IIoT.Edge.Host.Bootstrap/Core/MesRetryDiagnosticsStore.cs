@@ -1,5 +1,7 @@
 using IIoT.Edge.Application.Abstractions.Modules;
 
+using IIoT.Edge.Application.Abstractions.Mes;
+using IIoT.Edge.Application.Abstractions.Shared;
 namespace IIoT.Edge.Shell.Core;
 
 public sealed class MesRetryDiagnosticsStore

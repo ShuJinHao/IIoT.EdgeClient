@@ -14,6 +14,7 @@ using IIoT.Edge.Module.Homogenization.Runtime;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using Microsoft.Extensions.Options;
 
+using IIoT.Edge.Application.Abstractions.Mes;
 namespace IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 
 /// <summary>

@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Abstractions.Cloud;
 namespace IIoT.Edge.Application.Abstractions.Device;
 
 public interface IDeviceService

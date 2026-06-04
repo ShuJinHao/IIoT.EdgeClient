@@ -1,13 +1,13 @@
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Consumers;
 using IIoT.Edge.Application.Abstractions.Device;
-using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Common.Device;
 using IIoT.Edge.Infrastructure.Integration;
 using IIoT.Edge.SharedKernel.DataPipeline;
 
+using IIoT.Edge.Application.Abstractions.Cloud;
 namespace IIoT.Edge.Infrastructure.Integration.PassStation;
 
 public class CloudConsumer : ProcessUploaderConsumerBase<IProcessCloudUploader, CloudCallResult>, ICloudConsumer, ICloudBatchConsumer

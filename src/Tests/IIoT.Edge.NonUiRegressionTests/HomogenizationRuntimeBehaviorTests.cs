@@ -16,7 +16,7 @@ using IIoT.Edge.Module.Homogenization.Integration;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using IIoT.Edge.Module.Homogenization.Samples;
-using IIoT.Edge.Runtime.Signals;
+using IIoT.Edge.Module.Sdk.Signals;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.Domain;
@@ -27,6 +27,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
+using IIoT.Edge.Application.Abstractions.Mes;
 namespace IIoT.Edge.NonUiRegressionTests;
 
 public sealed class HomogenizationRuntimeBehaviorTests

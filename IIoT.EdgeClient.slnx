@@ -25,13 +25,14 @@
   </Folder>
   <Folder Name="/src/Modules/">
     <Project Path="src/Modules/IIoT.Edge.Module.Homogenization/IIoT.Edge.Module.Homogenization.csproj" />
+    <Project Path="src/Modules/IIoT.Edge.Module.Sdk/IIoT.Edge.Module.Sdk.csproj" />
   </Folder>
   <Folder Name="/src/Shared/">
     <Project Path="src/Shared/IIoT.Edge.SharedKernel/IIoT.Edge.SharedKernel.csproj" />
     <Project Path="src/Shared/IIoT.Edge.UI.Shared/IIoT.Edge.UI.Shared.csproj" Id="2c8e15da-52ba-4d59-aced-196d42918475" />
   </Folder>
   <Folder Name="/src/Runtime/">
-    <Project Path="src/Runtime/IIoT.Edge.Runtime/IIoT.Edge.Runtime.csproj" Id="0af2fc95-d944-481f-89e1-897ba043a59d" />
+    <Project Path="src/Edge/IIoT.Edge.Host.DataPipeline/IIoT.Edge.Host.DataPipeline.csproj" />
   </Folder>
   <Folder Name="/src/Tests/">
     <Project Path="src/Tests/IIoT.Edge.Launcher.Tests/IIoT.Edge.Launcher.Tests.csproj" />

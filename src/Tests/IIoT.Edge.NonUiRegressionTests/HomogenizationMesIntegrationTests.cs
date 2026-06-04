@@ -11,6 +11,7 @@ using IIoT.Edge.Module.Homogenization.Payload;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
 
+using IIoT.Edge.Application.Abstractions.Mes;
 namespace IIoT.Edge.NonUiRegressionTests;
 
 public sealed class HomogenizationMesIntegrationTests

@@ -18,16 +18,17 @@ public sealed class ArchitectureBoundaryContractTests
         {
             Path.Combine(repoRoot, "src", "Core"),
             Path.Combine(repoRoot, "src", "Application", "IIoT.Edge.Application"),
-            Path.Combine(repoRoot, "src", "Runtime"),
             Path.Combine(repoRoot, "src", "Infrastructure"),
             Path.Combine(repoRoot, "src", "Presentation"),
             Path.Combine(repoRoot, "src", "Shared", "IIoT.Edge.SharedKernel"),
             Path.Combine(repoRoot, "src", "Shared", "IIoT.Edge.UI.Shared"),
             Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.Shell"),
-            Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.Host.Bootstrap")
+            Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.Host.Bootstrap"),
+            Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.Host.DataPipeline")
         };
 
         var offendingFiles = directories
+            .Where(Directory.Exists)
             .SelectMany(directory => Directory.EnumerateFiles(directory, "*.cs", SearchOption.AllDirectories)
                 .Concat(Directory.EnumerateFiles(directory, "*.csproj", SearchOption.AllDirectories)))
             .Where(path => !path.Contains(Path.DirectorySeparatorChar + "bin" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
@@ -79,7 +80,7 @@ public sealed class ArchitectureBoundaryContractTests
         var approvedReferences = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "src/Application/IIoT.Edge.Application/IIoT.Edge.Application.csproj",
-            "src/Runtime/IIoT.Edge.Runtime/IIoT.Edge.Runtime.csproj",
+            "src/Modules/IIoT.Edge.Module.Sdk/IIoT.Edge.Module.Sdk.csproj",
             "src/Shared/IIoT.Edge.SharedKernel/IIoT.Edge.SharedKernel.csproj",
             "src/Shared/IIoT.Edge.UI.Shared/IIoT.Edge.UI.Shared.csproj",
             "src/Presentation/IIoT.Edge.Presentation.Navigation/IIoT.Edge.Presentation.Navigation.csproj"
@@ -88,8 +89,43 @@ public sealed class ArchitectureBoundaryContractTests
         var offendingReferences = Directory
             .EnumerateFiles(Path.Combine(repoRoot, "src", "Modules"), "*.csproj", SearchOption.AllDirectories)
             .Where(path => !IsBuildArtifact(path))
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}IIoT.Edge.Module.Sdk{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
             .SelectMany(projectPath => ReadProjectReferences(repoRoot, projectPath)
                 .Where(referencePath => !approvedReferences.Contains(referencePath))
+                .Select(referencePath => $"{ToRepositoryPath(repoRoot, projectPath)} -> {referencePath}"))
+            .ToArray();
+
+        Assert.Empty(offendingReferences);
+    }
+
+    [Fact]
+    public void ModuleSdk_ShouldNotReferenceDataPipelineRuntime()
+    {
+        var repoRoot = ContractTestPathHelper.FindRepoRoot();
+        var sdkProject = Path.Combine(
+            repoRoot,
+            "src",
+            "Modules",
+            "IIoT.Edge.Module.Sdk",
+            "IIoT.Edge.Module.Sdk.csproj");
+
+        var offendingReferences = ReadProjectReferences(repoRoot, sdkProject)
+            .Where(referencePath => referencePath.Contains("IIoT.Edge.Host.DataPipeline", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        Assert.Empty(offendingReferences);
+    }
+
+    [Fact]
+    public void ProcessModules_ShouldNotReferenceDataPipelineRuntime()
+    {
+        var repoRoot = ContractTestPathHelper.FindRepoRoot();
+        var offendingReferences = Directory
+            .EnumerateFiles(Path.Combine(repoRoot, "src", "Modules"), "*.csproj", SearchOption.AllDirectories)
+            .Where(path => !IsBuildArtifact(path))
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}IIoT.Edge.Module.Sdk{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            .SelectMany(projectPath => ReadProjectReferences(repoRoot, projectPath)
+                .Where(referencePath => referencePath.Contains("IIoT.Edge.Host.DataPipeline", StringComparison.OrdinalIgnoreCase))
                 .Select(referencePath => $"{ToRepositoryPath(repoRoot, projectPath)} -> {referencePath}"))
             .ToArray();
 
@@ -130,7 +166,7 @@ public sealed class ArchitectureBoundaryContractTests
         {
             Path.Combine(repoRoot, "src", "Application"),
             Path.Combine(repoRoot, "src", "Modules"),
-            Path.Combine(repoRoot, "src", "Runtime")
+            Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.Host.DataPipeline")
         };
         var obsoleteNames = new[]
         {
@@ -140,6 +176,7 @@ public sealed class ArchitectureBoundaryContractTests
         };
 
         var offendingFiles = sourceDirectories
+            .Where(Directory.Exists)
             .SelectMany(directory => Directory.EnumerateFiles(directory, "*.cs", SearchOption.AllDirectories))
             .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
             .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))

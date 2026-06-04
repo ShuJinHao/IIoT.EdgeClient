@@ -2,6 +2,7 @@ using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Device;
 using MediatR;
 
+using IIoT.Edge.Application.Abstractions.Cloud;
 namespace IIoT.Edge.Application.Features.Production.CapacityView;
 
 /// <summary>

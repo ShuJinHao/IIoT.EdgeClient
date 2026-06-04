@@ -10,6 +10,7 @@ using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 
+using IIoT.Edge.Application.Abstractions.Mes;
 namespace IIoT.Edge.Application.Modules.Mes;
 
 /// <summary>

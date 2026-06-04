@@ -3,6 +3,8 @@ using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.SharedKernel.DataPipeline;
 
+using IIoT.Edge.Application.Abstractions.Cloud;
+using IIoT.Edge.Application.Abstractions.Mes;
 namespace IIoT.Edge.Application.Features.DataPipeline.DeadLetters;
 
 /// <summary>

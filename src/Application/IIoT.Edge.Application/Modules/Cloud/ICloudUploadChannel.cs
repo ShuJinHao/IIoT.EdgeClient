@@ -1,6 +1,7 @@
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 
+using IIoT.Edge.Application.Abstractions.Cloud;
 namespace IIoT.Edge.Application.Modules.Cloud;
 
 /// <summary>

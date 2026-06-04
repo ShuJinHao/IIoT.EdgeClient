@@ -14,12 +14,14 @@ using IIoT.Edge.Module.Homogenization.Config.Parameters;
 using IIoT.Edge.Module.Homogenization.Integration;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Runtime;
-using IIoT.Edge.Runtime.Signals;
+using IIoT.Edge.Module.Sdk.Signals;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
+using IIoT.Edge.Application.Abstractions.Cloud;
+using IIoT.Edge.Application.Abstractions.Mes;
 namespace IIoT.Edge.NonUiRegressionTests;
 
 public sealed class HomogenizationBusinessChainBehaviorTests

@@ -9,6 +9,8 @@ using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
 using IIoT.Edge.SharedKernel.DataPipeline.DeviceLog;
 using IIoT.Edge.Application.Common.Persistence;
 
+using IIoT.Edge.Application.Abstractions.Cloud;
+using IIoT.Edge.Application.Abstractions.Mes;
 namespace IIoT.Edge.NonUiRegressionTests;
 
 public sealed class EdgeSyncDiagnosticsQueryBehaviorTests

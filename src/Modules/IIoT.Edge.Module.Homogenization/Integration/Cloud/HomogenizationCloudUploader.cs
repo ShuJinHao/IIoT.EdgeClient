@@ -5,6 +5,7 @@ using IIoT.Edge.Application.Modules.Cloud;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.SharedKernel.DataPipeline;
 
+using IIoT.Edge.Application.Abstractions.Cloud;
 namespace IIoT.Edge.Module.Homogenization.Integration.Cloud;
 
 /// <summary>

@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Abstractions.Cloud;
 ﻿using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
 using IIoT.Edge.Application.Abstractions.Device;
 using System.Text.Json;

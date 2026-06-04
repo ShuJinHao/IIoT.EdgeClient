@@ -1,9 +1,10 @@
 using IIoT.Edge.Application.Abstractions.Device;
-using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Infrastructure.Integration.PassStation;
 using IIoT.Edge.SharedKernel.DataPipeline;
 
+using IIoT.Edge.Application.Abstractions.Cloud;
+using IIoT.Edge.Application.Abstractions.Shared;
 namespace IIoT.Edge.NonUiRegressionTests;
 
 public sealed class CloudConsumerBehaviorTests

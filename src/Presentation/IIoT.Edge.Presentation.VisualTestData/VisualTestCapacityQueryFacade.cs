@@ -1,6 +1,7 @@
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Features.Production.CapacityView;
 
+using IIoT.Edge.Application.Abstractions.Cloud;
 namespace IIoT.Edge.Presentation.VisualTestData;
 
 /// <summary>

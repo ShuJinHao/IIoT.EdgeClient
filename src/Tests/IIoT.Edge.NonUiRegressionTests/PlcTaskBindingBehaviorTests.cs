@@ -16,7 +16,7 @@ using IIoT.Edge.Module.Homogenization;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Hardware;
 using IIoT.Edge.Module.Homogenization.Runtime;
-using IIoT.Edge.Runtime.Signals;
+using IIoT.Edge.Module.Sdk.Signals;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.Domain;
 using IIoT.Edge.SharedKernel.Enums;

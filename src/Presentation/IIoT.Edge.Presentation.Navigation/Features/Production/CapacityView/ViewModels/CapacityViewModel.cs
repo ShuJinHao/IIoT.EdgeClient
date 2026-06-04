@@ -9,6 +9,7 @@ using IIoT.Edge.UI.Shared.Avalonia.Controls;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
 
+using IIoT.Edge.Application.Abstractions.Cloud;
 namespace IIoT.Edge.Presentation.Navigation.Features.Production.CapacityView;
 
 public class CapacityViewModel : NavigationViewModelBase

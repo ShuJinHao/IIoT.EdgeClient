@@ -8,6 +8,7 @@ using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.UI.Shared.Avalonia.Controls;
 using IIoT.Edge.UI.Shared.Localization;
 
+using IIoT.Edge.Application.Abstractions.Cloud;
 namespace IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
 
 public interface IDiagnosticsRowsBuilder

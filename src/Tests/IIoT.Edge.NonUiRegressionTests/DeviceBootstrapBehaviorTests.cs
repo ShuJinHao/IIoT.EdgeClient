@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Abstractions.Cloud;
 ﻿using System.Net;
 using System.Net.Http.Json;
 using IIoT.Edge.Application.Abstractions.Config;

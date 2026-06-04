@@ -10,6 +10,7 @@ using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using Microsoft.Extensions.Options;
 
+using IIoT.Edge.Application.Abstractions.Mes;
 namespace IIoT.Edge.Module.Homogenization.Runtime.Tasks;
 
 /// <summary>

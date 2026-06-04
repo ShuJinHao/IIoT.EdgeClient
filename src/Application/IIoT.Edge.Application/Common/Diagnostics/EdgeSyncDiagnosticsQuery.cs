@@ -1,11 +1,13 @@
 using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 using IIoT.Edge.Application.Abstractions.Device;
-using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Common.Persistence;
 using IIoT.Edge.SharedKernel.DataPipeline;
 
+using IIoT.Edge.Application.Abstractions.Cloud;
+using IIoT.Edge.Application.Abstractions.Mes;
+using IIoT.Edge.Application.Abstractions.Shared;
 namespace IIoT.Edge.Application.Common.Diagnostics;
 
 public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery

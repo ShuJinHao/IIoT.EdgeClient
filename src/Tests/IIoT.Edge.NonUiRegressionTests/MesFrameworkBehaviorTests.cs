@@ -1,6 +1,8 @@
+using IIoT.Edge.Application.Abstractions.Cloud;
+using IIoT.Edge.Application.Abstractions.Mes;
+using IIoT.Edge.Application.Abstractions.Shared;
 ﻿using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
-using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Infrastructure.Integration.Config;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Infrastructure.Integration.Http;

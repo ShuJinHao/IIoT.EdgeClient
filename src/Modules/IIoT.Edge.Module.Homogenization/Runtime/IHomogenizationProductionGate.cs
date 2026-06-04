@@ -1,5 +1,6 @@
 using IIoT.Edge.Application.Abstractions.Modules;
 
+using IIoT.Edge.Application.Abstractions.Mes;
 namespace IIoT.Edge.Module.Homogenization.Runtime;
 
 /// <summary>

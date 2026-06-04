@@ -1,12 +1,14 @@
+using IIoT.Edge.Application.Abstractions.Cloud;
+using IIoT.Edge.Application.Abstractions.Mes;
+using IIoT.Edge.Application.Abstractions.Shared;
 ﻿using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
-using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Module.Homogenization.Payload;
-using IIoT.Edge.Runtime.DataPipeline.Services;
-using IIoT.Edge.Runtime.DataPipeline.Tasks;
+using IIoT.Edge.Host.DataPipeline.Services;
+using IIoT.Edge.Host.DataPipeline.Tasks;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using Microsoft.Extensions.Options;

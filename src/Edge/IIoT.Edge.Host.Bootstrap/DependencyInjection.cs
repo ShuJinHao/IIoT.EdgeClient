@@ -1,11 +1,12 @@
-﻿using IIoT.Edge.Application;
+using IIoT.Edge.Application.Abstractions.Cloud;
+using IIoT.Edge.Application.Abstractions.Mes;
+using IIoT.Edge.Application.Abstractions.Shared;
+using IIoT.Edge.Application;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
-using IIoT.Edge.Application.Abstractions.DataPipeline.SyncTask;
 using IIoT.Edge.Application.Abstractions.Device;
-using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Features.Config.ModuleParameters;
 using IIoT.Edge.Application.Abstractions.Plc;
@@ -25,8 +26,8 @@ using IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
 using IIoT.Edge.Presentation.Panels;
 using IIoT.Edge.Presentation.Shell;
 using IIoT.Edge.Presentation.VisualTestData;
-using IIoT.Edge.Runtime;
-using IIoT.Edge.Runtime.DataPipeline.Tasks;
+using IIoT.Edge.Host.DataPipeline;
+using IIoT.Edge.Host.DataPipeline.Tasks;
 using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using IIoT.Edge.Shell.Core;
@@ -161,7 +162,7 @@ public static class DependencyInjection
             (sp, ct) => sp.GetRequiredService<IPlcConnectionManager>().StopAsync(ct));
         AddLongRunningManagedBackgroundTaskGroup(
             services,
-            "DataPipeline.Runtime",
+            "Host.DataPipeline",
             sp =>
             [
                 sp.GetRequiredService<ProcessQueueTask>(),

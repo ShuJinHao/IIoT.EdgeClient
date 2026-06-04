@@ -1,10 +1,12 @@
 using IIoT.Edge.Application.Abstractions.Device;
-using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Context;
 using IIoT.Edge.Application.Features.Production.Monitor;
 using System.Globalization;
 
+using IIoT.Edge.Application.Abstractions.Cloud;
+using IIoT.Edge.Application.Abstractions.Mes;
+using IIoT.Edge.Application.Abstractions.Shared;
 namespace IIoT.Edge.Presentation.VisualTestData;
 
 /// <summary>

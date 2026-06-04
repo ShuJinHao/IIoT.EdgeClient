@@ -20,11 +20,12 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Edge\IIoT.Edge.Host.Bootstrap\IIoT.Edge.Host.Bootstrap.csproj" />
     <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.Homogenization\IIoT.Edge.Module.Homogenization.csproj" />
+    <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.Sdk\IIoT.Edge.Module.Sdk.csproj" />
     <ProjectReference Include="..\..\Application\IIoT.Edge.Application\IIoT.Edge.Application.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <PluginModuleProject Include="..\..\Modules\**\*.csproj" />
+    <PluginModuleProject Include="..\..\Modules\**\*.csproj" Exclude="..\..\Modules\IIoT.Edge.Module.Sdk\IIoT.Edge.Module.Sdk.csproj" />
   </ItemGroup>
 
   <Target Name="ResolvePluginModuleArtifacts">

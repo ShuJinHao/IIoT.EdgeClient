@@ -39,8 +39,10 @@ internal sealed class RuntimeLayoutSyncFileSystem : IRuntimeLayoutSyncFileSystem
                      "IIoT.Edge.Presentation.Shell.pdb",
                      "IIoT.Edge.Presentation.VisualTestData.dll",
                      "IIoT.Edge.Presentation.VisualTestData.pdb",
-                     "IIoT.Edge.Runtime.dll",
-                     "IIoT.Edge.Runtime.pdb",
+                     "IIoT.Edge.Host.DataPipeline.dll",
+                     "IIoT.Edge.Host.DataPipeline.pdb",
+                     "IIoT.Edge.Module.Sdk.dll",
+                     "IIoT.Edge.Module.Sdk.pdb",
                      "log4net.config"
                  })
         {

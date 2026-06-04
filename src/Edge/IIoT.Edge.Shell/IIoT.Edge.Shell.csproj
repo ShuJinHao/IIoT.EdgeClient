@@ -32,7 +32,7 @@
   </ItemGroup>
 
   <ItemGroup Condition="'$(EnableLocalPluginModuleBuild)' == 'true'">
-    <PluginModuleProject Include="..\..\Modules\**\*.csproj" />
+    <PluginModuleProject Include="..\..\Modules\**\*.csproj" Exclude="..\..\Modules\IIoT.Edge.Module.Sdk\IIoT.Edge.Module.Sdk.csproj" />
   </ItemGroup>
 
   <ItemGroup>

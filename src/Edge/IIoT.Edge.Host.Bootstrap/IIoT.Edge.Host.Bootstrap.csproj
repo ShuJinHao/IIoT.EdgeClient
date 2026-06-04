@@ -24,7 +24,7 @@
     <ProjectReference Include="..\\..\\Presentation\\IIoT.Edge.Presentation.Panels\\IIoT.Edge.Presentation.Panels.csproj" />
     <ProjectReference Include="..\\..\\Presentation\\IIoT.Edge.Presentation.Shell\\IIoT.Edge.Presentation.Shell.csproj" />
     <ProjectReference Include="..\\..\\Presentation\\IIoT.Edge.Presentation.VisualTestData\\IIoT.Edge.Presentation.VisualTestData.csproj" />
-    <ProjectReference Include="..\\..\\Runtime\\IIoT.Edge.Runtime\\IIoT.Edge.Runtime.csproj" />
+    <ProjectReference Include="..\\IIoT.Edge.Host.DataPipeline\\IIoT.Edge.Host.DataPipeline.csproj" />
     <ProjectReference Include="..\\..\\Shared\\IIoT.Edge.UI.Shared\\IIoT.Edge.UI.Shared.csproj" />
   </ItemGroup>
 
