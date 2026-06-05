@@ -12,7 +12,7 @@ using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.SharedKernel.DataPipeline;
 
 using IIoT.Edge.Application.Abstractions.Mes;
-namespace IIoT.Edge.Module.Homogenization.Integration.Mes;
+namespace IIoT.Edge.Module.Homogenization.Mes;
 
 /// <summary>
 /// 匀浆 MES 通道实现。通用签名、工站和请求执行由 Application 基类处理，本类只保留匀浆字段映射和 MES code 选择。

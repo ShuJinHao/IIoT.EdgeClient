@@ -10,7 +10,7 @@ using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Io;
 using IIoT.Edge.Module.Homogenization.Config.Parameters;
-using IIoT.Edge.Module.Homogenization.Integration.Mes;
+using IIoT.Edge.Module.Homogenization.Mes;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Production.Tasks;
 using IIoT.Edge.Module.Sdk.Signals;

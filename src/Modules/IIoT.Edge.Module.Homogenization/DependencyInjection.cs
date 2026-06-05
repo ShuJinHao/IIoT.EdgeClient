@@ -5,7 +5,7 @@ using IIoT.Edge.Application.Features.Production.Planning;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Io;
 using IIoT.Edge.Module.Homogenization.Config.Parameters;
-using IIoT.Edge.Module.Homogenization.Integration.Mes;
+using IIoT.Edge.Module.Homogenization.Mes;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Presentation;
 using IIoT.Edge.Module.Homogenization.Resources;

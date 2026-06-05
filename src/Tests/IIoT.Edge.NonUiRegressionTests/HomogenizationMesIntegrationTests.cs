@@ -7,7 +7,7 @@ using IIoT.Edge.Application.Modules.Mes;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Io;
 using IIoT.Edge.Module.Homogenization.Config.Parameters;
-using IIoT.Edge.Module.Homogenization.Integration.Mes;
+using IIoT.Edge.Module.Homogenization.Mes;
 using IIoT.Edge.Module.Homogenization.Payload;
 using Microsoft.Extensions.Options;
 using System.Text.Json;

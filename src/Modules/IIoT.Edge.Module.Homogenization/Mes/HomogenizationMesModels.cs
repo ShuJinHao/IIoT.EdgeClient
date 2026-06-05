@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace IIoT.Edge.Module.Homogenization.Integration.Mes;
+namespace IIoT.Edge.Module.Homogenization.Mes;
 
 /// <summary>
 /// 匀浆 MES 主批计划查询请求。upperComputerNo 由上位机编码传入，timestamp 使用 MES 要求的业务时间格式。

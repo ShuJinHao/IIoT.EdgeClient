@@ -4,7 +4,7 @@ using IIoT.Edge.Module.Homogenization.Config.Parameters;
 using IIoT.Edge.Module.Homogenization.Payload;
 using Microsoft.Extensions.Options;
 
-namespace IIoT.Edge.Module.Homogenization.Integration.Mes;
+namespace IIoT.Edge.Module.Homogenization.Mes;
 
 /// <summary>
 /// 匀浆 MES 字段 payload 构建器，负责把实时、配方和出料快照映射为 MES item 数组。

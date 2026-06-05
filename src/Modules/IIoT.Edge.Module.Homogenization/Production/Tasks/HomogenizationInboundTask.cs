@@ -7,7 +7,7 @@ using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Io;
 using IIoT.Edge.Module.Homogenization.Config.Parameters;
-using IIoT.Edge.Module.Homogenization.Integration.Mes;
+using IIoT.Edge.Module.Homogenization.Mes;
 using IIoT.Edge.Module.Homogenization.Resources;
 using IIoT.Edge.Module.Homogenization.Production;
 using Microsoft.Extensions.Options;
