@@ -14,6 +14,13 @@ public partial class MainWindow : Window
     private readonly LauncherMainViewModel _viewModel;
     private readonly IAppLanguageService _languageService;
 
+    public MainWindow()
+    {
+        InitializeComponent();
+        _viewModel = null!;
+        _languageService = null!;
+    }
+
     public MainWindow(
         LauncherMainViewModel viewModel,
         IAppLanguageService languageService)

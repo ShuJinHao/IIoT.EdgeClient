@@ -9,6 +9,12 @@ public partial class ChangePasswordWindow : Window
 {
     private readonly LauncherMainViewModel _viewModel;
 
+    public ChangePasswordWindow()
+    {
+        InitializeComponent();
+        _viewModel = null!;
+    }
+
     public ChangePasswordWindow(LauncherMainViewModel viewModel, string? initialUserName)
     {
         InitializeComponent();

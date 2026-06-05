@@ -157,30 +157,20 @@
                                     Content="{DynamicResource Launcher_Button_ChangePassword}" />
                             </StackPanel>
 
-                            <Border
+                            <edge:EdgeNoticeBar
                                 Grid.Row="2"
-                                Padding="{DynamicResource Edge.Thickness.Chip.Comfortable}"
-                                Background="{DynamicResource Edge.Brush.Surface.Wash}"
-                                BorderBrush="{DynamicResource Edge.Brush.Border.Subtle}"
-                                BorderThickness="1"
-                                CornerRadius="{DynamicResource Edge.CornerRadius.Pill}">
-                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                Status="Info">
+                                <edge:EdgeNoticeBar.Icon>
                                     <PathIcon
-                                        Grid.Column="0"
-                                        Width="16"
-                                        Height="16"
-                                        VerticalAlignment="Top"
+                                        Classes="edge-notice-icon"
                                         Data="{StaticResource Edge.Icon.Info}"
                                         Foreground="{DynamicResource Edge.Brush.Accent.Primary}" />
-                                    <TextBlock
-                                        Grid.Column="1"
-                                        VerticalAlignment="Center"
-                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                        Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
-                                        Text="{DynamicResource Launcher_Login_BoundaryNote}"
-                                        TextWrapping="Wrap" />
-                                </Grid>
-                            </Border>
+                                </edge:EdgeNoticeBar.Icon>
+                                <TextBlock
+                                    Classes="edge-notice-message"
+                                    Text="{DynamicResource Launcher_Login_BoundaryNote}"
+                                    TextWrapping="Wrap" />
+                            </edge:EdgeNoticeBar>
                         </Grid>
                     </edge:EdgeCard>
 
