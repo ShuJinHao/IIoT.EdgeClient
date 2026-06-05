@@ -7,11 +7,11 @@ namespace IIoT.Edge.Module.Homogenization.Integration;
 /// <summary>
 /// 匀浆 MES 字段 payload 构建器，负责把实时、配方和出料快照映射为 MES item 数组。
 /// </summary>
-internal sealed class HomogenizationMesItemPayloadBuilder : IHomogenizationMesItemPayloadBuilder
+public sealed class HomogenizationMesPayloadBuilder
 {
     private readonly HomogenizationMesCodeOptions _mesCodes;
 
-    public HomogenizationMesItemPayloadBuilder(IOptions<HomogenizationCodeOptions> codeOptions)
+    public HomogenizationMesPayloadBuilder(IOptions<HomogenizationCodeOptions> codeOptions)
     {
         _mesCodes = codeOptions.Value.Mes;
     }

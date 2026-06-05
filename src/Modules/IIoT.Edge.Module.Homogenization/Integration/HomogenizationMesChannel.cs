@@ -6,7 +6,7 @@ using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Application.Modules;
 using IIoT.Edge.Application.Modules.Mes;
-using IIoT.Edge.Module.Homogenization.Config.Parameters;
+using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.SharedKernel.DataPipeline;
 
@@ -19,7 +19,7 @@ namespace IIoT.Edge.Module.Homogenization.Integration;
 public sealed class HomogenizationMesChannel
     : MesScenarioChannelBase<HomogenizationCellData>, IHomogenizationMesScenarioChannel
 {
-    private readonly IHomogenizationMesItemPayloadBuilder _payloadBuilder;
+    private readonly HomogenizationMesPayloadBuilder _payloadBuilder;
     private readonly IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> _parameters;
 
     public HomogenizationMesChannel(
@@ -28,7 +28,7 @@ public sealed class HomogenizationMesChannel
         IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> parameters,
         ILogService logger,
         IProductionTimeProvider productionTime,
-        IHomogenizationMesItemPayloadBuilder payloadBuilder)
+        HomogenizationMesPayloadBuilder payloadBuilder)
         : base(DependencyInjection.ModuleKey, logger, requestExecutor, moduleParamRoleProvider, productionTime)
     {
         _parameters = parameters;
@@ -299,4 +299,21 @@ public sealed class HomogenizationMesChannel
             ? throw new InvalidOperationException($"Homogenization MES path is empty: {pathKey}.")
             : configuredPath.Trim();
     }
+}
+
+/// <summary>
+/// 匀浆 MES 场景通道契约。泛型实参只在插件边界声明一次，运行任务和测试依赖本插件强类型接口。
+/// </summary>
+public interface IHomogenizationMesScenarioChannel
+    : IMesScenarioChannel<
+        HomogenizationCellData,
+        string,
+        HomogenizationRealtimeSnapshot,
+        HomogenizationRecipeSnapshot,
+        HomogenizationEquipmentStatusSnapshot,
+        HomogenizationMainPlanRequest,
+        HomogenizationMainPlan,
+        HomogenizationTraceBatchRequest,
+        HomogenizationTraceBatchResult>
+{
 }

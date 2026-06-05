@@ -434,7 +434,7 @@ public sealed class ModuleRuntimeRegistrationTests
             Assert.Single(modules);
             Assert.Single(cellDataRegistry.GetRegistrations());
             Assert.Single(runtimeRegistry.GetRegistrations());
-            Assert.Single(integrationRegistry.GetCloudUploaders());
+            Assert.Empty(integrationRegistry.GetCloudUploaders());
             Assert.Single(moduleParamRegistry.GetRegistrations());
             Assert.NotNull(viewRegistry.GetViewRegistration("Homogenization.DataView"));
         }

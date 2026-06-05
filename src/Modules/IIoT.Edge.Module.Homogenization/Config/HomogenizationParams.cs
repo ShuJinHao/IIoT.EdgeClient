@@ -1,6 +1,6 @@
 using IIoT.Edge.Application.Abstractions.Config;
 
-namespace IIoT.Edge.Module.Homogenization.Config.Parameters;
+namespace IIoT.Edge.Module.Homogenization.Config;
 
 /// <summary>
 /// 匀浆参数枚举集中容器。宿主仍按 MES、云端、插件业务三组读取和保存，插件只维护本模块自己的参数键。

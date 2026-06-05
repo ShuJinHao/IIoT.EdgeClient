@@ -106,7 +106,7 @@ public sealed class ModuleDiscoveryContractTests
 
             Assert.Single(cellDataRegistry.GetRegistrations());
             Assert.Single(runtimeRegistry.GetRegistrations());
-            Assert.Single(integrationRegistry.GetCloudUploaders());
+            Assert.Empty(integrationRegistry.GetCloudUploaders());
             Assert.Single(moduleParamRegistry.GetRegistrations());
             Assert.NotNull(viewRegistry.GetViewRegistration("Homogenization.DataView"));
         }
@@ -214,7 +214,7 @@ public sealed class ModuleDiscoveryContractTests
 
         public override string DisplayName => "模拟工序";
 
-        protected override ProcessUploadMode CloudUploadMode => ProcessUploadMode.Single;
+        protected override ProcessUploadMode? CloudUploadMode => ProcessUploadMode.Single;
 
         protected override IStationRuntimeFactory CreateRuntimeFactory()
             => new MockRuntimeFactory();

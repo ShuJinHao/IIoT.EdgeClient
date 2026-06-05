@@ -1,6 +1,119 @@
+using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Resources;
 
 namespace IIoT.Edge.Module.Homogenization.Config;
+
+/// <summary>
+/// 匀浆模块运行和界面配置。
+/// </summary>
+public sealed class HomogenizationModuleOptions
+{
+    /// <summary>
+    /// 界面展示相关配置。
+    /// </summary>
+    public HomogenizationPresentationOptions Presentation { get; set; } = new();
+
+    /// <summary>
+    /// PLC 任务循环相关配置。
+    /// </summary>
+    public HomogenizationRuntimeOptions Runtime { get; set; } = new();
+}
+
+/// <summary>
+/// 匀浆模块界面刷新和缓存配置。
+/// </summary>
+public sealed class HomogenizationPresentationOptions
+{
+    /// <summary>
+    /// 数据页面刷新间隔，单位毫秒。
+    /// </summary>
+    public int DataViewRefreshIntervalMs { get; set; } = 1000;
+
+    /// <summary>
+    /// UI 内存中保留的最近出料记录上限。
+    /// </summary>
+    public int MaxOutboundRecords { get; set; } = 500;
+}
+
+/// <summary>
+/// 匀浆 PLC 任务循环配置。
+/// </summary>
+public sealed class HomogenizationRuntimeOptions
+{
+    /// <summary>
+    /// 触发-应答、心跳任务循环间隔，单位毫秒。
+    /// </summary>
+    public int EventLoopIntervalMs { get; set; } = 50;
+
+    /// <summary>
+    /// 实时快照上传任务循环间隔，单位毫秒。
+    /// </summary>
+    public int RealtimeLoopIntervalMs { get; set; } = 1000;
+
+    /// <summary>
+    /// 触发-应答、心跳任务允许的最小循环间隔，单位毫秒。
+    /// </summary>
+    public int MinEventLoopIntervalMs { get; set; } = 20;
+
+    /// <summary>
+    /// 实时快照上传任务允许的最小循环间隔，单位毫秒。
+    /// </summary>
+    public int MinRealtimeLoopIntervalMs { get; set; } = 200;
+}
+public sealed class HomogenizationCodeOptions
+{
+    /// <summary>
+    /// PLC 触发码和应答码配置。
+    /// </summary>
+    public HomogenizationPlcCodeOptions Plc { get; set; } = new();
+
+    /// <summary>
+    /// MES 通道和字段码表配置。
+    /// </summary>
+    public HomogenizationMesCodeOptions Mes { get; set; } = new();
+
+    /// <summary>
+    /// Cloud 日志映射码表配置。
+    /// </summary>
+    public HomogenizationCloudCodeOptions Cloud { get; set; } = new();
+}
+public sealed class HomogenizationPlcCodeOptions
+{
+    /// <summary>
+    /// PLC 写入触发点的复位值，业务任务通过交互访问器判断复位。
+    /// </summary>
+    public ushort SignalReset { get; set; }
+
+    /// <summary>
+    /// PLC 写入触发点的触发值，业务任务通过交互访问器判断触发。
+    /// </summary>
+    public ushort SignalTrigger { get; set; }
+
+    /// <summary>
+    /// 上位机写回 PLC 的正常完成应答码。
+    /// </summary>
+    public ushort AckOk { get; set; }
+
+    /// <summary>
+    /// 上位机写回 PLC 的异常失败应答码。
+    /// </summary>
+    public ushort AckException { get; set; }
+
+    /// <summary>
+    /// 上位机写回 PLC 的 MES 业务拒绝应答码。
+    /// </summary>
+    public ushort AckMesNg { get; set; }
+
+    internal void AppendValidationErrors(ICollection<string> errors)
+    {
+        if (SignalReset == SignalTrigger)
+        {
+            errors.Add(HomogenizationText.Get(
+                "Homogenization_Validate_PlcResetAndTriggerCannotEqual",
+                "PLC 复位信号不能与触发信号相同。"));
+        }
+    }
+}
 
 /// <summary>
 /// 匀浆 MES 通道和字段码表配置。
@@ -178,4 +291,89 @@ public sealed class HomogenizationMesItemCodeOptions
     /// MES 字段单位。
     /// </summary>
     public string Unit { get; set; } = string.Empty;
+}
+public sealed class HomogenizationCloudCodeOptions
+{
+    /// <summary>
+    /// PLC 设备状态码到 Cloud 日志级别的映射，允许值为 INFO、WARN、ERROR。
+    /// </summary>
+    public Dictionary<string, string> EquipmentStatusLevels { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// 按配置将设备状态转换为 Cloud 设备日志级别，未配置时使用插件默认判定。
+    /// </summary>
+    public string ResolveEquipmentStatusLevel(HomogenizationEquipmentStatusSnapshot snapshot)
+    {
+        if (EquipmentStatusLevels.TryGetValue(snapshot.StatusCode.ToString(), out var configured))
+        {
+            return NormalizeLevel(configured, GetDefaultStatusLevel(snapshot));
+        }
+
+        return GetDefaultStatusLevel(snapshot);
+    }
+
+    internal void AppendValidationErrors(ICollection<string> errors)
+    {
+        foreach (var item in EquipmentStatusLevels)
+        {
+            if (!IsSupportedLevel(item.Value))
+            {
+                errors.Add(HomogenizationText.Format(
+                    "Homogenization_Validate_CloudStatusLevelInvalidFormat",
+                    "Cloud 设备状态级别 {0}={1} 无效，只能配置 INFO、WARN 或 ERROR。",
+                    item.Key,
+                    item.Value));
+            }
+        }
+    }
+
+    private static string GetDefaultStatusLevel(HomogenizationEquipmentStatusSnapshot snapshot)
+    {
+        if (snapshot.StatusCode < 0)
+        {
+            return "ERROR";
+        }
+
+        if (snapshot.Messages.Count > 0
+            || ContainsWarningWord(snapshot.StatusText))
+        {
+            return "WARN";
+        }
+
+        return "INFO";
+    }
+
+    private static bool ContainsWarningWord(string value)
+        => value.Contains("报警", StringComparison.Ordinal)
+           || value.Contains("异常", StringComparison.Ordinal)
+           || value.Contains("故障", StringComparison.Ordinal)
+           || value.Contains("离线", StringComparison.Ordinal);
+
+    private static string NormalizeLevel(string? value, string fallback)
+    {
+        var normalized = value?.Trim().ToUpperInvariant();
+        return IsSupportedLevel(normalized) ? normalized! : fallback;
+    }
+
+    private static bool IsSupportedLevel(string? value)
+        => string.Equals(value, "INFO", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(value, "WARN", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(value, "ERROR", StringComparison.OrdinalIgnoreCase);
+}
+
+/// <summary>
+/// 匀浆配置校验辅助方法，只供非阻断诊断收集错误文本使用。
+/// </summary>
+internal static class HomogenizationOptionValidation
+{
+    /// <summary>
+    /// 校验字符串配置不能为空，主要用于 MES 路径和通道名称。
+    /// </summary>
+    public static void Require(string value, string name, ICollection<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            errors.Add(HomogenizationText.Format("Homogenization_Validate_StringRequiredFormat", "{0} 不能为空。", name));
+        }
+    }
 }

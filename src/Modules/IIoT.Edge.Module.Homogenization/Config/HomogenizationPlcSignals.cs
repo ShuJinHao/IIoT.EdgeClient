@@ -1,10 +1,12 @@
 using IIoT.Edge.Application.Modules.Hardware;
 
-namespace IIoT.Edge.Module.Homogenization.Config.Hardware;
+namespace IIoT.Edge.Module.Homogenization.Config;
 
-/// <summary>
-/// 匀浆 PLC 信号枚举容器。这里是业务信号唯一白名单；特性只提供标准播种默认值，不决定是否允许新增。
-/// </summary>
+/// <summary>匀浆 PLC 信号枚举容器，特性位置参数含义在备注中说明。</summary>
+/// <remarks>
+/// PlcInteractionSignal(key, group, readAddress, writeAddress, readSortOrder, writeSortOrder)。
+/// PlcReadSignal/PlcWriteSignal(key, defaultAddress, addressCount, dataType, sortOrder, category, businessGroup, displayName)。
+/// </remarks>
 public static class HomogenizationPlcSignals
 {
     /// <summary>

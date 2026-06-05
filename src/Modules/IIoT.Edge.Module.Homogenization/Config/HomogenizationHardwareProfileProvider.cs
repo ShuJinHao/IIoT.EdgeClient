@@ -2,7 +2,7 @@ using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.SharedKernel.Enums;
 
-namespace IIoT.Edge.Module.Homogenization.Config.Hardware;
+namespace IIoT.Edge.Module.Homogenization.Config;
 
 /// <summary>
 /// 匀浆硬件模板提供者，只保留模块参数，标准点位展开由通用基类完成。

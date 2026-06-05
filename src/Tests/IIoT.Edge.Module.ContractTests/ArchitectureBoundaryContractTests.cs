@@ -147,7 +147,6 @@ public sealed class ArchitectureBoundaryContractTests
             })
             .ToArray();
 
-        Assert.NotEmpty(cloudUploaderFiles);
         var oldCloudBaseName = "Process" + "CloudUploaderBase";
         Assert.All(
             cloudUploaderFiles,

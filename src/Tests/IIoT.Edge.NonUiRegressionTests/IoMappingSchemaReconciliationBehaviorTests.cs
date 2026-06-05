@@ -4,7 +4,7 @@ using IIoT.Edge.Application.Features.Config.SchemaReconciliation;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Module.Homogenization;
-using IIoT.Edge.Module.Homogenization.Config.Hardware;
+using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.SharedKernel.Domain;
 using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.SharedKernel.Repository;

@@ -8,18 +8,13 @@ using IIoT.Edge.Application.Modules.Mes;
 using System.Text.Json;
 using IIoT.Edge.Module.Homogenization;
 using IIoT.Edge.Module.Homogenization.Config;
-using IIoT.Edge.Module.Homogenization.Config.Parameters;
 using IIoT.Edge.Module.Homogenization.Integration;
-using IIoT.Edge.Module.Homogenization.Integration.Cloud;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Runtime;
 using IIoT.Edge.Module.Homogenization.Samples;
 using IIoT.Edge.SharedKernel.Context;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
-using HomogenizationCloudUploadChannel = IIoT.Edge.Application.Modules.Cloud.ICloudUploadChannel<
-    IIoT.Edge.Module.Homogenization.Payload.HomogenizationCellData,
-    object>;
 
 namespace IIoT.Edge.Module.ContractTests;
 
@@ -80,8 +75,8 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
 
         Assert.Contains(
             result.Services,
-            descriptor => descriptor.ServiceType == typeof(IHomogenizationMesItemPayloadBuilder)
-                          && descriptor.ImplementationType?.FullName == "IIoT.Edge.Module.Homogenization.Integration.HomogenizationMesItemPayloadBuilder");
+            descriptor => descriptor.ServiceType == typeof(HomogenizationMesPayloadBuilder)
+                          && descriptor.ImplementationType == typeof(HomogenizationMesPayloadBuilder));
         Assert.Contains(
             result.Services,
             descriptor => descriptor.ServiceType == typeof(HomogenizationMesChannel)
@@ -93,25 +88,6 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
         Assert.Contains(
             result.Services,
             descriptor => descriptor.ServiceType == typeof(IProcessMesUploader)
-                          && descriptor.ImplementationFactory is not null);
-    }
-
-    [Fact]
-    public void RegisterServices_ShouldRegisterCloudChannelAbstractionAndProcessUploader()
-    {
-        var result = new ModuleContractFixture().RegisterModule(new DependencyInjection());
-
-        Assert.Contains(
-            result.Services,
-            descriptor => descriptor.ServiceType == typeof(HomogenizationCloudUploader)
-                          && descriptor.ImplementationType == typeof(HomogenizationCloudUploader));
-        Assert.Contains(
-            result.Services,
-            descriptor => descriptor.ServiceType == typeof(HomogenizationCloudUploadChannel)
-                          && descriptor.ImplementationFactory is not null);
-        Assert.Contains(
-            result.Services,
-            descriptor => descriptor.ServiceType == typeof(IProcessCloudUploader)
                           && descriptor.ImplementationFactory is not null);
     }
 
