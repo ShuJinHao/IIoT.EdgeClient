@@ -110,6 +110,7 @@ public static class DependencyInjection
         services.AddSingleton<MesRequestExecutor>();
         services.AddSingleton<MesHeartbeatTask>();
 
+        services.AddSingleton<StandardPassStationCloudUploader>();
         services.AddSingleton<ICloudConsumer, CloudConsumer>();
         services.AddSingleton<ICloudBatchConsumer>(sp =>
             (ICloudBatchConsumer)sp.GetRequiredService<ICloudConsumer>());

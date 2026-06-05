@@ -67,14 +67,7 @@ public abstract class ModuleContractTestBase<TModule>
         var cloudUploaderDescriptors = result.Services
             .Where(static x => x.ServiceType == typeof(IProcessCloudUploader))
             .ToArray();
-        if (RequiresCloudUploader)
-        {
-            Assert.NotEmpty(cloudUploaderDescriptors);
-        }
-        else
-        {
-            Assert.Empty(cloudUploaderDescriptors);
-        }
+        Assert.Empty(cloudUploaderDescriptors);
 
         var hardwareProfileDescriptors = result.Services
             .Where(static x => x.ServiceType == typeof(IModuleHardwareProfileProvider))

@@ -106,7 +106,9 @@ public sealed class ModuleDiscoveryContractTests
 
             Assert.Single(cellDataRegistry.GetRegistrations());
             Assert.Single(runtimeRegistry.GetRegistrations());
-            Assert.Empty(integrationRegistry.GetCloudUploaders());
+            Assert.Single(integrationRegistry.GetCloudUploaders());
+            Assert.True(integrationRegistry.TryGetCloudUploader("Homogenization", out var cloudRegistration));
+            Assert.Equal(ProcessUploadMode.Batch, cloudRegistration.UploadMode);
             Assert.Single(moduleParamRegistry.GetRegistrations());
             Assert.NotNull(viewRegistry.GetViewRegistration("Homogenization.DataView"));
         }

@@ -17,6 +17,7 @@ internal sealed class StartupAppSettingsValidator(
         "CloudApi:Paths:HumanIdentityRefresh",
         "CloudApi:Paths:DeviceLog",
         "CloudApi:Paths:ProcessUpload",
+        "CloudApi:Paths:PassStationBatchTemplate",
         "CloudApi:Paths:CapacityHourly",
         "CloudApi:Paths:CapacitySummary",
         "CloudApi:Paths:CapacitySummaryRange",
@@ -55,6 +56,15 @@ internal sealed class StartupAppSettingsValidator(
             issues.Add(StartupDiagnosticIssueFactory.Create(
                 "CONFIG_INVALID",
                 "CloudApi:Paths:RecipeByDeviceTemplate 必须包含 {deviceId} 占位符。"));
+        }
+
+        var passStationPath = configuration["CloudApi:Paths:PassStationBatchTemplate"]?.Trim();
+        if (!string.IsNullOrWhiteSpace(passStationPath)
+            && !passStationPath.Contains("{typeKey}", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add(StartupDiagnosticIssueFactory.Create(
+                "CONFIG_INVALID",
+                "CloudApi:Paths:PassStationBatchTemplate 必须包含 {typeKey} 占位符。"));
         }
 
         ValidateShiftWindow(issues);

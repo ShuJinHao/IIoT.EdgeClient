@@ -22,6 +22,7 @@ namespace IIoT.Edge.Module.ContractTests;
 
 public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<DependencyInjection>
 {
+    protected override bool RequiresCloudUploader => true;
     protected override bool RequiresHardwareProfile => true;
     protected override bool RequiresMesUploader => true;
     protected override int ExpectedRuntimeTaskCount => 6;

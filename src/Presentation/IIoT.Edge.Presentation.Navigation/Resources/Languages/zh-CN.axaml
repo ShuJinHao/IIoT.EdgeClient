@@ -170,6 +170,8 @@
     <sys:String x:Key="Navigation_Param_CloudApi_DeviceLogPath_Description">客户端上传设备日志的接口路径。</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_ProcessUploadPath_DisplayName">生产数据上传接口</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_ProcessUploadPath_Description">客户端上传工序生产数据的接口路径。</sys:String>
+    <sys:String x:Key="Navigation_Param_CloudApi_PassStationBatchTemplatePath_DisplayName">过站批量上传接口模板</sys:String>
+    <sys:String x:Key="Navigation_Param_CloudApi_PassStationBatchTemplatePath_Description">客户端上传工序过站数据的接口模板，必须包含 {typeKey}。</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_CapacityHourlyPath_DisplayName">小时产能接口</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_CapacityHourlyPath_Description">客户端上传或查询小时产能的接口路径。</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_CapacitySummaryPath_DisplayName">产能汇总接口</sys:String>

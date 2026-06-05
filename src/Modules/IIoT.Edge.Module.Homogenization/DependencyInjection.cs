@@ -34,6 +34,9 @@ public sealed class DependencyInjection : EdgeProcessModuleBase<HomogenizationCe
     protected override ProcessUploadMode? MesUploadMode
         => IIoT.Edge.Application.Abstractions.Modules.ProcessUploadMode.Single;
 
+    protected override ProcessUploadMode? CloudUploadMode
+        => IIoT.Edge.Application.Abstractions.Modules.ProcessUploadMode.Batch;
+
     protected override IStationRuntimeFactory CreateRuntimeFactory()
         => new HomogenizationStationRuntimeFactory();
 

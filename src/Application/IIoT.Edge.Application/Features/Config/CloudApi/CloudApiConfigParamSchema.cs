@@ -22,6 +22,7 @@ public static class CloudApiConfigParamSchema
     public const string HumanIdentityRefreshPath = "CloudApi:Paths:HumanIdentityRefresh";
     public const string DeviceLogPath = "CloudApi:Paths:DeviceLog";
     public const string ProcessUploadPath = "CloudApi:Paths:ProcessUpload";
+    public const string PassStationBatchTemplatePath = "CloudApi:Paths:PassStationBatchTemplate";
     public const string CapacityHourlyPath = "CloudApi:Paths:CapacityHourly";
     public const string CapacitySummaryPath = "CloudApi:Paths:CapacitySummary";
     public const string CapacitySummaryRangePath = "CloudApi:Paths:CapacitySummaryRange";
@@ -55,6 +56,7 @@ public static class CloudApiConfigParamSchema
             HumanIdentityRefreshPath => snapshot.HumanIdentityRefreshPath,
             DeviceLogPath => snapshot.DeviceLogPath,
             ProcessUploadPath => snapshot.ProcessUploadPath,
+            PassStationBatchTemplatePath => snapshot.PassStationBatchTemplatePath,
             CapacityHourlyPath => snapshot.CapacityHourlyPath,
             CapacitySummaryPath => snapshot.CapacitySummaryPath,
             CapacitySummaryRangePath => snapshot.CapacitySummaryRangePath,
@@ -93,6 +95,7 @@ public static class CloudApiConfigParamSchema
             CloudApiConfigParam.HumanIdentityRefreshPath => HumanIdentityRefreshPath,
             CloudApiConfigParam.DeviceLogPath => DeviceLogPath,
             CloudApiConfigParam.ProcessUploadPath => ProcessUploadPath,
+            CloudApiConfigParam.PassStationBatchTemplatePath => PassStationBatchTemplatePath,
             CloudApiConfigParam.CapacityHourlyPath => CapacityHourlyPath,
             CloudApiConfigParam.CapacitySummaryPath => CapacitySummaryPath,
             CloudApiConfigParam.CapacitySummaryRangePath => CapacitySummaryRangePath,
@@ -165,6 +168,13 @@ public enum CloudApiConfigParam
         DisplayNameFallback = "ProcessUploadPath",
         DescriptionResourceKey = "Navigation_Param_CloudApi_ProcessUploadPath_Description")]
     ProcessUploadPath,
+
+    [ModuleParam(
+        ParamValueKind.String,
+        DisplayNameResourceKey = "Navigation_Param_CloudApi_PassStationBatchTemplatePath_DisplayName",
+        DisplayNameFallback = "PassStationBatchTemplatePath",
+        DescriptionResourceKey = "Navigation_Param_CloudApi_PassStationBatchTemplatePath_Description")]
+    PassStationBatchTemplatePath,
 
     [ModuleParam(
         ParamValueKind.String,

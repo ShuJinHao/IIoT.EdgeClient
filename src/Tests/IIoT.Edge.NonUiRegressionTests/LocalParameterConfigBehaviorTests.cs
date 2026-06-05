@@ -342,6 +342,7 @@ public sealed class LocalParameterConfigBehaviorTests
                 "/config/human-refresh",
                 "/config/logs",
                 "/config/process",
+                "/config/pass-stations/{typeKey}/batch",
                 "/config/capacity-hourly",
                 "/config/capacity-summary",
                 "/config/capacity-range",

@@ -434,7 +434,9 @@ public sealed class ModuleRuntimeRegistrationTests
             Assert.Single(modules);
             Assert.Single(cellDataRegistry.GetRegistrations());
             Assert.Single(runtimeRegistry.GetRegistrations());
-            Assert.Empty(integrationRegistry.GetCloudUploaders());
+            Assert.Single(integrationRegistry.GetCloudUploaders());
+            Assert.True(integrationRegistry.TryGetCloudUploader("Homogenization", out var cloudRegistration));
+            Assert.Equal(ProcessUploadMode.Batch, cloudRegistration.UploadMode);
             Assert.Single(moduleParamRegistry.GetRegistrations());
             Assert.NotNull(viewRegistry.GetViewRegistration("Homogenization.DataView"));
         }
@@ -566,6 +568,7 @@ public sealed class ModuleRuntimeRegistrationTests
             ["CloudApi:Paths:HumanIdentityRefresh"] = "/api/v1/human/identity/refresh",
             ["CloudApi:Paths:DeviceLog"] = "/api/v1/edge/device-logs",
             ["CloudApi:Paths:ProcessUpload"] = "/api/v1/edge/process-records",
+            ["CloudApi:Paths:PassStationBatchTemplate"] = "/api/v1/edge/pass-stations/{typeKey}/batch",
             ["CloudApi:Paths:CapacityHourly"] = "/api/v1/edge/capacity/hourly",
             ["CloudApi:Paths:CapacitySummary"] = "/api/v1/edge/capacity/summary",
             ["CloudApi:Paths:CapacitySummaryRange"] = "/api/v1/edge/capacity/summary/range",

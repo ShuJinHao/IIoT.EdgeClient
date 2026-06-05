@@ -13,6 +13,7 @@ public sealed record CloudApiConfigSnapshot(
     string HumanIdentityRefreshPath,
     string DeviceLogPath,
     string ProcessUploadPath,
+    string PassStationBatchTemplatePath,
     string CapacityHourlyPath,
     string CapacitySummaryPath,
     string CapacitySummaryRangePath,

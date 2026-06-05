@@ -126,6 +126,7 @@ namespace IIoT.Edge.NonUiRegressionTests;
                 "/config/human-refresh",
                 "/config/logs",
                 "/config/process",
+                "/config/pass-stations/{typeKey}/batch",
                 "/config/capacity-hourly",
                 "/config/capacity-summary",
                 "/config/capacity-range",
