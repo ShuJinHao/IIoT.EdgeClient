@@ -72,37 +72,23 @@
                         Surface="Card">
                         <Grid RowDefinitions="Auto,*,Auto">
                             <StackPanel Spacing="12">
-                                <Border
-                                    Padding="{DynamicResource Edge.Thickness.Chip.Comfortable}"
-                                    HorizontalAlignment="Left"
-                                    Background="{DynamicResource Edge.Brush.Surface.Wash}"
-                                    BorderBrush="{DynamicResource Edge.Brush.Border.Subtle}"
-                                    BorderThickness="1"
-                                    CornerRadius="{DynamicResource Edge.CornerRadius.Pill}">
+                                <Border Classes="launcher-badge">
                                     <StackPanel Orientation="Horizontal" Spacing="8">
                                         <PathIcon
-                                            Width="18"
-                                            Height="18"
-                                            Data="{StaticResource Edge.Icon.Shield}"
-                                            Foreground="{DynamicResource Edge.Brush.Accent.Primary}" />
+                                            Classes="launcher-badge-icon"
+                                            Data="{StaticResource Edge.Icon.Shield}" />
                                         <TextBlock
-                                            VerticalAlignment="Center"
-                                            FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                            Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
+                                            Classes="launcher-badge-text"
                                             Text="{DynamicResource Launcher_Login_Badge}" />
                                     </StackPanel>
                                 </Border>
 
                                 <TextBlock
-                                    FontFamily="{DynamicResource Edge.FontFamily.Display}"
-                                    FontSize="{DynamicResource Edge.FontSize.Display}"
-                                    FontWeight="SemiBold"
-                                    Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                    Classes="launcher-login-title"
                                     Text="{DynamicResource Launcher_Login_Title}"
                                     TextWrapping="Wrap" />
                                 <TextBlock
-                                    FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
-                                    Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
+                                    Classes="launcher-panel-description"
                                     Text="{DynamicResource Launcher_Login_Description}"
                                     TextWrapping="Wrap" />
                             </StackPanel>
@@ -126,13 +112,11 @@
                                     PlaceholderText="{DynamicResource Launcher_Login_PasswordPlaceholder}" />
 
                                 <TextBlock
-                                    FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                    Foreground="{DynamicResource Edge.Brush.Status.Error}"
+                                    Classes="launcher-inline-error"
                                     Text="{Binding ErrorMessage}"
                                     TextWrapping="Wrap" />
                                 <TextBlock
-                                    FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                    Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
+                                    Classes="launcher-inline-status"
                                     Text="{Binding StatusMessage}"
                                     TextWrapping="Wrap" />
 
@@ -162,9 +146,8 @@
                                 Status="Info">
                                 <edge:EdgeNoticeBar.Icon>
                                     <PathIcon
-                                        Classes="edge-notice-icon"
-                                        Data="{StaticResource Edge.Icon.Info}"
-                                        Foreground="{DynamicResource Edge.Brush.Accent.Primary}" />
+                                        Classes="launcher-notice-icon"
+                                        Data="{StaticResource Edge.Icon.Info}" />
                                 </edge:EdgeNoticeBar.Icon>
                                 <TextBlock
                                     Classes="edge-notice-message"
@@ -281,53 +264,32 @@
                         PaddingMode="Normal"
                         Surface="Card">
                         <Grid ColumnDefinitions="Auto,*,Auto">
-                            <Border
-                                Width="48"
-                                Height="48"
-                                Background="{DynamicResource Edge.Brush.Accent.Primary}"
-                                CornerRadius="{DynamicResource Edge.CornerRadius.Large}">
+                            <Border Classes="launcher-selection-icon-frame">
                                 <PathIcon
-                                    Width="24"
-                                    Height="24"
-                                    HorizontalAlignment="Center"
-                                    VerticalAlignment="Center"
-                                    Data="{StaticResource Edge.Icon.Dashboard}"
-                                    Foreground="{DynamicResource Edge.Brush.Text.OnAccent}" />
+                                    Classes="launcher-selection-icon"
+                                    Data="{StaticResource Edge.Icon.Dashboard}" />
                             </Border>
                             <StackPanel
                                 Grid.Column="1"
                                 Margin="16,0,0,0"
                                 Spacing="4">
                                 <TextBlock
-                                    FontFamily="{DynamicResource Edge.FontFamily.Display}"
-                                    FontSize="{DynamicResource Edge.FontSize.Title24}"
-                                    FontWeight="SemiBold"
-                                    Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                    Classes="launcher-selection-title"
                                     Text="{DynamicResource Launcher_Selection_Title}" />
                                 <TextBlock
-                                    FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
-                                    Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
+                                    Classes="launcher-panel-description"
                                     Text="{DynamicResource Launcher_Selection_Description}"
                                     TextWrapping="Wrap" />
                             </StackPanel>
                             <Border
                                 Grid.Column="2"
-                                Padding="{DynamicResource Edge.Thickness.Chip.Comfortable}"
-                                VerticalAlignment="Center"
-                                Background="{DynamicResource Edge.Brush.Surface.Wash}"
-                                BorderBrush="{DynamicResource Edge.Brush.Border.Subtle}"
-                                BorderThickness="1"
-                                CornerRadius="{DynamicResource Edge.CornerRadius.Pill}">
+                                Classes="launcher-chip">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <PathIcon
-                                        Width="18"
-                                        Height="18"
-                                        Data="{StaticResource Edge.Icon.User}"
-                                        Foreground="{DynamicResource Edge.Brush.Accent.Primary}" />
+                                        Classes="launcher-chip-icon"
+                                        Data="{StaticResource Edge.Icon.User}" />
                                     <TextBlock
-                                        VerticalAlignment="Center"
-                                        FontSize="{DynamicResource Edge.FontSize.Body}"
-                                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                                        Classes="launcher-chip-text"
                                         Text="{Binding WelcomeText}" />
                                 </StackPanel>
                             </Border>
@@ -348,21 +310,13 @@
                                 PlaceholderText="{DynamicResource Launcher_Selection_SearchPlaceholder}" />
                             <Border
                                 Grid.Column="2"
-                                Padding="{DynamicResource Edge.Thickness.Chip.Comfortable}"
-                                Background="{DynamicResource Edge.Brush.Surface.Wash}"
-                                BorderBrush="{DynamicResource Edge.Brush.Border.Subtle}"
-                                BorderThickness="1"
-                                CornerRadius="{DynamicResource Edge.CornerRadius.Pill}">
+                                Classes="launcher-chip">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <PathIcon
-                                        Width="16"
-                                        Height="16"
-                                        Data="{StaticResource Edge.Icon.Search}"
-                                        Foreground="{DynamicResource Edge.Brush.Accent.Primary}" />
+                                        Classes="launcher-chip-icon compact"
+                                        Data="{StaticResource Edge.Icon.Search}" />
                                     <TextBlock
-                                        VerticalAlignment="Center"
-                                        FontSize="{DynamicResource Edge.FontSize.Caption}"
-                                        Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
+                                        Classes="launcher-chip-text subtle"
                                         Text="{Binding ProfileSummaryText}" />
                                 </StackPanel>
                             </Border>
@@ -476,18 +430,16 @@
                                     Width="16"
                                     Height="16"
                                     VerticalAlignment="Top"
-                                    Data="{StaticResource Edge.Icon.Info}"
-                                    Foreground="{DynamicResource Edge.Brush.Accent.Primary}" />
+                                    Classes="launcher-notice-icon"
+                                    Data="{StaticResource Edge.Icon.Info}" />
                                 <TextBlock
                                     Grid.Column="1"
-                                    FontSize="{DynamicResource Edge.FontSize.Body}"
-                                    Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
+                                    Classes="launcher-status-message"
                                     Text="{Binding StatusMessage}"
                                     TextWrapping="Wrap" />
                             </Grid>
                             <TextBlock
-                                FontSize="{DynamicResource Edge.FontSize.Body}"
-                                Foreground="{DynamicResource Edge.Brush.Status.Error}"
+                                Classes="launcher-error-message"
                                 Text="{Binding ErrorMessage}"
                                 TextWrapping="Wrap" />
                         </StackPanel>

@@ -23,6 +23,18 @@ public sealed class MainWindowBehaviorTests
     }
 
     [Fact]
+    public void MainWindow_ShouldKeepLauncherTextStylesInSharedClasses()
+    {
+        var axaml = File.ReadAllText(ResolveLauncherAxamlPath("MainWindow.axaml"));
+
+        AssertDoesNotDeclareInlineTextStyle(axaml);
+        Assert.Contains("Text=\"{Binding WelcomeText}\"", axaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding ProfileSummaryText}\"", axaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding StatusMessage}\"", axaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding ErrorMessage}\"", axaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ChangePasswordWindow_ShouldDeclareMaskedPasswordFields()
     {
         var axaml = File.ReadAllText(ResolveLauncherAxamlPath("ChangePasswordWindow.axaml"));
@@ -34,6 +46,21 @@ public sealed class MainWindowBehaviorTests
         Assert.Contains("PasswordChar=\"●\"", axaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"ConfirmButton\"", axaml, StringComparison.Ordinal);
         Assert.Contains("Click=\"ConfirmButton_Click\"", axaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ChangePasswordWindow_ShouldKeepLauncherTextStylesInSharedClasses()
+    {
+        var axaml = File.ReadAllText(ResolveLauncherAxamlPath("ChangePasswordWindow.axaml"));
+
+        AssertDoesNotDeclareInlineTextStyle(axaml);
+    }
+
+    private static void AssertDoesNotDeclareInlineTextStyle(string axaml)
+    {
+        Assert.DoesNotContain("FontSize=", axaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Foreground=", axaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("FontFamily=", axaml, StringComparison.Ordinal);
     }
 
     private static string ResolveLauncherAxamlPath(string fileName)
