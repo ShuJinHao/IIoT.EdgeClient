@@ -1,4 +1,3 @@
-using System.Text.Json;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
@@ -52,8 +51,9 @@ public sealed class HomogenizationMesChannel
             ["timestamp"] = FormatTimestamp(request.Timestamp)
         };
 
-        return await ExecuteConfiguredMesGetAsync(
-                HomogenizationParams.Mes.OrderPath,
+        return await ExecuteOptionalMesGetAsync(
+                "主批计划",
+                ct => GetMesPathAsync(HomogenizationParams.Mes.OrderPath, ct),
                 query,
                 HomogenizationMesResponseParser.ParseMainPlan,
                 cancellationToken)
@@ -82,8 +82,9 @@ public sealed class HomogenizationMesChannel
             operationCode = request.OperationCode.Trim()
         };
 
-        return await ExecuteConfiguredMesPostAsync(
-                HomogenizationParams.Mes.BatchNumberPath,
+        return await ExecuteOptionalMesPostAsync(
+                "追溯批次号",
+                ct => GetMesPathAsync(HomogenizationParams.Mes.BatchNumberPath, ct),
                 payload,
                 HomogenizationMesResponseParser.ParseTraceBatch,
                 cancellationToken)
@@ -103,9 +104,10 @@ public sealed class HomogenizationMesChannel
             return MesCallResult.InvalidContext("托盘码不能为空。");
         }
 
-        return await ExecuteConfiguredMesAsync(
+        return await ExecuteOptionalMesAsync(
+            "进站",
+            ct => GetMesPathAsync(HomogenizationParams.Mes.InboundPath, ct),
             device,
-            HomogenizationParams.Mes.InboundPath,
             // 进站接口沿用 MES 文档中的托盘字段结构，不把这些匀浆业务字段上移到共享层。
             envelope => CreateStandardMesPayload(
                 envelope,
@@ -135,9 +137,10 @@ public sealed class HomogenizationMesChannel
             return MesCallResult.InvalidContext("出料托盘码不能为空。");
         }
 
-        return await ExecuteConfiguredMesAsync(
+        return await ExecuteRequiredMesAsync(
+            "出料",
+            ct => GetMesPathAsync(HomogenizationParams.Mes.OutboundPath, ct),
             device,
-            HomogenizationParams.Mes.OutboundPath,
             // 出料 payload 字段来自 HomogenizationCellData 和匀浆 MES code 配置。
             envelope => new
             {
@@ -167,9 +170,10 @@ public sealed class HomogenizationMesChannel
     {
         ArgumentNullException.ThrowIfNull(snapshot);
 
-        return await ExecuteConfiguredMesAsync(
+        return await ExecuteOptionalMesAsync(
+            "实时数据",
+            ct => GetMesPathAsync(HomogenizationParams.Mes.RealtimePath, ct),
             device,
-            HomogenizationParams.Mes.RealtimePath,
             envelope => CreateStandardMesPayload(
                 envelope,
                 new
@@ -197,9 +201,10 @@ public sealed class HomogenizationMesChannel
     {
         ArgumentNullException.ThrowIfNull(snapshot);
 
-        return await ExecuteConfiguredMesAsync(
+        return await ExecuteOptionalMesAsync(
+            "配方",
+            ct => GetMesPathAsync(HomogenizationParams.Mes.RecipePath, ct),
             device,
-            HomogenizationParams.Mes.RecipePath,
             envelope => CreateStandardMesPayload(
                 envelope,
                 new
@@ -219,9 +224,10 @@ public sealed class HomogenizationMesChannel
     {
         ArgumentNullException.ThrowIfNull(snapshot);
 
-        return await ExecuteConfiguredMesAsync(
+        return await ExecuteOptionalMesAsync(
+            "设备状态",
+            ct => GetMesPathAsync(HomogenizationParams.Mes.EquipmentStatusPath, ct),
             device,
-            HomogenizationParams.Mes.EquipmentStatusPath,
             envelope => CreateStandardMesPayload(
                 envelope,
                 new
@@ -246,58 +252,12 @@ public sealed class HomogenizationMesChannel
         CancellationToken cancellationToken)
         => UploadOutboundAsync(device, cellData, cancellationToken);
 
-    private async Task<MesCallResult> ExecuteConfiguredMesAsync(
-        DeviceSession? device,
-        HomogenizationParams.Mes pathKey,
-        Func<MesEnvelope, object> payloadFactory,
-        CancellationToken cancellationToken)
-    {
-        var relativePath = await ResolveMesPathAsync(pathKey, cancellationToken).ConfigureAwait(false);
-        return await ExecuteMesAsync(device, relativePath, payloadFactory, cancellationToken)
-            .ConfigureAwait(false);
-    }
-
-    private static object CreateStandardMesPayload(MesEnvelope envelope, object data)
-        => new
-        {
-            upperComputerNo = envelope.UpperComputerNo,
-            timestamp = envelope.Timestamp,
-            sign = envelope.Sign,
-            stationNo = envelope.StationNo,
-            data
-        };
-
-    private async Task<MesCallResult<TData>> ExecuteConfiguredMesGetAsync<TData>(
-        HomogenizationParams.Mes pathKey,
-        IReadOnlyDictionary<string, string?> query,
-        Func<JsonElement, TData> dataParser,
-        CancellationToken cancellationToken)
-    {
-        var relativePath = await ResolveMesPathAsync(pathKey, cancellationToken).ConfigureAwait(false);
-        return await ExecuteMesGetAsync(relativePath, query, dataParser, cancellationToken)
-            .ConfigureAwait(false);
-    }
-
-    private async Task<MesCallResult<TData>> ExecuteConfiguredMesPostAsync<TData>(
-        HomogenizationParams.Mes pathKey,
-        object payload,
-        Func<JsonElement, TData> dataParser,
-        CancellationToken cancellationToken)
-    {
-        var relativePath = await ResolveMesPathAsync(pathKey, cancellationToken).ConfigureAwait(false);
-        return await ExecuteMesPostAsync(relativePath, payload, dataParser, cancellationToken)
-            .ConfigureAwait(false);
-    }
-
-    private async Task<string> ResolveMesPathAsync(
+    private async Task<string?> GetMesPathAsync(
         HomogenizationParams.Mes pathKey,
         CancellationToken cancellationToken)
     {
         var snapshot = await _parameters.GetAsync(cancellationToken).ConfigureAwait(false);
-        var configuredPath = snapshot.Mes<string>(pathKey);
-        return string.IsNullOrWhiteSpace(configuredPath)
-            ? throw new InvalidOperationException($"Homogenization MES path is empty: {pathKey}.")
-            : configuredPath.Trim();
+        return snapshot.Mes<string>(pathKey);
     }
 }
 

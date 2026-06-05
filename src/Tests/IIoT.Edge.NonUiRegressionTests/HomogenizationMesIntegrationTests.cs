@@ -217,6 +217,69 @@ public sealed class HomogenizationMesIntegrationTests
     }
 
     [Fact]
+    public async Task UploadRealtimeAsync_WhenOptionalPathMissing_ShouldReturnDisabledWithoutPosting()
+    {
+        var httpClient = new CapturingMesHttpClient();
+        var logger = new FakeLogService();
+        var channel = CreateChannel(
+            httpClient,
+            stationNo: "ST-H-16",
+            new Dictionary<HomogenizationParams.Mes, string>
+            {
+                [HomogenizationParams.Mes.RealtimePath] = string.Empty
+            },
+            logger);
+
+        var result = await channel.UploadRealtimeAsync(
+            CreateDevice(),
+            new HomogenizationRealtimeSnapshot
+            {
+                CapturedAt = new DateTime(2026, 4, 29, 8, 1, 2),
+                StirringSpeed = 120
+            });
+
+        Assert.Equal(MesCallOutcome.Disabled, result.Outcome);
+        Assert.True(result.IsSuccess);
+        Assert.Empty(httpClient.Requests);
+        Assert.Contains(
+            logger.Entries,
+            entry => entry.Level == "Warn"
+                && entry.Message.Contains("可选场景 实时数据 未配置路径，已跳过", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task UploadAsync_WhenRequiredOutboundPathMissing_ShouldFailWithoutPosting()
+    {
+        var httpClient = new CapturingMesHttpClient();
+        var logger = new FakeLogService();
+        var uploader = (IProcessMesUploader)CreateChannel(
+            httpClient,
+            stationNo: "ST-H-17",
+            new Dictionary<HomogenizationParams.Mes, string>
+            {
+                [HomogenizationParams.Mes.OutboundPath] = string.Empty
+            },
+            logger);
+
+        var result = await uploader.UploadAsync(
+            new ProcessUploadContext(CreateDevice()),
+            [
+                new IIoT.Edge.SharedKernel.DataPipeline.CellCompletedRecord
+                {
+                    CellData = CreateCellData("TRAY-017")
+                }
+            ]);
+
+        Assert.Equal(MesCallOutcome.InvalidContext, result.Outcome);
+        Assert.False(result.IsSuccess);
+        Assert.Empty(httpClient.Requests);
+        Assert.Contains(
+            logger.Entries,
+            entry => entry.Level == "Error"
+                && entry.Message.Contains("必选场景 出料 未配置路径，数据将保留在补偿链路", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task GetMainPlanAsync_ShouldUseOrderPathAndParseOrders()
     {
         var httpClient = new CapturingMesHttpClient
@@ -474,9 +537,10 @@ public sealed class HomogenizationMesIntegrationTests
     private static HomogenizationMesChannel CreateChannel(
         CapturingMesHttpClient httpClient,
         string stationNo,
-        IReadOnlyDictionary<HomogenizationParams.Mes, string>? mesValues = null)
+        IReadOnlyDictionary<HomogenizationParams.Mes, string>? mesValues = null,
+        FakeLogService? logger = null)
     {
-        var logger = new FakeLogService();
+        logger ??= new FakeLogService();
         var roleProvider = new FakeModuleParamRoleProvider(stationNo);
         var parameters = new FakeModuleParamProvider(mesValues);
         var executor = CreateExecutor(httpClient, stationNo, logger, roleProvider);

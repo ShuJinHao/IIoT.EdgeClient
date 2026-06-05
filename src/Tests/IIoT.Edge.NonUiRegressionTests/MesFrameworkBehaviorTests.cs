@@ -85,6 +85,54 @@ public sealed class MesFrameworkBehaviorTests
     }
 
     [Fact]
+    public async Task MesConsumer_WhenUploaderReturnsDisabled_ShouldTreatAsSuccessWithoutRetry()
+    {
+        var uploader = new FakeMesUploader(TestProcessCellData.ProcessTypeKey);
+        uploader.EnqueueResult(MesCallResult.Disabled("可选 MES 场景实时数据未配置，已跳过。"));
+        var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
+        var consumer = new MesConsumer(
+            CreateOnlineDeviceService(),
+            CreateReadyMesGate(),
+            [uploader],
+            CreateMesRegistry(),
+            diagnosticsStore,
+            new FakeLogService());
+
+        var success = await consumer.ProcessAsync(CreateRecord(TestProcessCellData.ProcessTypeKey));
+
+        Assert.True(success);
+        Assert.Equal(1, uploader.UploadCallCount);
+        var diagnostics = diagnosticsStore.Get(TestProcessCellData.ProcessTypeKey);
+        Assert.NotNull(diagnostics);
+        Assert.Equal("Success", diagnostics!.LastResult);
+        Assert.Null(diagnostics.LastFailureReason);
+    }
+
+    [Fact]
+    public async Task MesConsumer_WhenUploaderReturnsInvalidContext_ShouldReturnFalseForRetry()
+    {
+        var uploader = new FakeMesUploader(TestProcessCellData.ProcessTypeKey);
+        uploader.EnqueueResult(MesCallResult.InvalidContext("必选 MES 场景出料未配置路径。"));
+        var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
+        var consumer = new MesConsumer(
+            CreateOnlineDeviceService(),
+            CreateReadyMesGate(),
+            [uploader],
+            CreateMesRegistry(),
+            diagnosticsStore,
+            new FakeLogService());
+
+        var success = await consumer.ProcessAsync(CreateRecord(TestProcessCellData.ProcessTypeKey));
+
+        Assert.False(success);
+        Assert.Equal(1, uploader.UploadCallCount);
+        var diagnostics = diagnosticsStore.Get(TestProcessCellData.ProcessTypeKey);
+        Assert.NotNull(diagnostics);
+        Assert.Equal("Failed", diagnostics!.LastResult);
+        Assert.Equal("必选 MES 场景出料未配置路径。", diagnostics.LastFailureReason);
+    }
+
+    [Fact]
     public async Task MesConsumer_WhenRegistryHasUploaderButDiDoesNot_ShouldReturnFalse()
     {
         var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
