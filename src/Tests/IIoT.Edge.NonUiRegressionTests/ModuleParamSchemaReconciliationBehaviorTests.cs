@@ -2,9 +2,9 @@ using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Features.Config.CloudApi;
 using IIoT.Edge.Application.Features.Config.ModuleParameters;
 using IIoT.Edge.Application.Features.Config.SchemaReconciliation;
-using HomogenizationBusinessParam = IIoT.Edge.Module.Homogenization.Config.HomogenizationParams.Business;
-using HomogenizationCloudParam = IIoT.Edge.Module.Homogenization.Config.HomogenizationParams.Cloud;
-using HomogenizationMesParam = IIoT.Edge.Module.Homogenization.Config.HomogenizationParams.Mes;
+using HomogenizationBusinessParam = IIoT.Edge.Module.Homogenization.Config.Parameters.HomogenizationParams.Business;
+using HomogenizationCloudParam = IIoT.Edge.Module.Homogenization.Config.Parameters.HomogenizationParams.Cloud;
+using HomogenizationMesParam = IIoT.Edge.Module.Homogenization.Config.Parameters.HomogenizationParams.Mes;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 

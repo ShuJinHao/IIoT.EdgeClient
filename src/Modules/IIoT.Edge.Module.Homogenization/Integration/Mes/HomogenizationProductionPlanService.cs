@@ -3,9 +3,11 @@ using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Application.Features.Production.Planning;
 using IIoT.Edge.Module.Homogenization.Config;
+using IIoT.Edge.Module.Homogenization.Config.Io;
+using IIoT.Edge.Module.Homogenization.Config.Parameters;
 
 using IIoT.Edge.Application.Abstractions.Mes;
-namespace IIoT.Edge.Module.Homogenization.Integration;
+namespace IIoT.Edge.Module.Homogenization.Integration.Mes;
 
 /// <summary>
 /// 匀浆主批计划选择服务，负责从 MES 加载主批计划、按 MES 参数生成追溯批次号，并维护当前选择状态。

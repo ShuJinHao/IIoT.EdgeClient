@@ -1,10 +1,12 @@
 ﻿using IIoT.Edge.Application.Abstractions.Plc.Signals;
 using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
+using IIoT.Edge.Module.Homogenization.Config.Io;
+using IIoT.Edge.Module.Homogenization.Config.Parameters;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Resources;
 
-namespace IIoT.Edge.Module.Homogenization.Runtime;
+namespace IIoT.Edge.Module.Homogenization.Production;
 
 /// <summary>
 /// 匀浆业务数据解码器，只读取单点读数据和连续读数据，不参与 PLC 信号交互应答。

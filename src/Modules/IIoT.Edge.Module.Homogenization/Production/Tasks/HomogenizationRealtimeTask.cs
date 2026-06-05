@@ -4,14 +4,16 @@ using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
-using IIoT.Edge.Module.Homogenization.Integration;
+using IIoT.Edge.Module.Homogenization.Config.Io;
+using IIoT.Edge.Module.Homogenization.Config.Parameters;
+using IIoT.Edge.Module.Homogenization.Integration.Mes;
 using IIoT.Edge.Module.Homogenization.Payload;
-using IIoT.Edge.Module.Homogenization.Runtime;
+using IIoT.Edge.Module.Homogenization.Production;
 using IIoT.Edge.Module.Sdk.Base;
 using Microsoft.Extensions.Options;
 
 using IIoT.Edge.Application.Abstractions.Mes;
-namespace IIoT.Edge.Module.Homogenization.Runtime.Tasks;
+namespace IIoT.Edge.Module.Homogenization.Production.Tasks;
 
 /// <summary>
 /// 实时上传任务：周期采集 PLC 单点实时数据快照并上传 MES。

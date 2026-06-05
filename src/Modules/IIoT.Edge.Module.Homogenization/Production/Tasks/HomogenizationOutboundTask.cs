@@ -6,14 +6,16 @@ using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
+using IIoT.Edge.Module.Homogenization.Config.Io;
+using IIoT.Edge.Module.Homogenization.Config.Parameters;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Resources;
-using IIoT.Edge.Module.Homogenization.Runtime;
+using IIoT.Edge.Module.Homogenization.Production;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using Microsoft.Extensions.Options;
 
 using IIoT.Edge.Application.Abstractions.Mes;
-namespace IIoT.Edge.Module.Homogenization.Runtime.Tasks;
+namespace IIoT.Edge.Module.Homogenization.Production.Tasks;
 
 /// <summary>
 /// 出料握手任务：PLC 触发后读取出料数据并写入本地数据管道。

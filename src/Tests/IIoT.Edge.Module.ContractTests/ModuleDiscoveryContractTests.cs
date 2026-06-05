@@ -137,7 +137,7 @@ public sealed class ModuleDiscoveryContractTests
     }
 
     [Fact]
-    public void ProductModules_ShouldUseStandardRuntimeAndSampleDirectories()
+    public void ProductModules_ShouldUseStandardProductionAndSampleDirectories()
     {
         var repoRoot = ContractTestPathHelper.FindRepoRoot();
 
@@ -151,14 +151,14 @@ public sealed class ModuleDiscoveryContractTests
             "src",
             "Modules",
             "IIoT.Edge.Module.Homogenization",
-            "Runtime",
+            "Production",
             "HomogenizationStationRuntimeFactory.cs")));
         Assert.False(File.Exists(Path.Combine(
             repoRoot,
             "src",
             "Modules",
             "IIoT.Edge.Module.Homogenization",
-            "Runtime",
+            "Production",
             "HomogenizationDevelopmentSampleContributor.cs")));
         Assert.True(File.Exists(Path.Combine(
             repoRoot,

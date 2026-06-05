@@ -8,16 +8,18 @@ using IIoT.Edge.Application.Abstractions.Plc.Signals;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
-using IIoT.Edge.Module.Homogenization.Integration;
+using IIoT.Edge.Module.Homogenization.Config.Io;
+using IIoT.Edge.Module.Homogenization.Config.Parameters;
+using IIoT.Edge.Module.Homogenization.Integration.Mes;
 using IIoT.Edge.Module.Homogenization.Payload;
-using IIoT.Edge.Module.Homogenization.Runtime.Tasks;
+using IIoT.Edge.Module.Homogenization.Production.Tasks;
 using IIoT.Edge.Module.Sdk.Signals;
 using IIoT.Edge.SharedKernel.Context;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 using IIoT.Edge.Application.Abstractions.Mes;
-namespace IIoT.Edge.Module.Homogenization.Runtime;
+namespace IIoT.Edge.Module.Homogenization.Production;
 
 /// <summary>
 /// 匀浆 PLC 运行时任务工厂，按握手任务、心跳、实时上传的顺序装配任务。

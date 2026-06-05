@@ -1,6 +1,6 @@
 using IIoT.Edge.Application.Modules.Hardware;
 
-namespace IIoT.Edge.Module.Homogenization.Config;
+namespace IIoT.Edge.Module.Homogenization.Config.Io;
 
 /// <summary>匀浆 PLC 信号枚举容器，特性位置参数含义在备注中说明。</summary>
 /// <remarks>

@@ -2,8 +2,10 @@ using IIoT.Edge.Application.Abstractions.Mes;
 ﻿using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc.Signals;
 using IIoT.Edge.Module.Homogenization.Config;
+using IIoT.Edge.Module.Homogenization.Config.Io;
+using IIoT.Edge.Module.Homogenization.Config.Parameters;
 
-namespace IIoT.Edge.Module.Homogenization.Runtime;
+namespace IIoT.Edge.Module.Homogenization.Production;
 
 /// <summary>
 /// 匀浆信号交互访问器，按业务动作封装 PLC 触发判断和上位机应答写入。

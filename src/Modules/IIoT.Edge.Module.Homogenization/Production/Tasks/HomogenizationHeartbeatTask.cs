@@ -3,11 +3,13 @@ using IIoT.Edge.Application.Abstractions.Plc.Signals;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
-using IIoT.Edge.Module.Homogenization.Runtime;
+using IIoT.Edge.Module.Homogenization.Config.Io;
+using IIoT.Edge.Module.Homogenization.Config.Parameters;
+using IIoT.Edge.Module.Homogenization.Production;
 using IIoT.Edge.Module.Sdk.Base;
 using Microsoft.Extensions.Options;
 
-namespace IIoT.Edge.Module.Homogenization.Runtime.Tasks;
+namespace IIoT.Edge.Module.Homogenization.Production.Tasks;
 
 /// <summary>
 /// 心跳镜像任务：周期读取 PLC 输入心跳并写回输出心跳。

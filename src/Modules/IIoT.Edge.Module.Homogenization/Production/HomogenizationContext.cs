@@ -1,12 +1,14 @@
 using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Features.Production.Planning;
 using IIoT.Edge.Module.Homogenization.Config;
+using IIoT.Edge.Module.Homogenization.Config.Io;
+using IIoT.Edge.Module.Homogenization.Config.Parameters;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.SharedKernel.Collections;
 using IIoT.Edge.SharedKernel.Context;
 using Microsoft.Extensions.Options;
 
-namespace IIoT.Edge.Module.Homogenization.Runtime;
+namespace IIoT.Edge.Module.Homogenization.Production;
 
 /// <summary>
 /// 匀浆模块的运行态共享状态，供本模块任务和 UI 读取最近一次业务结果。

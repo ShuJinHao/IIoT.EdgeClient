@@ -1,7 +1,7 @@
 using IIoT.Edge.Application.Abstractions.Modules;
 
 using IIoT.Edge.Application.Abstractions.Mes;
-namespace IIoT.Edge.Module.Homogenization.Runtime;
+namespace IIoT.Edge.Module.Homogenization.Production;
 
 /// <summary>
 /// 匀浆生产前置门禁，只判断 MES 启用时主批计划和追溯批次号是否已经准备好。
