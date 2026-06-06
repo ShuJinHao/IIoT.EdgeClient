@@ -187,7 +187,7 @@ public sealed class LauncherDependencyInjectionTests
         try
         {
             Directory.CreateDirectory(tempDirectory);
-            var accountsPath = Path.Combine(tempDirectory, "ProgramData", LauncherAccountCatalog.DefaultCatalogFileName);
+            var accountsPath = Path.Combine(tempDirectory, "protected-data", LauncherAccountCatalog.DefaultCatalogFileName);
             var samplePath = Path.Combine(tempDirectory, LauncherAccountCatalog.SampleCatalogFileName);
 
             var initializer = new LauncherAccountCatalogInitializer(
@@ -214,7 +214,7 @@ public sealed class LauncherDependencyInjectionTests
         try
         {
             Directory.CreateDirectory(tempDirectory);
-            var configPath = Path.Combine(tempDirectory, "ProgramData", "launcher.update.json");
+            var configPath = Path.Combine(tempDirectory, "protected-data", "launcher.update.json");
             var samplePath = Path.Combine(tempDirectory, LauncherUpdateConfigInitializer.SampleConfigFileName);
             File.WriteAllText(samplePath, """{"Source": ""}""");
 
@@ -243,7 +243,7 @@ public sealed class LauncherDependencyInjectionTests
         try
         {
             Directory.CreateDirectory(tempDirectory);
-            var configPath = Path.Combine(tempDirectory, "ProgramData", "launcher.update.json");
+            var configPath = Path.Combine(tempDirectory, "protected-data", "launcher.update.json");
             var samplePath = Path.Combine(tempDirectory, LauncherUpdateConfigInitializer.SampleConfigFileName);
             Directory.CreateDirectory(Path.GetDirectoryName(configPath)!);
             File.WriteAllText(configPath, """{"Source": "http://existing.example/updates"}""");

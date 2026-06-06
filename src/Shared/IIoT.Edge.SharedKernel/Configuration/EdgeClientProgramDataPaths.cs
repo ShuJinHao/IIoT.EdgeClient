@@ -3,6 +3,7 @@ namespace IIoT.Edge.SharedKernel.Configuration;
 public static class EdgeClientProgramDataPaths
 {
     public const string ProgramDataRootEnvironmentVariable = "IIOT_EDGE_PROGRAM_DATA_ROOT";
+    public const string DataDirectoryName = "data";
     public const string CompanyDirectoryName = "IIoT";
     public const string EdgeClientDirectoryName = "EdgeClient";
     public const string EdgeDataDirectoryName = "EdgeData";
@@ -14,7 +15,7 @@ public static class EdgeClientProgramDataPaths
     public const string LauncherUpdateConfigFileName = "launcher.update.json";
     public const string LanguageFileName = "language.json";
 
-    public static string ResolveProgramDataRoot()
+    public static string ResolveApplicationDataRoot(string? baseDirectory = null)
     {
         var overrideRoot = Environment.GetEnvironmentVariable(ProgramDataRootEnvironmentVariable);
         if (!string.IsNullOrWhiteSpace(overrideRoot))
@@ -22,61 +23,61 @@ public static class EdgeClientProgramDataPaths
             return NormalizeToFullPath(overrideRoot);
         }
 
-        var commonApplicationData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
-        if (!string.IsNullOrWhiteSpace(commonApplicationData))
-        {
-            return NormalizeToFullPath(commonApplicationData);
-        }
-
-        return NormalizeToFullPath(Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "ProgramData"));
+        return Path.Combine(ResolveApplicationLayoutRoot(baseDirectory), DataDirectoryName);
     }
 
-    public static string ResolveConfigRoot()
-        => Path.Combine(ResolveProgramDataRoot(), CompanyDirectoryName, EdgeClientDirectoryName);
+    public static string ResolveProgramDataRoot(string? baseDirectory = null)
+        => ResolveApplicationDataRoot(baseDirectory);
 
-    public static string ResolveDataRoot()
-        => Path.Combine(ResolveProgramDataRoot(), CompanyDirectoryName, EdgeDataDirectoryName);
+    public static string ResolveConfigRoot(string? baseDirectory = null)
+        => Path.Combine(ResolveApplicationDataRoot(baseDirectory), CompanyDirectoryName, EdgeClientDirectoryName);
 
-    public static string ResolveLauncherDirectory()
-        => Path.Combine(ResolveConfigRoot(), LauncherDirectoryName);
+    public static string ResolveDataRoot(string? baseDirectory = null)
+        => Path.Combine(ResolveApplicationDataRoot(baseDirectory), CompanyDirectoryName, EdgeDataDirectoryName);
 
-    public static string ResolveLauncherAccountsPath()
-        => Path.Combine(ResolveLauncherDirectory(), LauncherAccountsFileName);
+    public static string ResolveLauncherDirectory(string? baseDirectory = null)
+        => Path.Combine(ResolveConfigRoot(baseDirectory), LauncherDirectoryName);
 
-    public static string ResolveLauncherLanguagePath()
-        => Path.Combine(ResolveLauncherDirectory(), LanguageFileName);
+    public static string ResolveLauncherAccountsPath(string? baseDirectory = null)
+        => Path.Combine(ResolveLauncherDirectory(baseDirectory), LauncherAccountsFileName);
 
-    public static string ResolveLauncherUpdateConfigPath()
-        => Path.Combine(ResolveLauncherDirectory(), LauncherUpdateConfigFileName);
+    public static string ResolveLauncherLanguagePath(string? baseDirectory = null)
+        => Path.Combine(ResolveLauncherDirectory(baseDirectory), LanguageFileName);
 
-    public static string ResolveProfileConfigDirectory(string profileName)
-        => Path.Combine(ResolveConfigRoot(), ProfilesDirectoryName, SanitizePathSegment(profileName));
+    public static string ResolveLauncherUpdateConfigPath(string? baseDirectory = null)
+        => Path.Combine(ResolveLauncherDirectory(baseDirectory), LauncherUpdateConfigFileName);
 
-    public static string ResolveMachineProfileConfigPath(string profileName)
+    public static string ResolveProfileConfigDirectory(string profileName, string? baseDirectory = null)
+        => Path.Combine(ResolveConfigRoot(baseDirectory), ProfilesDirectoryName, SanitizePathSegment(profileName));
+
+    public static string ResolveMachineProfileConfigPath(string profileName, string? baseDirectory = null)
     {
         var profile = SanitizePathSegment(profileName);
-        return Path.Combine(ResolveProfileConfigDirectory(profile), $"appsettings.machine.{profile}.json");
+        return Path.Combine(
+            ResolveProfileConfigDirectory(profile, baseDirectory),
+            $"appsettings.machine.{profile}.json");
     }
 
-    public static string ResolveProfileDataRoot(string profileName)
-        => Path.Combine(ResolveDataRoot(), ProfilesDirectoryName, SanitizePathSegment(profileName));
+    public static string ResolveProfileDataRoot(string profileName, string? baseDirectory = null)
+        => Path.Combine(ResolveDataRoot(baseDirectory), ProfilesDirectoryName, SanitizePathSegment(profileName));
 
-    public static string ResolveProfileFallbackCrashLogPath(string profileName)
+    public static string ResolveProfileFallbackCrashLogPath(string profileName, string? baseDirectory = null)
         => Path.Combine(
-            ResolveProfileDataRoot(profileName),
+            ResolveProfileDataRoot(profileName, baseDirectory),
             DiagnosticsDirectoryName,
             "crash.fallback.log");
 
-    public static string ExpandProgramDataTokens(string path)
+    public static string ExpandProgramDataTokens(string path, string? baseDirectory = null)
     {
         ArgumentNullException.ThrowIfNull(path);
 
         var expanded = Environment.ExpandEnvironmentVariables(path);
         if (expanded.Contains("%ProgramData%", StringComparison.OrdinalIgnoreCase))
         {
-            expanded = expanded.Replace("%ProgramData%", ResolveProgramDataRoot(), StringComparison.OrdinalIgnoreCase);
+            expanded = expanded.Replace(
+                "%ProgramData%",
+                ResolveApplicationDataRoot(baseDirectory),
+                StringComparison.OrdinalIgnoreCase);
         }
 
         return expanded;
@@ -106,4 +107,29 @@ public static class EdgeClientProgramDataPaths
                 .Trim()
                 .Replace('\\', Path.DirectorySeparatorChar)
                 .Replace('/', Path.DirectorySeparatorChar));
+
+    private static string ResolveApplicationLayoutRoot(string? baseDirectory)
+    {
+        var normalizedBaseDirectory = NormalizeToFullPath(
+            string.IsNullOrWhiteSpace(baseDirectory)
+                ? AppContext.BaseDirectory
+                : baseDirectory);
+        var directory = new DirectoryInfo(normalizedBaseDirectory);
+
+        if (IsVelopackCurrentDirectory(directory))
+        {
+            return directory.Parent!.FullName;
+        }
+
+        if (directory.Parent is not null && IsVelopackCurrentDirectory(directory.Parent))
+        {
+            return directory.Parent.Parent!.FullName;
+        }
+
+        return directory.Parent?.FullName ?? directory.FullName;
+    }
+
+    private static bool IsVelopackCurrentDirectory(DirectoryInfo directory)
+        => string.Equals(directory.Name, "current", StringComparison.OrdinalIgnoreCase)
+            && directory.Parent is not null;
 }

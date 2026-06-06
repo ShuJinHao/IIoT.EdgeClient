@@ -239,11 +239,12 @@ try {
     Assert-CloudIdentityTemplateIsEmpty -Json $machineConfigJson -EntryName $machineConfigEntryName
 
     if ($machineConfigJson.Contains('../data', [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw "Machine profile still points to the old relative data directory: $machineConfigEntryName"
+        throw "Machine profile still points to a hand-counted relative data directory: $machineConfigEntryName"
     }
 
-    if (-not $machineConfigJson.Contains('%ProgramData%', [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw "Machine profile does not use ProgramData data root: $machineConfigEntryName"
+    if ($machineConfigJson.Contains('%ProgramData%', [System.StringComparison]::OrdinalIgnoreCase) -or
+        $machineConfigJson.Contains('CommonApplicationData', [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Machine profile must not use system data directories: $machineConfigEntryName"
     }
 
     New-Item -Path $tempDirectory -ItemType Directory -Force | Out-Null

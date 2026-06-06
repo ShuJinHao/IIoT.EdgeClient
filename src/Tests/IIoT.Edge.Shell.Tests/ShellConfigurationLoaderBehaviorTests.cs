@@ -11,7 +11,7 @@ public sealed class ShellConfigurationLoaderBehaviorTests
     public void Load_WhenMachineProfileExists_ShouldApplyProfileOverrides()
     {
         var tempDirectory = CreateTempDirectory();
-        var programDataRoot = Path.Combine(tempDirectory, "program-data");
+        var dataRootOverride = Path.Combine(tempDirectory, "data-root");
         try
         {
             WriteText(
@@ -36,7 +36,7 @@ public sealed class ShellConfigurationLoaderBehaviorTests
                 }
                 """);
 
-            EdgeEnvironmentTestScope.WithProgramDataRoot(programDataRoot, () =>
+            EdgeEnvironmentTestScope.WithDataRootOverride(dataRootOverride, () =>
             {
                 var result = new ShellConfigurationLoader().Load(tempDirectory);
 
@@ -58,7 +58,7 @@ public sealed class ShellConfigurationLoaderBehaviorTests
     public void Load_WhenMachineProfileFileIsMissing_ShouldKeepBaseSettingsAndExposeMetadata()
     {
         var tempDirectory = CreateTempDirectory();
-        var programDataRoot = Path.Combine(tempDirectory, "program-data");
+        var dataRootOverride = Path.Combine(tempDirectory, "data-root");
         try
         {
             WriteText(
@@ -74,7 +74,7 @@ public sealed class ShellConfigurationLoaderBehaviorTests
                 }
                 """);
 
-            EdgeEnvironmentTestScope.WithProgramDataRoot(programDataRoot, () =>
+            EdgeEnvironmentTestScope.WithDataRootOverride(dataRootOverride, () =>
             {
                 var result = new ShellConfigurationLoader().Load(tempDirectory);
 
@@ -96,7 +96,7 @@ public sealed class ShellConfigurationLoaderBehaviorTests
     public void Load_WhenMachineProfileComesFromEnvironmentVariable_ShouldPreferEnvironmentOverride()
     {
         var tempDirectory = CreateTempDirectory();
-        var programDataRoot = Path.Combine(tempDirectory, "program-data");
+        var dataRootOverride = Path.Combine(tempDirectory, "data-root");
         const string environmentVariable = "Shell__MachineProfile";
         var originalValue = Environment.GetEnvironmentVariable(environmentVariable);
 
@@ -123,7 +123,7 @@ public sealed class ShellConfigurationLoaderBehaviorTests
 
             Environment.SetEnvironmentVariable(environmentVariable, "HomogenizationLine");
 
-            EdgeEnvironmentTestScope.WithProgramDataRoot(programDataRoot, () =>
+            EdgeEnvironmentTestScope.WithDataRootOverride(dataRootOverride, () =>
             {
                 var result = new ShellConfigurationLoader().Load(tempDirectory);
 
@@ -144,7 +144,7 @@ public sealed class ShellConfigurationLoaderBehaviorTests
     public void Load_WhenExternalMachineProfileAlreadyExists_ShouldPreferItAndNeverOverwriteIt()
     {
         var tempDirectory = CreateTempDirectory();
-        var programDataRoot = Path.Combine(tempDirectory, "program-data");
+        var dataRootOverride = Path.Combine(tempDirectory, "data-root");
         try
         {
             WriteText(
@@ -169,7 +169,7 @@ public sealed class ShellConfigurationLoaderBehaviorTests
                 }
                 """);
 
-            EdgeEnvironmentTestScope.WithProgramDataRoot(programDataRoot, () =>
+            EdgeEnvironmentTestScope.WithDataRootOverride(dataRootOverride, () =>
             {
                 var externalPath = EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath("HomogenizationLine");
                 WriteText(

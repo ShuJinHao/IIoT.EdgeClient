@@ -13,11 +13,16 @@ param(
 
     [string]$UpdateSource,
 
-    [string]$ProgramDataRoot,
+    [Alias('ProgramDataRoot')]
+    [string]$AppDataRoot,
+
+    [string]$AppRoot,
 
     [string]$SnapshotPath,
 
     [string]$Channel = 'homogenization',
+
+    [string]$PackId = 'IIoT.EdgeClient.Homogenization',
 
     [string]$MachineProfile = 'HomogenizationLine'
 )
@@ -27,16 +32,25 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $invariantScript = Join-Path $PSScriptRoot 'TestEdgeProgramDataInvariant.ps1'
 
-function Get-EdgeDrillProgramDataRoot {
-    if (-not [string]::IsNullOrWhiteSpace($ProgramDataRoot)) {
-        return $ProgramDataRoot
+function Get-EdgeDrillAppDataRoot {
+    if (-not [string]::IsNullOrWhiteSpace($AppDataRoot)) {
+        return $AppDataRoot
     }
 
     if (-not [string]::IsNullOrWhiteSpace($env:IIOT_EDGE_PROGRAM_DATA_ROOT)) {
         return $env:IIOT_EDGE_PROGRAM_DATA_ROOT
     }
 
-    return [Environment]::GetFolderPath([Environment+SpecialFolder]::CommonApplicationData)
+    if (-not [string]::IsNullOrWhiteSpace($AppRoot)) {
+        return Join-Path $AppRoot 'data'
+    }
+
+    $localAppData = [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)
+    if ([string]::IsNullOrWhiteSpace($localAppData)) {
+        throw "Could not infer Velopack app data root. Pass -AppRoot or -AppDataRoot."
+    }
+
+    return Join-Path (Join-Path $localAppData $PackId) 'data'
 }
 
 function Get-EdgeDrillConfigRoot {
@@ -197,19 +211,19 @@ function Invoke-EdgeDrillInvariantSnapshot {
     )
 
     if (-not (Test-Path $invariantScript)) {
-        throw "ProgramData invariant script was not found: $invariantScript"
+        throw "App data invariant script was not found: $invariantScript"
     }
 
     if ($Create) {
         & $invariantScript `
-            -ProgramDataRoot $RootPath `
+            -AppDataRoot $RootPath `
             -SnapshotPath $PathValue `
             -CreateSnapshot
         return
     }
 
     & $invariantScript `
-        -ProgramDataRoot $RootPath `
+        -AppDataRoot $RootPath `
         -SnapshotPath $PathValue `
         -CompareSnapshot
 }
@@ -218,16 +232,16 @@ function Write-EdgeDrillChecklist {
     Write-Host "IIoT Edge Velopack Windows drill"
     Write-Host ""
     Write-Host "1. Install the old version Setup.exe and launch Launcher once."
-    Write-Host "2. Launch Shell once to seed ProgramData machine config, then fill machine identity:"
+    Write-Host "2. Launch Shell once to seed app data machine config, then fill machine identity:"
     Write-Host "   powershell -ExecutionPolicy Bypass -File scripts\InvokeEdgeVelopackWindowsDrill.ps1 -Step PrintMachineIdentityPath -MachineProfile $MachineProfile"
     Write-Host "   # edit CloudApi:ClientCode and CloudApi:BootstrapSecret in the printed file"
     Write-Host "   powershell -ExecutionPolicy Bypass -File scripts\InvokeEdgeVelopackWindowsDrill.ps1 -Step ValidateMachineIdentity -MachineProfile $MachineProfile"
     Write-Host "3. Point Launcher to the new release feed:"
     Write-Host "   powershell -ExecutionPolicy Bypass -File scripts\InvokeEdgeVelopackWindowsDrill.ps1 -Step ConfigureSource -UpdateSource C:\edge-releases\new -Channel $Channel"
-    Write-Host "4. Snapshot protected ProgramData before update:"
+    Write-Host "4. Snapshot protected app data before update:"
     Write-Host "   powershell -ExecutionPolicy Bypass -File scripts\InvokeEdgeVelopackWindowsDrill.ps1 -Step SnapshotBeforeUpdate"
     Write-Host "5. In Launcher, click check update, then download and restart update."
-    Write-Host "6. Verify protected ProgramData after update:"
+    Write-Host "6. Verify protected app data after update:"
     Write-Host "   powershell -ExecutionPolicy Bypass -File scripts\InvokeEdgeVelopackWindowsDrill.ps1 -Step VerifyAfterUpdate"
     Write-Host "7. For rollback, configure source to the old compatible feed, snapshot, apply update, then verify:"
     Write-Host "   powershell -ExecutionPolicy Bypass -File scripts\InvokeEdgeVelopackWindowsDrill.ps1 -Step ConfigureSource -UpdateSource C:\edge-releases\old -Channel $Channel"
@@ -235,10 +249,10 @@ function Write-EdgeDrillChecklist {
     Write-Host "   # apply rollback from Launcher"
     Write-Host "   powershell -ExecutionPolicy Bypass -File scripts\InvokeEdgeVelopackWindowsDrill.ps1 -Step VerifyAfterRollback"
     Write-Host ""
-    Write-Host "Pass criteria: Launcher version changes, Shell starts, and protected ProgramData comparison passes."
+    Write-Host "Pass criteria: Launcher version changes, Shell starts, and protected app data comparison passes."
 }
 
-$resolvedProgramDataRoot = Get-EdgeDrillProgramDataRoot
+$resolvedAppDataRoot = Get-EdgeDrillAppDataRoot
 
 switch ($Step) {
     'PrintChecklist' {
@@ -246,11 +260,11 @@ switch ($Step) {
     }
 
     'PrintMachineIdentityPath' {
-        Write-EdgeDrillMachineIdentityPath -RootPath $resolvedProgramDataRoot
+        Write-EdgeDrillMachineIdentityPath -RootPath $resolvedAppDataRoot
     }
 
     'ValidateMachineIdentity' {
-        Assert-EdgeDrillMachineIdentity -RootPath $resolvedProgramDataRoot
+        Assert-EdgeDrillMachineIdentity -RootPath $resolvedAppDataRoot
     }
 
     'ConfigureSource' {
@@ -261,43 +275,43 @@ switch ($Step) {
         $resolvedSource = Resolve-EdgeDrillUpdateSource -Source $UpdateSource
         Assert-EdgeDrillUpdateSource -ResolvedSource $resolvedSource
         Write-EdgeDrillUpdateConfig `
-            -RootPath $resolvedProgramDataRoot `
+            -RootPath $resolvedAppDataRoot `
             -ResolvedSource $resolvedSource
     }
 
     'SnapshotBeforeUpdate' {
         Invoke-EdgeDrillInvariantSnapshot `
-            -RootPath $resolvedProgramDataRoot `
+            -RootPath $resolvedAppDataRoot `
             -PathValue (Get-EdgeDrillSnapshotPath `
-                -RootPath $resolvedProgramDataRoot `
-                -Name 'edge-programdata.before-update.snapshot.json') `
+                -RootPath $resolvedAppDataRoot `
+                -Name 'edge-appdata.before-update.snapshot.json') `
             -Create $true
     }
 
     'VerifyAfterUpdate' {
         Invoke-EdgeDrillInvariantSnapshot `
-            -RootPath $resolvedProgramDataRoot `
+            -RootPath $resolvedAppDataRoot `
             -PathValue (Get-EdgeDrillSnapshotPath `
-                -RootPath $resolvedProgramDataRoot `
-                -Name 'edge-programdata.before-update.snapshot.json') `
+                -RootPath $resolvedAppDataRoot `
+                -Name 'edge-appdata.before-update.snapshot.json') `
             -Create $false
     }
 
     'SnapshotBeforeRollback' {
         Invoke-EdgeDrillInvariantSnapshot `
-            -RootPath $resolvedProgramDataRoot `
+            -RootPath $resolvedAppDataRoot `
             -PathValue (Get-EdgeDrillSnapshotPath `
-                -RootPath $resolvedProgramDataRoot `
-                -Name 'edge-programdata.before-rollback.snapshot.json') `
+                -RootPath $resolvedAppDataRoot `
+                -Name 'edge-appdata.before-rollback.snapshot.json') `
             -Create $true
     }
 
     'VerifyAfterRollback' {
         Invoke-EdgeDrillInvariantSnapshot `
-            -RootPath $resolvedProgramDataRoot `
+            -RootPath $resolvedAppDataRoot `
             -PathValue (Get-EdgeDrillSnapshotPath `
-                -RootPath $resolvedProgramDataRoot `
-                -Name 'edge-programdata.before-rollback.snapshot.json') `
+                -RootPath $resolvedAppDataRoot `
+                -Name 'edge-appdata.before-rollback.snapshot.json') `
             -Create $false
     }
 }

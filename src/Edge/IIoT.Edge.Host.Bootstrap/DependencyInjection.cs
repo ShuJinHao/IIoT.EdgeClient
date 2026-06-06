@@ -14,6 +14,7 @@ using IIoT.Edge.Application.Abstractions.Tasks;
 using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Application.Common.Tasks;
 using IIoT.Edge.Application.Common.Time;
+using IIoT.Edge.Application.Modules.Diagnostics;
 using IIoT.Edge.Host.Bootstrap.Modules;
 using IIoT.Edge.Infrastructure.DeviceComm;
 using IIoT.Edge.Infrastructure.Integration;
@@ -52,7 +53,8 @@ public static class DependencyInjection
         IReadOnlyCollection<ModulePluginDescriptor> discoveredModules,
         IReadOnlyCollection<ModuleCatalogIssue> moduleCatalogIssues,
         IReadOnlyCollection<string> configuredEnabledModuleIds,
-        IEnumerable<IEdgeProcessModule> modules)
+        IEnumerable<IEdgeProcessModule> modules,
+        IReadOnlyCollection<StartupDiagnosticIssue>? bootstrapDiagnosticIssues = null)
     {
         ArgumentNullException.ThrowIfNull(discoveredModules);
         ArgumentNullException.ThrowIfNull(moduleCatalogIssues);
@@ -62,16 +64,13 @@ public static class DependencyInjection
         var enabledModules = modules.ToList();
         var discoveredModuleList = discoveredModules.ToArray();
         var moduleCatalogIssueList = moduleCatalogIssues.ToArray();
+        var bootstrapDiagnosticIssueList = bootstrapDiagnosticIssues?.ToArray() ?? [];
         var configuredEnabledModuleList = configuredEnabledModuleIds.ToArray();
         var moduleAssemblies = enabledModules
             .Select(static module => module.GetType().Assembly)
             .Distinct()
             .ToArray();
         var efDbPath = Path.Combine(runtimePaths.DatabaseDirectory, "edge.db");
-
-        Directory.CreateDirectory(runtimePaths.DatabaseDirectory);
-        Directory.CreateDirectory(runtimePaths.ExcelDirectory);
-        Directory.CreateDirectory(runtimePaths.LogDirectory);
 
         services.AddSingleton(configuration);
         services.AddSingleton(runtimePaths);
@@ -90,6 +89,7 @@ public static class DependencyInjection
         services.AddSingleton<IViewRegistry>(viewRegistry);
         services.AddSingleton<IReadOnlyCollection<ModulePluginDescriptor>>(discoveredModuleList);
         services.AddSingleton<IReadOnlyCollection<ModuleCatalogIssue>>(moduleCatalogIssueList);
+        services.AddSingleton<IReadOnlyCollection<StartupDiagnosticIssue>>(bootstrapDiagnosticIssueList);
         services.AddSingleton<IReadOnlyCollection<string>>(configuredEnabledModuleList);
         services.TryAddSingleton<ICrashLogWriter, CrashLogWriter>();
         services.TryAddSingleton<IModulePluginAssemblyResolver, ModulePluginAssemblyResolver>();

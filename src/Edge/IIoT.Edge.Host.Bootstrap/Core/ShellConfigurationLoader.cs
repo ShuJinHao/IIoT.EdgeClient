@@ -48,7 +48,7 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
             && File.Exists(packagedMachineProfilePath);
         var externalMachineProfilePath = string.IsNullOrWhiteSpace(machineProfile)
             ? null
-            : EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(machineProfile);
+            : EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(machineProfile, baseDirectory);
 
         if (externalMachineProfilePath is not null)
         {

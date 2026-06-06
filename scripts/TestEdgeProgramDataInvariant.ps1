@@ -1,5 +1,6 @@
 param(
-    [string]$ProgramDataRoot,
+    [Alias('ProgramDataRoot')]
+    [string]$AppDataRoot,
 
     [string]$SnapshotPath,
 
@@ -18,21 +19,21 @@ if (-not $CreateSnapshot -and -not $CompareSnapshot) {
     throw "Specify -CreateSnapshot before update or -CompareSnapshot after update."
 }
 
-if ([string]::IsNullOrWhiteSpace($ProgramDataRoot)) {
-    $ProgramDataRoot = if (-not [string]::IsNullOrWhiteSpace($env:IIOT_EDGE_PROGRAM_DATA_ROOT)) {
+if ([string]::IsNullOrWhiteSpace($AppDataRoot)) {
+    $AppDataRoot = if (-not [string]::IsNullOrWhiteSpace($env:IIOT_EDGE_PROGRAM_DATA_ROOT)) {
         $env:IIOT_EDGE_PROGRAM_DATA_ROOT
     }
     else {
-        [Environment]::GetFolderPath([Environment+SpecialFolder]::CommonApplicationData)
+        throw "Specify -AppDataRoot, or set IIOT_EDGE_PROGRAM_DATA_ROOT for an explicit data-root override."
     }
 }
 
 if ([string]::IsNullOrWhiteSpace($SnapshotPath)) {
-    $SnapshotPath = Join-Path $ProgramDataRoot 'IIoT\EdgeClient\edge-programdata.snapshot.json'
+    $SnapshotPath = Join-Path $AppDataRoot 'IIoT\EdgeClient\edge-appdata.snapshot.json'
 }
 
-$configRoot = Join-Path $ProgramDataRoot 'IIoT\EdgeClient'
-$dataRoot = Join-Path $ProgramDataRoot 'IIoT\EdgeData'
+$configRoot = Join-Path $AppDataRoot 'IIoT\EdgeClient'
+$dataRoot = Join-Path $AppDataRoot 'IIoT\EdgeData'
 
 function Get-RelativePath {
     param(
@@ -82,7 +83,7 @@ function Get-FileSnapshot {
     })
 }
 
-function New-ProgramDataSnapshot {
+function New-AppDataSnapshot {
     $configPatterns = @(
         'launcher/launcher.accounts.json',
         'launcher/language.json',
@@ -103,7 +104,7 @@ function New-ProgramDataSnapshot {
 
     return [pscustomobject]@{
         CreatedAt = [DateTimeOffset]::UtcNow.ToString('O')
-        ProgramDataRoot = $ProgramDataRoot
+        AppDataRoot = $AppDataRoot
         ConfigRoot = $configRoot
         DataRoot = $dataRoot
         ConfigFiles = @(Get-FileSnapshot -RootPath $configRoot -IncludePatterns $configPatterns)
@@ -167,14 +168,14 @@ function Compare-FileGroup {
 }
 
 if ($CreateSnapshot) {
-    $snapshot = New-ProgramDataSnapshot
+    $snapshot = New-AppDataSnapshot
     $snapshotDirectory = Split-Path -Parent $SnapshotPath
     if (-not [string]::IsNullOrWhiteSpace($snapshotDirectory)) {
         New-Item -Path $snapshotDirectory -ItemType Directory -Force | Out-Null
     }
 
     $snapshot | ConvertTo-Json -Depth 20 | Set-Content -Encoding UTF8 -Path $SnapshotPath
-    Write-Host "ProgramData snapshot created: $SnapshotPath"
+    Write-Host "App data snapshot created: $SnapshotPath"
     Write-Host "Config files: $(@($snapshot.ConfigFiles).Count)"
     Write-Host "Data files: $(@($snapshot.DataFiles).Count)"
     return
@@ -185,7 +186,7 @@ if (-not (Test-Path $SnapshotPath)) {
 }
 
 $expectedSnapshot = Get-Content -Raw -Encoding UTF8 -Path $SnapshotPath | ConvertFrom-Json
-$actualSnapshot = New-ProgramDataSnapshot
+$actualSnapshot = New-AppDataSnapshot
 $differences = [System.Collections.Generic.List[string]]::new()
 
 foreach ($difference in Compare-FileGroup `
@@ -207,7 +208,7 @@ if ($differences.Count -gt 0) {
         Write-Error $difference
     }
 
-    throw "ProgramData invariant check failed. Differences: $($differences.Count)"
+    throw "App data invariant check failed. Differences: $($differences.Count)"
 }
 
-Write-Host "ProgramData invariant check passed: $SnapshotPath"
+Write-Host "App data invariant check passed: $SnapshotPath"

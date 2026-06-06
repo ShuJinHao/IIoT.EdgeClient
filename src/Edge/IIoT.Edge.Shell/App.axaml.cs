@@ -8,6 +8,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Application.Modules.Diagnostics;
 using IIoT.Edge.Host.Bootstrap;
 using IIoT.Edge.Presentation.Navigation.Features.Shell;
 using IIoT.Edge.Presentation.Panels.Features.Equipment;
@@ -73,7 +74,10 @@ public partial class App : global::Avalonia.Application
             var configurationResult = _configurationLoader.Load(AppDomain.CurrentDomain.BaseDirectory);
             var configuration = configurationResult.Configuration;
             var runtimePaths = _runtimePathResolver.Resolve(AppDomain.CurrentDomain.BaseDirectory, configuration);
+            var runtimePathPreflight = EdgeRuntimePathPreflight.EnsureWritable(runtimePaths);
+            runtimePaths = runtimePathPreflight.RuntimePaths;
             ConfigureCrashLogging(runtimePaths);
+            WriteRuntimePathPreflightIssues(runtimePathPreflight.Issues);
 
             if (!TryAcquireInstanceLock(configuration, desktop))
             {
@@ -83,7 +87,8 @@ public partial class App : global::Avalonia.Application
             _serviceProvider = ConfigureServices(
                 configuration,
                 runtimePaths,
-                configurationResult.EnvironmentName).BuildServiceProvider();
+                configurationResult.EnvironmentName,
+                runtimePathPreflight.Issues).BuildServiceProvider();
             _serviceProvider.GetRequiredService<IAppLanguageService>().Initialize();
 
             var lifecycle = _serviceProvider.GetRequiredService<IAppLifecycleCoordinator>();
@@ -344,7 +349,8 @@ public partial class App : global::Avalonia.Application
     private ServiceCollection ConfigureServices(
         IConfiguration configuration,
         EdgeRuntimePaths runtimePaths,
-        string environmentName)
+        string environmentName,
+        IReadOnlyCollection<StartupDiagnosticIssue> bootstrapDiagnosticIssues)
     {
         var services = new ServiceCollection();
         var viewRegistry = new ViewRegistry();
@@ -365,7 +371,8 @@ public partial class App : global::Avalonia.Application
             discoveryResult.Modules,
             moduleCatalogIssues,
             activationResult.EnabledModuleIds,
-            activationResult.Modules);
+            activationResult.Modules,
+            bootstrapDiagnosticIssues);
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton(sp => new MainWindow(
             sp.GetRequiredService<MainWindowViewModel>(),
@@ -381,6 +388,18 @@ public partial class App : global::Avalonia.Application
         _crashLogWriter?.ConfigurePaths(
             runtimePaths.PrimaryCrashLogPath,
             runtimePaths.FallbackCrashLogPath);
+    }
+
+    private void WriteRuntimePathPreflightIssues(IReadOnlyCollection<StartupDiagnosticIssue> issues)
+    {
+        if (issues.Count == 0)
+        {
+            return;
+        }
+
+        _crashLogWriter?.Write(
+            "运行目录预检发现问题。",
+            details: string.Join(Environment.NewLine, issues.Select(issue => $"- [{issue.Code}] {issue.Message}")));
     }
 
     private static void ShowStartupError(IClassicDesktopStyleApplicationLifetime desktop, string message)

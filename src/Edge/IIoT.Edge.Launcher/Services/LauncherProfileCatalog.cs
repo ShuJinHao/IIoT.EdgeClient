@@ -92,7 +92,7 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
 
     private string ResolvePath(string path)
     {
-        var expanded = NormalizePathSeparators(EdgeClientProgramDataPaths.ExpandProgramDataTokens(path.Trim()));
+        var expanded = NormalizePathSeparators(EdgeClientProgramDataPaths.ExpandProgramDataTokens(path.Trim(), _baseDirectory));
         return Path.GetFullPath(
             Path.IsPathRooted(expanded)
                 ? expanded
@@ -152,10 +152,11 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
         var runtimeDataRoot = ReadRuntimeDataRoot(configPath);
         if (string.IsNullOrWhiteSpace(runtimeDataRoot))
         {
-            return NormalizeDisplayPath(EdgeClientProgramDataPaths.ResolveProfileDataRoot(machineProfile));
+            return NormalizeDisplayPath(EdgeClientProgramDataPaths.ResolveProfileDataRoot(machineProfile, runtimeDirectory));
         }
 
-        var normalizedRoot = NormalizePathSeparators(EdgeClientProgramDataPaths.ExpandProgramDataTokens(runtimeDataRoot));
+        var normalizedRoot = NormalizePathSeparators(
+            EdgeClientProgramDataPaths.ExpandProgramDataTokens(runtimeDataRoot, runtimeDirectory));
         var absoluteRoot = Path.GetFullPath(
             Path.IsPathRooted(normalizedRoot)
                 ? normalizedRoot
@@ -168,7 +169,7 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
 
     private static string ResolveMachineProfileConfigPath(string runtimeDirectory, string machineProfile)
     {
-        var externalConfigPath = EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(machineProfile);
+        var externalConfigPath = EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(machineProfile, runtimeDirectory);
         return File.Exists(externalConfigPath)
             ? externalConfigPath
             : Path.Combine(runtimeDirectory, $"appsettings.machine.{machineProfile}.json");

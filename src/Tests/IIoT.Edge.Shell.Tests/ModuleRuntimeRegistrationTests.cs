@@ -537,8 +537,8 @@ public sealed class ModuleRuntimeRegistrationTests
 
         try
         {
-            EdgeEnvironmentTestScope.WithProgramDataRoot(
-                Path.Combine(hostRoot, "program-data"),
+            EdgeEnvironmentTestScope.WithDataRootOverride(
+                Path.Combine(hostRoot, "data-root"),
                 () =>
                 {
                     var runtimePaths = CreateRuntimePaths(hostRoot, configuration);
@@ -866,8 +866,8 @@ public sealed class ModuleRuntimeRegistrationTests
                 recipeByDeviceTemplate: recipeByDeviceTemplate,
                 deviceInstancePath: deviceInstancePath);
             EdgeRuntimePaths? runtimePaths = null;
-            EdgeEnvironmentTestScope.WithProgramDataRoot(
-                Path.Combine(tempDirectory, "program-data"),
+            EdgeEnvironmentTestScope.WithDataRootOverride(
+                Path.Combine(tempDirectory, "data-root"),
                 () => runtimePaths = CreateRuntimePaths(tempDirectory, configuration));
 
             var services = new ServiceCollection();
@@ -953,6 +953,7 @@ public sealed class ModuleRuntimeRegistrationTests
                 new StartupPluginLifecycleSnapshotBuilder(),
                 discovery.Modules,
                 [.. discovery.Issues, .. activation.Issues],
+                [],
                 activation.EnabledModuleIds,
                 activation.Modules,
                 serviceProvider.GetServices<IModuleHardwareProfileProvider>(),

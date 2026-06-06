@@ -23,7 +23,7 @@ public sealed class ShellRuntimePathResolver : IShellRuntimePathResolver
             : machineProfile;
         var runtimeDataRootSetting = configuration["Shell:RuntimeDataRoot"]?.Trim();
         var runtimeDataRoot = string.IsNullOrWhiteSpace(runtimeDataRootSetting)
-            ? EdgeClientProgramDataPaths.ResolveProfileDataRoot(profileName)
+            ? EdgeClientProgramDataPaths.ResolveProfileDataRoot(profileName, baseDirectory)
             : ResolvePath(baseDirectory, runtimeDataRootSetting);
         var diagnosticsDirectory = Path.Combine(runtimeDataRoot, "diagnostics");
         var logDirectory = Path.Combine(diagnosticsDirectory, "logs");
@@ -40,12 +40,12 @@ public sealed class ShellRuntimePathResolver : IShellRuntimePathResolver
             LogDirectory: logDirectory,
             DeviceCacheFilePath: Path.Combine(runtimeDataRoot, "device_cache.json"),
             PrimaryCrashLogPath: Path.Combine(diagnosticsDirectory, "crash.log"),
-            FallbackCrashLogPath: EdgeClientProgramDataPaths.ResolveProfileFallbackCrashLogPath(profileName));
+            FallbackCrashLogPath: EdgeClientProgramDataPaths.ResolveProfileFallbackCrashLogPath(profileName, baseDirectory));
     }
 
     private string ResolvePath(string baseDirectory, string path)
     {
-        var expanded = EdgeClientProgramDataPaths.ExpandProgramDataTokens(path);
+        var expanded = EdgeClientProgramDataPaths.ExpandProgramDataTokens(path, baseDirectory);
         var normalized = NormalizePathSeparators(expanded);
         return Path.GetFullPath(
             Path.IsPathRooted(normalized)
@@ -58,6 +58,4 @@ public sealed class ShellRuntimePathResolver : IShellRuntimePathResolver
             .Replace('\\', Path.DirectorySeparatorChar)
             .Replace('/', Path.DirectorySeparatorChar);
 
-    private string SanitizePathSegment(string value)
-        => EdgeClientProgramDataPaths.SanitizePathSegment(value);
 }

@@ -16,16 +16,16 @@ public static class LauncherDependencyInjection
         ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
 
         var accountPaths = new LauncherAccountCatalogPaths(
-            EdgeClientProgramDataPaths.ResolveLauncherAccountsPath(),
+            EdgeClientProgramDataPaths.ResolveLauncherAccountsPath(baseDirectory),
             Path.Combine(baseDirectory, LauncherAccountCatalog.SampleCatalogFileName));
         var updateConfigPaths = new LauncherUpdateConfigPaths(
-            EdgeClientProgramDataPaths.ResolveLauncherUpdateConfigPath(),
+            EdgeClientProgramDataPaths.ResolveLauncherUpdateConfigPath(baseDirectory),
             Path.Combine(baseDirectory, LauncherUpdateConfigInitializer.SampleConfigFileName));
 
         services.AddSingleton(accountPaths);
         services.AddSingleton(updateConfigPaths);
         services.AddSingleton<IAppLanguageService>(
-            _ => new LauncherLanguageService(EdgeClientProgramDataPaths.ResolveLauncherLanguagePath()));
+            _ => new LauncherLanguageService(EdgeClientProgramDataPaths.ResolveLauncherLanguagePath(baseDirectory)));
         services.AddSingleton<ILauncherAccountCatalogInitializer>(
             provider => ActivatorUtilities.CreateInstance<LauncherAccountCatalogInitializer>(provider));
         services.AddSingleton<ILauncherUpdateConfigInitializer>(
