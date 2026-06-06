@@ -20,20 +20,22 @@
     <PackageReference Include="Avalonia.Desktop" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Velopack" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\IIoT.Edge.Shell\IIoT.Edge.Shell.csproj"
                       ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\Shared\IIoT.Edge.SharedKernel\IIoT.Edge.SharedKernel.csproj" />
     <ProjectReference Include="..\..\Shared\IIoT.Edge.UI.Shared\IIoT.Edge.UI.Shared.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="launcher.accounts.json" Condition="Exists('launcher.accounts.json')">
+    <None Update="launcher.accounts.sample.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </None>
-    <None Update="launcher.accounts.sample.json">
+    <None Update="launcher.update.sample.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </None>

@@ -69,6 +69,32 @@ public sealed class LauncherWindowHeadlessTests
         }
     }
 
+    [AvaloniaFact]
+    public void MainWindow_ShouldExposeUpdateControls()
+    {
+        var window = CreateMainWindow(CreateViewModel());
+
+        try
+        {
+            window.Show();
+
+            var checkButton = window.FindControl<Control>("CheckUpdatesButton");
+            var applyButton = window.FindControl<Control>("ApplyUpdateButton");
+            var progressBar = window.FindControl<ProgressBar>("UpdateProgressBar");
+
+            Assert.NotNull(checkButton);
+            Assert.NotNull(applyButton);
+            Assert.NotNull(progressBar);
+            Assert.True(checkButton!.IsVisible);
+            Assert.True(applyButton!.IsVisible);
+            Assert.False(progressBar!.IsVisible);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     private static MainWindow CreateMainWindow(LauncherMainViewModel viewModel)
         => new(
             viewModel,
@@ -118,6 +144,8 @@ public sealed class LauncherWindowHeadlessTests
 
     private sealed class StubShellLaunchService : IShellLaunchService
     {
+        public bool HasRunningShellProcess => false;
+
         public void Launch(LauncherProfileDefinition profile)
         {
         }

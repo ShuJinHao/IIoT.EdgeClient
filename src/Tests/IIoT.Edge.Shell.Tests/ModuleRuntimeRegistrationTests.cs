@@ -27,6 +27,7 @@ using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using IIoT.Edge.SharedKernel.DataPipeline.Recipe;
 using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.SharedKernel.Repository;
+using IIoT.Edge.SharedKernel.Configuration;
 using IIoT.Edge.Module.Sdk.Signals;
 using IIoT.Edge.Shell.Core;
 using IIoT.Edge.Shell.Modules;
@@ -161,6 +162,23 @@ public sealed class ModuleRuntimeRegistrationTests
             harness.StartupDiagnosticsStore.Current.Issues,
             issue => string.Equals(issue.Code, "CONFIG_INVALID", StringComparison.OrdinalIgnoreCase)
                      && issue.Message.Contains("CloudApi:BootstrapSecret", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AppLifecycleManager_WhenClientCodeIsMissing_ShouldStartWithDiagnosticIssue()
+    {
+        await using var harness = await AppLifecycleHarness.CreateAsync(
+            enabledModules: ["Homogenization"],
+            deviceModuleIds: ["Homogenization"],
+            clientCode: null);
+
+        var result = await harness.Manager.StartAsync();
+
+        Assert.True(result.Success, result.Message);
+        Assert.Contains(
+            harness.StartupDiagnosticsStore.Current.Issues,
+            issue => string.Equals(issue.Code, "CONFIG_INVALID", StringComparison.OrdinalIgnoreCase)
+                     && issue.Message.Contains("CloudApi:ClientCode", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -519,24 +537,29 @@ public sealed class ModuleRuntimeRegistrationTests
 
         try
         {
-            var runtimePaths = CreateRuntimePaths(hostRoot, configuration);
-            var discovery = DiscoverTestPlugins(pluginRoot);
-            var activation = CreateShellModuleCatalog().CreateEnabledModules(configuration, discovery.Modules);
-            services.AddEdgeHostBootstrap(
-                viewRegistry,
-                configuration,
-                runtimePaths,
-                "Production",
-                discovery.Modules,
-                [.. discovery.Issues, .. activation.Issues],
-                activation.EnabledModuleIds,
-                activation.Modules);
+            EdgeEnvironmentTestScope.WithProgramDataRoot(
+                Path.Combine(hostRoot, "program-data"),
+                () =>
+                {
+                    var runtimePaths = CreateRuntimePaths(hostRoot, configuration);
+                    var discovery = DiscoverTestPlugins(pluginRoot);
+                    var activation = CreateShellModuleCatalog().CreateEnabledModules(configuration, discovery.Modules);
+                    services.AddEdgeHostBootstrap(
+                        viewRegistry,
+                        configuration,
+                        runtimePaths,
+                        "Production",
+                        discovery.Modules,
+                        [.. discovery.Issues, .. activation.Issues],
+                        activation.EnabledModuleIds,
+                        activation.Modules);
 
-            var diagnosticsRegistration = viewRegistry.GetViewRegistration(CoreViewIds.Diagnostics);
-            Assert.NotNull(diagnosticsRegistration);
-            Assert.Contains(
-                viewRegistry.GetAllMenus(),
-                menu => string.Equals(menu.ViewId, CoreViewIds.Diagnostics, StringComparison.Ordinal));
+                    var diagnosticsRegistration = viewRegistry.GetViewRegistration(CoreViewIds.Diagnostics);
+                    Assert.NotNull(diagnosticsRegistration);
+                    Assert.Contains(
+                        viewRegistry.GetAllMenus(),
+                        menu => string.Equals(menu.ViewId, CoreViewIds.Diagnostics, StringComparison.Ordinal));
+                });
         }
         finally
         {
@@ -553,6 +576,7 @@ public sealed class ModuleRuntimeRegistrationTests
         string[]? enabledModules = null,
         string environmentName = "Production",
         bool developmentSamplesEnabled = false,
+        string? clientCode = "CLIENT-01",
         string? bootstrapSecret = "bootstrap-secret",
         string? omittedCloudPathKey = null,
         string? recipeByDeviceTemplate = null,
@@ -561,7 +585,6 @@ public sealed class ModuleRuntimeRegistrationTests
         var settings = new Dictionary<string, string?>
         {
             ["CloudApi:BaseUrl"] = "https://cloud.test",
-            ["CloudApi:ClientCode"] = "CLIENT-01",
             ["CloudApi:Paths:DeviceInstance"] = deviceInstancePath ?? "/api/v1/bootstrap/device-instance",
             ["CloudApi:Paths:BootstrapRefresh"] = "/api/v1/bootstrap/edge-refresh",
             ["CloudApi:Paths:IdentityDeviceLogin"] = "/api/v1/bootstrap/edge-login",
@@ -578,6 +601,11 @@ public sealed class ModuleRuntimeRegistrationTests
             ["DevelopmentSamples:SampleBarcode"] = "ST-DEV-0001",
             ["DevelopmentSamples:SampleLayerCount"] = "12"
         };
+
+        if (clientCode is not null)
+        {
+            settings["CloudApi:ClientCode"] = clientCode;
+        }
 
         if (bootstrapSecret is not null)
         {
@@ -817,6 +845,7 @@ public sealed class ModuleRuntimeRegistrationTests
             string[] deviceModuleIds,
             string environmentName = "Production",
             bool developmentSamplesEnabled = false,
+            string? clientCode = "CLIENT-01",
             string? bootstrapSecret = "bootstrap-secret",
             string? omittedCloudPathKey = null,
             string? recipeByDeviceTemplate = null,
@@ -828,18 +857,22 @@ public sealed class ModuleRuntimeRegistrationTests
             Directory.CreateDirectory(tempDirectory);
 
             var configuration = CreateConfiguration(
-                enabledModules,
-                environmentName,
-                developmentSamplesEnabled,
-                bootstrapSecret,
-                omittedCloudPathKey,
-                recipeByDeviceTemplate,
-                deviceInstancePath);
-            var runtimePaths = CreateRuntimePaths(tempDirectory, configuration);
+                enabledModules: enabledModules,
+                environmentName: environmentName,
+                developmentSamplesEnabled: developmentSamplesEnabled,
+                clientCode: clientCode,
+                bootstrapSecret: bootstrapSecret,
+                omittedCloudPathKey: omittedCloudPathKey,
+                recipeByDeviceTemplate: recipeByDeviceTemplate,
+                deviceInstancePath: deviceInstancePath);
+            EdgeRuntimePaths? runtimePaths = null;
+            EdgeEnvironmentTestScope.WithProgramDataRoot(
+                Path.Combine(tempDirectory, "program-data"),
+                () => runtimePaths = CreateRuntimePaths(tempDirectory, configuration));
 
             var services = new ServiceCollection();
-            services.AddSingleton(runtimePaths);
-            services.AddEfCorePersistenceInfrastructure(Path.Combine(runtimePaths.DatabaseDirectory, "edge.db"));
+            services.AddSingleton(runtimePaths!);
+            services.AddEfCorePersistenceInfrastructure(Path.Combine(runtimePaths!.DatabaseDirectory, "edge.db"));
             services.AddDapperPersistenceInfrastructure(runtimePaths.DatabaseDirectory);
             var pluginRoot = CreatePluginRuntimeRoot(Path.Combine(tempDirectory, "Modules"));
 

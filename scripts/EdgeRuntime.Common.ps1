@@ -1,5 +1,20 @@
 $ErrorActionPreference = 'Stop'
 
+function Invoke-EdgeNativeCommand {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$FilePath,
+
+        [AllowEmptyCollection()]
+        [string[]]$Arguments = @()
+    )
+
+    & $FilePath @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Native command failed with exit code $LASTEXITCODE`: $FilePath $($Arguments -join ' ')"
+    }
+}
+
 function Resolve-EdgeAbsolutePath {
     param(
         [Parameter(Mandatory = $true)]
@@ -143,13 +158,20 @@ function Build-EdgeModuleProjects {
         }
 
         $project = $ModuleProjectMap[$moduleId]
-        dotnet build $project.ProjectPath `
-            --configuration $Configuration `
-            --nologo `
-            --verbosity minimal `
-            --disable-build-servers `
-            -p:BuildInParallel=false `
-            -p:RestoreDisableParallel=true
+        Invoke-EdgeNativeCommand `
+            -FilePath 'dotnet' `
+            -Arguments @(
+                'build',
+                $project.ProjectPath,
+                '--configuration',
+                $Configuration,
+                '--nologo',
+                '--verbosity',
+                'minimal',
+                '--disable-build-servers',
+                '-p:BuildInParallel=false',
+                '-p:RestoreDisableParallel=true'
+            )
     }
 }
 
@@ -240,15 +262,15 @@ function Get-EdgeExecutableCandidates {
         $baseLeaf = $leaf.Substring(0, $leaf.Length - 4)
     }
 
-    $isWindows = Test-EdgeIsWindowsPlatform
+    $runningOnWindows = Test-EdgeIsWindowsPlatform
     $hasExeExtension = $leaf.EndsWith('.exe', [System.StringComparison]::OrdinalIgnoreCase)
     $hasDllExtension = $leaf.EndsWith('.dll', [System.StringComparison]::OrdinalIgnoreCase)
     $candidates = [System.Collections.Generic.List[string]]::new()
 
-    if ($isWindows -and -not $hasExeExtension -and -not $hasDllExtension) {
+    if ($runningOnWindows -and -not $hasExeExtension -and -not $hasDllExtension) {
         Add-EdgeExecutableCandidate -Candidates $candidates -PathValue (Join-Path $directory "$baseLeaf.exe")
     }
-    elseif (-not $isWindows -and $hasExeExtension) {
+    elseif (-not $runningOnWindows -and $hasExeExtension) {
         Add-EdgeExecutableCandidate -Candidates $candidates -PathValue (Join-Path $directory $baseLeaf)
     }
 
@@ -263,6 +285,7 @@ function Get-EdgeExecutableCandidates {
 function Add-EdgeExecutableCandidate {
     param(
         [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
         [System.Collections.Generic.List[string]]$Candidates,
 
         [Parameter(Mandatory = $true)]

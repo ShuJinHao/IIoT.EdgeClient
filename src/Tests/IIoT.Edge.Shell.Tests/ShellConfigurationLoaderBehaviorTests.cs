@@ -1,3 +1,4 @@
+using IIoT.Edge.SharedKernel.Configuration;
 using IIoT.Edge.Shell.Core;
 using System.Text;
 using Xunit;
@@ -10,6 +11,7 @@ public sealed class ShellConfigurationLoaderBehaviorTests
     public void Load_WhenMachineProfileExists_ShouldApplyProfileOverrides()
     {
         var tempDirectory = CreateTempDirectory();
+        var programDataRoot = Path.Combine(tempDirectory, "program-data");
         try
         {
             WriteText(
@@ -34,12 +36,17 @@ public sealed class ShellConfigurationLoaderBehaviorTests
                 }
                 """);
 
-            var result = new ShellConfigurationLoader().Load(tempDirectory);
+            EdgeEnvironmentTestScope.WithProgramDataRoot(programDataRoot, () =>
+            {
+                var result = new ShellConfigurationLoader().Load(tempDirectory);
 
-            Assert.Equal("HomogenizationLine", result.MachineProfile);
-            Assert.True(result.IsMachineProfileLoaded);
-            Assert.Equal("Homogenization", result.Configuration["Modules:Enabled:0"]);
-            Assert.Equal("True", result.Configuration["Shell:MachineProfileLoaded"]);
+                Assert.Equal("HomogenizationLine", result.MachineProfile);
+                Assert.True(result.IsMachineProfileLoaded);
+                Assert.True(result.IsExternalMachineProfileLoaded);
+                Assert.Equal("Homogenization", result.Configuration["Modules:Enabled:0"]);
+                Assert.Equal("True", result.Configuration["Shell:MachineProfileLoaded"]);
+                Assert.True(File.Exists(EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath("HomogenizationLine")));
+            });
         }
         finally
         {
@@ -51,6 +58,7 @@ public sealed class ShellConfigurationLoaderBehaviorTests
     public void Load_WhenMachineProfileFileIsMissing_ShouldKeepBaseSettingsAndExposeMetadata()
     {
         var tempDirectory = CreateTempDirectory();
+        var programDataRoot = Path.Combine(tempDirectory, "program-data");
         try
         {
             WriteText(
@@ -66,13 +74,17 @@ public sealed class ShellConfigurationLoaderBehaviorTests
                 }
                 """);
 
-            var result = new ShellConfigurationLoader().Load(tempDirectory);
+            EdgeEnvironmentTestScope.WithProgramDataRoot(programDataRoot, () =>
+            {
+                var result = new ShellConfigurationLoader().Load(tempDirectory);
 
-            Assert.Equal("MissingLine", result.MachineProfile);
-            Assert.False(result.IsMachineProfileLoaded);
-            Assert.Equal("Homogenization", result.Configuration["Modules:Enabled:0"]);
-            Assert.Equal("False", result.Configuration["Shell:MachineProfileLoaded"]);
-            Assert.Equal("appsettings.machine.MissingLine.json", result.Configuration["Shell:MachineProfileFileName"]);
+                Assert.Equal("MissingLine", result.MachineProfile);
+                Assert.False(result.IsMachineProfileLoaded);
+                Assert.False(result.IsExternalMachineProfileLoaded);
+                Assert.Equal("Homogenization", result.Configuration["Modules:Enabled:0"]);
+                Assert.Equal("False", result.Configuration["Shell:MachineProfileLoaded"]);
+                Assert.Equal("appsettings.machine.MissingLine.json", result.Configuration["Shell:MachineProfileFileName"]);
+            });
         }
         finally
         {
@@ -84,6 +96,7 @@ public sealed class ShellConfigurationLoaderBehaviorTests
     public void Load_WhenMachineProfileComesFromEnvironmentVariable_ShouldPreferEnvironmentOverride()
     {
         var tempDirectory = CreateTempDirectory();
+        var programDataRoot = Path.Combine(tempDirectory, "program-data");
         const string environmentVariable = "Shell__MachineProfile";
         var originalValue = Environment.GetEnvironmentVariable(environmentVariable);
 
@@ -110,15 +123,84 @@ public sealed class ShellConfigurationLoaderBehaviorTests
 
             Environment.SetEnvironmentVariable(environmentVariable, "HomogenizationLine");
 
-            var result = new ShellConfigurationLoader().Load(tempDirectory);
+            EdgeEnvironmentTestScope.WithProgramDataRoot(programDataRoot, () =>
+            {
+                var result = new ShellConfigurationLoader().Load(tempDirectory);
 
-            Assert.Equal("HomogenizationLine", result.MachineProfile);
-            Assert.True(result.IsMachineProfileLoaded);
-            Assert.Equal("Homogenization", result.Configuration["Modules:Enabled:0"]);
+                Assert.Equal("HomogenizationLine", result.MachineProfile);
+                Assert.True(result.IsMachineProfileLoaded);
+                Assert.True(result.IsExternalMachineProfileLoaded);
+                Assert.Equal("Homogenization", result.Configuration["Modules:Enabled:0"]);
+            });
         }
         finally
         {
             Environment.SetEnvironmentVariable(environmentVariable, originalValue);
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public void Load_WhenExternalMachineProfileAlreadyExists_ShouldPreferItAndNeverOverwriteIt()
+    {
+        var tempDirectory = CreateTempDirectory();
+        var programDataRoot = Path.Combine(tempDirectory, "program-data");
+        try
+        {
+            WriteText(
+                Path.Combine(tempDirectory, "appsettings.json"),
+                """
+                {
+                  "Shell": {
+                    "MachineProfile": "HomogenizationLine"
+                  }
+                }
+                """);
+            WriteText(
+                Path.Combine(tempDirectory, "appsettings.machine.HomogenizationLine.json"),
+                """
+                {
+                  "Shell": {
+                    "RuntimeDataRoot": "packaged-template"
+                  },
+                  "Modules": {
+                    "Enabled": [ "Packaged" ]
+                  }
+                }
+                """);
+
+            EdgeEnvironmentTestScope.WithProgramDataRoot(programDataRoot, () =>
+            {
+                var externalPath = EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath("HomogenizationLine");
+                WriteText(
+                    externalPath,
+                    """
+                    {
+                      "Shell": {
+                        "RuntimeDataRoot": "external-protected"
+                      },
+                      "Modules": {
+                        "Enabled": [ "External" ]
+                      },
+                      "CloudApi": {
+                        "ClientCode": "protected-client"
+                      }
+                    }
+                    """);
+                var originalExternalProfile = File.ReadAllText(externalPath);
+
+                var result = new ShellConfigurationLoader().Load(tempDirectory);
+
+                Assert.True(result.IsMachineProfileLoaded);
+                Assert.True(result.IsExternalMachineProfileLoaded);
+                Assert.Equal("external-protected", result.Configuration["Shell:RuntimeDataRoot"]);
+                Assert.Equal("External", result.Configuration["Modules:Enabled:0"]);
+                Assert.Equal("protected-client", result.Configuration["CloudApi:ClientCode"]);
+                Assert.Equal(originalExternalProfile, File.ReadAllText(externalPath));
+            });
+        }
+        finally
+        {
             DeleteDirectory(tempDirectory);
         }
     }
@@ -223,7 +305,15 @@ public sealed class ShellConfigurationLoaderBehaviorTests
     }
 
     private static void WriteText(string path, string content)
-        => File.WriteAllText(path, content, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+    {
+        var directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        File.WriteAllText(path, content, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+    }
 
     private static void DeleteDirectory(string path)
     {

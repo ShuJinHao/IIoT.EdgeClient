@@ -1,3 +1,4 @@
+using IIoT.Edge.SharedKernel.Configuration;
 using IIoT.Edge.Shell.Core;
 using Microsoft.Extensions.Configuration;
 using Xunit;
@@ -14,20 +15,26 @@ public sealed class ShellRuntimePathResolverBehaviorTests
 
         try
         {
+            var programDataRoot = Path.Combine(baseDirectory, "program-data");
             var configuration = new ConfigurationBuilder()
-                .AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    ["Shell:MachineProfile"] = "HomogenizationLine"
-                })
-                .Build();
+                    .AddInMemoryCollection(new Dictionary<string, string?>
+                    {
+                        ["Shell:MachineProfile"] = "HomogenizationLine"
+                    })
+                    .Build();
 
-            var result = new ShellRuntimePathResolver().Resolve(baseDirectory, configuration);
+            EdgeEnvironmentTestScope.WithProgramDataRoot(programDataRoot, () =>
+            {
+                var result = new ShellRuntimePathResolver().Resolve(baseDirectory, configuration);
 
-            Assert.Equal("HomogenizationLine", result.ProfileName);
-            Assert.Equal(Path.Combine(baseDirectory, "data", "profiles", "HomogenizationLine"), result.RuntimeDataRoot);
-            Assert.Equal(Path.Combine(result.RuntimeDataRoot, "db"), result.DatabaseDirectory);
-            Assert.Equal(Path.Combine(result.RuntimeDataRoot, "context"), result.ContextDirectory);
-            Assert.Equal(Path.Combine(result.DiagnosticsDirectory, "logs"), result.LogDirectory);
+                Assert.Equal("HomogenizationLine", result.ProfileName);
+                Assert.Equal(
+                    Path.Combine(programDataRoot, "IIoT", "EdgeData", "profiles", "HomogenizationLine"),
+                    result.RuntimeDataRoot);
+                Assert.Equal(Path.Combine(result.RuntimeDataRoot, "db"), result.DatabaseDirectory);
+                Assert.Equal(Path.Combine(result.RuntimeDataRoot, "context"), result.ContextDirectory);
+                Assert.Equal(Path.Combine(result.DiagnosticsDirectory, "logs"), result.LogDirectory);
+            });
         }
         finally
         {
@@ -77,20 +84,25 @@ public sealed class ShellRuntimePathResolverBehaviorTests
             "IIoT.Edge.Shell",
             "appsettings.machine.HomogenizationLine.json");
         var shellOutputDirectory = Path.Combine(repoRoot, "publish", "Debug", "homogenization");
-        var expectedRuntimeRoot = Path.GetFullPath(Path.Combine(repoRoot, "publish", "Debug", "data", "profiles", "HomogenizationLine"));
+        var programDataRoot = Path.Combine(Path.GetTempPath(), "edge-runtime-resolver-tests", Guid.NewGuid().ToString("N"), "program-data");
+        var expectedRuntimeRoot = Path.Combine(programDataRoot, "IIoT", "EdgeData", "profiles", "HomogenizationLine");
 
         var profileText = File.ReadAllText(machineProfilePath);
         var configuration = new ConfigurationBuilder()
             .AddJsonFile(machineProfilePath, optional: false)
             .Build();
 
-        var result = new ShellRuntimePathResolver().Resolve(shellOutputDirectory, configuration);
+        EdgeEnvironmentTestScope.WithProgramDataRoot(programDataRoot, () =>
+        {
+            var result = new ShellRuntimePathResolver().Resolve(shellOutputDirectory, configuration);
 
-        Assert.DoesNotContain("%LocalAppData%", profileText, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("../data/profiles/HomogenizationLine", profileText, StringComparison.Ordinal);
-        Assert.DoesNotContain(@"..\\data\\profiles", profileText, StringComparison.Ordinal);
-        Assert.Equal(expectedRuntimeRoot, result.RuntimeDataRoot);
-        Assert.Equal(Path.Combine(expectedRuntimeRoot, "db"), result.DatabaseDirectory);
+            Assert.DoesNotContain("%LocalAppData%", profileText, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("%ProgramData%/IIoT/EdgeData/profiles/HomogenizationLine", profileText, StringComparison.Ordinal);
+            Assert.DoesNotContain("../data/profiles", profileText, StringComparison.Ordinal);
+            Assert.DoesNotContain(@"..\\data\\profiles", profileText, StringComparison.Ordinal);
+            Assert.Equal(expectedRuntimeRoot, result.RuntimeDataRoot);
+            Assert.Equal(Path.Combine(expectedRuntimeRoot, "db"), result.DatabaseDirectory);
+        });
     }
 
     private static string FindRepoRoot()
@@ -107,5 +119,22 @@ public sealed class ShellRuntimePathResolverBehaviorTests
         }
 
         throw new InvalidOperationException("Could not locate IIoT.EdgeClient repository root.");
+    }
+}
+
+internal static class EdgeEnvironmentTestScope
+{
+    public static void WithProgramDataRoot(string programDataRoot, Action action)
+    {
+        var originalValue = Environment.GetEnvironmentVariable(EdgeClientProgramDataPaths.ProgramDataRootEnvironmentVariable);
+        try
+        {
+            Environment.SetEnvironmentVariable(EdgeClientProgramDataPaths.ProgramDataRootEnvironmentVariable, programDataRoot);
+            action();
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(EdgeClientProgramDataPaths.ProgramDataRootEnvironmentVariable, originalValue);
+        }
     }
 }

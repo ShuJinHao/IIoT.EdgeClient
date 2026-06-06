@@ -7,6 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Markup.Xaml.Styling;
 using Avalonia.Platform;
 using Avalonia.Styling;
+using IIoT.Edge.SharedKernel.Configuration;
 using IIoT.Edge.UI.Shared.Localization;
 
 namespace IIoT.Edge.Presentation.Shell.Localization;
@@ -17,7 +18,6 @@ namespace IIoT.Edge.Presentation.Shell.Localization;
 public sealed class AppLanguageService : IAppLanguageService
 {
     private const string DefaultCultureName = "zh-CN";
-    private const string LanguageFileName = "language.json";
     private static readonly HashSet<string> RequiredResourceAssemblyNames = new(StringComparer.OrdinalIgnoreCase)
     {
         "IIoT.Edge.Shell",
@@ -30,10 +30,7 @@ public sealed class AppLanguageService : IAppLanguageService
     private CultureInfo _current;
 
     public AppLanguageService()
-        : this(Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "IIoT.Edge",
-            LanguageFileName))
+        : this(EdgeClientProgramDataPaths.ResolveLauncherLanguagePath())
     {
     }
 

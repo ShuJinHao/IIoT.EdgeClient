@@ -83,6 +83,40 @@ public sealed class LocalLauncherAuthServiceTests
         Assert.Contains("不正确", result.ErrorMessage, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Authenticate_WhenAccountCatalogCannotLoad_ShouldReturnConfigurationError()
+    {
+        var service = new LocalLauncherAuthService(
+            new ThrowingLauncherAccountCatalog(new FileNotFoundException("missing accounts")));
+
+        var result = service.Authenticate("edge-admin", "ChangeMe123!");
+
+        Assert.False(result.Success);
+        Assert.Equal(LocalLauncherAuthService.AccountConfigurationUnavailableError, result.ErrorMessage);
+    }
+
+    [Fact]
+    public void ChangePassword_WhenAccountCatalogCannotWrite_ShouldReturnConfigurationError()
+    {
+        var accounts = new StubLauncherAccountCatalog(
+        [
+            new LauncherAccountRecord(
+                "edge-admin",
+                "本地管理员",
+                LauncherPasswordHasher.ComputeSha256("123456"),
+                true)
+        ])
+        {
+            UpdatePasswordException = new UnauthorizedAccessException("read only")
+        };
+        var service = new LocalLauncherAuthService(accounts);
+
+        var result = service.ChangePassword("edge-admin", "123456", "new-pass");
+
+        Assert.False(result.Success);
+        Assert.Equal(LocalLauncherAuthService.AccountConfigurationUnavailableError, result.ErrorMessage);
+    }
+
     private sealed class StubLauncherAccountCatalog : ILauncherAccountCatalog
     {
         private readonly List<LauncherAccountRecord> _accounts;
@@ -92,10 +126,17 @@ public sealed class LocalLauncherAuthServiceTests
             _accounts = accounts.ToList();
         }
 
+        public Exception? UpdatePasswordException { get; init; }
+
         public IReadOnlyList<LauncherAccountRecord> LoadAccounts() => _accounts;
 
         public void UpdatePasswordHash(string userName, string passwordHash)
         {
+            if (UpdatePasswordException is not null)
+            {
+                throw UpdatePasswordException;
+            }
+
             var index = _accounts.FindIndex(x =>
                 string.Equals(x.UserName, userName, StringComparison.OrdinalIgnoreCase));
             if (index < 0)
@@ -104,6 +145,17 @@ public sealed class LocalLauncherAuthServiceTests
             }
 
             _accounts[index] = _accounts[index] with { PasswordHash = passwordHash };
+        }
+    }
+
+    private sealed class ThrowingLauncherAccountCatalog(Exception loadException) : ILauncherAccountCatalog
+    {
+        public IReadOnlyList<LauncherAccountRecord> LoadAccounts()
+            => throw loadException;
+
+        public void UpdatePasswordHash(string userName, string passwordHash)
+        {
+            throw new InvalidOperationException("not available");
         }
     }
 }

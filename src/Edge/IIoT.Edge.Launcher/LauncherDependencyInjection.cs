@@ -1,5 +1,6 @@
 using IIoT.Edge.Launcher.Services;
 using IIoT.Edge.Launcher.ViewModels;
+using IIoT.Edge.SharedKernel.Configuration;
 using IIoT.Edge.UI.Shared.Localization;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -14,14 +15,27 @@ public static class LauncherDependencyInjection
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
 
-        services.AddSingleton<IAppLanguageService, LauncherLanguageService>();
+        var accountPaths = new LauncherAccountCatalogPaths(
+            EdgeClientProgramDataPaths.ResolveLauncherAccountsPath(),
+            Path.Combine(baseDirectory, LauncherAccountCatalog.SampleCatalogFileName));
+        var updateConfigPaths = new LauncherUpdateConfigPaths(
+            EdgeClientProgramDataPaths.ResolveLauncherUpdateConfigPath(),
+            Path.Combine(baseDirectory, LauncherUpdateConfigInitializer.SampleConfigFileName));
+
+        services.AddSingleton(accountPaths);
+        services.AddSingleton(updateConfigPaths);
+        services.AddSingleton<IAppLanguageService>(
+            _ => new LauncherLanguageService(EdgeClientProgramDataPaths.ResolveLauncherLanguagePath()));
         services.AddSingleton<ILauncherAccountCatalogInitializer>(
-            _ => new LauncherAccountCatalogInitializer(baseDirectory));
+            provider => ActivatorUtilities.CreateInstance<LauncherAccountCatalogInitializer>(provider));
+        services.AddSingleton<ILauncherUpdateConfigInitializer>(
+            provider => ActivatorUtilities.CreateInstance<LauncherUpdateConfigInitializer>(provider));
         services.AddSingleton<ILauncherAccountCatalog>(
-            _ => new LauncherAccountCatalog(baseDirectory));
+            provider => ActivatorUtilities.CreateInstance<LauncherAccountCatalog>(provider));
         services.AddSingleton<ILocalLauncherAuthService, LocalLauncherAuthService>();
         services.AddSingleton<ILauncherProfileCatalog>(
             provider => ActivatorUtilities.CreateInstance<LauncherProfileCatalog>(provider, baseDirectory));
+        services.AddSingleton<ILauncherUpdateService, LauncherUpdateService>();
         services.AddSingleton<IProcessStarter, ProcessStarter>();
         services.AddSingleton<IShellLaunchService, ShellLaunchService>();
         services.AddSingleton<LauncherMainViewModel>();

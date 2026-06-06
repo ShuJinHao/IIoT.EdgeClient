@@ -19,6 +19,8 @@
     <sys:String x:Key="Launcher_Login_PasswordPlaceholder">密码</sys:String>
     <sys:String x:Key="Launcher_Button_Login">登录并进入工序选择</sys:String>
     <sys:String x:Key="Launcher_Button_ChangePassword">修改本地密码</sys:String>
+    <sys:String x:Key="Launcher_Button_CheckUpdates">检查更新</sys:String>
+    <sys:String x:Key="Launcher_Button_ApplyUpdate">下载并重启更新</sys:String>
     <sys:String x:Key="Launcher_Login_BoundaryNote">Launcher 只负责本地登录、读取 profile 清单并启动 Shell。</sys:String>
 
     <sys:String x:Key="Launcher_Hero_VersionLabel">软件版本</sys:String>
@@ -67,9 +69,24 @@
     <sys:String x:Key="Launcher_Status_PasswordChangeFailed">本地密码修改失败。</sys:String>
     <sys:String x:Key="Launcher_Status_LaunchSucceededFormat">已启动 {0}，MachineProfile = {1}。</sys:String>
     <sys:String x:Key="Launcher_Status_LaunchFailedFormat">启动 {0} 失败。</sys:String>
+    <sys:String x:Key="Launcher_Update_StatusInitial">未检查更新。</sys:String>
+    <sys:String x:Key="Launcher_Update_StatusChecking">正在检查更新...</sys:String>
+    <sys:String x:Key="Launcher_Update_StatusNotConfigured">未配置更新源。</sys:String>
+    <sys:String x:Key="Launcher_Update_StatusNotInstalled">当前不是安装版，无法使用自动更新。</sys:String>
+    <sys:String x:Key="Launcher_Update_StatusNoUpdate">当前已是最新版本：{0}</sys:String>
+    <sys:String x:Key="Launcher_Update_StatusAvailable">发现新版本：{0}</sys:String>
+    <sys:String x:Key="Launcher_Update_StatusPendingRestart">更新已下载，等待重启应用：{0}</sys:String>
+    <sys:String x:Key="Launcher_Update_StatusShellRunning">工序客户端正在运行，暂不能更新。</sys:String>
+    <sys:String x:Key="Launcher_Update_ShellRunningDetail">请先关闭已启动的工序客户端，再执行下载和重启更新。</sys:String>
+    <sys:String x:Key="Launcher_Update_StatusDownloading">正在下载更新...</sys:String>
+    <sys:String x:Key="Launcher_Update_StatusApplying">正在应用更新并重启...</sys:String>
+    <sys:String x:Key="Launcher_Update_StatusCanceled">更新操作已取消。</sys:String>
+    <sys:String x:Key="Launcher_Update_StatusFailed">更新检查或应用失败。</sys:String>
+    <sys:String x:Key="Launcher_Update_ErrorUnknown">未知更新错误。</sys:String>
     <sys:String x:Key="Launcher_Error_LoginFailed">本地登录失败。</sys:String>
     <sys:String x:Key="Launcher_Error_UserNameRequired">请输入账号。</sys:String>
     <sys:String x:Key="Launcher_Error_PasswordRequired">请输入密码。</sys:String>
+    <sys:String x:Key="Launcher_Error_AccountConfigurationUnavailable">本地账号配置不可用，请检查 ProgramData 中的账号文件。</sys:String>
     <sys:String x:Key="Launcher_Error_AccountDisabledOrMissing">本地账号不存在，或已被禁用。</sys:String>
     <sys:String x:Key="Launcher_Error_InvalidCredentials">账号或密码不正确。</sys:String>
     <sys:String x:Key="Launcher_Error_NewPasswordRequired">新密码不能为空。</sys:String>

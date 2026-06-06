@@ -7,7 +7,11 @@ param(
 
     [string]$LauncherProfileCatalogPath = 'src\Edge\IIoT.Edge.Launcher\launcher.profiles.json',
 
-    [string]$LauncherAccountsSource,
+    [string]$Version,
+
+    [string]$RuntimeIdentifier,
+
+    [switch]$SelfContained,
 
     [switch]$CleanOutput
 )
@@ -35,15 +39,39 @@ function Publish-Project {
         [string]$PublishRoot
     )
 
-    dotnet publish $ProjectPath `
-        --configuration $Configuration `
-        --output $PublishRoot `
-        --nologo `
-        --verbosity minimal `
-        --disable-build-servers `
-        -p:BuildInParallel=false `
-        -p:RestoreDisableParallel=true `
-        -p:SkipEdgeRuntimeLayoutSync=true
+    $publishArgs = @(
+        'publish',
+        $ProjectPath,
+        '--configuration',
+        $Configuration,
+        '--output',
+        $PublishRoot,
+        '--nologo',
+        '--verbosity',
+        'minimal',
+        '--disable-build-servers',
+        '-p:BuildInParallel=false',
+        '-p:RestoreDisableParallel=true',
+        '-p:SkipEdgeRuntimeLayoutSync=true'
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($RuntimeIdentifier)) {
+        $publishArgs += @('--runtime', $RuntimeIdentifier)
+    }
+
+    if ($SelfContained) {
+        $publishArgs += '--self-contained'
+        $publishArgs += 'true'
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($Version)) {
+        $publishArgs += @(
+            "-p:Version=$Version",
+            "-p:InformationalVersion=$Version"
+        )
+    }
+
+    Invoke-EdgeNativeCommand -FilePath 'dotnet' -Arguments $publishArgs
 }
 
 try {
@@ -69,30 +97,6 @@ try {
     Copy-EdgeDirectoryContent -SourceDirectory $launcherPublishRoot -TargetDirectory $launcherRuntimeRoot
     Copy-EdgeLauncherProfileCatalog -SourcePath $launcherProfileCatalog.Path -LauncherRuntimeRoot $launcherRuntimeRoot | Out-Null
     Remove-EdgeLauncherShellArtifacts -LauncherRuntimeRoot $launcherRuntimeRoot
-
-    $accountsSource = if (-not [string]::IsNullOrWhiteSpace($LauncherAccountsSource)) {
-        Resolve-EdgeAbsolutePath -BasePath $repoRoot -PathValue $LauncherAccountsSource
-    }
-    elseif (-not [string]::IsNullOrWhiteSpace($env:EDGE_LAUNCHER_ACCOUNTS_FILE)) {
-        Resolve-EdgeAbsolutePath -BasePath $repoRoot -PathValue $env:EDGE_LAUNCHER_ACCOUNTS_FILE
-    }
-    else {
-        $null
-    }
-
-    if (-not [string]::IsNullOrWhiteSpace($accountsSource)) {
-        if (-not (Test-Path $accountsSource)) {
-            throw "Launcher accounts source was not found: $accountsSource"
-        }
-
-        Copy-Item `
-            -Path $accountsSource `
-            -Destination (Join-Path $launcherRuntimeRoot 'launcher.accounts.json') `
-            -Force
-    }
-    else {
-        Write-Warning "launcher.accounts.json was not injected. The runtime package contains launcher.accounts.sample.json only."
-    }
 
     foreach ($runtime in $manifest.runtimes) {
         Sync-EdgeProcessRuntime `

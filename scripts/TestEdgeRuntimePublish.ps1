@@ -3,7 +3,13 @@ param(
 
     [string]$OutputRoot = 'publish\edge-runtime-smoke',
 
-    [string]$ManifestPath = 'scripts\edge-runtime.publish.json'
+    [string]$ManifestPath = 'scripts\edge-runtime.publish.json',
+
+    [string]$Version,
+
+    [string]$RuntimeIdentifier,
+
+    [switch]$SelfContained
 )
 
 $ErrorActionPreference = 'Stop'
@@ -18,6 +24,9 @@ $resolvedOutputRoot = Resolve-EdgeAbsolutePath -BasePath $repoRoot -PathValue $O
     -Configuration $Configuration `
     -OutputRoot $resolvedOutputRoot `
     -ManifestPath $ManifestPath `
+    -Version $Version `
+    -RuntimeIdentifier $RuntimeIdentifier `
+    -SelfContained:$SelfContained `
     -CleanOutput
 
 $launcherRoot = Join-Path $resolvedOutputRoot $manifest.launcherDirectory
@@ -29,6 +38,7 @@ Assert-EdgeExecutablePath `
 $launcherRequiredFiles = @(
     'launcher.profiles.json',
     'launcher.accounts.sample.json',
+    'launcher.update.sample.json',
     'Assets\Profiles\homogenization.png'
 )
 
@@ -37,6 +47,16 @@ foreach ($relativePath in $launcherRequiredFiles) {
     if (-not (Test-Path $fullPath)) {
         throw "Required launcher artifact was not found: $fullPath"
     }
+}
+
+$launcherAccountsPath = Join-Path $launcherRoot 'launcher.accounts.json'
+if (Test-Path $launcherAccountsPath) {
+    throw "Runtime package must not contain real launcher accounts: $launcherAccountsPath"
+}
+
+$launcherUpdateConfigPath = Join-Path $launcherRoot 'launcher.update.json'
+if (Test-Path $launcherUpdateConfigPath) {
+    throw "Runtime package must not contain real launcher update config: $launcherUpdateConfigPath"
 }
 
 $launcherProfilesPath = Join-Path $launcherRoot 'launcher.profiles.json'

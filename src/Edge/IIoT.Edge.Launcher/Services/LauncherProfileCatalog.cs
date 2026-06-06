@@ -1,4 +1,5 @@
 using IIoT.Edge.Launcher.Models;
+using IIoT.Edge.SharedKernel.Configuration;
 using System.IO;
 using System.Text.Json;
 
@@ -91,7 +92,7 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
 
     private string ResolvePath(string path)
     {
-        var expanded = NormalizePathSeparators(Environment.ExpandEnvironmentVariables(path.Trim()));
+        var expanded = NormalizePathSeparators(EdgeClientProgramDataPaths.ExpandProgramDataTokens(path.Trim()));
         return Path.GetFullPath(
             Path.IsPathRooted(expanded)
                 ? expanded
@@ -147,20 +148,30 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
 
     private static string ResolveDataDisplayPath(string runtimeDirectory, string machineProfile)
     {
-        var configPath = Path.Combine(runtimeDirectory, $"appsettings.machine.{machineProfile}.json");
+        var configPath = ResolveMachineProfileConfigPath(runtimeDirectory, machineProfile);
         var runtimeDataRoot = ReadRuntimeDataRoot(configPath);
         if (string.IsNullOrWhiteSpace(runtimeDataRoot))
         {
-            return NormalizeDisplayPath(Path.Combine("data", "profiles", machineProfile));
+            return NormalizeDisplayPath(EdgeClientProgramDataPaths.ResolveProfileDataRoot(machineProfile));
         }
 
-        var normalizedRoot = NormalizePathSeparators(Environment.ExpandEnvironmentVariables(runtimeDataRoot));
+        var normalizedRoot = NormalizePathSeparators(EdgeClientProgramDataPaths.ExpandProgramDataTokens(runtimeDataRoot));
         var absoluteRoot = Path.GetFullPath(
             Path.IsPathRooted(normalizedRoot)
                 ? normalizedRoot
                 : Path.Combine(runtimeDirectory, normalizedRoot));
         var layoutRoot = Directory.GetParent(runtimeDirectory)?.FullName ?? runtimeDirectory;
-        return NormalizeDisplayPath(Path.GetRelativePath(layoutRoot, absoluteRoot));
+        return IsUnderDirectory(layoutRoot, absoluteRoot)
+            ? NormalizeDisplayPath(Path.GetRelativePath(layoutRoot, absoluteRoot))
+            : NormalizeDisplayPath(absoluteRoot);
+    }
+
+    private static string ResolveMachineProfileConfigPath(string runtimeDirectory, string machineProfile)
+    {
+        var externalConfigPath = EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(machineProfile);
+        return File.Exists(externalConfigPath)
+            ? externalConfigPath
+            : Path.Combine(runtimeDirectory, $"appsettings.machine.{machineProfile}.json");
     }
 
     private static string? ReadRuntimeDataRoot(string configPath)
@@ -203,10 +214,29 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
 
     private static string NormalizeDisplayPath(string path)
     {
-        return path
-            .Replace('\\', '/')
-            .TrimStart('.', '/');
+        var normalized = path.Replace('\\', '/');
+        if (Path.IsPathRooted(path) || IsWindowsRootedPath(normalized))
+        {
+            return normalized;
+        }
+
+        return normalized.TrimStart('.', '/');
     }
+
+    private static bool IsUnderDirectory(string parentDirectory, string childPath)
+    {
+        var parent = Path.GetFullPath(parentDirectory)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
+        var child = Path.GetFullPath(childPath);
+        return child.StartsWith(parent, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsWindowsRootedPath(string path)
+        => path.Length >= 3
+            && char.IsLetter(path[0])
+            && path[1] == ':'
+            && path[2] == '/';
 
     private static JsonSerializerOptions JsonOptions()
         => new()

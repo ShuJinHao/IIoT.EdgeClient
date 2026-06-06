@@ -83,6 +83,16 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void CheckUpdatesButton_Click(object? sender, RoutedEventArgs e)
+    {
+        await _viewModel.CheckForUpdatesAsync();
+    }
+
+    private async void ApplyUpdateButton_Click(object? sender, RoutedEventArgs e)
+    {
+        await _viewModel.ApplyUpdateAsync();
+    }
+
     private void UpdateVisualState()
     {
         LoginPageRoot.IsVisible = !_viewModel.IsAuthenticated;

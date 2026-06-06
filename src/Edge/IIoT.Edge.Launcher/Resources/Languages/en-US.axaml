@@ -19,6 +19,8 @@
     <sys:String x:Key="Launcher_Login_PasswordPlaceholder">Password</sys:String>
     <sys:String x:Key="Launcher_Button_Login">Sign in and select process</sys:String>
     <sys:String x:Key="Launcher_Button_ChangePassword">Change local password</sys:String>
+    <sys:String x:Key="Launcher_Button_CheckUpdates">Check updates</sys:String>
+    <sys:String x:Key="Launcher_Button_ApplyUpdate">Download and restart</sys:String>
     <sys:String x:Key="Launcher_Login_BoundaryNote">Launcher only handles local login, reads the profile list, and starts Shell.</sys:String>
 
     <sys:String x:Key="Launcher_Hero_VersionLabel">Software version</sys:String>
@@ -67,9 +69,24 @@
     <sys:String x:Key="Launcher_Status_PasswordChangeFailed">Local password change failed.</sys:String>
     <sys:String x:Key="Launcher_Status_LaunchSucceededFormat">Started {0}, MachineProfile = {1}.</sys:String>
     <sys:String x:Key="Launcher_Status_LaunchFailedFormat">Failed to start {0}.</sys:String>
+    <sys:String x:Key="Launcher_Update_StatusInitial">Updates have not been checked.</sys:String>
+    <sys:String x:Key="Launcher_Update_StatusChecking">Checking for updates...</sys:String>
+    <sys:String x:Key="Launcher_Update_StatusNotConfigured">Update source is not configured.</sys:String>
+    <sys:String x:Key="Launcher_Update_StatusNotInstalled">This is not an installed build, so auto-update is unavailable.</sys:String>
+    <sys:String x:Key="Launcher_Update_StatusNoUpdate">Already on latest version: {0}</sys:String>
+    <sys:String x:Key="Launcher_Update_StatusAvailable">New version available: {0}</sys:String>
+    <sys:String x:Key="Launcher_Update_StatusPendingRestart">Update downloaded and waiting for restart: {0}</sys:String>
+    <sys:String x:Key="Launcher_Update_StatusShellRunning">A process client is still running, so update is paused.</sys:String>
+    <sys:String x:Key="Launcher_Update_ShellRunningDetail">Close the running process client before downloading and restarting for update.</sys:String>
+    <sys:String x:Key="Launcher_Update_StatusDownloading">Downloading update...</sys:String>
+    <sys:String x:Key="Launcher_Update_StatusApplying">Applying update and restarting...</sys:String>
+    <sys:String x:Key="Launcher_Update_StatusCanceled">Update operation was canceled.</sys:String>
+    <sys:String x:Key="Launcher_Update_StatusFailed">Update check or apply failed.</sys:String>
+    <sys:String x:Key="Launcher_Update_ErrorUnknown">Unknown update error.</sys:String>
     <sys:String x:Key="Launcher_Error_LoginFailed">Local login failed.</sys:String>
     <sys:String x:Key="Launcher_Error_UserNameRequired">Enter an account.</sys:String>
     <sys:String x:Key="Launcher_Error_PasswordRequired">Enter a password.</sys:String>
+    <sys:String x:Key="Launcher_Error_AccountConfigurationUnavailable">Local account configuration is unavailable. Check the account file under ProgramData.</sys:String>
     <sys:String x:Key="Launcher_Error_AccountDisabledOrMissing">The local account does not exist or is disabled.</sys:String>
     <sys:String x:Key="Launcher_Error_InvalidCredentials">The account or password is incorrect.</sys:String>
     <sys:String x:Key="Launcher_Error_NewPasswordRequired">New password is required.</sys:String>
