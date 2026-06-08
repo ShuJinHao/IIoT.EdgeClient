@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Application\IIoT.Edge.Application\IIoT.Edge.Application.csproj" />
+    <ProjectReference Include="..\IIoT.Edge.Infrastructure.CloudClient\IIoT.Edge.Infrastructure.CloudClient.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -339,6 +339,31 @@ public sealed class RepositoryHygieneTests
     }
 
     [Fact]
+    public void RuntimeLayoutSync_ShouldNotTouchExternalProfilePluginDirectory()
+    {
+        var root = FindRepositoryRoot();
+        var app = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "Tools",
+            "IIoT.Edge.RuntimeLayoutSync",
+            "RuntimeLayoutSyncApp.cs"));
+        var fileSystem = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "Tools",
+            "IIoT.Edge.RuntimeLayoutSync",
+            "RuntimeLayoutSyncFileSystem.cs"));
+
+        Assert.Contains("fileSystem.CleanDirectory(runtimeRoot)", app, StringComparison.Ordinal);
+        Assert.Contains("RemoveLauncherShellArtifacts(launcherRuntimeRoot)", app, StringComparison.Ordinal);
+        Assert.DoesNotContain("ResolveProfilePluginRootPath", app, StringComparison.Ordinal);
+        Assert.DoesNotContain("ResolveProfilePluginRootPath", fileSystem, StringComparison.Ordinal);
+        Assert.DoesNotContain("ProgramDataRootEnvironmentVariable", app, StringComparison.Ordinal);
+        Assert.DoesNotContain("ProgramDataRootEnvironmentVariable", fileSystem, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void IntegrationDependencyInjection_ShouldNotCacheTypedHttpClientsAsSingletons()
     {
         var root = FindRepositoryRoot();

@@ -1,8 +1,7 @@
-using System.Net.Http.Json;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Infrastructure.Integration.Config;
-using IIoT.Edge.Infrastructure.Integration.Http;
+using IIoT.Edge.Infrastructure.CloudClient;
 
 namespace IIoT.Edge.Infrastructure.Integration.Device;
 
@@ -15,14 +14,24 @@ public interface ICloudDeviceBootstrapClient
 
 public sealed class CloudDeviceBootstrapClient : ICloudDeviceBootstrapClient
 {
-    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IEdgeCloudDeviceBootstrapClient _cloudClient;
     private readonly ICloudApiEndpointProvider _endpointProvider;
 
     public CloudDeviceBootstrapClient(
         IHttpClientFactory httpClientFactory,
         ICloudApiEndpointProvider endpointProvider)
+        : this(
+            new EdgeCloudDeviceBootstrapClient(
+                new CloudClientHttpTransport(() => httpClientFactory.CreateClient(DeviceService.HttpClientName))),
+            endpointProvider)
     {
-        _httpClientFactory = httpClientFactory;
+    }
+
+    internal CloudDeviceBootstrapClient(
+        IEdgeCloudDeviceBootstrapClient cloudClient,
+        ICloudApiEndpointProvider endpointProvider)
+    {
+        _cloudClient = cloudClient ?? throw new ArgumentNullException(nameof(cloudClient));
         _endpointProvider = endpointProvider;
     }
 
@@ -37,11 +46,12 @@ public sealed class CloudDeviceBootstrapClient : ICloudDeviceBootstrapClient
             var url = _endpointProvider.BuildUrl(
                 $"{deviceInstancePath}?clientCode={Uri.EscapeDataString(clientCode)}");
 
-            using var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.TryAddWithoutValidation(CloudAuthHeaders.BootstrapSecret, bootstrapSecret);
-
-            using var response = await CreateHttpClient().SendAsync(request, ct).ConfigureAwait(false);
-            return await ReadBootstrapResponseAsync(response, clientCode, ct).ConfigureAwait(false);
+            var result = await _cloudClient
+                .BootstrapAsync(
+                    new EdgeCloudDeviceBootstrapRequest(clientCode, bootstrapSecret, new Uri(url)),
+                    ct)
+                .ConfigureAwait(false);
+            return MapResult(result);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -72,13 +82,15 @@ public sealed class CloudDeviceBootstrapClient : ICloudDeviceBootstrapClient
                 ? _endpointProvider.GetClientCode()
                 : session.ClientCode;
 
-            using var request = new HttpRequestMessage(
-                HttpMethod.Post,
-                _endpointProvider.BuildUrl(_endpointProvider.GetBootstrapRefreshPath()));
-            request.Headers.TryAddWithoutValidation(CloudAuthHeaders.RefreshToken, session.RefreshToken);
-
-            using var response = await CreateHttpClient().SendAsync(request, ct).ConfigureAwait(false);
-            return await ReadBootstrapResponseAsync(response, clientCode, ct).ConfigureAwait(false);
+            var result = await _cloudClient
+                .RefreshAsync(
+                    new EdgeCloudDeviceRefreshRequest(
+                        clientCode,
+                        session.RefreshToken,
+                        new Uri(_endpointProvider.BuildUrl(_endpointProvider.GetBootstrapRefreshPath()))),
+                    ct)
+                .ConfigureAwait(false);
+            return MapResult(result);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -98,55 +110,40 @@ public sealed class CloudDeviceBootstrapClient : ICloudDeviceBootstrapClient
         }
     }
 
-    private async Task<CloudDeviceBootstrapResult> ReadBootstrapResponseAsync(
-        HttpResponseMessage response,
-        string clientCode,
-        CancellationToken ct)
-    {
-        if (!response.IsSuccessStatusCode)
+    private static CloudDeviceBootstrapResult MapResult(EdgeCloudDeviceBootstrapResult result)
+        => result.Kind switch
         {
-            var errorMessage = await TryReadFirstErrorAsync(response, ct).ConfigureAwait(false);
-            return CloudDeviceBootstrapResult.HttpFailure(clientCode, (int)response.StatusCode, errorMessage);
-        }
-
-        var dto = await response.Content.ReadFromJsonAsync<DeviceResponseDto>(ct).ConfigureAwait(false);
-        if (dto is null)
-        {
-            return CloudDeviceBootstrapResult.EmptyPayload(clientCode);
-        }
-
-        dto.RefreshToken ??= CloudAuthHeaders.ReadRefreshToken(response);
-        dto.RefreshTokenExpiresAtUtc ??= CloudAuthHeaders.ReadRefreshTokenExpiresAtUtc(response);
-        dto.UploadAccessTokenExpiresAtUtc ??= CloudAuthHeaders.ReadAccessTokenExpiresAtUtc(response);
-
-        return CloudDeviceBootstrapResult.Success(clientCode, new DeviceSession
-        {
-            DeviceId = dto.Id,
-            DeviceName = dto.DeviceName,
-            ClientCode = string.IsNullOrWhiteSpace(dto.ClientCode) ? clientCode : dto.ClientCode,
-            ProcessId = dto.ProcessId,
-            UploadAccessToken = dto.UploadAccessToken,
-            UploadAccessTokenExpiresAtUtc = dto.UploadAccessTokenExpiresAtUtc,
-            RefreshToken = dto.RefreshToken,
-            RefreshTokenExpiresAtUtc = dto.RefreshTokenExpiresAtUtc
-        });
-    }
-
-    private static async Task<string?> TryReadFirstErrorAsync(HttpResponseMessage response, CancellationToken ct)
-    {
-        try
-        {
-            var envelope = await response.Content.ReadFromJsonAsync<ApiErrorEnvelope>(ct).ConfigureAwait(false);
-            return envelope?.Errors?.FirstOrDefault();
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private HttpClient CreateHttpClient()
-        => _httpClientFactory.CreateClient(DeviceService.HttpClientName);
+            EdgeCloudDeviceBootstrapResultKind.Success when result.Session is not null
+                => CloudDeviceBootstrapResult.Success(result.ClientCode, new DeviceSession
+                {
+                    DeviceId = result.Session.DeviceId,
+                    DeviceName = result.Session.DeviceName,
+                    ClientCode = result.Session.ClientCode,
+                    ProcessId = result.Session.ProcessId,
+                    UploadAccessToken = result.Session.UploadAccessToken,
+                    UploadAccessTokenExpiresAtUtc = result.Session.UploadAccessTokenExpiresAtUtc,
+                    RefreshToken = result.Session.RefreshToken,
+                    RefreshTokenExpiresAtUtc = result.Session.RefreshTokenExpiresAtUtc
+                }),
+            EdgeCloudDeviceBootstrapResultKind.HttpFailure
+                => CloudDeviceBootstrapResult.HttpFailure(
+                    result.ClientCode,
+                    result.StatusCode ?? 0,
+                    result.ErrorMessage),
+            EdgeCloudDeviceBootstrapResultKind.EmptyPayload
+                => CloudDeviceBootstrapResult.EmptyPayload(result.ClientCode),
+            EdgeCloudDeviceBootstrapResultKind.Timeout
+                => CloudDeviceBootstrapResult.Timeout(result.ClientCode),
+            EdgeCloudDeviceBootstrapResultKind.NetworkFailure
+                => CloudDeviceBootstrapResult.NetworkFailure(
+                    result.ClientCode,
+                    result.ErrorMessage ?? "Cloud 网络请求失败。"),
+            EdgeCloudDeviceBootstrapResultKind.Cancelled
+                => CloudDeviceBootstrapResult.Cancelled(result.ClientCode),
+            _ => CloudDeviceBootstrapResult.UnexpectedFailure(
+                result.ClientCode,
+                result.ErrorMessage ?? "Cloud bootstrap 失败。")
+        };
 }
 
 public sealed record CloudDeviceBootstrapResult(

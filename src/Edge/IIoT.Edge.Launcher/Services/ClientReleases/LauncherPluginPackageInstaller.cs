@@ -22,6 +22,28 @@ public interface ILauncherPluginPackageInstaller
 
 public sealed class LauncherPluginPackageInstaller : ILauncherPluginPackageInstaller
 {
+    private readonly HttpClient _httpClient;
+    private readonly LauncherPluginPackageInstallLimits _limits;
+
+    public LauncherPluginPackageInstaller()
+        : this(new HttpClient(new SocketsHttpHandler
+        {
+            PooledConnectionLifetime = TimeSpan.FromMinutes(5)
+        })
+        {
+            Timeout = Timeout.InfiniteTimeSpan
+        })
+    {
+    }
+
+    internal LauncherPluginPackageInstaller(
+        HttpClient httpClient,
+        LauncherPluginPackageInstallLimits? limits = null)
+    {
+        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        _limits = limits ?? LauncherPluginPackageInstallLimits.Default;
+    }
+
     public async Task<LauncherPluginInstallResult> InstallAsync(
         LauncherProfileDefinition profile,
         LauncherClientPluginRelease release,
@@ -57,9 +79,11 @@ public sealed class LauncherPluginPackageInstaller : ILauncherPluginPackageInsta
                 release.DownloadUrl,
                 cloudOptions.BaseUrl,
                 packagePath,
+                _limits,
                 progress,
                 cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
+            ValidatePackageFileSize(packagePath, _limits);
 
             var actualSha256 = await ComputeSha256Async(packagePath, cancellationToken).ConfigureAwait(false);
             if (!string.Equals(actualSha256, release.Sha256, StringComparison.OrdinalIgnoreCase))
@@ -69,7 +93,7 @@ public sealed class LauncherPluginPackageInstaller : ILauncherPluginPackageInsta
             }
 
             progress?.Report(70);
-            ValidateZipEntries(packagePath, extractDirectory);
+            ValidateZipEntries(packagePath, extractDirectory, _limits);
             ZipFile.ExtractToDirectory(packagePath, extractDirectory);
             var manifest = ValidateExtractedPackage(extractDirectory, release, hostVersion, hostApiVersion);
             ReplaceCurrentPlugin(moduleDirectory, extractDirectory);
@@ -118,10 +142,11 @@ public sealed class LauncherPluginPackageInstaller : ILauncherPluginPackageInsta
         return true;
     }
 
-    private static async Task DownloadPackageAsync(
+    private async Task DownloadPackageAsync(
         string packageUrl,
         string baseUrl,
         string packagePath,
+        LauncherPluginPackageInstallLimits limits,
         IProgress<int>? progress,
         CancellationToken cancellationToken)
     {
@@ -135,13 +160,19 @@ public sealed class LauncherPluginPackageInstaller : ILauncherPluginPackageInsta
             return;
         }
 
-        using var client = new HttpClient();
-        using var response = await client
-            .GetAsync(source, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+        using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutSource.CancelAfter(limits.DownloadTimeout);
+        using var response = await _httpClient
+            .GetAsync(source, HttpCompletionOption.ResponseHeadersRead, timeoutSource.Token)
             .ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
 
         var total = response.Content.Headers.ContentLength;
+        if (total is > 0 && total.Value > limits.MaxPackageBytes)
+        {
+            throw new InvalidOperationException($"插件包大小超过限制: {total.Value} bytes");
+        }
+
         await using var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         await using var fileStream = File.Create(packagePath);
         var buffer = new byte[64 * 1024];
@@ -151,6 +182,11 @@ public sealed class LauncherPluginPackageInstaller : ILauncherPluginPackageInsta
         {
             await fileStream.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
             readTotal += read;
+            if (readTotal > limits.MaxPackageBytes)
+            {
+                throw new InvalidOperationException($"插件包大小超过限制: {readTotal} bytes");
+            }
+
             if (total is > 0)
             {
                 progress?.Report(Math.Clamp((int)(readTotal * 60 / total.Value), 1, 60));
@@ -182,9 +218,23 @@ public sealed class LauncherPluginPackageInstaller : ILauncherPluginPackageInsta
         return Convert.ToHexString(hash);
     }
 
-    private static void ValidateZipEntries(string packagePath, string extractDirectory)
+    private static void ValidatePackageFileSize(string packagePath, LauncherPluginPackageInstallLimits limits)
+    {
+        var packageSize = new FileInfo(packagePath).Length;
+        if (packageSize > limits.MaxPackageBytes)
+        {
+            throw new InvalidOperationException($"插件包大小超过限制: {packageSize} bytes");
+        }
+    }
+
+    private static void ValidateZipEntries(
+        string packagePath,
+        string extractDirectory,
+        LauncherPluginPackageInstallLimits limits)
     {
         using var archive = ZipFile.OpenRead(packagePath);
+        long totalUncompressedBytes = 0;
+        var fileCount = 0;
         foreach (var entry in archive.Entries)
         {
             if (string.IsNullOrWhiteSpace(entry.FullName))
@@ -193,6 +243,38 @@ public sealed class LauncherPluginPackageInstaller : ILauncherPluginPackageInsta
             }
 
             _ = ResolveSafePackagePath(extractDirectory, entry.FullName, $"插件包包含非法路径: {entry.FullName}");
+            if (string.IsNullOrWhiteSpace(entry.Name))
+            {
+                continue;
+            }
+
+            fileCount++;
+            if (fileCount > limits.MaxFileCount)
+            {
+                throw new InvalidOperationException($"插件包文件数量超过限制: {fileCount}");
+            }
+
+            if (entry.Length > limits.MaxEntryBytes)
+            {
+                throw new InvalidOperationException($"插件包单文件大小超过限制: {entry.FullName}");
+            }
+
+            totalUncompressedBytes += entry.Length;
+            if (totalUncompressedBytes > limits.MaxExtractedBytes)
+            {
+                throw new InvalidOperationException($"插件包解压后大小超过限制: {totalUncompressedBytes} bytes");
+            }
+
+            if (entry.CompressedLength == 0 && entry.Length > 0)
+            {
+                throw new InvalidOperationException($"插件包条目压缩大小异常: {entry.FullName}");
+            }
+
+            if (entry.CompressedLength > 0
+                && entry.Length / (double)entry.CompressedLength > limits.MaxCompressionRatio)
+            {
+                throw new InvalidOperationException($"插件包压缩比超过限制: {entry.FullName}");
+            }
         }
     }
 
@@ -336,4 +418,21 @@ public sealed class LauncherPluginPackageInstaller : ILauncherPluginPackageInsta
         {
         }
     }
+}
+
+public sealed record LauncherPluginPackageInstallLimits(
+    long MaxPackageBytes,
+    long MaxExtractedBytes,
+    long MaxEntryBytes,
+    int MaxFileCount,
+    double MaxCompressionRatio,
+    TimeSpan DownloadTimeout)
+{
+    public static LauncherPluginPackageInstallLimits Default { get; } = new(
+        MaxPackageBytes: 512L * 1024 * 1024,
+        MaxExtractedBytes: 1024L * 1024 * 1024,
+        MaxEntryBytes: 512L * 1024 * 1024,
+        MaxFileCount: 4096,
+        MaxCompressionRatio: 100d,
+        DownloadTimeout: TimeSpan.FromMinutes(5));
 }

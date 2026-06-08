@@ -48,7 +48,7 @@ public sealed class LauncherWindowHeadlessTests
     }
 
     [AvaloniaFact]
-    public async Task MainWindow_WhenAuthenticated_ShouldExposeClientReleasePanel()
+    public async Task MainWindow_WhenAuthenticated_ShouldExposeDedicatedUpdateCenter()
     {
         var viewModel = CreateViewModel();
         await viewModel.LoginAsync("operator", "secret");
@@ -58,13 +58,9 @@ public sealed class LauncherWindowHeadlessTests
         {
             window.Show();
 
-            var releasePanel = window.FindControl<Control>("ClientReleasePanelRoot");
-            var releaseProgressBar = window.FindControl<ProgressBar>("ClientReleaseProgressBar");
-
-            Assert.NotNull(releasePanel);
-            Assert.NotNull(releaseProgressBar);
-            Assert.False(releasePanel!.IsVisible);
-            Assert.False(releaseProgressBar!.IsVisible);
+            Assert.True(window.FindControl<Control>("UpdateCenterPanelRoot")?.IsVisible);
+            Assert.Null(window.FindControl<Control>("ClientReleasePanelRoot"));
+            Assert.Null(window.FindControl<ProgressBar>("ClientReleaseProgressBar"));
         }
         finally
         {
@@ -95,7 +91,7 @@ public sealed class LauncherWindowHeadlessTests
     }
 
     [AvaloniaFact]
-    public void MainWindow_ShouldExposeUpdateControls()
+    public void MainWindow_ShouldNotExposeSeparateUpdateControls()
     {
         var window = CreateMainWindow(CreateViewModel());
 
@@ -103,16 +99,9 @@ public sealed class LauncherWindowHeadlessTests
         {
             window.Show();
 
-            var checkButton = window.FindControl<Control>("CheckUpdatesButton");
-            var applyButton = window.FindControl<Control>("ApplyUpdateButton");
-            var progressBar = window.FindControl<ProgressBar>("UpdateProgressBar");
-
-            Assert.NotNull(checkButton);
-            Assert.NotNull(applyButton);
-            Assert.NotNull(progressBar);
-            Assert.True(checkButton!.IsVisible);
-            Assert.True(applyButton!.IsVisible);
-            Assert.False(progressBar!.IsVisible);
+            Assert.Null(window.FindControl<Control>("CheckUpdatesButton"));
+            Assert.Null(window.FindControl<Control>("ApplyUpdateButton"));
+            Assert.Null(window.FindControl<ProgressBar>("UpdateProgressBar"));
         }
         finally
         {

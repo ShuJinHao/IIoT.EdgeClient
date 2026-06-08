@@ -29,6 +29,7 @@
     <ProjectReference Include="..\..\Presentation\IIoT.Edge.Presentation.VisualTestData\IIoT.Edge.Presentation.VisualTestData.csproj" />
     <ProjectReference Include="..\..\Edge\IIoT.Edge.Host.DataPipeline\IIoT.Edge.Host.DataPipeline.csproj" />
     <ProjectReference Include="..\..\Shared\IIoT.Edge.SharedKernel\IIoT.Edge.SharedKernel.csproj" />
+    <ProjectReference Include="..\..\Tools\IIoT.Edge.RuntimeLayoutSync\IIoT.Edge.RuntimeLayoutSync.csproj" />
   </ItemGroup>
 
   <ItemGroup>

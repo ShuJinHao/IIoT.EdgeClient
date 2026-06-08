@@ -245,6 +245,82 @@ public sealed class LauncherClientReleaseServiceTests
     }
 
     [Fact]
+    public async Task PluginPackageInstaller_ShouldRejectPackageWhenFileCountExceedsLimit()
+    {
+        var tempDirectory = CreateTempDirectory();
+        var dataRoot = Path.Combine(tempDirectory, "program-data");
+        try
+        {
+            var runtimeDirectory = Path.Combine(tempDirectory, "runtime");
+            Directory.CreateDirectory(runtimeDirectory);
+            var packagePath = Path.Combine(tempDirectory, "IIoT.EdgePlugin.Homogenization-1.2.0-win-x64.zip");
+            CreatePluginPackage(packagePath, "Homogenization", "1.2.0");
+            var release = ReleaseWithPackage(packagePath);
+            var installer = new LauncherPluginPackageInstaller(
+                new HttpClient(),
+                LauncherPluginPackageInstallLimits.Default with
+                {
+                    MaxFileCount = 1
+                });
+
+            WithDataRoot(dataRoot, async () =>
+            {
+                var result = await installer.InstallAsync(
+                    Profile(runtimeDirectory),
+                    release,
+                    CloudOptions(),
+                    "1.0.0",
+                    EdgeClientHostRuntime.HostApiVersion);
+
+                Assert.False(result.Success);
+                Assert.Contains("文件数量超过限制", result.ErrorMessage, StringComparison.Ordinal);
+            });
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task PluginPackageInstaller_ShouldRejectPackageWhenExtractedSizeExceedsLimit()
+    {
+        var tempDirectory = CreateTempDirectory();
+        var dataRoot = Path.Combine(tempDirectory, "program-data");
+        try
+        {
+            var runtimeDirectory = Path.Combine(tempDirectory, "runtime");
+            Directory.CreateDirectory(runtimeDirectory);
+            var packagePath = Path.Combine(tempDirectory, "IIoT.EdgePlugin.Homogenization-1.2.0-win-x64.zip");
+            CreatePluginPackage(packagePath, "Homogenization", "1.2.0");
+            var release = ReleaseWithPackage(packagePath);
+            var installer = new LauncherPluginPackageInstaller(
+                new HttpClient(),
+                LauncherPluginPackageInstallLimits.Default with
+                {
+                    MaxExtractedBytes = 16
+                });
+
+            WithDataRoot(dataRoot, async () =>
+            {
+                var result = await installer.InstallAsync(
+                    Profile(runtimeDirectory),
+                    release,
+                    CloudOptions(),
+                    "1.0.0",
+                    EdgeClientHostRuntime.HostApiVersion);
+
+                Assert.False(result.Success);
+                Assert.Contains("解压后大小超过限制", result.ErrorMessage, StringComparison.Ordinal);
+            });
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
     public void BuildPluginPlans_ShouldMarkUpdateAvailableAndIncompatible()
     {
         var releases = new[]
@@ -316,6 +392,32 @@ public sealed class LauncherClientReleaseServiceTests
             $"https://cloud.example.test/{moduleId}.zip",
             new string('A', 64),
             1,
+            null,
+            [],
+            "Published",
+            null,
+            "IIoT",
+            DateTime.UtcNow,
+            DateTime.UtcNow);
+
+    private static LauncherClientPluginRelease ReleaseWithPackage(string packagePath)
+        => new(
+            Guid.NewGuid(),
+            "Homogenization",
+            "匀浆",
+            null,
+            null,
+            null,
+            "stable",
+            "1.2.0",
+            EdgeClientHostRuntime.HostApiVersion,
+            "1.0.0",
+            "99.0.0",
+            "win-x64",
+            "net10.0",
+            packagePath,
+            ComputeSha256(packagePath),
+            new FileInfo(packagePath).Length,
             null,
             [],
             "Published",

@@ -12,6 +12,7 @@
     <Project Path="src/Edge/IIoT.Edge.Shell/IIoT.Edge.Shell.csproj" Id="18446b65-38e5-4acb-a229-ba0f9d8a83cf" />
   </Folder>
   <Folder Name="/src/Infrastructure/">
+    <Project Path="src/Infrastructure/IIoT.Edge.Infrastructure.CloudClient/IIoT.Edge.Infrastructure.CloudClient.csproj" />
     <Project Path="src/Infrastructure/IIoT.Edge.Infrastructure.Integration/IIoT.Edge.Infrastructure.Integration.csproj" Id="23525f6e-79c9-4ad1-992b-f1ad8ddfa65b" />
     <Project Path="src/Infrastructure/IIoT.Edge.Infrastructure.Persistence.Dapper/IIoT.Edge.Infrastructure.Persistence.Dapper.csproj" Id="f888b62f-8635-42cf-b2b4-fb605267ba78" />
     <Project Path="src/Infrastructure/IIoT.Edge.Infrastructure.Persistence.EfCore/IIoT.Edge.Infrastructure.Persistence.EfCore.csproj" Id="3fbdae2b-de52-43d5-ac49-4271b8819af2" />

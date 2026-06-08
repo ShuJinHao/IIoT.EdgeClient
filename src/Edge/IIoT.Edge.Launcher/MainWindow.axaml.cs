@@ -77,36 +77,32 @@ public partial class MainWindow : Window
 
     private async void LaunchProfileButton_Click(object? sender, RoutedEventArgs e)
     {
-        if ((sender as Control)?.DataContext is LauncherProfileDefinition profile)
+        if ((sender as Control)?.DataContext is not LauncherProfileCardViewModel card)
         {
-            await _viewModel.LaunchAsync(profile);
+            return;
         }
+
+        await _viewModel.LaunchProfileCardAsync(card);
     }
 
-    private async void ManageProfilePluginsButton_Click(object? sender, RoutedEventArgs e)
+    private async void RefreshUpdateCenterButton_Click(object? sender, RoutedEventArgs e)
     {
-        if ((sender as Control)?.DataContext is LauncherProfileDefinition profile)
+        await _viewModel.RefreshUpdateCenterAsync();
+    }
+
+    private async void ApplyHostUpdateButton_Click(object? sender, RoutedEventArgs e)
+    {
+        await _viewModel.HostUpdatePanel.ApplyUpdateAsync();
+    }
+
+    private async void InstallPluginUpdateButton_Click(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is not LauncherClientPluginItem plugin)
         {
-            await _viewModel.CheckClientReleasesAsync(profile);
+            return;
         }
-    }
 
-    private async void InstallPluginButton_Click(object? sender, RoutedEventArgs e)
-    {
-        if ((sender as Control)?.DataContext is LauncherClientPluginItem plugin)
-        {
-            await _viewModel.InstallOrUpdateClientPluginAsync(plugin);
-        }
-    }
-
-    private async void CheckUpdatesButton_Click(object? sender, RoutedEventArgs e)
-    {
-        await _viewModel.CheckForUpdatesAsync();
-    }
-
-    private async void ApplyUpdateButton_Click(object? sender, RoutedEventArgs e)
-    {
-        await _viewModel.ApplyUpdateAsync();
+        await _viewModel.ClientReleasePanel.InstallOrUpdateAsync(plugin);
     }
 
     private void UpdateVisualState()

@@ -1,5 +1,6 @@
 using IIoT.Edge.Launcher.Services;
 using IIoT.Edge.Launcher.ViewModels;
+using IIoT.Edge.Infrastructure.CloudClient;
 using IIoT.Edge.SharedKernel.Configuration;
 using IIoT.Edge.UI.Shared.Localization;
 using Microsoft.Extensions.DependencyInjection;
@@ -38,10 +39,21 @@ public static class LauncherDependencyInjection
         services.AddSingleton<ILauncherUpdateService, LauncherUpdateService>();
         services.AddSingleton<ILauncherCloudApiConfigurationResolver>(
             _ => new LauncherCloudApiConfigurationResolver(baseDirectory));
+        services.AddSingleton(_ => new HttpClient(new SocketsHttpHandler
+        {
+            PooledConnectionLifetime = TimeSpan.FromMinutes(5)
+        })
+        {
+            Timeout = Timeout.InfiniteTimeSpan
+        });
+        services.AddSingleton<ICloudClientHttpTransport>(
+            provider => new CloudClientHttpTransport(provider.GetRequiredService<HttpClient>()));
+        services.AddSingleton<IEdgeCloudDeviceBootstrapClient, EdgeCloudDeviceBootstrapClient>();
         services.AddSingleton<ILauncherEdgeReleaseCloudClient, LauncherEdgeReleaseCloudClient>();
         services.AddSingleton<ILauncherInstalledPluginCatalog, LauncherInstalledPluginCatalog>();
         services.AddSingleton<ILauncherProfileModuleConfiguration, LauncherProfileModuleConfiguration>();
-        services.AddSingleton<ILauncherPluginPackageInstaller, LauncherPluginPackageInstaller>();
+        services.AddSingleton<ILauncherPluginPackageInstaller>(
+            provider => new LauncherPluginPackageInstaller(provider.GetRequiredService<HttpClient>()));
         services.AddSingleton<ILauncherClientReleaseService, LauncherClientReleaseService>();
         services.AddSingleton<IProcessStarter, ProcessStarter>();
         services.AddSingleton<IShellLaunchService, ShellLaunchService>();
