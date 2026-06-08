@@ -36,6 +36,13 @@ public static class LauncherDependencyInjection
         services.AddSingleton<ILauncherProfileCatalog>(
             provider => ActivatorUtilities.CreateInstance<LauncherProfileCatalog>(provider, baseDirectory));
         services.AddSingleton<ILauncherUpdateService, LauncherUpdateService>();
+        services.AddSingleton<ILauncherCloudApiConfigurationResolver>(
+            _ => new LauncherCloudApiConfigurationResolver(baseDirectory));
+        services.AddSingleton<ILauncherEdgeReleaseCloudClient, LauncherEdgeReleaseCloudClient>();
+        services.AddSingleton<ILauncherInstalledPluginCatalog, LauncherInstalledPluginCatalog>();
+        services.AddSingleton<ILauncherProfileModuleConfiguration, LauncherProfileModuleConfiguration>();
+        services.AddSingleton<ILauncherPluginPackageInstaller, LauncherPluginPackageInstaller>();
+        services.AddSingleton<ILauncherClientReleaseService, LauncherClientReleaseService>();
         services.AddSingleton<IProcessStarter, ProcessStarter>();
         services.AddSingleton<IShellLaunchService, ShellLaunchService>();
         services.AddSingleton<LauncherMainViewModel>();

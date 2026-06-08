@@ -180,6 +180,10 @@
     <sys:String x:Key="Navigation_Param_CloudApi_CapacitySummaryRangePath_Description">客户端查询区间产能汇总的接口路径。</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_RecipeByDeviceTemplatePath_DisplayName">设备配方接口模板</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_RecipeByDeviceTemplatePath_Description">按设备查询云端配方的接口模板，必须包含 {deviceId}。</sys:String>
+    <sys:String x:Key="Navigation_Param_CloudApi_ClientReleaseCatalogTemplatePath_DisplayName">客户端版本目录接口模板</sys:String>
+    <sys:String x:Key="Navigation_Param_CloudApi_ClientReleaseCatalogTemplatePath_Description">Launcher 按设备拉取宿主和插件 catalog 的接口模板，必须包含 {deviceId}。</sys:String>
+    <sys:String x:Key="Navigation_Param_CloudApi_ClientVersionReportPath_DisplayName">客户端版本上报接口</sys:String>
+    <sys:String x:Key="Navigation_Param_CloudApi_ClientVersionReportPath_Description">Launcher 上报宿主版本、HostApiVersion、已安装插件和启用插件的接口路径。</sys:String>
     <sys:String x:Key="Navigation_Column_ParamName">参数名称</sys:String>
     <sys:String x:Key="Navigation_Column_ParamValue">参数值</sys:String>
     <sys:String x:Key="Navigation_Column_ParamType">类型</sys:String>

@@ -21,6 +21,7 @@
     <sys:String x:Key="Launcher_Button_ChangePassword">Change local password</sys:String>
     <sys:String x:Key="Launcher_Button_CheckUpdates">Check updates</sys:String>
     <sys:String x:Key="Launcher_Button_ApplyUpdate">Download and restart</sys:String>
+    <sys:String x:Key="Launcher_Button_CheckPluginCatalog">Plugin updates</sys:String>
     <sys:String x:Key="Launcher_Login_BoundaryNote">Launcher only handles local login, reads the profile list, and starts Shell.</sys:String>
 
     <sys:String x:Key="Launcher_Hero_VersionLabel">Software version</sys:String>
@@ -42,6 +43,21 @@
     <sys:String x:Key="Launcher_Profile_DataLabel">Data</sys:String>
     <sys:String x:Key="Launcher_Profile_PluginMissing">Plugin manifest missing</sys:String>
     <sys:String x:Key="Launcher_Profile_DataMissing">Data path missing</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_Title">Cloud plugin catalog</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_Description">Read installable process plugins from cloud catalog and install them into the current profile external plugin directory.</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_CurrentVersionLabel">Current</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_LatestVersionLabel">Latest</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_SizeLabel">Size</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_ButtonInstall">Install</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_ButtonUpdate">Update</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_ButtonNoAction">No action</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_Plugin_NotInstalled">Not installed</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_Plugin_StatusNotInstalled">Not installed</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_Plugin_StatusUpdateAvailable">Update available</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_Plugin_StatusLatest">Latest</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_Plugin_StatusInstalledNewer">Local newer</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_Plugin_StatusIncompatible">Incompatible</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_Plugin_StatusUnknown">Unknown</sys:String>
 
     <sys:String x:Key="Launcher_ChangePassword_WindowTitle">Change local password</sys:String>
     <sys:String x:Key="Launcher_ChangePassword_Badge">Local administrator</sys:String>
@@ -83,6 +99,19 @@
     <sys:String x:Key="Launcher_Update_StatusCanceled">Update operation was canceled.</sys:String>
     <sys:String x:Key="Launcher_Update_StatusFailed">Update check or apply failed.</sys:String>
     <sys:String x:Key="Launcher_Update_ErrorUnknown">Unknown update error.</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_StatusInitial">Cloud plugin catalog has not been checked.</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_StatusChecking">Checking cloud plugin catalog for {0}...</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_StatusReady">Host {0}, latest host {1}, {2} plugins.</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_StatusNotConfigured">CloudApi or catalog paths are not configured.</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_StatusBootstrapFailed">Cloud bootstrap failed, so plugin catalog cannot be read.</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_StatusCatalogFailed">Failed to fetch cloud plugin catalog.</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_StatusInstalling">Installing or updating plugin: {0}</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_StatusInstalled">Installed plugins: {0}</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_StatusShellRunning">A process client is running, so plugins cannot be replaced.</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_ShellRunningDetail">Close the running Shell before installing or updating plugins.</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_StatusNoProfile">Open plugin updates from a profile card first.</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_StatusCanceled">Plugin update operation was canceled.</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_StatusFailed">Plugin check or install failed.</sys:String>
     <sys:String x:Key="Launcher_Error_LoginFailed">Local login failed.</sys:String>
     <sys:String x:Key="Launcher_Error_UserNameRequired">Enter an account.</sys:String>
     <sys:String x:Key="Launcher_Error_PasswordRequired">Enter a password.</sys:String>

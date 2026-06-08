@@ -6,6 +6,19 @@ namespace IIoT.Edge.Module.ContractTests;
 public sealed class PluginCatalogLifecycleContractTests
 {
     [Fact]
+    public void HostRuntimeVersion_ShouldBeParseableAndDerivedFromHostAssemblyVersion()
+    {
+        var assemblyVersion = typeof(ModulePluginHostRuntime).Assembly.GetName().Version;
+
+        Assert.True(ModulePluginHostRuntime.TryParseVersion(ModulePluginHostRuntime.HostVersion, out var hostVersion));
+        Assert.NotNull(assemblyVersion);
+        Assert.Equal(assemblyVersion!.Major, hostVersion.Major);
+        Assert.Equal(assemblyVersion.Minor, hostVersion.Minor);
+        Assert.Equal(Math.Max(assemblyVersion.Build, 0), hostVersion.Build);
+        Assert.Equal("1.0.0", ModulePluginHostRuntime.HostApiVersion);
+    }
+
+    [Fact]
     public void DiscoverModules_WhenManifestMissesHostApiVersion_ShouldReportManifestInvalid()
     {
         var pluginRoot = CreatePluginRoot("Homogenization");

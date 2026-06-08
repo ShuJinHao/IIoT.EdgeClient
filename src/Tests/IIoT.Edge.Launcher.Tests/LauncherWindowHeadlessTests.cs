@@ -48,6 +48,31 @@ public sealed class LauncherWindowHeadlessTests
     }
 
     [AvaloniaFact]
+    public async Task MainWindow_WhenAuthenticated_ShouldExposeClientReleasePanel()
+    {
+        var viewModel = CreateViewModel();
+        await viewModel.LoginAsync("operator", "secret");
+        var window = CreateMainWindow(viewModel);
+
+        try
+        {
+            window.Show();
+
+            var releasePanel = window.FindControl<Control>("ClientReleasePanelRoot");
+            var releaseProgressBar = window.FindControl<ProgressBar>("ClientReleaseProgressBar");
+
+            Assert.NotNull(releasePanel);
+            Assert.NotNull(releaseProgressBar);
+            Assert.False(releasePanel!.IsVisible);
+            Assert.False(releaseProgressBar!.IsVisible);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
     public void ChangePasswordWindow_ShouldLoadDialog()
     {
         var window = new ChangePasswordWindow(CreateViewModel(), "operator")

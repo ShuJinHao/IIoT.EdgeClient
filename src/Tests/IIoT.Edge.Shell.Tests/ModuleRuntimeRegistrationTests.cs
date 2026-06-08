@@ -596,6 +596,8 @@ public sealed class ModuleRuntimeRegistrationTests
             ["CloudApi:Paths:CapacitySummary"] = "/api/v1/edge/capacity/summary",
             ["CloudApi:Paths:CapacitySummaryRange"] = "/api/v1/edge/capacity/summary/range",
             ["CloudApi:Paths:RecipeByDeviceTemplate"] = recipeByDeviceTemplate ?? "/api/v1/edge/recipes/device/{deviceId}",
+            ["CloudApi:Paths:ClientReleaseCatalogTemplate"] = "/api/v1/edge/client-releases/device/{deviceId}/catalog",
+            ["CloudApi:Paths:ClientVersionReport"] = "/api/v1/edge/client-releases/version-reports",
             ["Shell:Environment"] = environmentName,
             ["DevelopmentSamples:Enabled"] = developmentSamplesEnabled.ToString(),
             ["DevelopmentSamples:SampleBarcode"] = "ST-DEV-0001",

@@ -83,6 +83,22 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void ManageProfilePluginsButton_Click(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is LauncherProfileDefinition profile)
+        {
+            await _viewModel.CheckClientReleasesAsync(profile);
+        }
+    }
+
+    private async void InstallPluginButton_Click(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is LauncherClientPluginItem plugin)
+        {
+            await _viewModel.InstallOrUpdateClientPluginAsync(plugin);
+        }
+    }
+
     private async void CheckUpdatesButton_Click(object? sender, RoutedEventArgs e)
     {
         await _viewModel.CheckForUpdatesAsync();

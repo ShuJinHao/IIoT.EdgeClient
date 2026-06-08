@@ -180,6 +180,10 @@
     <sys:String x:Key="Navigation_Param_CloudApi_CapacitySummaryRangePath_Description">API path used to query capacity summaries for a time range.</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_RecipeByDeviceTemplatePath_DisplayName">Device Recipe Path Template</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_RecipeByDeviceTemplatePath_Description">API path template for querying device recipes. It must contain {deviceId}.</sys:String>
+    <sys:String x:Key="Navigation_Param_CloudApi_ClientReleaseCatalogTemplatePath_DisplayName">Client Release Catalog Path Template</sys:String>
+    <sys:String x:Key="Navigation_Param_CloudApi_ClientReleaseCatalogTemplatePath_Description">API path template used by Launcher to fetch host and plugin catalog for a device. It must contain {deviceId}.</sys:String>
+    <sys:String x:Key="Navigation_Param_CloudApi_ClientVersionReportPath_DisplayName">Client Version Report Path</sys:String>
+    <sys:String x:Key="Navigation_Param_CloudApi_ClientVersionReportPath_Description">API path used by Launcher to report host version, HostApiVersion, installed plugins, and enabled plugins.</sys:String>
     <sys:String x:Key="Navigation_Column_ParamName">Parameter Name</sys:String>
     <sys:String x:Key="Navigation_Column_ParamValue">Parameter Value</sys:String>
     <sys:String x:Key="Navigation_Column_ParamType">Type</sys:String>

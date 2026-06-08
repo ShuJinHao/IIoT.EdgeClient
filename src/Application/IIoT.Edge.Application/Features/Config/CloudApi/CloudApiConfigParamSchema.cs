@@ -27,6 +27,8 @@ public static class CloudApiConfigParamSchema
     public const string CapacitySummaryPath = "CloudApi:Paths:CapacitySummary";
     public const string CapacitySummaryRangePath = "CloudApi:Paths:CapacitySummaryRange";
     public const string RecipeByDeviceTemplatePath = "CloudApi:Paths:RecipeByDeviceTemplate";
+    public const string ClientReleaseCatalogTemplatePath = "CloudApi:Paths:ClientReleaseCatalogTemplate";
+    public const string ClientVersionReportPath = "CloudApi:Paths:ClientVersionReport";
 
     public static IReadOnlyList<CloudApiConfigParamDescriptor> Descriptors { get; } = Enum
         .GetValues<CloudApiConfigParam>()
@@ -61,6 +63,8 @@ public static class CloudApiConfigParamSchema
             CapacitySummaryPath => snapshot.CapacitySummaryPath,
             CapacitySummaryRangePath => snapshot.CapacitySummaryRangePath,
             RecipeByDeviceTemplatePath => snapshot.RecipeByDeviceTemplatePath,
+            ClientReleaseCatalogTemplatePath => snapshot.ClientReleaseCatalogTemplatePath,
+            ClientVersionReportPath => snapshot.ClientVersionReportPath,
             _ => string.Empty
         };
 
@@ -100,6 +104,8 @@ public static class CloudApiConfigParamSchema
             CloudApiConfigParam.CapacitySummaryPath => CapacitySummaryPath,
             CloudApiConfigParam.CapacitySummaryRangePath => CapacitySummaryRangePath,
             CloudApiConfigParam.RecipeByDeviceTemplatePath => RecipeByDeviceTemplatePath,
+            CloudApiConfigParam.ClientReleaseCatalogTemplatePath => ClientReleaseCatalogTemplatePath,
+            CloudApiConfigParam.ClientVersionReportPath => ClientVersionReportPath,
             _ => throw new ArgumentOutOfRangeException(nameof(param), param, null)
         };
 }
@@ -202,7 +208,21 @@ public enum CloudApiConfigParam
         DisplayNameResourceKey = "Navigation_Param_CloudApi_RecipeByDeviceTemplatePath_DisplayName",
         DisplayNameFallback = "RecipeByDeviceTemplatePath",
         DescriptionResourceKey = "Navigation_Param_CloudApi_RecipeByDeviceTemplatePath_Description")]
-    RecipeByDeviceTemplatePath
+    RecipeByDeviceTemplatePath,
+
+    [ModuleParam(
+        ParamValueKind.String,
+        DisplayNameResourceKey = "Navigation_Param_CloudApi_ClientReleaseCatalogTemplatePath_DisplayName",
+        DisplayNameFallback = "ClientReleaseCatalogTemplatePath",
+        DescriptionResourceKey = "Navigation_Param_CloudApi_ClientReleaseCatalogTemplatePath_Description")]
+    ClientReleaseCatalogTemplatePath,
+
+    [ModuleParam(
+        ParamValueKind.String,
+        DisplayNameResourceKey = "Navigation_Param_CloudApi_ClientVersionReportPath_DisplayName",
+        DisplayNameFallback = "ClientVersionReportPath",
+        DescriptionResourceKey = "Navigation_Param_CloudApi_ClientVersionReportPath_Description")]
+    ClientVersionReportPath
 }
 
 public sealed record CloudApiConfigParamDescriptor(

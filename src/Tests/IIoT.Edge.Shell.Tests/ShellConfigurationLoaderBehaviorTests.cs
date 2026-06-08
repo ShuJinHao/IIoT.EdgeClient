@@ -297,6 +297,73 @@ public sealed class ShellConfigurationLoaderBehaviorTests
         }
     }
 
+    [Fact]
+    public void Load_WhenExternalProfilePluginDefaultExists_ShouldApplyItAfterPublishedPluginDefaults()
+    {
+        var tempDirectory = CreateTempDirectory();
+        var dataRootOverride = Path.Combine(tempDirectory, "data-root");
+        try
+        {
+            WriteText(
+                Path.Combine(tempDirectory, "appsettings.json"),
+                """
+                {
+                  "Shell": {
+                    "MachineProfile": "HomogenizationLine"
+                  }
+                }
+                """);
+            WriteText(
+                Path.Combine(tempDirectory, "Modules", "Homogenization", "Config", "homogenization.module.json"),
+                """
+                {
+                  "Modules": {
+                    "Homogenization": {
+                      "Module": {
+                        "Runtime": {
+                          "EventLoopIntervalMs": 50
+                        }
+                      }
+                    }
+                  }
+                }
+                """);
+
+            EdgeEnvironmentTestScope.WithDataRootOverride(dataRootOverride, () =>
+            {
+                WriteText(
+                    Path.Combine(
+                        EdgeClientProgramDataPaths.ResolveProfilePluginCurrentDirectory(
+                            "HomogenizationLine",
+                            "Homogenization",
+                            tempDirectory),
+                        "Config",
+                        "homogenization.module.json"),
+                    """
+                    {
+                      "Modules": {
+                        "Homogenization": {
+                          "Module": {
+                            "Runtime": {
+                              "EventLoopIntervalMs": 75
+                            }
+                          }
+                        }
+                      }
+                    }
+                    """);
+
+                var result = new ShellConfigurationLoader().Load(tempDirectory);
+
+                Assert.Equal("75", result.Configuration["Modules:Homogenization:Module:Runtime:EventLoopIntervalMs"]);
+            });
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
     private static string CreateTempDirectory()
     {
         var path = Path.Combine(Path.GetTempPath(), "edge-shell-config-tests", Guid.NewGuid().ToString("N"));

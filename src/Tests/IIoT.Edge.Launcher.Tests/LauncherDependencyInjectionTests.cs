@@ -33,6 +33,18 @@ public sealed class LauncherDependencyInjectionTests
                 provider.GetRequiredService<ILauncherUpdateConfigInitializer>());
             Assert.IsType<LauncherAccountCatalog>(provider.GetRequiredService<ILauncherAccountCatalog>());
             Assert.IsType<LocalLauncherAuthService>(provider.GetRequiredService<ILocalLauncherAuthService>());
+            Assert.IsType<LauncherCloudApiConfigurationResolver>(
+                provider.GetRequiredService<ILauncherCloudApiConfigurationResolver>());
+            Assert.IsType<LauncherEdgeReleaseCloudClient>(
+                provider.GetRequiredService<ILauncherEdgeReleaseCloudClient>());
+            Assert.IsType<LauncherInstalledPluginCatalog>(
+                provider.GetRequiredService<ILauncherInstalledPluginCatalog>());
+            Assert.IsType<LauncherProfileModuleConfiguration>(
+                provider.GetRequiredService<ILauncherProfileModuleConfiguration>());
+            Assert.IsType<LauncherPluginPackageInstaller>(
+                provider.GetRequiredService<ILauncherPluginPackageInstaller>());
+            Assert.IsType<LauncherClientReleaseService>(
+                provider.GetRequiredService<ILauncherClientReleaseService>());
         }
         finally
         {

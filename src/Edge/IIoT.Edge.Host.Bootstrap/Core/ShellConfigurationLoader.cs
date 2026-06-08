@@ -65,7 +65,7 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
         var configuration = new ConfigurationBuilder()
             .SetBasePath(baseDirectory);
 
-        foreach (var pluginConfigPath in FindPluginDefaultConfigurationFiles(baseDirectory))
+        foreach (var pluginConfigPath in FindPluginDefaultConfigurationFiles(baseDirectory, machineProfile))
         {
             configuration.AddJsonFile(pluginConfigPath, optional: true, reloadOnChange: false);
         }
@@ -115,16 +115,28 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
             ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
             ?? "Production";
 
-    private IReadOnlyList<string> FindPluginDefaultConfigurationFiles(string baseDirectory)
+    private IReadOnlyList<string> FindPluginDefaultConfigurationFiles(string baseDirectory, string? machineProfile)
     {
-        var pluginRoot = Path.Combine(baseDirectory, "Modules");
-        if (!Directory.Exists(pluginRoot))
+        var pluginRoots = new List<string>
         {
-            return [];
+            Path.Combine(baseDirectory, "Modules")
+        };
+
+        if (!string.IsNullOrWhiteSpace(machineProfile))
+        {
+            pluginRoots.Add(EdgeClientProgramDataPaths.ResolveProfilePluginRootPath(machineProfile, baseDirectory));
         }
 
-        return Directory.GetFiles(pluginRoot, "*.module.json", SearchOption.AllDirectories)
-            .OrderBy(static path => path, StringComparer.OrdinalIgnoreCase)
+        return pluginRoots
+            .Where(Directory.Exists)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .SelectMany(static (pluginRoot, rootIndex) => Directory
+                .GetFiles(pluginRoot, "*.module.json", SearchOption.AllDirectories)
+                .OrderBy(static path => path, StringComparer.OrdinalIgnoreCase)
+                .Select(path => new { Path = path, RootIndex = rootIndex }))
+            .OrderBy(static item => item.RootIndex)
+            .ThenBy(static item => item.Path, StringComparer.OrdinalIgnoreCase)
+            .Select(static item => item.Path)
             .ToArray();
     }
 

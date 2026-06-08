@@ -22,4 +22,6 @@ public class CloudApiPaths
     public string CapacitySummary { get; set; } = string.Empty;
     public string CapacitySummaryRange { get; set; } = string.Empty;
     public string RecipeByDeviceTemplate { get; set; } = string.Empty;
+    public string ClientReleaseCatalogTemplate { get; set; } = string.Empty;
+    public string ClientVersionReport { get; set; } = string.Empty;
 }

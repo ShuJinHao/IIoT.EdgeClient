@@ -259,7 +259,7 @@
                 <Grid
                     x:Name="SelectionPageRoot"
                     IsVisible="False"
-                    RowDefinitions="Auto,Auto,*,Auto">
+                    RowDefinitions="Auto,Auto,Auto,*,Auto">
                     <edge:EdgeCard
                         PaddingMode="Normal"
                         Surface="Card">
@@ -323,8 +323,142 @@
                         </Grid>
                     </edge:EdgeCard>
 
-                    <edge:EdgeScrollHost
+                    <edge:EdgeCard
+                        x:Name="ClientReleasePanelRoot"
                         Grid.Row="2"
+                        Margin="0,0,0,14"
+                        IsVisible="{Binding IsClientReleasePanelVisible}"
+                        PaddingMode="Compact"
+                        Surface="Card">
+                        <Grid RowDefinitions="Auto,Auto,Auto">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                <StackPanel Spacing="4">
+                                    <TextBlock
+                                        Classes="launcher-selection-title"
+                                        Text="{DynamicResource Launcher_ClientRelease_Title}" />
+                                    <TextBlock
+                                        Classes="launcher-panel-description"
+                                        Text="{DynamicResource Launcher_ClientRelease_Description}"
+                                        TextWrapping="Wrap" />
+                                </StackPanel>
+                                <StackPanel
+                                    Grid.Column="1"
+                                    HorizontalAlignment="Right"
+                                    MinWidth="300"
+                                    Spacing="6">
+                                    <TextBlock
+                                        Classes="launcher-status-message"
+                                        HorizontalAlignment="Right"
+                                        Text="{Binding ClientReleaseStatusMessage}"
+                                        TextWrapping="Wrap" />
+                                    <TextBlock
+                                        Classes="launcher-inline-status"
+                                        HorizontalAlignment="Right"
+                                        MaxWidth="360"
+                                        Text="{Binding ClientReleaseDetailText}"
+                                        TextWrapping="Wrap" />
+                                    <ProgressBar
+                                        x:Name="ClientReleaseProgressBar"
+                                        Height="4"
+                                        IsVisible="{Binding IsClientReleaseProgressVisible}"
+                                        Maximum="100"
+                                        Minimum="0"
+                                        Value="{Binding ClientReleaseProgress}" />
+                                </StackPanel>
+                            </Grid>
+
+                            <edge:EdgeScrollHost
+                                Grid.Row="1"
+                                Margin="0,12,0,0"
+                                HorizontalScrollBarVisibility="Disabled"
+                                MaxHeight="220"
+                                VerticalScrollBarVisibility="Auto">
+                                <ItemsControl ItemsSource="{Binding ClientPlugins}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <edge:EdgeCard
+                                                Classes="launcher-process-card"
+                                                Width="330"
+                                                Margin="0,0,12,12">
+                                                <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
+                                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                                        <StackPanel Spacing="2">
+                                                            <TextBlock
+                                                                Classes="launcher-process-title"
+                                                                Text="{Binding DisplayName}" />
+                                                            <TextBlock
+                                                                Classes="launcher-process-path-value"
+                                                                Text="{Binding ModuleId}" />
+                                                        </StackPanel>
+                                                        <edge:EdgeStatusChip
+                                                            Grid.Column="1"
+                                                            Status="{Binding StatusKind}"
+                                                            Text="{Binding StatusText}" />
+                                                    </Grid>
+
+                                                    <Grid
+                                                        Grid.Row="1"
+                                                        ColumnDefinitions="Auto,*,Auto,*,Auto,*"
+                                                        ColumnSpacing="8">
+                                                        <TextBlock
+                                                            Grid.Column="0"
+                                                            Classes="launcher-process-path-label"
+                                                            Text="{DynamicResource Launcher_ClientRelease_CurrentVersionLabel}" />
+                                                        <TextBlock
+                                                            Grid.Column="1"
+                                                            Classes="launcher-process-path-value"
+                                                            Text="{Binding CurrentVersion}" />
+                                                        <TextBlock
+                                                            Grid.Column="2"
+                                                            Classes="launcher-process-path-label"
+                                                            Text="{DynamicResource Launcher_ClientRelease_LatestVersionLabel}" />
+                                                        <TextBlock
+                                                            Grid.Column="3"
+                                                            Classes="launcher-process-path-value"
+                                                            Text="{Binding LatestVersion}" />
+                                                        <TextBlock
+                                                            Grid.Column="4"
+                                                            Classes="launcher-process-path-label"
+                                                            Text="{DynamicResource Launcher_ClientRelease_SizeLabel}" />
+                                                        <TextBlock
+                                                            Grid.Column="5"
+                                                            Classes="launcher-process-path-value"
+                                                            Text="{Binding PackageSizeText}" />
+                                                    </Grid>
+
+                                                    <Grid
+                                                        Grid.Row="2"
+                                                        ColumnDefinitions="*,Auto"
+                                                        ColumnSpacing="10">
+                                                        <TextBlock
+                                                            Classes="launcher-inline-status"
+                                                            Text="{Binding DetailText}"
+                                                            TextWrapping="Wrap" />
+                                                        <edge:EdgeActionButton
+                                                            Grid.Column="1"
+                                                            Click="InstallPluginButton_Click"
+                                                            Content="{Binding ActionText}"
+                                                            Icon="{StaticResource Edge.Icon.Sync}"
+                                                            IsEnabled="{Binding CanInstallOrUpdate}"
+                                                            Kind="Secondary"
+                                                            Size="Compact" />
+                                                    </Grid>
+                                                </Grid>
+                                            </edge:EdgeCard>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </edge:EdgeScrollHost>
+                        </Grid>
+                    </edge:EdgeCard>
+
+                    <edge:EdgeScrollHost
+                        Grid.Row="3"
                         Margin="0,0,0,14"
                         HorizontalScrollBarVisibility="Disabled"
                         VerticalScrollBarVisibility="Auto">
@@ -403,15 +537,28 @@
                                                 </Border>
                                             </StackPanel>
 
-                                            <edge:EdgeActionButton
+                                            <Grid
                                                 Grid.Row="2"
-                                                Click="LaunchProfileButton_Click"
-                                                HorizontalContentAlignment="Center"
-                                                HorizontalAlignment="Stretch"
-                                                Kind="Primary"
-                                                MinHeight="44"
-                                                VerticalContentAlignment="Center"
-                                                Content="{DynamicResource Launcher_Button_LaunchProfile}" />
+                                                ColumnDefinitions="*,8,*">
+                                                <edge:EdgeActionButton
+                                                    Click="ManageProfilePluginsButton_Click"
+                                                    HorizontalContentAlignment="Center"
+                                                    HorizontalAlignment="Stretch"
+                                                    IsEnabled="{Binding $parent[Window].DataContext.CanCheckClientReleases}"
+                                                    Kind="Secondary"
+                                                    MinHeight="44"
+                                                    VerticalContentAlignment="Center"
+                                                    Content="{DynamicResource Launcher_Button_CheckPluginCatalog}" />
+                                                <edge:EdgeActionButton
+                                                    Grid.Column="2"
+                                                    Click="LaunchProfileButton_Click"
+                                                    HorizontalContentAlignment="Center"
+                                                    HorizontalAlignment="Stretch"
+                                                    Kind="Primary"
+                                                    MinHeight="44"
+                                                    VerticalContentAlignment="Center"
+                                                    Content="{DynamicResource Launcher_Button_LaunchProfile}" />
+                                            </Grid>
                                         </Grid>
                                     </edge:EdgeCard>
                                 </DataTemplate>
@@ -420,7 +567,7 @@
                     </edge:EdgeScrollHost>
 
                     <edge:EdgeCard
-                        Grid.Row="3"
+                        Grid.Row="4"
                         PaddingMode="Compact"
                         Surface="Card">
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">

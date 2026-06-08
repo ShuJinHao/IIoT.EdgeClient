@@ -130,6 +130,8 @@ namespace IIoT.Edge.NonUiRegressionTests;
                 "/config/capacity-hourly",
                 "/config/capacity-summary",
                 "/config/capacity-range",
-                "/config/recipes/{deviceId}");
+                "/config/recipes/{deviceId}",
+                "/config/client-releases/device/{deviceId}/catalog",
+                "/config/client-version-reports");
     }
 }

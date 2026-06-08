@@ -1,20 +1,14 @@
 namespace IIoT.Edge.Host.Bootstrap.Modules;
 
+using IIoT.Edge.SharedKernel.Runtime;
+
 public static class ModulePluginHostRuntime
 {
-    public const string HostApiVersion = "1.0.0";
-    public const string HostVersion = "1.0.0";
+    public const string HostApiVersion = EdgeClientHostRuntime.HostApiVersion;
+
+    public static string HostVersion { get; } = EdgeClientHostRuntime.ResolveHostVersion(
+        typeof(ModulePluginHostRuntime).Assembly);
 
     public static bool TryParseVersion(string? value, out Version version)
-    {
-        if (!string.IsNullOrWhiteSpace(value)
-            && Version.TryParse(value, out var parsedVersion))
-        {
-            version = parsedVersion;
-            return true;
-        }
-
-        version = new Version(0, 0, 0);
-        return false;
-    }
+        => EdgeClientHostRuntime.TryParseVersion(value, out version);
 }

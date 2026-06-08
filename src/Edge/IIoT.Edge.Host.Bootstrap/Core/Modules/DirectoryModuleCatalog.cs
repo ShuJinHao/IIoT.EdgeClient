@@ -56,15 +56,15 @@ public sealed class DirectoryModuleCatalog : IModuleCatalog
         var issues = new List<ModuleCatalogIssue>();
         foreach (var pluginDirectory in Directory.EnumerateDirectories(pluginRootPath))
         {
-            var manifestPath = Path.Combine(pluginDirectory, "plugin.json");
-            if (!File.Exists(manifestPath))
+            var manifestPath = ResolvePluginManifestPath(pluginDirectory);
+            if (manifestPath is null)
             {
                 continue;
             }
 
             try
             {
-                descriptors.Add(LoadDescriptor(pluginDirectory, manifestPath));
+                descriptors.Add(LoadDescriptor(Path.GetDirectoryName(manifestPath)!, manifestPath));
             }
             catch (Exception ex)
             {
@@ -89,6 +89,23 @@ public sealed class DirectoryModuleCatalog : IModuleCatalog
             .ToArray();
 
         return new ModuleCatalogDiscoveryResult(validDescriptors, issues);
+    }
+
+    private static string? ResolvePluginManifestPath(string pluginDirectory)
+    {
+        var directManifestPath = Path.Combine(pluginDirectory, "plugin.json");
+        if (File.Exists(directManifestPath))
+        {
+            return directManifestPath;
+        }
+
+        var currentManifestPath = Path.Combine(
+            pluginDirectory,
+            "current",
+            "plugin.json");
+        return File.Exists(currentManifestPath)
+            ? currentManifestPath
+            : null;
     }
 
     public ModuleCatalogActivationResult CreateEnabledModules(

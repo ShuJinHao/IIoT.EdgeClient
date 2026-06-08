@@ -14,8 +14,10 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
     private readonly ILocalLauncherAuthService _authService;
     private readonly IShellLaunchService _launchService;
     private readonly ILauncherUpdateService _updateService;
+    private readonly ILauncherClientReleaseService _clientReleaseService;
     private readonly IAppLanguageService? _languageService;
     private readonly List<LauncherProfileDefinition> _allProfiles = [];
+    private LauncherProfileDefinition? _activeClientReleaseProfile;
 
     private const string AuthErrorUserNameRequired = "\u8bf7\u8f93\u5165\u8d26\u53f7\u3002";
     private const string AuthErrorPasswordRequired = "\u8bf7\u8f93\u5165\u5bc6\u7801\u3002";
@@ -41,25 +43,35 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
     private object[] _updateStatusArgs = [];
     private string _updateStatusMessage = string.Empty;
     private string _updateDetailText = string.Empty;
+    private string _clientReleaseStatusKey = "Launcher_ClientRelease_StatusInitial";
+    private object[] _clientReleaseStatusArgs = [];
+    private string _clientReleaseStatusMessage = string.Empty;
+    private string _clientReleaseDetailText = string.Empty;
     private int _updateProgress;
+    private int _clientReleaseProgress;
     private bool _isAuthenticated;
     private bool _isBusy;
     private bool _isUpdateBusy;
+    private bool _isClientReleaseBusy;
     private bool _hasUpdateAvailable;
     private bool _isUpdateProgressVisible;
+    private bool _isClientReleaseProgressVisible;
+    private bool _isClientReleasePanelVisible;
 
     public LauncherMainViewModel(
         ILauncherProfileCatalog profileCatalog,
         ILocalLauncherAuthService authService,
         IShellLaunchService launchService,
         ILauncherUpdateService? updateService = null,
-        IAppLanguageService? languageService = null)
+        IAppLanguageService? languageService = null,
+        ILauncherClientReleaseService? clientReleaseService = null)
     {
         _profileCatalog = profileCatalog ?? throw new ArgumentNullException(nameof(profileCatalog));
         _authService = authService ?? throw new ArgumentNullException(nameof(authService));
         _launchService = launchService ?? throw new ArgumentNullException(nameof(launchService));
         _updateService = updateService ?? NullLauncherUpdateService.Instance;
         _languageService = languageService;
+        _clientReleaseService = clientReleaseService ?? NullLauncherClientReleaseService.Instance;
         if (_languageService is not null)
         {
             _languageService.LanguageChanged += OnLanguageChanged;
@@ -70,6 +82,8 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
     }
 
     public ObservableCollection<LauncherProfileDefinition> Profiles { get; } = [];
+
+    public ObservableCollection<LauncherClientPluginItem> ClientPlugins { get; } = [];
 
     public string ErrorMessage
     {
@@ -121,10 +135,28 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         private set => SetProperty(ref _updateDetailText, value);
     }
 
+    public string ClientReleaseStatusMessage
+    {
+        get => _clientReleaseStatusMessage;
+        private set => SetProperty(ref _clientReleaseStatusMessage, value);
+    }
+
+    public string ClientReleaseDetailText
+    {
+        get => _clientReleaseDetailText;
+        private set => SetProperty(ref _clientReleaseDetailText, value);
+    }
+
     public int UpdateProgress
     {
         get => _updateProgress;
         private set => SetProperty(ref _updateProgress, Math.Clamp(value, 0, 100));
+    }
+
+    public int ClientReleaseProgress
+    {
+        get => _clientReleaseProgress;
+        private set => SetProperty(ref _clientReleaseProgress, Math.Clamp(value, 0, 100));
     }
 
     public bool IsUpdateBusy
@@ -140,15 +172,41 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         }
     }
 
+    public bool IsClientReleaseBusy
+    {
+        get => _isClientReleaseBusy;
+        private set
+        {
+            if (SetProperty(ref _isClientReleaseBusy, value))
+            {
+                OnPropertyChanged(nameof(CanCheckClientReleases));
+            }
+        }
+    }
+
     public bool IsUpdateProgressVisible
     {
         get => _isUpdateProgressVisible;
         private set => SetProperty(ref _isUpdateProgressVisible, value);
     }
 
+    public bool IsClientReleaseProgressVisible
+    {
+        get => _isClientReleaseProgressVisible;
+        private set => SetProperty(ref _isClientReleaseProgressVisible, value);
+    }
+
+    public bool IsClientReleasePanelVisible
+    {
+        get => _isClientReleasePanelVisible;
+        private set => SetProperty(ref _isClientReleasePanelVisible, value);
+    }
+
     public bool CanCheckUpdates => !IsUpdateBusy;
 
     public bool CanApplyUpdate => _hasUpdateAvailable && !IsUpdateBusy;
+
+    public bool CanCheckClientReleases => !IsClientReleaseBusy;
 
     public string PlatformMetaText => Text("Launcher_Meta_Platform");
 
@@ -200,6 +258,7 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
             ProfileSearchText = string.Empty;
             ApplyProfileFilter();
             SetStatus("Launcher_Status_SelectProfile");
+            _ = ReportProfilesSilentlyAsync(_allProfiles.ToArray());
         }
         catch (Exception ex)
         {
@@ -258,6 +317,7 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
                 "Launcher_Status_LaunchSucceededFormat",
                 profile.DisplayName,
                 profile.MachineProfile);
+            _ = ReportProfilesSilentlyAsync([profile]);
         }
         catch (Exception ex)
         {
@@ -344,6 +404,92 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         }
     }
 
+    public async Task CheckClientReleasesAsync(LauncherProfileDefinition profile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+
+        _activeClientReleaseProfile = profile;
+        IsClientReleasePanelVisible = true;
+        IsClientReleaseProgressVisible = false;
+        ClientReleaseProgress = 0;
+        ClientReleaseDetailText = string.Empty;
+        SetClientReleaseStatus("Launcher_ClientRelease_StatusChecking", profile.DisplayName);
+        IsClientReleaseBusy = true;
+
+        try
+        {
+            var result = await _clientReleaseService.CheckAsync(profile).ConfigureAwait(true);
+            ApplyClientReleaseCheckResult(result);
+        }
+        catch (OperationCanceledException)
+        {
+            SetClientReleaseStatus("Launcher_ClientRelease_StatusCanceled");
+        }
+        finally
+        {
+            IsClientReleaseBusy = false;
+        }
+    }
+
+    public async Task InstallOrUpdateClientPluginAsync(LauncherClientPluginItem plugin)
+    {
+        ArgumentNullException.ThrowIfNull(plugin);
+
+        if (_activeClientReleaseProfile is null)
+        {
+            SetClientReleaseStatus("Launcher_ClientRelease_StatusNoProfile");
+            return;
+        }
+
+        if (_launchService.HasRunningShellProcess)
+        {
+            IsClientReleaseProgressVisible = false;
+            ClientReleaseProgress = 0;
+            SetClientReleaseStatus("Launcher_ClientRelease_StatusShellRunning");
+            ClientReleaseDetailText = Text("Launcher_ClientRelease_ShellRunningDetail");
+            return;
+        }
+
+        if (!plugin.CanInstallOrUpdate)
+        {
+            return;
+        }
+
+        IsClientReleaseProgressVisible = true;
+        ClientReleaseProgress = 0;
+        ClientReleaseDetailText = string.Empty;
+        SetClientReleaseStatus("Launcher_ClientRelease_StatusInstalling", plugin.DisplayName);
+        IsClientReleaseBusy = true;
+
+        try
+        {
+            var progress = new Progress<int>(value => ClientReleaseProgress = value);
+            var result = await _clientReleaseService
+                .InstallOrUpdatePluginAsync(_activeClientReleaseProfile, plugin.ModuleId, progress)
+                .ConfigureAwait(true);
+            if (!result.Success)
+            {
+                SetClientReleaseStatus("Launcher_ClientRelease_StatusFailed");
+                ClientReleaseDetailText = CompactUpdateDetail(result.ErrorMessage);
+                return;
+            }
+
+            SetClientReleaseStatus(
+                "Launcher_ClientRelease_StatusInstalled",
+                string.Join(", ", result.InstalledModuleIds));
+            await CheckClientReleasesAsync(_activeClientReleaseProfile).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            SetClientReleaseStatus("Launcher_ClientRelease_StatusCanceled");
+        }
+        finally
+        {
+            IsClientReleaseBusy = false;
+            IsClientReleaseProgressVisible = false;
+        }
+    }
+
     public string GetText(string key)
         => Text(key);
 
@@ -392,7 +538,14 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         ProfileSearchText = string.Empty;
         _allProfiles.Clear();
         Profiles.Clear();
+        ClientPlugins.Clear();
+        _activeClientReleaseProfile = null;
+        IsClientReleasePanelVisible = false;
+        ClientReleaseDetailText = string.Empty;
+        ClientReleaseProgress = 0;
+        IsClientReleaseProgressVisible = false;
         SetProfileSummary("Launcher_ProfileSummary_Zero");
+        SetClientReleaseStatus("Launcher_ClientRelease_StatusInitial");
     }
 
     public void Dispose()
@@ -433,6 +586,7 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
     private void OnLanguageChanged(object? sender, EventArgs e)
     {
         RefreshLocalizedState();
+        RefreshClientPluginTexts();
         OnPropertyChanged(nameof(PlatformMetaText));
         OnPropertyChanged(nameof(MaintainerText));
         OnPropertyChanged(nameof(ArchitectureText));
@@ -445,6 +599,7 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         WelcomeText = Format(_welcomeKey, _welcomeArgs);
         ProfileSummaryText = Format(_profileSummaryKey, _profileSummaryArgs);
         UpdateStatusMessage = Format(_updateStatusKey, _updateStatusArgs);
+        ClientReleaseStatusMessage = Format(_clientReleaseStatusKey, _clientReleaseStatusArgs);
     }
 
     private void SetStatus(string key, params object[] args)
@@ -473,6 +628,13 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         _updateStatusKey = key;
         _updateStatusArgs = args;
         UpdateStatusMessage = Format(key, args);
+    }
+
+    private void SetClientReleaseStatus(string key, params object[] args)
+    {
+        _clientReleaseStatusKey = key;
+        _clientReleaseStatusArgs = args;
+        ClientReleaseStatusMessage = Format(key, args);
     }
 
     private void SetHasUpdateAvailable(bool value)
@@ -515,6 +677,120 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
                 SetUpdateStatus("Launcher_Update_StatusInitial");
                 break;
         }
+    }
+
+    private void ApplyClientReleaseCheckResult(LauncherClientReleaseCheckResult result)
+    {
+        ClientPlugins.Clear();
+        foreach (var plan in result.Plugins)
+        {
+            ClientPlugins.Add(new LauncherClientPluginItem(
+                plan.Release.ModuleId,
+                string.IsNullOrWhiteSpace(plan.Release.DisplayName) ? plan.Release.ModuleId : plan.Release.DisplayName,
+                plan.InstalledPlugin?.Version ?? Text("Launcher_ClientRelease_Plugin_NotInstalled"),
+                plan.Release.Version,
+                FormatPackageSize(plan.Release.PackageSize),
+                plan.CompatibilityIssue ?? plan.Release.ReleaseNotes ?? string.Empty,
+                plan.CanInstallOrUpdate,
+                ResolvePluginStateKind(plan.State),
+                ResolvePluginStateText(plan.State),
+                ResolvePluginActionText(plan.State),
+                plan.State));
+        }
+
+        ClientReleaseDetailText = CompactUpdateDetail(result.ErrorMessage);
+        switch (result.State)
+        {
+            case LauncherClientReleaseCheckState.Succeeded:
+                SetClientReleaseStatus(
+                    "Launcher_ClientRelease_StatusReady",
+                    result.HostVersion,
+                    result.LatestHostVersion ?? result.HostVersion,
+                    result.Plugins.Count);
+                break;
+            case LauncherClientReleaseCheckState.NotConfigured:
+                SetClientReleaseStatus("Launcher_ClientRelease_StatusNotConfigured");
+                break;
+            case LauncherClientReleaseCheckState.BootstrapFailed:
+                SetClientReleaseStatus("Launcher_ClientRelease_StatusBootstrapFailed");
+                break;
+            case LauncherClientReleaseCheckState.CatalogUnavailable:
+                SetClientReleaseStatus("Launcher_ClientRelease_StatusCatalogFailed");
+                break;
+            default:
+                SetClientReleaseStatus("Launcher_ClientRelease_StatusFailed");
+                break;
+        }
+    }
+
+    private async Task ReportProfilesSilentlyAsync(IReadOnlyList<LauncherProfileDefinition> profiles)
+    {
+        foreach (var profile in profiles)
+        {
+            try
+            {
+                _ = await _clientReleaseService.ReportCurrentVersionsAsync(profile).ConfigureAwait(false);
+            }
+            catch
+            {
+                // 版本上报是非阻断链路，失败不能影响 Launcher 登录或 Shell 启动。
+            }
+        }
+    }
+
+    private void RefreshClientPluginTexts()
+    {
+        foreach (var plugin in ClientPlugins)
+        {
+            plugin.StatusText = ResolvePluginStateText(plugin.State);
+            plugin.ActionText = ResolvePluginActionText(plugin.State);
+            if (plugin.State == LauncherPluginUpdateState.NotInstalled)
+            {
+                plugin.CurrentVersion = Text("Launcher_ClientRelease_Plugin_NotInstalled");
+            }
+        }
+    }
+
+    private string ResolvePluginStateText(LauncherPluginUpdateState state)
+        => state switch
+        {
+            LauncherPluginUpdateState.NotInstalled => Text("Launcher_ClientRelease_Plugin_StatusNotInstalled"),
+            LauncherPluginUpdateState.UpdateAvailable => Text("Launcher_ClientRelease_Plugin_StatusUpdateAvailable"),
+            LauncherPluginUpdateState.Latest => Text("Launcher_ClientRelease_Plugin_StatusLatest"),
+            LauncherPluginUpdateState.InstalledNewer => Text("Launcher_ClientRelease_Plugin_StatusInstalledNewer"),
+            LauncherPluginUpdateState.Incompatible => Text("Launcher_ClientRelease_Plugin_StatusIncompatible"),
+            _ => Text("Launcher_ClientRelease_Plugin_StatusUnknown")
+        };
+
+    private string ResolvePluginActionText(LauncherPluginUpdateState state)
+        => state switch
+        {
+            LauncherPluginUpdateState.NotInstalled => Text("Launcher_ClientRelease_ButtonInstall"),
+            LauncherPluginUpdateState.UpdateAvailable => Text("Launcher_ClientRelease_ButtonUpdate"),
+            _ => Text("Launcher_ClientRelease_ButtonNoAction")
+        };
+
+    private static string ResolvePluginStateKind(LauncherPluginUpdateState state)
+        => state switch
+        {
+            LauncherPluginUpdateState.Latest => "Success",
+            LauncherPluginUpdateState.UpdateAvailable => "Warning",
+            LauncherPluginUpdateState.Incompatible => "Danger",
+            LauncherPluginUpdateState.NotInstalled => "Info",
+            _ => "Default"
+        };
+
+    private static string FormatPackageSize(long bytes)
+    {
+        if (bytes <= 0)
+        {
+            return string.Empty;
+        }
+
+        var mib = bytes / 1024d / 1024d;
+        return mib >= 1
+            ? $"{mib:0.0} MB"
+            : $"{bytes / 1024d:0.0} KB";
     }
 
     private static string CompactUpdateDetail(string? detail)
@@ -572,6 +848,12 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         "Launcher_Update_StatusAvailable" => "{0}",
         "Launcher_Update_StatusPendingRestart" => "{0}",
         "Launcher_Update_ShellRunningDetail" => string.Empty,
+        "Launcher_ClientRelease_StatusChecking" => "{0}",
+        "Launcher_ClientRelease_StatusInstalling" => "{0}",
+        "Launcher_ClientRelease_StatusInstalled" => "{0}",
+        "Launcher_ClientRelease_StatusReady" => "{0} {1} {2}",
+        "Launcher_ClientRelease_ShellRunningDetail" => string.Empty,
+        "Launcher_ClientRelease_Plugin_NotInstalled" => "-",
         _ => key
     };
 
@@ -597,4 +879,99 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
             CancellationToken cancellationToken = default)
             => Task.FromResult(new LauncherUpdateApplyResult(false, "Update source is not configured."));
     }
+}
+
+public sealed class LauncherClientPluginItem : BaseNotifyPropertyChanged
+{
+    private string _currentVersion;
+    private string _statusText;
+    private string _actionText;
+
+    public LauncherClientPluginItem(
+        string moduleId,
+        string displayName,
+        string currentVersion,
+        string latestVersion,
+        string packageSizeText,
+        string detailText,
+        bool canInstallOrUpdate,
+        string statusKind,
+        string statusText,
+        string actionText,
+        LauncherPluginUpdateState state)
+    {
+        ModuleId = moduleId;
+        DisplayName = displayName;
+        _currentVersion = currentVersion;
+        LatestVersion = latestVersion;
+        PackageSizeText = packageSizeText;
+        DetailText = detailText;
+        CanInstallOrUpdate = canInstallOrUpdate;
+        StatusKind = statusKind;
+        _statusText = statusText;
+        _actionText = actionText;
+        State = state;
+    }
+
+    public string ModuleId { get; }
+
+    public string DisplayName { get; }
+
+    public string CurrentVersion
+    {
+        get => _currentVersion;
+        set
+        {
+            if (_currentVersion == value)
+            {
+                return;
+            }
+
+            _currentVersion = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public string LatestVersion { get; }
+
+    public string PackageSizeText { get; }
+
+    public string DetailText { get; }
+
+    public bool CanInstallOrUpdate { get; }
+
+    public string StatusKind { get; }
+
+    public LauncherPluginUpdateState State { get; }
+
+    public string StatusText
+    {
+        get => _statusText;
+        set
+        {
+            if (_statusText == value)
+            {
+                return;
+            }
+
+            _statusText = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public string ActionText
+    {
+        get => _actionText;
+        set
+        {
+            if (_actionText == value)
+            {
+                return;
+            }
+
+            _actionText = value;
+            OnPropertyChanged();
+        }
+    }
+
 }
