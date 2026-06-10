@@ -42,8 +42,12 @@
     <sys:String x:Key="Launcher_UpdateCenter_PluginTitle">Process plugins</sys:String>
     <sys:String x:Key="Launcher_UpdateCenter_MachineLevel">Machine</sys:String>
     <sys:String x:Key="Launcher_UpdateCenter_ProcessLevel">Process</sys:String>
-    <sys:String x:Key="Launcher_UpdateCenter_ButtonRefresh">Check again</sys:String>
-    <sys:String x:Key="Launcher_UpdateCenter_ButtonHostUpdate">Update host</sys:String>
+    <sys:String x:Key="Launcher_UpdateCenter_ButtonRefresh">Check for updates</sys:String>
+    <sys:String x:Key="Launcher_UpdateCenter_ButtonHostUpdate">Update &amp; restart</sys:String>
+    <sys:String x:Key="Launcher_UpdateCenter_ColumnStatus">Status</sys:String>
+    <sys:String x:Key="Launcher_UpdateCenter_ColumnAction">Action</sys:String>
+    <sys:String x:Key="Launcher_UpdateCenter_ColumnName">Name</sys:String>
+    <sys:String x:Key="Launcher_UpdateCenter_HostStatusNotReady">Not configured</sys:String>
     <sys:String x:Key="Launcher_Profile_PluginLabel">Plugin</sys:String>
     <sys:String x:Key="Launcher_Profile_DataLabel">Data</sys:String>
     <sys:String x:Key="Launcher_Profile_PluginMissing">Plugin manifest missing</sys:String>
@@ -133,7 +137,7 @@
     <sys:String x:Key="Launcher_ClientRelease_StatusInitial">Process update state has not been checked.</sys:String>
     <sys:String x:Key="Launcher_ClientRelease_StatusChecking">Checking process update state for {0}...</sys:String>
     <sys:String x:Key="Launcher_ClientRelease_StatusReady">Host {0}, latest host {1}, {2} plugins.</sys:String>
-    <sys:String x:Key="Launcher_ClientRelease_StatusNotConfigured">CloudApi or catalog paths are not configured.</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_StatusNotConfigured">Device not registered. Please contact your administrator.</sys:String>
     <sys:String x:Key="Launcher_ClientRelease_StatusBootstrapFailed">Cloud bootstrap failed, so plugin catalog cannot be read.</sys:String>
     <sys:String x:Key="Launcher_ClientRelease_StatusCatalogFailed">Failed to fetch cloud plugin catalog.</sys:String>
     <sys:String x:Key="Launcher_ClientRelease_StatusInstalling">Installing or updating plugin: {0}</sys:String>

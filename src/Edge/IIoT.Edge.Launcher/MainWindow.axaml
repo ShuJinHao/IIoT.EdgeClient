@@ -261,44 +261,8 @@
                     IsVisible="False"
                     RowDefinitions="Auto,Auto,Auto,*">
                     <edge:EdgeCard
-                        PaddingMode="Normal"
-                        Surface="Card">
-                        <Grid ColumnDefinitions="Auto,*,Auto">
-                            <Border Classes="launcher-selection-icon-frame">
-                                <PathIcon
-                                    Classes="launcher-selection-icon"
-                                    Data="{StaticResource Edge.Icon.Dashboard}" />
-                            </Border>
-                            <StackPanel
-                                Grid.Column="1"
-                                Margin="16,0,0,0"
-                                Spacing="4">
-                                <TextBlock
-                                    Classes="launcher-selection-title"
-                                    Text="{DynamicResource Launcher_Selection_Title}" />
-                                <TextBlock
-                                    Classes="launcher-panel-description"
-                                    Text="{DynamicResource Launcher_Selection_Description}"
-                                    TextWrapping="Wrap" />
-                            </StackPanel>
-                            <Border
-                                Grid.Column="2"
-                                Classes="launcher-chip">
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <PathIcon
-                                        Classes="launcher-chip-icon"
-                                        Data="{StaticResource Edge.Icon.User}" />
-                                    <TextBlock
-                                        Classes="launcher-chip-text"
-                                        Text="{Binding WelcomeText}" />
-                                </StackPanel>
-                            </Border>
-                        </Grid>
-                    </edge:EdgeCard>
-
-                    <edge:EdgeCard
                         Grid.Row="1"
-                        Margin="0,14,0,14"
+                        Margin="0,0,0,14"
                         PaddingMode="Compact"
                         Surface="Card">
                         <Grid ColumnDefinitions="320,16,Auto,*">
@@ -320,6 +284,19 @@
                                         Text="{Binding ProfileSummaryText}" />
                                 </StackPanel>
                             </Border>
+                            <Border
+                                Grid.Column="3"
+                                HorizontalAlignment="Right"
+                                Classes="launcher-chip">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <PathIcon
+                                        Classes="launcher-chip-icon compact"
+                                        Data="{StaticResource Edge.Icon.User}" />
+                                    <TextBlock
+                                        Classes="launcher-chip-text"
+                                        Text="{Binding WelcomeText}" />
+                                </StackPanel>
+                            </Border>
                         </Grid>
                     </edge:EdgeCard>
 
@@ -329,17 +306,11 @@
                         Margin="0,0,0,14"
                         PaddingMode="Compact"
                         Surface="Card">
-                        <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="12">
+                        <Grid RowDefinitions="Auto,*" RowSpacing="14">
                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
-                                <StackPanel Spacing="4">
-                                    <TextBlock
-                                        Classes="launcher-selection-title"
-                                        Text="{DynamicResource Launcher_UpdateCenter_Title}" />
-                                    <TextBlock
-                                        Classes="launcher-panel-description"
-                                        Text="{DynamicResource Launcher_UpdateCenter_Description}"
-                                        TextWrapping="Wrap" />
-                                </StackPanel>
+                                <edge:EdgeSectionHeader
+                                    Title="{DynamicResource Launcher_UpdateCenter_Title}"
+                                    Subtitle="{DynamicResource Launcher_UpdateCenter_Description}" />
                                 <edge:EdgeActionButton
                                     Grid.Column="1"
                                     Click="RefreshUpdateCenterButton_Click"
@@ -350,183 +321,82 @@
                                     Size="Compact" />
                             </Grid>
 
-                            <Grid
-                                Grid.Row="1"
-                                ColumnDefinitions="1.05*,16,1.95*">
-                                <Border Classes="launcher-process-path-row">
-                                    <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
-                                        <Grid ColumnDefinitions="*,Auto">
-                                            <TextBlock
-                                                Classes="launcher-process-title"
-                                                Text="{DynamicResource Launcher_UpdateCenter_HostTitle}" />
-                                            <edge:EdgeStatusChip
-                                                Grid.Column="1"
-                                                Status="Info"
-                                                Text="{DynamicResource Launcher_UpdateCenter_MachineLevel}" />
-                                        </Grid>
-                                        <TextBlock
-                                            Grid.Row="1"
-                                            Classes="launcher-status-message"
-                                            Text="{Binding HostUpdatePanel.StatusMessage}"
-                                            TextWrapping="Wrap" />
-                                        <Grid
-                                            Grid.Row="2"
-                                            ColumnDefinitions="*,Auto"
-                                            ColumnSpacing="10">
-                                            <ProgressBar
-                                                Height="4"
-                                                IsVisible="{Binding HostUpdatePanel.IsProgressVisible}"
-                                                Maximum="100"
-                                                Minimum="0"
-                                                VerticalAlignment="Center"
-                                                Value="{Binding HostUpdatePanel.Progress}" />
-                                            <edge:EdgeActionButton
-                                                Grid.Column="1"
-                                                Click="ApplyHostUpdateButton_Click"
-                                                Content="{DynamicResource Launcher_UpdateCenter_ButtonHostUpdate}"
-                                                Icon="{StaticResource Edge.Icon.Sync}"
-                                                IsEnabled="{Binding HostUpdatePanel.CanApplyUpdate}"
-                                                IsVisible="{Binding HostUpdatePanel.CanApplyUpdate}"
-                                                Kind="Primary"
-                                                Size="Compact" />
-                                        </Grid>
-                                    </Grid>
-                                </Border>
-
-                                <Border
-                                    Grid.Column="2"
-                                    Classes="launcher-process-path-row">
-                                    <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
-                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
-                                            <TextBlock
-                                                VerticalAlignment="Center"
-                                                Classes="launcher-process-title"
-                                                Text="{DynamicResource Launcher_UpdateCenter_PluginTitle}" />
-                                            <edge:EdgeFilterComboBox
-                                                Grid.Column="1"
-                                                Width="220"
-                                                ItemsSource="{Binding Profiles}"
-                                                SelectedItem="{Binding SelectedUpdateProfile, Mode=TwoWay}">
-                                                <edge:EdgeFilterComboBox.SelectionBoxItemTemplate>
-                                                    <DataTemplate>
-                                                        <TextBlock Text="{Binding DisplayName}" />
-                                                    </DataTemplate>
-                                                </edge:EdgeFilterComboBox.SelectionBoxItemTemplate>
-                                                <edge:EdgeFilterComboBox.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <TextBlock Text="{Binding DisplayName}" />
-                                                    </DataTemplate>
-                                                </edge:EdgeFilterComboBox.ItemTemplate>
-                                            </edge:EdgeFilterComboBox>
-                                            <edge:EdgeStatusChip
-                                                Grid.Column="2"
-                                                Status="Info"
-                                                Text="{DynamicResource Launcher_UpdateCenter_ProcessLevel}" />
-                                        </Grid>
-                                        <StackPanel Grid.Row="1" Spacing="4">
-                                            <TextBlock
-                                                Classes="launcher-status-message"
-                                                Text="{Binding ClientReleasePanel.StatusMessage}"
-                                                TextWrapping="Wrap" />
-                                            <TextBlock
-                                                Classes="launcher-inline-status"
-                                                Text="{Binding ClientReleasePanel.DetailText}"
-                                                TextWrapping="Wrap" />
-                                            <ProgressBar
-                                                Height="4"
-                                                IsVisible="{Binding ClientReleasePanel.IsProgressVisible}"
-                                                Maximum="100"
-                                                Minimum="0"
-                                                Value="{Binding ClientReleasePanel.Progress}" />
-                                        </StackPanel>
-                                    </Grid>
-                                </Border>
-                            </Grid>
-
-                            <edge:EdgeScrollHost
-                                Grid.Row="2"
-                                HorizontalScrollBarVisibility="Disabled"
-                                MaxHeight="190"
-                                VerticalScrollBarVisibility="Auto">
-                                <ItemsControl ItemsSource="{Binding ClientReleasePanel.Plugins}">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <WrapPanel />
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <edge:EdgeCard
-                                                Classes="launcher-process-card"
-                                                Width="330"
-                                                Margin="0,0,12,12">
-                                                <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
-                                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
-                                                        <StackPanel Spacing="2">
-                                                            <TextBlock
-                                                                Classes="launcher-process-title"
-                                                                Text="{Binding DisplayName}" />
-                                                            <TextBlock
-                                                                Classes="launcher-process-path-value"
-                                                                Text="{Binding ModuleId}" />
-                                                        </StackPanel>
-                                                        <edge:EdgeStatusChip
-                                                            Grid.Column="1"
-                                                            Status="{Binding StatusKind}"
-                                                            Text="{Binding StatusText}" />
-                                                    </Grid>
-                                                    <Grid
-                                                        Grid.Row="1"
-                                                        ColumnDefinitions="Auto,*,Auto,*,Auto,*"
-                                                        ColumnSpacing="8">
-                                                        <TextBlock
-                                                            Grid.Column="0"
-                                                            Classes="launcher-process-path-label"
-                                                            Text="{DynamicResource Launcher_ClientRelease_CurrentVersionLabel}" />
-                                                        <TextBlock
-                                                            Grid.Column="1"
-                                                            Classes="launcher-process-path-value"
-                                                            Text="{Binding CurrentVersion}" />
-                                                        <TextBlock
-                                                            Grid.Column="2"
-                                                            Classes="launcher-process-path-label"
-                                                            Text="{DynamicResource Launcher_ClientRelease_LatestVersionLabel}" />
-                                                        <TextBlock
-                                                            Grid.Column="3"
-                                                            Classes="launcher-process-path-value"
-                                                            Text="{Binding LatestVersion}" />
-                                                        <TextBlock
-                                                            Grid.Column="4"
-                                                            Classes="launcher-process-path-label"
-                                                            Text="{DynamicResource Launcher_ClientRelease_SizeLabel}" />
-                                                        <TextBlock
-                                                            Grid.Column="5"
-                                                            Classes="launcher-process-path-value"
-                                                            Text="{Binding PackageSizeText}" />
-                                                    </Grid>
-                                                    <Grid
-                                                        Grid.Row="2"
-                                                        ColumnDefinitions="*,Auto"
-                                                        ColumnSpacing="10">
-                                                        <TextBlock
-                                                            Classes="launcher-inline-status"
-                                                            Text="{Binding DetailText}"
-                                                            TextWrapping="Wrap" />
-                                                        <edge:EdgeActionButton
-                                                            Grid.Column="1"
-                                                            Click="InstallPluginUpdateButton_Click"
-                                                            Content="{Binding ActionText}"
-                                                            Icon="{StaticResource Edge.Icon.Sync}"
-                                                            IsEnabled="{Binding CanInstallOrUpdate}"
-                                                            Kind="Secondary"
-                                                            Size="Compact" />
-                                                    </Grid>
-                                                </Grid>
-                                            </edge:EdgeCard>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </edge:EdgeScrollHost>
+                            <!-- 宿主 + 所有插件:统一一个表格 -->
+                            <StackPanel Grid.Row="1" Spacing="10">
+                                <TextBlock
+                                    Classes="launcher-inline-status"
+                                    Text="{Binding ClientReleasePanel.StatusMessage}"
+                                    TextWrapping="Wrap" />
+                                <ProgressBar
+                                    Height="4"
+                                    HorizontalAlignment="Stretch"
+                                    IsVisible="{Binding ClientReleasePanel.IsProgressVisible}"
+                                    Maximum="100"
+                                    Minimum="0"
+                                    Value="{Binding ClientReleasePanel.Progress}" />
+                                <edge:EdgeDataGrid
+                                    MaxHeight="320"
+                                    HeadersVisibility="Column"
+                                    IsReadOnly="True"
+                                    ItemsSource="{Binding UpdateRows}">
+                                    <edge:EdgeDataGrid.Columns>
+                                        <edge:EdgeTextColumn
+                                            Binding="{Binding DisplayName}"
+                                            Header="{DynamicResource Launcher_UpdateCenter_ColumnName}"
+                                            IsReadOnly="True"
+                                            MinWidth="160"
+                                            Width="2*" />
+                                        <edge:EdgeTextColumn
+                                            Binding="{Binding CurrentVersion}"
+                                            Header="{DynamicResource Launcher_ClientRelease_CurrentVersionLabel}"
+                                            IsReadOnly="True"
+                                            MinWidth="90"
+                                            Width="120" />
+                                        <edge:EdgeTextColumn
+                                            Binding="{Binding LatestVersion}"
+                                            Header="{DynamicResource Launcher_ClientRelease_LatestVersionLabel}"
+                                            IsReadOnly="True"
+                                            MinWidth="90"
+                                            Width="120" />
+                                        <edge:EdgeTextColumn
+                                            Binding="{Binding PackageSizeText}"
+                                            Header="{DynamicResource Launcher_ClientRelease_SizeLabel}"
+                                            IsReadOnly="True"
+                                            MinWidth="80"
+                                            Width="90" />
+                                        <edge:EdgeTemplateColumn
+                                            Header="{DynamicResource Launcher_UpdateCenter_ColumnStatus}"
+                                            MinWidth="90"
+                                            Width="110">
+                                            <edge:EdgeTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <edge:EdgeStatusChip
+                                                        VerticalAlignment="Center"
+                                                        Status="{Binding StatusKind}"
+                                                        Text="{Binding StatusText}" />
+                                                </DataTemplate>
+                                            </edge:EdgeTemplateColumn.CellTemplate>
+                                        </edge:EdgeTemplateColumn>
+                                        <edge:EdgeActionColumn
+                                            Header="{DynamicResource Launcher_UpdateCenter_ColumnAction}"
+                                            MinWidth="120"
+                                            Width="130">
+                                            <edge:EdgeActionColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <edge:EdgeActionButton
+                                                        VerticalAlignment="Center"
+                                                        Click="InstallPluginUpdateButton_Click"
+                                                        Content="{Binding ActionText}"
+                                                        Icon="{StaticResource Edge.Icon.Sync}"
+                                                        IsEnabled="{Binding CanInstallOrUpdate}"
+                                                        Kind="Secondary"
+                                                        Size="Compact" />
+                                                </DataTemplate>
+                                            </edge:EdgeActionColumn.CellTemplate>
+                                        </edge:EdgeActionColumn>
+                                    </edge:EdgeDataGrid.Columns>
+                                </edge:EdgeDataGrid>
+                            </StackPanel>
                         </Grid>
                     </edge:EdgeCard>
 

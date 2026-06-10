@@ -18,6 +18,11 @@ public sealed class LauncherHostUpdatePanelViewModel : BaseNotifyPropertyChanged
     private bool _isBusy;
     private bool _hasUpdateAvailable;
     private bool _isProgressVisible;
+    private string _currentVersion = "—";
+    private string _latestVersion = "—";
+    private LauncherUpdateCheckState _lastState = LauncherUpdateCheckState.NotConfigured;
+
+    public const string HostRowModuleId = "__edge_host__";
 
     public LauncherHostUpdatePanelViewModel(
         ILauncherUpdateService updateService,
@@ -185,6 +190,9 @@ public sealed class LauncherHostUpdatePanelViewModel : BaseNotifyPropertyChanged
     private void ApplyUpdateCheckResult(LauncherUpdateCheckResult result)
     {
         SetHasUpdateAvailable(result.HasUpdate);
+        _lastState = result.State;
+        _currentVersion = string.IsNullOrWhiteSpace(result.CurrentVersion) ? "—" : result.CurrentVersion!;
+        _latestVersion = string.IsNullOrWhiteSpace(result.TargetVersion) ? _currentVersion : result.TargetVersion!;
         DetailText = LauncherText.Compact(result.ReleaseNotes ?? result.ErrorMessage);
 
         switch (result.State)
@@ -211,6 +219,31 @@ public sealed class LauncherHostUpdatePanelViewModel : BaseNotifyPropertyChanged
                 SetStatus("Launcher_Update_StatusInitial");
                 break;
         }
+    }
+
+    public LauncherClientPluginItem CreateHostRow()
+    {
+        var (statusKind, statusKey) = _lastState switch
+        {
+            LauncherUpdateCheckState.UpdateAvailable or LauncherUpdateCheckState.PendingRestart
+                => ("Warning", "Launcher_ProfileCard_StatusUpdateAvailable"),
+            LauncherUpdateCheckState.NoUpdate
+                => ("Success", "Launcher_ProfileCard_StatusLatest"),
+            _ => ("Default", "Launcher_UpdateCenter_HostStatusNotReady"),
+        };
+
+        return new LauncherClientPluginItem(
+            HostRowModuleId,
+            LauncherText.Get(_languageService, "Launcher_UpdateCenter_HostTitle"),
+            _currentVersion,
+            _latestVersion,
+            string.Empty,
+            string.Empty,
+            CanApplyUpdate,
+            statusKind,
+            LauncherText.Get(_languageService, statusKey),
+            LauncherText.Get(_languageService, "Launcher_UpdateCenter_ButtonHostUpdate"),
+            _hasUpdateAvailable ? LauncherPluginUpdateState.UpdateAvailable : LauncherPluginUpdateState.Latest);
     }
 
     private bool SetProperty<T>(ref T field, T value, [CallerMemberName] string propertyName = "")

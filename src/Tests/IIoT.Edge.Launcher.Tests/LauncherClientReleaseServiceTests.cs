@@ -77,6 +77,58 @@ public sealed class LauncherClientReleaseServiceTests
     }
 
     [Fact]
+    public void CloudApiConfigurationResolver_ShouldReportIncompleteWithoutBootstrapSecret()
+    {
+        var tempDirectory = CreateTempDirectory();
+        var dataRoot = Path.Combine(tempDirectory, "program-data");
+        try
+        {
+            var runtimeDirectory = Path.Combine(tempDirectory, "runtime");
+            Directory.CreateDirectory(runtimeDirectory);
+            WriteText(
+                Path.Combine(runtimeDirectory, "appsettings.json"),
+                """
+                {
+                  "CloudApi": {
+                    "BaseUrl": "https://cloud.example.test",
+                    "Paths": {
+                      "DeviceInstance": "/api/v1/bootstrap/device-instance",
+                      "ClientReleaseCatalogTemplate": "/api/v1/edge/client-releases/device/{deviceId}/catalog",
+                      "ClientVersionReport": "/api/v1/edge/client-releases/version-reports"
+                    }
+                  }
+                }
+                """);
+
+            WithDataRoot(dataRoot, () =>
+            {
+                // 只有 ClientCode、缺 BootstrapSecret
+                WriteText(
+                    EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath("LineA", runtimeDirectory),
+                    """
+                    {
+                      "CloudApi": {
+                        "ClientCode": "DEV-AAAAAAAAAA"
+                      }
+                    }
+                    """);
+
+                var resolver = new LauncherCloudApiConfigurationResolver(runtimeDirectory);
+
+                var result = resolver.Resolve(Profile(runtimeDirectory));
+
+                // 方案 B 为密钥模式：缺 BootstrapSecret 必须判定为配置不完整（与 Shell bootstrap 要求一致）
+                Assert.False(result.Success);
+                Assert.Contains("BootstrapSecret", result.ErrorMessage ?? string.Empty, StringComparison.Ordinal);
+            });
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
     public void ProfileModuleConfiguration_EnableModules_ShouldWriteExternalMachineConfigAndPreserveIdentity()
     {
         var tempDirectory = CreateTempDirectory();

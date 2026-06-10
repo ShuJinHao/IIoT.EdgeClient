@@ -90,19 +90,14 @@ public partial class MainWindow : Window
         await _viewModel.RefreshUpdateCenterAsync();
     }
 
-    private async void ApplyHostUpdateButton_Click(object? sender, RoutedEventArgs e)
-    {
-        await _viewModel.HostUpdatePanel.ApplyUpdateAsync();
-    }
-
     private async void InstallPluginUpdateButton_Click(object? sender, RoutedEventArgs e)
     {
-        if ((sender as Control)?.DataContext is not LauncherClientPluginItem plugin)
+        if ((sender as Control)?.DataContext is not LauncherClientPluginItem row)
         {
             return;
         }
 
-        await _viewModel.ClientReleasePanel.InstallOrUpdateAsync(plugin);
+        await _viewModel.ExecuteUpdateRowActionAsync(row);
     }
 
     private void UpdateVisualState()

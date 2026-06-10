@@ -48,6 +48,8 @@ public partial class App : Avalonia.Application
                 .EnsureCatalogExists();
             _serviceProvider.GetRequiredService<ILauncherUpdateConfigInitializer>()
                 .EnsureConfigExists();
+            _serviceProvider.GetRequiredService<ILauncherDeviceBindingImporter>()
+                .ApplyPendingBindings();
 
             var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
             desktop.MainWindow = mainWindow;

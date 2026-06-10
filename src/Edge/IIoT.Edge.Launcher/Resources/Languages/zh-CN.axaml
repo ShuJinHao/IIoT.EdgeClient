@@ -42,8 +42,12 @@
     <sys:String x:Key="Launcher_UpdateCenter_PluginTitle">工序插件</sys:String>
     <sys:String x:Key="Launcher_UpdateCenter_MachineLevel">整机</sys:String>
     <sys:String x:Key="Launcher_UpdateCenter_ProcessLevel">工序</sys:String>
-    <sys:String x:Key="Launcher_UpdateCenter_ButtonRefresh">重新检测</sys:String>
-    <sys:String x:Key="Launcher_UpdateCenter_ButtonHostUpdate">更新宿主</sys:String>
+    <sys:String x:Key="Launcher_UpdateCenter_ButtonRefresh">检查更新</sys:String>
+    <sys:String x:Key="Launcher_UpdateCenter_ButtonHostUpdate">更新并重启</sys:String>
+    <sys:String x:Key="Launcher_UpdateCenter_ColumnStatus">状态</sys:String>
+    <sys:String x:Key="Launcher_UpdateCenter_ColumnAction">操作</sys:String>
+    <sys:String x:Key="Launcher_UpdateCenter_ColumnName">名称</sys:String>
+    <sys:String x:Key="Launcher_UpdateCenter_HostStatusNotReady">未配置</sys:String>
     <sys:String x:Key="Launcher_Profile_PluginLabel">插件</sys:String>
     <sys:String x:Key="Launcher_Profile_DataLabel">数据</sys:String>
     <sys:String x:Key="Launcher_Profile_PluginMissing">未发现插件清单</sys:String>
@@ -133,7 +137,7 @@
     <sys:String x:Key="Launcher_ClientRelease_StatusInitial">未检查工序更新状态。</sys:String>
     <sys:String x:Key="Launcher_ClientRelease_StatusChecking">正在检查 {0} 的工序更新状态...</sys:String>
     <sys:String x:Key="Launcher_ClientRelease_StatusReady">宿主 {0}，云端最新宿主 {1}，插件 {2} 个。</sys:String>
-    <sys:String x:Key="Launcher_ClientRelease_StatusNotConfigured">CloudApi 或 catalog 路径未配置。</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_StatusNotConfigured">设备未注册，请联系管理员。</sys:String>
     <sys:String x:Key="Launcher_ClientRelease_StatusBootstrapFailed">Cloud bootstrap 失败，无法读取插件 catalog。</sys:String>
     <sys:String x:Key="Launcher_ClientRelease_StatusCatalogFailed">云端插件 catalog 获取失败。</sys:String>
     <sys:String x:Key="Launcher_ClientRelease_StatusInstalling">正在安装或更新插件：{0}</sys:String>

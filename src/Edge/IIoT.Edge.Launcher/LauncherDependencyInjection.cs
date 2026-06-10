@@ -52,6 +52,11 @@ public static class LauncherDependencyInjection
         services.AddSingleton<ILauncherEdgeReleaseCloudClient, LauncherEdgeReleaseCloudClient>();
         services.AddSingleton<ILauncherInstalledPluginCatalog, LauncherInstalledPluginCatalog>();
         services.AddSingleton<ILauncherProfileModuleConfiguration, LauncherProfileModuleConfiguration>();
+        services.AddSingleton<ILauncherDeviceBindingImporter>(
+            provider => new LauncherDeviceBindingImporter(
+                baseDirectory,
+                provider.GetRequiredService<ILauncherProfileCatalog>(),
+                provider.GetRequiredService<ILauncherProfileModuleConfiguration>()));
         services.AddSingleton<ILauncherPluginPackageInstaller>(
             provider => new LauncherPluginPackageInstaller(provider.GetRequiredService<HttpClient>()));
         services.AddSingleton<ILauncherClientReleaseService, LauncherClientReleaseService>();

@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using IIoT.Edge.Launcher.Models;
@@ -11,6 +13,7 @@ namespace IIoT.Edge.Launcher.ViewModels;
 public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposable
 {
     private readonly ILauncherProfileCatalog _profileCatalog;
+    private readonly ILauncherCloudApiConfigurationResolver? _cloudApiResolver;
     private readonly ILocalLauncherAuthService _authService;
     private readonly IShellLaunchService _launchService;
     private readonly ILauncherUpdateService _updateService;
@@ -49,9 +52,11 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         IShellLaunchService launchService,
         ILauncherUpdateService? updateService = null,
         IAppLanguageService? languageService = null,
-        ILauncherClientReleaseService? clientReleaseService = null)
+        ILauncherClientReleaseService? clientReleaseService = null,
+        ILauncherCloudApiConfigurationResolver? cloudApiResolver = null)
     {
         _profileCatalog = profileCatalog ?? throw new ArgumentNullException(nameof(profileCatalog));
+        _cloudApiResolver = cloudApiResolver;
         _authService = authService ?? throw new ArgumentNullException(nameof(authService));
         _launchService = launchService ?? throw new ArgumentNullException(nameof(launchService));
         _updateService = updateService ?? NullLauncherUpdateService.Instance;
@@ -65,6 +70,8 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
             _clientReleaseService,
             _launchService,
             languageService);
+        HostUpdatePanel.PropertyChanged += OnHostUpdatePanelChanged;
+        ClientReleasePanel.Plugins.CollectionChanged += OnPluginRowsChanged;
         if (_languageService is not null)
         {
             _languageService.LanguageChanged += OnLanguageChanged;
@@ -72,6 +79,24 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
 
         AppVersionText = BuildAppVersionText();
         RefreshLocalizedState();
+        RebuildUpdateRows();
+    }
+
+    // 只显示“已配置(下载时选装、已写入云端唯一码)的 profile”；一个都没配置好则回退显示全部，
+    // 避免 Launcher 空屏(客户端规则·启动红线：必须能启动到可登录、可诊断、可修配置的 UI)。
+    private IReadOnlyList<LauncherProfileDefinition> SelectVisibleProfiles(
+        IReadOnlyList<LauncherProfileDefinition> profiles)
+    {
+        if (_cloudApiResolver is null)
+        {
+            return profiles;
+        }
+
+        var provisioned = profiles
+            .Where(profile => _cloudApiResolver.Resolve(profile).Success)
+            .ToList();
+
+        return provisioned.Count > 0 ? provisioned : profiles;
     }
 
     public ObservableCollection<LauncherProfileCardViewModel> Profiles { get; } = [];
@@ -79,6 +104,8 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
     public LauncherHostUpdatePanelViewModel HostUpdatePanel { get; }
 
     public LauncherClientReleasePanelViewModel ClientReleasePanel { get; }
+
+    public ObservableCollection<LauncherClientPluginItem> UpdateRows { get; } = [];
 
     public string ErrorMessage
     {
@@ -171,7 +198,7 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
             }
 
             _allProfiles.Clear();
-            _allProfiles.AddRange(_profileCatalog.LoadProfiles());
+            _allProfiles.AddRange(SelectVisibleProfiles(_profileCatalog.LoadProfiles()));
             _allProfileCards.Clear();
             foreach (var profile in _allProfiles)
             {
@@ -342,6 +369,8 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
             _languageService.LanguageChanged -= OnLanguageChanged;
         }
 
+        HostUpdatePanel.PropertyChanged -= OnHostUpdatePanelChanged;
+        ClientReleasePanel.Plugins.CollectionChanged -= OnPluginRowsChanged;
         HostUpdatePanel.Dispose();
         ClientReleasePanel.Dispose();
     }
@@ -384,6 +413,8 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         {
             card.RefreshLocalizedState();
         }
+
+        RebuildUpdateRows();
     }
 
     private void RefreshLocalizedState()
@@ -412,6 +443,41 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         _profileSummaryKey = key;
         _profileSummaryArgs = args;
         ProfileSummaryText = Format(key, args);
+    }
+
+    private void OnHostUpdatePanelChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(HostUpdatePanel.StatusMessage)
+            or nameof(HostUpdatePanel.CanApplyUpdate))
+        {
+            RebuildUpdateRows();
+        }
+    }
+
+    private void OnPluginRowsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        => RebuildUpdateRows();
+
+    private void RebuildUpdateRows()
+    {
+        UpdateRows.Clear();
+        UpdateRows.Add(HostUpdatePanel.CreateHostRow());
+        foreach (var plugin in ClientReleasePanel.Plugins)
+        {
+            UpdateRows.Add(plugin);
+        }
+    }
+
+    public async Task ExecuteUpdateRowActionAsync(LauncherClientPluginItem row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+
+        if (string.Equals(row.ModuleId, LauncherHostUpdatePanelViewModel.HostRowModuleId, StringComparison.Ordinal))
+        {
+            await HostUpdatePanel.ApplyUpdateAsync().ConfigureAwait(true);
+            return;
+        }
+
+        await ClientReleasePanel.InstallOrUpdateAsync(row).ConfigureAwait(true);
     }
 
     private async Task CheckSelectedProfilePluginsAsync()

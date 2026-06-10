@@ -30,6 +30,52 @@ public sealed class LauncherMainViewModelTests
     }
 
     [Fact]
+    public async Task LoginAsync_ShouldOnlyShowProvisionedProfiles()
+    {
+        var profiles = new[]
+        {
+            Profile("injection", "注液"),
+            Profile("hotair", "热风"),
+            Profile("welding", "焊接")
+        };
+        var viewModel = new LauncherMainViewModel(
+            new StubLauncherProfileCatalog(profiles),
+            new StubLocalAccountAuthService(
+                LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
+            new StubShellLaunchService(),
+            cloudApiResolver: new StubCloudApiConfigurationResolver("injection", "hotair"));
+
+        await viewModel.LoginAsync("operator", "secret");
+
+        // 只显示下载时选装、已写码的工序；未选的不显示
+        Assert.Equal(2, viewModel.Profiles.Count);
+        Assert.Contains(viewModel.Profiles, card => card.DisplayName == "注液");
+        Assert.Contains(viewModel.Profiles, card => card.DisplayName == "热风");
+        Assert.DoesNotContain(viewModel.Profiles, card => card.DisplayName == "焊接");
+    }
+
+    [Fact]
+    public async Task LoginAsync_ShouldShowAllProfilesWhenNoneProvisioned()
+    {
+        var profiles = new[]
+        {
+            Profile("injection", "注液"),
+            Profile("hotair", "热风")
+        };
+        var viewModel = new LauncherMainViewModel(
+            new StubLauncherProfileCatalog(profiles),
+            new StubLocalAccountAuthService(
+                LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
+            new StubShellLaunchService(),
+            cloudApiResolver: new StubCloudApiConfigurationResolver());
+
+        await viewModel.LoginAsync("operator", "secret");
+
+        // 一个都没配置好 → 回退显示全部，避免空屏（启动红线）
+        Assert.Equal(2, viewModel.Profiles.Count);
+    }
+
+    [Fact]
     public async Task LoginAsync_WhenAuthenticationSucceeds_ShouldReportAllProfileVersionsSilently()
     {
         var profiles = new[]
@@ -358,6 +404,26 @@ public sealed class LauncherMainViewModelTests
         : ILauncherProfileCatalog
     {
         public IReadOnlyList<LauncherProfileDefinition> LoadProfiles() => profiles;
+    }
+
+    private sealed class StubCloudApiConfigurationResolver(params string[] provisionedProfileIds)
+        : ILauncherCloudApiConfigurationResolver
+    {
+        private readonly HashSet<string> _provisioned = new(provisionedProfileIds, StringComparer.Ordinal);
+
+        public LauncherCloudApiConfigurationResult Resolve(LauncherProfileDefinition profile)
+            => _provisioned.Contains(profile.ProfileId)
+                ? LauncherCloudApiConfigurationResult.Succeeded(new LauncherCloudApiOptions(
+                    "http://cloud.local",
+                    10,
+                    "DEV-CODE",
+                    "secret",
+                    "/api/v1/bootstrap/device-instance",
+                    "/api/v1/edge/client-releases/device/{deviceId}/catalog",
+                    "/api/v1/edge/client-releases/version-reports"))
+                : LauncherCloudApiConfigurationResult.Failed("未配置");
+
+        public LauncherClientReleaseOptions ResolveReleaseOptions() => new("stable", "win-x64");
     }
 
     private sealed class StubShellLaunchService(bool hasRunningShellProcess = false) : IShellLaunchService
