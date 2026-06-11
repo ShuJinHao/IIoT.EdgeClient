@@ -72,8 +72,22 @@ jobs:
         shell: pwsh
         run: ./scripts/PublishEdgeRuntime.ps1 -Configuration Release -OutputRoot publish/edge-runtime -CleanOutput
 
+      - name: Publish installer artifact
+        shell: pwsh
+        run: ./scripts/PublishEdgeClientInstallerArtifact.ps1 -Version 0.0.0-ci -ReleaseChannel ci -OutputRoot publish/edge-installer-artifacts -RuntimeLayoutRoot publish/edge-runtime -CleanOutput
+
+      - name: Validate installer artifact
+        shell: pwsh
+        run: ./scripts/TestEdgeClientInstallerArtifact.ps1 -ArtifactRoot publish/edge-installer-artifacts/ci/0.0.0-ci -ExpectedChannel ci -ExpectedVersion 0.0.0-ci
+
       - name: Upload runtime artifact
         uses: actions/upload-artifact@v4
         with:
           name: edge-runtime-package
           path: publish/edge-runtime/**
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: edge-installer-artifact
+          path: publish/edge-installer-artifacts/ci/0.0.0-ci/**

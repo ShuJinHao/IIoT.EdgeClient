@@ -52,6 +52,7 @@ function Publish-Project {
         '--disable-build-servers',
         '-p:BuildInParallel=false',
         '-p:RestoreDisableParallel=true',
+        '-p:UseSharedCompilation=false',
         '-p:SkipEdgeRuntimeLayoutSync=true'
     )
 
