@@ -10,7 +10,7 @@ public interface IShellModuleCatalog
 {
     string GetPluginRootPath(string baseDirectory);
 
-    IReadOnlyList<string> GetPluginRootPaths(string baseDirectory, string? machineProfile);
+    IReadOnlyList<string> GetPluginRootPaths(string baseDirectory, IConfiguration configuration);
 
     ModuleCatalogDiscoveryResult DiscoverModules(string pluginRootPath);
 
@@ -30,8 +30,6 @@ public interface IShellModuleCatalog
 
 public sealed class ShellModuleCatalog : IShellModuleCatalog
 {
-    public const string PluginDirectoryName = "Modules";
-
     private readonly IModuleCatalog _moduleCatalog;
 
     public ShellModuleCatalog(IModuleCatalog moduleCatalog)
@@ -40,20 +38,24 @@ public sealed class ShellModuleCatalog : IShellModuleCatalog
     }
 
     public string GetPluginRootPath(string baseDirectory)
-        => Path.Combine(baseDirectory, PluginDirectoryName);
+        => EdgeClientProgramDataPaths.ResolveApplicationPluginRoot(baseDirectory);
 
-    public IReadOnlyList<string> GetPluginRootPaths(string baseDirectory, string? machineProfile)
+    public IReadOnlyList<string> GetPluginRootPaths(string baseDirectory, IConfiguration configuration)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
+        ArgumentNullException.ThrowIfNull(configuration);
 
-        var paths = new List<string>
+        var configuredRoots = configuration
+            .GetSection($"{ShellModuleOptions.SectionName}:PluginRoots")
+            .Get<string[]>()
+            ?? [];
+        var paths = configuredRoots
+            .Where(static path => !string.IsNullOrWhiteSpace(path))
+            .Select(path => ResolveConfiguredPluginRoot(baseDirectory, path))
+            .ToList();
+        if (paths.Count == 0)
         {
-            GetPluginRootPath(baseDirectory)
-        };
-
-        if (!string.IsNullOrWhiteSpace(machineProfile))
-        {
-            paths.Add(EdgeClientProgramDataPaths.ResolveProfilePluginRootPath(machineProfile, baseDirectory));
+            paths.Add(GetPluginRootPath(baseDirectory));
         }
 
         return paths
@@ -78,7 +80,7 @@ public sealed class ShellModuleCatalog : IShellModuleCatalog
                 continue;
             }
 
-            if (i > 0 && !Directory.Exists(pluginRootPath))
+            if (!Directory.Exists(pluginRootPath))
             {
                 continue;
             }
@@ -111,7 +113,7 @@ public sealed class ShellModuleCatalog : IShellModuleCatalog
 
     public IReadOnlyList<IEdgeProcessModule> CreateAllModulesForValidation()
         => _moduleCatalog.CreateAllModules(
-            DiscoverModules(GetPluginRootPaths(AppContext.BaseDirectory, null)).Modules);
+            DiscoverModules([GetPluginRootPath(AppContext.BaseDirectory)]).Modules);
 
     public IReadOnlyList<IEdgeProcessModule> CreateAllModulesForValidation(
         IReadOnlyList<ModulePluginDescriptor> discoveredModules)
@@ -119,4 +121,15 @@ public sealed class ShellModuleCatalog : IShellModuleCatalog
 
     public bool IsDiscoveredModule(string moduleId, IReadOnlyList<ModulePluginDescriptor> discoveredModules)
         => _moduleCatalog.IsDiscoveredModule(moduleId, discoveredModules);
+
+    private static string ResolveConfiguredPluginRoot(string baseDirectory, string path)
+    {
+        var expanded = EdgeClientProgramDataPaths.ExpandProgramDataTokens(path.Trim(), baseDirectory)
+            .Replace('\\', Path.DirectorySeparatorChar)
+            .Replace('/', Path.DirectorySeparatorChar);
+        return Path.GetFullPath(
+            Path.IsPathRooted(expanded)
+                ? expanded
+                : Path.Combine(baseDirectory, expanded));
+    }
 }

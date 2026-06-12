@@ -7,6 +7,6 @@
     "IconKind": "BeakerOutline",
     "AccentColor": "#4D7C0F",
     "MachineProfile": "HomogenizationLine",
-    "ExecutablePath": "../homogenization/IIoT.Edge.Shell"
+    "ExecutablePath": "../host/IIoT.Edge.Shell"
   }
 ]

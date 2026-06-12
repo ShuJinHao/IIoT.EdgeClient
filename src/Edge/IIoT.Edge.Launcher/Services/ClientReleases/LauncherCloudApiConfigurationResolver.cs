@@ -30,15 +30,15 @@ public sealed class LauncherCloudApiConfigurationResolver : ILauncherCloudApiCon
     {
         ArgumentNullException.ThrowIfNull(profile);
 
-        var runtimeDirectory = ResolveRuntimeDirectory(profile);
+        var hostDirectory = ResolveHostDirectory(profile);
         var mutable = new MutableCloudApiOptions();
 
-        ApplyConfigurationFile(mutable, Path.Combine(runtimeDirectory, "appsettings.json"));
-        ApplyConfigurationFile(mutable, Path.Combine(runtimeDirectory, $"appsettings.{GetEnvironmentName()}.json"));
-        ApplyConfigurationFile(mutable, Path.Combine(runtimeDirectory, $"appsettings.machine.{profile.MachineProfile}.json"));
+        ApplyConfigurationFile(mutable, Path.Combine(hostDirectory, "appsettings.json"));
+        ApplyConfigurationFile(mutable, Path.Combine(hostDirectory, $"appsettings.{GetEnvironmentName()}.json"));
+        ApplyConfigurationFile(mutable, Path.Combine(hostDirectory, $"appsettings.machine.{profile.MachineProfile}.json"));
         ApplyConfigurationFile(
             mutable,
-            EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(profile.MachineProfile, runtimeDirectory));
+            EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(profile.MachineProfile, hostDirectory));
         ApplyEnvironment(mutable);
 
         var missing = mutable.GetMissingKeys().ToArray();
@@ -89,7 +89,7 @@ public sealed class LauncherCloudApiConfigurationResolver : ILauncherCloudApiCon
             FirstNotWhiteSpace(targetRuntime, DefaultTargetRuntime)!);
     }
 
-    internal static string ResolveRuntimeDirectory(LauncherProfileDefinition profile)
+    internal static string ResolveHostDirectory(LauncherProfileDefinition profile)
         => Path.GetDirectoryName(profile.ExecutablePath) ?? AppContext.BaseDirectory;
 
     private static string GetEnvironmentName()

@@ -10,6 +10,8 @@ param(
 
     [string]$PackAuthors = 'IIoT',
 
+    [string]$ProfileId = 'HomogenizationLine',
+
     [string]$Configuration = 'Release',
 
     [string]$RuntimeIdentifier = 'win-x64',
@@ -234,22 +236,25 @@ function Write-EdgeVelopackProfileCatalog {
         [System.Collections.IEnumerable]$Profiles,
 
         [Parameter(Mandatory = $true)]
-        $RuntimeDefinition,
+        $ProfileDefinition,
+
+        [Parameter(Mandatory = $true)]
+        $Manifest,
 
         [Parameter(Mandatory = $true)]
         [string]$PackDirectory
     )
 
     $selectedProfile = @($Profiles | Where-Object {
-        $_.ProfileId -eq $RuntimeDefinition.profileId
+        $_.ProfileId -eq $ProfileDefinition.profileId
     })
 
     if ($selectedProfile.Count -ne 1) {
-        throw "Could not find exactly one launcher profile for runtime '$($RuntimeDefinition.runtimeId)'."
+        throw "Could not find exactly one launcher profile for profile '$($ProfileDefinition.profileId)'."
     }
 
     $profile = $selectedProfile[0]
-    $profile.ExecutablePath = "$($RuntimeDefinition.outputDirectory)/IIoT.Edge.Shell"
+    $profile.ExecutablePath = "$($Manifest.hostDirectory)/IIoT.Edge.Shell"
     ConvertTo-Json -InputObject @($profile) -Depth 20 | Set-Content `
         -Encoding UTF8 `
         -Path (Join-Path $PackDirectory 'launcher.profiles.json')
@@ -285,12 +290,12 @@ function Get-EdgeVelopackReleaseNotesPath {
 
 $manifest = Load-EdgeRuntimePublishManifest -RepoRoot $repoRoot -ManifestPath $ManifestPath
 $launcherProfileCatalog = Get-EdgeLauncherProfileCatalog -RepoRoot $repoRoot -ProfileCatalogPath $LauncherProfileCatalogPath
-$runtime = @($manifest.runtimes | Where-Object {
-    $_.runtimeId -eq $Channel
+$profileDefinition = @($manifest.profiles | Where-Object {
+    $_.profileId -eq $ProfileId
 })[0]
 
-if ($null -eq $runtime) {
-    throw "Channel '$Channel' does not match any runtimeId in '$ManifestPath'."
+if ($null -eq $profileDefinition) {
+    throw "ProfileId '$ProfileId' does not match any profile in '$ManifestPath'."
 }
 
 $resolvedRuntimeLayoutRoot = Resolve-EdgeAbsolutePath -BasePath $repoRoot -PathValue $RuntimeLayoutRoot
@@ -321,11 +326,17 @@ Copy-EdgeVelopackDirectory `
     -SourceDirectory (Join-Path $resolvedRuntimeLayoutRoot $manifest.launcherDirectory) `
     -TargetDirectory $packDirectory
 Copy-EdgeVelopackDirectory `
-    -SourceDirectory (Join-Path $resolvedRuntimeLayoutRoot $runtime.outputDirectory) `
-    -TargetDirectory (Join-Path $packDirectory $runtime.outputDirectory)
+    -SourceDirectory (Join-Path $resolvedRuntimeLayoutRoot $manifest.hostDirectory) `
+    -TargetDirectory (Join-Path $packDirectory $manifest.hostDirectory)
+foreach ($moduleId in @($profileDefinition.moduleIds)) {
+    Copy-EdgeVelopackDirectory `
+        -SourceDirectory (Join-Path (Join-Path $resolvedRuntimeLayoutRoot $manifest.pluginsRoot) $moduleId) `
+        -TargetDirectory (Join-Path (Join-Path $packDirectory $manifest.pluginsRoot) $moduleId)
+}
 Write-EdgeVelopackProfileCatalog `
     -Profiles $launcherProfileCatalog.Profiles `
-    -RuntimeDefinition $runtime `
+    -ProfileDefinition $profileDefinition `
+    -Manifest $manifest `
     -PackDirectory $packDirectory
 Assert-EdgeVelopackStagingRedlines -PackDirectory $packDirectory
 
@@ -334,9 +345,9 @@ Assert-EdgeExecutablePath `
     -PathValue 'IIoT.Edge.Launcher.exe' `
     -Message "Velopack main exe must be at pack root." | Out-Null
 Assert-EdgeExecutablePath `
-    -BasePath (Join-Path $packDirectory $runtime.outputDirectory) `
+    -BasePath (Join-Path $packDirectory $manifest.hostDirectory) `
     -PathValue 'IIoT.Edge.Shell.exe' `
-    -Message "Velopack process runtime shell exe was not found." | Out-Null
+    -Message "Velopack host shell exe was not found." | Out-Null
 
 $releaseNotesPath = Get-EdgeVelopackReleaseNotesPath `
     -ReleaseNotesPath $ReleaseNotes `

@@ -61,8 +61,8 @@ if (Test-Path $launcherUpdateConfigPath) {
 
 $launcherProfilesPath = Join-Path $launcherRoot 'launcher.profiles.json'
 $launcherProfiles = Get-Content -Raw -Encoding UTF8 -Path $launcherProfilesPath | ConvertFrom-Json
-if ($launcherProfiles.Count -ne $manifest.runtimes.Count) {
-    throw "Generated launcher.profiles.json does not match runtime manifest count."
+if ($launcherProfiles.Count -ne $manifest.profiles.Count) {
+    throw "Generated launcher.profiles.json does not match publish profile count."
 }
 
 Test-EdgeLauncherProfilesMatchManifest -Manifest $manifest -Profiles @($launcherProfiles) -LauncherRuntimeRoot $launcherRoot -CheckExecutablePath
@@ -74,44 +74,52 @@ foreach ($profile in $launcherProfiles) {
         -Message "Launcher profile '$($profile.ProfileId)' points to a missing executable." | Out-Null
 }
 
-foreach ($runtime in $manifest.runtimes) {
-    $runtimeRoot = Join-Path $resolvedOutputRoot $runtime.outputDirectory
-    Assert-EdgeExecutablePath `
-        -BasePath $runtimeRoot `
-        -PathValue 'IIoT.Edge.Shell' `
-        -Message "Required Shell executable was not found in runtime '$($runtime.runtimeId)'." | Out-Null
+$hostRoot = Join-Path $resolvedOutputRoot $manifest.hostDirectory
+Assert-EdgeExecutablePath `
+    -BasePath $hostRoot `
+    -PathValue 'IIoT.Edge.Shell' `
+    -Message "Required Shell executable was not found in host '$hostRoot'." | Out-Null
 
-    $requiredFiles = @(
-        'appsettings.json',
-        'appsettings.Production.json',
-        (Split-Path -Leaf $runtime.machineConfig)
-    )
+$requiredFiles = @(
+    'appsettings.json',
+    'appsettings.Production.json'
+)
 
-    foreach ($relativePath in $requiredFiles) {
-        $fullPath = Join-Path $runtimeRoot $relativePath
-        if (-not (Test-Path $fullPath)) {
-            throw "Required runtime artifact was not found: $fullPath"
-        }
+foreach ($relativePath in $requiredFiles) {
+    $fullPath = Join-Path $hostRoot $relativePath
+    if (-not (Test-Path $fullPath)) {
+        throw "Required host artifact was not found: $fullPath"
     }
+}
 
-    $allMachineConfigs = Get-ChildItem -Path $runtimeRoot -Filter 'appsettings.machine.*.json' -File
-    if ($allMachineConfigs.Count -ne 1) {
-        throw "Runtime '$($runtime.runtimeId)' should contain exactly one machine profile config, found $($allMachineConfigs.Count)."
+foreach ($profile in $manifest.profiles) {
+    $machineConfigPath = Join-Path $hostRoot (Split-Path -Leaf $profile.machineConfig)
+    if (-not (Test-Path $machineConfigPath)) {
+        throw "Required machine profile config was not found in host: $machineConfigPath"
     }
+}
 
-    $modulesRoot = Join-Path $runtimeRoot 'Modules'
-    $moduleDirectories = Get-ChildItem -Path $modulesRoot -Directory | Select-Object -ExpandProperty Name
-    $expectedModules = @($runtime.moduleIds)
-    $actualModuleKey = (@($moduleDirectories | Sort-Object) -join '|')
-    $expectedModuleKey = (@($expectedModules | Sort-Object) -join '|')
+if (Test-Path (Join-Path $hostRoot 'Modules')) {
+    throw "Host directory must not contain legacy Modules directory: $hostRoot"
+}
 
-    if ($actualModuleKey -ne $expectedModuleKey) {
-        throw "Runtime '$($runtime.runtimeId)' modules do not match manifest. Expected: $($expectedModules -join ', ') / Actual: $($moduleDirectories -join ', ')"
-    }
+$pluginsRoot = Join-Path $resolvedOutputRoot $manifest.pluginsRoot
+$moduleDirectories = Get-ChildItem -Path $pluginsRoot -Directory | Select-Object -ExpandProperty Name
+$expectedModules = @($manifest.profiles | ForEach-Object { $_.moduleIds } | Sort-Object -Unique)
+$actualModuleKey = (@($moduleDirectories | Sort-Object) -join '|')
+$expectedModuleKey = (@($expectedModules | Sort-Object) -join '|')
 
-    foreach ($moduleId in $expectedModules) {
-        Test-EdgePluginManifestFile -ManifestPath (Join-Path (Join-Path $modulesRoot $moduleId) 'plugin.json')
-    }
+if ($actualModuleKey -ne $expectedModuleKey) {
+    throw "Plugins root modules do not match manifest. Expected: $($expectedModules -join ', ') / Actual: $($moduleDirectories -join ', ')"
+}
+
+foreach ($moduleId in $expectedModules) {
+    Test-EdgePluginManifestFile -ManifestPath (Join-Path (Join-Path $pluginsRoot $moduleId) 'plugin.json')
+}
+
+$dataRoot = Join-Path $resolvedOutputRoot 'data'
+if (-not (Test-Path $dataRoot)) {
+    throw "Runtime layout data directory was not found: $dataRoot"
 }
 
 Write-Host "Edge runtime publish smoke test passed: $resolvedOutputRoot"

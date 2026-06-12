@@ -6,8 +6,6 @@ param(
 
     [string]$ExpectedVersion,
 
-    [string]$ExpectedRuntimeDirectory = 'homogenization',
-
     [string]$ExpectedModuleId = 'Homogenization'
 )
 
@@ -169,6 +167,10 @@ foreach ($legacyProperty in @('layoutZipFile', 'layoutZipSha256', 'layoutZipSize
     }
 }
 
+if ([int]$manifest.schemaVersion -ne 2) {
+    throw "Installer artifact manifest schemaVersion must be 2, actual: $($manifest.schemaVersion)"
+}
+
 if ($manifest.channel -ne $ExpectedChannel) {
     throw "Artifact channel '$($manifest.channel)' does not match expected '$ExpectedChannel'."
 }
@@ -194,29 +196,55 @@ $launcherPath = Join-Path $resolvedArtifactRoot $launcherDirectory
 Assert-PathExists -PathValue $launcherPath -Message "Launcher directory was not found: $launcherPath"
 Assert-PathExists -PathValue (Join-Path $launcherPath 'IIoT.Edge.Launcher.dll') -Message "Launcher runtime file was not found."
 
+$hostDirectory = [string]$manifest.hostDirectory
+if ([string]::IsNullOrWhiteSpace($hostDirectory)) {
+    throw "Artifact manifest hostDirectory is empty."
+}
+
+$pluginsRoot = [string]$manifest.pluginsRoot
+if ([string]::IsNullOrWhiteSpace($pluginsRoot)) {
+    throw "Artifact manifest pluginsRoot is empty."
+}
+
+$hostPath = Join-Path $resolvedArtifactRoot $hostDirectory
+$pluginsPath = Join-Path $resolvedArtifactRoot $pluginsRoot
+Assert-PathExists -PathValue $hostPath -Message "Host directory was not found: $hostPath"
+Assert-PathExists -PathValue (Join-Path $hostPath 'IIoT.Edge.Shell.dll') -Message "Host shell file was not found."
+Assert-PathExists -PathValue $pluginsPath -Message "Plugins root was not found: $pluginsPath"
+if (Test-Path (Join-Path $hostPath 'Modules')) {
+    throw "Host directory must not contain legacy Modules directory: $hostPath"
+}
+
+if ($manifest.hostDirectorySha256 -ne (Get-TestDirectorySha256 -Directory $hostPath)) {
+    throw "Host directory sha256 does not match installer-artifact.json."
+}
+
+if ([long]$manifest.hostDirectorySize -ne (Get-TestDirectorySize -Directory $hostPath)) {
+    throw "Host directory size does not match installer-artifact.json."
+}
+
 $module = @($manifest.modules | Where-Object { $_.moduleId -eq $ExpectedModuleId }) | Select-Object -First 1
 if ($null -eq $module) {
     throw "Artifact manifest does not contain module '$ExpectedModuleId'."
 }
 
-if ($module.runtimeDirectory -ne $ExpectedRuntimeDirectory) {
-    throw "Module '$ExpectedModuleId' runtime directory '$($module.runtimeDirectory)' does not match '$ExpectedRuntimeDirectory'."
+if ([string]::IsNullOrWhiteSpace($module.pluginDirectory)) {
+    throw "Module '$ExpectedModuleId' pluginDirectory is empty."
 }
 
-$runtimePath = Join-Path $resolvedArtifactRoot ([string]$module.runtimeDirectory)
-Assert-PathExists -PathValue $runtimePath -Message "Runtime directory was not found: $runtimePath"
-Assert-PathExists -PathValue (Join-Path $runtimePath 'IIoT.Edge.Shell.dll') -Message "Runtime shell file was not found."
-Assert-PathExists -PathValue (Join-Path (Join-Path (Join-Path $runtimePath 'Modules') $ExpectedModuleId) 'plugin.json') -Message "Module plugin manifest was not found."
+$pluginPath = Join-Path $pluginsPath ([string]$module.pluginDirectory)
+Assert-PathExists -PathValue $pluginPath -Message "Plugin directory was not found: $pluginPath"
+Assert-PathExists -PathValue (Join-Path $pluginPath 'plugin.json') -Message "Module plugin manifest was not found."
 
-if ($module.runtimeSha256 -ne (Get-TestDirectorySha256 -Directory $runtimePath)) {
-    throw "Runtime directory sha256 does not match installer-artifact.json."
+if ($module.pluginSha256 -ne (Get-TestDirectorySha256 -Directory $pluginPath)) {
+    throw "Plugin directory sha256 does not match installer-artifact.json."
 }
 
-if ([long]$module.runtimeSize -ne (Get-TestDirectorySize -Directory $runtimePath)) {
-    throw "Runtime directory size does not match installer-artifact.json."
+if ([long]$module.pluginSize -ne (Get-TestDirectorySize -Directory $pluginPath)) {
+    throw "Plugin directory size does not match installer-artifact.json."
 }
 
-foreach ($directory in @($launcherPath, $runtimePath)) {
+foreach ($directory in @($launcherPath, $hostPath, $pluginsPath)) {
     Assert-ForbiddenFilesMissing -Directory $directory
     Assert-CloudIdentityTemplatesAreEmpty -Directory $directory
 }

@@ -8,7 +8,11 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$Version,
 
-    [string]$RuntimeDirectory = 'homogenization',
+    [string]$ExpectedHostDirectory = 'host',
+
+    [string]$ExpectedPluginsRoot = 'plugins',
+
+    [string]$ExpectedModuleId = 'Homogenization',
 
     [switch]$RequireDelta
 )
@@ -188,11 +192,12 @@ $tempDirectory = Join-Path ([System.IO.Path]::GetTempPath()) "iiot-edge-velopack
 try {
     Assert-ZipEntryExists -Archive $archive -EntryName 'lib/app/IIoT.Edge.Launcher.exe' | Out-Null
     $launcherAssemblyEntry = Assert-ZipEntryExists -Archive $archive -EntryName 'lib/app/IIoT.Edge.Launcher.dll'
-    Assert-ZipEntryExists -Archive $archive -EntryName "lib/app/$RuntimeDirectory/IIoT.Edge.Shell.exe" | Out-Null
+    Assert-ZipEntryExists -Archive $archive -EntryName "lib/app/$ExpectedHostDirectory/IIoT.Edge.Shell.exe" | Out-Null
+    Assert-ZipEntryExists -Archive $archive -EntryName "lib/app/$ExpectedPluginsRoot/$ExpectedModuleId/plugin.json" | Out-Null
     Assert-ZipEntryExists -Archive $archive -EntryName 'lib/app/launcher.accounts.sample.json' | Out-Null
     Assert-ZipEntryExists -Archive $archive -EntryName 'lib/app/launcher.update.sample.json' | Out-Null
 
-    $appSettingsEntryName = "lib/app/$RuntimeDirectory/appsettings.json"
+    $appSettingsEntryName = "lib/app/$ExpectedHostDirectory/appsettings.json"
     $appSettingsJson = Read-ZipEntryText -Archive $archive -EntryName $appSettingsEntryName
     Assert-CloudIdentityTemplateIsEmpty -Json $appSettingsJson -EntryName $appSettingsEntryName
 
@@ -225,8 +230,8 @@ try {
     }
 
     $profile = $profiles[0]
-    if ($profile.ExecutablePath -ne "$RuntimeDirectory/IIoT.Edge.Shell") {
-        throw "Launcher profile executable path should point to '$RuntimeDirectory/IIoT.Edge.Shell', actual: $($profile.ExecutablePath)"
+    if ($profile.ExecutablePath -ne "$ExpectedHostDirectory/IIoT.Edge.Shell") {
+        throw "Launcher profile executable path should point to '$ExpectedHostDirectory/IIoT.Edge.Shell', actual: $($profile.ExecutablePath)"
     }
 
     $machineProfile = [string]$profile.MachineProfile
@@ -234,7 +239,7 @@ try {
         throw "Launcher profile is missing MachineProfile."
     }
 
-    $machineConfigEntryName = "lib/app/$RuntimeDirectory/appsettings.machine.$machineProfile.json"
+    $machineConfigEntryName = "lib/app/$ExpectedHostDirectory/appsettings.machine.$machineProfile.json"
     $machineConfigJson = Read-ZipEntryText -Archive $archive -EntryName $machineConfigEntryName
     Assert-CloudIdentityTemplateIsEmpty -Json $machineConfigJson -EntryName $machineConfigEntryName
 

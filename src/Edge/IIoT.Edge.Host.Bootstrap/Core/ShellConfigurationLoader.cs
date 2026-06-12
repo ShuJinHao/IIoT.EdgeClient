@@ -65,7 +65,7 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
         var configuration = new ConfigurationBuilder()
             .SetBasePath(baseDirectory);
 
-        foreach (var pluginConfigPath in FindPluginDefaultConfigurationFiles(baseDirectory, machineProfile))
+        foreach (var pluginConfigPath in FindPluginDefaultConfigurationFiles(baseDirectory, bootstrapConfiguration))
         {
             configuration.AddJsonFile(pluginConfigPath, optional: true, reloadOnChange: false);
         }
@@ -115,16 +115,19 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
             ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
             ?? "Production";
 
-    private IReadOnlyList<string> FindPluginDefaultConfigurationFiles(string baseDirectory, string? machineProfile)
+    private IReadOnlyList<string> FindPluginDefaultConfigurationFiles(string baseDirectory, IConfiguration configuration)
     {
-        var pluginRoots = new List<string>
+        var configuredRoots = configuration
+            .GetSection("Modules:PluginRoots")
+            .Get<string[]>()
+            ?? [];
+        var pluginRoots = configuredRoots
+            .Where(static path => !string.IsNullOrWhiteSpace(path))
+            .Select(path => ResolveConfiguredPluginRoot(baseDirectory, path))
+            .ToList();
+        if (pluginRoots.Count == 0)
         {
-            Path.Combine(baseDirectory, "Modules")
-        };
-
-        if (!string.IsNullOrWhiteSpace(machineProfile))
-        {
-            pluginRoots.Add(EdgeClientProgramDataPaths.ResolveProfilePluginRootPath(machineProfile, baseDirectory));
+            pluginRoots.Add(EdgeClientProgramDataPaths.ResolveApplicationPluginRoot(baseDirectory));
         }
 
         return pluginRoots
@@ -138,6 +141,17 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
             .ThenBy(static item => item.Path, StringComparer.OrdinalIgnoreCase)
             .Select(static item => item.Path)
             .ToArray();
+    }
+
+    private static string ResolveConfiguredPluginRoot(string baseDirectory, string path)
+    {
+        var expanded = EdgeClientProgramDataPaths.ExpandProgramDataTokens(path.Trim(), baseDirectory)
+            .Replace('\\', Path.DirectorySeparatorChar)
+            .Replace('/', Path.DirectorySeparatorChar);
+        return Path.GetFullPath(
+            Path.IsPathRooted(expanded)
+                ? expanded
+                : Path.Combine(baseDirectory, expanded));
     }
 
     private static void TryInitializeExternalMachineProfile(string? sourcePath, string targetPath)

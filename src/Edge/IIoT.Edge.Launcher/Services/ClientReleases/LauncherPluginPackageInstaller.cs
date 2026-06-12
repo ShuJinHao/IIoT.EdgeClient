@@ -62,12 +62,12 @@ public sealed class LauncherPluginPackageInstaller : ILauncherPluginPackageInsta
             return LauncherPluginInstallResult.Failed(issue!);
         }
 
-        var runtimeDirectory = LauncherCloudApiConfigurationResolver.ResolveRuntimeDirectory(profile);
-        var moduleDirectory = EdgeClientProgramDataPaths.ResolveProfilePluginDirectory(
-            profile.MachineProfile,
-            release.ModuleId,
-            runtimeDirectory);
-        var stagingRoot = Path.Combine(moduleDirectory, ".staging", Guid.NewGuid().ToString("N"));
+        var hostDirectory = LauncherCloudApiConfigurationResolver.ResolveHostDirectory(profile);
+        var pluginsRoot = EdgeClientProgramDataPaths.ResolveApplicationPluginRoot(hostDirectory);
+        var moduleDirectory = Path.Combine(
+            pluginsRoot,
+            EdgeClientProgramDataPaths.SanitizePathSegment(release.ModuleId));
+        var stagingRoot = Path.Combine(pluginsRoot, ".staging", Guid.NewGuid().ToString("N"));
         var packagePath = Path.Combine(stagingRoot, "package.zip");
         var extractDirectory = Path.Combine(stagingRoot, "extract");
 
@@ -96,7 +96,7 @@ public sealed class LauncherPluginPackageInstaller : ILauncherPluginPackageInsta
             ValidateZipEntries(packagePath, extractDirectory, _limits);
             ZipFile.ExtractToDirectory(packagePath, extractDirectory);
             var manifest = ValidateExtractedPackage(extractDirectory, release, hostVersion, hostApiVersion);
-            ReplaceCurrentPlugin(moduleDirectory, extractDirectory);
+            ReplacePluginDirectory(moduleDirectory, extractDirectory);
             WriteInstallRecord(moduleDirectory, release, manifest, actualSha256);
             progress?.Report(100);
 
@@ -343,33 +343,36 @@ public sealed class LauncherPluginPackageInstaller : ILauncherPluginPackageInsta
         return fullPath;
     }
 
-    private static void ReplaceCurrentPlugin(string moduleDirectory, string extractDirectory)
+    private static void ReplacePluginDirectory(string moduleDirectory, string extractDirectory)
     {
-        var currentDirectory = Path.Combine(moduleDirectory, EdgeClientProgramDataPaths.PluginCurrentDirectoryName);
-        var previousDirectory = Path.Combine(moduleDirectory, EdgeClientProgramDataPaths.PluginPreviousDirectoryName);
-        Directory.CreateDirectory(moduleDirectory);
-        TryDeleteDirectory(previousDirectory);
+        var parentDirectory = Path.GetDirectoryName(moduleDirectory)
+            ?? throw new InvalidOperationException($"插件目录无效: {moduleDirectory}");
+        var backupDirectory = Path.Combine(parentDirectory, ".previous", $"{Path.GetFileName(moduleDirectory)}-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(parentDirectory);
 
-        var currentMoved = false;
-        if (Directory.Exists(currentDirectory))
+        var existingMoved = false;
+        if (Directory.Exists(moduleDirectory))
         {
-            Directory.Move(currentDirectory, previousDirectory);
-            currentMoved = true;
+            Directory.CreateDirectory(Path.GetDirectoryName(backupDirectory)!);
+            Directory.Move(moduleDirectory, backupDirectory);
+            existingMoved = true;
         }
 
         try
         {
-            Directory.Move(extractDirectory, currentDirectory);
+            Directory.Move(extractDirectory, moduleDirectory);
         }
         catch
         {
-            if (currentMoved && !Directory.Exists(currentDirectory) && Directory.Exists(previousDirectory))
+            if (existingMoved && !Directory.Exists(moduleDirectory) && Directory.Exists(backupDirectory))
             {
-                Directory.Move(previousDirectory, currentDirectory);
+                Directory.Move(backupDirectory, moduleDirectory);
             }
 
             throw;
         }
+
+        TryDeleteDirectory(backupDirectory);
     }
 
     private static void WriteInstallRecord(

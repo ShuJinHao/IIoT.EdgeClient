@@ -10,8 +10,6 @@ public static class EdgeClientProgramDataPaths
     public const string LauncherDirectoryName = "launcher";
     public const string ProfilesDirectoryName = "profiles";
     public const string PluginsDirectoryName = "plugins";
-    public const string PluginCurrentDirectoryName = "current";
-    public const string PluginPreviousDirectoryName = "previous";
     public const string DiagnosticsDirectoryName = "diagnostics";
     public const string LogsDirectoryName = "logs";
     public const string LauncherAccountsFileName = "launcher.accounts.json";
@@ -50,6 +48,9 @@ public static class EdgeClientProgramDataPaths
     public static string ResolveLauncherUpdateConfigPath(string? baseDirectory = null)
         => Path.Combine(ResolveLauncherDirectory(baseDirectory), LauncherUpdateConfigFileName);
 
+    public static string ResolveApplicationPluginRoot(string? baseDirectory = null)
+        => Path.Combine(ResolveApplicationLayoutRoot(baseDirectory), PluginsDirectoryName);
+
     public static string ResolveProfileConfigDirectory(string profileName, string? baseDirectory = null)
         => Path.Combine(ResolveConfigRoot(baseDirectory), ProfilesDirectoryName, SanitizePathSegment(profileName));
 
@@ -60,33 +61,6 @@ public static class EdgeClientProgramDataPaths
             ResolveProfileConfigDirectory(profile, baseDirectory),
             $"appsettings.machine.{profile}.json");
     }
-
-    public static string ResolveProfilePluginRootPath(string profileName, string? baseDirectory = null)
-        => Path.Combine(ResolveProfileConfigDirectory(profileName, baseDirectory), PluginsDirectoryName);
-
-    public static string ResolveProfilePluginDirectory(
-        string profileName,
-        string moduleId,
-        string? baseDirectory = null)
-        => Path.Combine(
-            ResolveProfilePluginRootPath(profileName, baseDirectory),
-            SanitizePathSegment(moduleId));
-
-    public static string ResolveProfilePluginCurrentDirectory(
-        string profileName,
-        string moduleId,
-        string? baseDirectory = null)
-        => Path.Combine(
-            ResolveProfilePluginDirectory(profileName, moduleId, baseDirectory),
-            PluginCurrentDirectoryName);
-
-    public static string ResolveProfilePluginPreviousDirectory(
-        string profileName,
-        string moduleId,
-        string? baseDirectory = null)
-        => Path.Combine(
-            ResolveProfilePluginDirectory(profileName, moduleId, baseDirectory),
-            PluginPreviousDirectoryName);
 
     public static string ResolveProfileDataRoot(string profileName, string? baseDirectory = null)
         => Path.Combine(ResolveDataRoot(baseDirectory), ProfilesDirectoryName, SanitizePathSegment(profileName));

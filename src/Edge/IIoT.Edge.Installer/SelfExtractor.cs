@@ -5,7 +5,7 @@ namespace IIoT.Edge.Installer;
 
 /// <summary>
 /// 自解压安装器的载荷读写：成品 .exe = [安装器外壳][载荷 zip][载荷长度 8 字节小端][magic 8 字节]。
-/// 服务端按你勾选的工序，把【launcher + 选中的工序文件夹 + iiot-binding.json(含码)】打成 zip 追加到外壳尾部，
+/// 服务端按你勾选的工序，把【launcher + host + 选中的 plugins + 绑定 JSON】打成 zip 追加到外壳尾部，
 /// 得到一个双击即装的 .exe;安装器运行时从自身尾部读回 zip 解压。整条链不需要在服务端编译。
 /// </summary>
 internal static class SelfExtractor

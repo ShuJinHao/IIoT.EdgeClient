@@ -14,12 +14,12 @@ public sealed class LauncherDeviceBindingImporterTests
         var dataRoot = Path.Combine(tempDirectory, "program-data");
         try
         {
-            var runtimeDirectory = Path.Combine(tempDirectory, "runtime");
-            Directory.CreateDirectory(runtimeDirectory);
+            var hostDirectory = Path.Combine(tempDirectory, "host");
+            Directory.CreateDirectory(hostDirectory);
 
             // 打包机器配置：声明启用模块 Homogenization（moduleId -> profile 据此匹配）
             WriteText(
-                Path.Combine(runtimeDirectory, "appsettings.machine.LineA.json"),
+                Path.Combine(hostDirectory, "appsettings.machine.LineA.json"),
                 """
                 {
                   "CloudApi": { "ClientCode": "", "BootstrapSecret": "" },
@@ -29,7 +29,7 @@ public sealed class LauncherDeviceBindingImporterTests
 
             // 随下载附带、放在 exe 目录下的首装绑定文件
             WriteText(
-                Path.Combine(runtimeDirectory, LauncherDeviceBindingImporter.BindingFileName),
+                Path.Combine(hostDirectory, LauncherDeviceBindingImporter.BindingFileName),
                 """
                 {
                   "schemaVersion": 1,
@@ -48,24 +48,24 @@ public sealed class LauncherDeviceBindingImporterTests
             WithDataRoot(dataRoot, () =>
             {
                 var importer = new LauncherDeviceBindingImporter(
-                    runtimeDirectory,
-                    new FakeProfileCatalog(Profile(runtimeDirectory)),
+                    hostDirectory,
+                    new FakeProfileCatalog(Profile(hostDirectory)),
                     new LauncherProfileModuleConfiguration());
 
                 importer.ApplyPendingBindings();
 
                 var externalConfig = File.ReadAllText(
-                    EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath("LineA", runtimeDirectory));
+                    EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath("LineA", hostDirectory));
                 Assert.Contains("\"ClientCode\": \"DEV-AAAAAAAAAA\"", externalConfig, StringComparison.Ordinal);
                 Assert.Contains("\"BootstrapSecret\": \"SEC-HOMOG-001\"", externalConfig, StringComparison.Ordinal);
                 Assert.Contains("\"BaseUrl\": \"http://cloud.local:81\"", externalConfig, StringComparison.Ordinal);
 
                 // 原始绑定文件导入后删除（不再在磁盘多留一份明文密钥）
                 Assert.False(File.Exists(
-                    Path.Combine(runtimeDirectory, LauncherDeviceBindingImporter.BindingFileName)));
+                    Path.Combine(hostDirectory, LauncherDeviceBindingImporter.BindingFileName)));
 
                 // 仅保留脱敏摘要：含 clientCode，但不含启动密钥
-                var launcherDir = EdgeClientProgramDataPaths.ResolveLauncherDirectory(runtimeDirectory);
+                var launcherDir = EdgeClientProgramDataPaths.ResolveLauncherDirectory(hostDirectory);
                 var appliedFiles = Directory.GetFiles(launcherDir, "iiot-binding.applied.*.json");
                 Assert.Single(appliedFiles);
                 var appliedContent = File.ReadAllText(appliedFiles[0]);
@@ -86,10 +86,10 @@ public sealed class LauncherDeviceBindingImporterTests
         var dataRoot = Path.Combine(tempDirectory, "program-data");
         try
         {
-            var runtimeDirectory = Path.Combine(tempDirectory, "runtime");
-            Directory.CreateDirectory(runtimeDirectory);
+            var hostDirectory = Path.Combine(tempDirectory, "host");
+            Directory.CreateDirectory(hostDirectory);
             WriteText(
-                Path.Combine(runtimeDirectory, "appsettings.machine.LineA.json"),
+                Path.Combine(hostDirectory, "appsettings.machine.LineA.json"),
                 """
                 { "Modules": { "Enabled": [ "Homogenization" ] } }
                 """);
@@ -97,8 +97,8 @@ public sealed class LauncherDeviceBindingImporterTests
             WithDataRoot(dataRoot, () =>
             {
                 var importer = new LauncherDeviceBindingImporter(
-                    runtimeDirectory,
-                    new FakeProfileCatalog(Profile(runtimeDirectory)),
+                    hostDirectory,
+                    new FakeProfileCatalog(Profile(hostDirectory)),
                     new LauncherProfileModuleConfiguration());
 
                 // 无绑定文件：不抛异常、也不创建外部配置
@@ -106,7 +106,7 @@ public sealed class LauncherDeviceBindingImporterTests
 
                 Assert.Null(exception);
                 Assert.False(File.Exists(
-                    EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath("LineA", runtimeDirectory)));
+                    EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath("LineA", hostDirectory)));
             });
         }
         finally
@@ -122,17 +122,17 @@ public sealed class LauncherDeviceBindingImporterTests
         var dataRoot = Path.Combine(tempDirectory, "program-data");
         try
         {
-            var runtimeDirectory = Path.Combine(tempDirectory, "runtime");
-            Directory.CreateDirectory(runtimeDirectory);
+            var hostDirectory = Path.Combine(tempDirectory, "host");
+            Directory.CreateDirectory(hostDirectory);
             WriteText(
-                Path.Combine(runtimeDirectory, LauncherDeviceBindingImporter.BindingFileName),
+                Path.Combine(hostDirectory, LauncherDeviceBindingImporter.BindingFileName),
                 "{ not valid json");
 
             WithDataRoot(dataRoot, () =>
             {
                 var importer = new LauncherDeviceBindingImporter(
-                    runtimeDirectory,
-                    new FakeProfileCatalog(Profile(runtimeDirectory)),
+                    hostDirectory,
+                    new FakeProfileCatalog(Profile(hostDirectory)),
                     new LauncherProfileModuleConfiguration());
 
                 // 启动红线：JSON 损坏不得抛 fatal
@@ -156,14 +156,14 @@ public sealed class LauncherDeviceBindingImporterTests
         public IReadOnlyList<LauncherProfileDefinition> LoadProfiles() => _profiles;
     }
 
-    private static LauncherProfileDefinition Profile(string runtimeDirectory)
+    private static LauncherProfileDefinition Profile(string hostDirectory)
         => new(
             "LineA",
             "Line A",
             "测试 profile",
             null,
             "LineA",
-            Path.Combine(runtimeDirectory, "IIoT.Edge.Shell"),
+            Path.Combine(hostDirectory, "IIoT.Edge.Shell"),
             "BeakerOutline",
             "#4D7C0F");
 

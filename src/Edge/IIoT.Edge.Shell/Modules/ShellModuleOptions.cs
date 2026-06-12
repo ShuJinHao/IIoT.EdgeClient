@@ -5,4 +5,6 @@ public sealed class ShellModuleOptions
     public const string SectionName = "Modules";
 
     public List<string> Enabled { get; set; } = [];
+
+    public List<string> PluginRoots { get; set; } = [];
 }

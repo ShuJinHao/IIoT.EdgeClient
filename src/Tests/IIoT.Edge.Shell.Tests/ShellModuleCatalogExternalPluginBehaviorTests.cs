@@ -1,6 +1,7 @@
 using IIoT.Edge.Host.Bootstrap.Modules;
 using IIoT.Edge.SharedKernel.Configuration;
 using IIoT.Edge.Shell.Modules;
+using Microsoft.Extensions.Configuration;
 using System.Text;
 using Xunit;
 
@@ -9,23 +10,22 @@ namespace IIoT.Edge.Shell.Tests;
 public sealed class ShellModuleCatalogExternalPluginBehaviorTests
 {
     [Fact]
-    public void GetPluginRootPaths_WhenMachineProfileIsProvided_ShouldIncludeProfileScopedExternalPluginRoot()
+    public void GetPluginRootPaths_WhenPluginRootsAreNotConfigured_ShouldUseLayoutPluginsRoot()
     {
         var tempDirectory = CreateTempDirectory();
-        var dataRootOverride = Path.Combine(tempDirectory, "data-root");
         try
         {
-            EdgeEnvironmentTestScope.WithDataRootOverride(dataRootOverride, () =>
-            {
-                var catalog = CreateCatalog();
+            var hostDirectory = Path.Combine(tempDirectory, "host");
+            Directory.CreateDirectory(hostDirectory);
+            var catalog = CreateCatalog();
+            var configuration = new ConfigurationBuilder().Build();
 
-                var paths = catalog.GetPluginRootPaths(tempDirectory, "HomogenizationLine");
+            var paths = catalog.GetPluginRootPaths(hostDirectory, configuration);
 
-                Assert.Equal(Path.Combine(tempDirectory, ShellModuleCatalog.PluginDirectoryName), paths[0]);
-                Assert.Equal(
-                    EdgeClientProgramDataPaths.ResolveProfilePluginRootPath("HomogenizationLine", tempDirectory),
-                    paths[1]);
-            });
+            var path = Assert.Single(paths);
+            Assert.Equal(
+                Path.Combine(tempDirectory, EdgeClientProgramDataPaths.PluginsDirectoryName),
+                path);
         }
         finally
         {
@@ -34,43 +34,63 @@ public sealed class ShellModuleCatalogExternalPluginBehaviorTests
     }
 
     [Fact]
-    public void DiscoverModules_WhenExternalProfilePluginMatchesBuiltInModule_ShouldPreferExternalPlugin()
+    public void GetPluginRootPaths_WhenPluginRootsAreConfigured_ShouldResolveRelativeToHostDirectory()
     {
         var tempDirectory = CreateTempDirectory();
-        var dataRootOverride = Path.Combine(tempDirectory, "data-root");
         try
         {
+            var hostDirectory = Path.Combine(tempDirectory, "host");
+            var customPluginRoot = Path.Combine(tempDirectory, "custom-plugins");
+            Directory.CreateDirectory(hostDirectory);
+            var configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Modules:PluginRoots:0"] = "../custom-plugins"
+                })
+                .Build();
+
+            var paths = CreateCatalog().GetPluginRootPaths(hostDirectory, configuration);
+
+            var path = Assert.Single(paths);
+            Assert.Equal(customPluginRoot, path);
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public void DiscoverModules_WhenConfiguredRootsContainDuplicateModule_ShouldPreferLaterRoot()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var firstRoot = Path.Combine(tempDirectory, "plugins-a");
+            var secondRoot = Path.Combine(tempDirectory, "plugins-b");
             WritePlugin(
-                Path.Combine(tempDirectory, ShellModuleCatalog.PluginDirectoryName, "Homogenization"),
+                Path.Combine(firstRoot, "Homogenization"),
                 "Homogenization",
                 "Homogenization",
                 "1.0.0",
-                "BuiltIn.dll");
+                "First.dll");
+            WritePlugin(
+                Path.Combine(secondRoot, "Homogenization"),
+                "Homogenization",
+                "Homogenization",
+                "2.0.0",
+                "Second.dll");
 
-            EdgeEnvironmentTestScope.WithDataRootOverride(dataRootOverride, () =>
-            {
-                var externalCurrentDirectory = EdgeClientProgramDataPaths.ResolveProfilePluginCurrentDirectory(
-                    "HomogenizationLine",
-                    "Homogenization",
-                    tempDirectory);
-                WritePlugin(
-                    externalCurrentDirectory,
-                    "Homogenization",
-                    "Homogenization",
-                    "2.0.0",
-                    "External.dll");
+            var catalog = CreateCatalog();
+            var discovery = catalog.DiscoverModules([firstRoot, secondRoot]);
 
-                var catalog = CreateCatalog();
-                var discovery = catalog.DiscoverModules(catalog.GetPluginRootPaths(tempDirectory, "HomogenizationLine"));
-
-                var descriptor = Assert.Single(discovery.Modules);
-                Assert.Empty(discovery.Issues);
-                Assert.Equal("2.0.0", descriptor.Version);
-                Assert.EndsWith(
-                    Path.Combine("Homogenization", "current", "plugin.json"),
-                    descriptor.ManifestPath,
-                    StringComparison.Ordinal);
-            });
+            var descriptor = Assert.Single(discovery.Modules);
+            Assert.Empty(discovery.Issues);
+            Assert.Equal("2.0.0", descriptor.Version);
+            Assert.EndsWith(
+                Path.Combine("plugins-b", "Homogenization", "plugin.json"),
+                descriptor.ManifestPath,
+                StringComparison.Ordinal);
         }
         finally
         {

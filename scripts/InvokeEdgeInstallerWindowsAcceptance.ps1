@@ -4,7 +4,9 @@ param(
 
     [string]$ExpectedModuleId = 'Homogenization',
 
-    [string]$ExpectedRuntimeDirectory = 'homogenization',
+    [string]$ExpectedHostDirectory = 'host',
+
+    [string]$ExpectedPluginsRoot = 'plugins',
 
     [string]$InstallRoot,
 
@@ -55,41 +57,48 @@ function Read-JsonFile {
     return Get-Content -Raw -Encoding UTF8 -Path $PathValue | ConvertFrom-Json
 }
 
-function Assert-InstalledRuntimeShape {
+function Assert-InstalledLayoutShape {
     param(
         [Parameter(Mandatory = $true)][string]$Root,
-        [Parameter(Mandatory = $true)][string]$RuntimeDirectory,
+        [Parameter(Mandatory = $true)][string]$HostDirectory,
+        [Parameter(Mandatory = $true)][string]$PluginsRoot,
         [Parameter(Mandatory = $true)][string]$ModuleId
     )
 
     $launcherExe = Join-Path $Root 'launcher/IIoT.Edge.Launcher.exe'
-    $runtimeRoot = Join-Path $Root $RuntimeDirectory
-    $pluginJson = Join-Path $runtimeRoot "Modules/$ModuleId/plugin.json"
+    $hostRoot = Join-Path $Root $HostDirectory
+    $hostExe = Join-Path $hostRoot 'IIoT.Edge.Shell.exe'
+    $pluginJson = Join-Path $Root "$PluginsRoot/$ModuleId/plugin.json"
 
-    foreach ($path in @($launcherExe, $runtimeRoot, $pluginJson)) {
+    foreach ($path in @($launcherExe, $hostRoot, $hostExe, $pluginJson)) {
         if (-not (Test-Path $path)) {
             throw "Expected installed path was not found: $path"
         }
     }
 
+    $legacyModulesRoot = Join-Path $hostRoot 'Modules'
+    if (Test-Path $legacyModulesRoot) {
+        throw "Host directory must stay clean and must not contain legacy Modules: $legacyModulesRoot"
+    }
+
     $allowedTopLevel = @(
         'launcher',
         'data',
-        $RuntimeDirectory
+        $HostDirectory,
+        $PluginsRoot
     )
     $unexpected = Get-ChildItem -LiteralPath $Root -Directory -Force |
         Where-Object { $allowedTopLevel -notcontains $_.Name } |
         Select-Object -ExpandProperty Name
 
     if ($unexpected.Count -gt 0) {
-        throw "Unexpected top-level runtime directories were installed: $($unexpected -join ', ')"
+        throw "Unexpected top-level directories were installed: $($unexpected -join ', ')"
     }
 }
 
 function Assert-BindingApplied {
     param(
         [Parameter(Mandatory = $true)][string]$Root,
-        [Parameter(Mandatory = $true)][string]$RuntimeDirectory,
         [Parameter(Mandatory = $true)][string]$ModuleId
     )
 
@@ -188,7 +197,8 @@ if ($CleanInstallRoot) {
 & (Join-Path $scriptRoot 'TestEdgeDownloadedInstallerPackage.ps1') `
     -InstallerPath $resolvedInstallerPath `
     -ExpectedModuleId $ExpectedModuleId `
-    -ExpectedRuntimeDirectory $ExpectedRuntimeDirectory
+    -ExpectedHostDirectory $ExpectedHostDirectory `
+    -ExpectedPluginsRoot $ExpectedPluginsRoot
 
 $process = Start-Process `
     -FilePath $resolvedInstallerPath `
@@ -205,9 +215,10 @@ Wait-Until `
     -TimeoutMessage "Timed out waiting for install root: $resolvedInstallRoot" `
     -Condition { Test-Path $resolvedInstallRoot }
 
-Assert-InstalledRuntimeShape `
+Assert-InstalledLayoutShape `
     -Root $resolvedInstallRoot `
-    -RuntimeDirectory $ExpectedRuntimeDirectory `
+    -HostDirectory $ExpectedHostDirectory `
+    -PluginsRoot $ExpectedPluginsRoot `
     -ModuleId $ExpectedModuleId
 
 if (-not $SkipLauncherProcessCheck) {
@@ -216,7 +227,6 @@ if (-not $SkipLauncherProcessCheck) {
 
 Assert-BindingApplied `
     -Root $resolvedInstallRoot `
-    -RuntimeDirectory $ExpectedRuntimeDirectory `
     -ModuleId $ExpectedModuleId
 
 Write-Host "Edge installer Windows acceptance passed: $resolvedInstallerPath"

@@ -4,7 +4,9 @@ param(
 
     [string]$ExpectedModuleId = 'Homogenization',
 
-    [string]$ExpectedRuntimeDirectory = 'homogenization',
+    [string]$ExpectedHostDirectory = 'host',
+
+    [string]$ExpectedPluginsRoot = 'plugins',
 
     [switch]$ExtractPayload,
 
@@ -174,7 +176,7 @@ function Assert-HostPluginPayload {
     param(
         [Parameter(Mandatory = $true)][string]$HostPluginJson,
         [Parameter(Mandatory = $true)][string]$ModuleId,
-        [Parameter(Mandatory = $true)][string]$RuntimeDirectory,
+        [Parameter(Mandatory = $true)][string]$PluginDirectory,
         [Parameter(Mandatory = $true)][string]$ClientCode
     )
 
@@ -188,8 +190,8 @@ function Assert-HostPluginPayload {
         throw "iiot-enabled-plugins.json does not contain module '$ModuleId'."
     }
 
-    if ($match.runtimeDirectory -ne $RuntimeDirectory) {
-        throw "iiot-enabled-plugins.json module '$ModuleId' runtimeDirectory '$($match.runtimeDirectory)' does not match '$RuntimeDirectory'."
+    if ($match.pluginDirectory -ne $PluginDirectory) {
+        throw "iiot-enabled-plugins.json module '$ModuleId' pluginDirectory '$($match.pluginDirectory)' does not match '$PluginDirectory'."
     }
 
     if ($match.clientCode -ne $ClientCode) {
@@ -239,8 +241,9 @@ try {
     Assert-ZipEntryExists -Archive $archive -EntryName 'launcher/IIoT.Edge.Launcher.exe'
     Assert-ZipEntryExists -Archive $archive -EntryName 'launcher/iiot-binding.json'
     Assert-ZipEntryExists -Archive $archive -EntryName 'launcher/iiot-enabled-plugins.json'
-    Assert-ZipEntryExists -Archive $archive -EntryName "$ExpectedRuntimeDirectory/Modules/$ExpectedModuleId/plugin.json"
-    Assert-ZipEntryExists -Archive $archive -EntryName "$ExpectedRuntimeDirectory/iiot-plugin-binding.json"
+    Assert-ZipEntryExists -Archive $archive -EntryName "$ExpectedHostDirectory/IIoT.Edge.Shell.dll"
+    Assert-ZipEntryExists -Archive $archive -EntryName "$ExpectedPluginsRoot/$ExpectedModuleId/plugin.json"
+    Assert-ZipEntryExists -Archive $archive -EntryName "$ExpectedPluginsRoot/$ExpectedModuleId/iiot-plugin-binding.json"
 
     $bindingJson = Read-ZipEntryText -Archive $archive -EntryName 'launcher/iiot-binding.json'
     $bindingItem = Assert-BindingPayload -BindingJson $bindingJson -ModuleId $ExpectedModuleId
@@ -249,10 +252,10 @@ try {
     Assert-HostPluginPayload `
         -HostPluginJson $hostPluginJson `
         -ModuleId $ExpectedModuleId `
-        -RuntimeDirectory $ExpectedRuntimeDirectory `
+        -PluginDirectory $ExpectedModuleId `
         -ClientCode $bindingItem.clientCode
 
-    $pluginBindingJson = Read-ZipEntryText -Archive $archive -EntryName "$ExpectedRuntimeDirectory/iiot-plugin-binding.json"
+    $pluginBindingJson = Read-ZipEntryText -Archive $archive -EntryName "$ExpectedPluginsRoot/$ExpectedModuleId/iiot-plugin-binding.json"
     Assert-PluginBindingPayload `
         -PluginBindingJson $pluginBindingJson `
         -ModuleId $ExpectedModuleId `

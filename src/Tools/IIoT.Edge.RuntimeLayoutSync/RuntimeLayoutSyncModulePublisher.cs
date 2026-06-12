@@ -4,11 +4,11 @@ using System.Xml.Linq;
 
 internal sealed class RuntimeLayoutSyncModulePublisher(IRuntimeLayoutSyncFileSystem fileSystem) : IRuntimeLayoutSyncModulePublisher
 {
-    public void PublishModulesToRuntimeRoot(
+    public void PublishModulesToPluginsRoot(
         string repoRoot,
         string configuration,
         IReadOnlyList<string> moduleIds,
-        string targetModulesRoot)
+        string targetPluginsRoot)
     {
         var moduleMap = GetModuleProjectMap(repoRoot);
         var uniqueModuleIds = moduleIds.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
@@ -23,8 +23,8 @@ internal sealed class RuntimeLayoutSyncModulePublisher(IRuntimeLayoutSyncFileSys
             BuildModuleProject(project.ProjectPath, configuration);
         }
 
-        fileSystem.RemoveDirectoryIfExists(targetModulesRoot);
-        fileSystem.CreateDirectory(targetModulesRoot);
+        fileSystem.RemoveDirectoryIfExists(targetPluginsRoot);
+        fileSystem.CreateDirectory(targetPluginsRoot);
 
         foreach (var moduleId in uniqueModuleIds)
         {
@@ -35,11 +35,11 @@ internal sealed class RuntimeLayoutSyncModulePublisher(IRuntimeLayoutSyncFileSys
                 throw new DirectoryNotFoundException($"Module build output was not found: {moduleBuildRoot}");
             }
 
-            var moduleRuntimeDirectory = Path.Combine(targetModulesRoot, moduleId);
-            fileSystem.RemoveDirectoryIfExists(moduleRuntimeDirectory);
-            fileSystem.CreateDirectory(moduleRuntimeDirectory);
-            fileSystem.CopyDirectoryContent(moduleBuildRoot, moduleRuntimeDirectory);
-            ValidatePluginManifest(Path.Combine(moduleRuntimeDirectory, "plugin.json"));
+            var modulePluginDirectory = Path.Combine(targetPluginsRoot, moduleId);
+            fileSystem.RemoveDirectoryIfExists(modulePluginDirectory);
+            fileSystem.CreateDirectory(modulePluginDirectory);
+            fileSystem.CopyDirectoryContent(moduleBuildRoot, modulePluginDirectory);
+            ValidatePluginManifest(Path.Combine(modulePluginDirectory, "plugin.json"));
         }
     }
 

@@ -196,13 +196,13 @@ function Copy-ArtifactDirectory {
 
 function Read-ArtifactPluginManifest {
     param(
-        [Parameter(Mandatory = $true)][string]$RuntimeDirectory,
+        [Parameter(Mandatory = $true)][string]$PluginDirectory,
         [Parameter(Mandatory = $true)][string]$ModuleId
     )
 
-    $pluginPath = Join-Path (Join-Path (Join-Path $RuntimeDirectory 'Modules') $ModuleId) 'plugin.json'
+    $pluginPath = Join-Path $PluginDirectory 'plugin.json'
     if (-not (Test-Path $pluginPath)) {
-        throw "Runtime '$RuntimeDirectory' is missing module plugin manifest: $ModuleId"
+        throw "Plugin directory '$PluginDirectory' is missing module plugin manifest: $ModuleId"
     }
 
     return Get-Content -Raw -Encoding UTF8 -Path $pluginPath | ConvertFrom-Json
@@ -360,8 +360,8 @@ function Register-CloudCatalog {
             targetRuntime = $Artifact.targetRuntime
             targetFramework = $Artifact.targetFramework
             downloadUrl = "$ArtifactPublicUrl#moduleId=$($module.moduleId)"
-            sha256 = $module.runtimeSha256
-            packageSize = $module.runtimeSize
+            sha256 = $module.pluginSha256
+            packageSize = $module.pluginSize
             releaseNotes = "Bundled in Edge installer artifact $($Artifact.version)"
             dependenciesJson = '[]'
             status = 'Published'
@@ -406,35 +406,37 @@ Copy-ArtifactDirectory `
     -SourceDirectory (Join-Path $resolvedRuntimeLayoutRoot $manifest.launcherDirectory) `
     -TargetDirectory (Join-Path $artifactRoot $manifest.launcherDirectory)
 
+Copy-ArtifactDirectory `
+    -SourceDirectory (Join-Path $resolvedRuntimeLayoutRoot $manifest.hostDirectory) `
+    -TargetDirectory (Join-Path $artifactRoot $manifest.hostDirectory)
+
+Copy-ArtifactDirectory `
+    -SourceDirectory (Join-Path $resolvedRuntimeLayoutRoot $manifest.pluginsRoot) `
+    -TargetDirectory (Join-Path $artifactRoot $manifest.pluginsRoot)
+
 $artifactDirectoriesToValidate = @(
-    (Join-Path $artifactRoot $manifest.launcherDirectory)
+    (Join-Path $artifactRoot $manifest.launcherDirectory),
+    (Join-Path $artifactRoot $manifest.hostDirectory),
+    (Join-Path $artifactRoot $manifest.pluginsRoot)
 )
 
 $modules = @()
-foreach ($runtime in $manifest.runtimes) {
-    $runtimeDirectory = Join-Path $resolvedRuntimeLayoutRoot $runtime.outputDirectory
-    $artifactRuntimeDirectory = Join-Path $artifactRoot $runtime.outputDirectory
-    Copy-ArtifactDirectory `
-        -SourceDirectory $runtimeDirectory `
-        -TargetDirectory $artifactRuntimeDirectory
-
-    $artifactDirectoriesToValidate += $artifactRuntimeDirectory
-
-    foreach ($moduleId in @($runtime.moduleIds)) {
-        $plugin = Read-ArtifactPluginManifest -RuntimeDirectory $runtimeDirectory -ModuleId $moduleId
-        $modules += [PSCustomObject]@{
-            moduleId = [string]$plugin.moduleId
-            displayName = [string]$plugin.displayName
-            description = [string]$plugin.description
-            version = [string]$plugin.version
-            hostApiVersion = [string]$plugin.hostApiVersion
-            minHostVersion = [string]$plugin.minHostVersion
-            maxHostVersion = [string]$plugin.maxHostVersion
-            runtimeId = [string]$runtime.runtimeId
-            runtimeDirectory = [string]$runtime.outputDirectory
-            runtimeSha256 = Get-ArtifactDirectorySha256 -Directory $artifactRuntimeDirectory
-            runtimeSize = Get-ArtifactDirectorySize -Directory $artifactRuntimeDirectory
-        }
+$moduleIds = @($manifest.profiles | ForEach-Object { $_.moduleIds } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+foreach ($moduleId in $moduleIds) {
+    $pluginDirectory = Join-Path (Join-Path $resolvedRuntimeLayoutRoot $manifest.pluginsRoot) $moduleId
+    $artifactPluginDirectory = Join-Path (Join-Path $artifactRoot $manifest.pluginsRoot) $moduleId
+    $plugin = Read-ArtifactPluginManifest -PluginDirectory $pluginDirectory -ModuleId $moduleId
+    $modules += [PSCustomObject]@{
+        moduleId = [string]$plugin.moduleId
+        displayName = [string]$plugin.displayName
+        description = [string]$plugin.description
+        version = [string]$plugin.version
+        hostApiVersion = [string]$plugin.hostApiVersion
+        minHostVersion = [string]$plugin.minHostVersion
+        maxHostVersion = [string]$plugin.maxHostVersion
+        pluginDirectory = [string]$moduleId
+        pluginSha256 = Get-ArtifactDirectorySha256 -Directory $artifactPluginDirectory
+        pluginSize = Get-ArtifactDirectorySize -Directory $artifactPluginDirectory
     }
 }
 
@@ -447,7 +449,7 @@ $publishedStubPath = Publish-InstallerStub -OutputDirectory $stubPublishRoot
 Copy-Item -Path $publishedStubPath -Destination $installerStubTargetPath -Force
 
 $artifact = [PSCustomObject]@{
-    schemaVersion = 1
+    schemaVersion = 2
     channel = $ReleaseChannel
     version = $Version
     hostApiVersion = $HostApiVersion
@@ -458,6 +460,10 @@ $artifact = [PSCustomObject]@{
     installerStubSha256 = Get-ArtifactSha256 -PathValue $installerStubTargetPath
     installerStubSize = (Get-Item $installerStubTargetPath).Length
     launcherDirectory = [string]$manifest.launcherDirectory
+    hostDirectory = [string]$manifest.hostDirectory
+    hostDirectorySha256 = Get-ArtifactDirectorySha256 -Directory (Join-Path $artifactRoot $manifest.hostDirectory)
+    hostDirectorySize = Get-ArtifactDirectorySize -Directory (Join-Path $artifactRoot $manifest.hostDirectory)
+    pluginsRoot = [string]$manifest.pluginsRoot
     modules = $modules
 }
 

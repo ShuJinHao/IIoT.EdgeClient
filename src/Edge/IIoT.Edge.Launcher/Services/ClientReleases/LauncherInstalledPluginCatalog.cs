@@ -15,11 +15,10 @@ public sealed class LauncherInstalledPluginCatalog : ILauncherInstalledPluginCat
     {
         ArgumentNullException.ThrowIfNull(profile);
 
-        var runtimeDirectory = LauncherCloudApiConfigurationResolver.ResolveRuntimeDirectory(profile);
+        var hostDirectory = LauncherCloudApiConfigurationResolver.ResolveHostDirectory(profile);
         var roots = new[]
         {
-            Path.Combine(runtimeDirectory, "Modules"),
-            EdgeClientProgramDataPaths.ResolveProfilePluginRootPath(profile.MachineProfile, runtimeDirectory)
+            EdgeClientProgramDataPaths.ResolveApplicationPluginRoot(hostDirectory)
         };
 
         var selected = new List<LauncherInstalledPlugin>();
@@ -65,13 +64,7 @@ public sealed class LauncherInstalledPluginCatalog : ILauncherInstalledPluginCat
     private static string? ResolveManifestPath(string pluginDirectory)
     {
         var direct = Path.Combine(pluginDirectory, "plugin.json");
-        if (File.Exists(direct))
-        {
-            return direct;
-        }
-
-        var current = Path.Combine(pluginDirectory, EdgeClientProgramDataPaths.PluginCurrentDirectoryName, "plugin.json");
-        return File.Exists(current) ? current : null;
+        return File.Exists(direct) ? direct : null;
     }
 
     private static LauncherInstalledPlugin? TryLoadPlugin(string manifestPath)

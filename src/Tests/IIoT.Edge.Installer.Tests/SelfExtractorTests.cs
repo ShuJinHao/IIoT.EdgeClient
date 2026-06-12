@@ -17,7 +17,7 @@ public sealed class SelfExtractorTests
             var stubPath = Path.Combine(tempDir, "stub.bin");
             File.WriteAllBytes(stubPath, Encoding.ASCII.GetBytes("FAKE-INSTALLER-STUB-BYTES"));
 
-            // 2. 载荷 zip:launcher/iiot-binding.json + 一个工序文件夹文件
+            // 2. 载荷 zip:launcher/iiot-binding.json + host + selected plugins
             byte[] payloadZip;
             using (var ms = new MemoryStream())
             {
@@ -25,7 +25,8 @@ public sealed class SelfExtractorTests
                 {
                     WriteEntry(zip, "launcher/iiot-binding.json",
                         "{\"bindings\":[{\"moduleId\":\"Homogenization\",\"clientCode\":\"DEV-AAAAAAAAAA\"}]}");
-                    WriteEntry(zip, "homogenization/IIoT.Edge.Shell.dll", "shell-bytes");
+                    WriteEntry(zip, "host/IIoT.Edge.Shell.dll", "shell-bytes");
+                    WriteEntry(zip, "plugins/Homogenization/plugin.json", "{}");
                 }
                 payloadZip = ms.ToArray();
             }
@@ -44,9 +45,11 @@ public sealed class SelfExtractorTests
             SelfExtractor.ExtractPayload(readBack!, installDir);
 
             var bindingPath = Path.Combine(installDir, "launcher", "iiot-binding.json");
-            var shellPath = Path.Combine(installDir, "homogenization", "IIoT.Edge.Shell.dll");
+            var shellPath = Path.Combine(installDir, "host", "IIoT.Edge.Shell.dll");
+            var pluginPath = Path.Combine(installDir, "plugins", "Homogenization", "plugin.json");
             Assert.True(File.Exists(bindingPath));
             Assert.True(File.Exists(shellPath));
+            Assert.True(File.Exists(pluginPath));
             Assert.Contains("DEV-AAAAAAAAAA", File.ReadAllText(bindingPath), StringComparison.Ordinal);
         }
         finally

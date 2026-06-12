@@ -57,7 +57,7 @@
              Targets="Build"
              BuildInParallel="false"
              Properties="Configuration=$(Configuration);TargetFramework=net10.0" />
-    <Exec Command="dotnet &quot;$(RuntimeLayoutSyncAssembly)&quot; --configuration &quot;$(Configuration)&quot; --repo-root &quot;$(RepoRoot)&quot; --manifest-path &quot;scripts/edge-runtime.publish.json&quot; --launcher-profile-catalog-path &quot;src/Edge/IIoT.Edge.Launcher/launcher.profiles.json&quot; --layout-root &quot;$(TargetDir)..&quot; --launcher-runtime-root &quot;$(TargetDir).&quot; --shell-runtime-root &quot;$(TargetDir)../shell/.&quot;"
+    <Exec Command="dotnet &quot;$(RuntimeLayoutSyncAssembly)&quot; --configuration &quot;$(Configuration)&quot; --repo-root &quot;$(RepoRoot)&quot; --manifest-path &quot;scripts/edge-runtime.publish.json&quot; --launcher-profile-catalog-path &quot;src/Edge/IIoT.Edge.Launcher/launcher.profiles.json&quot; --layout-root &quot;$(TargetDir)..&quot; --launcher-runtime-root &quot;$(TargetDir).&quot; --shell-runtime-root &quot;$(TargetDir)../host/.&quot;"
           WorkingDirectory="$(RepoRoot)" />
   </Target>
 

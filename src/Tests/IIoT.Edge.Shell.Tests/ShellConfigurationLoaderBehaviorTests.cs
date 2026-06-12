@@ -211,8 +211,9 @@ public sealed class ShellConfigurationLoaderBehaviorTests
         var tempDirectory = CreateTempDirectory();
         try
         {
+            var hostDirectory = Path.Combine(tempDirectory, "host");
             WriteText(
-                Path.Combine(tempDirectory, "appsettings.json"),
+                Path.Combine(hostDirectory, "appsettings.json"),
                 """
                 {
                   "Modules": {
@@ -226,7 +227,7 @@ public sealed class ShellConfigurationLoaderBehaviorTests
                   }
                 }
                 """);
-            var pluginConfigDirectory = Path.Combine(tempDirectory, "Modules", "Homogenization", "Config");
+            var pluginConfigDirectory = Path.Combine(tempDirectory, "plugins", "Homogenization", "Config");
             Directory.CreateDirectory(pluginConfigDirectory);
             WriteText(
                 Path.Combine(pluginConfigDirectory, "homogenization.module.json"),
@@ -244,7 +245,7 @@ public sealed class ShellConfigurationLoaderBehaviorTests
                 }
                 """);
 
-            var result = new ShellConfigurationLoader().Load(tempDirectory);
+            var result = new ShellConfigurationLoader().Load(hostDirectory);
 
             Assert.Equal("25", result.Configuration["Modules:Homogenization:Module:Presentation:MaxOutboundRecords"]);
         }
@@ -260,8 +261,9 @@ public sealed class ShellConfigurationLoaderBehaviorTests
         var tempDirectory = CreateTempDirectory();
         try
         {
+            var hostDirectory = Path.Combine(tempDirectory, "host");
             WriteText(
-                Path.Combine(tempDirectory, "appsettings.json"),
+                Path.Combine(hostDirectory, "appsettings.json"),
                 """
                 {
                   "Modules": {
@@ -269,7 +271,7 @@ public sealed class ShellConfigurationLoaderBehaviorTests
                   }
                 }
                 """);
-            var pluginDirectory = Path.Combine(tempDirectory, "Modules", "Homogenization");
+            var pluginDirectory = Path.Combine(tempDirectory, "plugins", "Homogenization");
             Directory.CreateDirectory(pluginDirectory);
             WriteText(
                 Path.Combine(pluginDirectory, "homogenization.module.json"),
@@ -287,7 +289,7 @@ public sealed class ShellConfigurationLoaderBehaviorTests
                 }
                 """);
 
-            var result = new ShellConfigurationLoader().Load(tempDirectory);
+            var result = new ShellConfigurationLoader().Load(hostDirectory);
 
             Assert.Equal("50", result.Configuration["Modules:Homogenization:Module:Runtime:EventLoopIntervalMs"]);
         }
@@ -298,23 +300,23 @@ public sealed class ShellConfigurationLoaderBehaviorTests
     }
 
     [Fact]
-    public void Load_WhenExternalProfilePluginDefaultExists_ShouldApplyItAfterPublishedPluginDefaults()
+    public void Load_WhenMultiplePluginRootsAreConfigured_ShouldApplyLaterDefaultsAfterEarlierDefaults()
     {
         var tempDirectory = CreateTempDirectory();
-        var dataRootOverride = Path.Combine(tempDirectory, "data-root");
         try
         {
+            var hostDirectory = Path.Combine(tempDirectory, "host");
             WriteText(
-                Path.Combine(tempDirectory, "appsettings.json"),
+                Path.Combine(hostDirectory, "appsettings.json"),
                 """
                 {
-                  "Shell": {
-                    "MachineProfile": "HomogenizationLine"
+                  "Modules": {
+                    "PluginRoots": [ "../plugins-a", "../plugins-b" ]
                   }
                 }
                 """);
             WriteText(
-                Path.Combine(tempDirectory, "Modules", "Homogenization", "Config", "homogenization.module.json"),
+                Path.Combine(tempDirectory, "plugins-a", "Homogenization", "Config", "homogenization.module.json"),
                 """
                 {
                   "Modules": {
@@ -329,34 +331,25 @@ public sealed class ShellConfigurationLoaderBehaviorTests
                 }
                 """);
 
-            EdgeEnvironmentTestScope.WithDataRootOverride(dataRootOverride, () =>
-            {
-                WriteText(
-                    Path.Combine(
-                        EdgeClientProgramDataPaths.ResolveProfilePluginCurrentDirectory(
-                            "HomogenizationLine",
-                            "Homogenization",
-                            tempDirectory),
-                        "Config",
-                        "homogenization.module.json"),
-                    """
-                    {
-                      "Modules": {
-                        "Homogenization": {
-                          "Module": {
-                            "Runtime": {
-                              "EventLoopIntervalMs": 75
-                            }
-                          }
+            WriteText(
+                Path.Combine(tempDirectory, "plugins-b", "Homogenization", "Config", "homogenization.module.json"),
+                """
+                {
+                  "Modules": {
+                    "Homogenization": {
+                      "Module": {
+                        "Runtime": {
+                          "EventLoopIntervalMs": 75
                         }
                       }
                     }
-                    """);
+                  }
+                }
+                """);
 
-                var result = new ShellConfigurationLoader().Load(tempDirectory);
+            var result = new ShellConfigurationLoader().Load(hostDirectory);
 
-                Assert.Equal("75", result.Configuration["Modules:Homogenization:Module:Runtime:EventLoopIntervalMs"]);
-            });
+            Assert.Equal("75", result.Configuration["Modules:Homogenization:Module:Runtime:EventLoopIntervalMs"]);
         }
         finally
         {

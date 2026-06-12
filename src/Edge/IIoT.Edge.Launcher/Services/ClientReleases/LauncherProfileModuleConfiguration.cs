@@ -19,9 +19,9 @@ public sealed class LauncherProfileModuleConfiguration : ILauncherProfileModuleC
     {
         ArgumentNullException.ThrowIfNull(profile);
 
-        var runtimeDirectory = LauncherCloudApiConfigurationResolver.ResolveRuntimeDirectory(profile);
+        var hostDirectory = LauncherCloudApiConfigurationResolver.ResolveHostDirectory(profile);
         var enabled = new List<string>();
-        foreach (var path in ResolveEffectiveConfigPaths(profile, runtimeDirectory))
+        foreach (var path in ResolveEffectiveConfigPaths(profile, hostDirectory))
         {
             var fileEnabled = ReadEnabledModules(path);
             if (fileEnabled is not null)
@@ -42,8 +42,8 @@ public sealed class LauncherProfileModuleConfiguration : ILauncherProfileModuleC
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(moduleIds);
 
-        var runtimeDirectory = LauncherCloudApiConfigurationResolver.ResolveRuntimeDirectory(profile);
-        var targetPath = EnsureExternalMachineProfile(profile, runtimeDirectory);
+        var hostDirectory = LauncherCloudApiConfigurationResolver.ResolveHostDirectory(profile);
+        var targetPath = EnsureExternalMachineProfile(profile, hostDirectory);
         JsonObject root;
         if (File.Exists(targetPath))
         {
@@ -93,13 +93,13 @@ public sealed class LauncherProfileModuleConfiguration : ILauncherProfileModuleC
 
     private static IReadOnlyList<string> ResolveEffectiveConfigPaths(
         LauncherProfileDefinition profile,
-        string runtimeDirectory)
+        string hostDirectory)
     {
         var paths = new List<string>
         {
-            Path.Combine(runtimeDirectory, "appsettings.json"),
-            Path.Combine(runtimeDirectory, $"appsettings.machine.{profile.MachineProfile}.json"),
-            EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(profile.MachineProfile, runtimeDirectory)
+            Path.Combine(hostDirectory, "appsettings.json"),
+            Path.Combine(hostDirectory, $"appsettings.machine.{profile.MachineProfile}.json"),
+            EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(profile.MachineProfile, hostDirectory)
         };
 
         return paths
@@ -143,15 +143,15 @@ public sealed class LauncherProfileModuleConfiguration : ILauncherProfileModuleC
         }
     }
 
-    private static string EnsureExternalMachineProfile(LauncherProfileDefinition profile, string runtimeDirectory)
+    private static string EnsureExternalMachineProfile(LauncherProfileDefinition profile, string hostDirectory)
     {
-        var targetPath = EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(profile.MachineProfile, runtimeDirectory);
+        var targetPath = EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(profile.MachineProfile, hostDirectory);
         if (File.Exists(targetPath))
         {
             return targetPath;
         }
 
-        var packagedPath = Path.Combine(runtimeDirectory, $"appsettings.machine.{profile.MachineProfile}.json");
+        var packagedPath = Path.Combine(hostDirectory, $"appsettings.machine.{profile.MachineProfile}.json");
         var directory = Path.GetDirectoryName(targetPath);
         if (!string.IsNullOrWhiteSpace(directory))
         {

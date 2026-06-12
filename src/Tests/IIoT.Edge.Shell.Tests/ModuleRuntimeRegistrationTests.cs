@@ -44,7 +44,7 @@ namespace IIoT.Edge.Shell.Tests;
 public sealed class ModuleRuntimeRegistrationTests
 {
     [Fact]
-    public void ConfiguredCatalog_WhenNoModulesSectionExists_ShouldEnableAllDiscoveredModules()
+    public void ConfiguredCatalog_WhenNoModulesSectionExists_ShouldNotEnableDiscoveredModules()
     {
         var pluginRoot = CreatePluginRuntimeRoot();
         try
@@ -53,10 +53,9 @@ public sealed class ModuleRuntimeRegistrationTests
             var activation = CreateShellModuleCatalog().CreateEnabledModules(CreateConfiguration(), discovery.Modules);
 
             Assert.Empty(discovery.Issues);
-            Assert.Empty(activation.Issues);
-            Assert.Equal(
-                ["Homogenization"],
-                activation.Modules.Select(x => x.ModuleId).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray());
+            Assert.Empty(activation.Modules);
+            Assert.Contains(activation.Issues, issue => issue.Code == "PLUGIN_ENABLED_EMPTY");
+            Assert.Contains(activation.Issues, issue => issue.Code == "PLUGIN_NONE_ENABLED");
         }
         finally
         {

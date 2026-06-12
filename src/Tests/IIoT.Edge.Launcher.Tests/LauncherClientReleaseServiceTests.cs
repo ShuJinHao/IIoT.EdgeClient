@@ -17,10 +17,10 @@ public sealed class LauncherClientReleaseServiceTests
         var dataRoot = Path.Combine(tempDirectory, "program-data");
         try
         {
-            var runtimeDirectory = Path.Combine(tempDirectory, "runtime");
-            Directory.CreateDirectory(runtimeDirectory);
+            var hostDirectory = Path.Combine(tempDirectory, "host");
+            Directory.CreateDirectory(hostDirectory);
             WriteText(
-                Path.Combine(runtimeDirectory, "appsettings.json"),
+                Path.Combine(hostDirectory, "appsettings.json"),
                 """
                 {
                   "CloudApi": {
@@ -38,7 +38,7 @@ public sealed class LauncherClientReleaseServiceTests
             WithDataRoot(dataRoot, () =>
             {
                 WriteText(
-                    EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath("LineA", runtimeDirectory),
+                    EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath("LineA", hostDirectory),
                     """
                     {
                       "CloudApi": {
@@ -48,7 +48,7 @@ public sealed class LauncherClientReleaseServiceTests
                     }
                     """);
                 WriteText(
-                    EdgeClientProgramDataPaths.ResolveLauncherUpdateConfigPath(runtimeDirectory),
+                    EdgeClientProgramDataPaths.ResolveLauncherUpdateConfigPath(hostDirectory),
                     """
                     {
                       "Channel": "beta",
@@ -56,8 +56,8 @@ public sealed class LauncherClientReleaseServiceTests
                     }
                     """);
 
-                var resolver = new LauncherCloudApiConfigurationResolver(runtimeDirectory);
-                var profile = Profile(runtimeDirectory);
+                var resolver = new LauncherCloudApiConfigurationResolver(hostDirectory);
+                var profile = Profile(hostDirectory);
 
                 var result = resolver.Resolve(profile);
                 var releaseOptions = resolver.ResolveReleaseOptions();
@@ -83,10 +83,10 @@ public sealed class LauncherClientReleaseServiceTests
         var dataRoot = Path.Combine(tempDirectory, "program-data");
         try
         {
-            var runtimeDirectory = Path.Combine(tempDirectory, "runtime");
-            Directory.CreateDirectory(runtimeDirectory);
+            var hostDirectory = Path.Combine(tempDirectory, "host");
+            Directory.CreateDirectory(hostDirectory);
             WriteText(
-                Path.Combine(runtimeDirectory, "appsettings.json"),
+                Path.Combine(hostDirectory, "appsettings.json"),
                 """
                 {
                   "CloudApi": {
@@ -104,7 +104,7 @@ public sealed class LauncherClientReleaseServiceTests
             {
                 // 只有 ClientCode、缺 BootstrapSecret
                 WriteText(
-                    EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath("LineA", runtimeDirectory),
+                    EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath("LineA", hostDirectory),
                     """
                     {
                       "CloudApi": {
@@ -113,9 +113,9 @@ public sealed class LauncherClientReleaseServiceTests
                     }
                     """);
 
-                var resolver = new LauncherCloudApiConfigurationResolver(runtimeDirectory);
+                var resolver = new LauncherCloudApiConfigurationResolver(hostDirectory);
 
-                var result = resolver.Resolve(Profile(runtimeDirectory));
+                var result = resolver.Resolve(Profile(hostDirectory));
 
                 // 方案 B 为密钥模式：缺 BootstrapSecret 必须判定为配置不完整（与 Shell bootstrap 要求一致）
                 Assert.False(result.Success);
@@ -135,10 +135,10 @@ public sealed class LauncherClientReleaseServiceTests
         var dataRoot = Path.Combine(tempDirectory, "program-data");
         try
         {
-            var runtimeDirectory = Path.Combine(tempDirectory, "runtime");
-            Directory.CreateDirectory(runtimeDirectory);
+            var hostDirectory = Path.Combine(tempDirectory, "host");
+            Directory.CreateDirectory(hostDirectory);
             WriteText(
-                Path.Combine(runtimeDirectory, "appsettings.machine.LineA.json"),
+                Path.Combine(hostDirectory, "appsettings.machine.LineA.json"),
                 """
                 {
                   "CloudApi": {
@@ -153,14 +153,14 @@ public sealed class LauncherClientReleaseServiceTests
 
             WithDataRoot(dataRoot, () =>
             {
-                var profile = Profile(runtimeDirectory);
+                var profile = Profile(hostDirectory);
                 var configuration = new LauncherProfileModuleConfiguration();
 
                 configuration.EnableModules(profile, ["Welding"]);
 
                 var enabled = configuration.ReadEnabledModules(profile);
                 var externalConfig = File.ReadAllText(
-                    EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath("LineA", runtimeDirectory));
+                    EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath("LineA", hostDirectory));
 
                 Assert.Equal(["Homogenization", "Welding"], enabled);
                 Assert.Contains("\"ClientCode\": \"EDGE-001\"", externalConfig, StringComparison.Ordinal);
@@ -173,14 +173,14 @@ public sealed class LauncherClientReleaseServiceTests
     }
 
     [Fact]
-    public async Task PluginPackageInstaller_ShouldInstallPackageIntoProfileExternalCurrentDirectory()
+    public async Task PluginPackageInstaller_ShouldInstallPackageIntoApplicationPluginsRoot()
     {
         var tempDirectory = CreateTempDirectory();
         var dataRoot = Path.Combine(tempDirectory, "program-data");
         try
         {
-            var runtimeDirectory = Path.Combine(tempDirectory, "runtime");
-            Directory.CreateDirectory(runtimeDirectory);
+            var hostDirectory = Path.Combine(tempDirectory, "host");
+            Directory.CreateDirectory(hostDirectory);
             var packagePath = Path.Combine(tempDirectory, "IIoT.EdgePlugin.Homogenization-1.2.0-win-x64.zip");
             CreatePluginPackage(packagePath, "Homogenization", "1.2.0");
             var sha256 = ComputeSha256(packagePath);
@@ -214,21 +214,20 @@ public sealed class LauncherClientReleaseServiceTests
                 var installer = new LauncherPluginPackageInstaller();
 
                 var result = await installer.InstallAsync(
-                    Profile(runtimeDirectory),
+                    Profile(hostDirectory),
                     release,
                     CloudOptions(),
                     "1.0.0",
                     EdgeClientHostRuntime.HostApiVersion);
 
-                var currentDirectory = EdgeClientProgramDataPaths.ResolveProfilePluginCurrentDirectory(
-                    "LineA",
-                    "Homogenization",
-                    runtimeDirectory);
+                var pluginDirectory = Path.Combine(
+                    EdgeClientProgramDataPaths.ResolveApplicationPluginRoot(hostDirectory),
+                    "Homogenization");
                 Assert.True(result.Success, result.ErrorMessage);
-                Assert.True(File.Exists(Path.Combine(currentDirectory, "plugin.json")));
-                Assert.True(File.Exists(Path.Combine(currentDirectory, "IIoT.Edge.Module.Homogenization.dll")));
+                Assert.True(File.Exists(Path.Combine(pluginDirectory, "plugin.json")));
+                Assert.True(File.Exists(Path.Combine(pluginDirectory, "IIoT.Edge.Module.Homogenization.dll")));
                 Assert.True(File.Exists(Path.Combine(
-                    EdgeClientProgramDataPaths.ResolveProfilePluginDirectory("LineA", "Homogenization", runtimeDirectory),
+                    pluginDirectory,
                     "install.json")));
             });
         }
@@ -245,8 +244,8 @@ public sealed class LauncherClientReleaseServiceTests
         var dataRoot = Path.Combine(tempDirectory, "program-data");
         try
         {
-            var runtimeDirectory = Path.Combine(tempDirectory, "runtime");
-            Directory.CreateDirectory(runtimeDirectory);
+            var hostDirectory = Path.Combine(tempDirectory, "host");
+            Directory.CreateDirectory(hostDirectory);
             var packagePath = Path.Combine(tempDirectory, "IIoT.EdgePlugin.Homogenization-1.2.0-win-x64.zip");
             CreatePluginPackage(packagePath, "Homogenization", "1.2.0", "..\\evil.dll");
             var sha256 = ComputeSha256(packagePath);
@@ -280,7 +279,7 @@ public sealed class LauncherClientReleaseServiceTests
                 var installer = new LauncherPluginPackageInstaller();
 
                 var result = await installer.InstallAsync(
-                    Profile(runtimeDirectory),
+                    Profile(hostDirectory),
                     release,
                     CloudOptions(),
                     "1.0.0",
@@ -303,8 +302,8 @@ public sealed class LauncherClientReleaseServiceTests
         var dataRoot = Path.Combine(tempDirectory, "program-data");
         try
         {
-            var runtimeDirectory = Path.Combine(tempDirectory, "runtime");
-            Directory.CreateDirectory(runtimeDirectory);
+            var hostDirectory = Path.Combine(tempDirectory, "host");
+            Directory.CreateDirectory(hostDirectory);
             var packagePath = Path.Combine(tempDirectory, "IIoT.EdgePlugin.Homogenization-1.2.0-win-x64.zip");
             CreatePluginPackage(packagePath, "Homogenization", "1.2.0");
             var release = ReleaseWithPackage(packagePath);
@@ -318,7 +317,7 @@ public sealed class LauncherClientReleaseServiceTests
             WithDataRoot(dataRoot, async () =>
             {
                 var result = await installer.InstallAsync(
-                    Profile(runtimeDirectory),
+                    Profile(hostDirectory),
                     release,
                     CloudOptions(),
                     "1.0.0",
@@ -341,8 +340,8 @@ public sealed class LauncherClientReleaseServiceTests
         var dataRoot = Path.Combine(tempDirectory, "program-data");
         try
         {
-            var runtimeDirectory = Path.Combine(tempDirectory, "runtime");
-            Directory.CreateDirectory(runtimeDirectory);
+            var hostDirectory = Path.Combine(tempDirectory, "host");
+            Directory.CreateDirectory(hostDirectory);
             var packagePath = Path.Combine(tempDirectory, "IIoT.EdgePlugin.Homogenization-1.2.0-win-x64.zip");
             CreatePluginPackage(packagePath, "Homogenization", "1.2.0");
             var release = ReleaseWithPackage(packagePath);
@@ -356,7 +355,7 @@ public sealed class LauncherClientReleaseServiceTests
             WithDataRoot(dataRoot, async () =>
             {
                 var result = await installer.InstallAsync(
-                    Profile(runtimeDirectory),
+                    Profile(hostDirectory),
                     release,
                     CloudOptions(),
                     "1.0.0",
@@ -405,14 +404,14 @@ public sealed class LauncherClientReleaseServiceTests
         Assert.Equal(LauncherPluginUpdateState.Incompatible, plans.Single(x => x.Release.ModuleId == "Welding").State);
     }
 
-    private static LauncherProfileDefinition Profile(string runtimeDirectory)
+    private static LauncherProfileDefinition Profile(string hostDirectory)
         => new(
             "LineA",
             "Line A",
             "Line A profile",
             null,
             "LineA",
-            Path.Combine(runtimeDirectory, "IIoT.Edge.Shell"),
+            Path.Combine(hostDirectory, "IIoT.Edge.Shell"),
             "Cog",
             "#0F766E");
 

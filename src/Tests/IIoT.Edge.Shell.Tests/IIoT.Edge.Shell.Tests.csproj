@@ -47,10 +47,10 @@
   </Target>
 
   <Target Name="CopyPluginModulesToTestOutput" AfterTargets="Build" DependsOnTargets="ResolvePluginModuleArtifacts" Condition="'@(PluginModuleArtifact)' != ''">
-    <MakeDir Directories="@(PluginModuleArtifact -> '$(TargetDir)Modules\%(ModuleId)\%(RecursiveDir)')" />
+    <MakeDir Directories="@(PluginModuleArtifact -> '$(TargetDir)..\plugins\%(ModuleId)\%(RecursiveDir)')" />
     <Copy
       SourceFiles="@(PluginModuleArtifact)"
-      DestinationFiles="@(PluginModuleArtifact -> '$(TargetDir)Modules\%(ModuleId)\%(RecursiveDir)%(Filename)%(Extension)')"
+      DestinationFiles="@(PluginModuleArtifact -> '$(TargetDir)..\plugins\%(ModuleId)\%(RecursiveDir)%(Filename)%(Extension)')"
       SkipUnchangedFiles="true" />
   </Target>
 

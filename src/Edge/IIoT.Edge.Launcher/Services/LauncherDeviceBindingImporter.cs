@@ -95,8 +95,8 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
         string? bootstrapSecret,
         string? baseUrl)
     {
-        var runtimeDirectory = LauncherCloudApiConfigurationResolver.ResolveRuntimeDirectory(profile);
-        var targetPath = EnsureExternalMachineProfile(profile, runtimeDirectory);
+        var hostDirectory = LauncherCloudApiConfigurationResolver.ResolveHostDirectory(profile);
+        var targetPath = EnsureExternalMachineProfile(profile, hostDirectory);
 
         JsonObject root;
         try
@@ -138,15 +138,15 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
     }
 
     // 与 LauncherProfileModuleConfiguration 保持同一外部机器配置约定：外部不存在则从打包配置拷贝。
-    private static string EnsureExternalMachineProfile(LauncherProfileDefinition profile, string runtimeDirectory)
+    private static string EnsureExternalMachineProfile(LauncherProfileDefinition profile, string hostDirectory)
     {
-        var targetPath = EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(profile.MachineProfile, runtimeDirectory);
+        var targetPath = EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(profile.MachineProfile, hostDirectory);
         if (File.Exists(targetPath))
         {
             return targetPath;
         }
 
-        var packagedPath = Path.Combine(runtimeDirectory, $"appsettings.machine.{profile.MachineProfile}.json");
+        var packagedPath = Path.Combine(hostDirectory, $"appsettings.machine.{profile.MachineProfile}.json");
         var directory = Path.GetDirectoryName(targetPath);
         if (!string.IsNullOrWhiteSpace(directory))
         {

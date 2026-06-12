@@ -28,6 +28,7 @@ $stagingRoot = Join-Path $resolvedOutputRoot ('.staging\' + [Guid]::NewGuid().To
 $launcherPublishRoot = Join-Path $stagingRoot 'launcher'
 $shellPublishRoot = Join-Path $stagingRoot 'shell'
 $launcherRuntimeRoot = Join-Path $resolvedOutputRoot $manifest.launcherDirectory
+$dataRoot = Join-Path $resolvedOutputRoot 'data'
 Test-EdgeLauncherProfilesMatchManifest -Manifest $manifest -Profiles $launcherProfileCatalog.Profiles -LauncherRuntimeRoot $launcherRuntimeRoot
 
 function Publish-Project {
@@ -99,14 +100,19 @@ try {
     Copy-EdgeLauncherProfileCatalog -SourcePath $launcherProfileCatalog.Path -LauncherRuntimeRoot $launcherRuntimeRoot | Out-Null
     Remove-EdgeLauncherShellArtifacts -LauncherRuntimeRoot $launcherRuntimeRoot
 
-    foreach ($runtime in $manifest.runtimes) {
-        Sync-EdgeProcessRuntime `
-            -RepoRoot $repoRoot `
-            -Configuration $Configuration `
-            -ShellRuntimeSource $shellPublishRoot `
-            -RuntimeDefinition $runtime `
-            -LayoutRoot $resolvedOutputRoot
-    }
+    Sync-EdgeHostLayout `
+        -RepoRoot $repoRoot `
+        -ShellRuntimeSource $shellPublishRoot `
+        -Manifest $manifest `
+        -LayoutRoot $resolvedOutputRoot
+
+    Sync-EdgePluginsLayout `
+        -RepoRoot $repoRoot `
+        -Configuration $Configuration `
+        -Manifest $manifest `
+        -LayoutRoot $resolvedOutputRoot
+
+    New-Item -Path $dataRoot -ItemType Directory -Force | Out-Null
 
     Test-EdgeLauncherProfilesMatchManifest -Manifest $manifest -Profiles $launcherProfileCatalog.Profiles -LauncherRuntimeRoot $launcherRuntimeRoot -CheckExecutablePath
 

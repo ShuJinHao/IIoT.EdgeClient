@@ -331,11 +331,11 @@ public sealed class LauncherClientReleaseService : ILauncherClientReleaseService
 
     private static string ResolveHostVersion(LauncherProfileDefinition profile)
     {
-        var runtimeDirectory = LauncherCloudApiConfigurationResolver.ResolveRuntimeDirectory(profile);
+        var hostDirectory = LauncherCloudApiConfigurationResolver.ResolveHostDirectory(profile);
         var candidates = new[]
         {
-            Path.Combine(runtimeDirectory, "IIoT.Edge.Host.Bootstrap.dll"),
-            Path.Combine(runtimeDirectory, "IIoT.Edge.Shell.dll"),
+            Path.Combine(hostDirectory, "IIoT.Edge.Host.Bootstrap.dll"),
+            Path.Combine(hostDirectory, "IIoT.Edge.Shell.dll"),
             profile.ExecutablePath
         };
 

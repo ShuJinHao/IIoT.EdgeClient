@@ -9,7 +9,7 @@ Edge 现场安装由两层组成：
 - 通用宿主：Launcher、Shell、共享运行时、Velopack 自更新能力。
 - 工序插件：按机器 profile 选择安装，可同时安装多个工序，独立声明版本和宿主兼容范围。
 
-开发机仍可通过 `EnableLocalPluginModuleBuild=true` 全量加载仓库内插件调试；现场机通过 profile 插件目录和 `Modules:Enabled` 控制启用范围。
+开发机和现场机都遵守同一布局：宿主目录保持干净，插件只放在与宿主并列的 `plugins/`。现场机通过 `launcher.profiles.json`、`Shell__MachineProfile`、`Modules:PluginRoots` 和 `Modules:Enabled` 控制可见工序与启用范围。
 
 ## 2. 不变量
 
@@ -21,26 +21,55 @@ Edge 现场安装由两层组成：
 
 ## 3. 目录布局
 
-通用宿主程序目录仍由 Velopack 管理。动态插件安装在 profile 级外部目录：
+安装目录固定为单宿主布局：
 
 ```text
-<ProgramDataRoot>/IIoT/EdgeClient/profiles/<MachineProfile>/plugins/
-  <ModuleId>/
-    current/
+install-root/
+  launcher/
+    launcher.profiles.json
+  host/
+    IIoT.Edge.Shell(.exe/.dll)
+    appsettings.json
+    appsettings.machine.<MachineProfile>.json
+  plugins/
+    <ModuleId>/
       plugin.json
       <module assemblies>
-    previous/
-    install.json
+      install.json
+  data/
 ```
 
-`current/` 是 Shell 当前发现和加载的插件目录。后续 Launcher 安装插件时必须先写 staging，再校验 SHA256、`plugin.json`、宿主兼容性和依赖，最后原子替换 `current/`。`previous/` 用于安装失败回滚和人工恢复。
+`host/` 只能包含宿主及宿主配置，严禁出现 `Modules/` 或任何工序插件。Shell 默认从 `host/../plugins` 发现插件，也可以通过 `Modules:PluginRoots` 显式配置插件根路径。`Modules:Enabled` 为空时不自动加载全部插件，必须提示诊断问题。
 
-现阶段 Shell 同时发现两类插件根：
+`launcher.profiles.json` 中所有工序的 `ExecutablePath` 必须指向同一份宿主：
 
-1. 程序目录 `Modules/`，用于现有发布包和开发调试。
-2. 外部 profile 插件根 `<ProgramDataRoot>/IIoT/EdgeClient/profiles/<MachineProfile>/plugins/`。
+```json
+{
+  "ProfileId": "HomogenizationLine",
+  "DisplayName": "匀浆",
+  "MachineProfile": "HomogenizationLine",
+  "ExecutablePath": "../host/IIoT.Edge.Shell"
+}
+```
 
-当内置目录和外部目录出现相同 `moduleId` 或相同 `supportedProcessType` 时，外部 profile 插件优先。通用宿主最终应趋向零内置工序插件。
+安装素材清单使用 `schemaVersion=2`：
+
+```json
+{
+  "schemaVersion": 2,
+  "launcherDirectory": "launcher",
+  "hostDirectory": "host",
+  "pluginsRoot": "plugins",
+  "modules": [
+    {
+      "moduleId": "Homogenization",
+      "pluginDirectory": "Homogenization"
+    }
+  ]
+}
+```
+
+旧的 `layout.zip`、`runtimeDirectory`、`runtime/Modules`、每工序一份宿主目录模型全部废弃，不得在新代码、脚本或文档中继续作为生产契约。
 
 ## 4. Catalog 契约
 
@@ -136,10 +165,10 @@ MVP 阶段可以先实现 TLS + SHA256 + 签名字段占位，但必须保留拒
 Phase 1 只完成 Edge 地基：
 
 - 宿主版本来自真实程序集版本，`hostApiVersion` 保留为独立契约值。
-- Shell 同时发现程序目录插件和外部 profile 插件。
-- Shell 加载内置与外部插件的 `*.module.json` 默认配置，外部默认配置优先于内置默认配置，应用配置和外部机器配置仍然优先。
-- 提供单插件 zip 包脚本和包元数据、SHA256 输出。
-- 增加测试覆盖外部插件路径、外部默认配置、外部插件覆盖内置插件、真实宿主版本格式。
+- Shell 从配置化 `Modules:PluginRoots` 发现插件，默认 `../plugins`。
+- Shell 加载所配置插件根中的 `*.module.json` 默认配置；后配置的插件根可以覆盖前配置的插件根，应用配置和外部机器配置仍然优先。
+- 发布脚本输出 `launcher/ + host/ + plugins/ + data/`，并生成 `installer-artifact.json` v2。
+- 增加测试覆盖单 host 布局、host 无 `Modules/`、配置化插件路径、真实宿主版本格式。
 
 Cloud 下载中心、插件选择安装、设备盘点和版本上报属于后续阶段。
 
@@ -225,7 +254,7 @@ Edge catalog 只返回 `Published` 发布记录。Human catalog 可通过 `onlyP
 以下内容仍属后续阶段：
 
 - Launcher 拉取 catalog 并选择插件。
-- 插件下载、staging、校验、安装到外部 profile 目录。
+- 插件下载、staging、校验、安装到布局级 `plugins/<ModuleId>/`。
 - 插件更新失败回滚和宿主回滚后的 UX。
 - catalog 或包签名的生产级验签。
 - Windows 首装实机下载和更新验收。
@@ -262,15 +291,15 @@ Launcher 读取以下配置后才会启用云端插件 catalog：
 
 ### 10.2 首次安装/选择插件流程
 
-Windows 首次安装通用宿主后，现场配置写入机器级 `CloudApi` 身份和发布通道。操作员在 Launcher 的 profile 卡片进入“插件更新”后：
+Windows 首次安装由 Cloud 生成绑定安装包，payload 内包含 `launcher/`、一份 `host/`、所选 `plugins/<ModuleId>/` 和本次生成的绑定 JSON。操作员打开 Launcher 后：
 
 1. Launcher 使用 `ClientCode + BootstrapSecret` bootstrap 当前设备，获取设备 token 和 `deviceId`。
 2. Launcher 使用设备 token 拉取 catalog，并按 `channel`、`targetRuntime` 读取可用宿主和插件版本。
-3. Launcher 扫描程序目录 `Modules/` 和 profile 外部插件目录，计算当前插件版本、云端最新版本和兼容状态。
+3. Launcher 扫描布局级 `plugins/`，计算当前插件版本、云端最新版本和兼容状态。
 4. 操作员选择安装或更新某个工序插件。
 5. Launcher 连带解析 `dependencies[]`，下载目标插件和依赖插件包。
 6. 每个插件包先写入 staging，校验包 SHA256、zip 路径安全、`plugin.json` 与 catalog 一致、入口程序集存在、`hostApiVersion` 精确匹配、宿主版本落在 `[minHostVersion, maxHostVersion]`。
-7. 校验通过后替换外部目录 `<ModuleId>/current/`，旧版本移动到 `<ModuleId>/previous/`。
+7. 校验通过后替换布局级目录 `plugins/<ModuleId>/`，并保留安装摘要 `install.json`。
 8. Launcher 写外部机器配置 `Modules:Enabled`，启用已安装插件。
 9. Launcher 上报宿主版本、`HostApiVersion`、已安装插件版本和启用插件列表。
 

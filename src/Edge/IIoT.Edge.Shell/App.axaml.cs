@@ -356,7 +356,7 @@ public partial class App : global::Avalonia.Application
         var viewRegistry = new ViewRegistry();
         var pluginRootPaths = _moduleCatalog!.GetPluginRootPaths(
             AppDomain.CurrentDomain.BaseDirectory,
-            runtimePaths.ProfileName);
+            configuration);
         var discoveryResult = _moduleCatalog.DiscoverModules(pluginRootPaths);
         var activationResult = _moduleCatalog.CreateEnabledModules(configuration, discoveryResult.Modules);
         var moduleCatalogIssues = discoveryResult.Issues

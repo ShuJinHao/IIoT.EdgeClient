@@ -94,17 +94,8 @@ public sealed class DirectoryModuleCatalog : IModuleCatalog
     private static string? ResolvePluginManifestPath(string pluginDirectory)
     {
         var directManifestPath = Path.Combine(pluginDirectory, "plugin.json");
-        if (File.Exists(directManifestPath))
-        {
-            return directManifestPath;
-        }
-
-        var currentManifestPath = Path.Combine(
-            pluginDirectory,
-            "current",
-            "plugin.json");
-        return File.Exists(currentManifestPath)
-            ? currentManifestPath
+        return File.Exists(directManifestPath)
+            ? directManifestPath
             : null;
     }
 
@@ -263,14 +254,16 @@ public sealed class DirectoryModuleCatalog : IModuleCatalog
             .ToList()
             ?? [];
 
-        if (configuredValues.Count == 0)
-        {
-            configuredValues.AddRange(discoveredModules.Select(static x => x.ModuleId));
-        }
-
         var uniqueModuleIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var result = new List<string>(configuredValues.Count);
         var issues = new List<ModuleCatalogIssue>();
+        if (configuredValues.Count == 0)
+        {
+            issues.Add(new ModuleCatalogIssue(
+                "PLUGIN_ENABLED_EMPTY",
+                $"{sectionName}:Enabled 未配置启用模块，Shell 不会自动加载任何插件。"));
+        }
+
         foreach (var moduleId in configuredValues)
         {
             if (!uniqueModuleIds.Add(moduleId))
