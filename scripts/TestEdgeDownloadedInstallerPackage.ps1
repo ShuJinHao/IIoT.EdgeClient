@@ -166,6 +166,61 @@ function Assert-BindingPayload {
             throw "iiot-binding.json module '$ModuleId' has empty '$propertyName'."
         }
     }
+
+    return $match
+}
+
+function Assert-HostPluginPayload {
+    param(
+        [Parameter(Mandatory = $true)][string]$HostPluginJson,
+        [Parameter(Mandatory = $true)][string]$ModuleId,
+        [Parameter(Mandatory = $true)][string]$RuntimeDirectory,
+        [Parameter(Mandatory = $true)][string]$ClientCode
+    )
+
+    $hostPlugins = $HostPluginJson | ConvertFrom-Json
+    if ($hostPlugins.schemaVersion -lt 1) {
+        throw 'iiot-enabled-plugins.json schemaVersion is invalid.'
+    }
+
+    $match = @($hostPlugins.plugins | Where-Object { $_.moduleId -eq $ModuleId }) | Select-Object -First 1
+    if ($null -eq $match) {
+        throw "iiot-enabled-plugins.json does not contain module '$ModuleId'."
+    }
+
+    if ($match.runtimeDirectory -ne $RuntimeDirectory) {
+        throw "iiot-enabled-plugins.json module '$ModuleId' runtimeDirectory '$($match.runtimeDirectory)' does not match '$RuntimeDirectory'."
+    }
+
+    if ($match.clientCode -ne $ClientCode) {
+        throw "iiot-enabled-plugins.json module '$ModuleId' clientCode does not match iiot-binding.json."
+    }
+}
+
+function Assert-PluginBindingPayload {
+    param(
+        [Parameter(Mandatory = $true)][string]$PluginBindingJson,
+        [Parameter(Mandatory = $true)][string]$ModuleId,
+        [Parameter(Mandatory = $true)][string]$ClientCode,
+        [Parameter(Mandatory = $true)][string]$BootstrapSecret
+    )
+
+    $pluginBinding = $PluginBindingJson | ConvertFrom-Json
+    if ($pluginBinding.schemaVersion -lt 1) {
+        throw 'iiot-plugin-binding.json schemaVersion is invalid.'
+    }
+
+    if ($pluginBinding.moduleId -ne $ModuleId) {
+        throw "iiot-plugin-binding.json moduleId '$($pluginBinding.moduleId)' does not match '$ModuleId'."
+    }
+
+    if ($pluginBinding.clientCode -ne $ClientCode) {
+        throw "iiot-plugin-binding.json clientCode does not match iiot-binding.json."
+    }
+
+    if ($pluginBinding.bootstrapSecret -ne $BootstrapSecret) {
+        throw "iiot-plugin-binding.json bootstrapSecret does not match iiot-binding.json."
+    }
 }
 
 $resolvedInstallerPath = Resolve-TestPath -PathValue $InstallerPath
@@ -183,10 +238,26 @@ try {
     Assert-ZipEntriesSafe -Archive $archive
     Assert-ZipEntryExists -Archive $archive -EntryName 'launcher/IIoT.Edge.Launcher.exe'
     Assert-ZipEntryExists -Archive $archive -EntryName 'launcher/iiot-binding.json'
+    Assert-ZipEntryExists -Archive $archive -EntryName 'launcher/iiot-enabled-plugins.json'
     Assert-ZipEntryExists -Archive $archive -EntryName "$ExpectedRuntimeDirectory/Modules/$ExpectedModuleId/plugin.json"
+    Assert-ZipEntryExists -Archive $archive -EntryName "$ExpectedRuntimeDirectory/iiot-plugin-binding.json"
 
     $bindingJson = Read-ZipEntryText -Archive $archive -EntryName 'launcher/iiot-binding.json'
-    Assert-BindingPayload -BindingJson $bindingJson -ModuleId $ExpectedModuleId
+    $bindingItem = Assert-BindingPayload -BindingJson $bindingJson -ModuleId $ExpectedModuleId
+
+    $hostPluginJson = Read-ZipEntryText -Archive $archive -EntryName 'launcher/iiot-enabled-plugins.json'
+    Assert-HostPluginPayload `
+        -HostPluginJson $hostPluginJson `
+        -ModuleId $ExpectedModuleId `
+        -RuntimeDirectory $ExpectedRuntimeDirectory `
+        -ClientCode $bindingItem.clientCode
+
+    $pluginBindingJson = Read-ZipEntryText -Archive $archive -EntryName "$ExpectedRuntimeDirectory/iiot-plugin-binding.json"
+    Assert-PluginBindingPayload `
+        -PluginBindingJson $pluginBindingJson `
+        -ModuleId $ExpectedModuleId `
+        -ClientCode $bindingItem.clientCode `
+        -BootstrapSecret $bindingItem.bootstrapSecret
 
     if ($ExtractPayload) {
         if ([string]::IsNullOrWhiteSpace($PayloadOutputDirectory)) {

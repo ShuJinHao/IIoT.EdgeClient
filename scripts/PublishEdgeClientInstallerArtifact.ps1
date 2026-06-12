@@ -48,9 +48,6 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot 'EdgeRuntime.Common.ps1')
 
-Add-Type -AssemblyName System.IO.Compression
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-
 function Get-ArtifactSha256 {
     param([Parameter(Mandatory = $true)][string]$PathValue)
     return (Get-FileHash -Algorithm SHA256 -Path $PathValue).Hash.ToLowerInvariant()
@@ -70,6 +67,45 @@ function Get-ArtifactDirectorySize {
     }
 
     return [long]$measure.Sum
+}
+
+function Get-ArtifactDirectorySha256 {
+    param([Parameter(Mandatory = $true)][string]$Directory)
+
+    if (-not (Test-Path $Directory)) {
+        throw "Artifact directory was not found: $Directory"
+    }
+
+    $hasher = [System.Security.Cryptography.IncrementalHash]::CreateHash([System.Security.Cryptography.HashAlgorithmName]::SHA256)
+    try {
+        $files = Get-ChildItem -Path $Directory -Recurse -File -ErrorAction SilentlyContinue |
+            Sort-Object @{ Expression = { Get-ArtifactRelativePath -BaseDirectory $Directory -PathValue $_.FullName } }
+
+        foreach ($file in $files) {
+            $relativePath = Get-ArtifactRelativePath -BaseDirectory $Directory -PathValue $file.FullName
+            $pathBytes = [System.Text.Encoding]::UTF8.GetBytes($relativePath)
+            $hasher.AppendData($pathBytes)
+            $hasher.AppendData([byte[]](0))
+
+            $stream = [System.IO.File]::OpenRead($file.FullName)
+            try {
+                $buffer = New-Object byte[] 1048576
+                while (($read = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                    $hasher.AppendData($buffer, 0, $read)
+                }
+            }
+            finally {
+                $stream.Dispose()
+            }
+
+            $hasher.AppendData([byte[]](10))
+        }
+
+        return ([BitConverter]::ToString($hasher.GetHashAndReset()).Replace('-', '').ToLowerInvariant())
+    }
+    finally {
+        $hasher.Dispose()
+    }
 }
 
 function Get-ArtifactRelativePath {
@@ -150,25 +186,12 @@ function Copy-ArtifactDirectory {
         throw "Artifact source directory was not found: $SourceDirectory"
     }
 
-    New-Item -Path $TargetDirectory -ItemType Directory -Force | Out-Null
-    Copy-Item -Path (Join-Path $SourceDirectory '*') -Destination $TargetDirectory -Recurse -Force
-}
-
-function Write-ArtifactZip {
-    param(
-        [Parameter(Mandatory = $true)][string]$SourceDirectory,
-        [Parameter(Mandatory = $true)][string]$ZipPath
-    )
-
-    if (Test-Path $ZipPath) {
-        Remove-Item -Path $ZipPath -Force
+    if (Test-Path $TargetDirectory) {
+        Remove-Item -Path $TargetDirectory -Recurse -Force
     }
 
-    [System.IO.Compression.ZipFile]::CreateFromDirectory(
-        $SourceDirectory,
-        $ZipPath,
-        [System.IO.Compression.CompressionLevel]::Optimal,
-        $false)
+    New-Item -Path $TargetDirectory -ItemType Directory -Force | Out-Null
+    Copy-Item -Path (Join-Path $SourceDirectory '*') -Destination $TargetDirectory -Recurse -Force
 }
 
 function Read-ArtifactPluginManifest {
@@ -314,8 +337,8 @@ function Register-CloudCatalog {
         targetRuntime = $Artifact.targetRuntime
         targetFramework = $Artifact.targetFramework
         downloadUrl = $ArtifactPublicUrl
-        sha256 = $Artifact.layoutZipSha256
-        packageSize = $Artifact.layoutZipSize
+        sha256 = $Artifact.installerStubSha256
+        packageSize = $Artifact.installerStubSize
         releaseNotes = "Edge installer artifact $($Artifact.version)"
         status = 'Published'
         signature = $null
@@ -337,7 +360,7 @@ function Register-CloudCatalog {
             targetRuntime = $Artifact.targetRuntime
             targetFramework = $Artifact.targetFramework
             downloadUrl = "$ArtifactPublicUrl#moduleId=$($module.moduleId)"
-            sha256 = $Artifact.layoutZipSha256
+            sha256 = $module.runtimeSha256
             packageSize = $module.runtimeSize
             releaseNotes = "Bundled in Edge installer artifact $($Artifact.version)"
             dependenciesJson = '[]'
@@ -357,9 +380,8 @@ $runtimeLayoutRootValue = if ([string]::IsNullOrWhiteSpace($RuntimeLayoutRoot)) 
     $RuntimeLayoutRoot
 }
 $resolvedRuntimeLayoutRoot = Resolve-EdgeAbsolutePath -BasePath $repoRoot -PathValue $runtimeLayoutRootValue
-$layoutStageRoot = Join-Path $artifactRoot '.layout-staging'
 $stubPublishRoot = Join-Path $artifactRoot '.installer-stub'
-$layoutZipPath = Join-Path $artifactRoot 'layout.zip'
+$legacyLayoutZipPath = Join-Path $artifactRoot 'layout.zip'
 $installerStubTargetPath = Join-Path $artifactRoot 'IIoT.Edge.Setup.exe'
 $artifactManifestPath = Join-Path $artifactRoot 'installer-artifact.json'
 
@@ -368,6 +390,7 @@ if ($CleanOutput -and (Test-Path $artifactRoot)) {
 }
 
 New-Item -Path $artifactRoot -ItemType Directory -Force | Out-Null
+Remove-Item -Path $legacyLayoutZipPath -Force -ErrorAction SilentlyContinue
 
 & (Join-Path $PSScriptRoot 'PublishEdgeRuntime.ps1') `
     -Configuration $Configuration `
@@ -379,21 +402,23 @@ New-Item -Path $artifactRoot -ItemType Directory -Force | Out-Null
     -SelfContained:$RuntimeSelfContained `
     -CleanOutput
 
-if (Test-Path $layoutStageRoot) {
-    Remove-Item -Path $layoutStageRoot -Recurse -Force
-}
-New-Item -Path $layoutStageRoot -ItemType Directory -Force | Out-Null
-
 Copy-ArtifactDirectory `
     -SourceDirectory (Join-Path $resolvedRuntimeLayoutRoot $manifest.launcherDirectory) `
-    -TargetDirectory (Join-Path $layoutStageRoot $manifest.launcherDirectory)
+    -TargetDirectory (Join-Path $artifactRoot $manifest.launcherDirectory)
+
+$artifactDirectoriesToValidate = @(
+    (Join-Path $artifactRoot $manifest.launcherDirectory)
+)
 
 $modules = @()
 foreach ($runtime in $manifest.runtimes) {
     $runtimeDirectory = Join-Path $resolvedRuntimeLayoutRoot $runtime.outputDirectory
+    $artifactRuntimeDirectory = Join-Path $artifactRoot $runtime.outputDirectory
     Copy-ArtifactDirectory `
         -SourceDirectory $runtimeDirectory `
-        -TargetDirectory (Join-Path $layoutStageRoot $runtime.outputDirectory)
+        -TargetDirectory $artifactRuntimeDirectory
+
+    $artifactDirectoriesToValidate += $artifactRuntimeDirectory
 
     foreach ($moduleId in @($runtime.moduleIds)) {
         $plugin = Read-ArtifactPluginManifest -RuntimeDirectory $runtimeDirectory -ModuleId $moduleId
@@ -407,14 +432,16 @@ foreach ($runtime in $manifest.runtimes) {
             maxHostVersion = [string]$plugin.maxHostVersion
             runtimeId = [string]$runtime.runtimeId
             runtimeDirectory = [string]$runtime.outputDirectory
-            runtimeSize = Get-ArtifactDirectorySize -Directory $runtimeDirectory
+            runtimeSha256 = Get-ArtifactDirectorySha256 -Directory $artifactRuntimeDirectory
+            runtimeSize = Get-ArtifactDirectorySize -Directory $artifactRuntimeDirectory
         }
     }
 }
 
-Assert-ArtifactForbiddenContentMissing -Directory $layoutStageRoot
-Assert-ArtifactCloudIdentityTemplatesAreEmpty -Directory $layoutStageRoot
-Write-ArtifactZip -SourceDirectory $layoutStageRoot -ZipPath $layoutZipPath
+foreach ($directory in $artifactDirectoriesToValidate) {
+    Assert-ArtifactForbiddenContentMissing -Directory $directory
+    Assert-ArtifactCloudIdentityTemplatesAreEmpty -Directory $directory
+}
 
 $publishedStubPath = Publish-InstallerStub -OutputDirectory $stubPublishRoot
 Copy-Item -Path $publishedStubPath -Destination $installerStubTargetPath -Force
@@ -430,16 +457,12 @@ $artifact = [PSCustomObject]@{
     installerStubFile = 'IIoT.Edge.Setup.exe'
     installerStubSha256 = Get-ArtifactSha256 -PathValue $installerStubTargetPath
     installerStubSize = (Get-Item $installerStubTargetPath).Length
-    layoutZipFile = 'layout.zip'
-    layoutZipSha256 = Get-ArtifactSha256 -PathValue $layoutZipPath
-    layoutZipSize = (Get-Item $layoutZipPath).Length
     launcherDirectory = [string]$manifest.launcherDirectory
     modules = $modules
 }
 
 $artifact | ConvertTo-Json -Depth 20 | Set-Content -Encoding UTF8 -Path $artifactManifestPath
 
-Remove-Item -Path $layoutStageRoot -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item -Path $stubPublishRoot -Recurse -Force -ErrorAction SilentlyContinue
 if ([string]::IsNullOrWhiteSpace($RuntimeLayoutRoot)) {
     Remove-Item -Path $resolvedRuntimeLayoutRoot -Recurse -Force -ErrorAction SilentlyContinue

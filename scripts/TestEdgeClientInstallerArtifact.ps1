@@ -13,9 +13,6 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-Add-Type -AssemblyName System.IO.Compression
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-
 function Resolve-TestArtifactPath {
     param([Parameter(Mandatory = $true)][string]$PathValue)
     return [System.IO.Path]::GetFullPath($PathValue)
@@ -37,68 +34,71 @@ function Get-TestSha256 {
     return (Get-FileHash -Algorithm SHA256 -Path $PathValue).Hash.ToLowerInvariant()
 }
 
-function Get-ZipEntry {
-    param(
-        [Parameter(Mandatory = $true)]
-        [System.IO.Compression.ZipArchive]$Archive,
+function Get-TestDirectorySize {
+    param([Parameter(Mandatory = $true)][string]$Directory)
 
-        [Parameter(Mandatory = $true)]
-        [string]$EntryName
-    )
-
-    $normalized = $EntryName.Replace('\', '/')
-    return $Archive.Entries |
-        Where-Object { $_.FullName -eq $normalized } |
-        Select-Object -First 1
-}
-
-function Assert-ZipEntryExists {
-    param(
-        [Parameter(Mandatory = $true)]
-        [System.IO.Compression.ZipArchive]$Archive,
-
-        [Parameter(Mandatory = $true)]
-        [string]$EntryName
-    )
-
-    if ($null -eq (Get-ZipEntry -Archive $Archive -EntryName $EntryName)) {
-        throw "Required artifact zip entry was not found: $EntryName"
-    }
-}
-
-function Read-ZipEntryText {
-    param(
-        [Parameter(Mandatory = $true)]
-        [System.IO.Compression.ZipArchive]$Archive,
-
-        [Parameter(Mandatory = $true)]
-        [string]$EntryName
-    )
-
-    $entry = Get-ZipEntry -Archive $Archive -EntryName $EntryName
-    if ($null -eq $entry) {
-        throw "Required artifact zip entry was not found: $EntryName"
+    $measure = Get-ChildItem -Path $Directory -Recurse -File -ErrorAction SilentlyContinue |
+        Measure-Object -Property Length -Sum
+    if ($null -eq $measure.Sum) {
+        return 0
     }
 
-    $reader = [System.IO.StreamReader]::new($entry.Open(), [System.Text.Encoding]::UTF8)
+    return [long]$measure.Sum
+}
+
+function Get-TestRelativePath {
+    param(
+        [Parameter(Mandatory = $true)][string]$BaseDirectory,
+        [Parameter(Mandatory = $true)][string]$PathValue
+    )
+
+    return [System.IO.Path]::GetRelativePath($BaseDirectory, $PathValue).Replace('\', '/')
+}
+
+function Get-TestDirectorySha256 {
+    param([Parameter(Mandatory = $true)][string]$Directory)
+
+    $hasher = [System.Security.Cryptography.IncrementalHash]::CreateHash([System.Security.Cryptography.HashAlgorithmName]::SHA256)
     try {
-        return $reader.ReadToEnd()
+        $files = Get-ChildItem -Path $Directory -Recurse -File -ErrorAction SilentlyContinue |
+            Sort-Object @{ Expression = { Get-TestRelativePath -BaseDirectory $Directory -PathValue $_.FullName } }
+
+        foreach ($file in $files) {
+            $relativePath = Get-TestRelativePath -BaseDirectory $Directory -PathValue $file.FullName
+            $pathBytes = [System.Text.Encoding]::UTF8.GetBytes($relativePath)
+            $hasher.AppendData($pathBytes)
+            $hasher.AppendData([byte[]](0))
+
+            $stream = [System.IO.File]::OpenRead($file.FullName)
+            try {
+                $buffer = New-Object byte[] 1048576
+                while (($read = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                    $hasher.AppendData($buffer, 0, $read)
+                }
+            }
+            finally {
+                $stream.Dispose()
+            }
+
+            $hasher.AppendData([byte[]](10))
+        }
+
+        return ([BitConverter]::ToString($hasher.GetHashAndReset()).Replace('-', '').ToLowerInvariant())
     }
     finally {
-        $reader.Dispose()
+        $hasher.Dispose()
     }
 }
 
-function Assert-ZipForbiddenEntriesMissing {
-    param(
-        [Parameter(Mandatory = $true)]
-        [System.IO.Compression.ZipArchive]$Archive
-    )
+function Assert-ForbiddenFilesMissing {
+    param([Parameter(Mandatory = $true)][string]$Directory)
 
     $forbiddenPatterns = @(
         '(^|/)launcher\.accounts\.json$',
         '(^|/)launcher\.update\.json$',
         '(^|/)iiot-binding\.json$',
+        '(^|/)iiot-enabled-plugins\.json$',
+        '(^|/)iiot-plugin-binding\.json$',
         '(^|/)edge\.db$',
         '(^|/)pipeline_cloud\.db$',
         '(^|/)pipeline_mes\.db$',
@@ -110,49 +110,65 @@ function Assert-ZipForbiddenEntriesMissing {
         '(^|/)excel/'
     )
 
-    foreach ($entry in $Archive.Entries) {
+    foreach ($file in Get-ChildItem -Path $Directory -Recurse -File -ErrorAction SilentlyContinue) {
+        $relativePath = Get-TestRelativePath -BaseDirectory $Directory -PathValue $file.FullName
         foreach ($pattern in $forbiddenPatterns) {
-            if ($entry.FullName -match $pattern) {
-                throw "Forbidden entry was found in artifact zip: $($entry.FullName)"
+            if ($relativePath -match $pattern) {
+                throw "Forbidden site config or runtime data was found in installer artifact directory: $relativePath"
             }
         }
     }
 }
 
-function Assert-CloudIdentityTemplateIsEmpty {
-    param(
-        [Parameter(Mandatory = $true)][string]$Json,
-        [Parameter(Mandatory = $true)][string]$EntryName
-    )
+function Assert-CloudIdentityTemplatesAreEmpty {
+    param([Parameter(Mandatory = $true)][string]$Directory)
 
-    $config = $Json | ConvertFrom-Json
-    if ($null -eq $config.CloudApi) {
-        return
-    }
+    $configFiles = Get-ChildItem -Path $Directory -Recurse -File -Filter 'appsettings*.json' -ErrorAction SilentlyContinue
+    foreach ($configFile in $configFiles) {
+        $relativePath = Get-TestRelativePath -BaseDirectory $Directory -PathValue $configFile.FullName
+        try {
+            $config = Get-Content -Raw -Encoding UTF8 -Path $configFile.FullName | ConvertFrom-Json
+        }
+        catch {
+            throw "Artifact config file could not be parsed: $relativePath"
+        }
 
-    foreach ($key in @('ClientCode', 'BootstrapSecret')) {
-        $property = $config.CloudApi.PSObject.Properties[$key]
-        if ($null -eq $property) {
+        if ($null -eq $config.CloudApi) {
             continue
         }
 
-        $value = [string]$property.Value
-        if (-not [string]::IsNullOrWhiteSpace($value)) {
-            throw "Artifact zip must not contain machine identity CloudApi:$key in $EntryName."
+        foreach ($key in @('ClientCode', 'BootstrapSecret')) {
+            $property = $config.CloudApi.PSObject.Properties[$key]
+            if ($null -eq $property) {
+                continue
+            }
+
+            $value = [string]$property.Value
+            if (-not [string]::IsNullOrWhiteSpace($value)) {
+                throw "Installer artifact directory must not contain machine identity CloudApi:$key in $relativePath."
+            }
         }
     }
 }
 
 $resolvedArtifactRoot = Resolve-TestArtifactPath -PathValue $ArtifactRoot
 $manifestPath = Join-Path $resolvedArtifactRoot 'installer-artifact.json'
-$layoutZipPath = Join-Path $resolvedArtifactRoot 'layout.zip'
+$legacyLayoutZipPath = Join-Path $resolvedArtifactRoot 'layout.zip'
 $stubPath = Join-Path $resolvedArtifactRoot 'IIoT.Edge.Setup.exe'
 
 Assert-PathExists -PathValue $manifestPath -Message "Artifact manifest was not found: $manifestPath"
-Assert-PathExists -PathValue $layoutZipPath -Message "Artifact layout zip was not found: $layoutZipPath"
 Assert-PathExists -PathValue $stubPath -Message "Installer stub was not found: $stubPath"
+if (Test-Path $legacyLayoutZipPath) {
+    throw "Legacy layout.zip must not be present in installer artifact: $legacyLayoutZipPath"
+}
 
 $manifest = Get-Content -Raw -Encoding UTF8 -Path $manifestPath | ConvertFrom-Json
+foreach ($legacyProperty in @('layoutZipFile', 'layoutZipSha256', 'layoutZipSize')) {
+    if ($manifest.PSObject.Properties.Name -contains $legacyProperty) {
+        throw "Installer artifact manifest still contains legacy property: $legacyProperty"
+    }
+}
+
 if ($manifest.channel -ne $ExpectedChannel) {
     throw "Artifact channel '$($manifest.channel)' does not match expected '$ExpectedChannel'."
 }
@@ -165,9 +181,18 @@ if ($manifest.installerStubSha256 -ne (Get-TestSha256 -PathValue $stubPath)) {
     throw "Installer stub sha256 does not match installer-artifact.json."
 }
 
-if ($manifest.layoutZipSha256 -ne (Get-TestSha256 -PathValue $layoutZipPath)) {
-    throw "Layout zip sha256 does not match installer-artifact.json."
+if ([long]$manifest.installerStubSize -ne (Get-Item $stubPath).Length) {
+    throw "Installer stub size does not match installer-artifact.json."
 }
+
+$launcherDirectory = [string]$manifest.launcherDirectory
+if ([string]::IsNullOrWhiteSpace($launcherDirectory)) {
+    throw "Artifact manifest launcherDirectory is empty."
+}
+
+$launcherPath = Join-Path $resolvedArtifactRoot $launcherDirectory
+Assert-PathExists -PathValue $launcherPath -Message "Launcher directory was not found: $launcherPath"
+Assert-PathExists -PathValue (Join-Path $launcherPath 'IIoT.Edge.Launcher.dll') -Message "Launcher runtime file was not found."
 
 $module = @($manifest.modules | Where-Object { $_.moduleId -eq $ExpectedModuleId }) | Select-Object -First 1
 if ($null -eq $module) {
@@ -178,23 +203,22 @@ if ($module.runtimeDirectory -ne $ExpectedRuntimeDirectory) {
     throw "Module '$ExpectedModuleId' runtime directory '$($module.runtimeDirectory)' does not match '$ExpectedRuntimeDirectory'."
 }
 
-$archive = [System.IO.Compression.ZipFile]::OpenRead($layoutZipPath)
-try {
-    Assert-ZipEntryExists -Archive $archive -EntryName 'launcher/IIoT.Edge.Launcher.dll'
-    Assert-ZipEntryExists -Archive $archive -EntryName "$ExpectedRuntimeDirectory/IIoT.Edge.Shell.dll"
-    Assert-ZipEntryExists -Archive $archive -EntryName "$ExpectedRuntimeDirectory/Modules/$ExpectedModuleId/plugin.json"
-    Assert-ZipForbiddenEntriesMissing -Archive $archive
+$runtimePath = Join-Path $resolvedArtifactRoot ([string]$module.runtimeDirectory)
+Assert-PathExists -PathValue $runtimePath -Message "Runtime directory was not found: $runtimePath"
+Assert-PathExists -PathValue (Join-Path $runtimePath 'IIoT.Edge.Shell.dll') -Message "Runtime shell file was not found."
+Assert-PathExists -PathValue (Join-Path (Join-Path (Join-Path $runtimePath 'Modules') $ExpectedModuleId) 'plugin.json') -Message "Module plugin manifest was not found."
 
-    foreach ($entry in @($archive.Entries | Where-Object {
-        $_.FullName -like '*/appsettings*.json' -or $_.FullName -like 'appsettings*.json'
-    })) {
-        Assert-CloudIdentityTemplateIsEmpty `
-            -Json (Read-ZipEntryText -Archive $archive -EntryName $entry.FullName) `
-            -EntryName $entry.FullName
-    }
+if ($module.runtimeSha256 -ne (Get-TestDirectorySha256 -Directory $runtimePath)) {
+    throw "Runtime directory sha256 does not match installer-artifact.json."
 }
-finally {
-    $archive.Dispose()
+
+if ([long]$module.runtimeSize -ne (Get-TestDirectorySize -Directory $runtimePath)) {
+    throw "Runtime directory size does not match installer-artifact.json."
+}
+
+foreach ($directory in @($launcherPath, $runtimePath)) {
+    Assert-ForbiddenFilesMissing -Directory $directory
+    Assert-CloudIdentityTemplatesAreEmpty -Directory $directory
 }
 
 Write-Host "Edge installer artifact smoke test passed: $resolvedArtifactRoot"
