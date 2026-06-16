@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text;
 using IIoT.Edge.Installer;
+using IIoT.Edge.SharedKernel.Configuration;
 using Xunit;
 
 namespace IIoT.Edge.Installer.Tests;
@@ -71,6 +72,125 @@ public sealed class SelfExtractorTests
         }
         finally
         {
+            DeleteDir(tempDir);
+        }
+    }
+
+    [Fact]
+    public void InstallerOptions_ShouldParseVelopackInstallDirectoryAndSilentMode()
+    {
+        var options = InstallerOptions.Parse([
+            "--silent",
+            "--installto",
+            @"D:\IIoT\EdgeClient",
+            "--no-launch"
+        ]);
+
+        Assert.Equal(@"D:\IIoT\EdgeClient", options.InstallTo);
+        Assert.True(options.Silent);
+        Assert.True(options.NoLaunch);
+    }
+
+    [Fact]
+    public void VelopackPayload_ShouldCopyBootstrapBindingOutsideCurrent()
+    {
+        var tempDir = CreateTempDir();
+        var previousDataRoot = Environment.GetEnvironmentVariable(
+            EdgeClientProgramDataPaths.ProgramDataRootEnvironmentVariable);
+        try
+        {
+            Environment.SetEnvironmentVariable(
+                EdgeClientProgramDataPaths.ProgramDataRootEnvironmentVariable,
+                null);
+
+            var payloadRoot = Path.Combine(tempDir, "payload");
+            var payloadVelopackRoot = Path.Combine(payloadRoot, "velopack");
+            var payloadLauncherRoot = Path.Combine(payloadRoot, "launcher");
+            var payloadPluginRoot = Path.Combine(payloadRoot, "plugins", "Homogenization");
+            Directory.CreateDirectory(payloadVelopackRoot);
+            Directory.CreateDirectory(payloadLauncherRoot);
+            Directory.CreateDirectory(payloadPluginRoot);
+            var setupPath = Path.Combine(payloadVelopackRoot, "IIoT.EdgeClient-stable-Setup.exe");
+            File.WriteAllText(setupPath, "fake setup");
+            File.WriteAllText(
+                Path.Combine(payloadLauncherRoot, "iiot-binding.json"),
+                "{\"bindings\":[{\"moduleId\":\"Homogenization\",\"clientCode\":\"DEV-AAAAAAAAAA\"}]}");
+            File.WriteAllText(
+                Path.Combine(payloadLauncherRoot, "iiot-enabled-plugins.json"),
+                "{\"plugins\":[{\"moduleId\":\"Homogenization\"}]}");
+            File.WriteAllText(Path.Combine(payloadPluginRoot, "plugin.json"), "{}");
+
+            var installRoot = Path.Combine(tempDir, "install");
+            var currentRoot = Path.Combine(installRoot, "current");
+            Directory.CreateDirectory(currentRoot);
+
+            var discoveredSetup = SelfExtractor.FindVelopackSetup(payloadRoot);
+            var setupArguments = SelfExtractor.BuildVelopackSetupArguments(installRoot, silent: true);
+            SelfExtractor.CopyBootstrapFilesToVelopackDataRoot(payloadRoot, installRoot);
+            var launcherDataRoot = EdgeClientProgramDataPaths.ResolveLauncherDirectory(currentRoot);
+
+            Assert.Equal(setupPath, discoveredSetup);
+            Assert.Equal(["--silent", "--installto", Path.GetFullPath(installRoot)], setupArguments);
+            Assert.False(File.Exists(Path.Combine(currentRoot, "iiot-binding.json")));
+            Assert.False(File.Exists(Path.Combine(currentRoot, "iiot-enabled-plugins.json")));
+            Assert.False(File.Exists(Path.Combine(currentRoot, "plugins", "Homogenization", "plugin.json")));
+            Assert.True(File.Exists(Path.Combine(launcherDataRoot, "iiot-binding.json")));
+            Assert.True(File.Exists(Path.Combine(launcherDataRoot, "iiot-enabled-plugins.json")));
+            Assert.True(File.Exists(Path.Combine(installRoot, "plugins", "Homogenization", "plugin.json")));
+            Assert.Contains(
+                "DEV-AAAAAAAAAA",
+                File.ReadAllText(Path.Combine(launcherDataRoot, "iiot-binding.json")),
+                StringComparison.Ordinal);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(
+                EdgeClientProgramDataPaths.ProgramDataRootEnvironmentVariable,
+                previousDataRoot);
+            DeleteDir(tempDir);
+        }
+    }
+
+    [Fact]
+    public void VelopackPayload_ShouldRespectProgramDataRootOverrideWhenCopyingBootstrapBinding()
+    {
+        var tempDir = CreateTempDir();
+        var previousDataRoot = Environment.GetEnvironmentVariable(
+            EdgeClientProgramDataPaths.ProgramDataRootEnvironmentVariable);
+        try
+        {
+            var payloadRoot = Path.Combine(tempDir, "payload");
+            var payloadLauncherRoot = Path.Combine(payloadRoot, "launcher");
+            Directory.CreateDirectory(payloadLauncherRoot);
+            File.WriteAllText(
+                Path.Combine(payloadLauncherRoot, "iiot-binding.json"),
+                "{\"bindings\":[{\"moduleId\":\"Homogenization\",\"clientCode\":\"DEV-AAAAAAAAAA\"}]}");
+            File.WriteAllText(
+                Path.Combine(payloadLauncherRoot, "iiot-enabled-plugins.json"),
+                "{\"plugins\":[{\"moduleId\":\"Homogenization\"}]}");
+
+            var dataRoot = Path.Combine(tempDir, "site-data");
+            Environment.SetEnvironmentVariable(
+                EdgeClientProgramDataPaths.ProgramDataRootEnvironmentVariable,
+                dataRoot);
+
+            var installRoot = Path.Combine(tempDir, "install");
+            Directory.CreateDirectory(Path.Combine(installRoot, "current"));
+
+            SelfExtractor.CopyBootstrapFilesToVelopackDataRoot(payloadRoot, installRoot);
+
+            var launcherDataRoot = EdgeClientProgramDataPaths.ResolveLauncherDirectory(
+                Path.Combine(installRoot, "current"));
+            Assert.Equal(
+                Path.Combine(dataRoot, "IIoT", "EdgeClient", "launcher"),
+                launcherDataRoot);
+            Assert.True(File.Exists(Path.Combine(launcherDataRoot, "iiot-binding.json")));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(
+                EdgeClientProgramDataPaths.ProgramDataRootEnvironmentVariable,
+                previousDataRoot);
             DeleteDir(tempDir);
         }
     }

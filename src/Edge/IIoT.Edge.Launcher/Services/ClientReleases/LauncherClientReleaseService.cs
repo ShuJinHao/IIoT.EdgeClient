@@ -28,19 +28,22 @@ public sealed class LauncherClientReleaseService : ILauncherClientReleaseService
     private readonly ILauncherInstalledPluginCatalog _installedPluginCatalog;
     private readonly ILauncherProfileModuleConfiguration _profileModuleConfiguration;
     private readonly ILauncherPluginPackageInstaller _packageInstaller;
+    private readonly ILauncherUpdateConfigInitializer _updateConfigInitializer;
 
     public LauncherClientReleaseService(
         ILauncherCloudApiConfigurationResolver configurationResolver,
         ILauncherEdgeReleaseCloudClient cloudClient,
         ILauncherInstalledPluginCatalog installedPluginCatalog,
         ILauncherProfileModuleConfiguration profileModuleConfiguration,
-        ILauncherPluginPackageInstaller packageInstaller)
+        ILauncherPluginPackageInstaller packageInstaller,
+        ILauncherUpdateConfigInitializer updateConfigInitializer)
     {
         _configurationResolver = configurationResolver ?? throw new ArgumentNullException(nameof(configurationResolver));
         _cloudClient = cloudClient ?? throw new ArgumentNullException(nameof(cloudClient));
         _installedPluginCatalog = installedPluginCatalog ?? throw new ArgumentNullException(nameof(installedPluginCatalog));
         _profileModuleConfiguration = profileModuleConfiguration ?? throw new ArgumentNullException(nameof(profileModuleConfiguration));
         _packageInstaller = packageInstaller ?? throw new ArgumentNullException(nameof(packageInstaller));
+        _updateConfigInitializer = updateConfigInitializer ?? throw new ArgumentNullException(nameof(updateConfigInitializer));
     }
 
     public async Task<LauncherClientReleaseCheckResult> CheckAsync(
@@ -94,6 +97,11 @@ public sealed class LauncherClientReleaseService : ILauncherClientReleaseService
                 null,
                 [],
                 catalog.ErrorMessage);
+        }
+
+        if (!string.IsNullOrWhiteSpace(catalog.Value.HostUpdateSource))
+        {
+            _updateConfigInitializer.TrySyncUpdateSource(catalog.Value.HostUpdateSource);
         }
 
         var installedPlugins = _installedPluginCatalog.LoadInstalledPlugins(profile);

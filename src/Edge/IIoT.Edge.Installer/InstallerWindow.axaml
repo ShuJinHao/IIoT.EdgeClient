@@ -1,0 +1,346 @@
+<Window
+    x:Class="IIoT.Edge.Installer.InstallerWindow"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
+    Title="IIoT Edge 客户端安装"
+    Width="560"
+    Height="460"
+    MinWidth="560"
+    MinHeight="460"
+    Background="Transparent"
+    CanResize="False"
+    ExtendClientAreaToDecorationsHint="True"
+    ShowInTaskbar="True"
+    TransparencyLevelHint="Transparent"
+    WindowDecorations="None"
+    WindowStartupLocation="CenterScreen">
+    <edge:EdgeCard
+        Margin="1"
+        Elevation="Float"
+        PaddingMode="None"
+        PointerPressed="TitleBar_PointerPressed"
+        Surface="Card">
+        <Grid>
+            <!-- Close button (always visible) -->
+            <edge:EdgeWindowButton
+                Action="Close"
+                Margin="0,8,8,0"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                ZIndex="10"
+                Click="CloseButton_Click" />
+
+            <!-- ==================== Page 1: Welcome ==================== -->
+            <Grid
+                x:Name="WelcomePage"
+                RowDefinitions="*,Auto">
+                <StackPanel
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Spacing="8">
+                    <Image
+                        Width="72"
+                        Height="72"
+                        HorizontalAlignment="Center"
+                        Source="avares://IIoT.Edge.Setup/Assets/icon.ico" />
+                    <TextBlock
+                        Margin="0,8,0,0"
+                        FontSize="24"
+                        FontWeight="Bold"
+                        Foreground="{DynamicResource Edge.Brush.Gray900}"
+                        HorizontalAlignment="Center"
+                        Text="IIoT Edge 客户端" />
+                    <TextBlock
+                        FontSize="14"
+                        Foreground="{DynamicResource Edge.Brush.Gray500}"
+                        HorizontalAlignment="Center"
+                        Text="工业物联网边缘计算客户端" />
+                </StackPanel>
+
+                <StackPanel
+                    Grid.Row="1"
+                    Margin="32,0,32,32"
+                    Spacing="12">
+                    <edge:EdgeActionButton
+                        Click="QuickInstallButton_Click"
+                        Content="一键安装"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Center"
+                        Kind="Primary"
+                        MinHeight="48"
+                        FontSize="16" />
+                    <edge:EdgeActionButton
+                        Click="CustomInstallButton_Click"
+                        Content="自定义安装"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Center"
+                        Kind="Ghost"
+                        MinHeight="40" />
+                    <TextBlock
+                        FontSize="12"
+                        Foreground="{DynamicResource Edge.Brush.Gray500}"
+                        HorizontalAlignment="Center"
+                        TextWrapping="Wrap">
+                        <Run Text="默认安装到 " />
+                        <Run
+                            x:Name="DefaultPathRun"
+                            Foreground="{DynamicResource Edge.Brush.Gray700}"
+                            Text="" />
+                    </TextBlock>
+                </StackPanel>
+            </Grid>
+
+            <!-- ==================== Page 2: Custom Settings ==================== -->
+            <Grid
+                x:Name="SettingsPage"
+                IsVisible="False"
+                Margin="32,20,32,32"
+                RowDefinitions="Auto,*,Auto">
+
+                <!-- Header -->
+                <StackPanel Spacing="4">
+                    <TextBlock
+                        FontSize="20"
+                        FontWeight="SemiBold"
+                        Foreground="{DynamicResource Edge.Brush.Gray900}"
+                        Text="自定义安装" />
+                    <TextBlock
+                        FontSize="13"
+                        Foreground="{DynamicResource Edge.Brush.Gray500}"
+                        Text="选择安装位置和其他选项" />
+                </StackPanel>
+
+                <!-- Settings content -->
+                <StackPanel
+                    Grid.Row="1"
+                    Margin="0,28,0,0"
+                    Spacing="20">
+                    <!-- Directory -->
+                    <StackPanel Spacing="8">
+                        <TextBlock
+                            FontSize="13"
+                            FontWeight="Medium"
+                            Foreground="{DynamicResource Edge.Brush.Gray700}"
+                            Text="安装目录" />
+                        <Grid ColumnDefinitions="*,10,Auto">
+                            <edge:EdgeTextBox
+                                x:Name="InstallPathInput"
+                                Classes="edge-text-box"
+                                HorizontalAlignment="Stretch"
+                                Width="NaN"
+                                IsReadOnly="True" />
+                            <edge:EdgeActionButton
+                                Grid.Column="2"
+                                Click="BrowseButton_Click"
+                                Content="浏览…"
+                                Kind="Secondary"
+                                MinHeight="36"
+                                MinWidth="72" />
+                        </Grid>
+                    </StackPanel>
+
+                    <!-- Options -->
+                    <StackPanel Spacing="10">
+                        <TextBlock
+                            FontSize="13"
+                            FontWeight="Medium"
+                            Foreground="{DynamicResource Edge.Brush.Gray700}"
+                            Text="安装选项" />
+                        <edge:EdgeCheckBox
+                            x:Name="DesktopShortcutCheckBox"
+                            Content="创建桌面快捷方式"
+                            IsChecked="True" />
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Buttons -->
+                <Grid
+                    Grid.Row="2"
+                    ColumnDefinitions="*,12,*">
+                    <edge:EdgeActionButton
+                        Grid.Column="0"
+                        Click="BackToWelcomeButton_Click"
+                        Content="返回"
+                        Kind="Secondary"
+                        MinHeight="44" />
+                    <edge:EdgeActionButton
+                        Grid.Column="2"
+                        Click="InstallButton_Click"
+                        Content="开始安装"
+                        Kind="Primary"
+                        MinHeight="44" />
+                </Grid>
+            </Grid>
+
+            <!-- ==================== Page 3: Installing ==================== -->
+            <Grid
+                x:Name="InstallingPage"
+                IsVisible="False"
+                Margin="32,20,32,32"
+                RowDefinitions="Auto,*,Auto">
+
+                <StackPanel Spacing="4">
+                    <TextBlock
+                        FontSize="20"
+                        FontWeight="SemiBold"
+                        Foreground="{DynamicResource Edge.Brush.Gray900}"
+                        Text="正在安装" />
+                    <TextBlock
+                        FontSize="13"
+                        Foreground="{DynamicResource Edge.Brush.Gray500}"
+                        Text="请耐心等待，安装即将完成…" />
+                </StackPanel>
+
+                <StackPanel
+                    Grid.Row="1"
+                    VerticalAlignment="Center"
+                    Spacing="16">
+                    <Image
+                        Width="56"
+                        Height="56"
+                        HorizontalAlignment="Center"
+                        Opacity="0.6"
+                        Source="avares://IIoT.Edge.Setup/Assets/icon.ico" />
+                    <ProgressBar
+                        x:Name="InstallProgressBar"
+                        Height="6"
+                        Margin="40,0"
+                        Maximum="100"
+                        Minimum="0"
+                        Value="0" />
+                    <StackPanel
+                        HorizontalAlignment="Center"
+                        Orientation="Horizontal"
+                        Spacing="8">
+                        <TextBlock
+                            x:Name="ProgressStatusText"
+                            FontSize="13"
+                            Foreground="{DynamicResource Edge.Brush.Gray500}"
+                            Text="正在准备…" />
+                        <TextBlock
+                            x:Name="ProgressPercentText"
+                            FontSize="13"
+                            Foreground="{DynamicResource Edge.Brush.Gray700}"
+                            FontWeight="Medium"
+                            Text="0%" />
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+
+            <!-- ==================== Page 4: Complete ==================== -->
+            <Grid
+                x:Name="CompletePage"
+                IsVisible="False"
+                Margin="32,20,32,32"
+                RowDefinitions="*,Auto">
+
+                <StackPanel
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Spacing="8">
+                    <Border
+                        Width="64"
+                        Height="64"
+                        HorizontalAlignment="Center"
+                        Background="{DynamicResource Edge.Brush.Green100}"
+                        CornerRadius="32">
+                        <PathIcon
+                            Width="28"
+                            Height="28"
+                            Foreground="{DynamicResource Edge.Brush.Green500}"
+                            Data="M9.55 18 3.85 12.3 5.275 10.875 9.55 15.15 18.725 5.975 20.15 7.4Z" />
+                    </Border>
+                    <TextBlock
+                        Margin="0,8,0,0"
+                        FontSize="22"
+                        FontWeight="SemiBold"
+                        Foreground="{DynamicResource Edge.Brush.Gray900}"
+                        HorizontalAlignment="Center"
+                        Text="安装完成" />
+                    <TextBlock
+                        x:Name="CompleteMessageText"
+                        FontSize="13"
+                        Foreground="{DynamicResource Edge.Brush.Gray500}"
+                        HorizontalAlignment="Center"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+
+                <Grid
+                    Grid.Row="1"
+                    ColumnDefinitions="*,12,*">
+                    <edge:EdgeActionButton
+                        Grid.Column="0"
+                        Click="FinishButton_Click"
+                        Content="完成"
+                        Kind="Secondary"
+                        MinHeight="44" />
+                    <edge:EdgeActionButton
+                        Grid.Column="2"
+                        Click="LaunchButton_Click"
+                        Content="启动客户端"
+                        Kind="Primary"
+                        MinHeight="44" />
+                </Grid>
+            </Grid>
+
+            <!-- ==================== Page: Error ==================== -->
+            <Grid
+                x:Name="ErrorPage"
+                IsVisible="False"
+                Margin="32,20,32,32"
+                RowDefinitions="*,Auto">
+
+                <StackPanel
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Spacing="8">
+                    <Border
+                        Width="64"
+                        Height="64"
+                        HorizontalAlignment="Center"
+                        Background="#FFF0F0"
+                        CornerRadius="32">
+                        <PathIcon
+                            Width="28"
+                            Height="28"
+                            Foreground="#DC2626"
+                            Data="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12Z" />
+                    </Border>
+                    <TextBlock
+                        Margin="0,8,0,0"
+                        FontSize="22"
+                        FontWeight="SemiBold"
+                        Foreground="#DC2626"
+                        HorizontalAlignment="Center"
+                        Text="安装失败" />
+                    <TextBlock
+                        x:Name="ErrorMessageText"
+                        FontSize="13"
+                        Foreground="{DynamicResource Edge.Brush.Gray700}"
+                        HorizontalAlignment="Center"
+                        MaxWidth="360"
+                        TextAlignment="Center"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+
+                <Grid
+                    Grid.Row="1"
+                    ColumnDefinitions="*,12,*">
+                    <edge:EdgeActionButton
+                        Grid.Column="0"
+                        Click="CloseButton_Click"
+                        Content="关闭"
+                        Kind="Secondary"
+                        MinHeight="44" />
+                    <edge:EdgeActionButton
+                        Grid.Column="2"
+                        Click="RetryButton_Click"
+                        Content="重试"
+                        Kind="Primary"
+                        MinHeight="44" />
+                </Grid>
+            </Grid>
+        </Grid>
+    </edge:EdgeCard>
+</Window>

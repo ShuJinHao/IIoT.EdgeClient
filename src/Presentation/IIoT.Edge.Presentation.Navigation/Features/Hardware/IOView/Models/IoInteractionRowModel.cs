@@ -134,7 +134,7 @@ public sealed class IoInteractionRowModel : BaseNotifyPropertyChanged
     }
 
     private static string FormatSignal(IoSignalModel signal)
-        => signal.SignalKey;
+        => string.IsNullOrWhiteSpace(signal.Remark) ? "-" : signal.Remark;
 
     private string FormatSignalToolTip(
         IReadOnlyCollection<IoSignalModel> signals,
@@ -153,8 +153,8 @@ public sealed class IoInteractionRowModel : BaseNotifyPropertyChanged
                 : string.Empty;
             return FormatText(
                 "Navigation_Io_TooltipSignalFormat",
-                "信号键：{0}，地址：{1}{2}",
-                signal.SignalKey,
+                "备注：{0}，地址：{1}{2}",
+                FormatSignal(signal),
                 signal.PlcAddress,
                 suffix);
         }));

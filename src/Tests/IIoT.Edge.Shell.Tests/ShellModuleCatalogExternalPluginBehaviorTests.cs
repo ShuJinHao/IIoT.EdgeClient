@@ -61,6 +61,35 @@ public sealed class ShellModuleCatalogExternalPluginBehaviorTests
     }
 
     [Fact]
+    public void GetPluginRootPaths_WhenVelopackCurrentHostUsesDefaultPluginsRoot_ShouldUseInstallRootPlugins()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var hostDirectory = Path.Combine(tempDirectory, "install", "current", "host");
+            var pluginsRoot = Path.Combine(tempDirectory, "install", "plugins");
+            Directory.CreateDirectory(hostDirectory);
+            Directory.CreateDirectory(pluginsRoot);
+            var configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Modules:PluginRoots:0"] = "../plugins"
+                })
+                .Build();
+
+            var paths = CreateCatalog().GetPluginRootPaths(hostDirectory, configuration);
+
+            var path = Assert.Single(paths);
+            Assert.Equal(pluginsRoot, path);
+            Assert.NotEqual(Path.Combine(tempDirectory, "install", "current", "plugins"), path);
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
     public void DiscoverModules_WhenConfiguredRootsContainDuplicateModule_ShouldPreferLaterRoot()
     {
         var tempDirectory = CreateTempDirectory();

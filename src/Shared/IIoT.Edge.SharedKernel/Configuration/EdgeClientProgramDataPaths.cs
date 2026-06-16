@@ -51,6 +51,26 @@ public static class EdgeClientProgramDataPaths
     public static string ResolveApplicationPluginRoot(string? baseDirectory = null)
         => Path.Combine(ResolveApplicationLayoutRoot(baseDirectory), PluginsDirectoryName);
 
+    public static string ResolveConfiguredPluginRoot(string baseDirectory, string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+        var trimmed = path.Trim();
+        if (IsDefaultLayoutPluginRoot(trimmed))
+        {
+            return ResolveApplicationPluginRoot(baseDirectory);
+        }
+
+        var expanded = ExpandProgramDataTokens(trimmed, baseDirectory)
+            .Replace('\\', Path.DirectorySeparatorChar)
+            .Replace('/', Path.DirectorySeparatorChar);
+        return Path.GetFullPath(
+            Path.IsPathRooted(expanded)
+                ? expanded
+                : Path.Combine(baseDirectory, expanded));
+    }
+
     public static string ResolveProfileConfigDirectory(string profileName, string? baseDirectory = null)
         => Path.Combine(ResolveConfigRoot(baseDirectory), ProfilesDirectoryName, SanitizePathSegment(profileName));
 
@@ -136,4 +156,12 @@ public static class EdgeClientProgramDataPaths
     private static bool IsVelopackCurrentDirectory(DirectoryInfo directory)
         => string.Equals(directory.Name, "current", StringComparison.OrdinalIgnoreCase)
             && directory.Parent is not null;
+
+    private static bool IsDefaultLayoutPluginRoot(string path)
+    {
+        var normalized = path
+            .Replace('\\', '/')
+            .TrimEnd('/');
+        return string.Equals(normalized, "../plugins", StringComparison.OrdinalIgnoreCase);
+    }
 }

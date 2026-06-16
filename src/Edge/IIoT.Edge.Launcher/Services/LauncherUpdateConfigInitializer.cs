@@ -1,3 +1,6 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
+
 namespace IIoT.Edge.Launcher.Services;
 
 public sealed record LauncherUpdateConfigPaths(string ConfigPath, string SampleConfigPath);
@@ -39,6 +42,59 @@ public sealed class LauncherUpdateConfigInitializer : ILauncherUpdateConfigIniti
         }
         catch (UnauthorizedAccessException)
         {
+        }
+    }
+
+    public bool TrySyncUpdateSource(string updateSource)
+    {
+        if (string.IsNullOrWhiteSpace(updateSource))
+        {
+            return false;
+        }
+
+        try
+        {
+            JsonObject config;
+            if (File.Exists(_paths.ConfigPath))
+            {
+                var existing = File.ReadAllText(_paths.ConfigPath);
+                config = JsonNode.Parse(existing)?.AsObject() ?? new JsonObject();
+            }
+            else
+            {
+                config = new JsonObject();
+            }
+
+            var currentSource = config["Source"]?.GetValue<string>();
+            if (string.Equals(currentSource, updateSource.Trim(), StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            config["Source"] = updateSource.Trim();
+
+            var directory = Path.GetDirectoryName(_paths.ConfigPath);
+            if (!string.IsNullOrWhiteSpace(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            File.WriteAllText(
+                _paths.ConfigPath,
+                config.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
         }
     }
 }

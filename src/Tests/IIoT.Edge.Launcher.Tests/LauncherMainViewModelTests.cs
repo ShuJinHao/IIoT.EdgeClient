@@ -55,6 +55,42 @@ public sealed class LauncherMainViewModelTests
     }
 
     [Fact]
+    public async Task LoginAsync_ShouldLoadProfilesAndResolveCloudApiOffCallerThread()
+    {
+        var profiles = new[]
+        {
+            Profile("shell", "Shell")
+        };
+        var profileCatalog = new BlockingLauncherProfileCatalog(profiles);
+        var cloudApiResolver = new ThreadRecordingCloudApiConfigurationResolver("shell");
+        var viewModel = new LauncherMainViewModel(
+            profileCatalog,
+            new StubLocalAccountAuthService(
+                LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
+            new StubShellLaunchService(),
+            cloudApiResolver: cloudApiResolver);
+        var callerThreadId = Environment.CurrentManagedThreadId;
+
+        var loginTask = viewModel.LoginAsync("operator", "secret");
+        try
+        {
+            Assert.True(profileCatalog.WaitForLoadStart(), "Profile loading should start while LoginAsync is still awaiting.");
+            Assert.True(viewModel.IsBusy);
+            Assert.NotEqual(callerThreadId, profileCatalog.LoadThreadId);
+        }
+        finally
+        {
+            profileCatalog.ReleaseLoad();
+        }
+
+        await loginTask.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+
+        Assert.True(viewModel.IsAuthenticated);
+        Assert.Single(viewModel.Profiles);
+        Assert.DoesNotContain(callerThreadId, cloudApiResolver.ResolveThreadIds);
+    }
+
+    [Fact]
     public async Task LoginAsync_ShouldShowAllProfilesWhenNoneProvisioned()
     {
         var profiles = new[]
@@ -406,6 +442,27 @@ public sealed class LauncherMainViewModelTests
         public IReadOnlyList<LauncherProfileDefinition> LoadProfiles() => profiles;
     }
 
+    private sealed class BlockingLauncherProfileCatalog(IReadOnlyList<LauncherProfileDefinition> profiles)
+        : ILauncherProfileCatalog
+    {
+        private readonly ManualResetEventSlim _loadStarted = new();
+        private readonly ManualResetEventSlim _allowLoad = new();
+
+        public int LoadThreadId { get; private set; } = -1;
+
+        public IReadOnlyList<LauncherProfileDefinition> LoadProfiles()
+        {
+            LoadThreadId = Environment.CurrentManagedThreadId;
+            _loadStarted.Set();
+            Assert.True(_allowLoad.Wait(TimeSpan.FromSeconds(2)), "Test did not release blocked profile loading.");
+            return profiles;
+        }
+
+        public bool WaitForLoadStart() => _loadStarted.Wait(TimeSpan.FromSeconds(2));
+
+        public void ReleaseLoad() => _allowLoad.Set();
+    }
+
     private sealed class StubCloudApiConfigurationResolver(params string[] provisionedProfileIds)
         : ILauncherCloudApiConfigurationResolver
     {
@@ -422,6 +479,46 @@ public sealed class LauncherMainViewModelTests
                     "/api/v1/edge/client-releases/device/{deviceId}/catalog",
                     "/api/v1/edge/client-releases/version-reports"))
                 : LauncherCloudApiConfigurationResult.Failed("未配置");
+
+        public LauncherClientReleaseOptions ResolveReleaseOptions() => new("stable", "win-x64");
+    }
+
+    private sealed class ThreadRecordingCloudApiConfigurationResolver(params string[] provisionedProfileIds)
+        : ILauncherCloudApiConfigurationResolver
+    {
+        private readonly object _syncRoot = new();
+        private readonly HashSet<string> _provisioned = new(provisionedProfileIds, StringComparer.Ordinal);
+        private readonly List<int> _resolveThreadIds = [];
+
+        public IReadOnlyList<int> ResolveThreadIds
+        {
+            get
+            {
+                lock (_syncRoot)
+                {
+                    return _resolveThreadIds.ToArray();
+                }
+            }
+        }
+
+        public LauncherCloudApiConfigurationResult Resolve(LauncherProfileDefinition profile)
+        {
+            lock (_syncRoot)
+            {
+                _resolveThreadIds.Add(Environment.CurrentManagedThreadId);
+            }
+
+            return _provisioned.Contains(profile.ProfileId)
+                ? LauncherCloudApiConfigurationResult.Succeeded(new LauncherCloudApiOptions(
+                    "http://cloud.local",
+                    10,
+                    "DEV-CODE",
+                    "secret",
+                    "/api/v1/bootstrap/device-instance",
+                    "/api/v1/edge/client-releases/device/{deviceId}/catalog",
+                    "/api/v1/edge/client-releases/version-reports"))
+                : LauncherCloudApiConfigurationResult.Failed("未配置");
+        }
 
         public LauncherClientReleaseOptions ResolveReleaseOptions() => new("stable", "win-x64");
     }

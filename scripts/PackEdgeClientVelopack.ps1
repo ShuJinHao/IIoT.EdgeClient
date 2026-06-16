@@ -328,11 +328,6 @@ Copy-EdgeVelopackDirectory `
 Copy-EdgeVelopackDirectory `
     -SourceDirectory (Join-Path $resolvedRuntimeLayoutRoot $manifest.hostDirectory) `
     -TargetDirectory (Join-Path $packDirectory $manifest.hostDirectory)
-foreach ($moduleId in @($profileDefinition.moduleIds)) {
-    Copy-EdgeVelopackDirectory `
-        -SourceDirectory (Join-Path (Join-Path $resolvedRuntimeLayoutRoot $manifest.pluginsRoot) $moduleId) `
-        -TargetDirectory (Join-Path (Join-Path $packDirectory $manifest.pluginsRoot) $moduleId)
-}
 Write-EdgeVelopackProfileCatalog `
     -Profiles $launcherProfileCatalog.Profiles `
     -ProfileDefinition $profileDefinition `
@@ -358,6 +353,7 @@ if ($RuntimeIdentifier.StartsWith('win', [System.StringComparison]::OrdinalIgnor
     $vpkArgs += '[win]'
 }
 
+$iconPath = Join-Path $repoRoot 'src\Shared\IIoT.Edge.UI.Shared\Assets\images\icon.ico'
 $vpkArgs += @(
     'pack',
     '--packId', $PackId,
@@ -369,6 +365,7 @@ $vpkArgs += @(
     '--packTitle', $PackTitle,
     '--packAuthors', $PackAuthors,
     '--releaseNotes', $releaseNotesPath,
+    '--icon', $iconPath,
     '--outputDir', $resolvedOutputRoot
 )
 

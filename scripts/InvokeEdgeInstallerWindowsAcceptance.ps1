@@ -65,10 +65,18 @@ function Assert-InstalledLayoutShape {
         [Parameter(Mandatory = $true)][string]$ModuleId
     )
 
-    $launcherExe = Join-Path $Root 'launcher/IIoT.Edge.Launcher.exe'
-    $hostRoot = Join-Path $Root $HostDirectory
+    $currentRoot = Join-Path $Root 'current'
+    $isVelopackInstall = Test-Path (Join-Path $currentRoot 'IIoT.Edge.Launcher.exe')
+    $appContentRoot = if ($isVelopackInstall) { $currentRoot } else { $Root }
+    $launcherExe = if ($isVelopackInstall) {
+        Join-Path $appContentRoot 'IIoT.Edge.Launcher.exe'
+    } else {
+        Join-Path $appContentRoot 'launcher/IIoT.Edge.Launcher.exe'
+    }
+    $hostRoot = Join-Path $appContentRoot $HostDirectory
     $hostExe = Join-Path $hostRoot 'IIoT.Edge.Shell.exe'
-    $pluginJson = Join-Path $Root "$PluginsRoot/$ModuleId/plugin.json"
+    $pluginRoot = if ($isVelopackInstall) { $Root } else { $appContentRoot }
+    $pluginJson = Join-Path $pluginRoot "$PluginsRoot/$ModuleId/plugin.json"
 
     foreach ($path in @($launcherExe, $hostRoot, $hostExe, $pluginJson)) {
         if (-not (Test-Path $path)) {
@@ -81,29 +89,56 @@ function Assert-InstalledLayoutShape {
         throw "Host directory must stay clean and must not contain legacy Modules: $legacyModulesRoot"
     }
 
-    $allowedTopLevel = @(
-        'launcher',
-        'data',
-        $HostDirectory,
-        $PluginsRoot
-    )
-    $unexpected = Get-ChildItem -LiteralPath $Root -Directory -Force |
-        Where-Object { $allowedTopLevel -notcontains $_.Name } |
-        Select-Object -ExpandProperty Name
+    if ($isVelopackInstall) {
+        $currentData = Join-Path $currentRoot 'data'
+        if (Test-Path $currentData) {
+            throw "Velopack-managed current directory must not contain mutable data: $currentData"
+        }
 
-    if ($unexpected.Count -gt 0) {
-        throw "Unexpected top-level directories were installed: $($unexpected -join ', ')"
+        $currentPlugins = Join-Path $currentRoot $PluginsRoot
+        if (Test-Path $currentPlugins) {
+            throw "Velopack-managed current directory must not contain mutable plugins: $currentPlugins"
+        }
+
+        foreach ($forbiddenCurrentFile in @('iiot-binding.json', 'iiot-enabled-plugins.json')) {
+            $forbiddenPath = Join-Path $currentRoot $forbiddenCurrentFile
+            if (Test-Path $forbiddenPath) {
+                throw "Velopack-managed current directory must not contain bootstrap binding files: $forbiddenPath"
+            }
+        }
     }
+    else {
+        $allowedTopLevel = @(
+            'launcher',
+            'data',
+            $HostDirectory,
+            $PluginsRoot
+        )
+        $unexpected = Get-ChildItem -LiteralPath $Root -Directory -Force |
+            Where-Object { $allowedTopLevel -notcontains $_.Name } |
+            Select-Object -ExpandProperty Name
+
+        if ($unexpected.Count -gt 0) {
+            throw "Unexpected top-level directories were installed: $($unexpected -join ', ')"
+        }
+    }
+
+    return $appContentRoot
 }
 
 function Assert-BindingApplied {
     param(
         [Parameter(Mandatory = $true)][string]$Root,
+        [Parameter(Mandatory = $true)][string]$AppContentRoot,
         [Parameter(Mandatory = $true)][string]$ModuleId
     )
 
-    $rawBindingPath = Join-Path $Root 'launcher/iiot-binding.json'
     $appliedRoot = Join-Path $Root 'data/IIoT/EdgeClient/launcher'
+    $rawBindingPath = if ((Split-Path -Leaf $AppContentRoot) -eq 'current') {
+        Join-Path $appliedRoot 'iiot-binding.json'
+    } else {
+        Join-Path $Root 'launcher/iiot-binding.json'
+    }
     $profilesRoot = Join-Path $Root 'data/IIoT/EdgeClient/profiles'
 
     Wait-Until `
@@ -200,8 +235,11 @@ if ($CleanInstallRoot) {
     -ExpectedHostDirectory $ExpectedHostDirectory `
     -ExpectedPluginsRoot $ExpectedPluginsRoot
 
+$installerArguments = "--silent --installto `"$resolvedInstallRoot`""
+
 $process = Start-Process `
     -FilePath $resolvedInstallerPath `
+    -ArgumentList $installerArguments `
     -WorkingDirectory (Split-Path -Parent $resolvedInstallerPath) `
     -PassThru `
     -Wait
@@ -215,7 +253,7 @@ Wait-Until `
     -TimeoutMessage "Timed out waiting for install root: $resolvedInstallRoot" `
     -Condition { Test-Path $resolvedInstallRoot }
 
-Assert-InstalledLayoutShape `
+$appContentRoot = Assert-InstalledLayoutShape `
     -Root $resolvedInstallRoot `
     -HostDirectory $ExpectedHostDirectory `
     -PluginsRoot $ExpectedPluginsRoot `
@@ -227,6 +265,7 @@ if (-not $SkipLauncherProcessCheck) {
 
 Assert-BindingApplied `
     -Root $resolvedInstallRoot `
+    -AppContentRoot $appContentRoot `
     -ModuleId $ExpectedModuleId
 
 Write-Host "Edge installer Windows acceptance passed: $resolvedInstallerPath"

@@ -287,6 +287,58 @@ public sealed class RepositoryHygieneTests
     }
 
     [Fact]
+    public void RoundedWindowRegion_ShouldLiveInSharedUiAndBeReusedByShellLauncherAndPanels()
+    {
+        var root = FindRepositoryRoot();
+        var allowedRegionOwner = "src/Shared/IIoT.Edge.UI.Shared/Avalonia/Windowing/EdgeRoundedWindowRegion.cs";
+        var sharedRegion = File.ReadAllText(ToFullPath(root, allowedRegionOwner));
+        var regionUsers = new[]
+        {
+            "src/Edge/IIoT.Edge.Shell/MainWindow.axaml.cs",
+            "src/Edge/IIoT.Edge.Launcher/MainWindow.axaml.cs",
+            "src/Edge/IIoT.Edge.Launcher/ChangePasswordWindow.axaml.cs",
+            "src/Presentation/IIoT.Edge.Presentation.Panels/Features/Equipment/Views/ProductionPlanSelectionWindow.axaml.cs"
+        };
+        var forbiddenRegionMarkers = new[]
+        {
+            "CreateRoundRectRgn",
+            "SetWindowRgn",
+            "DeleteObject",
+            "DllImport(\"gdi32.dll\")",
+            "DllImport(\"user32.dll\")"
+        };
+
+        Assert.Contains("CreateRoundRectRgn", sharedRegion, StringComparison.Ordinal);
+        Assert.Contains("SetWindowRgn", sharedRegion, StringComparison.Ordinal);
+        Assert.DoesNotContain("ApplyStartupLeftBias", sharedRegion, StringComparison.Ordinal);
+
+        foreach (var regionUser in regionUsers)
+        {
+            var source = File.ReadAllText(ToFullPath(root, regionUser));
+            Assert.Contains("EdgeRoundedWindowRegion.Attach(this, WindowCornerRadius)", source, StringComparison.Ordinal);
+        }
+
+        var duplicatedRegionMatches = new[]
+            {
+                Path.Combine(root, "src", "Edge"),
+                Path.Combine(root, "src", "Presentation"),
+                Path.Combine(root, "src", "Shared")
+            }
+            .SelectMany(path => EnumerateFiles(path, "*.cs"))
+            .Where(path => !string.Equals(ToRepositoryPath(root, path), allowedRegionOwner, StringComparison.OrdinalIgnoreCase))
+            .SelectMany(path =>
+            {
+                var source = File.ReadAllText(path);
+                return forbiddenRegionMarkers
+                    .Where(marker => source.Contains(marker, StringComparison.Ordinal))
+                    .Select(marker => $"{ToRepositoryPath(root, path)} contains duplicate rounded-window region marker {marker}");
+            })
+            .ToArray();
+
+        Assert.Empty(duplicatedRegionMatches);
+    }
+
+    [Fact]
     public void ShellAppSettings_ShouldNotContainCommittedLicenseOrJwtSecrets()
     {
         var root = FindRepositoryRoot();

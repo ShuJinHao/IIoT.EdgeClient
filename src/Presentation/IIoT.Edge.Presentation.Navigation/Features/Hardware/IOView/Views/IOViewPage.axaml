@@ -130,7 +130,7 @@
                                             ItemsSource="{Binding Signals}"
                                             ViewportMaxHeight="360">
                                             <edge:EdgeDataGrid.Columns>
-                                                <edge:EdgeTextColumn Binding="{Binding SignalKey}" Header="{DynamicResource Navigation_Column_SignalKey}" MinWidth="180" Width="2*" />
+                                                <edge:EdgeTextColumn Binding="{Binding MatrixColumnTitle}" Header="{DynamicResource Navigation_Column_Remark}" MinWidth="180" Width="2*" />
                                                 <edge:EdgeTextColumn Binding="{Binding PlcAddress}" Header="{DynamicResource Navigation_Column_Address}" MinWidth="120" Width="120" />
                                                 <edge:EdgeTextColumn Binding="{Binding DataType}" Header="{DynamicResource Navigation_Column_Type}" MinWidth="100" Width="100" />
                                                 <edge:EdgeTextColumn Binding="{Binding LengthText}" Header="{DynamicResource Navigation_Column_Length}" MinWidth="80" Width="80" />

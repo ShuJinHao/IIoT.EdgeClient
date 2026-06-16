@@ -8,7 +8,70 @@ namespace IIoT.Edge.Launcher.Tests;
 public sealed class LauncherDeviceBindingImporterTests
 {
     [Fact]
-    public void ApplyPendingBindings_ShouldWriteClientCodeIntoMatchedProfileAndArchiveFile()
+    public void ApplyPendingBindings_ShouldReadPendingBindingFromProgramDataLauncherDirectory()
+    {
+        var tempDirectory = CreateTempDirectory();
+        var dataRoot = Path.Combine(tempDirectory, "program-data");
+        try
+        {
+            var currentDirectory = Path.Combine(tempDirectory, "install", "current");
+            var hostDirectory = Path.Combine(currentDirectory, "host");
+            Directory.CreateDirectory(hostDirectory);
+
+            WriteText(
+                Path.Combine(hostDirectory, "appsettings.machine.LineA.json"),
+                """
+                {
+                  "CloudApi": { "ClientCode": "", "BootstrapSecret": "" },
+                  "Modules": { "Enabled": [ "Homogenization" ] }
+                }
+                """);
+
+            WithDataRoot(dataRoot, () =>
+            {
+                var launcherDir = EdgeClientProgramDataPaths.ResolveLauncherDirectory(currentDirectory);
+                var pendingPath = Path.Combine(launcherDir, LauncherDeviceBindingImporter.BindingFileName);
+                WriteText(
+                    pendingPath,
+                    """
+                    {
+                      "schemaVersion": 1,
+                      "baseUrl": "http://cloud.local:81",
+                      "bindings": [
+                        {
+                          "moduleId": "Homogenization",
+                          "clientCode": "DEV-AAAAAAAAAA",
+                          "bootstrapSecret": "SEC-HOMOG-001"
+                        }
+                      ]
+                    }
+                    """);
+
+                var importer = new LauncherDeviceBindingImporter(
+                    currentDirectory,
+                    new FakeProfileCatalog(Profile(hostDirectory)),
+                    new LauncherProfileModuleConfiguration());
+
+                importer.ApplyPendingBindings();
+
+                var externalConfig = File.ReadAllText(
+                    EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath("LineA", hostDirectory));
+                Assert.Contains("\"ClientCode\": \"DEV-AAAAAAAAAA\"", externalConfig, StringComparison.Ordinal);
+                Assert.Contains("\"BootstrapSecret\": \"SEC-HOMOG-001\"", externalConfig, StringComparison.Ordinal);
+                Assert.False(File.Exists(pendingPath));
+
+                var appliedFiles = Directory.GetFiles(launcherDir, "iiot-binding.applied.*.json");
+                Assert.Single(appliedFiles);
+            });
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public void ApplyPendingBindings_ShouldKeepLegacyBaseDirectoryBindingCompatible()
     {
         var tempDirectory = CreateTempDirectory();
         var dataRoot = Path.Combine(tempDirectory, "program-data");

@@ -48,8 +48,8 @@ public sealed class IoViewViewModelBehaviorTests
             {
                 [device.Id] =
                 [
-                    CreateMapping(device.Id, "进站触发", "D701", 1, "Int16", "Read", "信号交互", "扫码进站", 10),
-                    CreateMapping(device.Id, "进站应答", "D601", 1, "Int16", "Write", "信号交互", "扫码进站", 11),
+                    CreateMapping(device.Id, "Homogenization.Interaction.Inbound", "D701", 1, "Int16", "Read", "信号交互", "扫码进站", 10, "匀浆模块 - 进站触发"),
+                    CreateMapping(device.Id, "Homogenization.Interaction.InboundReply", "D601", 1, "Int16", "Write", "信号交互", "扫码进站", 11, "匀浆模块 - 进站应答"),
                     CreateMapping(device.Id, "搅拌速度", "D800", 1, "UInt16", "Read", "实时数据", "设备实时", 20)
                 ]
             };
@@ -86,10 +86,10 @@ public sealed class IoViewViewModelBehaviorTests
             {
                 [device.Id] =
                 [
-                    CreateMapping(device.Id, "触发A", "D701", 1, "Int16", "Read", "信号交互", "复合交互", 1),
-                    CreateMapping(device.Id, "触发B", "D702", 1, "Int16", "Read", "信号交互", "复合交互", 2),
-                    CreateMapping(device.Id, "应答A", "D601", 1, "Int16", "Write", "信号交互", "复合交互", 3),
-                    CreateMapping(device.Id, "应答B", "D602", 1, "Int16", "Write", "信号交互", "复合交互", 4)
+                    CreateMapping(device.Id, "Signal.TriggerA", "D701", 1, "Int16", "Read", "信号交互", "复合交互", 1, "匀浆模块 - 触发A"),
+                    CreateMapping(device.Id, "Signal.TriggerB", "D702", 1, "Int16", "Read", "信号交互", "复合交互", 2, "匀浆模块 - 触发B"),
+                    CreateMapping(device.Id, "Signal.ReplyA", "D601", 1, "Int16", "Write", "信号交互", "复合交互", 3, "匀浆模块 - 应答A"),
+                    CreateMapping(device.Id, "Signal.ReplyB", "D602", 1, "Int16", "Write", "信号交互", "复合交互", 4, "匀浆模块 - 应答B")
                 ]
             };
             var viewModel = CreateViewModel([device], mappings);
@@ -235,8 +235,8 @@ public sealed class IoViewViewModelBehaviorTests
             {
                 [device.Id] =
                 [
-                    CreateMapping(device.Id, "配方时间", "ZR0", 3, "UInt16", "Read", "连续读数据", "配方数组", 1),
-                    CreateMapping(device.Id, "配方温度", "ZR100", 3, "Int16", "Read", "连续读数据", "配方数组", 2)
+                    CreateMapping(device.Id, "Homogenization.Recipe.Time", "ZR0", 3, "UInt16", "Read", "连续读数据", "配方数组", 1, "匀浆模块 - 配方时间"),
+                    CreateMapping(device.Id, "Homogenization.Recipe.Temperature", "ZR100", 3, "Int16", "Read", "连续读数据", "配方数组", 2, "匀浆模块 - 配方温度")
                 ]
             };
             var dataStore = new PlcDataStore();
@@ -252,6 +252,11 @@ public sealed class IoViewViewModelBehaviorTests
             Assert.Equal("连续读数据", matrix.Title);
             Assert.Equal(2, matrix.Columns.Count);
             Assert.Equal(3, matrix.Rows.Count);
+            Assert.Equal("配方时间", matrix.Columns[0].MatrixColumnTitle);
+            Assert.Equal("配方温度", matrix.Columns[1].MatrixColumnTitle);
+            Assert.Contains("配方时间:10", matrix.Summary);
+            Assert.Contains("配方温度:-1", matrix.Summary);
+            Assert.DoesNotContain("Homogenization.", matrix.Summary);
             Assert.Equal("10", matrix.Rows[0].Values[0].Value);
             Assert.Equal("-1", matrix.Rows[0].Values[1].Value);
             Assert.Equal("30", matrix.Rows[2].Values[0].Value);
@@ -402,9 +407,11 @@ public sealed class IoViewViewModelBehaviorTests
         string direction,
         string category,
         string businessGroup,
-        int sortOrder)
+        int sortOrder,
+        string? remark = null)
     {
         var entity = IoMappingEntity.Create(networkDeviceId, signalKey, address, count, dataType, direction, category, businessGroup);
+        entity.UpdateMetadata(signalKey, dataType, direction, category, businessGroup, remark);
         entity.UpdateSortOrder(sortOrder);
         return entity;
     }

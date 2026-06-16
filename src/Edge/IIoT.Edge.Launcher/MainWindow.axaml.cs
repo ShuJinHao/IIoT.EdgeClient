@@ -5,18 +5,21 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using IIoT.Edge.Launcher.Models;
 using IIoT.Edge.Launcher.ViewModels;
+using IIoT.Edge.UI.Shared.Avalonia.Windowing;
 using IIoT.Edge.UI.Shared.Localization;
 
 namespace IIoT.Edge.Launcher;
 
 public partial class MainWindow : Window
 {
+    private const int WindowCornerRadius = 16;
     private readonly LauncherMainViewModel _viewModel;
     private readonly IAppLanguageService _languageService;
 
     public MainWindow()
     {
         InitializeComponent();
+        EdgeRoundedWindowRegion.Attach(this, WindowCornerRadius);
         _viewModel = null!;
         _languageService = null!;
     }
@@ -26,6 +29,7 @@ public partial class MainWindow : Window
         IAppLanguageService languageService)
     {
         InitializeComponent();
+        EdgeRoundedWindowRegion.Attach(this, WindowCornerRadius);
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _languageService = languageService ?? throw new ArgumentNullException(nameof(languageService));
         DataContext = _viewModel;

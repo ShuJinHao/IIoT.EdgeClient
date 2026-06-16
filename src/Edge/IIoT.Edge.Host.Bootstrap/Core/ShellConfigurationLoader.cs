@@ -144,15 +144,7 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
     }
 
     private static string ResolveConfiguredPluginRoot(string baseDirectory, string path)
-    {
-        var expanded = EdgeClientProgramDataPaths.ExpandProgramDataTokens(path.Trim(), baseDirectory)
-            .Replace('\\', Path.DirectorySeparatorChar)
-            .Replace('/', Path.DirectorySeparatorChar);
-        return Path.GetFullPath(
-            Path.IsPathRooted(expanded)
-                ? expanded
-                : Path.Combine(baseDirectory, expanded));
-    }
+        => EdgeClientProgramDataPaths.ResolveConfiguredPluginRoot(baseDirectory, path);
 
     private static void TryInitializeExternalMachineProfile(string? sourcePath, string targetPath)
     {

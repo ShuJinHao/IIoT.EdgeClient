@@ -14,6 +14,8 @@ param(
 
     [string]$OutputRoot = 'publish\edge-installer-artifacts',
 
+    [string]$VelopackSetupPath,
+
     [string]$RuntimeLayoutRoot = '',
 
     [string]$ManifestPath = 'scripts\edge-runtime.publish.json',
@@ -31,6 +33,8 @@ param(
     [string]$SshPort = '22',
 
     [string]$RemoteEdgeUpdatesDir,
+
+    [string]$VelopackReleasesDir,
 
     [switch]$RegisterCloudCatalog,
 
@@ -301,6 +305,54 @@ function Upload-ArtifactToRemoteEdgeUpdates {
     Write-Host "Uploaded installer artifact to: ${SshTarget}:$remoteDirectory"
 }
 
+function Copy-VelopackReleasesToEdgeUpdatesRoot {
+    param(
+        [Parameter(Mandatory = $true)][string]$SourceDirectory,
+        [Parameter(Mandatory = $true)][string]$TargetEdgeUpdatesRoot
+    )
+
+    $targetRoot = Resolve-EdgeAbsolutePath -BasePath $repoRoot -PathValue $TargetEdgeUpdatesRoot
+    $targetDirectory = Join-Path (Join-Path $targetRoot 'velopack') $ReleaseChannel
+    if (-not (Test-Path $targetDirectory)) {
+        New-Item -Path $targetDirectory -ItemType Directory -Force | Out-Null
+    }
+
+    Copy-Item -Path (Join-Path $SourceDirectory '*') -Destination $targetDirectory -Recurse -Force
+    Write-Host "Copied Velopack releases to: $targetDirectory"
+}
+
+function Upload-VelopackReleasesToRemote {
+    param(
+        [Parameter(Mandatory = $true)][string]$SourceDirectory
+    )
+
+    if ([string]::IsNullOrWhiteSpace($SshTarget) -or [string]::IsNullOrWhiteSpace($RemoteEdgeUpdatesDir)) {
+        return
+    }
+
+    $remoteDirectory = "$RemoteEdgeUpdatesDir/velopack/$ReleaseChannel"
+    Invoke-EdgeNativeCommand -FilePath 'ssh' -Arguments @(
+        '-p',
+        $SshPort,
+        $SshTarget,
+        "mkdir -p '$remoteDirectory'"
+    )
+    $releaseItems = Get-ChildItem -Path $SourceDirectory -Force | ForEach-Object { $_.FullName }
+    if ($releaseItems.Count -eq 0) {
+        throw "Velopack releases directory is empty: $SourceDirectory"
+    }
+
+    $scpArguments = @(
+        '-P',
+        $SshPort,
+        '-r'
+    )
+    $scpArguments += $releaseItems
+    $scpArguments += "${SshTarget}:$remoteDirectory/"
+    Invoke-EdgeNativeCommand -FilePath 'scp' -Arguments $scpArguments
+    Write-Host "Uploaded Velopack releases to: ${SshTarget}:$remoteDirectory"
+}
+
 function Invoke-CloudJsonPost {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -384,6 +436,8 @@ $stubPublishRoot = Join-Path $artifactRoot '.installer-stub'
 $legacyLayoutZipPath = Join-Path $artifactRoot 'layout.zip'
 $installerStubTargetPath = Join-Path $artifactRoot 'IIoT.Edge.Setup.exe'
 $artifactManifestPath = Join-Path $artifactRoot 'installer-artifact.json'
+$velopackSetupRelativePath = $null
+$velopackSetupTargetPath = $null
 
 if ($CleanOutput -and (Test-Path $artifactRoot)) {
     Remove-Item -Path $artifactRoot -Recurse -Force
@@ -448,7 +502,19 @@ foreach ($directory in $artifactDirectoriesToValidate) {
 $publishedStubPath = Publish-InstallerStub -OutputDirectory $stubPublishRoot
 Copy-Item -Path $publishedStubPath -Destination $installerStubTargetPath -Force
 
-$artifact = [PSCustomObject]@{
+if (-not [string]::IsNullOrWhiteSpace($VelopackSetupPath)) {
+    $resolvedVelopackSetupPath = Resolve-EdgeAbsolutePath -BasePath $repoRoot -PathValue $VelopackSetupPath
+    if (-not (Test-Path $resolvedVelopackSetupPath)) {
+        throw "Velopack setup file was not found: $resolvedVelopackSetupPath"
+    }
+
+    $velopackSetupRelativePath = "velopack/$([System.IO.Path]::GetFileName($resolvedVelopackSetupPath))"
+    $velopackSetupTargetPath = Join-Path $artifactRoot $velopackSetupRelativePath
+    New-Item -Path (Split-Path -Parent $velopackSetupTargetPath) -ItemType Directory -Force | Out-Null
+    Copy-Item -Path $resolvedVelopackSetupPath -Destination $velopackSetupTargetPath -Force
+}
+
+$artifactProperties = [ordered]@{
     schemaVersion = 2
     channel = $ReleaseChannel
     version = $Version
@@ -467,6 +533,13 @@ $artifact = [PSCustomObject]@{
     modules = $modules
 }
 
+$artifact = [PSCustomObject]$artifactProperties
+if ($null -ne $velopackSetupTargetPath) {
+    $artifact | Add-Member -NotePropertyName 'velopackSetupFile' -NotePropertyValue $velopackSetupRelativePath
+    $artifact | Add-Member -NotePropertyName 'velopackSetupSha256' -NotePropertyValue (Get-ArtifactSha256 -PathValue $velopackSetupTargetPath)
+    $artifact | Add-Member -NotePropertyName 'velopackSetupSize' -NotePropertyValue (Get-Item $velopackSetupTargetPath).Length
+}
+
 $artifact | ConvertTo-Json -Depth 20 | Set-Content -Encoding UTF8 -Path $artifactManifestPath
 
 Remove-Item -Path $stubPublishRoot -Recurse -Force -ErrorAction SilentlyContinue
@@ -478,6 +551,18 @@ if (-not [string]::IsNullOrWhiteSpace($EdgeUpdatesRoot)) {
     Copy-ArtifactToEdgeUpdatesRoot -ArtifactRoot $artifactRoot -TargetEdgeUpdatesRoot $EdgeUpdatesRoot
 }
 Upload-ArtifactToRemoteEdgeUpdates -ArtifactRoot $artifactRoot
+
+if (-not [string]::IsNullOrWhiteSpace($VelopackReleasesDir)) {
+    $resolvedVelopackReleasesDir = Resolve-EdgeAbsolutePath -BasePath $repoRoot -PathValue $VelopackReleasesDir
+    if (-not (Test-Path $resolvedVelopackReleasesDir)) {
+        throw "Velopack releases directory was not found: $resolvedVelopackReleasesDir"
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($EdgeUpdatesRoot)) {
+        Copy-VelopackReleasesToEdgeUpdatesRoot -SourceDirectory $resolvedVelopackReleasesDir -TargetEdgeUpdatesRoot $EdgeUpdatesRoot
+    }
+    Upload-VelopackReleasesToRemote -SourceDirectory $resolvedVelopackReleasesDir
+}
 
 if ($RegisterCloudCatalog) {
     if ([string]::IsNullOrWhiteSpace($PublicBaseUrl)) {

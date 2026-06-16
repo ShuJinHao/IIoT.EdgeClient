@@ -669,7 +669,7 @@
     <sys:String x:Key="Navigation_Io_Direction_PlcToHost">PLC 到上位机</sys:String>
     <sys:String x:Key="Navigation_Io_TooltipSeparator">；</sys:String>
     <sys:String x:Key="Navigation_Io_TooltipCurrentValueFormat">，当前值：{0}</sys:String>
-    <sys:String x:Key="Navigation_Io_TooltipSignalFormat">信号键：{0}，地址：{1}{2}</sys:String>
+    <sys:String x:Key="Navigation_Io_TooltipSignalFormat">备注：{0}，地址：{1}{2}</sys:String>
     <sys:String x:Key="Navigation_Io_NoContinuousValues">暂无连续值</sys:String>
     <sys:String x:Key="Navigation_Io_ArraySummaryFormat">{0} 行 x {1} 项</sys:String>
     <sys:String x:Key="Navigation_Io_CollapseDetails">收起明细</sys:String>

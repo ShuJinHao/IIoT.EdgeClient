@@ -84,6 +84,22 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
 
     // 只显示“已配置(下载时选装、已写入云端唯一码)的 profile”；一个都没配置好则回退显示全部，
     // 避免 Launcher 空屏(客户端规则·启动红线：必须能启动到可登录、可诊断、可修配置的 UI)。
+    private sealed record LauncherLoginLoadResult(
+        LauncherAuthenticationResult Authentication,
+        IReadOnlyList<LauncherProfileDefinition> Profiles);
+
+    private LauncherLoginLoadResult LoadLoginState(string? userName, string? password)
+    {
+        var authentication = _authService.Authenticate(userName, password);
+        if (!authentication.Success)
+        {
+            return new LauncherLoginLoadResult(authentication, []);
+        }
+
+        var profiles = SelectVisibleProfiles(_profileCatalog.LoadProfiles()).ToArray();
+        return new LauncherLoginLoadResult(authentication, profiles);
+    }
+
     private IReadOnlyList<LauncherProfileDefinition> SelectVisibleProfiles(
         IReadOnlyList<LauncherProfileDefinition> profiles)
     {
@@ -185,9 +201,8 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
 
         try
         {
-            await Task.Yield();
-
-            var result = _authService.Authenticate(userName, password);
+            var loginState = await Task.Run(() => LoadLoginState(userName, password));
+            var result = loginState.Authentication;
             if (!result.Success)
             {
                 ResetToLoggedOutState();
@@ -198,7 +213,7 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
             }
 
             _allProfiles.Clear();
-            _allProfiles.AddRange(SelectVisibleProfiles(_profileCatalog.LoadProfiles()));
+            _allProfiles.AddRange(loginState.Profiles);
             _allProfileCards.Clear();
             foreach (var profile in _allProfiles)
             {
@@ -238,8 +253,7 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
 
         try
         {
-            await Task.Yield();
-            var result = _authService.ChangePassword(userName, oldPassword, newPassword);
+            var result = await Task.Run(() => _authService.ChangePassword(userName, oldPassword, newPassword));
             if (!result.Success)
             {
                 ErrorMessage = LocalizeAuthenticationError(result.ErrorMessage)

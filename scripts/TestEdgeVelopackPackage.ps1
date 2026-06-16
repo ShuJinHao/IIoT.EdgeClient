@@ -193,7 +193,7 @@ try {
     Assert-ZipEntryExists -Archive $archive -EntryName 'lib/app/IIoT.Edge.Launcher.exe' | Out-Null
     $launcherAssemblyEntry = Assert-ZipEntryExists -Archive $archive -EntryName 'lib/app/IIoT.Edge.Launcher.dll'
     Assert-ZipEntryExists -Archive $archive -EntryName "lib/app/$ExpectedHostDirectory/IIoT.Edge.Shell.exe" | Out-Null
-    Assert-ZipEntryExists -Archive $archive -EntryName "lib/app/$ExpectedPluginsRoot/$ExpectedModuleId/plugin.json" | Out-Null
+    Test-ZipEntryMissing -Archive $archive -EntryName "lib/app/$ExpectedPluginsRoot/$ExpectedModuleId/plugin.json"
     Assert-ZipEntryExists -Archive $archive -EntryName 'lib/app/launcher.accounts.sample.json' | Out-Null
     Assert-ZipEntryExists -Archive $archive -EntryName 'lib/app/launcher.update.sample.json' | Out-Null
 

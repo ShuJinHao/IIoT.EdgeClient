@@ -187,6 +187,18 @@ if ([long]$manifest.installerStubSize -ne (Get-Item $stubPath).Length) {
     throw "Installer stub size does not match installer-artifact.json."
 }
 
+if ($manifest.PSObject.Properties.Name -contains 'velopackSetupFile') {
+    $velopackSetupPath = Join-Path $resolvedArtifactRoot ([string]$manifest.velopackSetupFile)
+    Assert-PathExists -PathValue $velopackSetupPath -Message "Velopack setup file was not found: $velopackSetupPath"
+    if ($manifest.velopackSetupSha256 -ne (Get-TestSha256 -PathValue $velopackSetupPath)) {
+        throw "Velopack setup sha256 does not match installer-artifact.json."
+    }
+
+    if ([long]$manifest.velopackSetupSize -ne (Get-Item $velopackSetupPath).Length) {
+        throw "Velopack setup size does not match installer-artifact.json."
+    }
+}
+
 $launcherDirectory = [string]$manifest.launcherDirectory
 if ([string]::IsNullOrWhiteSpace($launcherDirectory)) {
     throw "Artifact manifest launcherDirectory is empty."

@@ -357,6 +357,48 @@ public sealed class ShellConfigurationLoaderBehaviorTests
         }
     }
 
+    [Fact]
+    public void Load_WhenVelopackCurrentHostUsesDefaultPluginRoot_ShouldLoadDefaultsFromInstallRootPlugins()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var hostDirectory = Path.Combine(tempDirectory, "install", "current", "host");
+            WriteText(
+                Path.Combine(hostDirectory, "appsettings.json"),
+                """
+                {
+                  "Modules": {
+                    "PluginRoots": [ "../plugins" ]
+                  }
+                }
+                """);
+            WriteText(
+                Path.Combine(tempDirectory, "install", "plugins", "Homogenization", "Config", "homogenization.module.json"),
+                """
+                {
+                  "Modules": {
+                    "Homogenization": {
+                      "Module": {
+                        "Runtime": {
+                          "EventLoopIntervalMs": 125
+                        }
+                      }
+                    }
+                  }
+                }
+                """);
+
+            var result = new ShellConfigurationLoader().Load(hostDirectory);
+
+            Assert.Equal("125", result.Configuration["Modules:Homogenization:Module:Runtime:EventLoopIntervalMs"]);
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
     private static string CreateTempDirectory()
     {
         var path = Path.Combine(Path.GetTempPath(), "edge-shell-config-tests", Guid.NewGuid().ToString("N"));

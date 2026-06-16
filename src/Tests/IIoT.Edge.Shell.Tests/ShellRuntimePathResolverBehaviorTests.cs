@@ -75,6 +75,47 @@ public sealed class ShellRuntimePathResolverBehaviorTests
     }
 
     [Fact]
+    public void ProgramDataPaths_WhenRunningFromVelopackCurrentRoot_ShouldKeepMutableDataOutsideCurrent()
+    {
+        var appRoot = Path.Combine(
+            Path.GetTempPath(),
+            "edge-runtime-resolver-tests",
+            Guid.NewGuid().ToString("N"));
+        var previousDataRoot = Environment.GetEnvironmentVariable(
+            EdgeClientProgramDataPaths.ProgramDataRootEnvironmentVariable);
+        var currentRoot = Path.Combine(appRoot, "current");
+        var hostDirectory = Path.Combine(currentRoot, "host");
+        Directory.CreateDirectory(hostDirectory);
+
+        try
+        {
+            Environment.SetEnvironmentVariable(
+                EdgeClientProgramDataPaths.ProgramDataRootEnvironmentVariable,
+                null);
+
+            Assert.Equal(
+                Path.Combine(appRoot, "data"),
+                EdgeClientProgramDataPaths.ResolveApplicationDataRoot(currentRoot));
+            Assert.Equal(
+                Path.Combine(appRoot, "data"),
+                EdgeClientProgramDataPaths.ResolveApplicationDataRoot(hostDirectory));
+            Assert.Equal(
+                Path.Combine(appRoot, "plugins"),
+                EdgeClientProgramDataPaths.ResolveApplicationPluginRoot(hostDirectory));
+            Assert.Equal(
+                Path.Combine(appRoot, "data", "IIoT", "EdgeClient", "launcher"),
+                EdgeClientProgramDataPaths.ResolveLauncherDirectory(currentRoot));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(
+                EdgeClientProgramDataPaths.ProgramDataRootEnvironmentVariable,
+                previousDataRoot);
+            Directory.Delete(appRoot, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Resolve_WhenRuntimeDataRootUsesWindowsSeparators_ShouldResolveRelativeRootAgainstBaseDirectory()
     {
         var baseDirectory = Path.Combine(Path.GetTempPath(), "edge-runtime-resolver-tests", Guid.NewGuid().ToString("N"));

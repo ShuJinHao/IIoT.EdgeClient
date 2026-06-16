@@ -52,7 +52,8 @@ public sealed record LauncherClientReleaseCatalog(
     LauncherClientHostRelease? LatestHost,
     IReadOnlyList<LauncherClientHostRelease> HostReleases,
     IReadOnlyList<LauncherClientPluginRelease> PluginReleases,
-    DateTime GeneratedAtUtc);
+    DateTime GeneratedAtUtc,
+    string? HostUpdateSource = null);
 
 public sealed record LauncherClientHostRelease(
     Guid Id,

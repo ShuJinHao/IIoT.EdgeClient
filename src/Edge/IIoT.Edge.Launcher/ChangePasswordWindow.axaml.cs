@@ -2,22 +2,26 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using IIoT.Edge.Launcher.ViewModels;
+using IIoT.Edge.UI.Shared.Avalonia.Windowing;
 
 namespace IIoT.Edge.Launcher;
 
 public partial class ChangePasswordWindow : Window
 {
+    private const int WindowCornerRadius = 8;
     private readonly LauncherMainViewModel _viewModel;
 
     public ChangePasswordWindow()
     {
         InitializeComponent();
+        EdgeRoundedWindowRegion.Attach(this, WindowCornerRadius);
         _viewModel = null!;
     }
 
     public ChangePasswordWindow(LauncherMainViewModel viewModel, string? initialUserName)
     {
         InitializeComponent();
+        EdgeRoundedWindowRegion.Attach(this, WindowCornerRadius);
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         DataContext = _viewModel;
         UserNameInput.Text = initialUserName?.Trim() ?? string.Empty;

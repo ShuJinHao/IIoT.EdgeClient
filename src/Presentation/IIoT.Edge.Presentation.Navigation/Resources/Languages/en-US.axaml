@@ -669,7 +669,7 @@
     <sys:String x:Key="Navigation_Io_Direction_PlcToHost">PLC to Host</sys:String>
     <sys:String x:Key="Navigation_Io_TooltipSeparator">; </sys:String>
     <sys:String x:Key="Navigation_Io_TooltipCurrentValueFormat">, current value: {0}</sys:String>
-    <sys:String x:Key="Navigation_Io_TooltipSignalFormat">Signal key: {0}, address: {1}{2}</sys:String>
+    <sys:String x:Key="Navigation_Io_TooltipSignalFormat">Remark: {0}, address: {1}{2}</sys:String>
     <sys:String x:Key="Navigation_Io_NoContinuousValues">No continuous values</sys:String>
     <sys:String x:Key="Navigation_Io_ArraySummaryFormat">{0} rows x {1} columns</sys:String>
     <sys:String x:Key="Navigation_Io_CollapseDetails">Collapse details</sys:String>

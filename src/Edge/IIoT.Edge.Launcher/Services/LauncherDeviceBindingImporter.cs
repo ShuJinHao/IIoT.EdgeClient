@@ -42,8 +42,8 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
         // 启动红线：导入失败绝不阻断启动，这里兜底吞掉任何异常（包含意外的程序错误）。
         try
         {
-            var bindingPath = Path.Combine(_baseDirectory, BindingFileName);
-            if (!File.Exists(bindingPath))
+            var bindingPath = ResolvePendingBindingPath();
+            if (bindingPath is null)
             {
                 return;
             }
@@ -68,6 +68,20 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
         {
             // 非阻断：首启绑定导入失败不得影响客户端启动（客户端规则·启动红线）。
         }
+    }
+
+    private string? ResolvePendingBindingPath()
+    {
+        var dataPath = Path.Combine(
+            EdgeClientProgramDataPaths.ResolveLauncherDirectory(_baseDirectory),
+            BindingFileName);
+        if (File.Exists(dataPath))
+        {
+            return dataPath;
+        }
+
+        var legacyPath = Path.Combine(_baseDirectory, BindingFileName);
+        return File.Exists(legacyPath) ? legacyPath : null;
     }
 
     private void ApplyOneBinding(

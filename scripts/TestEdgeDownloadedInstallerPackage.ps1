@@ -238,29 +238,49 @@ $archive = [System.IO.Compression.ZipArchive]::new(
     $true)
 try {
     Assert-ZipEntriesSafe -Archive $archive
-    Assert-ZipEntryExists -Archive $archive -EntryName 'launcher/IIoT.Edge.Launcher.exe'
-    Assert-ZipEntryExists -Archive $archive -EntryName 'launcher/iiot-binding.json'
-    Assert-ZipEntryExists -Archive $archive -EntryName 'launcher/iiot-enabled-plugins.json'
-    Assert-ZipEntryExists -Archive $archive -EntryName "$ExpectedHostDirectory/IIoT.Edge.Shell.dll"
-    Assert-ZipEntryExists -Archive $archive -EntryName "$ExpectedPluginsRoot/$ExpectedModuleId/plugin.json"
-    Assert-ZipEntryExists -Archive $archive -EntryName "$ExpectedPluginsRoot/$ExpectedModuleId/iiot-plugin-binding.json"
+    $velopackSetupEntry = $archive.Entries |
+        Where-Object {
+            $_.FullName -match '(^|/)velopack/.+Setup\.exe$' -or
+            $_.FullName -match '^[^/]+Setup\.exe$'
+        } |
+        Select-Object -First 1
 
+    Assert-ZipEntryExists -Archive $archive -EntryName 'launcher/iiot-binding.json'
     $bindingJson = Read-ZipEntryText -Archive $archive -EntryName 'launcher/iiot-binding.json'
     $bindingItem = Assert-BindingPayload -BindingJson $bindingJson -ModuleId $ExpectedModuleId
 
-    $hostPluginJson = Read-ZipEntryText -Archive $archive -EntryName 'launcher/iiot-enabled-plugins.json'
-    Assert-HostPluginPayload `
-        -HostPluginJson $hostPluginJson `
-        -ModuleId $ExpectedModuleId `
-        -PluginDirectory $ExpectedModuleId `
-        -ClientCode $bindingItem.clientCode
+    if ($null -ne $velopackSetupEntry) {
+        Assert-ZipEntryExists -Archive $archive -EntryName 'launcher/iiot-enabled-plugins.json'
+        Assert-ZipEntryExists -Archive $archive -EntryName "$ExpectedPluginsRoot/$ExpectedModuleId/plugin.json"
 
-    $pluginBindingJson = Read-ZipEntryText -Archive $archive -EntryName "$ExpectedPluginsRoot/$ExpectedModuleId/iiot-plugin-binding.json"
-    Assert-PluginBindingPayload `
-        -PluginBindingJson $pluginBindingJson `
-        -ModuleId $ExpectedModuleId `
-        -ClientCode $bindingItem.clientCode `
-        -BootstrapSecret $bindingItem.bootstrapSecret
+        $hostPluginJson = Read-ZipEntryText -Archive $archive -EntryName 'launcher/iiot-enabled-plugins.json'
+        Assert-HostPluginPayload `
+            -HostPluginJson $hostPluginJson `
+            -ModuleId $ExpectedModuleId `
+            -PluginDirectory $ExpectedModuleId `
+            -ClientCode $bindingItem.clientCode
+    }
+    else {
+        Assert-ZipEntryExists -Archive $archive -EntryName 'launcher/IIoT.Edge.Launcher.exe'
+        Assert-ZipEntryExists -Archive $archive -EntryName 'launcher/iiot-enabled-plugins.json'
+        Assert-ZipEntryExists -Archive $archive -EntryName "$ExpectedHostDirectory/IIoT.Edge.Shell.dll"
+        Assert-ZipEntryExists -Archive $archive -EntryName "$ExpectedPluginsRoot/$ExpectedModuleId/plugin.json"
+        Assert-ZipEntryExists -Archive $archive -EntryName "$ExpectedPluginsRoot/$ExpectedModuleId/iiot-plugin-binding.json"
+
+        $hostPluginJson = Read-ZipEntryText -Archive $archive -EntryName 'launcher/iiot-enabled-plugins.json'
+        Assert-HostPluginPayload `
+            -HostPluginJson $hostPluginJson `
+            -ModuleId $ExpectedModuleId `
+            -PluginDirectory $ExpectedModuleId `
+            -ClientCode $bindingItem.clientCode
+
+        $pluginBindingJson = Read-ZipEntryText -Archive $archive -EntryName "$ExpectedPluginsRoot/$ExpectedModuleId/iiot-plugin-binding.json"
+        Assert-PluginBindingPayload `
+            -PluginBindingJson $pluginBindingJson `
+            -ModuleId $ExpectedModuleId `
+            -ClientCode $bindingItem.clientCode `
+            -BootstrapSecret $bindingItem.bootstrapSecret
+    }
 
     if ($ExtractPayload) {
         if ([string]::IsNullOrWhiteSpace($PayloadOutputDirectory)) {

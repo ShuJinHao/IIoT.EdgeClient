@@ -3,6 +3,7 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
+    Icon="avares://IIoT.Edge.UI.Shared/Assets/images/icon.ico"
     Title="{DynamicResource Launcher_WindowTitle}"
     Width="1280"
     Height="760"
