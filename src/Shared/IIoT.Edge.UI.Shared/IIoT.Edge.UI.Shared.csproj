@@ -24,15 +24,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Resource Include="Assets\fonts\iconfont.ttf">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Resource>
-    <Resource Include="Assets\images\icon.ico">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Resource>
-    <Resource Include="Assets\images\login1.png">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Resource>
+    <AvaloniaResource Include="Assets\fonts\iconfont.ttf" />
+    <AvaloniaResource Include="Assets\images\icon.ico" />
+    <AvaloniaResource Include="Assets\images\login1.png" />
   </ItemGroup>
 
 </Project>

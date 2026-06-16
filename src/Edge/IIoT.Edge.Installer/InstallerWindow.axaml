@@ -43,7 +43,7 @@
                         Width="72"
                         Height="72"
                         HorizontalAlignment="Center"
-                        Source="avares://IIoT.Edge.Setup/Assets/icon.ico" />
+                        Source="avares://IIoT.Edge.UI.Shared/Assets/images/icon.ico" />
                     <TextBlock
                         Margin="0,8,0,0"
                         FontSize="24"
@@ -201,7 +201,7 @@
                         Height="56"
                         HorizontalAlignment="Center"
                         Opacity="0.6"
-                        Source="avares://IIoT.Edge.Setup/Assets/icon.ico" />
+                        Source="avares://IIoT.Edge.UI.Shared/Assets/images/icon.ico" />
                     <ProgressBar
                         x:Name="InstallProgressBar"
                         Height="6"
