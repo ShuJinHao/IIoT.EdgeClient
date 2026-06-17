@@ -32,6 +32,7 @@
     <sys:String x:Key="Installer_Error_EmptyShell">This is an empty installer shell. Download a configured package from the cloud Client Download Center.</sys:String>
     <sys:String x:Key="Installer_Progress_ExtractPackage">Extracting installer package...</sys:String>
     <sys:String x:Key="Installer_Progress_InstallCore">Installing core components...</sys:String>
+    <sys:String x:Key="Installer_Error_MissingVelopackSetup">The installer package does not contain Velopack Setup.exe. Installation stopped. Generate a new package from the cloud Client Download Center.</sys:String>
     <sys:String x:Key="Installer_Error_CoreInstallerExitFormat">Core installer exit code: {0}</sys:String>
     <sys:String x:Key="Installer_Progress_WriteConfig">Writing configuration files...</sys:String>
     <sys:String x:Key="Installer_Error_BootstrapCopyFormat">Failed to place first-install binding files: {0}</sys:String>

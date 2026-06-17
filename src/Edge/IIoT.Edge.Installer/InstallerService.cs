@@ -67,27 +67,8 @@ internal static class InstallerService
                 return 0;
             }
 
-            Console.WriteLine($"正在安装到：{installRoot}");
-            SelfExtractor.ExtractPayload(payload, installRoot);
-
-            try
-            {
-                SelfExtractor.CopyBootstrapFilesToFallbackDataRoot(installRoot);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                Console.Error.WriteLine($"首装绑定文件落位失败：{ex.Message}");
-                return 3;
-            }
-
-            Console.WriteLine("安装完成。");
-
-            if (!options.NoLaunch)
-            {
-                TryStartLauncher(Path.Combine(installRoot, "launcher", "IIoT.Edge.Launcher.exe"));
-            }
-
-            return 0;
+            Console.Error.WriteLine("安装包缺少 Velopack Setup.exe，已停止安装。请重新从云端客户端下载中心生成安装包。");
+            return 4;
         }
         finally
         {
@@ -169,32 +150,9 @@ internal static class InstallerService
                 return new InstallerResult(true, t("Installer_Result_Complete", "安装完成。"), installRoot);
             }
 
-            progress?.Report(new InstallerProgress(40, t("Installer_Progress_Install", "正在安装...")));
-            await Task.Run(() => SelfExtractor.ExtractPayload(payload, installRoot), cancellationToken)
-                .ConfigureAwait(false);
-
-            progress?.Report(new InstallerProgress(75, t("Installer_Progress_WriteConfig", "正在写入配置文件...")));
-            try
-            {
-                SelfExtractor.CopyBootstrapFilesToFallbackDataRoot(installRoot);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                return new InstallerResult(false, string.Format(
-                    t("Installer_Error_BootstrapCopyFormat", "首装绑定文件落位失败：{0}"),
-                    ex.Message), installRoot);
-            }
-
-            if (createDesktopShortcut)
-            {
-                progress?.Report(new InstallerProgress(90, t("Installer_Progress_CreateShortcut", "正在创建桌面快捷方式...")));
-                TryCreateDesktopShortcut(
-                    Path.Combine(installRoot, "launcher", "IIoT.Edge.Launcher.exe"),
-                    t("Installer_ShortcutName", "IIoT Edge 客户端"));
-            }
-
-            progress?.Report(new InstallerProgress(100, t("Installer_Progress_Complete", "安装完成")));
-            return new InstallerResult(true, t("Installer_Result_Complete", "安装完成。"), installRoot);
+            return new InstallerResult(false,
+                t("Installer_Error_MissingVelopackSetup", "安装包缺少 Velopack Setup.exe，已停止安装。请重新从云端客户端下载中心生成安装包。"),
+                installRoot);
         }
         catch (OperationCanceledException)
         {

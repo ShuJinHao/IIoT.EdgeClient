@@ -75,13 +75,7 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
         var dataPath = Path.Combine(
             EdgeClientProgramDataPaths.ResolveLauncherDirectory(_baseDirectory),
             BindingFileName);
-        if (File.Exists(dataPath))
-        {
-            return dataPath;
-        }
-
-        var legacyPath = Path.Combine(_baseDirectory, BindingFileName);
-        return File.Exists(legacyPath) ? legacyPath : null;
+        return File.Exists(dataPath) ? dataPath : null;
     }
 
     private void ApplyOneBinding(

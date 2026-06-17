@@ -71,7 +71,7 @@ public sealed class LauncherDeviceBindingImporterTests
     }
 
     [Fact]
-    public void ApplyPendingBindings_ShouldKeepLegacyBaseDirectoryBindingCompatible()
+    public void ApplyPendingBindings_ShouldIgnoreBaseDirectoryBinding()
     {
         var tempDirectory = CreateTempDirectory();
         var dataRoot = Path.Combine(tempDirectory, "program-data");
@@ -90,9 +90,10 @@ public sealed class LauncherDeviceBindingImporterTests
                 }
                 """);
 
-            // 随下载附带、放在 exe 目录下的首装绑定文件
+            // 旧 exe 目录绑定文件不再属于当前安装契约。
+            var legacyBindingPath = Path.Combine(hostDirectory, LauncherDeviceBindingImporter.BindingFileName);
             WriteText(
-                Path.Combine(hostDirectory, LauncherDeviceBindingImporter.BindingFileName),
+                legacyBindingPath,
                 """
                 {
                   "schemaVersion": 1,
@@ -117,23 +118,12 @@ public sealed class LauncherDeviceBindingImporterTests
 
                 importer.ApplyPendingBindings();
 
-                var externalConfig = File.ReadAllText(
-                    EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath("LineA", hostDirectory));
-                Assert.Contains("\"ClientCode\": \"DEV-AAAAAAAAAA\"", externalConfig, StringComparison.Ordinal);
-                Assert.Contains("\"BootstrapSecret\": \"SEC-HOMOG-001\"", externalConfig, StringComparison.Ordinal);
-                Assert.Contains("\"BaseUrl\": \"http://cloud.local:81\"", externalConfig, StringComparison.Ordinal);
-
-                // 原始绑定文件导入后删除（不再在磁盘多留一份明文密钥）
                 Assert.False(File.Exists(
-                    Path.Combine(hostDirectory, LauncherDeviceBindingImporter.BindingFileName)));
+                    EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath("LineA", hostDirectory)));
+                Assert.True(File.Exists(legacyBindingPath));
 
-                // 仅保留脱敏摘要：含 clientCode，但不含启动密钥
                 var launcherDir = EdgeClientProgramDataPaths.ResolveLauncherDirectory(hostDirectory);
-                var appliedFiles = Directory.GetFiles(launcherDir, "iiot-binding.applied.*.json");
-                Assert.Single(appliedFiles);
-                var appliedContent = File.ReadAllText(appliedFiles[0]);
-                Assert.Contains("DEV-AAAAAAAAAA", appliedContent, StringComparison.Ordinal);
-                Assert.DoesNotContain("SEC-HOMOG-001", appliedContent, StringComparison.Ordinal);
+                Assert.False(Directory.Exists(launcherDir));
             });
         }
         finally

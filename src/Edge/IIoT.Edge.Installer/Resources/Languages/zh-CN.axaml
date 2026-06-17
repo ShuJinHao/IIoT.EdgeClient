@@ -32,6 +32,7 @@
     <sys:String x:Key="Installer_Error_EmptyShell">这是空的安装器外壳，请从云端“客户端下载中心”获取带配置的安装包。</sys:String>
     <sys:String x:Key="Installer_Progress_ExtractPackage">正在解压安装包...</sys:String>
     <sys:String x:Key="Installer_Progress_InstallCore">正在安装核心组件...</sys:String>
+    <sys:String x:Key="Installer_Error_MissingVelopackSetup">安装包缺少 Velopack Setup.exe，已停止安装。请重新从云端客户端下载中心生成安装包。</sys:String>
     <sys:String x:Key="Installer_Error_CoreInstallerExitFormat">核心安装器退出码：{0}</sys:String>
     <sys:String x:Key="Installer_Progress_WriteConfig">正在写入配置文件...</sys:String>
     <sys:String x:Key="Installer_Error_BootstrapCopyFormat">首装绑定文件落位失败：{0}</sys:String>
