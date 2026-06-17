@@ -517,6 +517,60 @@ public sealed class RepositoryHygieneTests
     }
 
     [Fact]
+    public void EdgePackWorkflow_ShouldBuildOnWindowsAndPublishFromIntranetRunner()
+    {
+        var root = FindRepositoryRoot();
+        var workflowPath = Path.Combine(root, ".github", "workflows", "edge-pack-modules.yml");
+        var workflow = File.ReadAllText(workflowPath);
+
+        Assert.Contains("workflow_dispatch:", workflow, StringComparison.Ordinal);
+        Assert.Contains("EDGE_RELEASE_VERSION", workflow, StringComparison.Ordinal);
+        Assert.Contains("EDGE_RELEASE_CHANNEL", workflow, StringComparison.Ordinal);
+        Assert.Contains("runs-on: windows-latest", workflow, StringComparison.Ordinal);
+        Assert.Contains("PackEdgeClientVelopack.ps1", workflow, StringComparison.Ordinal);
+        Assert.Contains("TestEdgeVelopackPackage.ps1", workflow, StringComparison.Ordinal);
+        Assert.Contains("edge-installer-artifact", workflow, StringComparison.Ordinal);
+        Assert.Contains("edge-velopack-releases", workflow, StringComparison.Ordinal);
+        Assert.Contains("publish-edge-updates:", workflow, StringComparison.Ordinal);
+        Assert.Contains("self-hosted", workflow, StringComparison.Ordinal);
+        Assert.Contains("iiot-linux-prod", workflow, StringComparison.Ordinal);
+        Assert.Contains("actions/download-artifact@v4", workflow, StringComparison.Ordinal);
+        Assert.Contains("EDGE_UPDATES_DIR", workflow, StringComparison.Ordinal);
+        Assert.Contains("installers/$EDGE_RELEASE_CHANNEL/$EDGE_RELEASE_VERSION", workflow, StringComparison.Ordinal);
+        Assert.Contains("velopack/$EDGE_RELEASE_CHANNEL", workflow, StringComparison.Ordinal);
+
+        foreach (var forbidden in new[] { "scp", "ssh", "docker build", "ghcr.io", "Harbor" })
+        {
+            Assert.DoesNotContain(forbidden, workflow, StringComparison.OrdinalIgnoreCase);
+        }
+
+        var installerPublisher = File.ReadAllText(Path.Combine(root, "scripts", "PublishEdgeClientInstallerArtifact.ps1"));
+        foreach (var forbidden in new[] { "SshTarget", "RemoteEdgeUpdatesDir", "scp", "ssh" })
+        {
+            Assert.DoesNotContain(forbidden, installerPublisher, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Fact]
+    public void EdgeInstallUpdateDocs_ShouldDocumentStandardArtifactPublishPath()
+    {
+        var root = FindRepositoryRoot();
+        var installDoc = File.ReadAllText(Path.Combine(root, "docs", "Edge安装更新验收.md"));
+        var contractDoc = File.ReadAllText(Path.Combine(root, "docs", "Edge客户端宿主插件分发契约.md"));
+        var ruleDoc = File.ReadAllText(Path.Combine(root, "docs", "客户端规则.md"));
+
+        Assert.Contains("唯一客户端侧验收入口", installDoc, StringComparison.Ordinal);
+        Assert.Contains("GitHub hosted Windows runner", installDoc, StringComparison.Ordinal);
+        Assert.Contains("内网 Linux self-hosted runner", installDoc, StringComparison.Ordinal);
+        Assert.Contains("/srv/iiot/edge-updates", installDoc, StringComparison.Ordinal);
+        Assert.Contains("EdgeClient 不发布 Docker 镜像，不推 Harbor", installDoc, StringComparison.Ordinal);
+        Assert.Contains("Windows hosted runner 只负责构建", ruleDoc, StringComparison.Ordinal);
+        Assert.Contains("内网 Linux self-hosted runner 只负责", ruleDoc, StringComparison.Ordinal);
+        Assert.Contains("CI artifact 发布契约", contractDoc, StringComparison.Ordinal);
+        Assert.Contains("Linux runner 只做文件分发，不重新构建 EdgeClient", contractDoc, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SourceTree_ShouldNotReferenceRemovedMapperOrUnusedCentralPackages()
     {
         var root = FindRepositoryRoot();

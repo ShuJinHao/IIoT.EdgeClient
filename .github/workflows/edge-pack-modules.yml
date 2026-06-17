@@ -7,9 +7,22 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Edge client release version
+        required: false
+        default: 0.0.0-ci
+      channel:
+        description: Edge client release channel
+        required: false
+        default: ci
 
 env:
   DOTNET_NOLOGO: true
+  EDGE_RELEASE_VERSION: ${{ github.event.inputs.version || '0.0.0-ci' }}
+  EDGE_RELEASE_CHANNEL: ${{ github.event.inputs.channel || 'ci' }}
+  EDGE_PACK_ID: IIoT.EdgeClient.Homogenization
 
 jobs:
   validate-runtime:
@@ -58,7 +71,7 @@ jobs:
         run: ./scripts/TestEdgePackageVulnerabilities.ps1
 
   package-runtime:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     needs: validate-runtime
     steps:
@@ -80,13 +93,21 @@ jobs:
         shell: pwsh
         run: ./scripts/PublishEdgeRuntime.ps1 -Configuration Release -OutputRoot publish/edge-runtime -CleanOutput
 
+      - name: Pack Velopack releases
+        shell: pwsh
+        run: ./scripts/PackEdgeClientVelopack.ps1 -Version $env:EDGE_RELEASE_VERSION -Channel $env:EDGE_RELEASE_CHANNEL -OutputRoot publish/edge-velopack -CleanOutput
+
+      - name: Validate Velopack releases
+        shell: pwsh
+        run: ./scripts/TestEdgeVelopackPackage.ps1 -OutputRoot publish/edge-velopack -Channel $env:EDGE_RELEASE_CHANNEL -Version $env:EDGE_RELEASE_VERSION
+
       - name: Publish installer artifact
         shell: pwsh
-        run: ./scripts/PublishEdgeClientInstallerArtifact.ps1 -Version 0.0.0-ci -ReleaseChannel ci -OutputRoot publish/edge-installer-artifacts -RuntimeLayoutRoot publish/edge-runtime -CleanOutput
+        run: ./scripts/PublishEdgeClientInstallerArtifact.ps1 -Version $env:EDGE_RELEASE_VERSION -ReleaseChannel $env:EDGE_RELEASE_CHANNEL -OutputRoot publish/edge-installer-artifacts -RuntimeLayoutRoot publish/edge-runtime -VelopackSetupPath "publish/edge-velopack/$env:EDGE_PACK_ID-$env:EDGE_RELEASE_CHANNEL-Setup.exe" -CleanOutput
 
       - name: Validate installer artifact
         shell: pwsh
-        run: ./scripts/TestEdgeClientInstallerArtifact.ps1 -ArtifactRoot publish/edge-installer-artifacts/ci/0.0.0-ci -ExpectedChannel ci -ExpectedVersion 0.0.0-ci
+        run: ./scripts/TestEdgeClientInstallerArtifact.ps1 -ArtifactRoot "publish/edge-installer-artifacts/$env:EDGE_RELEASE_CHANNEL/$env:EDGE_RELEASE_VERSION" -ExpectedChannel $env:EDGE_RELEASE_CHANNEL -ExpectedVersion $env:EDGE_RELEASE_VERSION
 
       - name: Upload runtime artifact
         uses: actions/upload-artifact@v4
@@ -98,4 +119,75 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: edge-installer-artifact
-          path: publish/edge-installer-artifacts/ci/0.0.0-ci/**
+          path: publish/edge-installer-artifacts/${{ env.EDGE_RELEASE_CHANNEL }}/${{ env.EDGE_RELEASE_VERSION }}/**
+
+      - name: Upload Velopack releases
+        uses: actions/upload-artifact@v4
+        with:
+          name: edge-velopack-releases
+          path: publish/edge-velopack/**
+
+  publish-edge-updates:
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    runs-on:
+      - self-hosted
+      - iiot-linux-prod
+    needs: package-runtime
+    steps:
+      - name: Download installer artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: edge-installer-artifact
+          path: publish-download/installer
+
+      - name: Download Velopack releases
+        uses: actions/download-artifact@v4
+        with:
+          name: edge-velopack-releases
+          path: publish-download/velopack
+
+      - name: Publish to intranet edge-updates
+        shell: bash
+        env:
+          EDGE_UPDATES_DIR: ${{ vars.EDGE_UPDATES_DIR }}
+        run: |
+          set -euo pipefail
+
+          if [ "$(id -u)" = "0" ]; then
+            echo "self-hosted runner must not run as root." >&2
+            exit 1
+          fi
+
+          edge_updates_dir="${EDGE_UPDATES_DIR:-/srv/iiot/edge-updates}"
+          installer_source="$GITHUB_WORKSPACE/publish-download/installer"
+          velopack_source="$GITHUB_WORKSPACE/publish-download/velopack"
+          installer_target="$edge_updates_dir/installers/$EDGE_RELEASE_CHANNEL/$EDGE_RELEASE_VERSION"
+          velopack_target="$edge_updates_dir/velopack/$EDGE_RELEASE_CHANNEL"
+
+          mkdir -p "$edge_updates_dir"
+          test -f "$installer_source/installer-artifact.json"
+          test -f "$installer_source/IIoT.Edge.Setup.exe"
+          test -d "$installer_source/launcher"
+          test -d "$installer_source/host"
+          test -d "$installer_source/plugins"
+          test -f "$velopack_source/releases.$EDGE_RELEASE_CHANNEL.json"
+          test -f "$velopack_source/assets.$EDGE_RELEASE_CHANNEL.json"
+
+          tmp_root="$(mktemp -d "$edge_updates_dir/.edge-publish.XXXXXX")"
+          trap 'rm -rf "$tmp_root"' EXIT
+
+          mkdir -p "$tmp_root/installer" "$tmp_root/velopack"
+          cp -a "$installer_source"/. "$tmp_root/installer"/
+          cp -a "$velopack_source"/. "$tmp_root/velopack"/
+
+          mkdir -p "$(dirname "$installer_target")" "$velopack_target"
+          rm -rf "$installer_target"
+          mv "$tmp_root/installer" "$installer_target"
+          cp -a "$tmp_root/velopack"/. "$velopack_target"/
+
+          test -f "$installer_target/installer-artifact.json"
+          test -f "$installer_target/IIoT.Edge.Setup.exe"
+          test -f "$velopack_target/releases.$EDGE_RELEASE_CHANNEL.json"
+          test -f "$velopack_target/assets.$EDGE_RELEASE_CHANNEL.json"
+          echo "Published Edge installer artifact to $installer_target"
+          echo "Published Edge Velopack releases to $velopack_target"

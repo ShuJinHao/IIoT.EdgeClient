@@ -265,7 +265,10 @@ try {
     }
 
     $assemblyVersion = [System.Reflection.AssemblyName]::GetAssemblyName($launcherAssemblyPath).Version
-    $expectedVersion = [System.Version]::Parse("$Version.0")
+    $assemblyVersionPrefix = ($Version -split '[-+]')[0]
+    $assemblyVersionPartCount = $assemblyVersionPrefix.Split('.').Length
+    $expectedAssemblyVersion = if ($assemblyVersionPartCount -eq 3) { "$assemblyVersionPrefix.0" } else { $assemblyVersionPrefix }
+    $expectedVersion = [System.Version]::Parse($expectedAssemblyVersion)
     if ($assemblyVersion -ne $expectedVersion) {
         throw "Launcher assembly version '$assemblyVersion' does not match package version '$expectedVersion'."
     }

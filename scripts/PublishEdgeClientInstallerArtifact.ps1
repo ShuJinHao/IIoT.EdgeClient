@@ -28,12 +28,6 @@ param(
 
     [string]$EdgeUpdatesRoot,
 
-    [string]$SshTarget,
-
-    [string]$SshPort = '22',
-
-    [string]$RemoteEdgeUpdatesDir,
-
     [string]$VelopackReleasesDir,
 
     [switch]$RegisterCloudCatalog,
@@ -269,42 +263,6 @@ function Copy-ArtifactToEdgeUpdatesRoot {
     Write-Host "Copied installer artifact to: $targetDirectory"
 }
 
-function Upload-ArtifactToRemoteEdgeUpdates {
-    param(
-        [Parameter(Mandatory = $true)][string]$ArtifactRoot
-    )
-
-    if ([string]::IsNullOrWhiteSpace($SshTarget) -xor [string]::IsNullOrWhiteSpace($RemoteEdgeUpdatesDir)) {
-        throw "SshTarget and RemoteEdgeUpdatesDir must be provided together."
-    }
-
-    if ([string]::IsNullOrWhiteSpace($SshTarget)) {
-        return
-    }
-
-    $remoteDirectory = "$RemoteEdgeUpdatesDir/installers/$ReleaseChannel/$Version"
-    Invoke-EdgeNativeCommand -FilePath 'ssh' -Arguments @(
-        '-p',
-        $SshPort,
-        $SshTarget,
-        "rm -rf '$remoteDirectory' && mkdir -p '$remoteDirectory'"
-    )
-    $artifactItems = Get-ChildItem -Path $ArtifactRoot -Force | ForEach-Object { $_.FullName }
-    if ($artifactItems.Count -eq 0) {
-        throw "Installer artifact directory is empty: $ArtifactRoot"
-    }
-
-    $scpArguments = @(
-        '-P',
-        $SshPort,
-        '-r'
-    )
-    $scpArguments += $artifactItems
-    $scpArguments += "${SshTarget}:$remoteDirectory/"
-    Invoke-EdgeNativeCommand -FilePath 'scp' -Arguments $scpArguments
-    Write-Host "Uploaded installer artifact to: ${SshTarget}:$remoteDirectory"
-}
-
 function Copy-VelopackReleasesToEdgeUpdatesRoot {
     param(
         [Parameter(Mandatory = $true)][string]$SourceDirectory,
@@ -319,38 +277,6 @@ function Copy-VelopackReleasesToEdgeUpdatesRoot {
 
     Copy-Item -Path (Join-Path $SourceDirectory '*') -Destination $targetDirectory -Recurse -Force
     Write-Host "Copied Velopack releases to: $targetDirectory"
-}
-
-function Upload-VelopackReleasesToRemote {
-    param(
-        [Parameter(Mandatory = $true)][string]$SourceDirectory
-    )
-
-    if ([string]::IsNullOrWhiteSpace($SshTarget) -or [string]::IsNullOrWhiteSpace($RemoteEdgeUpdatesDir)) {
-        return
-    }
-
-    $remoteDirectory = "$RemoteEdgeUpdatesDir/velopack/$ReleaseChannel"
-    Invoke-EdgeNativeCommand -FilePath 'ssh' -Arguments @(
-        '-p',
-        $SshPort,
-        $SshTarget,
-        "mkdir -p '$remoteDirectory'"
-    )
-    $releaseItems = Get-ChildItem -Path $SourceDirectory -Force | ForEach-Object { $_.FullName }
-    if ($releaseItems.Count -eq 0) {
-        throw "Velopack releases directory is empty: $SourceDirectory"
-    }
-
-    $scpArguments = @(
-        '-P',
-        $SshPort,
-        '-r'
-    )
-    $scpArguments += $releaseItems
-    $scpArguments += "${SshTarget}:$remoteDirectory/"
-    Invoke-EdgeNativeCommand -FilePath 'scp' -Arguments $scpArguments
-    Write-Host "Uploaded Velopack releases to: ${SshTarget}:$remoteDirectory"
 }
 
 function Invoke-CloudJsonPost {
@@ -550,7 +476,6 @@ if ([string]::IsNullOrWhiteSpace($RuntimeLayoutRoot)) {
 if (-not [string]::IsNullOrWhiteSpace($EdgeUpdatesRoot)) {
     Copy-ArtifactToEdgeUpdatesRoot -ArtifactRoot $artifactRoot -TargetEdgeUpdatesRoot $EdgeUpdatesRoot
 }
-Upload-ArtifactToRemoteEdgeUpdates -ArtifactRoot $artifactRoot
 
 if (-not [string]::IsNullOrWhiteSpace($VelopackReleasesDir)) {
     $resolvedVelopackReleasesDir = Resolve-EdgeAbsolutePath -BasePath $repoRoot -PathValue $VelopackReleasesDir
@@ -561,7 +486,6 @@ if (-not [string]::IsNullOrWhiteSpace($VelopackReleasesDir)) {
     if (-not [string]::IsNullOrWhiteSpace($EdgeUpdatesRoot)) {
         Copy-VelopackReleasesToEdgeUpdatesRoot -SourceDirectory $resolvedVelopackReleasesDir -TargetEdgeUpdatesRoot $EdgeUpdatesRoot
     }
-    Upload-VelopackReleasesToRemote -SourceDirectory $resolvedVelopackReleasesDir
 }
 
 if ($RegisterCloudCatalog) {

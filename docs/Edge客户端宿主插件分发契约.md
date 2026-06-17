@@ -172,6 +172,40 @@ Phase 1 只完成 Edge 地基：
 
 Cloud 下载中心、插件选择安装、设备盘点和版本上报属于后续阶段。
 
+### 8.1 CI artifact 发布契约
+
+EdgeClient 的交付物是 Windows 安装器、安装素材和 Velopack 更新包，不是 Docker 镜像。CI/CD 不允许推 Harbor、GHCR，也不允许从 GitHub hosted runner 通过 SSH/SCP 直连内网服务器。
+
+标准发布分两段：
+
+```text
+windows-latest
+-> PublishEdgeRuntime.ps1
+-> PackEdgeClientVelopack.ps1
+-> PublishEdgeClientInstallerArtifact.ps1
+-> upload edge-runtime-package / edge-installer-artifact / edge-velopack-releases
+
+[self-hosted, iiot-linux-prod]
+-> download GitHub Actions artifacts
+-> copy installers/<channel>/<version> and velopack/<channel> to /srv/iiot/edge-updates
+```
+
+内网 Linux runner 只做文件分发，不重新构建 EdgeClient。原因是 Avalonia 桌面应用、Windows installer 和 Velopack Windows 包必须在 Windows runner 上构建和验证。Linux runner 必须用非 root 专用用户运行，并只授予 Docker 之外的最小文件权限：读取 Actions 工作目录、写入 `/srv/iiot/edge-updates`。
+
+发布目录固定为：
+
+```text
+edge-updates/
+  installers/<channel>/<version>/installer-artifact.json
+  installers/<channel>/<version>/IIoT.Edge.Setup.exe
+  installers/<channel>/<version>/launcher/
+  installers/<channel>/<version>/host/
+  installers/<channel>/<version>/plugins/
+  installers/<channel>/<version>/velopack/
+  velopack/<channel>/releases.<channel>.json
+  velopack/<channel>/assets.<channel>.json
+```
+
 ## 9. Phase 2 Cloud 落地
 
 Phase 2 在云端建立 catalog、下载中心基础页和设备版本盘点能力。Cloud 负责“管版本、发 catalog、收上报、看差异”，不负责本阶段的 Launcher 插件安装。
