@@ -1,3 +1,4 @@
+using IIoT.Edge.Infrastructure.Update.Profiles;
 using IIoT.Edge.Launcher.Models;
 using IIoT.Edge.Launcher.Services;
 using IIoT.Edge.SharedKernel.Configuration;
@@ -50,7 +51,8 @@ public sealed class LauncherDeviceBindingImporterTests
                 var importer = new LauncherDeviceBindingImporter(
                     currentDirectory,
                     new FakeProfileCatalog(Profile(hostDirectory)),
-                    new LauncherProfileModuleConfiguration());
+                    new FileEdgeProfileModuleConfigurationStore(),
+                    new LauncherUpdateTargetFactory());
 
                 importer.ApplyPendingBindings();
 
@@ -114,7 +116,8 @@ public sealed class LauncherDeviceBindingImporterTests
                 var importer = new LauncherDeviceBindingImporter(
                     hostDirectory,
                     new FakeProfileCatalog(Profile(hostDirectory)),
-                    new LauncherProfileModuleConfiguration());
+                    new FileEdgeProfileModuleConfigurationStore(),
+                    new LauncherUpdateTargetFactory());
 
                 importer.ApplyPendingBindings();
 
@@ -152,7 +155,8 @@ public sealed class LauncherDeviceBindingImporterTests
                 var importer = new LauncherDeviceBindingImporter(
                     hostDirectory,
                     new FakeProfileCatalog(Profile(hostDirectory)),
-                    new LauncherProfileModuleConfiguration());
+                    new FileEdgeProfileModuleConfigurationStore(),
+                    new LauncherUpdateTargetFactory());
 
                 // 无绑定文件：不抛异常、也不创建外部配置
                 var exception = Record.Exception(() => importer.ApplyPendingBindings());
@@ -186,7 +190,8 @@ public sealed class LauncherDeviceBindingImporterTests
                 var importer = new LauncherDeviceBindingImporter(
                     hostDirectory,
                     new FakeProfileCatalog(Profile(hostDirectory)),
-                    new LauncherProfileModuleConfiguration());
+                    new FileEdgeProfileModuleConfigurationStore(),
+                    new LauncherUpdateTargetFactory());
 
                 // 启动红线：JSON 损坏不得抛 fatal
                 var exception = Record.Exception(() => importer.ApplyPendingBindings());

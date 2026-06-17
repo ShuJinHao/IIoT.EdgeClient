@@ -1,27 +1,19 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using IIoT.Edge.Launcher.Models;
+using IIoT.Edge.Application.Abstractions.Updates;
 using IIoT.Edge.SharedKernel.Configuration;
 
-namespace IIoT.Edge.Launcher.Services;
+namespace IIoT.Edge.Infrastructure.Update.Profiles;
 
-public interface ILauncherProfileModuleConfiguration
+public sealed class FileEdgeProfileModuleConfigurationStore : IEdgeProfileModuleConfigurationStore
 {
-    IReadOnlyList<string> ReadEnabledModules(LauncherProfileDefinition profile);
-
-    void EnableModules(LauncherProfileDefinition profile, IReadOnlyList<string> moduleIds);
-}
-
-public sealed class LauncherProfileModuleConfiguration : ILauncherProfileModuleConfiguration
-{
-    public IReadOnlyList<string> ReadEnabledModules(LauncherProfileDefinition profile)
+    public IReadOnlyList<string> ReadEnabledModules(EdgeUpdateTarget target)
     {
-        ArgumentNullException.ThrowIfNull(profile);
+        ArgumentNullException.ThrowIfNull(target);
 
-        var hostDirectory = LauncherCloudApiConfigurationResolver.ResolveHostDirectory(profile);
         var enabled = new List<string>();
-        foreach (var path in ResolveEffectiveConfigPaths(profile, hostDirectory))
+        foreach (var path in ResolveEffectiveConfigPaths(target))
         {
             var fileEnabled = ReadEnabledModules(path);
             if (fileEnabled is not null)
@@ -37,13 +29,12 @@ public sealed class LauncherProfileModuleConfiguration : ILauncherProfileModuleC
             .ToArray();
     }
 
-    public void EnableModules(LauncherProfileDefinition profile, IReadOnlyList<string> moduleIds)
+    public void EnableModules(EdgeUpdateTarget target, IReadOnlyList<string> moduleIds)
     {
-        ArgumentNullException.ThrowIfNull(profile);
+        ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(moduleIds);
 
-        var hostDirectory = LauncherCloudApiConfigurationResolver.ResolveHostDirectory(profile);
-        var targetPath = EnsureExternalMachineProfile(profile, hostDirectory);
+        var targetPath = EnsureExternalMachineProfile(target);
         JsonObject root;
         if (File.Exists(targetPath))
         {
@@ -62,7 +53,7 @@ public sealed class LauncherProfileModuleConfiguration : ILauncherProfileModuleC
             root = new JsonObject();
         }
 
-        var enabled = ReadEnabledModules(profile)
+        var enabled = ReadEnabledModules(target)
             .Concat(moduleIds)
             .Where(static moduleId => !string.IsNullOrWhiteSpace(moduleId))
             .Select(static moduleId => moduleId.Trim())
@@ -91,15 +82,13 @@ public sealed class LauncherProfileModuleConfiguration : ILauncherProfileModuleC
             new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
     }
 
-    private static IReadOnlyList<string> ResolveEffectiveConfigPaths(
-        LauncherProfileDefinition profile,
-        string hostDirectory)
+    private static IReadOnlyList<string> ResolveEffectiveConfigPaths(EdgeUpdateTarget target)
     {
         var paths = new List<string>
         {
-            Path.Combine(hostDirectory, "appsettings.json"),
-            Path.Combine(hostDirectory, $"appsettings.machine.{profile.MachineProfile}.json"),
-            EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(profile.MachineProfile, hostDirectory)
+            Path.Combine(target.HostDirectory, "appsettings.json"),
+            Path.Combine(target.HostDirectory, $"appsettings.machine.{target.MachineProfile}.json"),
+            EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(target.MachineProfile, target.HostDirectory)
         };
 
         return paths
@@ -143,15 +132,15 @@ public sealed class LauncherProfileModuleConfiguration : ILauncherProfileModuleC
         }
     }
 
-    private static string EnsureExternalMachineProfile(LauncherProfileDefinition profile, string hostDirectory)
+    private static string EnsureExternalMachineProfile(EdgeUpdateTarget target)
     {
-        var targetPath = EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(profile.MachineProfile, hostDirectory);
+        var targetPath = EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(target.MachineProfile, target.HostDirectory);
         if (File.Exists(targetPath))
         {
             return targetPath;
         }
 
-        var packagedPath = Path.Combine(hostDirectory, $"appsettings.machine.{profile.MachineProfile}.json");
+        var packagedPath = Path.Combine(target.HostDirectory, $"appsettings.machine.{target.MachineProfile}.json");
         var directory = Path.GetDirectoryName(targetPath);
         if (!string.IsNullOrWhiteSpace(directory))
         {

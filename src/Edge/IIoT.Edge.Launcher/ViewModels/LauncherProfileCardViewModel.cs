@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Runtime.CompilerServices;
+using IIoT.Edge.Application.Abstractions.Updates;
 using IIoT.Edge.Launcher.Models;
 using IIoT.Edge.Launcher.Services;
 using IIoT.Edge.UI.Shared.Localization;
@@ -52,9 +53,9 @@ public sealed class LauncherProfileCardViewModel : BaseNotifyPropertyChanged
 
     public ObservableCollection<LauncherClientPluginItem> Plugins { get; } = [];
 
-    public LauncherUpdateCheckResult? HostUpdateCheck { get; private set; }
+    public EdgeHostUpdateCheckResult? HostUpdateCheck { get; private set; }
 
-    public LauncherClientReleaseCheckResult? ClientReleaseCheck { get; private set; }
+    public EdgeReleaseCatalogResult? ClientReleaseCheck { get; private set; }
 
     public string ProfileId => Profile.ProfileId;
 
@@ -173,8 +174,8 @@ public sealed class LauncherProfileCardViewModel : BaseNotifyPropertyChanged
     }
 
     public void ApplyCheckResult(
-        LauncherUpdateCheckResult? hostUpdateCheck,
-        LauncherClientReleaseCheckResult clientReleaseCheck)
+        EdgeHostUpdateCheckResult? hostUpdateCheck,
+        EdgeReleaseCatalogResult clientReleaseCheck)
     {
         ArgumentNullException.ThrowIfNull(clientReleaseCheck);
 
@@ -184,7 +185,7 @@ public sealed class LauncherProfileCardViewModel : BaseNotifyPropertyChanged
         IsProgressVisible = false;
         RebuildPluginDetails(clientReleaseCheck);
 
-        if (clientReleaseCheck.State == LauncherClientReleaseCheckState.NotConfigured)
+        if (clientReleaseCheck.State == EdgeReleaseCatalogState.NotConfigured)
         {
             SetState(
                 LauncherProfileCardState.Unregistered,
@@ -212,12 +213,16 @@ public sealed class LauncherProfileCardViewModel : BaseNotifyPropertyChanged
             return;
         }
 
-        var pendingPluginCount = clientReleaseCheck.Plugins
-            .Where(static plan => plan.CanInstallOrUpdate)
-            .Select(static plan => plan.Release.ModuleId)
+        var pluginComponents = clientReleaseCheck.Components
+            .Where(static component => component.ComponentKind == EdgeComponentKind.Plugin)
+            .ToArray();
+        var pendingPluginCount = pluginComponents
+            .Where(static plan => plan.Versions.Any(static option => option.CanApply))
+            .Select(static plan => plan.ModuleId)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Count();
-        var hasIncompatiblePlugin = clientReleaseCheck.Plugins.Any(static plan => plan.State == LauncherPluginUpdateState.Incompatible);
+        var hasIncompatiblePlugin = pluginComponents.Any(static plan =>
+            plan.Versions.Any(static option => option.Status is EdgeVersionStatus.Incompatible or EdgeVersionStatus.Deprecated));
         var hasHostUpdate = hostUpdateCheck?.HasUpdate == true;
         if (hasHostUpdate || pendingPluginCount > 0)
         {
@@ -366,31 +371,38 @@ public sealed class LauncherProfileCardViewModel : BaseNotifyPropertyChanged
         TechnicalDetailText = technicalDetailText ?? string.Empty;
     }
 
-    private void RebuildPluginDetails(LauncherClientReleaseCheckResult result)
+    private void RebuildPluginDetails(EdgeReleaseCatalogResult result)
     {
         Plugins.Clear();
-        foreach (var plan in result.Plugins)
+        foreach (var plan in result.Components.Where(static component => component.ComponentKind == EdgeComponentKind.Plugin))
         {
+            var option = SelectDisplayOption(plan);
+            if (option?.PluginRelease is null)
+            {
+                continue;
+            }
+
+            var release = option.PluginRelease;
             Plugins.Add(new LauncherClientPluginItem(
-                plan.Release.ModuleId,
-                string.IsNullOrWhiteSpace(plan.Release.DisplayName) ? plan.Release.ModuleId : plan.Release.DisplayName,
-                plan.InstalledPlugin?.Version ?? LauncherText.Get(_languageService, "Launcher_ClientRelease_Plugin_NotInstalled"),
-                plan.Release.Version,
-                FormatPackageSize(plan.Release.PackageSize),
-                plan.CompatibilityIssue ?? plan.Release.ReleaseNotes ?? string.Empty,
-                plan.CanInstallOrUpdate,
-                ResolvePluginStateKind(plan.State),
-                ResolvePluginStateText(plan.State),
-                ResolvePluginActionText(plan.State),
-                plan.State));
+                plan.ModuleId,
+                string.IsNullOrWhiteSpace(plan.DisplayName) ? plan.ModuleId : plan.DisplayName,
+                plan.CurrentVersion ?? LauncherText.Get(_languageService, "Launcher_ClientRelease_Plugin_NotInstalled"),
+                option.Version,
+                FormatPackageSize(release.PackageSize),
+                option.CompatibilityIssue ?? release.ReleaseNotes ?? string.Empty,
+                option.CanApply,
+                ResolvePluginStateKind(option.Status),
+                ResolvePluginStateText(option.Status),
+                ResolvePluginActionText(option.Status),
+                option.Status));
         }
 
         OnPropertyChanged(nameof(HasDetail));
     }
 
     private string BuildTechnicalDetail(
-        LauncherClientReleaseCheckResult? clientReleaseCheck,
-        LauncherUpdateCheckResult? hostUpdateCheck)
+        EdgeReleaseCatalogResult? clientReleaseCheck,
+        EdgeHostUpdateCheckResult? hostUpdateCheck)
     {
         var parts = new List<string>();
         if (clientReleaseCheck is not null)
@@ -399,7 +411,7 @@ public sealed class LauncherProfileCardViewModel : BaseNotifyPropertyChanged
                 _languageService,
                 "Launcher_ProfileCard_TechnicalHostFormat",
                 clientReleaseCheck.HostVersion,
-                clientReleaseCheck.LatestHostVersion ?? clientReleaseCheck.HostVersion));
+                ResolveHostTargetVersion(clientReleaseCheck)));
             if (!string.IsNullOrWhiteSpace(clientReleaseCheck.ErrorMessage))
             {
                 parts.Add(LauncherText.Compact(clientReleaseCheck.ErrorMessage));
@@ -414,7 +426,7 @@ public sealed class LauncherProfileCardViewModel : BaseNotifyPropertyChanged
                 hostUpdateCheck.CurrentVersion ?? string.Empty,
                 hostUpdateCheck.TargetVersion ?? string.Empty));
         }
-        else if (hostUpdateCheck?.State == LauncherUpdateCheckState.Failed &&
+        else if (hostUpdateCheck?.State == EdgeHostUpdateCheckState.Failed &&
                  !string.IsNullOrWhiteSpace(hostUpdateCheck.ErrorMessage))
         {
             parts.Add(LauncherText.Compact(hostUpdateCheck.ErrorMessage));
@@ -423,32 +435,47 @@ public sealed class LauncherProfileCardViewModel : BaseNotifyPropertyChanged
         return string.Join(Environment.NewLine, parts.Where(static part => !string.IsNullOrWhiteSpace(part)));
     }
 
-    private string ResolvePluginStateText(LauncherPluginUpdateState state)
+    private static EdgeVersionOption? SelectDisplayOption(EdgeComponentVersionPlan plan)
+        => plan.Versions.FirstOrDefault(static option => option.Status is EdgeVersionStatus.NotInstalled or EdgeVersionStatus.Newer)
+           ?? plan.Versions.FirstOrDefault(static option => option.Status == EdgeVersionStatus.Current)
+           ?? plan.Versions.FirstOrDefault(static option => option.CanApply)
+           ?? plan.Versions.FirstOrDefault();
+
+    private static string ResolveHostTargetVersion(EdgeReleaseCatalogResult result)
+        => result.Components
+               .FirstOrDefault(static component => component.ComponentKind == EdgeComponentKind.Host)?
+               .Versions.FirstOrDefault()?.Version
+           ?? result.HostVersion;
+
+    private string ResolvePluginStateText(EdgeVersionStatus state)
         => state switch
         {
-            LauncherPluginUpdateState.NotInstalled => LauncherText.Get(_languageService, "Launcher_ClientRelease_Plugin_StatusNotInstalled"),
-            LauncherPluginUpdateState.UpdateAvailable => LauncherText.Get(_languageService, "Launcher_ClientRelease_Plugin_StatusUpdateAvailable"),
-            LauncherPluginUpdateState.Latest => LauncherText.Get(_languageService, "Launcher_ClientRelease_Plugin_StatusLatest"),
-            LauncherPluginUpdateState.InstalledNewer => LauncherText.Get(_languageService, "Launcher_ClientRelease_Plugin_StatusInstalledNewer"),
-            LauncherPluginUpdateState.Incompatible => LauncherText.Get(_languageService, "Launcher_ClientRelease_Plugin_StatusIncompatible"),
+            EdgeVersionStatus.NotInstalled => LauncherText.Get(_languageService, "Launcher_ClientRelease_Plugin_StatusNotInstalled"),
+            EdgeVersionStatus.Newer => LauncherText.Get(_languageService, "Launcher_ClientRelease_Plugin_StatusUpdateAvailable"),
+            EdgeVersionStatus.Current => LauncherText.Get(_languageService, "Launcher_ClientRelease_Plugin_StatusLatest"),
+            EdgeVersionStatus.InstalledNewer => LauncherText.Get(_languageService, "Launcher_ClientRelease_Plugin_StatusInstalledNewer"),
+            EdgeVersionStatus.Incompatible => LauncherText.Get(_languageService, "Launcher_ClientRelease_Plugin_StatusIncompatible"),
+            EdgeVersionStatus.Deprecated => LauncherText.Get(_languageService, "Launcher_VersionManagement_StatusDeprecated"),
+            EdgeVersionStatus.Older => LauncherText.Get(_languageService, "Launcher_VersionManagement_StatusOlder"),
             _ => LauncherText.Get(_languageService, "Launcher_ClientRelease_Plugin_StatusUnknown")
         };
 
-    private string ResolvePluginActionText(LauncherPluginUpdateState state)
+    private string ResolvePluginActionText(EdgeVersionStatus state)
         => state switch
         {
-            LauncherPluginUpdateState.NotInstalled => LauncherText.Get(_languageService, "Launcher_ClientRelease_ButtonInstall"),
-            LauncherPluginUpdateState.UpdateAvailable => LauncherText.Get(_languageService, "Launcher_ClientRelease_ButtonUpdate"),
+            EdgeVersionStatus.NotInstalled => LauncherText.Get(_languageService, "Launcher_ClientRelease_ButtonInstall"),
+            EdgeVersionStatus.Newer => LauncherText.Get(_languageService, "Launcher_ClientRelease_ButtonUpdate"),
+            EdgeVersionStatus.Older => LauncherText.Get(_languageService, "Launcher_VersionManagement_ButtonRollback"),
             _ => LauncherText.Get(_languageService, "Launcher_ClientRelease_ButtonNoAction")
         };
 
-    private static string ResolvePluginStateKind(LauncherPluginUpdateState state)
+    private static string ResolvePluginStateKind(EdgeVersionStatus state)
         => state switch
         {
-            LauncherPluginUpdateState.Latest => "Running",
-            LauncherPluginUpdateState.UpdateAvailable => "Warning",
-            LauncherPluginUpdateState.Incompatible => "Error",
-            LauncherPluginUpdateState.NotInstalled => "Info",
+            EdgeVersionStatus.Current => "Running",
+            EdgeVersionStatus.Newer or EdgeVersionStatus.Older => "Warning",
+            EdgeVersionStatus.Incompatible or EdgeVersionStatus.Deprecated => "Error",
+            EdgeVersionStatus.NotInstalled => "Info",
             _ => "Default"
         };
 

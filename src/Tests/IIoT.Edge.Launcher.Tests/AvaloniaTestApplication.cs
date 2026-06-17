@@ -8,7 +8,7 @@ using IIoT.Edge.Launcher;
 
 namespace IIoT.Edge.Launcher.Tests;
 
-public sealed class LauncherTestAvaloniaApplication : Application
+public sealed class LauncherTestAvaloniaApplication : Avalonia.Application
 {
     public override void Initialize()
     {

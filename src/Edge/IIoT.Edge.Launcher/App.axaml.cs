@@ -9,6 +9,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Markup.Xaml.Styling;
 using Avalonia.Media;
 using Avalonia.Styling;
+using IIoT.Edge.Application.Abstractions.Updates;
 using IIoT.Edge.Launcher.Services;
 using IIoT.Edge.SharedKernel.Configuration;
 using IIoT.Edge.UI.Shared.Localization;
@@ -46,7 +47,7 @@ public partial class App : Avalonia.Application
             _serviceProvider.GetRequiredService<IAppLanguageService>().Initialize();
             _serviceProvider.GetRequiredService<ILauncherAccountCatalogInitializer>()
                 .EnsureCatalogExists();
-            _serviceProvider.GetRequiredService<ILauncherUpdateConfigInitializer>()
+            _serviceProvider.GetRequiredService<IEdgeUpdateConfigInitializer>()
                 .EnsureConfigExists();
             _serviceProvider.GetRequiredService<ILauncherDeviceBindingImporter>()
                 .ApplyPendingBindings();

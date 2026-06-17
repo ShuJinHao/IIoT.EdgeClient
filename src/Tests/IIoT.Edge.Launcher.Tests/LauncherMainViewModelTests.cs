@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Abstractions.Updates;
 using IIoT.Edge.Launcher.Models;
 using IIoT.Edge.Launcher.Services;
 using IIoT.Edge.Launcher.ViewModels;
@@ -43,7 +44,7 @@ public sealed class LauncherMainViewModelTests
             new StubLocalAccountAuthService(
                 LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
             new StubShellLaunchService(),
-            cloudApiResolver: new StubCloudApiConfigurationResolver("injection", "hotair"));
+            updateConfigurationProvider: new StubUpdateConfigurationProvider("injection", "hotair"));
 
         await viewModel.LoginAsync("operator", "secret");
 
@@ -62,13 +63,13 @@ public sealed class LauncherMainViewModelTests
             Profile("shell", "Shell")
         };
         var profileCatalog = new BlockingLauncherProfileCatalog(profiles);
-        var cloudApiResolver = new ThreadRecordingCloudApiConfigurationResolver("shell");
+        var cloudApiResolver = new ThreadRecordingUpdateConfigurationProvider("shell");
         var viewModel = new LauncherMainViewModel(
             profileCatalog,
             new StubLocalAccountAuthService(
                 LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
             new StubShellLaunchService(),
-            cloudApiResolver: cloudApiResolver);
+            updateConfigurationProvider: cloudApiResolver);
         var callerThreadId = Environment.CurrentManagedThreadId;
 
         var loginTask = viewModel.LoginAsync("operator", "secret");
@@ -103,7 +104,7 @@ public sealed class LauncherMainViewModelTests
             new StubLocalAccountAuthService(
                 LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
             new StubShellLaunchService(),
-            cloudApiResolver: new StubCloudApiConfigurationResolver());
+            updateConfigurationProvider: new StubUpdateConfigurationProvider());
 
         await viewModel.LoginAsync("operator", "secret");
 
@@ -215,7 +216,7 @@ public sealed class LauncherMainViewModelTests
                 LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
             new StubShellLaunchService(),
             new StubLauncherUpdateService(
-                new LauncherUpdateCheckResult(LauncherUpdateCheckState.NotConfigured)));
+                new EdgeHostUpdateCheckResult(EdgeHostUpdateCheckState.NotConfigured)));
 
         await viewModel.HostUpdatePanel.CheckForUpdatesAsync();
 
@@ -233,8 +234,8 @@ public sealed class LauncherMainViewModelTests
                 LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
             new StubShellLaunchService(),
             new StubLauncherUpdateService(
-                new LauncherUpdateCheckResult(
-                    LauncherUpdateCheckState.UpdateAvailable,
+                new EdgeHostUpdateCheckResult(
+                    EdgeHostUpdateCheckState.UpdateAvailable,
                     CurrentVersion: "0.0.1",
                     TargetVersion: "0.0.2",
                     ReleaseNotes: "update notes")));
@@ -250,8 +251,8 @@ public sealed class LauncherMainViewModelTests
     public async Task ApplyUpdateAsync_WhenShellIsRunning_ShouldNotApplyUpdate()
     {
         var updateService = new StubLauncherUpdateService(
-            new LauncherUpdateCheckResult(
-                LauncherUpdateCheckState.UpdateAvailable,
+            new EdgeHostUpdateCheckResult(
+                EdgeHostUpdateCheckState.UpdateAvailable,
                 CurrentVersion: "0.0.1",
                 TargetVersion: "0.0.2"));
         var viewModel = new LauncherMainViewModel(
@@ -333,8 +334,8 @@ public sealed class LauncherMainViewModelTests
     public async Task LoginAsync_WhenUpdatesExist_ShouldOnlyPopulateUpdateCenterAndNotInstallOrApply()
     {
         var profile = Profile("shell", "Shell");
-        var updateService = new StubLauncherUpdateService(new LauncherUpdateCheckResult(
-            LauncherUpdateCheckState.UpdateAvailable,
+        var updateService = new StubLauncherUpdateService(new EdgeHostUpdateCheckResult(
+            EdgeHostUpdateCheckState.UpdateAvailable,
             CurrentVersion: "1.0.0",
             TargetVersion: "1.1.0"));
         var releaseService = new RecordingUpdateClientReleaseService(
@@ -354,7 +355,7 @@ public sealed class LauncherMainViewModelTests
         Assert.Equal(0, releaseService.InstallCallCount);
         Assert.Single(viewModel.Profiles);
         Assert.NotNull(viewModel.SelectedUpdateProfile);
-        Assert.Single(viewModel.ClientReleasePanel.Plugins);
+        Assert.Contains(viewModel.ClientReleasePanel.Components, component => component.ModuleId == "IIoT.Edge.Module.Homogenization");
     }
 
     [Fact]
@@ -372,7 +373,7 @@ public sealed class LauncherMainViewModelTests
             clientReleaseService: releaseService);
         var card = new LauncherProfileCardViewModel(profile);
         card.ApplyCheckResult(
-            new LauncherUpdateCheckResult(LauncherUpdateCheckState.NoUpdate),
+            new EdgeHostUpdateCheckResult(EdgeHostUpdateCheckState.NoUpdate),
             CreateReleaseCheckWithPluginUpdate());
 
         await viewModel.LaunchProfileCardAsync(card);
@@ -385,55 +386,81 @@ public sealed class LauncherMainViewModelTests
         new(userName, displayName, "hash", true);
 
     private static LauncherProfileDefinition Profile(string profileId, string displayName) =>
-        new(profileId, displayName, "测试工序", null, "default", "IIoT.Edge.Shell", "Shell", "#000000");
+        new(profileId, displayName, "测试工序", null, profileId, "IIoT.Edge.Shell", "Shell", "#000000");
 
-    private static LauncherClientReleaseCheckResult CreateReleaseCheckWithPluginUpdate()
+    private static EdgeReleaseCatalogResult CreateReleaseCheckWithPluginUpdate()
         => new(
-            LauncherClientReleaseCheckState.Succeeded,
+            EdgeReleaseCatalogState.Succeeded,
             "stable",
             "win-x64",
             "1.0.0",
             "1.0.0",
-            null,
             [
-                new LauncherPluginUpdatePlan(
-                    new LauncherClientPluginRelease(
-                        Guid.NewGuid(),
+                new EdgeComponentVersionPlan(
+                    EdgeComponentKind.Host,
+                    "Host",
+                    "Edge Host",
+                    "1.0.0",
+                    [
+                        new EdgeVersionOption(
+                            "1.0.0",
+                            EdgeVersionStatus.Current,
+                            false,
+                            null,
+                            HostRelease: new EdgeHostVersionRelease(new EdgeHostVersionEntry(
+                                Guid.NewGuid(),
+                                "stable",
+                                "1.0.0",
+                                "1.0.0",
+                                "win-x64",
+                                "net10.0",
+                                "https://example.invalid/host.nupkg",
+                                "sha256",
+                                1024,
+                                null,
+                                "Published",
+                                null,
+                                null,
+                                DateTime.UtcNow,
+                                DateTime.UtcNow)))
+                    ]),
+                new EdgeComponentVersionPlan(
+                    EdgeComponentKind.Plugin,
+                    "IIoT.Edge.Module.Homogenization",
+                    "均浆",
+                    "1.0.0",
+                    [
+                        new EdgeVersionOption(
+                            "1.1.0",
+                            EdgeVersionStatus.Newer,
+                            true,
+                            null,
+                            PluginRelease: new EdgePluginVersionRelease(
                         "IIoT.Edge.Module.Homogenization",
                         "均浆",
                         null,
                         null,
                         null,
-                        "stable",
-                        "1.1.0",
-                        "1.0.0",
-                        "1.0.0",
-                        "99.0.0",
-                        "win-x64",
-                        "net10.0",
-                        "https://example.invalid/plugin.zip",
-                        "sha256",
-                        1024,
-                        null,
-                        [],
-                        "published",
-                        null,
-                        null,
-                        DateTime.UtcNow,
-                        DateTime.UtcNow),
-                    new LauncherInstalledPlugin(
-                        "IIoT.Edge.Module.Homogenization",
-                        "HomogenizationLine",
-                        "均浆",
-                        "1.0.0",
-                        "1.0.0",
-                        "1.0.0",
-                        "99.0.0",
-                        [],
-                        "/tmp/plugin.json",
-                        "/tmp/plugin"),
-                    LauncherPluginUpdateState.UpdateAvailable,
-                    null)
+                                new EdgePluginVersionEntry(
+                                    Guid.NewGuid(),
+                                    "stable",
+                                    "1.1.0",
+                                    "1.0.0",
+                                    "1.0.0",
+                                    "99.0.0",
+                                    "win-x64",
+                                    "net10.0",
+                                    "https://example.invalid/plugin.zip",
+                                    "sha256",
+                                    1024,
+                                    null,
+                                    [],
+                                    "Published",
+                                    null,
+                                    null,
+                                    DateTime.UtcNow,
+                                    DateTime.UtcNow)))
+                    ])
             ]);
 
     private sealed class StubLauncherProfileCatalog(IReadOnlyList<LauncherProfileDefinition> profiles)
@@ -463,14 +490,14 @@ public sealed class LauncherMainViewModelTests
         public void ReleaseLoad() => _allowLoad.Set();
     }
 
-    private sealed class StubCloudApiConfigurationResolver(params string[] provisionedProfileIds)
-        : ILauncherCloudApiConfigurationResolver
+    private sealed class StubUpdateConfigurationProvider(params string[] provisionedProfileIds)
+        : IEdgeUpdateConfigurationProvider
     {
         private readonly HashSet<string> _provisioned = new(provisionedProfileIds, StringComparer.Ordinal);
 
-        public LauncherCloudApiConfigurationResult Resolve(LauncherProfileDefinition profile)
-            => _provisioned.Contains(profile.ProfileId)
-                ? LauncherCloudApiConfigurationResult.Succeeded(new LauncherCloudApiOptions(
+        public EdgeUpdateConfigurationResult Resolve(EdgeUpdateTarget target)
+            => _provisioned.Contains(target.MachineProfile)
+                ? EdgeUpdateConfigurationResult.Succeeded(new EdgeUpdateCloudApiOptions(
                     "http://cloud.local",
                     10,
                     "DEV-CODE",
@@ -478,13 +505,13 @@ public sealed class LauncherMainViewModelTests
                     "/api/v1/bootstrap/device-instance",
                     "/api/v1/edge/client-releases/device/{deviceId}/catalog",
                     "/api/v1/edge/client-releases/version-reports"))
-                : LauncherCloudApiConfigurationResult.Failed("未配置");
+                : EdgeUpdateConfigurationResult.Failed("未配置");
 
-        public LauncherClientReleaseOptions ResolveReleaseOptions() => new("stable", "win-x64");
+        public EdgeReleaseOptions ResolveReleaseOptions() => new("stable", "win-x64");
     }
 
-    private sealed class ThreadRecordingCloudApiConfigurationResolver(params string[] provisionedProfileIds)
-        : ILauncherCloudApiConfigurationResolver
+    private sealed class ThreadRecordingUpdateConfigurationProvider(params string[] provisionedProfileIds)
+        : IEdgeUpdateConfigurationProvider
     {
         private readonly object _syncRoot = new();
         private readonly HashSet<string> _provisioned = new(provisionedProfileIds, StringComparer.Ordinal);
@@ -501,15 +528,15 @@ public sealed class LauncherMainViewModelTests
             }
         }
 
-        public LauncherCloudApiConfigurationResult Resolve(LauncherProfileDefinition profile)
+        public EdgeUpdateConfigurationResult Resolve(EdgeUpdateTarget target)
         {
             lock (_syncRoot)
             {
                 _resolveThreadIds.Add(Environment.CurrentManagedThreadId);
             }
 
-            return _provisioned.Contains(profile.ProfileId)
-                ? LauncherCloudApiConfigurationResult.Succeeded(new LauncherCloudApiOptions(
+            return _provisioned.Contains(target.MachineProfile)
+                ? EdgeUpdateConfigurationResult.Succeeded(new EdgeUpdateCloudApiOptions(
                     "http://cloud.local",
                     10,
                     "DEV-CODE",
@@ -517,10 +544,10 @@ public sealed class LauncherMainViewModelTests
                     "/api/v1/bootstrap/device-instance",
                     "/api/v1/edge/client-releases/device/{deviceId}/catalog",
                     "/api/v1/edge/client-releases/version-reports"))
-                : LauncherCloudApiConfigurationResult.Failed("未配置");
+                : EdgeUpdateConfigurationResult.Failed("未配置");
         }
 
-        public LauncherClientReleaseOptions ResolveReleaseOptions() => new("stable", "win-x64");
+        public EdgeReleaseOptions ResolveReleaseOptions() => new("stable", "win-x64");
     }
 
     private sealed class StubShellLaunchService(bool hasRunningShellProcess = false) : IShellLaunchService
@@ -553,50 +580,74 @@ public sealed class LauncherMainViewModelTests
     }
 
     private sealed class StubLauncherUpdateService(
-        LauncherUpdateCheckResult checkResult,
-        LauncherUpdateApplyResult? applyResult = null) : ILauncherUpdateService
+        EdgeHostUpdateCheckResult checkResult,
+        EdgeHostUpdateApplyResult? applyResult = null) : IEdgeHostUpdateService
     {
         public int ApplyCallCount { get; private set; }
 
-        public Task<LauncherUpdateCheckResult> CheckForUpdatesAsync(CancellationToken cancellationToken = default)
+        public Task<EdgeHostUpdateCheckResult> CheckForUpdatesAsync(CancellationToken cancellationToken = default)
             => Task.FromResult(checkResult);
 
-        public Task<LauncherUpdateApplyResult> DownloadAndApplyUpdateAsync(
+        public Task<EdgeHostUpdateApplyResult> DownloadAndApplyUpdateAsync(
             IProgress<int>? progress = null,
             CancellationToken cancellationToken = default)
         {
             ApplyCallCount++;
             progress?.Report(100);
-            return Task.FromResult(applyResult ?? new LauncherUpdateApplyResult(true));
+            return Task.FromResult(applyResult ?? new EdgeHostUpdateApplyResult(true));
+        }
+
+        public Task<EdgeHostUpdateApplyResult> ApplyVersionAsync(
+            EdgeHostVersionRelease release,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+        {
+            ApplyCallCount++;
+            progress?.Report(100);
+            return Task.FromResult(applyResult ?? new EdgeHostUpdateApplyResult(true));
         }
     }
 
-    private sealed class ThrowingClientReleaseService : ILauncherClientReleaseService
+    private sealed class ThrowingClientReleaseService : IEdgeReleaseService
     {
         private readonly TaskCompletionSource _reportAttempted = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public Task<LauncherClientReleaseCheckResult> CheckAsync(
-            LauncherProfileDefinition profile,
+        public Task<EdgeReleaseCatalogResult> CheckReleaseCatalogAsync(
+            EdgeUpdateTarget target,
             CancellationToken cancellationToken = default)
-            => Task.FromResult(new LauncherClientReleaseCheckResult(
-                LauncherClientReleaseCheckState.NotConfigured,
+            => Task.FromResult(new EdgeReleaseCatalogResult(
+                EdgeReleaseCatalogState.NotConfigured,
                 "stable",
                 "win-x64",
                 "1.0.0",
                 "1.0.0",
-                null,
                 [],
                 "not configured"));
 
-        public Task<LauncherPluginInstallResult> InstallOrUpdatePluginAsync(
-            LauncherProfileDefinition profile,
+        public Task<EdgePluginInstallResult> ApplyPluginVersionAsync(
+            EdgeUpdateTarget target,
             string moduleId,
+            string version,
             IProgress<int>? progress = null,
             CancellationToken cancellationToken = default)
-            => Task.FromResult(LauncherPluginInstallResult.Failed("not configured"));
+            => Task.FromResult(EdgePluginInstallResult.Failed("not configured"));
 
-        public Task<LauncherVersionReportResult> ReportCurrentVersionsAsync(
-            LauncherProfileDefinition profile,
+        public Task<EdgeHostUpdateApplyResult> ApplyHostVersionAsync(
+            EdgeUpdateTarget target,
+            string version,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new EdgeHostUpdateApplyResult(false, "not configured"));
+
+        public Task<EdgePluginInstallResult> ApplyVersionCompositionAsync(
+            EdgeUpdateTarget target,
+            EdgeVersionSelection selection,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(EdgePluginInstallResult.Failed("not configured"));
+
+        public Task<EdgeVersionReportResult> ReportCurrentVersionsAsync(
+            EdgeUpdateTarget target,
             CancellationToken cancellationToken = default)
         {
             _reportAttempted.TrySetResult();
@@ -607,7 +658,7 @@ public sealed class LauncherMainViewModelTests
             => await _reportAttempted.Task.WaitAsync(TimeSpan.FromSeconds(2));
     }
 
-    private sealed class RecordingClientReleaseService(int expectedReportCount) : ILauncherClientReleaseService
+    private sealed class RecordingClientReleaseService(int expectedReportCount) : IEdgeReleaseService
     {
         private readonly object _syncRoot = new();
         private readonly List<string> _reportedProfileIds = [];
@@ -624,39 +675,53 @@ public sealed class LauncherMainViewModelTests
             }
         }
 
-        public Task<LauncherClientReleaseCheckResult> CheckAsync(
-            LauncherProfileDefinition profile,
+        public Task<EdgeReleaseCatalogResult> CheckReleaseCatalogAsync(
+            EdgeUpdateTarget target,
             CancellationToken cancellationToken = default)
-            => Task.FromResult(new LauncherClientReleaseCheckResult(
-                LauncherClientReleaseCheckState.Succeeded,
+            => Task.FromResult(new EdgeReleaseCatalogResult(
+                EdgeReleaseCatalogState.Succeeded,
                 "stable",
                 "win-x64",
                 "1.0.0",
                 "1.0.0",
-                null,
                 []));
 
-        public Task<LauncherPluginInstallResult> InstallOrUpdatePluginAsync(
-            LauncherProfileDefinition profile,
+        public Task<EdgePluginInstallResult> ApplyPluginVersionAsync(
+            EdgeUpdateTarget target,
             string moduleId,
+            string version,
             IProgress<int>? progress = null,
             CancellationToken cancellationToken = default)
-            => Task.FromResult(LauncherPluginInstallResult.Failed("not configured"));
+            => Task.FromResult(EdgePluginInstallResult.Failed("not configured"));
 
-        public Task<LauncherVersionReportResult> ReportCurrentVersionsAsync(
-            LauncherProfileDefinition profile,
+        public Task<EdgeHostUpdateApplyResult> ApplyHostVersionAsync(
+            EdgeUpdateTarget target,
+            string version,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new EdgeHostUpdateApplyResult(false, "not configured"));
+
+        public Task<EdgePluginInstallResult> ApplyVersionCompositionAsync(
+            EdgeUpdateTarget target,
+            EdgeVersionSelection selection,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(EdgePluginInstallResult.Failed("not configured"));
+
+        public Task<EdgeVersionReportResult> ReportCurrentVersionsAsync(
+            EdgeUpdateTarget target,
             CancellationToken cancellationToken = default)
         {
             lock (_syncRoot)
             {
-                _reportedProfileIds.Add(profile.ProfileId);
+                _reportedProfileIds.Add(target.MachineProfile);
                 if (_reportedProfileIds.Count >= expectedReportCount)
                 {
                     _reportsCompleted.TrySetResult();
                 }
             }
 
-            return Task.FromResult(LauncherVersionReportResult.Succeeded());
+            return Task.FromResult(EdgeVersionReportResult.Succeeded());
         }
 
         public async Task WaitForReportsAsync()
@@ -664,7 +729,7 @@ public sealed class LauncherMainViewModelTests
     }
 
     private sealed class RecordingUpdateClientReleaseService(
-        LauncherClientReleaseCheckResult checkResult) : ILauncherClientReleaseService
+        EdgeReleaseCatalogResult checkResult) : IEdgeReleaseService
     {
         private readonly TaskCompletionSource _checkCompleted = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly List<string> _installedModuleIds = [];
@@ -673,30 +738,45 @@ public sealed class LauncherMainViewModelTests
 
         public IReadOnlyList<string> InstalledModuleIds => _installedModuleIds.ToArray();
 
-        public Task<LauncherClientReleaseCheckResult> CheckAsync(
-            LauncherProfileDefinition profile,
+        public Task<EdgeReleaseCatalogResult> CheckReleaseCatalogAsync(
+            EdgeUpdateTarget target,
             CancellationToken cancellationToken = default)
         {
             _checkCompleted.TrySetResult();
             return Task.FromResult(checkResult);
         }
 
-        public Task<LauncherPluginInstallResult> InstallOrUpdatePluginAsync(
-            LauncherProfileDefinition profile,
+        public Task<EdgePluginInstallResult> ApplyPluginVersionAsync(
+            EdgeUpdateTarget target,
             string moduleId,
+            string version,
             IProgress<int>? progress = null,
             CancellationToken cancellationToken = default)
         {
             InstallCallCount++;
             _installedModuleIds.Add(moduleId);
             progress?.Report(100);
-            return Task.FromResult(LauncherPluginInstallResult.Succeeded([moduleId]));
+            return Task.FromResult(EdgePluginInstallResult.Succeeded([moduleId]));
         }
 
-        public Task<LauncherVersionReportResult> ReportCurrentVersionsAsync(
-            LauncherProfileDefinition profile,
+        public Task<EdgeHostUpdateApplyResult> ApplyHostVersionAsync(
+            EdgeUpdateTarget target,
+            string version,
+            IProgress<int>? progress = null,
             CancellationToken cancellationToken = default)
-            => Task.FromResult(LauncherVersionReportResult.Succeeded());
+            => Task.FromResult(new EdgeHostUpdateApplyResult(false, "not configured"));
+
+        public Task<EdgePluginInstallResult> ApplyVersionCompositionAsync(
+            EdgeUpdateTarget target,
+            EdgeVersionSelection selection,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(EdgePluginInstallResult.Failed("not configured"));
+
+        public Task<EdgeVersionReportResult> ReportCurrentVersionsAsync(
+            EdgeUpdateTarget target,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(EdgeVersionReportResult.Succeeded());
 
         public async Task WaitForCheckAsync()
             => await _checkCompleted.Task.WaitAsync(TimeSpan.FromSeconds(2));

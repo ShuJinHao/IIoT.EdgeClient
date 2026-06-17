@@ -2,68 +2,62 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using IIoT.Edge.Launcher.Models;
+using IIoT.Edge.Application.Abstractions.Updates;
+using IIoT.Edge.Infrastructure.Update.Cloud;
+using IIoT.Edge.Infrastructure.Update.Plugins;
 using IIoT.Edge.SharedKernel.Configuration;
-using IIoT.Edge.SharedKernel.Runtime;
+using static IIoT.Edge.Infrastructure.Update.Cloud.EdgeUpdateCloudUrl;
 
-namespace IIoT.Edge.Launcher.Services;
+namespace IIoT.Edge.Infrastructure.Update.Packages;
 
-public interface ILauncherPluginPackageInstaller
-{
-    Task<LauncherPluginInstallResult> InstallAsync(
-        LauncherProfileDefinition profile,
-        LauncherClientPluginRelease release,
-        LauncherCloudApiOptions cloudOptions,
-        string hostVersion,
-        string hostApiVersion,
-        IProgress<int>? progress = null,
-        CancellationToken cancellationToken = default);
-}
-
-public sealed class LauncherPluginPackageInstaller : ILauncherPluginPackageInstaller
+public sealed class EdgePluginPackageInstaller : IEdgePluginPackageInstaller
 {
     private readonly HttpClient _httpClient;
-    private readonly LauncherPluginPackageInstallLimits _limits;
+    private readonly IEdgeVersionCompatibilityPolicy _compatibilityPolicy;
+    private readonly EdgePluginPackageInstallLimits _limits;
 
-    public LauncherPluginPackageInstaller()
-        : this(new HttpClient(new SocketsHttpHandler
-        {
-            PooledConnectionLifetime = TimeSpan.FromMinutes(5)
-        })
-        {
-            Timeout = Timeout.InfiniteTimeSpan
-        })
+    public EdgePluginPackageInstaller(IEdgeVersionCompatibilityPolicy compatibilityPolicy)
+        : this(
+            new HttpClient(new SocketsHttpHandler
+            {
+                PooledConnectionLifetime = TimeSpan.FromMinutes(5)
+            })
+            {
+                Timeout = Timeout.InfiniteTimeSpan
+            },
+            compatibilityPolicy)
     {
     }
 
-    internal LauncherPluginPackageInstaller(
+    public EdgePluginPackageInstaller(
         HttpClient httpClient,
-        LauncherPluginPackageInstallLimits? limits = null)
+        IEdgeVersionCompatibilityPolicy compatibilityPolicy,
+        EdgePluginPackageInstallLimits? limits = null)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-        _limits = limits ?? LauncherPluginPackageInstallLimits.Default;
+        _compatibilityPolicy = compatibilityPolicy ?? throw new ArgumentNullException(nameof(compatibilityPolicy));
+        _limits = limits ?? EdgePluginPackageInstallLimits.Default;
     }
 
-    public async Task<LauncherPluginInstallResult> InstallAsync(
-        LauncherProfileDefinition profile,
-        LauncherClientPluginRelease release,
-        LauncherCloudApiOptions cloudOptions,
+    public async Task<EdgePluginInstallResult> InstallAsync(
+        EdgeUpdateTarget target,
+        EdgePluginVersionRelease release,
+        EdgeUpdateCloudApiOptions cloudOptions,
         string hostVersion,
         string hostApiVersion,
         IProgress<int>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(profile);
+        ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(release);
         ArgumentNullException.ThrowIfNull(cloudOptions);
 
-        if (!IsReleaseCompatible(release, hostVersion, hostApiVersion, out var issue))
+        if (!_compatibilityPolicy.IsReleaseCompatible(release, hostVersion, hostApiVersion, out var issue))
         {
-            return LauncherPluginInstallResult.Failed(issue!);
+            return EdgePluginInstallResult.Failed(issue!);
         }
 
-        var hostDirectory = LauncherCloudApiConfigurationResolver.ResolveHostDirectory(profile);
-        var pluginsRoot = EdgeClientProgramDataPaths.ResolveApplicationPluginRoot(hostDirectory);
+        var pluginsRoot = EdgeClientProgramDataPaths.ResolveApplicationPluginRoot(target.HostDirectory);
         var moduleDirectory = Path.Combine(
             pluginsRoot,
             EdgeClientProgramDataPaths.SanitizePathSegment(release.ModuleId));
@@ -88,8 +82,8 @@ public sealed class LauncherPluginPackageInstaller : ILauncherPluginPackageInsta
             var actualSha256 = await ComputeSha256Async(packagePath, cancellationToken).ConfigureAwait(false);
             if (!string.Equals(actualSha256, release.Sha256, StringComparison.OrdinalIgnoreCase))
             {
-                return LauncherPluginInstallResult.Failed(
-                    $"插件包 SHA256 不匹配: {release.ModuleId} {release.Version}");
+                return EdgePluginInstallResult.Failed(
+                    $"插件包 SHA256 不匹配: {release.ModuleId} {release.PackageVersion}");
             }
 
             progress?.Report(70);
@@ -100,7 +94,7 @@ public sealed class LauncherPluginPackageInstaller : ILauncherPluginPackageInsta
             WriteInstallRecord(moduleDirectory, release, manifest, actualSha256);
             progress?.Report(100);
 
-            return LauncherPluginInstallResult.Succeeded([release.ModuleId]);
+            return EdgePluginInstallResult.Succeeded([release.ModuleId]);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -108,7 +102,7 @@ public sealed class LauncherPluginPackageInstaller : ILauncherPluginPackageInsta
         }
         catch (Exception ex)
         {
-            return LauncherPluginInstallResult.Failed($"插件安装失败: {ex.Message}");
+            return EdgePluginInstallResult.Failed($"插件安装失败: {ex.Message}");
         }
         finally
         {
@@ -116,37 +110,11 @@ public sealed class LauncherPluginPackageInstaller : ILauncherPluginPackageInsta
         }
     }
 
-    internal static bool IsReleaseCompatible(
-        LauncherClientPluginRelease release,
-        string hostVersion,
-        string hostApiVersion,
-        out string? issue)
-    {
-        if (!string.Equals(release.HostApiVersion, hostApiVersion, StringComparison.OrdinalIgnoreCase))
-        {
-            issue = $"插件 {release.ModuleId} 要求 HostApiVersion={release.HostApiVersion}，当前宿主为 {hostApiVersion}。";
-            return false;
-        }
-
-        if (!EdgeClientHostRuntime.TryParseVersion(hostVersion, out var host)
-            || !EdgeClientHostRuntime.TryParseVersion(release.MinHostVersion, out var min)
-            || !EdgeClientHostRuntime.TryParseVersion(release.MaxHostVersion, out var max)
-            || host.CompareTo(min) < 0
-            || host.CompareTo(max) > 0)
-        {
-            issue = $"插件 {release.ModuleId} 兼容宿主版本范围为 [{release.MinHostVersion}, {release.MaxHostVersion}]，当前宿主为 {hostVersion}。";
-            return false;
-        }
-
-        issue = null;
-        return true;
-    }
-
     private async Task DownloadPackageAsync(
         string packageUrl,
         string baseUrl,
         string packagePath,
-        LauncherPluginPackageInstallLimits limits,
+        EdgePluginPackageInstallLimits limits,
         IProgress<int>? progress,
         CancellationToken cancellationToken)
     {
@@ -208,7 +176,7 @@ public sealed class LauncherPluginPackageInstaller : ILauncherPluginPackageInsta
             return new Uri(Path.GetFullPath(packageUrl));
         }
 
-        return LauncherEdgeReleaseCloudClient.BuildUrl(baseUrl, packageUrl);
+        return BuildUrl(baseUrl, packageUrl);
     }
 
     private static async Task<string> ComputeSha256Async(string path, CancellationToken cancellationToken)
@@ -218,7 +186,7 @@ public sealed class LauncherPluginPackageInstaller : ILauncherPluginPackageInsta
         return Convert.ToHexString(hash);
     }
 
-    private static void ValidatePackageFileSize(string packagePath, LauncherPluginPackageInstallLimits limits)
+    private static void ValidatePackageFileSize(string packagePath, EdgePluginPackageInstallLimits limits)
     {
         var packageSize = new FileInfo(packagePath).Length;
         if (packageSize > limits.MaxPackageBytes)
@@ -230,7 +198,7 @@ public sealed class LauncherPluginPackageInstaller : ILauncherPluginPackageInsta
     private static void ValidateZipEntries(
         string packagePath,
         string extractDirectory,
-        LauncherPluginPackageInstallLimits limits)
+        EdgePluginPackageInstallLimits limits)
     {
         using var archive = ZipFile.OpenRead(packagePath);
         long totalUncompressedBytes = 0;
@@ -278,9 +246,9 @@ public sealed class LauncherPluginPackageInstaller : ILauncherPluginPackageInsta
         }
     }
 
-    private static LauncherPluginManifest ValidateExtractedPackage(
+    private EdgePluginManifest ValidateExtractedPackage(
         string extractDirectory,
-        LauncherClientPluginRelease release,
+        EdgePluginVersionRelease release,
         string hostVersion,
         string hostApiVersion)
     {
@@ -290,12 +258,12 @@ public sealed class LauncherPluginPackageInstaller : ILauncherPluginPackageInsta
             throw new InvalidOperationException("插件包根目录缺少 plugin.json。");
         }
 
-        var manifest = JsonSerializer.Deserialize<LauncherPluginManifest>(
+        var manifest = JsonSerializer.Deserialize<EdgePluginManifest>(
             File.ReadAllText(manifestPath),
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
             ?? throw new InvalidOperationException("plugin.json 无法解析。");
         if (!string.Equals(manifest.ModuleId, release.ModuleId, StringComparison.OrdinalIgnoreCase)
-            || !string.Equals(manifest.Version, release.Version, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(manifest.Version, release.PackageVersion, StringComparison.OrdinalIgnoreCase)
             || !string.Equals(manifest.HostApiVersion, release.HostApiVersion, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException("plugin.json 与 catalog 发布记录不一致。");
@@ -310,7 +278,7 @@ public sealed class LauncherPluginPackageInstaller : ILauncherPluginPackageInsta
             throw new InvalidOperationException($"插件入口程序集不存在: {manifest.EntryAssembly}");
         }
 
-        if (!IsReleaseCompatible(release, hostVersion, hostApiVersion, out var issue))
+        if (!_compatibilityPolicy.IsReleaseCompatible(release, hostVersion, hostApiVersion, out var issue))
         {
             throw new InvalidOperationException(issue);
         }
@@ -377,8 +345,8 @@ public sealed class LauncherPluginPackageInstaller : ILauncherPluginPackageInsta
 
     private static void WriteInstallRecord(
         string moduleDirectory,
-        LauncherClientPluginRelease release,
-        LauncherPluginManifest manifest,
+        EdgePluginVersionRelease release,
+        EdgePluginManifest manifest,
         string sha256)
     {
         var record = new
@@ -388,7 +356,7 @@ public sealed class LauncherPluginPackageInstaller : ILauncherPluginPackageInsta
             moduleId = release.ModuleId,
             processType = manifest.SupportedProcessType,
             displayName = manifest.DisplayName,
-            version = release.Version,
+            version = release.PackageVersion,
             hostApiVersion = release.HostApiVersion,
             minHostVersion = release.MinHostVersion,
             maxHostVersion = release.MaxHostVersion,
@@ -423,7 +391,7 @@ public sealed class LauncherPluginPackageInstaller : ILauncherPluginPackageInsta
     }
 }
 
-public sealed record LauncherPluginPackageInstallLimits(
+public sealed record EdgePluginPackageInstallLimits(
     long MaxPackageBytes,
     long MaxExtractedBytes,
     long MaxEntryBytes,
@@ -431,7 +399,7 @@ public sealed record LauncherPluginPackageInstallLimits(
     double MaxCompressionRatio,
     TimeSpan DownloadTimeout)
 {
-    public static LauncherPluginPackageInstallLimits Default { get; } = new(
+    public static EdgePluginPackageInstallLimits Default { get; } = new(
         MaxPackageBytes: 512L * 1024 * 1024,
         MaxExtractedBytes: 1024L * 1024 * 1024,
         MaxEntryBytes: 512L * 1024 * 1024,

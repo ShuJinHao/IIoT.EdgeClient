@@ -1,65 +1,25 @@
 using System.Net.Http.Headers;
+using IIoT.Edge.Application.Abstractions.Updates;
 using IIoT.Edge.Infrastructure.CloudClient;
+using static IIoT.Edge.Infrastructure.Update.Cloud.EdgeUpdateCloudUrl;
 
-namespace IIoT.Edge.Launcher.Services;
+namespace IIoT.Edge.Infrastructure.Update.Cloud;
 
-public interface ILauncherEdgeReleaseCloudClient
+public sealed class HttpEdgeUpdateDeviceSessionClient : IEdgeUpdateDeviceSessionClient
 {
-    Task<LauncherEdgeCloudOperationResult<LauncherEdgeDeviceSession>> BootstrapAsync(
-        LauncherCloudApiOptions options,
-        CancellationToken cancellationToken = default);
-
-    Task<LauncherEdgeCloudOperationResult<LauncherClientReleaseCatalog>> GetCatalogAsync(
-        LauncherCloudApiOptions options,
-        LauncherEdgeDeviceSession session,
-        LauncherClientReleaseOptions releaseOptions,
-        CancellationToken cancellationToken = default);
-
-    Task<LauncherVersionReportResult> ReportVersionAsync(
-        LauncherCloudApiOptions options,
-        LauncherEdgeDeviceSession session,
-        LauncherClientReleaseOptions releaseOptions,
-        string machineProfile,
-        string hostVersion,
-        string hostApiVersion,
-        IReadOnlyList<LauncherInstalledPlugin> installedPlugins,
-        IReadOnlyList<string> enabledPlugins,
-        CancellationToken cancellationToken = default);
-}
-
-public sealed class LauncherEdgeReleaseCloudClient : ILauncherEdgeReleaseCloudClient
-{
-    private readonly ICloudClientHttpTransport _transport;
     private readonly IEdgeCloudDeviceBootstrapClient _bootstrapClient;
 
-    public LauncherEdgeReleaseCloudClient(
-        ICloudClientHttpTransport transport,
-        IEdgeCloudDeviceBootstrapClient bootstrapClient)
+    public HttpEdgeUpdateDeviceSessionClient(IEdgeCloudDeviceBootstrapClient bootstrapClient)
     {
-        _transport = transport ?? throw new ArgumentNullException(nameof(transport));
         _bootstrapClient = bootstrapClient ?? throw new ArgumentNullException(nameof(bootstrapClient));
     }
 
-    internal LauncherEdgeReleaseCloudClient(Func<HttpMessageHandler> messageHandlerFactory)
-        : this(
-            new CloudClientHttpTransport(
-                () => new HttpClient(messageHandlerFactory())
-                {
-                    Timeout = Timeout.InfiniteTimeSpan
-                }),
-            new EdgeCloudDeviceBootstrapClient(
-                new CloudClientHttpTransport(
-                    () => new HttpClient(messageHandlerFactory())
-                    {
-                        Timeout = Timeout.InfiniteTimeSpan
-                    })))
-    {
-    }
-
-    public async Task<LauncherEdgeCloudOperationResult<LauncherEdgeDeviceSession>> BootstrapAsync(
-        LauncherCloudApiOptions options,
+    public async Task<EdgeUpdateOperationResult<EdgeUpdateDeviceSession>> BootstrapAsync(
+        EdgeUpdateCloudApiOptions options,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(options);
+
         try
         {
             var url = BuildUrl(
@@ -78,12 +38,12 @@ public sealed class LauncherEdgeReleaseCloudClient : ILauncherEdgeReleaseCloudCl
                 || result.Session is null
                 || result.Session.DeviceId == Guid.Empty)
             {
-                return LauncherEdgeCloudOperationResult<LauncherEdgeDeviceSession>.Failed(
+                return EdgeUpdateOperationResult<EdgeUpdateDeviceSession>.Failed(
                     result.ErrorMessage ?? "Cloud bootstrap 返回空设备身份。");
             }
 
-            return LauncherEdgeCloudOperationResult<LauncherEdgeDeviceSession>.Succeeded(
-                new LauncherEdgeDeviceSession(
+            return EdgeUpdateOperationResult<EdgeUpdateDeviceSession>.Succeeded(
+                new EdgeUpdateDeviceSession(
                     result.Session.DeviceId,
                     result.Session.DeviceName,
                     string.IsNullOrWhiteSpace(result.Session.ClientCode) ? options.ClientCode : result.Session.ClientCode,
@@ -91,20 +51,34 @@ public sealed class LauncherEdgeReleaseCloudClient : ILauncherEdgeReleaseCloudCl
         }
         catch (Exception ex)
         {
-            return LauncherEdgeCloudOperationResult<LauncherEdgeDeviceSession>.Failed(
+            return EdgeUpdateOperationResult<EdgeUpdateDeviceSession>.Failed(
                 $"Cloud bootstrap 失败: {ex.Message}");
         }
     }
+}
 
-    public async Task<LauncherEdgeCloudOperationResult<LauncherClientReleaseCatalog>> GetCatalogAsync(
-        LauncherCloudApiOptions options,
-        LauncherEdgeDeviceSession session,
-        LauncherClientReleaseOptions releaseOptions,
+public sealed class HttpEdgeUpdateCatalogClient : IEdgeUpdateCatalogClient
+{
+    private readonly ICloudClientHttpTransport _transport;
+
+    public HttpEdgeUpdateCatalogClient(ICloudClientHttpTransport transport)
+    {
+        _transport = transport ?? throw new ArgumentNullException(nameof(transport));
+    }
+
+    public async Task<EdgeUpdateOperationResult<EdgeReleaseCatalog>> GetCatalogAsync(
+        EdgeUpdateCloudApiOptions options,
+        EdgeUpdateDeviceSession session,
+        EdgeReleaseOptions releaseOptions,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(session.UploadAccessToken))
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(releaseOptions);
+
+        if (string.IsNullOrWhiteSpace(session.AccessToken))
         {
-            return LauncherEdgeCloudOperationResult<LauncherClientReleaseCatalog>.Failed("设备 token 为空，无法拉取 catalog。");
+            return EdgeUpdateOperationResult<EdgeReleaseCatalog>.Failed("设备 token 为空，无法拉取 catalog。");
         }
 
         try
@@ -114,38 +88,55 @@ public sealed class LauncherEdgeReleaseCloudClient : ILauncherEdgeReleaseCloudCl
             var query = $"channel={Uri.EscapeDataString(releaseOptions.Channel)}&targetRuntime={Uri.EscapeDataString(releaseOptions.TargetRuntime)}";
             var url = BuildUrl(options.BaseUrl, path.Contains("?", StringComparison.Ordinal) ? $"{path}&{query}" : $"{path}?{query}");
             var catalog = await _transport
-                .GetJsonAsync<LauncherClientReleaseCatalog>(
+                .GetJsonAsync<EdgeReleaseCatalog>(
                     url,
                     ResolveTimeout(options),
-                    headers => headers.Authorization = new AuthenticationHeaderValue("Bearer", session.UploadAccessToken),
+                    headers => headers.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken),
                     cancellationToken)
                 .ConfigureAwait(false);
             return !catalog.Success || catalog.Value is null
-                ? LauncherEdgeCloudOperationResult<LauncherClientReleaseCatalog>.Failed(
+                ? EdgeUpdateOperationResult<EdgeReleaseCatalog>.Failed(
                     catalog.ErrorMessage ?? "Cloud catalog 返回空响应。")
-                : LauncherEdgeCloudOperationResult<LauncherClientReleaseCatalog>.Succeeded(catalog.Value);
+                : EdgeUpdateOperationResult<EdgeReleaseCatalog>.Succeeded(catalog.Value);
         }
         catch (Exception ex)
         {
-            return LauncherEdgeCloudOperationResult<LauncherClientReleaseCatalog>.Failed(
+            return EdgeUpdateOperationResult<EdgeReleaseCatalog>.Failed(
                 $"Cloud catalog 请求失败: {ex.Message}");
         }
     }
+}
 
-    public async Task<LauncherVersionReportResult> ReportVersionAsync(
-        LauncherCloudApiOptions options,
-        LauncherEdgeDeviceSession session,
-        LauncherClientReleaseOptions releaseOptions,
-        string machineProfile,
+public sealed class HttpEdgeVersionReporter : IEdgeVersionReporter
+{
+    private readonly ICloudClientHttpTransport _transport;
+
+    public HttpEdgeVersionReporter(ICloudClientHttpTransport transport)
+    {
+        _transport = transport ?? throw new ArgumentNullException(nameof(transport));
+    }
+
+    public async Task<EdgeVersionReportResult> ReportVersionAsync(
+        EdgeUpdateCloudApiOptions options,
+        EdgeUpdateDeviceSession session,
+        EdgeReleaseOptions releaseOptions,
+        EdgeUpdateTarget target,
         string hostVersion,
         string hostApiVersion,
-        IReadOnlyList<LauncherInstalledPlugin> installedPlugins,
+        IReadOnlyList<EdgeInstalledPlugin> installedPlugins,
         IReadOnlyList<string> enabledPlugins,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(session.UploadAccessToken))
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(releaseOptions);
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(installedPlugins);
+        ArgumentNullException.ThrowIfNull(enabledPlugins);
+
+        if (string.IsNullOrWhiteSpace(session.AccessToken))
         {
-            return LauncherVersionReportResult.Failed("设备 token 为空，无法上报版本。");
+            return EdgeVersionReportResult.Failed("设备 token 为空，无法上报版本。");
         }
 
         try
@@ -158,7 +149,7 @@ public sealed class LauncherEdgeReleaseCloudClient : ILauncherEdgeReleaseCloudCl
                     {
                         deviceId = session.DeviceId,
                         clientCode = session.ClientCode,
-                        machineProfile,
+                        machineProfile = target.MachineProfile,
                         hostVersion,
                         hostApiVersion,
                         installedPlugins = installedPlugins.Select(plugin => new
@@ -173,27 +164,30 @@ public sealed class LauncherEdgeReleaseCloudClient : ILauncherEdgeReleaseCloudCl
                         reportedAtUtc = DateTime.UtcNow
                     },
                     ResolveTimeout(options),
-                    headers => headers.Authorization = new AuthenticationHeaderValue("Bearer", session.UploadAccessToken),
+                    headers => headers.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken),
                     cancellationToken)
                 .ConfigureAwait(false);
             return response.Success
-                ? LauncherVersionReportResult.Succeeded()
-                : LauncherVersionReportResult.Failed(
+                ? EdgeVersionReportResult.Succeeded()
+                : EdgeVersionReportResult.Failed(
                     response.ErrorMessage ?? $"Cloud 请求失败: HTTP {response.StatusCode}");
         }
         catch (Exception ex)
         {
-            return LauncherVersionReportResult.Failed($"版本上报失败: {ex.Message}");
+            return EdgeVersionReportResult.Failed($"版本上报失败: {ex.Message}");
         }
     }
+}
 
-    internal static Uri BuildUrl(string baseUrl, string relativeOrAbsoluteUrl)
+public static class EdgeUpdateCloudUrl
+{
+    public static Uri BuildUrl(string baseUrl, string relativeOrAbsoluteUrl)
         => CloudClientHttpUrl.Build(baseUrl, relativeOrAbsoluteUrl);
 
-    private static TimeSpan ResolveTimeout(LauncherCloudApiOptions options)
+    internal static TimeSpan ResolveTimeout(EdgeUpdateCloudApiOptions options)
         => TimeSpan.FromSeconds(Math.Clamp(options.TimeoutSeconds, 1, 120));
 
-    private static string RequireRelativePath(string path)
+    internal static string RequireRelativePath(string path)
     {
         if (string.IsNullOrWhiteSpace(path))
         {

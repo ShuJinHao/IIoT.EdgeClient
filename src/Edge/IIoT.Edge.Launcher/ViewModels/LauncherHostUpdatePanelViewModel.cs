@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using IIoT.Edge.Application.Abstractions.Updates;
 using IIoT.Edge.Launcher.Services;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
@@ -7,7 +8,7 @@ namespace IIoT.Edge.Launcher.ViewModels;
 
 public sealed class LauncherHostUpdatePanelViewModel : BaseNotifyPropertyChanged, IDisposable
 {
-    private readonly ILauncherUpdateService _updateService;
+    private readonly IEdgeHostUpdateService _updateService;
     private readonly IShellLaunchService _launchService;
     private readonly IAppLanguageService? _languageService;
     private string _statusKey = "Launcher_Update_StatusInitial";
@@ -19,13 +20,13 @@ public sealed class LauncherHostUpdatePanelViewModel : BaseNotifyPropertyChanged
     private bool _hasUpdateAvailable;
     private bool _isProgressVisible;
     private string _currentVersion = "—";
-    private string _latestVersion = "—";
-    private LauncherUpdateCheckState _lastState = LauncherUpdateCheckState.NotConfigured;
+    private string _targetVersion = "—";
+    private EdgeHostUpdateCheckState _lastState = EdgeHostUpdateCheckState.NotConfigured;
 
     public const string HostRowModuleId = "__edge_host__";
 
     public LauncherHostUpdatePanelViewModel(
-        ILauncherUpdateService updateService,
+        IEdgeHostUpdateService updateService,
         IShellLaunchService launchService,
         IAppLanguageService? languageService = null)
     {
@@ -187,32 +188,32 @@ public sealed class LauncherHostUpdatePanelViewModel : BaseNotifyPropertyChanged
         OnPropertyChanged(nameof(CanApplyUpdate));
     }
 
-    private void ApplyUpdateCheckResult(LauncherUpdateCheckResult result)
+    private void ApplyUpdateCheckResult(EdgeHostUpdateCheckResult result)
     {
         SetHasUpdateAvailable(result.HasUpdate);
         _lastState = result.State;
         _currentVersion = string.IsNullOrWhiteSpace(result.CurrentVersion) ? "—" : result.CurrentVersion!;
-        _latestVersion = string.IsNullOrWhiteSpace(result.TargetVersion) ? _currentVersion : result.TargetVersion!;
+        _targetVersion = string.IsNullOrWhiteSpace(result.TargetVersion) ? _currentVersion : result.TargetVersion!;
         DetailText = LauncherText.Compact(result.ReleaseNotes ?? result.ErrorMessage);
 
         switch (result.State)
         {
-            case LauncherUpdateCheckState.NotConfigured:
+            case EdgeHostUpdateCheckState.NotConfigured:
                 SetStatus("Launcher_Update_StatusNotConfigured");
                 break;
-            case LauncherUpdateCheckState.NotInstalled:
+            case EdgeHostUpdateCheckState.NotInstalled:
                 SetStatus("Launcher_Update_StatusNotInstalled");
                 break;
-            case LauncherUpdateCheckState.NoUpdate:
+            case EdgeHostUpdateCheckState.NoUpdate:
                 SetStatus("Launcher_Update_StatusNoUpdate", result.CurrentVersion ?? string.Empty);
                 break;
-            case LauncherUpdateCheckState.UpdateAvailable:
+            case EdgeHostUpdateCheckState.UpdateAvailable:
                 SetStatus("Launcher_Update_StatusAvailable", result.TargetVersion ?? string.Empty);
                 break;
-            case LauncherUpdateCheckState.PendingRestart:
+            case EdgeHostUpdateCheckState.PendingRestart:
                 SetStatus("Launcher_Update_StatusPendingRestart", result.TargetVersion ?? string.Empty);
                 break;
-            case LauncherUpdateCheckState.Failed:
+            case EdgeHostUpdateCheckState.Failed:
                 SetStatus("Launcher_Update_StatusFailed");
                 break;
             default:
@@ -225,10 +226,10 @@ public sealed class LauncherHostUpdatePanelViewModel : BaseNotifyPropertyChanged
     {
         var (statusKind, statusKey) = _lastState switch
         {
-            LauncherUpdateCheckState.UpdateAvailable or LauncherUpdateCheckState.PendingRestart
+            EdgeHostUpdateCheckState.UpdateAvailable or EdgeHostUpdateCheckState.PendingRestart
                 => ("Warning", "Launcher_ProfileCard_StatusUpdateAvailable"),
-            LauncherUpdateCheckState.NoUpdate
-                => ("Success", "Launcher_ProfileCard_StatusLatest"),
+            EdgeHostUpdateCheckState.NoUpdate
+                => ("Running", "Launcher_ProfileCard_StatusLatest"),
             _ => ("Default", "Launcher_UpdateCenter_HostStatusNotReady"),
         };
 
@@ -236,14 +237,14 @@ public sealed class LauncherHostUpdatePanelViewModel : BaseNotifyPropertyChanged
             HostRowModuleId,
             LauncherText.Get(_languageService, "Launcher_UpdateCenter_HostTitle"),
             _currentVersion,
-            _latestVersion,
+            _targetVersion,
             string.Empty,
             string.Empty,
             CanApplyUpdate,
             statusKind,
             LauncherText.Get(_languageService, statusKey),
             LauncherText.Get(_languageService, "Launcher_UpdateCenter_ButtonHostUpdate"),
-            _hasUpdateAvailable ? LauncherPluginUpdateState.UpdateAvailable : LauncherPluginUpdateState.Latest);
+            _hasUpdateAvailable ? EdgeVersionStatus.Newer : EdgeVersionStatus.Current);
     }
 
     private bool SetProperty<T>(ref T field, T value, [CallerMemberName] string propertyName = "")

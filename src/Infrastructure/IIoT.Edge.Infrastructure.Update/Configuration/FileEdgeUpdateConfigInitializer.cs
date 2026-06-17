@@ -1,17 +1,16 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using IIoT.Edge.Application.Abstractions.Updates;
 
-namespace IIoT.Edge.Launcher.Services;
+namespace IIoT.Edge.Infrastructure.Update.Configuration;
 
-public sealed record LauncherUpdateConfigPaths(string ConfigPath, string SampleConfigPath);
-
-public sealed class LauncherUpdateConfigInitializer : ILauncherUpdateConfigInitializer
+public sealed class FileEdgeUpdateConfigInitializer : IEdgeUpdateConfigInitializer
 {
     public const string SampleConfigFileName = "launcher.update.sample.json";
 
-    private readonly LauncherUpdateConfigPaths _paths;
+    private readonly EdgeUpdateConfigPaths _paths;
 
-    public LauncherUpdateConfigInitializer(LauncherUpdateConfigPaths paths)
+    public FileEdgeUpdateConfigInitializer(EdgeUpdateConfigPaths paths)
     {
         ArgumentNullException.ThrowIfNull(paths);
         ArgumentException.ThrowIfNullOrWhiteSpace(paths.ConfigPath);

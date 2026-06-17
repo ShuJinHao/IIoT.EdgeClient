@@ -1,12 +1,13 @@
 using System.Text.Json;
+using IIoT.Edge.Application.Abstractions.Updates;
 using IIoT.Edge.SharedKernel.Configuration;
 using Velopack;
 using Velopack.Exceptions;
 using Velopack.Sources;
 
-namespace IIoT.Edge.Launcher.Services;
+namespace IIoT.Edge.Infrastructure.Update.Host;
 
-public sealed class LauncherUpdateService : ILauncherUpdateService
+public sealed class VelopackHostUpdateService : IEdgeHostUpdateService
 {
     public const string UpdateSourceEnvironmentVariable = "IIOT_EDGE_UPDATE_URL";
 
@@ -15,12 +16,13 @@ public sealed class LauncherUpdateService : ILauncherUpdateService
     private UpdateInfo? _lastUpdate;
     private string? _lastSource;
 
-    public LauncherUpdateService()
-        : this(ResolveUpdateSource, CreateUpdateManager)
+    public VelopackHostUpdateService(string baseDirectory)
+        : this(() => ResolveUpdateSource(baseDirectory), CreateUpdateManager)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
     }
 
-    internal LauncherUpdateService(
+    internal VelopackHostUpdateService(
         Func<string?> sourceProvider,
         Func<string, UpdateManager> managerFactory)
     {
@@ -28,13 +30,13 @@ public sealed class LauncherUpdateService : ILauncherUpdateService
         _managerFactory = managerFactory ?? throw new ArgumentNullException(nameof(managerFactory));
     }
 
-    public async Task<LauncherUpdateCheckResult> CheckForUpdatesAsync(CancellationToken cancellationToken = default)
+    public async Task<EdgeHostUpdateCheckResult> CheckForUpdatesAsync(CancellationToken cancellationToken = default)
     {
         var source = _sourceProvider()?.Trim();
         if (string.IsNullOrWhiteSpace(source))
         {
             ClearCachedUpdate();
-            return new LauncherUpdateCheckResult(LauncherUpdateCheckState.NotConfigured);
+            return new EdgeHostUpdateCheckResult(EdgeHostUpdateCheckState.NotConfigured);
         }
 
         try
@@ -43,8 +45,8 @@ public sealed class LauncherUpdateService : ILauncherUpdateService
             if (!manager.IsInstalled)
             {
                 ClearCachedUpdate();
-                return new LauncherUpdateCheckResult(
-                    LauncherUpdateCheckState.NotInstalled,
+                return new EdgeHostUpdateCheckResult(
+                    EdgeHostUpdateCheckState.NotInstalled,
                     CurrentVersion: manager.CurrentVersion?.ToString());
             }
 
@@ -52,7 +54,7 @@ public sealed class LauncherUpdateService : ILauncherUpdateService
             if (pending is not null)
             {
                 return CreateCheckResult(
-                    LauncherUpdateCheckState.PendingRestart,
+                    EdgeHostUpdateCheckState.PendingRestart,
                     manager.CurrentVersion?.ToString(),
                     pending);
             }
@@ -61,22 +63,22 @@ public sealed class LauncherUpdateService : ILauncherUpdateService
             if (update is null)
             {
                 ClearCachedUpdate();
-                return new LauncherUpdateCheckResult(
-                    LauncherUpdateCheckState.NoUpdate,
+                return new EdgeHostUpdateCheckResult(
+                    EdgeHostUpdateCheckState.NoUpdate,
                     CurrentVersion: manager.CurrentVersion?.ToString());
             }
 
             _lastUpdate = update;
             _lastSource = source;
             return CreateCheckResult(
-                LauncherUpdateCheckState.UpdateAvailable,
+                EdgeHostUpdateCheckState.UpdateAvailable,
                 manager.CurrentVersion?.ToString(),
                 update.TargetFullRelease);
         }
         catch (NotInstalledException)
         {
             ClearCachedUpdate();
-            return new LauncherUpdateCheckResult(LauncherUpdateCheckState.NotInstalled);
+            return new EdgeHostUpdateCheckResult(EdgeHostUpdateCheckState.NotInstalled);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -85,20 +87,20 @@ public sealed class LauncherUpdateService : ILauncherUpdateService
         catch (Exception ex)
         {
             ClearCachedUpdate();
-            return new LauncherUpdateCheckResult(
-                LauncherUpdateCheckState.Failed,
+            return new EdgeHostUpdateCheckResult(
+                EdgeHostUpdateCheckState.Failed,
                 ErrorMessage: ex.Message);
         }
     }
 
-    public async Task<LauncherUpdateApplyResult> DownloadAndApplyUpdateAsync(
+    public async Task<EdgeHostUpdateApplyResult> DownloadAndApplyUpdateAsync(
         IProgress<int>? progress = null,
         CancellationToken cancellationToken = default)
     {
         var source = _sourceProvider()?.Trim();
         if (string.IsNullOrWhiteSpace(source))
         {
-            return new LauncherUpdateApplyResult(false, "Update source is not configured.");
+            return new EdgeHostUpdateApplyResult(false, "Update source is not configured.");
         }
 
         try
@@ -106,14 +108,14 @@ public sealed class LauncherUpdateService : ILauncherUpdateService
             var manager = _managerFactory(source);
             if (!manager.IsInstalled)
             {
-                return new LauncherUpdateApplyResult(false, "Application is not installed by Velopack.");
+                return new EdgeHostUpdateApplyResult(false, "Application is not installed by Velopack.");
             }
 
             var pending = manager.UpdatePendingRestart;
             if (pending is not null)
             {
                 manager.ApplyUpdatesAndRestart(pending, []);
-                return new LauncherUpdateApplyResult(true);
+                return new EdgeHostUpdateApplyResult(true);
             }
 
             var update = string.Equals(_lastSource, source, StringComparison.OrdinalIgnoreCase)
@@ -123,14 +125,14 @@ public sealed class LauncherUpdateService : ILauncherUpdateService
             if (update is null)
             {
                 ClearCachedUpdate();
-                return new LauncherUpdateApplyResult(false, "No update is available.");
+                return new EdgeHostUpdateApplyResult(false, "No update is available.");
             }
 
             await manager
                 .DownloadUpdatesAsync(update, value => progress?.Report(value), cancellationToken)
                 .ConfigureAwait(false);
             manager.ApplyUpdatesAndRestart(update.TargetFullRelease, []);
-            return new LauncherUpdateApplyResult(true);
+            return new EdgeHostUpdateApplyResult(true);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -138,8 +140,34 @@ public sealed class LauncherUpdateService : ILauncherUpdateService
         }
         catch (Exception ex)
         {
-            return new LauncherUpdateApplyResult(false, ex.Message);
+            return new EdgeHostUpdateApplyResult(false, ex.Message);
         }
+    }
+
+    public async Task<EdgeHostUpdateApplyResult> ApplyVersionAsync(
+        EdgeHostVersionRelease release,
+        IProgress<int>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(release);
+
+        var check = await CheckForUpdatesAsync(cancellationToken).ConfigureAwait(false);
+        if (check.State is EdgeHostUpdateCheckState.Failed
+            or EdgeHostUpdateCheckState.NotConfigured
+            or EdgeHostUpdateCheckState.NotInstalled)
+        {
+            return new EdgeHostUpdateApplyResult(false, check.ErrorMessage ?? "宿主更新源不可用。");
+        }
+
+        if (check.State == EdgeHostUpdateCheckState.NoUpdate
+            || !string.Equals(check.TargetVersion, release.Version.Version, StringComparison.OrdinalIgnoreCase))
+        {
+            return new EdgeHostUpdateApplyResult(
+                false,
+                $"当前宿主更新源没有提供指定版本 {release.Version.Version}。");
+        }
+
+        return await DownloadAndApplyUpdateAsync(progress, cancellationToken).ConfigureAwait(false);
     }
 
     internal static UpdateManager CreateUpdateManager(string source)
@@ -155,7 +183,7 @@ public sealed class LauncherUpdateService : ILauncherUpdateService
             : new UpdateManager(new SimpleFileSource(localDirectory), options);
     }
 
-    internal static DirectoryInfo? TryResolveLocalDirectory(string source)
+    public static DirectoryInfo? TryResolveLocalDirectory(string source)
     {
         var trimmedSource = source.Trim();
         if (string.IsNullOrWhiteSpace(trimmedSource))
@@ -173,8 +201,8 @@ public sealed class LauncherUpdateService : ILauncherUpdateService
         return directory.Exists ? directory : null;
     }
 
-    private static LauncherUpdateCheckResult CreateCheckResult(
-        LauncherUpdateCheckState state,
+    private static EdgeHostUpdateCheckResult CreateCheckResult(
+        EdgeHostUpdateCheckState state,
         string? currentVersion,
         VelopackAsset asset)
         => new(
@@ -183,7 +211,7 @@ public sealed class LauncherUpdateService : ILauncherUpdateService
             TargetVersion: asset.Version?.ToString(),
             ReleaseNotes: asset.NotesMarkdown);
 
-    private static string? ResolveUpdateSource()
+    private static string? ResolveUpdateSource(string baseDirectory)
     {
         var fromEnvironment = Environment.GetEnvironmentVariable(UpdateSourceEnvironmentVariable);
         if (!string.IsNullOrWhiteSpace(fromEnvironment))
@@ -191,7 +219,7 @@ public sealed class LauncherUpdateService : ILauncherUpdateService
             return fromEnvironment.Trim();
         }
 
-        var configPath = EdgeClientProgramDataPaths.ResolveLauncherUpdateConfigPath();
+        var configPath = EdgeClientProgramDataPaths.ResolveLauncherUpdateConfigPath(baseDirectory);
         if (!File.Exists(configPath))
         {
             return null;

@@ -21,13 +21,13 @@
     <PackageReference Include="Avalonia.Desktop" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
-    <PackageReference Include="Velopack" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\IIoT.Edge.Shell\IIoT.Edge.Shell.csproj"
                       ReferenceOutputAssembly="false" />
-    <ProjectReference Include="..\..\Infrastructure\IIoT.Edge.Infrastructure.CloudClient\IIoT.Edge.Infrastructure.CloudClient.csproj" />
+    <ProjectReference Include="..\..\Application\IIoT.Edge.Application\IIoT.Edge.Application.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\IIoT.Edge.Infrastructure.Update\IIoT.Edge.Infrastructure.Update.csproj" />
     <ProjectReference Include="..\..\Shared\IIoT.Edge.SharedKernel\IIoT.Edge.SharedKernel.csproj" />
     <ProjectReference Include="..\..\Shared\IIoT.Edge.UI.Shared\IIoT.Edge.UI.Shared.csproj" />
   </ItemGroup>

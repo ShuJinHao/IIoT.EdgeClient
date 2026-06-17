@@ -1,8 +1,8 @@
 using System.Collections.ObjectModel;
-using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using IIoT.Edge.Application.Abstractions.Updates;
 using IIoT.Edge.Launcher.Models;
 using IIoT.Edge.Launcher.Services;
 using IIoT.Edge.UI.Shared.Localization;
@@ -13,11 +13,12 @@ namespace IIoT.Edge.Launcher.ViewModels;
 public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposable
 {
     private readonly ILauncherProfileCatalog _profileCatalog;
-    private readonly ILauncherCloudApiConfigurationResolver? _cloudApiResolver;
+    private readonly IEdgeUpdateConfigurationProvider? _updateConfigurationProvider;
+    private readonly ILauncherUpdateTargetFactory _targetFactory;
     private readonly ILocalLauncherAuthService _authService;
     private readonly IShellLaunchService _launchService;
-    private readonly ILauncherUpdateService _updateService;
-    private readonly ILauncherClientReleaseService _clientReleaseService;
+    private readonly IEdgeHostUpdateService _updateService;
+    private readonly IEdgeReleaseService _clientReleaseService;
     private readonly IAppLanguageService? _languageService;
     private readonly List<LauncherProfileDefinition> _allProfiles = [];
     private readonly List<LauncherProfileCardViewModel> _allProfileCards = [];
@@ -50,17 +51,19 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         ILauncherProfileCatalog profileCatalog,
         ILocalLauncherAuthService authService,
         IShellLaunchService launchService,
-        ILauncherUpdateService? updateService = null,
+        IEdgeHostUpdateService? updateService = null,
         IAppLanguageService? languageService = null,
-        ILauncherClientReleaseService? clientReleaseService = null,
-        ILauncherCloudApiConfigurationResolver? cloudApiResolver = null)
+        IEdgeReleaseService? clientReleaseService = null,
+        IEdgeUpdateConfigurationProvider? updateConfigurationProvider = null,
+        ILauncherUpdateTargetFactory? targetFactory = null)
     {
         _profileCatalog = profileCatalog ?? throw new ArgumentNullException(nameof(profileCatalog));
-        _cloudApiResolver = cloudApiResolver;
+        _updateConfigurationProvider = updateConfigurationProvider;
+        _targetFactory = targetFactory ?? new LauncherUpdateTargetFactory();
         _authService = authService ?? throw new ArgumentNullException(nameof(authService));
         _launchService = launchService ?? throw new ArgumentNullException(nameof(launchService));
-        _updateService = updateService ?? NullLauncherUpdateService.Instance;
-        _clientReleaseService = clientReleaseService ?? NullLauncherClientReleaseService.Instance;
+        _updateService = updateService ?? NullEdgeHostUpdateService.Instance;
+        _clientReleaseService = clientReleaseService ?? NullEdgeReleaseService.Instance;
         _languageService = languageService;
         HostUpdatePanel = new LauncherHostUpdatePanelViewModel(
             _updateService,
@@ -68,10 +71,10 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
             languageService);
         ClientReleasePanel = new LauncherClientReleasePanelViewModel(
             _clientReleaseService,
+            _targetFactory,
             _launchService,
             languageService);
         HostUpdatePanel.PropertyChanged += OnHostUpdatePanelChanged;
-        ClientReleasePanel.Plugins.CollectionChanged += OnPluginRowsChanged;
         if (_languageService is not null)
         {
             _languageService.LanguageChanged += OnLanguageChanged;
@@ -103,13 +106,13 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
     private IReadOnlyList<LauncherProfileDefinition> SelectVisibleProfiles(
         IReadOnlyList<LauncherProfileDefinition> profiles)
     {
-        if (_cloudApiResolver is null)
+        if (_updateConfigurationProvider is null)
         {
             return profiles;
         }
 
         var provisioned = profiles
-            .Where(profile => _cloudApiResolver.Resolve(profile).Success)
+            .Where(profile => _updateConfigurationProvider.Resolve(_targetFactory.Create(profile)).Success)
             .ToList();
 
         return provisioned.Count > 0 ? provisioned : profiles;
@@ -384,7 +387,6 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         }
 
         HostUpdatePanel.PropertyChanged -= OnHostUpdatePanelChanged;
-        ClientReleasePanel.Plugins.CollectionChanged -= OnPluginRowsChanged;
         HostUpdatePanel.Dispose();
         ClientReleasePanel.Dispose();
     }
@@ -468,17 +470,10 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         }
     }
 
-    private void OnPluginRowsChanged(object? sender, NotifyCollectionChangedEventArgs e)
-        => RebuildUpdateRows();
-
     private void RebuildUpdateRows()
     {
         UpdateRows.Clear();
         UpdateRows.Add(HostUpdatePanel.CreateHostRow());
-        foreach (var plugin in ClientReleasePanel.Plugins)
-        {
-            UpdateRows.Add(plugin);
-        }
     }
 
     public async Task ExecuteUpdateRowActionAsync(LauncherClientPluginItem row)
@@ -491,7 +486,7 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
             return;
         }
 
-        await ClientReleasePanel.InstallOrUpdateAsync(row).ConfigureAwait(true);
+        return;
     }
 
     private async Task CheckSelectedProfilePluginsAsync()
@@ -539,16 +534,66 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
     private string Format(string key, params object[] args)
         => LauncherText.Format(_languageService, key, args);
 
-    private sealed class NullLauncherUpdateService : ILauncherUpdateService
+    private sealed class NullEdgeHostUpdateService : IEdgeHostUpdateService
     {
-        public static readonly NullLauncherUpdateService Instance = new();
+        public static readonly NullEdgeHostUpdateService Instance = new();
 
-        public Task<LauncherUpdateCheckResult> CheckForUpdatesAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult(new LauncherUpdateCheckResult(LauncherUpdateCheckState.NotConfigured));
+        public Task<EdgeHostUpdateCheckResult> CheckForUpdatesAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(new EdgeHostUpdateCheckResult(EdgeHostUpdateCheckState.NotConfigured));
 
-        public Task<LauncherUpdateApplyResult> DownloadAndApplyUpdateAsync(
+        public Task<EdgeHostUpdateApplyResult> DownloadAndApplyUpdateAsync(
             IProgress<int>? progress = null,
             CancellationToken cancellationToken = default)
-            => Task.FromResult(new LauncherUpdateApplyResult(false, "Update source is not configured."));
+            => Task.FromResult(new EdgeHostUpdateApplyResult(false, "Update source is not configured."));
+
+        public Task<EdgeHostUpdateApplyResult> ApplyVersionAsync(
+            EdgeHostVersionRelease release,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new EdgeHostUpdateApplyResult(false, "Update source is not configured."));
+    }
+
+    private sealed class NullEdgeReleaseService : IEdgeReleaseService
+    {
+        public static readonly NullEdgeReleaseService Instance = new();
+
+        public Task<EdgeReleaseCatalogResult> CheckReleaseCatalogAsync(
+            EdgeUpdateTarget target,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new EdgeReleaseCatalogResult(
+                EdgeReleaseCatalogState.NotConfigured,
+                "stable",
+                "win-x64",
+                string.Empty,
+                string.Empty,
+                [],
+                "CloudApi 配置不可用。"));
+
+        public Task<EdgePluginInstallResult> ApplyPluginVersionAsync(
+            EdgeUpdateTarget target,
+            string moduleId,
+            string version,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(EdgePluginInstallResult.Failed("CloudApi 配置不可用。"));
+
+        public Task<EdgeHostUpdateApplyResult> ApplyHostVersionAsync(
+            EdgeUpdateTarget target,
+            string version,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new EdgeHostUpdateApplyResult(false, "CloudApi 配置不可用。"));
+
+        public Task<EdgePluginInstallResult> ApplyVersionCompositionAsync(
+            EdgeUpdateTarget target,
+            EdgeVersionSelection selection,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(EdgePluginInstallResult.Failed("CloudApi 配置不可用。"));
+
+        public Task<EdgeVersionReportResult> ReportCurrentVersionsAsync(
+            EdgeUpdateTarget target,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(EdgeVersionReportResult.Failed("CloudApi 配置不可用。"));
     }
 }

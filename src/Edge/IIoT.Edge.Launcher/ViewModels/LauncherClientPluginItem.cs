@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Abstractions.Updates;
 using IIoT.Edge.Launcher.Services;
 using IIoT.Edge.UI.Shared.Mvvm;
 
@@ -13,19 +14,19 @@ public sealed class LauncherClientPluginItem : BaseNotifyPropertyChanged
         string moduleId,
         string displayName,
         string currentVersion,
-        string latestVersion,
+        string targetVersion,
         string packageSizeText,
         string detailText,
         bool canInstallOrUpdate,
         string statusKind,
         string statusText,
         string actionText,
-        LauncherPluginUpdateState state)
+        EdgeVersionStatus state)
     {
         ModuleId = moduleId;
         DisplayName = displayName;
         _currentVersion = currentVersion;
-        LatestVersion = latestVersion;
+        TargetVersion = targetVersion;
         PackageSizeText = packageSizeText;
         DetailText = detailText;
         CanInstallOrUpdate = canInstallOrUpdate;
@@ -54,7 +55,7 @@ public sealed class LauncherClientPluginItem : BaseNotifyPropertyChanged
         }
     }
 
-    public string LatestVersion { get; }
+    public string TargetVersion { get; }
 
     public string PackageSizeText { get; }
 
@@ -64,7 +65,7 @@ public sealed class LauncherClientPluginItem : BaseNotifyPropertyChanged
 
     public string StatusKind { get; }
 
-    public LauncherPluginUpdateState State { get; }
+    public EdgeVersionStatus State { get; }
 
     public string StatusText
     {

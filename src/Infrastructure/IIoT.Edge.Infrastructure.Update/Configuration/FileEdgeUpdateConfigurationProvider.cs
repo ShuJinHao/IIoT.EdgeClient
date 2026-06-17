@@ -1,17 +1,10 @@
 using System.Text.Json;
-using IIoT.Edge.Launcher.Models;
+using IIoT.Edge.Application.Abstractions.Updates;
 using IIoT.Edge.SharedKernel.Configuration;
 
-namespace IIoT.Edge.Launcher.Services;
+namespace IIoT.Edge.Infrastructure.Update.Configuration;
 
-public interface ILauncherCloudApiConfigurationResolver
-{
-    LauncherCloudApiConfigurationResult Resolve(LauncherProfileDefinition profile);
-
-    LauncherClientReleaseOptions ResolveReleaseOptions();
-}
-
-public sealed class LauncherCloudApiConfigurationResolver : ILauncherCloudApiConfigurationResolver
+public sealed class FileEdgeUpdateConfigurationProvider : IEdgeUpdateConfigurationProvider
 {
     public const string ReleaseChannelEnvironmentVariable = "IIOT_EDGE_RELEASE_CHANNEL";
     public const string TargetRuntimeEnvironmentVariable = "IIOT_EDGE_TARGET_RUNTIME";
@@ -20,35 +13,33 @@ public sealed class LauncherCloudApiConfigurationResolver : ILauncherCloudApiCon
     private const string DefaultTargetRuntime = "win-x64";
     private readonly string _baseDirectory;
 
-    public LauncherCloudApiConfigurationResolver(string baseDirectory)
+    public FileEdgeUpdateConfigurationProvider(string baseDirectory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
         _baseDirectory = baseDirectory;
     }
 
-    public LauncherCloudApiConfigurationResult Resolve(LauncherProfileDefinition profile)
+    public EdgeUpdateConfigurationResult Resolve(EdgeUpdateTarget target)
     {
-        ArgumentNullException.ThrowIfNull(profile);
+        ArgumentNullException.ThrowIfNull(target);
 
-        var hostDirectory = ResolveHostDirectory(profile);
         var mutable = new MutableCloudApiOptions();
-
-        ApplyConfigurationFile(mutable, Path.Combine(hostDirectory, "appsettings.json"));
-        ApplyConfigurationFile(mutable, Path.Combine(hostDirectory, $"appsettings.{GetEnvironmentName()}.json"));
-        ApplyConfigurationFile(mutable, Path.Combine(hostDirectory, $"appsettings.machine.{profile.MachineProfile}.json"));
+        ApplyConfigurationFile(mutable, Path.Combine(target.HostDirectory, "appsettings.json"));
+        ApplyConfigurationFile(mutable, Path.Combine(target.HostDirectory, $"appsettings.{GetEnvironmentName()}.json"));
+        ApplyConfigurationFile(mutable, Path.Combine(target.HostDirectory, $"appsettings.machine.{target.MachineProfile}.json"));
         ApplyConfigurationFile(
             mutable,
-            EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(profile.MachineProfile, hostDirectory));
+            EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(target.MachineProfile, target.HostDirectory));
         ApplyEnvironment(mutable);
 
         var missing = mutable.GetMissingKeys().ToArray();
         if (missing.Length > 0)
         {
-            return LauncherCloudApiConfigurationResult.Failed(
+            return EdgeUpdateConfigurationResult.Failed(
                 $"CloudApi 配置不完整: {string.Join(", ", missing)}");
         }
 
-        return LauncherCloudApiConfigurationResult.Succeeded(new LauncherCloudApiOptions(
+        return EdgeUpdateConfigurationResult.Succeeded(new EdgeUpdateCloudApiOptions(
             mutable.BaseUrl!,
             mutable.TimeoutSeconds ?? 10,
             mutable.ClientCode!,
@@ -58,7 +49,7 @@ public sealed class LauncherCloudApiConfigurationResolver : ILauncherCloudApiCon
             mutable.ClientVersionReportPath!));
     }
 
-    public LauncherClientReleaseOptions ResolveReleaseOptions()
+    public EdgeReleaseOptions ResolveReleaseOptions()
     {
         var channel = Environment.GetEnvironmentVariable(ReleaseChannelEnvironmentVariable)?.Trim();
         var targetRuntime = Environment.GetEnvironmentVariable(TargetRuntimeEnvironmentVariable)?.Trim();
@@ -84,13 +75,10 @@ public sealed class LauncherCloudApiConfigurationResolver : ILauncherCloudApiCon
             }
         }
 
-        return new LauncherClientReleaseOptions(
+        return new EdgeReleaseOptions(
             FirstNotWhiteSpace(channel, DefaultChannel)!,
             FirstNotWhiteSpace(targetRuntime, DefaultTargetRuntime)!);
     }
-
-    internal static string ResolveHostDirectory(LauncherProfileDefinition profile)
-        => Path.GetDirectoryName(profile.ExecutablePath) ?? AppContext.BaseDirectory;
 
     private static string GetEnvironmentName()
         => Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")

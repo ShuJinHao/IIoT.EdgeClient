@@ -22,6 +22,7 @@ using IIoT.Edge.Infrastructure.Integration.Mes;
 using IIoT.Edge.Infrastructure.Integration.Recipe;
 using IIoT.Edge.Infrastructure.Persistence.Dapper;
 using IIoT.Edge.Infrastructure.Persistence.EfCore;
+using IIoT.Edge.Infrastructure.Update;
 using IIoT.Edge.Presentation.Navigation;
 using IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
 using IIoT.Edge.Presentation.Panels;
@@ -111,6 +112,7 @@ public static class DependencyInjection
         services.AddSingleton(shiftConfig);
 
         services.AddEdgeApplication();
+        services.AddEdgeUpdateInfrastructure(runtimePaths.BaseDirectory);
         services.AddEfCorePersistenceInfrastructure(efDbPath);
         services.AddDapperPersistenceInfrastructure(runtimePaths.DatabaseDirectory);
         services.AddIntegrationInfrastructure(configuration, runtimePaths);

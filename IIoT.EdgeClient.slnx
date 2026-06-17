@@ -17,6 +17,7 @@
     <Project Path="src/Infrastructure/IIoT.Edge.Infrastructure.Persistence.Dapper/IIoT.Edge.Infrastructure.Persistence.Dapper.csproj" Id="f888b62f-8635-42cf-b2b4-fb605267ba78" />
     <Project Path="src/Infrastructure/IIoT.Edge.Infrastructure.Persistence.EfCore/IIoT.Edge.Infrastructure.Persistence.EfCore.csproj" Id="3fbdae2b-de52-43d5-ac49-4271b8819af2" />
     <Project Path="src/Infrastructure/IIoT.Edge.Infrastructure.DeviceComm/IIoT.Edge.Infrastructure.DeviceComm.csproj" Id="78ef5b00-1ea0-475d-9e2f-8318f8ea0819" />
+    <Project Path="src/Infrastructure/IIoT.Edge.Infrastructure.Update/IIoT.Edge.Infrastructure.Update.csproj" />
   </Folder>
   <Folder Name="/src/Presentation/">
     <Project Path="src/Presentation/IIoT.Edge.Presentation.Shell/IIoT.Edge.Presentation.Shell.csproj" />
@@ -37,6 +38,7 @@
   </Folder>
   <Folder Name="/src/Tests/">
     <Project Path="src/Tests/IIoT.Edge.Launcher.Tests/IIoT.Edge.Launcher.Tests.csproj" />
+    <Project Path="src/Tests/IIoT.Edge.Infrastructure.Update.Tests/IIoT.Edge.Infrastructure.Update.Tests.csproj" />
     <Project Path="src/Tests/IIoT.Edge.Module.ContractTests/IIoT.Edge.Module.ContractTests.csproj" />
     <Project Path="src/Tests/IIoT.Edge.NonUiRegressionTests/IIoT.Edge.NonUiRegressionTests.csproj" />
     <Project Path="src/Tests/IIoT.Edge.Shell.Tests/IIoT.Edge.Shell.Tests.csproj" />

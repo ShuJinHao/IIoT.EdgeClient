@@ -1,27 +1,21 @@
 using System.Text.Json;
-using IIoT.Edge.Launcher.Models;
+using IIoT.Edge.Application.Abstractions.Updates;
 using IIoT.Edge.SharedKernel.Configuration;
 
-namespace IIoT.Edge.Launcher.Services;
+namespace IIoT.Edge.Infrastructure.Update.Plugins;
 
-public interface ILauncherInstalledPluginCatalog
+public sealed class FileInstalledPluginCatalog : IEdgeInstalledPluginCatalog
 {
-    IReadOnlyList<LauncherInstalledPlugin> LoadInstalledPlugins(LauncherProfileDefinition profile);
-}
-
-public sealed class LauncherInstalledPluginCatalog : ILauncherInstalledPluginCatalog
-{
-    public IReadOnlyList<LauncherInstalledPlugin> LoadInstalledPlugins(LauncherProfileDefinition profile)
+    public IReadOnlyList<EdgeInstalledPlugin> LoadInstalledPlugins(EdgeUpdateTarget target)
     {
-        ArgumentNullException.ThrowIfNull(profile);
+        ArgumentNullException.ThrowIfNull(target);
 
-        var hostDirectory = LauncherCloudApiConfigurationResolver.ResolveHostDirectory(profile);
         var roots = new[]
         {
-            EdgeClientProgramDataPaths.ResolveApplicationPluginRoot(hostDirectory)
+            EdgeClientProgramDataPaths.ResolveApplicationPluginRoot(target.HostDirectory)
         };
 
-        var selected = new List<LauncherInstalledPlugin>();
+        var selected = new List<EdgeInstalledPlugin>();
         foreach (var root in roots)
         {
             if (!Directory.Exists(root))
@@ -43,7 +37,7 @@ public sealed class LauncherInstalledPluginCatalog : ILauncherInstalledPluginCat
             .ToArray();
     }
 
-    private static IEnumerable<LauncherInstalledPlugin> LoadPluginsFromRoot(string root)
+    private static IEnumerable<EdgeInstalledPlugin> LoadPluginsFromRoot(string root)
     {
         foreach (var pluginDirectory in Directory.EnumerateDirectories(root))
         {
@@ -67,11 +61,11 @@ public sealed class LauncherInstalledPluginCatalog : ILauncherInstalledPluginCat
         return File.Exists(direct) ? direct : null;
     }
 
-    private static LauncherInstalledPlugin? TryLoadPlugin(string manifestPath)
+    private static EdgeInstalledPlugin? TryLoadPlugin(string manifestPath)
     {
         try
         {
-            var manifest = JsonSerializer.Deserialize<LauncherPluginManifest>(
+            var manifest = JsonSerializer.Deserialize<EdgePluginManifest>(
                 File.ReadAllText(manifestPath),
                 JsonOptions());
             if (manifest is null
@@ -82,7 +76,7 @@ public sealed class LauncherInstalledPluginCatalog : ILauncherInstalledPluginCat
                 return null;
             }
 
-            return new LauncherInstalledPlugin(
+            return new EdgeInstalledPlugin(
                 manifest.ModuleId.Trim(),
                 manifest.SupportedProcessType?.Trim() ?? manifest.ModuleId.Trim(),
                 manifest.DisplayName?.Trim() ?? manifest.ModuleId.Trim(),

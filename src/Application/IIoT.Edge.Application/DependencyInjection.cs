@@ -3,6 +3,7 @@ using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Tasks;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Abstractions.Updates;
 using IIoT.Edge.Application.Auth;
 using IIoT.Edge.Application.Common.Diagnostics;
 using IIoT.Edge.Application.Common.Tasks;
@@ -19,6 +20,7 @@ using IIoT.Edge.Application.Features.Production.CapacityView;
 using IIoT.Edge.Application.Features.Production.DataView;
 using IIoT.Edge.Application.Features.Production.Equipment;
 using IIoT.Edge.Application.Features.Production.Monitor;
+using IIoT.Edge.Application.Features.Updates;
 using IIoT.Edge.Application.Modules.Hardware;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -71,6 +73,8 @@ public static class DependencyInjection
         services.AddTransient<IMonitorSnapshotSourceMatcher, MonitorSnapshotSourceMatcher>();
         services.AddTransient<IMonitorSnapshotProjectionBuilder, MonitorSnapshotProjectionBuilder>();
         services.AddTransient<IEquipmentPanelService, EquipmentPanelService>();
+        services.AddSingleton<IEdgeVersionCompatibilityPolicy, EdgeVersionCompatibilityPolicy>();
+        services.AddSingleton<IEdgeReleaseService, EdgeReleaseService>();
         services.AddSingleton<IEdgeSyncDiagnosticsQuery, EdgeSyncDiagnosticsQuery>();
         services.AddSingleton<IBackgroundServiceCoordinator, BackgroundServiceCoordinator>();
         return services;

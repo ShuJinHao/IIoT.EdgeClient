@@ -1,3 +1,6 @@
+using IIoT.Edge.Application.Abstractions.Updates;
+using IIoT.Edge.Infrastructure.Update.Configuration;
+using IIoT.Edge.Infrastructure.Update.Host;
 using IIoT.Edge.Launcher;
 using IIoT.Edge.Launcher.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -29,22 +32,18 @@ public sealed class LauncherDependencyInjectionTests
             Assert.IsType<ShellLaunchService>(provider.GetRequiredService<IShellLaunchService>());
             Assert.IsType<LauncherAccountCatalogInitializer>(
                 provider.GetRequiredService<ILauncherAccountCatalogInitializer>());
-            Assert.IsType<LauncherUpdateConfigInitializer>(
-                provider.GetRequiredService<ILauncherUpdateConfigInitializer>());
             Assert.IsType<LauncherAccountCatalog>(provider.GetRequiredService<ILauncherAccountCatalog>());
             Assert.IsType<LocalLauncherAuthService>(provider.GetRequiredService<ILocalLauncherAuthService>());
-            Assert.IsType<LauncherCloudApiConfigurationResolver>(
-                provider.GetRequiredService<ILauncherCloudApiConfigurationResolver>());
-            Assert.IsType<LauncherEdgeReleaseCloudClient>(
-                provider.GetRequiredService<ILauncherEdgeReleaseCloudClient>());
-            Assert.IsType<LauncherInstalledPluginCatalog>(
-                provider.GetRequiredService<ILauncherInstalledPluginCatalog>());
-            Assert.IsType<LauncherProfileModuleConfiguration>(
-                provider.GetRequiredService<ILauncherProfileModuleConfiguration>());
-            Assert.IsType<LauncherPluginPackageInstaller>(
-                provider.GetRequiredService<ILauncherPluginPackageInstaller>());
-            Assert.IsType<LauncherClientReleaseService>(
-                provider.GetRequiredService<ILauncherClientReleaseService>());
+            Assert.IsType<LauncherUpdateTargetFactory>(
+                provider.GetRequiredService<ILauncherUpdateTargetFactory>());
+            Assert.IsType<FileEdgeUpdateConfigInitializer>(
+                provider.GetRequiredService<IEdgeUpdateConfigInitializer>());
+            Assert.NotNull(provider.GetRequiredService<IEdgeUpdateConfigurationProvider>());
+            Assert.NotNull(provider.GetRequiredService<IEdgeInstalledPluginCatalog>());
+            Assert.NotNull(provider.GetRequiredService<IEdgeProfileModuleConfigurationStore>());
+            Assert.NotNull(provider.GetRequiredService<IEdgePluginPackageInstaller>());
+            Assert.NotNull(provider.GetRequiredService<IEdgeReleaseService>());
+            Assert.NotNull(provider.GetRequiredService<IEdgeHostUpdateService>());
         }
         finally
         {
@@ -227,11 +226,11 @@ public sealed class LauncherDependencyInjectionTests
         {
             Directory.CreateDirectory(tempDirectory);
             var configPath = Path.Combine(tempDirectory, "protected-data", "launcher.update.json");
-            var samplePath = Path.Combine(tempDirectory, LauncherUpdateConfigInitializer.SampleConfigFileName);
+            var samplePath = Path.Combine(tempDirectory, FileEdgeUpdateConfigInitializer.SampleConfigFileName);
             File.WriteAllText(samplePath, """{"Source": ""}""");
 
-            var initializer = new LauncherUpdateConfigInitializer(
-                new LauncherUpdateConfigPaths(configPath, samplePath));
+            var initializer = new FileEdgeUpdateConfigInitializer(
+                new EdgeUpdateConfigPaths(configPath, samplePath));
 
             initializer.EnsureConfigExists();
 
@@ -256,14 +255,14 @@ public sealed class LauncherDependencyInjectionTests
         {
             Directory.CreateDirectory(tempDirectory);
             var configPath = Path.Combine(tempDirectory, "protected-data", "launcher.update.json");
-            var samplePath = Path.Combine(tempDirectory, LauncherUpdateConfigInitializer.SampleConfigFileName);
+            var samplePath = Path.Combine(tempDirectory, FileEdgeUpdateConfigInitializer.SampleConfigFileName);
             Directory.CreateDirectory(Path.GetDirectoryName(configPath)!);
             File.WriteAllText(configPath, """{"Source": "http://existing.example/updates"}""");
             File.WriteAllText(samplePath, """{"Source": ""}""");
             var originalConfig = File.ReadAllText(configPath);
 
-            var initializer = new LauncherUpdateConfigInitializer(
-                new LauncherUpdateConfigPaths(configPath, samplePath));
+            var initializer = new FileEdgeUpdateConfigInitializer(
+                new EdgeUpdateConfigPaths(configPath, samplePath));
 
             initializer.EnsureConfigExists();
 
@@ -287,7 +286,7 @@ public sealed class LauncherDependencyInjectionTests
         {
             Directory.CreateDirectory(tempDirectory);
 
-            var localDirectory = LauncherUpdateService.TryResolveLocalDirectory(tempDirectory);
+            var localDirectory = VelopackHostUpdateService.TryResolveLocalDirectory(tempDirectory);
 
             Assert.NotNull(localDirectory);
             Assert.Equal(Path.GetFullPath(tempDirectory), localDirectory.FullName);
@@ -311,7 +310,7 @@ public sealed class LauncherDependencyInjectionTests
             Directory.CreateDirectory(tempDirectory);
             var sourceUri = new Uri(tempDirectory).AbsoluteUri;
 
-            var localDirectory = LauncherUpdateService.TryResolveLocalDirectory(sourceUri);
+            var localDirectory = VelopackHostUpdateService.TryResolveLocalDirectory(sourceUri);
 
             Assert.NotNull(localDirectory);
             Assert.Equal(Path.GetFullPath(tempDirectory), localDirectory.FullName);
@@ -328,7 +327,7 @@ public sealed class LauncherDependencyInjectionTests
     [Fact]
     public void LauncherUpdateService_WhenSourceIsWebUrl_ShouldNotResolveLocalDirectory()
     {
-        var localDirectory = LauncherUpdateService.TryResolveLocalDirectory("https://updates.example/edge/");
+        var localDirectory = VelopackHostUpdateService.TryResolveLocalDirectory("https://updates.example/edge/");
 
         Assert.Null(localDirectory);
     }

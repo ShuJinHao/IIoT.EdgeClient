@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using IIoT.Edge.Application.Abstractions.Updates;
 using IIoT.Edge.Launcher.Models;
 using IIoT.Edge.SharedKernel.Configuration;
 
@@ -24,17 +25,20 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
 
     private readonly string _baseDirectory;
     private readonly ILauncherProfileCatalog _profileCatalog;
-    private readonly ILauncherProfileModuleConfiguration _moduleConfiguration;
+    private readonly IEdgeProfileModuleConfigurationStore _moduleConfiguration;
+    private readonly ILauncherUpdateTargetFactory _targetFactory;
 
     public LauncherDeviceBindingImporter(
         string baseDirectory,
         ILauncherProfileCatalog profileCatalog,
-        ILauncherProfileModuleConfiguration moduleConfiguration)
+        IEdgeProfileModuleConfigurationStore moduleConfiguration,
+        ILauncherUpdateTargetFactory targetFactory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
         _baseDirectory = baseDirectory;
         _profileCatalog = profileCatalog ?? throw new ArgumentNullException(nameof(profileCatalog));
         _moduleConfiguration = moduleConfiguration ?? throw new ArgumentNullException(nameof(moduleConfiguration));
+        _targetFactory = targetFactory ?? throw new ArgumentNullException(nameof(targetFactory));
     }
 
     public void ApplyPendingBindings()
@@ -85,7 +89,7 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
     {
         // moduleId -> profile：匹配“机器配置 Modules.Enabled 含该 module”的 profile（与规则一致）。
         var target = profiles.FirstOrDefault(profile =>
-            _moduleConfiguration.ReadEnabledModules(profile)
+            _moduleConfiguration.ReadEnabledModules(_targetFactory.Create(profile))
                 .Any(moduleId => string.Equals(moduleId, binding.ModuleId, StringComparison.OrdinalIgnoreCase)));
 
         if (target is null)
@@ -94,17 +98,16 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
             return;
         }
 
-        WriteCloudApiIdentity(target, binding.ClientCode, binding.BootstrapSecret, baseUrl);
+        WriteCloudApiIdentity(_targetFactory.Create(target), binding.ClientCode, binding.BootstrapSecret, baseUrl);
     }
 
     private static void WriteCloudApiIdentity(
-        LauncherProfileDefinition profile,
+        EdgeUpdateTarget target,
         string clientCode,
         string? bootstrapSecret,
         string? baseUrl)
     {
-        var hostDirectory = LauncherCloudApiConfigurationResolver.ResolveHostDirectory(profile);
-        var targetPath = EnsureExternalMachineProfile(profile, hostDirectory);
+        var targetPath = EnsureExternalMachineProfile(target);
 
         JsonObject root;
         try
@@ -145,16 +148,16 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
             new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
     }
 
-    // 与 LauncherProfileModuleConfiguration 保持同一外部机器配置约定：外部不存在则从打包配置拷贝。
-    private static string EnsureExternalMachineProfile(LauncherProfileDefinition profile, string hostDirectory)
+    // 与 Infrastructure.Update 的外部机器配置约定保持一致：外部不存在则从打包配置拷贝。
+    private static string EnsureExternalMachineProfile(EdgeUpdateTarget target)
     {
-        var targetPath = EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(profile.MachineProfile, hostDirectory);
+        var targetPath = EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(target.MachineProfile, target.HostDirectory);
         if (File.Exists(targetPath))
         {
             return targetPath;
         }
 
-        var packagedPath = Path.Combine(hostDirectory, $"appsettings.machine.{profile.MachineProfile}.json");
+        var packagedPath = Path.Combine(target.HostDirectory, $"appsettings.machine.{target.MachineProfile}.json");
         var directory = Path.GetDirectoryName(targetPath);
         if (!string.IsNullOrWhiteSpace(directory))
         {

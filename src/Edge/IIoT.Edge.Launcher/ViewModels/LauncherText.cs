@@ -43,8 +43,12 @@ internal static class LauncherText
         "Launcher_Update_ShellRunningDetail" => string.Empty,
         "Launcher_ClientRelease_StatusChecking" => "{0}",
         "Launcher_ClientRelease_StatusInstalling" => "{0}",
+        "Launcher_ClientRelease_StatusApplyingVersion" => "{0} {1}",
+        "Launcher_ClientRelease_StatusHostApplyStarted" => "{0}",
         "Launcher_ClientRelease_StatusInstalled" => "{0}",
         "Launcher_ClientRelease_StatusReady" => "{0} {1} {2}",
+        "Launcher_VersionManagement_ConfirmRollbackMessage" => "{0} {1} {2}",
+        "Launcher_VersionManagement_ConfirmDeprecatedMessage" => "{0} {1} {2}",
         "Launcher_ClientRelease_ShellRunningDetail" => string.Empty,
         "Launcher_ClientRelease_Plugin_NotInstalled" => "-",
         _ => key

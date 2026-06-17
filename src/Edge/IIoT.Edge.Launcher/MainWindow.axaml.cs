@@ -33,6 +33,7 @@ public partial class MainWindow : Window
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _languageService = languageService ?? throw new ArgumentNullException(nameof(languageService));
         DataContext = _viewModel;
+        _viewModel.ClientReleasePanel.ConfirmVersionChangeAsync = ConfirmVersionChangeAsync;
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
         Opened += OnOpened;
         Closed += OnClosed;
@@ -102,6 +103,32 @@ public partial class MainWindow : Window
         }
 
         await _viewModel.ExecuteUpdateRowActionAsync(row);
+    }
+
+    private void ToggleVersionComponentButton_Click(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is not LauncherVersionComponentItem component)
+        {
+            return;
+        }
+
+        _viewModel.ClientReleasePanel.ToggleComponent(component);
+    }
+
+    private async void ApplyVersionButton_Click(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is not LauncherVersionOptionItem option)
+        {
+            return;
+        }
+
+        await _viewModel.ClientReleasePanel.ApplyVersionAsync(option);
+    }
+
+    private async Task<bool> ConfirmVersionChangeAsync(LauncherVersionChangeConfirmationRequest request)
+    {
+        var dialog = new VersionChangeConfirmationWindow(request, _languageService);
+        return await dialog.ShowDialog<bool>(this);
     }
 
     private void UpdateVisualState()

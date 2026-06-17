@@ -71,48 +71,135 @@ install-root/
 
 旧的 `layout.zip`、`runtimeDirectory`、`runtime/Modules`、每工序一份宿主目录模型全部废弃，不得在新代码、脚本或文档中继续作为生产契约。
 
-## 4. Catalog 契约
+## 4. Catalog v2 契约
 
-云端插件 catalog 使用 JSON，根结构：
+云端客户端版本 catalog 使用 v2 JSON，返回“宿主组件 + 插件组件”的版本仓库视图。客户端基于 `versions[]` 和本机已安装版本计算当前版本、目标版本、可回退版本和兼容状态；云端不得再返回 v1 派生字段或扁平列表。
+
+根结构：
 
 ```json
 {
-  "catalogSchemaVersion": 1,
-  "generatedAtUtc": "2026-06-08T00:00:00Z",
+  "catalogSchemaVersion": 2,
+  "channel": "stable",
+  "targetRuntime": "win-x64",
   "host": {
-    "latestVersion": "0.1.0",
-    "hostApiVersion": "1.0.0",
-    "updateSource": "https://example.com/edge-updates/host/"
+    "componentKind": "Host",
+    "displayName": "Edge Host",
+    "versions": []
   },
-  "plugins": []
+  "plugins": [],
+  "generatedAtUtc": "2026-06-17T00:00:00Z",
+  "hostUpdateSource": "https://example.com/edge-updates/velopack/stable/"
 }
 ```
 
-插件条目：
+宿主版本条目：
 
 ```json
 {
+  "version": "1.0.0",
+  "hostApiVersion": "1.0.0",
+  "targetRuntime": "win-x64",
+  "targetFramework": "net10.0",
+  "downloadUrl": "https://example.com/edge-updates/host/1.0.0/package.nupkg",
+  "sha256": "",
+  "packageSize": 0,
+  "status": "Published",
+  "releaseNotes": "",
+  "signature": "",
+  "publisher": "IIoT"
+}
+```
+
+插件组件与版本条目：
+
+```json
+{
+  "componentKind": "Plugin",
   "moduleId": "Homogenization",
-  "processType": "Homogenization",
   "displayName": "匀浆",
   "description": "",
   "iconKind": "Cog",
   "accentColor": "#0F766E",
-  "version": "1.0.0",
-  "hostApiVersion": "1.0.0",
-  "minHostVersion": "0.1.0",
-  "maxHostVersion": "0.1.99",
-  "dependencies": [],
-  "targetRuntime": "win-x64",
-  "targetFramework": "net10.0",
-  "packageUrl": "https://example.com/edge-updates/plugins/packages/Homogenization-1.0.0.zip",
-  "packageSize": 0,
-  "sha256": "",
-  "signature": "",
-  "publisher": "IIoT",
-  "releaseNotes": ""
+  "versions": [
+    {
+      "version": "1.0.0",
+      "hostApiVersion": "1.0.0",
+      "minHostVersion": "1.0.0",
+      "maxHostVersion": "1.0.99",
+      "targetRuntime": "win-x64",
+      "targetFramework": "net10.0",
+      "downloadUrl": "https://example.com/edge-updates/plugins/Homogenization/1.0.0/package.zip",
+      "sha256": "",
+      "packageSize": 0,
+      "dependencies": [],
+      "status": "Published",
+      "releaseNotes": "",
+      "signature": "",
+      "publisher": "IIoT"
+    }
+  ]
 }
 ```
+
+版本状态只允许：
+
+```text
+Draft | Published | Deprecated | Archived
+```
+
+- `Published`：进入 catalog，可安装、更新和回退。
+- `Deprecated`：进入 catalog，可下载，但 UI 必须显示降级/不推荐语义，默认不作为推荐目标。
+- `Archived`：不进入 Edge catalog，包文件允许被异步清理。
+- `Draft`：只允许 Human 管理端查看，不进入 Edge catalog。
+
+发布保留上限由云端统一配置 `EdgeRelease:MaxVersionsPerComponent`，默认 5。发布新版本后，云端对同一组件、同一 channel、同一 targetRuntime 执行保留策略：超过上限的老版本如果没有设备上报使用则归档；仍有设备使用则降级为 `Deprecated`，等待管理员处理。
+
+客户端 Application 层输出给 UI 的版本计划结构必须表达多版本，不允许 UI 自己猜：
+
+```text
+EdgeComponentVersionPlan
+  ComponentKind: Host | Plugin
+  ModuleId
+  DisplayName
+  CurrentVersion
+  Versions: EdgeVersionOption[]
+
+EdgeVersionOption
+  Version
+  Status: NotInstalled | Current | Newer | Older | InstalledNewer | Incompatible | Deprecated
+  CanApply
+  CompatibilityIssue
+```
+
+所有安装、更新和回退都必须显式选择版本：
+
+```text
+CheckReleaseCatalogAsync(target)
+ApplyPluginVersionAsync(target, moduleId, version)
+ApplyHostVersionAsync(target, version)
+ApplyVersionCompositionAsync(target, selection)
+```
+
+旧的单版本接口、单版本计划和 v1 扁平 catalog 模型全部废弃，不得保留 wrapper。
+
+### 4.1 云端安装包载荷约束
+
+Cloud 生成的 Windows 安装包是一个单文件安装器：安装器 stub 后追加 payload zip 和 trailer。payload zip 内统一携带本次安装所需的宿主、插件和绑定配置，不允许把配置文件散落成独立下载项。
+
+payload 必须包含：
+
+```text
+launcher/
+  iiot-binding.json
+  iiot-enabled-plugins.json
+  launcher.update.json
+host/
+plugins/<ModuleId>/
+  iiot-plugin-binding.json
+```
+
+安装器只负责解包、调用 Velopack Setup、复制引导文件和启动 Launcher。`ClientCode`、`BootstrapSecret` 等绑定信息只存在于受控 payload 的绑定文件中，不写 UI、不写日志、不进入公共 catalog。
 
 ## 5. 兼容语义
 
@@ -222,7 +309,7 @@ Cloud 新增四类表，不改 `devices` 主表字段：
 发布记录状态统一为：
 
 ```text
-Draft | Published | Revoked
+Draft | Published | Deprecated | Archived
 ```
 
 ### 9.2 Human API
@@ -253,23 +340,24 @@ POST /api/v1/edge/client-releases/version-reports
 
 版本上报会额外校验 `DeviceId + ClientCode` 是否匹配云端设备身份，防止把 `ClientCode` 当成归档主键或跨设备混用。
 
-### 9.4 Catalog 返回
-
-Phase 2 的 catalog 返回结构：
+### 9.4 Catalog v2 返回
 
 ```json
 {
-  "catalogSchemaVersion": 1,
+  "catalogSchemaVersion": 2,
   "channel": "stable",
   "targetRuntime": "win-x64",
-  "latestHost": {},
-  "hostReleases": [],
-  "pluginReleases": [],
+  "host": {
+    "componentKind": "Host",
+    "displayName": "Edge Host",
+    "versions": []
+  },
+  "plugins": [],
   "generatedAtUtc": "2026-06-08T00:00:00Z"
 }
 ```
 
-Edge catalog 只返回 `Published` 发布记录。Human catalog 可通过 `onlyPublished` 决定是否只看已发布。
+Edge catalog 返回 `Published` 和 `Deprecated` 发布记录，按组件分组并受 `EdgeRelease:MaxVersionsPerComponent` 保留策略限制。Human catalog 可通过 `includeArchived` 查看归档记录，但 Edge catalog 永远不返回 `Archived`。
 
 ### 9.5 设备版本盘点
 

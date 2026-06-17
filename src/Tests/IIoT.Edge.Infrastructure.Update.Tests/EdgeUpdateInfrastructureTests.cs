@@ -1,17 +1,21 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
-using IIoT.Edge.Launcher.Models;
-using IIoT.Edge.Launcher.Services;
+using IIoT.Edge.Application.Abstractions.Updates;
+using IIoT.Edge.Application.Features.Updates;
+using IIoT.Edge.Infrastructure.Update.Configuration;
+using IIoT.Edge.Infrastructure.Update.Host;
+using IIoT.Edge.Infrastructure.Update.Packages;
+using IIoT.Edge.Infrastructure.Update.Profiles;
 using IIoT.Edge.SharedKernel.Configuration;
 using IIoT.Edge.SharedKernel.Runtime;
 using Xunit;
 
-namespace IIoT.Edge.Launcher.Tests;
+namespace IIoT.Edge.Infrastructure.Update.Tests;
 
-public sealed class LauncherClientReleaseServiceTests
+public sealed class EdgeUpdateInfrastructureTests
 {
     [Fact]
-    public void CloudApiConfigurationResolver_ShouldReadExternalProfileIdentityAndReleaseOptions()
+    public void ConfigurationProvider_ShouldReadExternalProfileIdentityAndReleaseOptions()
     {
         var tempDirectory = CreateTempDirectory();
         var dataRoot = Path.Combine(tempDirectory, "program-data");
@@ -56,11 +60,11 @@ public sealed class LauncherClientReleaseServiceTests
                     }
                     """);
 
-                var resolver = new LauncherCloudApiConfigurationResolver(hostDirectory);
-                var profile = Profile(hostDirectory);
+                var provider = new FileEdgeUpdateConfigurationProvider(hostDirectory);
+                var target = Target(hostDirectory);
 
-                var result = resolver.Resolve(profile);
-                var releaseOptions = resolver.ResolveReleaseOptions();
+                var result = provider.Resolve(target);
+                var releaseOptions = provider.ResolveReleaseOptions();
 
                 Assert.True(result.Success);
                 Assert.Equal("EDGE-001", result.Options!.ClientCode);
@@ -77,7 +81,7 @@ public sealed class LauncherClientReleaseServiceTests
     }
 
     [Fact]
-    public void CloudApiConfigurationResolver_ShouldReportIncompleteWithoutBootstrapSecret()
+    public void ConfigurationProvider_ShouldReportIncompleteWithoutBootstrapSecret()
     {
         var tempDirectory = CreateTempDirectory();
         var dataRoot = Path.Combine(tempDirectory, "program-data");
@@ -102,7 +106,6 @@ public sealed class LauncherClientReleaseServiceTests
 
             WithDataRoot(dataRoot, () =>
             {
-                // 只有 ClientCode、缺 BootstrapSecret
                 WriteText(
                     EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath("LineA", hostDirectory),
                     """
@@ -113,11 +116,10 @@ public sealed class LauncherClientReleaseServiceTests
                     }
                     """);
 
-                var resolver = new LauncherCloudApiConfigurationResolver(hostDirectory);
+                var provider = new FileEdgeUpdateConfigurationProvider(hostDirectory);
 
-                var result = resolver.Resolve(Profile(hostDirectory));
+                var result = provider.Resolve(Target(hostDirectory));
 
-                // 方案 B 为密钥模式：缺 BootstrapSecret 必须判定为配置不完整（与 Shell bootstrap 要求一致）
                 Assert.False(result.Success);
                 Assert.Contains("BootstrapSecret", result.ErrorMessage ?? string.Empty, StringComparison.Ordinal);
             });
@@ -153,12 +155,12 @@ public sealed class LauncherClientReleaseServiceTests
 
             WithDataRoot(dataRoot, () =>
             {
-                var profile = Profile(hostDirectory);
-                var configuration = new LauncherProfileModuleConfiguration();
+                var target = Target(hostDirectory);
+                var store = new FileEdgeProfileModuleConfigurationStore();
 
-                configuration.EnableModules(profile, ["Welding"]);
+                store.EnableModules(target, ["Welding"]);
 
-                var enabled = configuration.ReadEnabledModules(profile);
+                var enabled = store.ReadEnabledModules(target);
                 var externalConfig = File.ReadAllText(
                     EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath("LineA", hostDirectory));
 
@@ -183,38 +185,13 @@ public sealed class LauncherClientReleaseServiceTests
             Directory.CreateDirectory(hostDirectory);
             var packagePath = Path.Combine(tempDirectory, "IIoT.EdgePlugin.Homogenization-1.2.0-win-x64.zip");
             CreatePluginPackage(packagePath, "Homogenization", "1.2.0");
-            var sha256 = ComputeSha256(packagePath);
+            var release = ReleaseWithPackage(packagePath);
+            var installer = new EdgePluginPackageInstaller(new EdgeVersionCompatibilityPolicy());
 
-            WithDataRoot(dataRoot, async () =>
+            await WithDataRootAsync(dataRoot, async () =>
             {
-                var release = new LauncherClientPluginRelease(
-                    Guid.NewGuid(),
-                    "Homogenization",
-                    "匀浆",
-                    null,
-                    null,
-                    null,
-                    "stable",
-                    "1.2.0",
-                    EdgeClientHostRuntime.HostApiVersion,
-                    "1.0.0",
-                    "99.0.0",
-                    "win-x64",
-                    "net10.0",
-                    packagePath,
-                    sha256,
-                    new FileInfo(packagePath).Length,
-                    null,
-                    [],
-                    "Published",
-                    null,
-                    "IIoT",
-                    DateTime.UtcNow,
-                    DateTime.UtcNow);
-                var installer = new LauncherPluginPackageInstaller();
-
                 var result = await installer.InstallAsync(
-                    Profile(hostDirectory),
+                    Target(hostDirectory),
                     release,
                     CloudOptions(),
                     "1.0.0",
@@ -226,9 +203,7 @@ public sealed class LauncherClientReleaseServiceTests
                 Assert.True(result.Success, result.ErrorMessage);
                 Assert.True(File.Exists(Path.Combine(pluginDirectory, "plugin.json")));
                 Assert.True(File.Exists(Path.Combine(pluginDirectory, "IIoT.Edge.Module.Homogenization.dll")));
-                Assert.True(File.Exists(Path.Combine(
-                    pluginDirectory,
-                    "install.json")));
+                Assert.True(File.Exists(Path.Combine(pluginDirectory, "install.json")));
             });
         }
         finally
@@ -248,38 +223,13 @@ public sealed class LauncherClientReleaseServiceTests
             Directory.CreateDirectory(hostDirectory);
             var packagePath = Path.Combine(tempDirectory, "IIoT.EdgePlugin.Homogenization-1.2.0-win-x64.zip");
             CreatePluginPackage(packagePath, "Homogenization", "1.2.0", "..\\evil.dll");
-            var sha256 = ComputeSha256(packagePath);
+            var release = ReleaseWithPackage(packagePath);
+            var installer = new EdgePluginPackageInstaller(new EdgeVersionCompatibilityPolicy());
 
-            WithDataRoot(dataRoot, async () =>
+            await WithDataRootAsync(dataRoot, async () =>
             {
-                var release = new LauncherClientPluginRelease(
-                    Guid.NewGuid(),
-                    "Homogenization",
-                    "匀浆",
-                    null,
-                    null,
-                    null,
-                    "stable",
-                    "1.2.0",
-                    EdgeClientHostRuntime.HostApiVersion,
-                    "1.0.0",
-                    "99.0.0",
-                    "win-x64",
-                    "net10.0",
-                    packagePath,
-                    sha256,
-                    new FileInfo(packagePath).Length,
-                    null,
-                    [],
-                    "Published",
-                    null,
-                    "IIoT",
-                    DateTime.UtcNow,
-                    DateTime.UtcNow);
-                var installer = new LauncherPluginPackageInstaller();
-
                 var result = await installer.InstallAsync(
-                    Profile(hostDirectory),
+                    Target(hostDirectory),
                     release,
                     CloudOptions(),
                     "1.0.0",
@@ -307,17 +257,15 @@ public sealed class LauncherClientReleaseServiceTests
             var packagePath = Path.Combine(tempDirectory, "IIoT.EdgePlugin.Homogenization-1.2.0-win-x64.zip");
             CreatePluginPackage(packagePath, "Homogenization", "1.2.0");
             var release = ReleaseWithPackage(packagePath);
-            var installer = new LauncherPluginPackageInstaller(
+            var installer = new EdgePluginPackageInstaller(
                 new HttpClient(),
-                LauncherPluginPackageInstallLimits.Default with
-                {
-                    MaxFileCount = 1
-                });
+                new EdgeVersionCompatibilityPolicy(),
+                EdgePluginPackageInstallLimits.Default with { MaxFileCount = 1 });
 
-            WithDataRoot(dataRoot, async () =>
+            await WithDataRootAsync(dataRoot, async () =>
             {
                 var result = await installer.InstallAsync(
-                    Profile(hostDirectory),
+                    Target(hostDirectory),
                     release,
                     CloudOptions(),
                     "1.0.0",
@@ -334,106 +282,9 @@ public sealed class LauncherClientReleaseServiceTests
     }
 
     [Fact]
-    public async Task PluginPackageInstaller_ShouldRejectPackageWhenExtractedSizeExceedsLimit()
+    public void UpdateConfigInitializer_TrySyncUpdateSource_ShouldNormalizeCamelCaseKey()
     {
-        var tempDirectory = CreateTempDirectory();
-        var dataRoot = Path.Combine(tempDirectory, "program-data");
-        try
-        {
-            var hostDirectory = Path.Combine(tempDirectory, "host");
-            Directory.CreateDirectory(hostDirectory);
-            var packagePath = Path.Combine(tempDirectory, "IIoT.EdgePlugin.Homogenization-1.2.0-win-x64.zip");
-            CreatePluginPackage(packagePath, "Homogenization", "1.2.0");
-            var release = ReleaseWithPackage(packagePath);
-            var installer = new LauncherPluginPackageInstaller(
-                new HttpClient(),
-                LauncherPluginPackageInstallLimits.Default with
-                {
-                    MaxExtractedBytes = 16
-                });
-
-            WithDataRoot(dataRoot, async () =>
-            {
-                var result = await installer.InstallAsync(
-                    Profile(hostDirectory),
-                    release,
-                    CloudOptions(),
-                    "1.0.0",
-                    EdgeClientHostRuntime.HostApiVersion);
-
-                Assert.False(result.Success);
-                Assert.Contains("解压后大小超过限制", result.ErrorMessage, StringComparison.Ordinal);
-            });
-        }
-        finally
-        {
-            DeleteDirectory(tempDirectory);
-        }
-    }
-
-    [Fact]
-    public void CloudApiConfigurationResolver_ShouldReadCamelCaseUpdateConfig()
-    {
-        var tempDirectory = CreateTempDirectory();
-        var dataRoot = Path.Combine(tempDirectory, "program-data");
-        try
-        {
-            var hostDirectory = Path.Combine(tempDirectory, "host");
-            Directory.CreateDirectory(hostDirectory);
-            WriteText(
-                Path.Combine(hostDirectory, "appsettings.json"),
-                """
-                {
-                  "CloudApi": {
-                    "BaseUrl": "https://cloud.example.test",
-                    "Paths": {
-                      "DeviceInstance": "/api/v1/bootstrap/device-instance",
-                      "ClientReleaseCatalogTemplate": "/api/v1/edge/client-releases/device/{deviceId}/catalog",
-                      "ClientVersionReport": "/api/v1/edge/client-releases/version-reports"
-                    }
-                  }
-                }
-                """);
-
-            WithDataRoot(dataRoot, () =>
-            {
-                WriteText(
-                    EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath("LineA", hostDirectory),
-                    """
-                    {
-                      "CloudApi": {
-                        "ClientCode": "EDGE-002",
-                        "BootstrapSecret": "secret"
-                      }
-                    }
-                    """);
-                WriteText(
-                    EdgeClientProgramDataPaths.ResolveLauncherUpdateConfigPath(hostDirectory),
-                    """
-                    {
-                      "source": "https://cloud.example.test/edge-updates/velopack/stable/",
-                      "channel": "nightly",
-                      "targetRuntime": "win-arm64"
-                    }
-                    """);
-
-                var resolver = new LauncherCloudApiConfigurationResolver(hostDirectory);
-                var releaseOptions = resolver.ResolveReleaseOptions();
-
-                Assert.Equal("nightly", releaseOptions.Channel);
-                Assert.Equal("win-arm64", releaseOptions.TargetRuntime);
-            });
-        }
-        finally
-        {
-            DeleteDirectory(tempDirectory);
-        }
-    }
-
-    [Fact]
-    public void LauncherUpdateConfigInitializer_TrySyncUpdateSource_ShouldNormalizeCamelCaseKey()
-    {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), $"iiot-launcher-test-{Guid.NewGuid():N}");
+        var tempDirectory = Path.Combine(Path.GetTempPath(), $"iiot-update-test-{Guid.NewGuid():N}");
         try
         {
             Directory.CreateDirectory(tempDirectory);
@@ -442,8 +293,7 @@ public sealed class LauncherClientReleaseServiceTests
             File.WriteAllText(configPath,
                 """{"source": "https://cloud.example.test/edge-updates/velopack/stable/", "channel": "stable"}""");
 
-            var initializer = new LauncherUpdateConfigInitializer(
-                new LauncherUpdateConfigPaths(configPath, samplePath));
+            var initializer = new FileEdgeUpdateConfigInitializer(new EdgeUpdateConfigPaths(configPath, samplePath));
 
             var changed = initializer.TrySyncUpdateSource(
                 "https://cloud.example.test/edge-updates/velopack/stable/");
@@ -455,24 +305,19 @@ public sealed class LauncherClientReleaseServiceTests
         }
         finally
         {
-            if (Directory.Exists(tempDirectory))
-            {
-                Directory.Delete(tempDirectory, recursive: true);
-            }
+            DeleteDirectory(tempDirectory);
         }
     }
 
     [Fact]
-    public void BuildPluginPlans_ShouldMarkUpdateAvailableAndIncompatible()
+    public void BuildVersionPlans_ShouldMarkUpdateAvailableAndIncompatible()
     {
-        var releases = new[]
-        {
-            Release("Homogenization", "1.2.0", EdgeClientHostRuntime.HostApiVersion),
-            Release("Welding", "1.0.0", "2.0.0")
-        };
+        var catalog = Catalog(
+            PluginComponent("Homogenization", Release("Homogenization", "1.2.0", EdgeClientHostRuntime.HostApiVersion)),
+            PluginComponent("Welding", Release("Welding", "1.0.0", "2.0.0")));
         var installed = new[]
         {
-            new LauncherInstalledPlugin(
+            new EdgeInstalledPlugin(
                 "Homogenization",
                 "Homogenization",
                 "匀浆",
@@ -485,28 +330,48 @@ public sealed class LauncherClientReleaseServiceTests
                 "current")
         };
 
-        var plans = LauncherClientReleaseService.BuildPluginPlans(
-            releases,
+        var plans = EdgeReleaseService.BuildVersionPlans(
+            catalog,
             installed,
             "1.0.0",
-            EdgeClientHostRuntime.HostApiVersion);
+            EdgeClientHostRuntime.HostApiVersion,
+            new EdgeVersionCompatibilityPolicy());
 
-        Assert.Equal(LauncherPluginUpdateState.UpdateAvailable, plans.Single(x => x.Release.ModuleId == "Homogenization").State);
-        Assert.Equal(LauncherPluginUpdateState.Incompatible, plans.Single(x => x.Release.ModuleId == "Welding").State);
+        var homogenization = plans.Single(x => x.ModuleId == "Homogenization");
+        var welding = plans.Single(x => x.ModuleId == "Welding");
+        Assert.Equal(EdgeVersionStatus.Newer, homogenization.Versions.Single().Status);
+        Assert.Equal(EdgeVersionStatus.Incompatible, welding.Versions.Single().Status);
     }
 
-    private static LauncherProfileDefinition Profile(string hostDirectory)
-        => new(
-            "LineA",
-            "Line A",
-            "Line A profile",
-            null,
-            "LineA",
-            Path.Combine(hostDirectory, "IIoT.Edge.Shell"),
-            "Cog",
-            "#0F766E");
+    [Fact]
+    public void HostUpdateService_WhenSourceIsLocalDirectory_ShouldResolveLocalDirectory()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var localDirectory = VelopackHostUpdateService.TryResolveLocalDirectory(tempDirectory);
 
-    private static LauncherCloudApiOptions CloudOptions()
+            Assert.NotNull(localDirectory);
+            Assert.Equal(Path.GetFullPath(tempDirectory), localDirectory.FullName);
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public void HostUpdateService_WhenSourceIsWebUrl_ShouldNotResolveLocalDirectory()
+    {
+        var localDirectory = VelopackHostUpdateService.TryResolveLocalDirectory("https://updates.example/edge/");
+
+        Assert.Null(localDirectory);
+    }
+
+    private static EdgeUpdateTarget Target(string hostDirectory)
+        => new("LineA", hostDirectory, Path.Combine(hostDirectory, "IIoT.Edge.Shell"));
+
+    private static EdgeUpdateCloudApiOptions CloudOptions()
         => new(
             "https://cloud.example.test",
             5,
@@ -516,14 +381,50 @@ public sealed class LauncherClientReleaseServiceTests
             "/api/v1/edge/client-releases/device/{deviceId}/catalog",
             "/api/v1/edge/client-releases/version-reports");
 
-    private static LauncherClientPluginRelease Release(string moduleId, string version, string hostApiVersion)
+    private static EdgeReleaseCatalog Catalog(params EdgePluginReleaseComponent[] plugins)
+        => new(
+            2,
+            "stable",
+            "win-x64",
+            new EdgeHostReleaseComponent(
+                "Host",
+                "Edge Host",
+                [
+                    new EdgeHostVersionEntry(
+                        Guid.NewGuid(),
+                        "stable",
+                        "1.0.0",
+                        EdgeClientHostRuntime.HostApiVersion,
+                        "win-x64",
+                        "net10.0",
+                        "https://cloud.example.test/host.nupkg",
+                        new string('A', 64),
+                        1,
+                        null,
+                        "Published",
+                        null,
+                        "IIoT",
+                        DateTime.UtcNow,
+                        DateTime.UtcNow)
+                ]),
+            plugins,
+            DateTime.UtcNow);
+
+    private static EdgePluginReleaseComponent PluginComponent(
+        string moduleId,
+        EdgePluginVersionEntry release)
+        => new(
+            "Plugin",
+            moduleId,
+            moduleId,
+            null,
+            null,
+            null,
+            [release]);
+
+    private static EdgePluginVersionEntry Release(string moduleId, string version, string hostApiVersion)
         => new(
             Guid.NewGuid(),
-            moduleId,
-            moduleId,
-            null,
-            null,
-            null,
             "stable",
             version,
             hostApiVersion,
@@ -542,31 +443,35 @@ public sealed class LauncherClientReleaseServiceTests
             DateTime.UtcNow,
             DateTime.UtcNow);
 
-    private static LauncherClientPluginRelease ReleaseWithPackage(string packagePath)
-        => new(
-            Guid.NewGuid(),
+    private static EdgePluginVersionRelease ReleaseWithPackage(string packagePath)
+    {
+        CreateShaIfMissing(packagePath);
+        return new EdgePluginVersionRelease(
             "Homogenization",
             "匀浆",
             null,
             null,
             null,
-            "stable",
-            "1.2.0",
-            EdgeClientHostRuntime.HostApiVersion,
-            "1.0.0",
-            "99.0.0",
-            "win-x64",
-            "net10.0",
-            packagePath,
-            ComputeSha256(packagePath),
-            new FileInfo(packagePath).Length,
-            null,
-            [],
-            "Published",
-            null,
-            "IIoT",
-            DateTime.UtcNow,
-            DateTime.UtcNow);
+            new EdgePluginVersionEntry(
+                Guid.NewGuid(),
+                "stable",
+                "1.2.0",
+                EdgeClientHostRuntime.HostApiVersion,
+                "1.0.0",
+                "99.0.0",
+                "win-x64",
+                "net10.0",
+                packagePath,
+                ComputeSha256(packagePath),
+                new FileInfo(packagePath).Length,
+                null,
+                [],
+                "Published",
+                null,
+                "IIoT",
+                DateTime.UtcNow,
+                DateTime.UtcNow));
+    }
 
     private static void CreatePluginPackage(
         string path,
@@ -612,6 +517,14 @@ public sealed class LauncherClientReleaseServiceTests
         return Convert.ToHexString(SHA256.HashData(stream));
     }
 
+    private static void CreateShaIfMissing(string path)
+    {
+        if (!File.Exists(path))
+        {
+            throw new FileNotFoundException("测试插件包不存在。", path);
+        }
+    }
+
     private static void WithDataRoot(string dataRoot, Action action)
     {
         var previous = Environment.GetEnvironmentVariable(EdgeClientProgramDataPaths.ProgramDataRootEnvironmentVariable);
@@ -626,13 +539,13 @@ public sealed class LauncherClientReleaseServiceTests
         }
     }
 
-    private static void WithDataRoot(string dataRoot, Func<Task> action)
+    private static async Task WithDataRootAsync(string dataRoot, Func<Task> action)
     {
         var previous = Environment.GetEnvironmentVariable(EdgeClientProgramDataPaths.ProgramDataRootEnvironmentVariable);
         Environment.SetEnvironmentVariable(EdgeClientProgramDataPaths.ProgramDataRootEnvironmentVariable, dataRoot);
         try
         {
-            action().GetAwaiter().GetResult();
+            await action();
         }
         finally
         {
@@ -642,7 +555,7 @@ public sealed class LauncherClientReleaseServiceTests
 
     private static string CreateTempDirectory()
     {
-        var path = Path.Combine(Path.GetTempPath(), "edge-launcher-client-release-tests", Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(Path.GetTempPath(), "edge-update-infrastructure-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(path);
         return path;
     }

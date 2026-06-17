@@ -1,5 +1,5 @@
 using Avalonia;
-using Velopack;
+using IIoT.Edge.Infrastructure.Update.Startup;
 
 namespace IIoT.Edge.Launcher;
 
@@ -8,9 +8,7 @@ internal static class Program
     [STAThread]
     public static void Main(string[] args)
     {
-        VelopackApp.Build()
-            .SetAutoApplyOnStartup(false)
-            .Run();
+        EdgeUpdateVelopackStartup.Run();
 
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
