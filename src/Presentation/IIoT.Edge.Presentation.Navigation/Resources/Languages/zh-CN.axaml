@@ -403,6 +403,9 @@
     <sys:String x:Key="Navigation_Monitor_ColumnValue">当前值</sys:String>
     <sys:String x:Key="Navigation_Monitor_ConnectionOnline">已连接</sys:String>
     <sys:String x:Key="Navigation_Monitor_ConnectionOffline">未连接</sys:String>
+    <sys:String x:Key="Navigation_Monitor_ConnectionConnecting">连接中</sys:String>
+    <sys:String x:Key="Navigation_Monitor_ConnectionRetrying">重试中</sys:String>
+    <sys:String x:Key="Navigation_Monitor_ConnectionFaulted">运行异常</sys:String>
     <sys:String x:Key="Navigation_Monitor_RowCountFormat">{0} 项</sys:String>
     <sys:String x:Key="Navigation_Monitor_StateMachinePrefix">状态机：</sys:String>
     <sys:String x:Key="Navigation_Monitor_DeviceDataPrefix">设备数据：</sys:String>

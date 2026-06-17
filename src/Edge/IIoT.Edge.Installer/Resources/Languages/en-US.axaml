@@ -36,7 +36,7 @@
     <sys:String x:Key="Installer_Error_CoreInstallerExitFormat">Core installer exit code: {0}</sys:String>
     <sys:String x:Key="Installer_Progress_WriteConfig">Writing configuration files...</sys:String>
     <sys:String x:Key="Installer_Error_BootstrapCopyFormat">Failed to place first-install binding files: {0}</sys:String>
-    <sys:String x:Key="Installer_Progress_CreateShortcut">Creating desktop shortcut...</sys:String>
+    <sys:String x:Key="Installer_Progress_CreateShortcut">Creating shortcuts...</sys:String>
     <sys:String x:Key="Installer_Progress_Complete">Installation complete</sys:String>
     <sys:String x:Key="Installer_Progress_Install">Installing...</sys:String>
     <sys:String x:Key="Installer_Result_Complete">Installation complete.</sys:String>

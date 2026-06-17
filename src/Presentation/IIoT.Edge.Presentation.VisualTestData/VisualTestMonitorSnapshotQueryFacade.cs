@@ -1,5 +1,6 @@
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Context;
 using IIoT.Edge.Application.Features.Production.Monitor;
 using System.Globalization;
@@ -103,6 +104,7 @@ public sealed class VisualTestMonitorSnapshotQueryFacade(VisualTestDataOptions o
                 new(deviceName, "GlueActualKg", $"{glueActual:F1}")
             ],
             IsConnected: connected,
+            ConnectionState: connected ? PlcConnectionState.Connected : PlcConnectionState.Disconnected,
             LastConnectedAtText: now.AddMinutes(-48 - offset * 9).ToString("HH:mm:ss"),
             LastFailureAtText: "--",
             LastErrorText: "--",

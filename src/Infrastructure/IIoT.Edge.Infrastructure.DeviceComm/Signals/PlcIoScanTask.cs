@@ -54,6 +54,9 @@ public sealed class PlcIoScanTask : PlcIoScanTaskBase
     protected override void MarkConnected()
         => _statusStore?.MarkConnected(DeviceId, DeviceName);
 
+    protected override void MarkConnecting()
+        => _statusStore?.MarkConnecting(DeviceId, DeviceName);
+
     protected override void MarkDisconnected(string reason)
         => _statusStore?.MarkDisconnected(DeviceId, DeviceName, reason);
 

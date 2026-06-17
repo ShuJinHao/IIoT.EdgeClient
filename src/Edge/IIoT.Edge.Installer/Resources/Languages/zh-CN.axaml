@@ -36,11 +36,11 @@
     <sys:String x:Key="Installer_Error_CoreInstallerExitFormat">核心安装器退出码：{0}</sys:String>
     <sys:String x:Key="Installer_Progress_WriteConfig">正在写入配置文件...</sys:String>
     <sys:String x:Key="Installer_Error_BootstrapCopyFormat">首装绑定文件落位失败：{0}</sys:String>
-    <sys:String x:Key="Installer_Progress_CreateShortcut">正在创建桌面快捷方式...</sys:String>
+    <sys:String x:Key="Installer_Progress_CreateShortcut">正在创建快捷方式...</sys:String>
     <sys:String x:Key="Installer_Progress_Complete">安装完成</sys:String>
     <sys:String x:Key="Installer_Progress_Install">正在安装...</sys:String>
     <sys:String x:Key="Installer_Result_Complete">安装完成。</sys:String>
     <sys:String x:Key="Installer_Error_Canceled">安装已取消。</sys:String>
     <sys:String x:Key="Installer_Error_InstallFailedFormat">安装失败：{0}</sys:String>
-    <sys:String x:Key="Installer_ShortcutName">IIoT Edge 客户端</sys:String>
+    <sys:String x:Key="Installer_ShortcutName">IIoT Edge Client</sys:String>
 </ResourceDictionary>

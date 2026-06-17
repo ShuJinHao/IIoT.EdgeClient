@@ -10,6 +10,9 @@ internal sealed record InstallerResult(bool Success, string Message, string Inst
 
 internal static class InstallerService
 {
+    internal const string StartMenuFolderName = "IIoT Edge";
+    internal const string DefaultShortcutName = "IIoT Edge Client";
+
     public static int RunSilent(InstallerOptions options)
     {
         Console.OutputEncoding = Encoding.UTF8;
@@ -57,6 +60,13 @@ internal static class InstallerService
                 }
 
                 Console.WriteLine("安装完成。");
+                TryCreateStandardShortcuts(
+                    Path.Combine(
+                        SelfExtractor.GetVelopackCurrentDirectory(installRoot),
+                        "IIoT.Edge.Launcher.exe"),
+                    DefaultShortcutName,
+                    createDesktopShortcut: false);
+
                 if (!options.NoLaunch)
                 {
                     TryStartLauncher(Path.Combine(
@@ -136,15 +146,13 @@ internal static class InstallerService
                         ex.Message), installRoot);
                 }
 
-                if (createDesktopShortcut)
-                {
-                    progress?.Report(new InstallerProgress(90, t("Installer_Progress_CreateShortcut", "正在创建桌面快捷方式...")));
-                    TryCreateDesktopShortcut(
-                        Path.Combine(
-                            SelfExtractor.GetVelopackCurrentDirectory(installRoot),
-                            "IIoT.Edge.Launcher.exe"),
-                        t("Installer_ShortcutName", "IIoT Edge 客户端"));
-                }
+                progress?.Report(new InstallerProgress(90, t("Installer_Progress_CreateShortcut", "正在创建快捷方式...")));
+                TryCreateStandardShortcuts(
+                    Path.Combine(
+                        SelfExtractor.GetVelopackCurrentDirectory(installRoot),
+                        "IIoT.Edge.Launcher.exe"),
+                    t("Installer_ShortcutName", DefaultShortcutName),
+                    createDesktopShortcut);
 
                 progress?.Report(new InstallerProgress(100, t("Installer_Progress_Complete", "安装完成")));
                 return new InstallerResult(true, t("Installer_Result_Complete", "安装完成。"), installRoot);
@@ -277,6 +285,48 @@ internal static class InstallerService
         }
     }
 
+    private static void TryCreateStandardShortcuts(
+        string targetPath,
+        string shortcutName,
+        bool createDesktopShortcut)
+    {
+        TryCreateStartMenuShortcut(targetPath, shortcutName);
+        if (createDesktopShortcut)
+        {
+            TryCreateDesktopShortcut(targetPath, shortcutName);
+        }
+    }
+
+    private static void TryCreateStartMenuShortcut(string targetPath, string shortcutName)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        try
+        {
+            var programsPath = Environment.GetFolderPath(Environment.SpecialFolder.Programs);
+            if (string.IsNullOrWhiteSpace(programsPath))
+            {
+                return;
+            }
+
+            var shortcutPath = BuildStartMenuShortcutPath(programsPath, shortcutName);
+            CreateWindowsShortcut(shortcutPath, targetPath, shortcutName);
+        }
+        catch
+        {
+        }
+    }
+
+    internal static string BuildStartMenuShortcutPath(string programsDirectory, string shortcutName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(programsDirectory);
+        ArgumentException.ThrowIfNullOrWhiteSpace(shortcutName);
+        return Path.Combine(programsDirectory, StartMenuFolderName, $"{shortcutName}.lnk");
+    }
+
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     private static void CreateWindowsShortcut(string shortcutPath, string targetPath, string shortcutName)
     {
@@ -294,6 +344,12 @@ internal static class InstallerService
             if (shell is null)
             {
                 return;
+            }
+
+            var shortcutDirectory = Path.GetDirectoryName(shortcutPath);
+            if (!string.IsNullOrWhiteSpace(shortcutDirectory))
+            {
+                Directory.CreateDirectory(shortcutDirectory);
             }
 
             shortcut = shell.CreateShortcut(shortcutPath);

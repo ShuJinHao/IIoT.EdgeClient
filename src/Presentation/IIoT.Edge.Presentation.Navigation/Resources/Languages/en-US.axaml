@@ -403,6 +403,9 @@
     <sys:String x:Key="Navigation_Monitor_ColumnValue">Current Value</sys:String>
     <sys:String x:Key="Navigation_Monitor_ConnectionOnline">Connected</sys:String>
     <sys:String x:Key="Navigation_Monitor_ConnectionOffline">Disconnected</sys:String>
+    <sys:String x:Key="Navigation_Monitor_ConnectionConnecting">Connecting</sys:String>
+    <sys:String x:Key="Navigation_Monitor_ConnectionRetrying">Retrying</sys:String>
+    <sys:String x:Key="Navigation_Monitor_ConnectionFaulted">Runtime fault</sys:String>
     <sys:String x:Key="Navigation_Monitor_RowCountFormat">{0} items</sys:String>
     <sys:String x:Key="Navigation_Monitor_StateMachinePrefix">State Machine: </sys:String>
     <sys:String x:Key="Navigation_Monitor_DeviceDataPrefix">Device Data: </sys:String>

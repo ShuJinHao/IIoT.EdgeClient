@@ -88,7 +88,6 @@ public sealed class PlcDeviceRuntimeBuilder
             _statusStore,
             runtimePolicy,
             endpoint);
-        await ioScanTask.ConnectAsync().ConfigureAwait(false);
 
         var tasks = new List<IPlcTask> { ioScanTask };
         if (buffer is not null && taskFactory is not null)

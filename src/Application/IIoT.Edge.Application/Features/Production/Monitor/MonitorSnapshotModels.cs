@@ -1,5 +1,6 @@
 using IIoT.Edge.Application.Context;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Abstractions.Plc;
 
 namespace IIoT.Edge.Application.Features.Production.Monitor;
 
@@ -34,6 +35,7 @@ public record DeviceMonitorSnapshot(
     IReadOnlyList<MonitorSnapshotRow> EquipmentStatusRows,
     IReadOnlyList<MonitorSnapshotRow> RealtimeRows,
     bool IsConnected,
+    PlcConnectionState ConnectionState,
     string LastConnectedAtText,
     string LastFailureAtText,
     string LastErrorText,

@@ -44,10 +44,8 @@ public sealed class PlcLifecycleCoordinator
                 x => x.IsEnabled && x.DeviceType == SharedKernel.Enums.DeviceType.PLC,
                 ct).ConfigureAwait(false);
 
-            foreach (var device in devices)
-            {
-                await InitializeDeviceSafelyAsync(device, ct).ConfigureAwait(false);
-            }
+            await Task.WhenAll(devices.Select(device => InitializeDeviceSafelyAsync(device, ct)))
+                .ConfigureAwait(false);
         }
         finally
         {

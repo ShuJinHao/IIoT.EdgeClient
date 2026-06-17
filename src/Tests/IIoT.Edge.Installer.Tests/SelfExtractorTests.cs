@@ -118,6 +118,9 @@ public sealed class SelfExtractorTests
             File.WriteAllText(
                 Path.Combine(payloadLauncherRoot, "iiot-enabled-plugins.json"),
                 "{\"plugins\":[{\"moduleId\":\"Homogenization\"}]}");
+            File.WriteAllText(
+                Path.Combine(payloadLauncherRoot, "launcher.update.json"),
+                "{\"source\":\"https://cloud.example.com/edge-updates/velopack/stable\",\"channel\":\"stable\",\"targetRuntime\":\"win-x64\"}");
             File.WriteAllText(Path.Combine(payloadPluginRoot, "plugin.json"), "{}");
 
             var installRoot = Path.Combine(tempDir, "install");
@@ -133,9 +136,11 @@ public sealed class SelfExtractorTests
             Assert.Equal(["--silent", "--installto", Path.GetFullPath(installRoot)], setupArguments);
             Assert.False(File.Exists(Path.Combine(currentRoot, "iiot-binding.json")));
             Assert.False(File.Exists(Path.Combine(currentRoot, "iiot-enabled-plugins.json")));
+            Assert.False(File.Exists(Path.Combine(currentRoot, "launcher.update.json")));
             Assert.False(File.Exists(Path.Combine(currentRoot, "plugins", "Homogenization", "plugin.json")));
             Assert.True(File.Exists(Path.Combine(launcherDataRoot, "iiot-binding.json")));
             Assert.True(File.Exists(Path.Combine(launcherDataRoot, "iiot-enabled-plugins.json")));
+            Assert.True(File.Exists(Path.Combine(launcherDataRoot, "launcher.update.json")));
             Assert.True(File.Exists(Path.Combine(installRoot, "plugins", "Homogenization", "plugin.json")));
             Assert.Contains(
                 "DEV-AAAAAAAAAA",
@@ -149,6 +154,19 @@ public sealed class SelfExtractorTests
                 previousDataRoot);
             DeleteDir(tempDir);
         }
+    }
+
+    [Fact]
+    public void BuildStartMenuShortcutPath_ShouldUseStableProductFolderAndShortcutName()
+    {
+        var path = InstallerService.BuildStartMenuShortcutPath(
+            Path.Combine("C:", "Users", "operator", "AppData", "Roaming", "Microsoft", "Windows", "Start Menu", "Programs"),
+            InstallerService.DefaultShortcutName);
+
+        Assert.EndsWith(
+            Path.Combine("IIoT Edge", "IIoT Edge Client.lnk"),
+            path,
+            StringComparison.Ordinal);
     }
 
     [Fact]

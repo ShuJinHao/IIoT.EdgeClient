@@ -149,6 +149,36 @@ function Assert-CloudIdentityTemplatesAreEmpty {
     }
 }
 
+function Assert-InstallerVersionInfo {
+    param([Parameter(Mandatory = $true)][string]$PathValue)
+
+    if (-not $IsWindows) {
+        Write-Host "Skipping PE VersionInfo check on non-Windows host: $PathValue"
+        return
+    }
+
+    $versionInfo = (Get-Item -LiteralPath $PathValue).VersionInfo
+    if ($versionInfo.CompanyName -ne 'IIoT') {
+        throw "Installer CompanyName must be 'IIoT', actual: '$($versionInfo.CompanyName)'."
+    }
+
+    if ($versionInfo.ProductName -ne 'IIoT Edge Client') {
+        throw "Installer ProductName must be 'IIoT Edge Client', actual: '$($versionInfo.ProductName)'."
+    }
+
+    if ($versionInfo.FileDescription -ne 'IIoT Edge Client') {
+        throw "Installer FileDescription must be 'IIoT Edge Client', actual: '$($versionInfo.FileDescription)'."
+    }
+
+    if ($versionInfo.FileVersion -ne '1.0.0.0') {
+        throw "Installer FileVersion must be '1.0.0.0', actual: '$($versionInfo.FileVersion)'."
+    }
+
+    if ($versionInfo.ProductVersion -ne '1.0.0-dev') {
+        throw "Installer ProductVersion must be '1.0.0-dev', actual: '$($versionInfo.ProductVersion)'."
+    }
+}
+
 $resolvedArtifactRoot = Resolve-TestArtifactPath -PathValue $ArtifactRoot
 $manifestPath = Join-Path $resolvedArtifactRoot 'installer-artifact.json'
 $legacyLayoutZipPath = Join-Path $resolvedArtifactRoot 'layout.zip'
@@ -156,6 +186,7 @@ $stubPath = Join-Path $resolvedArtifactRoot 'IIoT.Edge.Setup.exe'
 
 Assert-PathExists -PathValue $manifestPath -Message "Artifact manifest was not found: $manifestPath"
 Assert-PathExists -PathValue $stubPath -Message "Installer stub was not found: $stubPath"
+Assert-InstallerVersionInfo -PathValue $stubPath
 if (Test-Path $legacyLayoutZipPath) {
     throw "Legacy layout.zip must not be present in installer artifact: $legacyLayoutZipPath"
 }

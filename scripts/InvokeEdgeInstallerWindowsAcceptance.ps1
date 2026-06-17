@@ -216,6 +216,18 @@ function Assert-LauncherProcessStarted {
         }
 }
 
+function Assert-StartMenuShortcut {
+    $programsPath = [Environment]::GetFolderPath([Environment+SpecialFolder]::Programs)
+    if ([string]::IsNullOrWhiteSpace($programsPath)) {
+        throw 'Could not resolve current user Start Menu Programs folder.'
+    }
+
+    $shortcutPath = Join-Path $programsPath 'IIoT Edge/IIoT Edge Client.lnk'
+    if (-not (Test-Path $shortcutPath)) {
+        throw "Start Menu shortcut was not created: $shortcutPath"
+    }
+}
+
 $scriptRoot = Split-Path -Parent $PSCommandPath
 $resolvedInstallerPath = Resolve-AcceptancePath -PathValue $InstallerPath
 $resolvedInstallRoot = Resolve-AcceptancePath -PathValue $InstallRoot
@@ -262,6 +274,8 @@ $appContentRoot = Assert-InstalledLayoutShape `
 if (-not $SkipLauncherProcessCheck) {
     Assert-LauncherProcessStarted
 }
+
+Assert-StartMenuShortcut
 
 Assert-BindingApplied `
     -Root $resolvedInstallRoot `
