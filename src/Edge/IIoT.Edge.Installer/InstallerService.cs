@@ -4,7 +4,7 @@ using System.Text;
 
 namespace IIoT.Edge.Installer;
 
-internal sealed record InstallerProgress(int Percent, string Status);
+internal sealed record InstallerProgress(int Percent, string Status, bool IsIndeterminate = false);
 
 internal sealed record InstallerResult(bool Success, string Message, string InstallRoot);
 
@@ -122,7 +122,10 @@ internal static class InstallerService
             var velopackSetup = SelfExtractor.FindVelopackSetup(stagingRoot);
             if (!string.IsNullOrWhiteSpace(velopackSetup))
             {
-                progress?.Report(new InstallerProgress(40, t("Installer_Progress_InstallCore", "正在安装核心组件...")));
+                progress?.Report(new InstallerProgress(
+                    40,
+                    t("Installer_Progress_InstallCore", "正在安装核心组件..."),
+                    IsIndeterminate: true));
                 var exitCode = await Task.Run(
                     () => RunVelopackSetup(velopackSetup, installRoot, silent: true),
                     cancellationToken).ConfigureAwait(false);

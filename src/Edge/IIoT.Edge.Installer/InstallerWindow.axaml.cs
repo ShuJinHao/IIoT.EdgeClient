@@ -111,8 +111,9 @@ public partial class InstallerWindow : Window
         {
             Dispatcher.UIThread.Post(() =>
             {
+                InstallProgressBar.IsIndeterminate = p.IsIndeterminate;
                 InstallProgressBar.Value = p.Percent;
-                ProgressPercentText.Text = $"{p.Percent}%";
+                ProgressPercentText.Text = p.IsIndeterminate ? string.Empty : $"{p.Percent}%";
                 ProgressStatusText.Text = p.Status;
             });
         });

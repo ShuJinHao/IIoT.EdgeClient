@@ -154,7 +154,7 @@ internal static class SelfExtractor
         CopyRequiredFile(
             Path.Combine(payloadDirectory, "launcher", EnabledPluginsFileName),
             Path.Combine(launcherDirectory, EnabledPluginsFileName));
-        CopyIfExists(
+        CopyRequiredFile(
             Path.Combine(payloadDirectory, "launcher", UpdateConfigFileName),
             Path.Combine(launcherDirectory, UpdateConfigFileName));
 

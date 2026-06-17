@@ -35,7 +35,9 @@ internal static class InstallerLanguageResources
     private const string DefaultCultureName = "zh-CN";
     private const string EnglishCultureName = "en-US";
     private const string LanguageResourceMarker = "/Resources/Languages/";
-    private const string InstallerAssemblyName = "IIoT.Edge.Setup";
+    private static string InstallerAssemblyName
+        => typeof(App).Assembly.GetName().Name
+            ?? throw new InvalidOperationException("Installer assembly name could not be resolved.");
 
     public static void Apply(CultureInfo culture)
     {

@@ -24,9 +24,10 @@ public sealed class InstallerLanguageResourcesTests
     public void BuildLanguageResourceUri_ShouldPointToInstallerAssemblyResources()
     {
         var uri = InstallerLanguageResources.BuildLanguageResourceUri("en-US");
+        var installerAssemblyName = typeof(App).Assembly.GetName().Name;
 
         Assert.Equal(
-            "avares://IIoT.Edge.Setup/Resources/Languages/en-US.axaml",
+            $"avares://{installerAssemblyName}/Resources/Languages/en-US.axaml",
             uri.ToString(),
             ignoreCase: true);
     }

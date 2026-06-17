@@ -157,6 +157,39 @@ public sealed class SelfExtractorTests
     }
 
     [Fact]
+    public void VelopackPayload_WhenLauncherUpdateConfigMissing_ShouldFailFast()
+    {
+        var tempDir = CreateTempDir();
+        try
+        {
+            var payloadRoot = Path.Combine(tempDir, "payload");
+            var payloadLauncherRoot = Path.Combine(payloadRoot, "launcher");
+            Directory.CreateDirectory(payloadLauncherRoot);
+            File.WriteAllText(
+                Path.Combine(payloadLauncherRoot, "iiot-binding.json"),
+                "{\"bindings\":[{\"moduleId\":\"Homogenization\",\"clientCode\":\"DEV-AAAAAAAAAA\"}]}");
+            File.WriteAllText(
+                Path.Combine(payloadLauncherRoot, "iiot-enabled-plugins.json"),
+                "{\"plugins\":[{\"moduleId\":\"Homogenization\"}]}");
+
+            var installRoot = Path.Combine(tempDir, "install");
+            Directory.CreateDirectory(Path.Combine(installRoot, "current"));
+
+            var exception = Assert.Throws<FileNotFoundException>(() =>
+                SelfExtractor.CopyBootstrapFilesToVelopackDataRoot(payloadRoot, installRoot));
+
+            Assert.EndsWith(
+                Path.Combine("launcher", "launcher.update.json"),
+                exception.FileName,
+                StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDir(tempDir);
+        }
+    }
+
+    [Fact]
     public void BuildStartMenuShortcutPath_ShouldUseStableProductFolderAndShortcutName()
     {
         var path = InstallerService.BuildStartMenuShortcutPath(
@@ -186,6 +219,9 @@ public sealed class SelfExtractorTests
             File.WriteAllText(
                 Path.Combine(payloadLauncherRoot, "iiot-enabled-plugins.json"),
                 "{\"plugins\":[{\"moduleId\":\"Homogenization\"}]}");
+            File.WriteAllText(
+                Path.Combine(payloadLauncherRoot, "launcher.update.json"),
+                "{\"source\":\"https://cloud.example.com/edge-updates/velopack/stable\",\"channel\":\"stable\",\"targetRuntime\":\"win-x64\"}");
 
             var dataRoot = Path.Combine(tempDir, "site-data");
             Environment.SetEnvironmentVariable(
@@ -203,6 +239,7 @@ public sealed class SelfExtractorTests
                 Path.Combine(dataRoot, "IIoT", "EdgeClient", "launcher"),
                 launcherDataRoot);
             Assert.True(File.Exists(Path.Combine(launcherDataRoot, "iiot-binding.json")));
+            Assert.True(File.Exists(Path.Combine(launcherDataRoot, "launcher.update.json")));
         }
         finally
         {
