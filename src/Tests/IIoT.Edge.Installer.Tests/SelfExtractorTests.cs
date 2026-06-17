@@ -195,6 +195,85 @@ public sealed class SelfExtractorTests
         }
     }
 
+    [Fact]
+    public void FallbackExtract_ShouldCopyBootstrapFilesToProgramDataPath()
+    {
+        var tempDir = CreateTempDir();
+        var previousDataRoot = Environment.GetEnvironmentVariable(
+            EdgeClientProgramDataPaths.ProgramDataRootEnvironmentVariable);
+        try
+        {
+            Environment.SetEnvironmentVariable(
+                EdgeClientProgramDataPaths.ProgramDataRootEnvironmentVariable,
+                null);
+
+            var installRoot = Path.Combine(tempDir, "install");
+            var launcherSource = Path.Combine(installRoot, "launcher");
+            Directory.CreateDirectory(launcherSource);
+            File.WriteAllText(
+                Path.Combine(launcherSource, "iiot-binding.json"),
+                "{\"bindings\":[{\"moduleId\":\"Homogenization\",\"clientCode\":\"DEV-BBBBBBBBBB\"}]}");
+            File.WriteAllText(
+                Path.Combine(launcherSource, "iiot-enabled-plugins.json"),
+                "{\"plugins\":[{\"moduleId\":\"Homogenization\"}]}");
+            File.WriteAllText(
+                Path.Combine(launcherSource, "launcher.update.json"),
+                "{\"source\":\"https://example.com/edge-updates/velopack/stable/\",\"channel\":\"stable\"}");
+
+            SelfExtractor.CopyBootstrapFilesToFallbackDataRoot(installRoot);
+
+            var launcherDataRoot = EdgeClientProgramDataPaths.ResolveLauncherDirectory(
+                Path.Combine(installRoot, "launcher"));
+
+            Assert.True(File.Exists(Path.Combine(launcherDataRoot, "iiot-binding.json")));
+            Assert.True(File.Exists(Path.Combine(launcherDataRoot, "iiot-enabled-plugins.json")));
+            Assert.True(File.Exists(Path.Combine(launcherDataRoot, "launcher.update.json")));
+            Assert.Contains(
+                "DEV-BBBBBBBBBB",
+                File.ReadAllText(Path.Combine(launcherDataRoot, "iiot-binding.json")),
+                StringComparison.Ordinal);
+            Assert.Contains(
+                "example.com",
+                File.ReadAllText(Path.Combine(launcherDataRoot, "launcher.update.json")),
+                StringComparison.Ordinal);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(
+                EdgeClientProgramDataPaths.ProgramDataRootEnvironmentVariable,
+                previousDataRoot);
+            DeleteDir(tempDir);
+        }
+    }
+
+    [Fact]
+    public void FallbackExtract_ShouldThrowWhenRequiredBindingFileMissing()
+    {
+        var tempDir = CreateTempDir();
+        var previousDataRoot = Environment.GetEnvironmentVariable(
+            EdgeClientProgramDataPaths.ProgramDataRootEnvironmentVariable);
+        try
+        {
+            Environment.SetEnvironmentVariable(
+                EdgeClientProgramDataPaths.ProgramDataRootEnvironmentVariable,
+                null);
+
+            var installRoot = Path.Combine(tempDir, "install");
+            var launcherSource = Path.Combine(installRoot, "launcher");
+            Directory.CreateDirectory(launcherSource);
+
+            Assert.Throws<FileNotFoundException>(
+                () => SelfExtractor.CopyBootstrapFilesToFallbackDataRoot(installRoot));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(
+                EdgeClientProgramDataPaths.ProgramDataRootEnvironmentVariable,
+                previousDataRoot);
+            DeleteDir(tempDir);
+        }
+    }
+
     private static string CreateTempDir()
     {
         var path = Path.Combine(Path.GetTempPath(), "iiot-installer-tests", Guid.NewGuid().ToString("N"));

@@ -70,8 +70,8 @@ public sealed class LauncherCloudApiConfigurationResolver : ILauncherCloudApiCon
             {
                 using var document = JsonDocument.Parse(File.ReadAllText(configPath));
                 var root = document.RootElement;
-                channel = FirstNotWhiteSpace(channel, ReadString(root, "Channel"));
-                targetRuntime = FirstNotWhiteSpace(targetRuntime, ReadString(root, "TargetRuntime"));
+                channel = FirstNotWhiteSpace(channel, ReadString(root, "Channel") ?? ReadString(root, "channel"));
+                targetRuntime = FirstNotWhiteSpace(targetRuntime, ReadString(root, "TargetRuntime") ?? ReadString(root, "targetRuntime"));
             }
             catch (JsonException)
             {

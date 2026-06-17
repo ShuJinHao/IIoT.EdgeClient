@@ -177,6 +177,38 @@ internal static class SelfExtractor
         output.Write(trailer);
     }
 
+    /// <summary>
+    /// 回退安装路径专用：直接解压到 installRoot 后，把引导文件从
+    /// {installRoot}/launcher/ 拷贝到 ProgramData 路径（{layoutRoot}/data/IIoT/EdgeClient/launcher/），
+    /// 保证 Launcher 在 ProgramData 路径能找到 launcher.update.json 等配置。
+    /// </summary>
+    public static void CopyBootstrapFilesToFallbackDataRoot(string installRoot)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(installRoot);
+
+        var launcherSourceDirectory = Path.Combine(installRoot, "launcher");
+        var launcherTargetDirectory = EdgeClientProgramDataPaths.ResolveLauncherDirectory(
+            Path.Combine(installRoot, "launcher"));
+
+        if (string.Equals(
+                Path.GetFullPath(launcherSourceDirectory),
+                Path.GetFullPath(launcherTargetDirectory),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        CopyRequiredFile(
+            Path.Combine(launcherSourceDirectory, BindingFileName),
+            Path.Combine(launcherTargetDirectory, BindingFileName));
+        CopyRequiredFile(
+            Path.Combine(launcherSourceDirectory, EnabledPluginsFileName),
+            Path.Combine(launcherTargetDirectory, EnabledPluginsFileName));
+        CopyIfExists(
+            Path.Combine(launcherSourceDirectory, UpdateConfigFileName),
+            Path.Combine(launcherTargetDirectory, UpdateConfigFileName));
+    }
+
     private static void CopyIfExists(string sourcePath, string targetPath)
     {
         if (!File.Exists(sourcePath))

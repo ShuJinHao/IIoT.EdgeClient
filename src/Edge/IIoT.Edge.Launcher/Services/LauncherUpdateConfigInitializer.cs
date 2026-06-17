@@ -65,12 +65,16 @@ public sealed class LauncherUpdateConfigInitializer : ILauncherUpdateConfigIniti
                 config = new JsonObject();
             }
 
-            var currentSource = config["Source"]?.GetValue<string>();
-            if (string.Equals(currentSource, updateSource.Trim(), StringComparison.Ordinal))
+            var hasCamelCaseKey = config.ContainsKey("source");
+            var currentSource = config["Source"]?.GetValue<string>()
+                ?? config["source"]?.GetValue<string>();
+            if (string.Equals(currentSource, updateSource.Trim(), StringComparison.Ordinal)
+                && !hasCamelCaseKey)
             {
                 return false;
             }
 
+            config.Remove("source");
             config["Source"] = updateSource.Trim();
 
             var directory = Path.GetDirectoryName(_paths.ConfigPath);

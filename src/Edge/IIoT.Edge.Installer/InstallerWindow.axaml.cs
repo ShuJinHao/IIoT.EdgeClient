@@ -1,3 +1,4 @@
+using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -73,7 +74,7 @@ public partial class InstallerWindow : Window
         var folders = await StorageProvider.OpenFolderPickerAsync(
             new FolderPickerOpenOptions
             {
-                Title = "选择安装目录",
+                Title = Res("Installer_FolderPicker_Title", "选择安装目录"),
                 AllowMultiple = false
             });
 
@@ -120,11 +121,15 @@ public partial class InstallerWindow : Window
             installRoot,
             createShortcut,
             progress,
-            _installCts.Token);
+            _installCts.Token,
+            Res);
 
         if (result.Success)
         {
-            CompleteMessageText.Text = $"已安装到 {result.InstallRoot}";
+            CompleteMessageText.Text = string.Format(
+                CultureInfo.CurrentCulture,
+                Res("Installer_Complete_MessageFormat", "已安装到 {0}"),
+                result.InstallRoot);
             ShowPage(CompletePage);
         }
         else
@@ -164,4 +169,9 @@ public partial class InstallerWindow : Window
         CompletePage.IsVisible = page == CompletePage;
         ErrorPage.IsVisible = page == ErrorPage;
     }
+
+    private string Res(string key, string fallback)
+        => this.TryFindResource(key, out var value) && value is string text
+            ? text
+            : fallback;
 }

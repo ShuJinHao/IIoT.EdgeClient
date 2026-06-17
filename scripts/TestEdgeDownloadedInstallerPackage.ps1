@@ -4,6 +4,12 @@ param(
 
     [string]$ExpectedModuleId = 'Homogenization',
 
+    [string]$ExpectedUpdateSource,
+
+    [string]$ExpectedChannel,
+
+    [string]$ExpectedTargetRuntime,
+
     [string]$ExpectedHostDirectory = 'host',
 
     [string]$ExpectedPluginsRoot = 'plugins',
@@ -199,6 +205,46 @@ function Assert-HostPluginPayload {
     }
 }
 
+function Assert-UpdateConfigPayload {
+    param(
+        [Parameter(Mandatory = $true)][string]$UpdateConfigJson,
+        [string]$ExpectedSource,
+        [string]$ExpectedChannel,
+        [string]$ExpectedTargetRuntime
+    )
+
+    $updateConfig = $UpdateConfigJson | ConvertFrom-Json
+    $propertyNames = @($updateConfig.PSObject.Properties.Name)
+    foreach ($propertyName in @('source', 'channel', 'targetRuntime')) {
+        if (-not ($propertyNames -ccontains $propertyName)) {
+            throw "launcher.update.json must contain camelCase property '$propertyName'."
+        }
+
+        $value = [string]$updateConfig.$propertyName
+        if ([string]::IsNullOrWhiteSpace($value)) {
+            throw "launcher.update.json property '$propertyName' must not be empty."
+        }
+    }
+
+    foreach ($legacyName in @('Source', 'Channel', 'TargetRuntime')) {
+        if ($propertyNames -ccontains $legacyName) {
+            throw "launcher.update.json must use camelCase, but found legacy property '$legacyName'."
+        }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedSource) -and $updateConfig.source -ne $ExpectedSource) {
+        throw "launcher.update.json source '$($updateConfig.source)' does not match expected '$ExpectedSource'."
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedChannel) -and $updateConfig.channel -ne $ExpectedChannel) {
+        throw "launcher.update.json channel '$($updateConfig.channel)' does not match expected '$ExpectedChannel'."
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedTargetRuntime) -and $updateConfig.targetRuntime -ne $ExpectedTargetRuntime) {
+        throw "launcher.update.json targetRuntime '$($updateConfig.targetRuntime)' does not match expected '$ExpectedTargetRuntime'."
+    }
+}
+
 function Assert-PluginBindingPayload {
     param(
         [Parameter(Mandatory = $true)][string]$PluginBindingJson,
@@ -248,6 +294,13 @@ try {
     Assert-ZipEntryExists -Archive $archive -EntryName 'launcher/iiot-binding.json'
     $bindingJson = Read-ZipEntryText -Archive $archive -EntryName 'launcher/iiot-binding.json'
     $bindingItem = Assert-BindingPayload -BindingJson $bindingJson -ModuleId $ExpectedModuleId
+    Assert-ZipEntryExists -Archive $archive -EntryName 'launcher/launcher.update.json'
+    $updateConfigJson = Read-ZipEntryText -Archive $archive -EntryName 'launcher/launcher.update.json'
+    Assert-UpdateConfigPayload `
+        -UpdateConfigJson $updateConfigJson `
+        -ExpectedSource $ExpectedUpdateSource `
+        -ExpectedChannel $ExpectedChannel `
+        -ExpectedTargetRuntime $ExpectedTargetRuntime
 
     if ($null -ne $velopackSetupEntry) {
         Assert-ZipEntryExists -Archive $archive -EntryName 'launcher/iiot-enabled-plugins.json'

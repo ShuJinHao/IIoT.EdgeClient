@@ -372,6 +372,97 @@ public sealed class LauncherClientReleaseServiceTests
     }
 
     [Fact]
+    public void CloudApiConfigurationResolver_ShouldReadCamelCaseUpdateConfig()
+    {
+        var tempDirectory = CreateTempDirectory();
+        var dataRoot = Path.Combine(tempDirectory, "program-data");
+        try
+        {
+            var hostDirectory = Path.Combine(tempDirectory, "host");
+            Directory.CreateDirectory(hostDirectory);
+            WriteText(
+                Path.Combine(hostDirectory, "appsettings.json"),
+                """
+                {
+                  "CloudApi": {
+                    "BaseUrl": "https://cloud.example.test",
+                    "Paths": {
+                      "DeviceInstance": "/api/v1/bootstrap/device-instance",
+                      "ClientReleaseCatalogTemplate": "/api/v1/edge/client-releases/device/{deviceId}/catalog",
+                      "ClientVersionReport": "/api/v1/edge/client-releases/version-reports"
+                    }
+                  }
+                }
+                """);
+
+            WithDataRoot(dataRoot, () =>
+            {
+                WriteText(
+                    EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath("LineA", hostDirectory),
+                    """
+                    {
+                      "CloudApi": {
+                        "ClientCode": "EDGE-002",
+                        "BootstrapSecret": "secret"
+                      }
+                    }
+                    """);
+                WriteText(
+                    EdgeClientProgramDataPaths.ResolveLauncherUpdateConfigPath(hostDirectory),
+                    """
+                    {
+                      "source": "https://cloud.example.test/edge-updates/velopack/stable/",
+                      "channel": "nightly",
+                      "targetRuntime": "win-arm64"
+                    }
+                    """);
+
+                var resolver = new LauncherCloudApiConfigurationResolver(hostDirectory);
+                var releaseOptions = resolver.ResolveReleaseOptions();
+
+                Assert.Equal("nightly", releaseOptions.Channel);
+                Assert.Equal("win-arm64", releaseOptions.TargetRuntime);
+            });
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public void LauncherUpdateConfigInitializer_TrySyncUpdateSource_ShouldNormalizeCamelCaseKey()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), $"iiot-launcher-test-{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateDirectory(tempDirectory);
+            var configPath = Path.Combine(tempDirectory, "launcher.update.json");
+            var samplePath = Path.Combine(tempDirectory, "launcher.update.sample.json");
+            File.WriteAllText(configPath,
+                """{"source": "https://cloud.example.test/edge-updates/velopack/stable/", "channel": "stable"}""");
+
+            var initializer = new LauncherUpdateConfigInitializer(
+                new LauncherUpdateConfigPaths(configPath, samplePath));
+
+            var changed = initializer.TrySyncUpdateSource(
+                "https://cloud.example.test/edge-updates/velopack/stable/");
+
+            Assert.True(changed);
+            var content = File.ReadAllText(configPath);
+            Assert.Contains("\"Source\"", content, StringComparison.Ordinal);
+            Assert.DoesNotContain("\"source\"", content, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public void BuildPluginPlans_ShouldMarkUpdateAvailableAndIncompatible()
     {
         var releases = new[]

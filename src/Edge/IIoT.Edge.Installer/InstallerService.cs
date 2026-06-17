@@ -69,6 +69,17 @@ internal static class InstallerService
 
             Console.WriteLine($"正在安装到：{installRoot}");
             SelfExtractor.ExtractPayload(payload, installRoot);
+
+            try
+            {
+                SelfExtractor.CopyBootstrapFilesToFallbackDataRoot(installRoot);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Console.Error.WriteLine($"首装绑定文件落位失败：{ex.Message}");
+                return 3;
+            }
+
             Console.WriteLine("安装完成。");
 
             if (!options.NoLaunch)
@@ -88,20 +99,22 @@ internal static class InstallerService
         string installRoot,
         bool createDesktopShortcut,
         IProgress<InstallerProgress>? progress,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<string, string, string>? text = null)
     {
+        var t = text ?? ((_, fallback) => fallback);
         var selfPath = Environment.ProcessPath;
         if (string.IsNullOrEmpty(selfPath))
         {
-            return new InstallerResult(false, "无法定位安装器自身路径。", installRoot);
+            return new InstallerResult(false, t("Installer_Error_SelfPath", "无法定位安装器自身路径。"), installRoot);
         }
 
-        progress?.Report(new InstallerProgress(5, "正在读取安装包…"));
+        progress?.Report(new InstallerProgress(5, t("Installer_Progress_ReadPackage", "正在读取安装包...")));
         var payload = SelfExtractor.ReadAppendedPayload(selfPath);
         if (payload is null)
         {
             return new InstallerResult(false,
-                "这是空的安装器外壳，请从云端「客户端下载中心」获取带配置的安装包。",
+                t("Installer_Error_EmptyShell", "这是空的安装器外壳，请从云端“客户端下载中心”获取带配置的安装包。"),
                 installRoot);
         }
 
@@ -111,69 +124,87 @@ internal static class InstallerService
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            progress?.Report(new InstallerProgress(15, "正在解压安装包…"));
+            progress?.Report(new InstallerProgress(15, t("Installer_Progress_ExtractPackage", "正在解压安装包...")));
             await Task.Run(() => SelfExtractor.ExtractPayload(payload, stagingRoot), cancellationToken)
                 .ConfigureAwait(false);
 
             var velopackSetup = SelfExtractor.FindVelopackSetup(stagingRoot);
             if (!string.IsNullOrWhiteSpace(velopackSetup))
             {
-                progress?.Report(new InstallerProgress(40, "正在安装核心组件…"));
+                progress?.Report(new InstallerProgress(40, t("Installer_Progress_InstallCore", "正在安装核心组件...")));
                 var exitCode = await Task.Run(
                     () => RunVelopackSetup(velopackSetup, installRoot, silent: true),
                     cancellationToken).ConfigureAwait(false);
 
                 if (exitCode != 0)
                 {
-                    return new InstallerResult(false, $"核心安装器退出码：{exitCode}", installRoot);
+                    return new InstallerResult(false, string.Format(
+                        t("Installer_Error_CoreInstallerExitFormat", "核心安装器退出码：{0}"),
+                        exitCode), installRoot);
                 }
 
-                progress?.Report(new InstallerProgress(75, "正在写入配置文件…"));
+                progress?.Report(new InstallerProgress(75, t("Installer_Progress_WriteConfig", "正在写入配置文件...")));
                 try
                 {
                     SelfExtractor.CopyBootstrapFilesToVelopackDataRoot(stagingRoot, installRoot);
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
-                    return new InstallerResult(false, $"首装绑定文件落位失败：{ex.Message}", installRoot);
+                    return new InstallerResult(false, string.Format(
+                        t("Installer_Error_BootstrapCopyFormat", "首装绑定文件落位失败：{0}"),
+                        ex.Message), installRoot);
                 }
 
                 if (createDesktopShortcut)
                 {
-                    progress?.Report(new InstallerProgress(90, "正在创建桌面快捷方式…"));
+                    progress?.Report(new InstallerProgress(90, t("Installer_Progress_CreateShortcut", "正在创建桌面快捷方式...")));
                     TryCreateDesktopShortcut(
                         Path.Combine(
                             SelfExtractor.GetVelopackCurrentDirectory(installRoot),
                             "IIoT.Edge.Launcher.exe"),
-                        "IIoT Edge 客户端");
+                        t("Installer_ShortcutName", "IIoT Edge 客户端"));
                 }
 
-                progress?.Report(new InstallerProgress(100, "安装完成"));
-                return new InstallerResult(true, "安装完成。", installRoot);
+                progress?.Report(new InstallerProgress(100, t("Installer_Progress_Complete", "安装完成")));
+                return new InstallerResult(true, t("Installer_Result_Complete", "安装完成。"), installRoot);
             }
 
-            progress?.Report(new InstallerProgress(40, "正在安装…"));
+            progress?.Report(new InstallerProgress(40, t("Installer_Progress_Install", "正在安装...")));
             await Task.Run(() => SelfExtractor.ExtractPayload(payload, installRoot), cancellationToken)
                 .ConfigureAwait(false);
 
-            if (createDesktopShortcut)
+            progress?.Report(new InstallerProgress(75, t("Installer_Progress_WriteConfig", "正在写入配置文件...")));
+            try
             {
-                progress?.Report(new InstallerProgress(90, "正在创建桌面快捷方式…"));
-                TryCreateDesktopShortcut(
-                    Path.Combine(installRoot, "launcher", "IIoT.Edge.Launcher.exe"),
-                    "IIoT Edge 客户端");
+                SelfExtractor.CopyBootstrapFilesToFallbackDataRoot(installRoot);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return new InstallerResult(false, string.Format(
+                    t("Installer_Error_BootstrapCopyFormat", "首装绑定文件落位失败：{0}"),
+                    ex.Message), installRoot);
             }
 
-            progress?.Report(new InstallerProgress(100, "安装完成"));
-            return new InstallerResult(true, "安装完成。", installRoot);
+            if (createDesktopShortcut)
+            {
+                progress?.Report(new InstallerProgress(90, t("Installer_Progress_CreateShortcut", "正在创建桌面快捷方式...")));
+                TryCreateDesktopShortcut(
+                    Path.Combine(installRoot, "launcher", "IIoT.Edge.Launcher.exe"),
+                    t("Installer_ShortcutName", "IIoT Edge 客户端"));
+            }
+
+            progress?.Report(new InstallerProgress(100, t("Installer_Progress_Complete", "安装完成")));
+            return new InstallerResult(true, t("Installer_Result_Complete", "安装完成。"), installRoot);
         }
         catch (OperationCanceledException)
         {
-            return new InstallerResult(false, "安装已取消。", installRoot);
+            return new InstallerResult(false, t("Installer_Error_Canceled", "安装已取消。"), installRoot);
         }
         catch (Exception ex)
         {
-            return new InstallerResult(false, $"安装失败：{ex.Message}", installRoot);
+            return new InstallerResult(false, string.Format(
+                t("Installer_Error_InstallFailedFormat", "安装失败：{0}"),
+                ex.Message), installRoot);
         }
         finally
         {
@@ -281,7 +312,7 @@ internal static class InstallerService
             }
 
             var shortcutPath = Path.Combine(desktopPath, $"{shortcutName}.lnk");
-            CreateWindowsShortcut(shortcutPath, targetPath);
+            CreateWindowsShortcut(shortcutPath, targetPath, shortcutName);
         }
         catch
         {
@@ -289,7 +320,7 @@ internal static class InstallerService
     }
 
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-    private static void CreateWindowsShortcut(string shortcutPath, string targetPath)
+    private static void CreateWindowsShortcut(string shortcutPath, string targetPath, string shortcutName)
     {
         var shellType = Type.GetTypeFromProgID("WScript.Shell");
         if (shellType is null)
@@ -310,7 +341,7 @@ internal static class InstallerService
             shortcut = shell.CreateShortcut(shortcutPath);
             shortcut.TargetPath = targetPath;
             shortcut.WorkingDirectory = Path.GetDirectoryName(targetPath) ?? string.Empty;
-            shortcut.Description = "IIoT Edge 客户端";
+            shortcut.Description = shortcutName;
             shortcut.Save();
         }
         finally

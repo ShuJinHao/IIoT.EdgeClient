@@ -3,7 +3,7 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
-    Title="IIoT Edge 客户端安装"
+    Title="{StaticResource Installer_WindowTitle}"
     Width="560"
     Height="460"
     MinWidth="560"
@@ -50,12 +50,12 @@
                         FontWeight="Bold"
                         Foreground="{DynamicResource Edge.Brush.Gray900}"
                         HorizontalAlignment="Center"
-                        Text="IIoT Edge 客户端" />
+                        Text="{StaticResource Installer_ProductName}" />
                     <TextBlock
                         FontSize="14"
                         Foreground="{DynamicResource Edge.Brush.Gray500}"
                         HorizontalAlignment="Center"
-                        Text="工业物联网边缘计算客户端" />
+                        Text="{StaticResource Installer_ProductSubtitle}" />
                 </StackPanel>
 
                 <StackPanel
@@ -64,7 +64,7 @@
                     Spacing="12">
                     <edge:EdgeActionButton
                         Click="QuickInstallButton_Click"
-                        Content="一键安装"
+                        Content="{StaticResource Installer_Button_QuickInstall}"
                         HorizontalAlignment="Stretch"
                         HorizontalContentAlignment="Center"
                         Kind="Primary"
@@ -72,7 +72,7 @@
                         FontSize="16" />
                     <edge:EdgeActionButton
                         Click="CustomInstallButton_Click"
-                        Content="自定义安装"
+                        Content="{StaticResource Installer_Button_CustomInstall}"
                         HorizontalAlignment="Stretch"
                         HorizontalContentAlignment="Center"
                         Kind="Ghost"
@@ -82,7 +82,7 @@
                         Foreground="{DynamicResource Edge.Brush.Gray500}"
                         HorizontalAlignment="Center"
                         TextWrapping="Wrap">
-                        <Run Text="默认安装到 " />
+                        <Run Text="{StaticResource Installer_DefaultPathPrefix}" />
                         <Run
                             x:Name="DefaultPathRun"
                             Foreground="{DynamicResource Edge.Brush.Gray700}"
@@ -104,11 +104,11 @@
                         FontSize="20"
                         FontWeight="SemiBold"
                         Foreground="{DynamicResource Edge.Brush.Gray900}"
-                        Text="自定义安装" />
+                        Text="{StaticResource Installer_Custom_Title}" />
                     <TextBlock
                         FontSize="13"
                         Foreground="{DynamicResource Edge.Brush.Gray500}"
-                        Text="选择安装位置和其他选项" />
+                        Text="{StaticResource Installer_Custom_Subtitle}" />
                 </StackPanel>
 
                 <!-- Settings content -->
@@ -122,7 +122,7 @@
                             FontSize="13"
                             FontWeight="Medium"
                             Foreground="{DynamicResource Edge.Brush.Gray700}"
-                            Text="安装目录" />
+                            Text="{StaticResource Installer_Field_InstallDirectory}" />
                         <Grid ColumnDefinitions="*,10,Auto">
                             <edge:EdgeTextBox
                                 x:Name="InstallPathInput"
@@ -133,7 +133,7 @@
                             <edge:EdgeActionButton
                                 Grid.Column="2"
                                 Click="BrowseButton_Click"
-                                Content="浏览…"
+                                Content="{StaticResource Installer_Button_Browse}"
                                 Kind="Secondary"
                                 MinHeight="36"
                                 MinWidth="72" />
@@ -146,10 +146,10 @@
                             FontSize="13"
                             FontWeight="Medium"
                             Foreground="{DynamicResource Edge.Brush.Gray700}"
-                            Text="安装选项" />
+                            Text="{StaticResource Installer_Field_InstallOptions}" />
                         <edge:EdgeCheckBox
                             x:Name="DesktopShortcutCheckBox"
-                            Content="创建桌面快捷方式"
+                            Content="{StaticResource Installer_Option_DesktopShortcut}"
                             IsChecked="True" />
                     </StackPanel>
                 </StackPanel>
@@ -161,13 +161,13 @@
                     <edge:EdgeActionButton
                         Grid.Column="0"
                         Click="BackToWelcomeButton_Click"
-                        Content="返回"
+                        Content="{StaticResource Installer_Button_Back}"
                         Kind="Secondary"
                         MinHeight="44" />
                     <edge:EdgeActionButton
                         Grid.Column="2"
                         Click="InstallButton_Click"
-                        Content="开始安装"
+                        Content="{StaticResource Installer_Button_StartInstall}"
                         Kind="Primary"
                         MinHeight="44" />
                 </Grid>
@@ -185,11 +185,11 @@
                         FontSize="20"
                         FontWeight="SemiBold"
                         Foreground="{DynamicResource Edge.Brush.Gray900}"
-                        Text="正在安装" />
+                        Text="{StaticResource Installer_Installing_Title}" />
                     <TextBlock
                         FontSize="13"
                         Foreground="{DynamicResource Edge.Brush.Gray500}"
-                        Text="请耐心等待，安装即将完成…" />
+                        Text="{StaticResource Installer_Installing_Subtitle}" />
                 </StackPanel>
 
                 <StackPanel
@@ -217,7 +217,7 @@
                             x:Name="ProgressStatusText"
                             FontSize="13"
                             Foreground="{DynamicResource Edge.Brush.Gray500}"
-                            Text="正在准备…" />
+                            Text="{StaticResource Installer_Progress_Preparing}" />
                         <TextBlock
                             x:Name="ProgressPercentText"
                             FontSize="13"
@@ -257,7 +257,7 @@
                         FontWeight="SemiBold"
                         Foreground="{DynamicResource Edge.Brush.Gray900}"
                         HorizontalAlignment="Center"
-                        Text="安装完成" />
+                        Text="{StaticResource Installer_Complete_Title}" />
                     <TextBlock
                         x:Name="CompleteMessageText"
                         FontSize="13"
@@ -272,13 +272,13 @@
                     <edge:EdgeActionButton
                         Grid.Column="0"
                         Click="FinishButton_Click"
-                        Content="完成"
+                        Content="{StaticResource Installer_Button_Finish}"
                         Kind="Secondary"
                         MinHeight="44" />
                     <edge:EdgeActionButton
                         Grid.Column="2"
                         Click="LaunchButton_Click"
-                        Content="启动客户端"
+                        Content="{StaticResource Installer_Button_Launch}"
                         Kind="Primary"
                         MinHeight="44" />
                 </Grid>
@@ -313,7 +313,7 @@
                         FontWeight="SemiBold"
                         Foreground="#DC2626"
                         HorizontalAlignment="Center"
-                        Text="安装失败" />
+                        Text="{StaticResource Installer_Error_Title}" />
                     <TextBlock
                         x:Name="ErrorMessageText"
                         FontSize="13"
@@ -330,13 +330,13 @@
                     <edge:EdgeActionButton
                         Grid.Column="0"
                         Click="CloseButton_Click"
-                        Content="关闭"
+                        Content="{StaticResource Installer_Button_Close}"
                         Kind="Secondary"
                         MinHeight="44" />
                     <edge:EdgeActionButton
                         Grid.Column="2"
                         Click="RetryButton_Click"
-                        Content="重试"
+                        Content="{StaticResource Installer_Button_Retry}"
                         Kind="Primary"
                         MinHeight="44" />
                 </Grid>

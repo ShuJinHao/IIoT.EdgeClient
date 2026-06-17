@@ -202,6 +202,7 @@ public sealed class LauncherUpdateService : ILauncherUpdateService
             using var document = JsonDocument.Parse(File.ReadAllText(configPath));
             var root = document.RootElement;
             return ReadString(root, "Source")
+                ?? ReadString(root, "source")
                 ?? ReadString(root, "UpdateSource")
                 ?? ReadString(root, "Url");
         }
