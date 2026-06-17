@@ -273,7 +273,7 @@ Launcher 读取以下配置后才会启用云端插件 catalog：
 - `CloudApi:Paths:DeviceInstance`
 - `CloudApi:Paths:ClientReleaseCatalogTemplate`
 - `CloudApi:Paths:ClientVersionReport`
-- `launcher.update.json` 中的 `Channel`、`TargetRuntime`
+- `launcher.update.json` 中的 `channel`、`targetRuntime`
 
 `ClientReleaseCatalogTemplate` 必须包含 `{deviceId}`，默认值为：
 

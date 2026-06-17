@@ -496,6 +496,27 @@ public sealed class RepositoryHygieneTests
     }
 
     [Fact]
+    public void EdgeDocs_ShouldNotDocumentLegacyLauncherUpdateJsonPascalCaseKeys()
+    {
+        var root = FindRepositoryRoot();
+        var docsRoot = Path.Combine(root, "docs");
+        var legacyPatterns = new[]
+        {
+            "`launcher.update.json` 中的 `Source`",
+            "`launcher.update.json` 中的 `Channel`",
+            "`launcher.update.json` 中的 `TargetRuntime`",
+            "`Source`、`Channel`",
+            "`Channel`、`TargetRuntime`"
+        };
+
+        var matches = EnumerateFiles(docsRoot, "*.md")
+            .SelectMany(path => FindForbiddenMatches(root, path, legacyPatterns))
+            .ToArray();
+
+        Assert.Empty(matches);
+    }
+
+    [Fact]
     public void SourceTree_ShouldNotReferenceRemovedMapperOrUnusedCentralPackages()
     {
         var root = FindRepositoryRoot();
