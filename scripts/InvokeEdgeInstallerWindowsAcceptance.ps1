@@ -4,6 +4,12 @@ param(
 
     [string]$ExpectedModuleId = 'Homogenization',
 
+    [string]$ExpectedUpdateSource,
+
+    [string]$ExpectedChannel,
+
+    [string]$ExpectedTargetRuntime,
+
     [string]$ExpectedHostDirectory = 'host',
 
     [string]$ExpectedPluginsRoot = 'plugins',
@@ -100,7 +106,7 @@ function Assert-InstalledLayoutShape {
             throw "Velopack-managed current directory must not contain mutable plugins: $currentPlugins"
         }
 
-        foreach ($forbiddenCurrentFile in @('iiot-binding.json', 'iiot-enabled-plugins.json')) {
+        foreach ($forbiddenCurrentFile in @('iiot-binding.json', 'iiot-enabled-plugins.json', 'launcher.update.json')) {
             $forbiddenPath = Join-Path $currentRoot $forbiddenCurrentFile
             if (Test-Path $forbiddenPath) {
                 throw "Velopack-managed current directory must not contain bootstrap binding files: $forbiddenPath"
@@ -207,6 +213,68 @@ function Assert-BindingApplied {
     Write-Host "Machine identity config: $($identityConfig.FullName)"
 }
 
+function Assert-InstalledUpdateConfig {
+    param(
+        [Parameter(Mandatory = $true)][string]$Root,
+        [Parameter(Mandatory = $true)][string]$AppContentRoot,
+        [string]$ExpectedSource,
+        [string]$ExpectedChannel,
+        [string]$ExpectedTargetRuntime
+    )
+
+    $launcherRoot = Join-Path $Root 'data/IIoT/EdgeClient/launcher'
+    $updateConfigPath = Join-Path $launcherRoot 'launcher.update.json'
+
+    if (-not (Test-Path $updateConfigPath)) {
+        throw "Installed launcher.update.json was not found in the standard launcher data directory: $updateConfigPath"
+    }
+
+    if ((Split-Path -Leaf $AppContentRoot) -eq 'current') {
+        foreach ($forbiddenPath in @(
+            (Join-Path $AppContentRoot 'launcher.update.json'),
+            (Join-Path $AppContentRoot 'launcher/launcher.update.json'),
+            (Join-Path $Root 'launcher/launcher.update.json')
+        )) {
+            if (Test-Path $forbiddenPath) {
+                throw "launcher.update.json must not remain under a program directory after Velopack install: $forbiddenPath"
+            }
+        }
+    }
+
+    $updateConfig = Read-JsonFile -PathValue $updateConfigPath
+    $propertyNames = @($updateConfig.PSObject.Properties.Name)
+    foreach ($propertyName in @('source', 'channel', 'targetRuntime')) {
+        if (-not ($propertyNames -ccontains $propertyName)) {
+            throw "Installed launcher.update.json must contain camelCase property '$propertyName': $updateConfigPath"
+        }
+
+        $value = [string]$updateConfig.$propertyName
+        if ([string]::IsNullOrWhiteSpace($value)) {
+            throw "Installed launcher.update.json property '$propertyName' must not be empty: $updateConfigPath"
+        }
+    }
+
+    foreach ($legacyName in @('Source', 'Channel', 'TargetRuntime')) {
+        if ($propertyNames -ccontains $legacyName) {
+            throw "Installed launcher.update.json must use camelCase, but found legacy property '$legacyName': $updateConfigPath"
+        }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedSource) -and $updateConfig.source -ne $ExpectedSource) {
+        throw "Installed launcher.update.json source '$($updateConfig.source)' does not match expected '$ExpectedSource'."
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedChannel) -and $updateConfig.channel -ne $ExpectedChannel) {
+        throw "Installed launcher.update.json channel '$($updateConfig.channel)' does not match expected '$ExpectedChannel'."
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedTargetRuntime) -and $updateConfig.targetRuntime -ne $ExpectedTargetRuntime) {
+        throw "Installed launcher.update.json targetRuntime '$($updateConfig.targetRuntime)' does not match expected '$ExpectedTargetRuntime'."
+    }
+
+    Write-Host "Launcher update config: $updateConfigPath"
+}
+
 function Assert-LauncherProcessStarted {
     Wait-Until `
         -TimeoutSeconds $WaitSeconds `
@@ -217,15 +285,85 @@ function Assert-LauncherProcessStarted {
 }
 
 function Assert-StartMenuShortcut {
+    param([Parameter(Mandatory = $true)][string]$ExpectedTargetPath)
+
+    $shortcutPath = Get-StartMenuShortcutPath
+    if (-not (Test-Path $shortcutPath)) {
+        throw "Start Menu shortcut was not created: $shortcutPath"
+    }
+
+    $targetPath = Get-WindowsShortcutTargetPath -ShortcutPath $shortcutPath
+    if ($targetPath -ne $ExpectedTargetPath) {
+        throw "Start Menu shortcut target '$targetPath' does not match installed launcher '$ExpectedTargetPath'."
+    }
+}
+
+function Get-StartMenuShortcutPath {
     $programsPath = [Environment]::GetFolderPath([Environment+SpecialFolder]::Programs)
     if ([string]::IsNullOrWhiteSpace($programsPath)) {
         throw 'Could not resolve current user Start Menu Programs folder.'
     }
 
-    $shortcutPath = Join-Path $programsPath 'IIoT Edge/IIoT Edge Client.lnk'
-    if (-not (Test-Path $shortcutPath)) {
-        throw "Start Menu shortcut was not created: $shortcutPath"
+    return (Join-Path $programsPath 'IIoT Edge/IIoT Edge Client.lnk')
+}
+
+function Get-DesktopShortcutPath {
+    $desktopPath = [Environment]::GetFolderPath([Environment+SpecialFolder]::DesktopDirectory)
+    if ([string]::IsNullOrWhiteSpace($desktopPath)) {
+        throw 'Could not resolve current user Desktop folder.'
     }
+
+    return (Join-Path $desktopPath 'IIoT Edge Client.lnk')
+}
+
+function Test-DesktopShortcut {
+    $shortcutPath = Get-DesktopShortcutPath
+    return (Test-Path $shortcutPath)
+}
+
+function Assert-NoNewDesktopShortcut {
+    param([bool]$ExistingBeforeInstall)
+
+    if ($ExistingBeforeInstall) {
+        Write-Host 'Desktop shortcut already existed before install; skipping no-new-desktop-shortcut assertion.'
+        return
+    }
+
+    $shortcutPath = Get-DesktopShortcutPath
+    if (Test-Path $shortcutPath) {
+        throw "Silent installer must not create a desktop shortcut by default: $shortcutPath"
+    }
+}
+
+function Get-WindowsShortcutTargetPath {
+    param([Parameter(Mandatory = $true)][string]$ShortcutPath)
+
+    $shell = $null
+    $shortcut = $null
+    try {
+        $shell = New-Object -ComObject WScript.Shell
+        $shortcut = $shell.CreateShortcut($ShortcutPath)
+        return [string]$shortcut.TargetPath
+    }
+    finally {
+        if ($null -ne $shortcut) {
+            [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($shortcut)
+        }
+
+        if ($null -ne $shell) {
+            [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell)
+        }
+    }
+}
+
+function Resolve-InstalledLauncherPath {
+    param([Parameter(Mandatory = $true)][string]$AppContentRoot)
+
+    if ((Split-Path -Leaf $AppContentRoot) -eq 'current') {
+        return (Join-Path $AppContentRoot 'IIoT.Edge.Launcher.exe')
+    }
+
+    return (Join-Path $AppContentRoot 'launcher/IIoT.Edge.Launcher.exe')
 }
 
 $scriptRoot = Split-Path -Parent $PSCommandPath
@@ -244,9 +382,13 @@ if ($CleanInstallRoot) {
 & (Join-Path $scriptRoot 'TestEdgeDownloadedInstallerPackage.ps1') `
     -InstallerPath $resolvedInstallerPath `
     -ExpectedModuleId $ExpectedModuleId `
+    -ExpectedUpdateSource $ExpectedUpdateSource `
+    -ExpectedChannel $ExpectedChannel `
+    -ExpectedTargetRuntime $ExpectedTargetRuntime `
     -ExpectedHostDirectory $ExpectedHostDirectory `
     -ExpectedPluginsRoot $ExpectedPluginsRoot
 
+$desktopShortcutExistedBeforeInstall = Test-DesktopShortcut
 $installerArguments = "--silent --installto `"$resolvedInstallRoot`""
 
 $process = Start-Process `
@@ -271,16 +413,25 @@ $appContentRoot = Assert-InstalledLayoutShape `
     -PluginsRoot $ExpectedPluginsRoot `
     -ModuleId $ExpectedModuleId
 
+$installedLauncherPath = Resolve-InstalledLauncherPath -AppContentRoot $appContentRoot
 if (-not $SkipLauncherProcessCheck) {
     Assert-LauncherProcessStarted
 }
 
-Assert-StartMenuShortcut
+Assert-StartMenuShortcut -ExpectedTargetPath $installedLauncherPath
+Assert-NoNewDesktopShortcut -ExistingBeforeInstall $desktopShortcutExistedBeforeInstall
 
 Assert-BindingApplied `
     -Root $resolvedInstallRoot `
     -AppContentRoot $appContentRoot `
     -ModuleId $ExpectedModuleId
+
+Assert-InstalledUpdateConfig `
+    -Root $resolvedInstallRoot `
+    -AppContentRoot $appContentRoot `
+    -ExpectedSource $ExpectedUpdateSource `
+    -ExpectedChannel $ExpectedChannel `
+    -ExpectedTargetRuntime $ExpectedTargetRuntime
 
 Write-Host "Edge installer Windows acceptance passed: $resolvedInstallerPath"
 Write-Host "InstallRoot=$resolvedInstallRoot"

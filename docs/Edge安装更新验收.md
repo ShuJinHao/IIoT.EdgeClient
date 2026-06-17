@@ -22,10 +22,15 @@ dotnet test src/Tests/IIoT.Edge.Installer.Tests/IIoT.Edge.Installer.Tests.csproj
 Windows 实机安装验收：
 
 ```powershell
-./scripts/InvokeEdgeInstallerWindowsAcceptance.ps1 -InstallerPath <cloud-downloaded-installer.exe> -InstallRoot <install-root>
+./scripts/InvokeEdgeInstallerWindowsAcceptance.ps1 `
+  -InstallerPath <cloud-downloaded-installer.exe> `
+  -InstallRoot <install-root> `
+  -ExpectedUpdateSource <base-url>/edge-updates/velopack/<channel>/ `
+  -ExpectedChannel <channel> `
+  -ExpectedTargetRuntime <target-runtime>
 ```
 
-该脚本会验证安装布局、首装绑定导入、开始菜单快捷方式和 Launcher 启动。
+该脚本会验证安装布局、首装绑定导入、`launcher.update.json` 标准落点与 camelCase 字段、开始菜单快捷方式目标、静默安装默认不创建桌面快捷方式和 Launcher 启动。
 
 ## 3. Defender 策略
 
