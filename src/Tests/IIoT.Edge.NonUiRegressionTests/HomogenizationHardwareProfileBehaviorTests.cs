@@ -1,8 +1,8 @@
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Application.Abstractions.Plc.Signals;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
-using IIoT.Edge.Module.Homogenization.Config.Hardware;
-using IIoT.Edge.Runtime.Signals;
+using IIoT.Edge.Module.Homogenization.Config.Io;
+using IIoT.Edge.Module.Sdk.Signals;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 
@@ -136,7 +136,7 @@ public sealed class HomogenizationHardwareProfileBehaviorTests
             "Modules",
             "IIoT.Edge.Module.Homogenization",
             "Config",
-            "Hardware",
+            "Io",
             "HomogenizationPlcSignals.cs");
         var text = File.ReadAllText(signalFile);
 

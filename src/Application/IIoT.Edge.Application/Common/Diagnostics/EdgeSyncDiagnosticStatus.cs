@@ -1,6 +1,8 @@
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
 
+using IIoT.Edge.Application.Abstractions.Cloud;
+using IIoT.Edge.Application.Abstractions.Mes;
 namespace IIoT.Edge.Application.Common.Diagnostics;
 
 /// <summary>

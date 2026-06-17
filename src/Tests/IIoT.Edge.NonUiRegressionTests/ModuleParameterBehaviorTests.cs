@@ -103,6 +103,9 @@ public sealed class ModuleParameterBehaviorTests
         Assert.Contains(cloudParams, x =>
             x.Key == CloudApiConfigParamSchema.ProcessUploadPath
             && x.Value == "/config/process");
+        Assert.Contains(cloudParams, x =>
+            x.Key == CloudApiConfigParamSchema.PassStationBatchTemplatePath
+            && x.Value == "/config/pass-stations/{typeKey}/batch");
     }
 
     [Fact]
@@ -282,9 +285,12 @@ public sealed class ModuleParameterBehaviorTests
                 "/config/human-refresh",
                 "/config/logs",
                 "/config/process",
+                "/config/pass-stations/{typeKey}/batch",
                 "/config/capacity-hourly",
                 "/config/capacity-summary",
                 "/config/capacity-range",
-                "/config/recipes/{deviceId}");
+                "/config/recipes/{deviceId}",
+                "/config/client-releases/device/{deviceId}/catalog",
+                "/config/client-version-reports");
     }
 }

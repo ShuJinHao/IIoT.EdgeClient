@@ -5,12 +5,14 @@ using IIoT.Edge.Application.Features.Production.Planning;
 using IIoT.Edge.Application.Modules;
 using IIoT.Edge.Application.Modules.Mes;
 using IIoT.Edge.Module.Homogenization.Config;
+using IIoT.Edge.Module.Homogenization.Config.Io;
 using IIoT.Edge.Module.Homogenization.Config.Parameters;
-using IIoT.Edge.Module.Homogenization.Integration;
+using IIoT.Edge.Module.Homogenization.Mes;
 using IIoT.Edge.Module.Homogenization.Payload;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
 
+using IIoT.Edge.Application.Abstractions.Mes;
 namespace IIoT.Edge.NonUiRegressionTests;
 
 public sealed class HomogenizationMesIntegrationTests
@@ -42,6 +44,9 @@ public sealed class HomogenizationMesIntegrationTests
         Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("timestamp").GetString()));
         Assert.Equal("TRAY-001", root.GetProperty("data").GetProperty("productNo").GetString());
         Assert.Equal(32, root.GetProperty("sign").GetString()!.Length);
+        AssertCapturedPayload(
+            """{"upperComputerNo":"CLIENT-H","timestamp":"2026-04-23 08:00:00","sign":"5D76007498C64D3DB38FA6DE3FAF1962","stationNo":"ST-H-01","data":{"stackTrayNo":"TRAY-001","weldTrayNo":"TRAY-001","productNo":"TRAY-001","devices":null,"boms":null}}""",
+            httpClient);
     }
 
     [Fact]
@@ -64,6 +69,9 @@ public sealed class HomogenizationMesIntegrationTests
         Assert.Equal("ST-H-02", root.GetProperty("stationNo").GetString());
         Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("timestamp").GetString()));
         Assert.Equal(32, root.GetProperty("sign").GetString()!.Length);
+        AssertCapturedPayload(
+            """{"upperComputerNo":"CLIENT-H","timestamp":"2026-04-23 08:00:00","sign":"5D76007498C64D3DB38FA6DE3FAF1962","stationNo":"ST-H-02","outboundTime":"2026-04-23 08:30:00","serialNumber":"TRAY-002","data":{"boundNo":"TRAY-002","lastBoundNo":"TRAY-002","produce":[{"code":"gluingDeviceCode","name":"设备编码","val":"CLIENT-H"},{"code":"gluingDeviceName","name":"设备名称","val":"PLC-H"},{"code":"gluingStartTime","name":"开始时间","val":"2026-04-23 08:00:00"},{"code":"gluingCompleteTime","name":"完成时间","val":"2026-04-23 08:30:00"},{"code":"gluingStirSpeed","name":"搅拌转速","val":"120"},{"code":"gluingGlueSolutingTemperature","name":"温度","val":"25"},{"code":"gluingVacuumDegree","name":"真空度","val":"-10"},{"code":"gluingCntActualValue","name":"CNT 实际值","val":"15"},{"code":"gluingNmpActualValue","name":"NMP 实际值","val":"18"}]}}""",
+            httpClient);
     }
 
     [Fact]
@@ -96,6 +104,9 @@ public sealed class HomogenizationMesIntegrationTests
         Assert.Equal("ST-H-03", device.GetProperty("stationNo").GetString());
         Assert.Equal("2026-04-29 08:01:02", device.GetProperty("collectTime").GetString());
         Assert.Equal("rt_stir_speed", device.GetProperty("data")[0].GetProperty("code").GetString());
+        AssertCapturedPayload(
+            """{"upperComputerNo":"CLIENT-H","timestamp":"2026-04-23 08:00:00","sign":"5D76007498C64D3DB38FA6DE3FAF1962","stationNo":"ST-H-03","data":{"devices":[{"stationNo":"ST-H-03","collectTime":"2026-04-29 08:01:02","data":[{"code":"rt_stir_speed","name":"搅拌转速","type":"short","unit":"RPM","val":"120"},{"code":"rt_stir_current","name":"搅拌电流","type":"short","unit":"A","val":"11"},{"code":"rt_dispersion_speed","name":"分散转速","type":"short","unit":"RPM","val":"220"},{"code":"rt_dispersion_current","name":"分散电流","type":"short","unit":"A","val":"12"},{"code":"rt_temperature","name":"温度","type":"short","unit":"C","val":"25"},{"code":"rt_vacuum","name":"真空度","type":"short","unit":"Kpa","val":"-9"}]}]}}""",
+            httpClient);
     }
 
     [Fact]
@@ -131,6 +142,9 @@ public sealed class HomogenizationMesIntegrationTests
         var items = root.GetProperty("data").GetProperty("devices");
         Assert.Equal("recipe_stir_speed_01", items[0].GetProperty("code").GetString());
         Assert.Equal("10", items[0].GetProperty("val").GetString());
+        AssertCapturedPayload(
+            """{"upperComputerNo":"CLIENT-H","timestamp":"2026-04-23 08:00:00","sign":"5D76007498C64D3DB38FA6DE3FAF1962","stationNo":"ST-H-04","data":{"devices":[{"code":"recipe_stir_speed_01","name":"搅拌转速_01","type":"short","unit":"RPM","val":"10"},{"code":"recipe_dispersion_speed_01","name":"分散转速_01","type":"short","unit":"RPM","val":"20"},{"code":"recipe_ncm_01","name":"NCM_01","type":"decimal","unit":"kg","val":"1.1"},{"code":"recipe_sp1_01","name":"SP1_01","type":"decimal","unit":"kg","val":"2.2"},{"code":"recipe_nmp_01","name":"NMP_01","type":"decimal","unit":"kg","val":"3.3"},{"code":"recipe_glue_solution_01","name":"胶液_01","type":"decimal","unit":"kg","val":"4.4"},{"code":"recipe_cnt_01","name":"CNT_01","type":"decimal","unit":"kg","val":"5.5"},{"code":"recipe_vacuum_01","name":"真空_01","type":"bool","unit":"","val":"1"},{"code":"recipe_time_01","name":"时间_01","type":"ushort","unit":"min","val":"30"},{"code":"recipe_temperature_01","name":"温度_01","type":"short","unit":"C","val":"45"},{"code":"recipe_stop_step_01","name":"停止步骤_01","type":"bool","unit":"","val":"0"}]}}""",
+            httpClient);
     }
 
     [Fact]
@@ -157,6 +171,9 @@ public sealed class HomogenizationMesIntegrationTests
         var device = root.GetProperty("data").GetProperty("devices")[0];
         Assert.Equal("ST-H-05", device.GetProperty("stationNo").GetString());
         Assert.Equal(1, device.GetProperty("status").GetInt32());
+        AssertCapturedPayload(
+            """{"upperComputerNo":"CLIENT-H","timestamp":"2026-04-23 08:00:00","sign":"5D76007498C64D3DB38FA6DE3FAF1962","stationNo":"ST-H-05","data":{"devices":[{"stationNo":"ST-H-05","status":1,"msg":["运行"]}]}}""",
+            httpClient);
     }
 
     [Fact]
@@ -202,6 +219,69 @@ public sealed class HomogenizationMesIntegrationTests
     }
 
     [Fact]
+    public async Task UploadRealtimeAsync_WhenOptionalPathMissing_ShouldReturnDisabledWithoutPosting()
+    {
+        var httpClient = new CapturingMesHttpClient();
+        var logger = new FakeLogService();
+        var channel = CreateChannel(
+            httpClient,
+            stationNo: "ST-H-16",
+            new Dictionary<HomogenizationParams.Mes, string>
+            {
+                [HomogenizationParams.Mes.RealtimePath] = string.Empty
+            },
+            logger);
+
+        var result = await channel.UploadRealtimeAsync(
+            CreateDevice(),
+            new HomogenizationRealtimeSnapshot
+            {
+                CapturedAt = new DateTime(2026, 4, 29, 8, 1, 2),
+                StirringSpeed = 120
+            });
+
+        Assert.Equal(MesCallOutcome.Disabled, result.Outcome);
+        Assert.True(result.IsSuccess);
+        Assert.Empty(httpClient.Requests);
+        Assert.Contains(
+            logger.Entries,
+            entry => entry.Level == "Warn"
+                && entry.Message.Contains("可选场景 实时数据 未配置路径，已跳过", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task UploadAsync_WhenRequiredOutboundPathMissing_ShouldFailWithoutPosting()
+    {
+        var httpClient = new CapturingMesHttpClient();
+        var logger = new FakeLogService();
+        var uploader = (IProcessMesUploader)CreateChannel(
+            httpClient,
+            stationNo: "ST-H-17",
+            new Dictionary<HomogenizationParams.Mes, string>
+            {
+                [HomogenizationParams.Mes.OutboundPath] = string.Empty
+            },
+            logger);
+
+        var result = await uploader.UploadAsync(
+            new ProcessUploadContext(CreateDevice()),
+            [
+                new IIoT.Edge.SharedKernel.DataPipeline.CellCompletedRecord
+                {
+                    CellData = CreateCellData("TRAY-017")
+                }
+            ]);
+
+        Assert.Equal(MesCallOutcome.InvalidContext, result.Outcome);
+        Assert.False(result.IsSuccess);
+        Assert.Empty(httpClient.Requests);
+        Assert.Contains(
+            logger.Entries,
+            entry => entry.Level == "Error"
+                && entry.Message.Contains("必选场景 出料 未配置路径，数据将保留在补偿链路", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task GetMainPlanAsync_ShouldUseOrderPathAndParseOrders()
     {
         var httpClient = new CapturingMesHttpClient
@@ -222,7 +302,9 @@ public sealed class HomogenizationMesIntegrationTests
             new HomogenizationMainPlanRequest("A1-STUC", new DateTime(2026, 4, 24, 12, 10, 11)));
 
         Assert.True(result.IsSuccess);
-        Assert.Equal("/configured/order?upperComputerNo=A1-STUC&timestamp=2026-04-24%2012%3A10%3A11", httpClient.LastGetUrl);
+        Assert.Equal(
+            "/configured/order?upperComputerNo=A1-STUC&timestamp=2026-04-24%2012%3A10%3A11",
+            httpClient.LastGetUrl);
         var order = Assert.Single(result.Data!.Orders);
         Assert.Equal("orderNo", order[0].Code);
         Assert.Equal("MO-001", order[0].Value);
@@ -254,6 +336,9 @@ public sealed class HomogenizationMesIntegrationTests
         var root = document.RootElement;
         Assert.Equal("PLAN-001", root.GetProperty("masterPlanCode").GetString());
         Assert.Equal("CG", root.GetProperty("operationCode").GetString());
+        AssertCapturedPayload(
+            """{"masterPlanCode":"PLAN-001","operationCode":"CG"}""",
+            httpClient);
     }
 
     [Fact]
@@ -270,7 +355,7 @@ public sealed class HomogenizationMesIntegrationTests
             {
                 [HomogenizationParams.Mes.BatchNumberPath] = "/configured/batch-number"
             });
-        var service = new HomogenizationProductionPlanSelectionService(
+        var service = new HomogenizationProductionPlanService(
             channel,
             new FakeModuleParamRoleProvider("ST-H-13", operationCode: "CG"),
             new FakeProductionTimeProvider());
@@ -301,6 +386,9 @@ public sealed class HomogenizationMesIntegrationTests
         Assert.Equal("TRACE-001", state.TraceBatchNumber);
         Assert.True(state.HasTraceBatchNumber);
         Assert.Equal("/configured/batch-number", httpClient.LastUrl);
+        AssertCapturedPayload(
+            """{"masterPlanCode":"PLAN-001","operationCode":"CG"}""",
+            httpClient);
 
         using var document = JsonDocument.Parse(JsonSerializer.Serialize(httpClient.LastPayload));
         var root = document.RootElement;
@@ -316,7 +404,7 @@ public sealed class HomogenizationMesIntegrationTests
             PostWithResponseException = new TaskCanceledException("The MES request timed out.")
         };
         var channel = CreateChannel(httpClient, stationNo: "ST-H-15");
-        var service = new HomogenizationProductionPlanSelectionService(
+        var service = new HomogenizationProductionPlanService(
             channel,
             new FakeModuleParamRoleProvider("ST-H-15", operationCode: "CG"),
             new FakeProductionTimeProvider());
@@ -352,12 +440,15 @@ public sealed class HomogenizationMesIntegrationTests
         var root = document.RootElement;
         Assert.Equal("PLAN-001", root.GetProperty("masterPlanCode").GetString());
         Assert.Equal("CG", root.GetProperty("operationCode").GetString());
+        AssertCapturedPayload(
+            """{"masterPlanCode":"PLAN-001","operationCode":"CG"}""",
+            httpClient);
     }
 
     [Fact]
     public async Task ProductionPlanSelectionService_WhenOperationCodeMissing_ShouldRejectSelection()
     {
-        var service = new HomogenizationProductionPlanSelectionService(
+        var service = new HomogenizationProductionPlanService(
             CreateChannel(new CapturingMesHttpClient(), stationNo: "ST-H-14"),
             new FakeModuleParamRoleProvider("ST-H-14", operationCode: null),
             new FakeProductionTimeProvider());
@@ -448,9 +539,10 @@ public sealed class HomogenizationMesIntegrationTests
     private static HomogenizationMesChannel CreateChannel(
         CapturingMesHttpClient httpClient,
         string stationNo,
-        IReadOnlyDictionary<HomogenizationParams.Mes, string>? mesValues = null)
+        IReadOnlyDictionary<HomogenizationParams.Mes, string>? mesValues = null,
+        FakeLogService? logger = null)
     {
-        var logger = new FakeLogService();
+        logger ??= new FakeLogService();
         var roleProvider = new FakeModuleParamRoleProvider(stationNo);
         var parameters = new FakeModuleParamProvider(mesValues);
         var executor = CreateExecutor(httpClient, stationNo, logger, roleProvider);
@@ -460,8 +552,21 @@ public sealed class HomogenizationMesIntegrationTests
             roleProvider,
             parameters,
             logger,
-            new FakeProductionTimeProvider(),
-            new HomogenizationMesItemPayloadBuilder(Options.Create(CreateCodeOptions())));
+            new FakeProductionTimeProvider
+            {
+                FixedUtcNow = new DateTime(2026, 4, 23, 0, 0, 0, DateTimeKind.Utc)
+            },
+            new HomogenizationMesPayloadBuilder(Options.Create(CreateCodeOptions())));
+    }
+
+    private static string SerializeCapturedPayload(CapturingMesHttpClient httpClient)
+        => JsonSerializer.Serialize(httpClient.LastPayload);
+
+    private static void AssertCapturedPayload(string expectedJson, CapturingMesHttpClient httpClient)
+    {
+        using var expectedDocument = JsonDocument.Parse(expectedJson);
+        var expectedRawJson = JsonSerializer.Serialize(expectedDocument.RootElement);
+        Assert.Equal(expectedRawJson, SerializeCapturedPayload(httpClient));
     }
 
     private static MesRequestExecutor CreateExecutor(

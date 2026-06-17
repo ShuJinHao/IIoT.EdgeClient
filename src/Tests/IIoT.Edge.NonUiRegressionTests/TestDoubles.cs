@@ -4,10 +4,9 @@ using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Consumers;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
-using IIoT.Edge.Application.Abstractions.DataPipeline.SyncTask;
+using IIoT.Edge.Application.Abstractions.Cloud;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Auth;
-using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Time;
@@ -16,6 +15,8 @@ using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
 using IIoT.Edge.SharedKernel.DataPipeline.DeviceLog;
+using IIoT.Edge.Application.Abstractions.Mes;
+using IIoT.Edge.Application.Abstractions.Shared;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 
@@ -1163,6 +1164,7 @@ internal sealed class FakeCloudApiEndpointProvider : ICloudApiEndpointProvider
     public string GetHumanIdentityRefreshPath() => "/api/v1/human/identity/refresh";
     public string GetDeviceLogPath() => "/api/v1/edge/device-logs";
     public string GetProcessUploadPath() => "/api/v1/edge/process-records";
+    public string GetPassStationBatchPath(string typeKey) => $"/api/v1/edge/pass-stations/{typeKey}/batch";
     public string BuildRecipeByDevicePath(Guid deviceId) => $"/api/v1/edge/recipes/device/{deviceId}";
     public string GetCapacityHourlyPath() => "/api/v1/edge/capacity/hourly";
     public string GetCapacitySummaryPath() => "/api/v1/edge/capacity/summary";

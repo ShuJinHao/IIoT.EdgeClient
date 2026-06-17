@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using System.Diagnostics;
 using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
@@ -14,9 +15,10 @@ using IIoT.Edge.Infrastructure.DeviceComm.Plc;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Module.Homogenization;
 using IIoT.Edge.Module.Homogenization.Config;
-using IIoT.Edge.Module.Homogenization.Config.Hardware;
-using IIoT.Edge.Module.Homogenization.Runtime;
-using IIoT.Edge.Runtime.Signals;
+using IIoT.Edge.Module.Homogenization.Config.Io;
+using IIoT.Edge.Module.Homogenization.Config.Parameters;
+using IIoT.Edge.Module.Homogenization.Production;
+using IIoT.Edge.Module.Sdk.Signals;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.Domain;
 using IIoT.Edge.SharedKernel.Enums;
@@ -238,7 +240,65 @@ public sealed class PlcTaskBindingBehaviorTests
             Assert.NotNull(blockedSnapshot);
             Assert.False(blockedSnapshot!.IsConnected);
             Assert.Equal(bindingFault, blockedSnapshot.LastError);
+            await WaitUntilAsync(() => statusStore.GetSnapshot(healthyDevice.Id)?.IsConnected == true);
             Assert.True(statusStore.GetSnapshot(healthyDevice.Id)?.IsConnected);
+        }
+        finally
+        {
+            await coordinator.StopAsync();
+        }
+    }
+
+    [Fact]
+    public async Task PlcLifecycleCoordinator_WhenMultiplePlcConnectionsHang_ShouldNotWaitForConnections()
+    {
+        var networkDevices = new InMemoryRepository<NetworkDeviceEntity>();
+        var ioMappings = new InMemoryRepository<IoMappingEntity>();
+        var devices = new[]
+        {
+            networkDevices.Add(CreateLifecyclePlc("PLC-A", 6200, connectTimeout: 30)),
+            networkDevices.Add(CreateLifecyclePlc("PLC-B", 6201, connectTimeout: 30)),
+            networkDevices.Add(CreateLifecyclePlc("PLC-C", 6202, connectTimeout: 30))
+        };
+        var contextStore = new FakeProductionContextStore();
+        var logger = new FakeLogService();
+        var runtimeRegistry = new PlcRuntimeRegistry();
+        var statusStore = new PlcConnectionStatusStore();
+        var plcServiceFactory = new HangingPlcServiceFactory();
+        var runtimeBuilder = new PlcDeviceRuntimeBuilder(
+            ioMappings,
+            new PlcDataStore(),
+            plcServiceFactory,
+            contextStore,
+            logger,
+            statusStore,
+            new DefaultPlcSignalBlockPlanner(),
+            new StaticPlcEndpointResolver(),
+            new ModuleHardwareProfileResolver([]));
+        var coordinator = new PlcLifecycleCoordinator(
+            networkDevices,
+            contextStore,
+            logger,
+            runtimeRegistry,
+            runtimeBuilder,
+            statusStore);
+
+        var stopwatch = Stopwatch.StartNew();
+        await coordinator.InitializeAsync();
+
+        try
+        {
+            Assert.True(stopwatch.ElapsedMilliseconds < 500);
+            Assert.Equal(["PLC-A", "PLC-B", "PLC-C"], plcServiceFactory.CreatedDeviceNames);
+            Assert.All(devices, device =>
+            {
+                var snapshot = statusStore.GetSnapshot(device.Id);
+                Assert.NotNull(snapshot);
+                Assert.False(snapshot!.IsConnected);
+                Assert.True(
+                    snapshot.ConnectionState is PlcConnectionState.Connecting or PlcConnectionState.Retrying,
+                    $"Unexpected connection state for {device.DeviceName}: {snapshot.ConnectionState}");
+            });
         }
         finally
         {
@@ -344,11 +404,32 @@ public sealed class PlcTaskBindingBehaviorTests
             "业务信号"));
     }
 
-    private static NetworkDeviceEntity CreateLifecyclePlc(string deviceName, int port)
+    private static NetworkDeviceEntity CreateLifecyclePlc(string deviceName, int port, int? connectTimeout = null)
     {
         var device = NetworkDeviceEntity.Create(deviceName, DeviceType.PLC, "127.0.0.1", port);
+        if (connectTimeout.HasValue)
+        {
+            device.UpdateEndpoint(device.IpAddress, device.Port1, device.Port2, connectTimeout.Value);
+        }
+
         device.UpdateDeviceModel(PlcType.S7.ToString());
         return device;
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition, int timeoutMs = 1500)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        while (stopwatch.ElapsedMilliseconds < timeoutMs)
+        {
+            if (condition())
+            {
+                return;
+            }
+
+            await Task.Yield();
+        }
+
+        throw new TimeoutException("Condition was not met within the test timeout.");
     }
 
     private sealed record BindingServiceHarness(
@@ -485,6 +566,43 @@ public sealed class PlcTaskBindingBehaviorTests
 
         public void Dispose()
             => Disconnect();
+    }
+
+    private sealed class HangingPlcServiceFactory : IPlcServiceFactory
+    {
+        public List<string> CreatedDeviceNames { get; } = [];
+
+        public IPlcService Create(PlcType plcType, string deviceName)
+        {
+            CreatedDeviceNames.Add(deviceName);
+            return new HangingPlcService();
+        }
+    }
+
+    private sealed class HangingPlcService : IPlcService
+    {
+        public bool IsConnected => false;
+
+        public void Init(PlcEndpoint endpoint)
+        {
+        }
+
+        public Task<bool> ConnectAsync()
+            => new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously).Task;
+
+        public void Disconnect()
+        {
+        }
+
+        public Task<List<T>> ReadDataAsync<T>(string address, ushort length)
+            => throw new NotSupportedException();
+
+        public Task WriteDataAsync<T>(string address, List<T> data)
+            => throw new NotSupportedException();
+
+        public void Dispose()
+        {
+        }
     }
 
     private sealed class InMemoryRepository<T> : IRepository<T>

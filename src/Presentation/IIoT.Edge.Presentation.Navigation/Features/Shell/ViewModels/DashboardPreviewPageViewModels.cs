@@ -4,7 +4,6 @@ using System.ComponentModel;
 using Avalonia.Threading;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
-using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc;
@@ -15,6 +14,8 @@ using IIoT.Edge.UI.Shared.Avalonia.Controls;
 using IIoT.Edge.UI.Shared.Localization;
 using AvaloniaDispatcher = Avalonia.Threading.Dispatcher;
 
+using IIoT.Edge.Application.Abstractions.Cloud;
+using IIoT.Edge.Application.Abstractions.Mes;
 namespace IIoT.Edge.Presentation.Navigation.Features.Shell;
 
 internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocalizedViewModel

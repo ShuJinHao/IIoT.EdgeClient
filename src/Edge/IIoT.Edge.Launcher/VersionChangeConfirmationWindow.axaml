@@ -1,0 +1,76 @@
+<Window
+    x:Class="IIoT.Edge.Launcher.VersionChangeConfirmationWindow"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
+    Title="{Binding Title}"
+    Width="460"
+    Height="300"
+    MinWidth="440"
+    MinHeight="280"
+    Background="Transparent"
+    CanResize="False"
+    ExtendClientAreaToDecorationsHint="True"
+    ShowInTaskbar="False"
+    TransparencyLevelHint="Transparent"
+    WindowDecorations="None"
+    WindowStartupLocation="CenterOwner">
+    <edge:EdgeCard
+        Margin="1"
+        Elevation="Float"
+        PaddingMode="Normal"
+        PointerPressed="TitleBar_PointerPressed"
+        Surface="Card">
+        <Grid>
+            <edge:EdgeWindowButton
+                Action="Close"
+                Margin="0,-8,-8,0"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                Click="CloseWindowButton_Click"
+                ToolTip.Tip="{DynamicResource Launcher_ToolTip_Close}" />
+
+            <Grid RowDefinitions="Auto,*,Auto">
+                <StackPanel Spacing="10">
+                    <Border Classes="launcher-badge">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <PathIcon
+                                Classes="launcher-badge-icon"
+                                Data="{StaticResource Edge.Icon.Sync}" />
+                            <TextBlock
+                                Classes="launcher-badge-text"
+                                Text="{Binding Badge}" />
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock
+                        Classes="launcher-login-title"
+                        Text="{Binding Title}"
+                        TextWrapping="Wrap" />
+                    <TextBlock
+                        Classes="launcher-panel-description"
+                        Text="{Binding Message}"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+
+                <Grid
+                    Grid.Row="2"
+                    Margin="0,24,0,0"
+                    ColumnDefinitions="*,12,*">
+                    <edge:EdgeActionButton
+                        Grid.Column="0"
+                        Click="CancelButton_Click"
+                        Kind="Secondary"
+                        MinHeight="44"
+                        Content="{DynamicResource Launcher_VersionManagement_ConfirmCancel}" />
+                    <edge:EdgeActionButton
+                        Grid.Column="2"
+                        Click="ConfirmButton_Click"
+                        Kind="Danger"
+                        MinHeight="44"
+                        Content="{DynamicResource Launcher_VersionManagement_ConfirmAccept}" />
+                </Grid>
+            </Grid>
+        </Grid>
+    </edge:EdgeCard>
+</Window>

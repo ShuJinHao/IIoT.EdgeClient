@@ -1,6 +1,7 @@
 using IIoT.Edge.Application.Abstractions.Config;
-using IIoT.Edge.Application.Abstractions.Integration;
 
+using IIoT.Edge.Application.Abstractions.Mes;
+using IIoT.Edge.Application.Abstractions.Shared;
 namespace IIoT.Edge.Infrastructure.Integration.Mes;
 
 public sealed class MesUploadGate : IMesUploadGate

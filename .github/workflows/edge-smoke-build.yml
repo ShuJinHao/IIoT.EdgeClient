@@ -31,6 +31,10 @@ jobs:
         shell: pwsh
         run: dotnet test src/Tests/IIoT.Edge.Shell.Tests/IIoT.Edge.Shell.Tests.csproj -p:BuildInParallel=false --disable-build-servers
 
+      - name: Run installer tests
+        shell: pwsh
+        run: dotnet test src/Tests/IIoT.Edge.Installer.Tests/IIoT.Edge.Installer.Tests.csproj -p:BuildInParallel=false --disable-build-servers
+
       - name: Run module contract tests
         shell: pwsh
         run: dotnet test src/Tests/IIoT.Edge.Module.ContractTests/IIoT.Edge.Module.ContractTests.csproj -p:BuildInParallel=false --disable-build-servers
@@ -38,3 +42,7 @@ jobs:
       - name: Run non-UI regression tests
         shell: pwsh
         run: dotnet test src/Tests/IIoT.Edge.NonUiRegressionTests/IIoT.Edge.NonUiRegressionTests.csproj -p:BuildInParallel=false --disable-build-servers
+
+      - name: Scan vulnerable NuGet packages
+        shell: pwsh
+        run: ./scripts/TestEdgePackageVulnerabilities.ps1

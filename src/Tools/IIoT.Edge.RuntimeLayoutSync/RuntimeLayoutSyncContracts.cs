@@ -42,14 +42,14 @@ internal interface IRuntimeLayoutSyncValidation
         string launcherRuntimeRoot,
         bool checkExecutablePath);
 
-    IEnumerable<string> GetShellExecutableCandidates(string runtimeRoot);
+    IEnumerable<string> GetShellExecutableCandidates(string hostRoot);
 }
 
 internal interface IRuntimeLayoutSyncModulePublisher
 {
-    void PublishModulesToRuntimeRoot(
+    void PublishModulesToPluginsRoot(
         string repoRoot,
         string configuration,
         IReadOnlyList<string> moduleIds,
-        string targetModulesRoot);
+        string targetPluginsRoot);
 }

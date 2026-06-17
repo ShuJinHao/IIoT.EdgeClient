@@ -3,14 +3,20 @@ using System.Diagnostics;
 
 namespace IIoT.Edge.Launcher.Services;
 
-public sealed class ShellLaunchService : IShellLaunchService
+public sealed class ShellLaunchService : IShellLaunchService, IDisposable
 {
+    private const string ShellProcessName = "IIoT.Edge.Shell";
+
     private readonly IProcessStarter _processStarter;
+    private readonly object _syncRoot = new();
+    private readonly List<Process> _startedProcesses = [];
 
     public ShellLaunchService(IProcessStarter processStarter)
     {
         _processStarter = processStarter ?? throw new ArgumentNullException(nameof(processStarter));
     }
+
+    public bool HasRunningShellProcess => HasTrackedRunningShellProcess() || HasOperatingSystemShellProcess();
 
     public void Launch(LauncherProfileDefinition profile)
     {
@@ -34,6 +40,83 @@ public sealed class ShellLaunchService : IShellLaunchService
         if (process is null)
         {
             throw new InvalidOperationException($"客户端启动失败：{profile.DisplayName}");
+        }
+
+        lock (_syncRoot)
+        {
+            _startedProcesses.Add(process);
+        }
+    }
+
+    public void Dispose()
+    {
+        lock (_syncRoot)
+        {
+            foreach (var process in _startedProcesses)
+            {
+                process.Dispose();
+            }
+
+            _startedProcesses.Clear();
+        }
+    }
+
+    private bool HasTrackedRunningShellProcess()
+    {
+        lock (_syncRoot)
+        {
+            var hasRunningProcess = false;
+            for (var i = _startedProcesses.Count - 1; i >= 0; i--)
+            {
+                var process = _startedProcesses[i];
+                if (IsRunning(process))
+                {
+                    hasRunningProcess = true;
+                    continue;
+                }
+
+                process.Dispose();
+                _startedProcesses.RemoveAt(i);
+            }
+
+            return hasRunningProcess;
+        }
+    }
+
+    private static bool HasOperatingSystemShellProcess()
+    {
+        try
+        {
+            foreach (var process in Process.GetProcessesByName(ShellProcessName))
+            {
+                using (process)
+                {
+                    if (IsRunning(process))
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        catch (InvalidOperationException)
+        {
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+        }
+
+        return false;
+    }
+
+    private static bool IsRunning(Process process)
+    {
+        try
+        {
+            return !process.HasExited;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
         }
     }
 }

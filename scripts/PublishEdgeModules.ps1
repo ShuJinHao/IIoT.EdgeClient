@@ -1,13 +1,13 @@
 param(
     [string]$Configuration = 'Release',
 
-    [string]$TargetModulesRoot = '.artifacts\edge-runtime\edge-runtime\Modules',
+    [string]$TargetPluginsRoot = '.artifacts\edge-runtime\plugins',
 
     [string[]]$ModuleIds,
 
     [string]$ManifestPath = 'scripts\edge-runtime.publish.json',
 
-    [switch]$CleanModulesDirectory
+    [switch]$CleanPluginsDirectory
 )
 
 $ErrorActionPreference = 'Stop'
@@ -18,20 +18,20 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $manifest = Load-EdgeRuntimePublishManifest -RepoRoot $repoRoot -ManifestPath $ManifestPath
 
 if (-not $ModuleIds -or $ModuleIds.Count -eq 0) {
-    $ModuleIds = @(
-        $manifest.runtimes |
+        $ModuleIds = @(
+        $manifest.profiles |
             ForEach-Object { @($_.moduleIds) } |
             Select-Object -Unique
     )
 }
 
-$resolvedTargetModulesRoot = Resolve-EdgeAbsolutePath -BasePath $repoRoot -PathValue $TargetModulesRoot
+$resolvedTargetPluginsRoot = Resolve-EdgeAbsolutePath -BasePath $repoRoot -PathValue $TargetPluginsRoot
 
-Publish-EdgeModulesToRuntimeRoot `
+Publish-EdgeModulesToPluginsRoot `
     -RepoRoot $repoRoot `
     -Configuration $Configuration `
     -ModuleIds $ModuleIds `
-    -TargetModulesRoot $resolvedTargetModulesRoot `
-    -CleanModulesDirectory:$CleanModulesDirectory
+    -TargetPluginsRoot $resolvedTargetPluginsRoot `
+    -CleanPluginsDirectory:$CleanPluginsDirectory
 
-Write-Host "Published module runtime root: $resolvedTargetModulesRoot"
+Write-Host "Published plugin root: $resolvedTargetPluginsRoot"

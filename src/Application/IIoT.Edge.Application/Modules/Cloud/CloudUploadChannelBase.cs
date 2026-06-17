@@ -5,6 +5,7 @@ using IIoT.Edge.Application.Common.Http;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 
+using IIoT.Edge.Application.Abstractions.Cloud;
 namespace IIoT.Edge.Application.Modules.Cloud;
 
 /// <summary>

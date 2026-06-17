@@ -1,11 +1,12 @@
 {
+  "schemaVersion": 2,
   "launcherDirectory": "launcher",
-  "runtimes": [
+  "hostDirectory": "host",
+  "pluginsRoot": "plugins",
+  "profiles": [
     {
-      "runtimeId": "homogenization",
       "profileId": "HomogenizationLine",
       "machineProfile": "HomogenizationLine",
-      "outputDirectory": "homogenization",
       "machineConfig": "src/Edge/IIoT.Edge.Shell/appsettings.machine.HomogenizationLine.json",
       "moduleIds": [ "Homogenization" ]
     }

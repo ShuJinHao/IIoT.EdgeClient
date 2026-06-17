@@ -10,6 +10,7 @@
     <BaseOutputPath>..\..\..\..\publish\</BaseOutputPath>
     <OutputPath>..\..\..\..\publish\$(Configuration)\launcher\</OutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <ApplicationIcon>..\..\Shared\IIoT.Edge.UI.Shared\Assets\images\icon.ico</ApplicationIcon>
     <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../..'))</RepoRoot>
     <RuntimeLayoutSyncProject>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../Tools/IIoT.Edge.RuntimeLayoutSync/IIoT.Edge.RuntimeLayoutSync.csproj'))</RuntimeLayoutSyncProject>
     <RuntimeLayoutSyncAssembly>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../Tools/IIoT.Edge.RuntimeLayoutSync/bin/$(Configuration)/net10.0/IIoT.Edge.RuntimeLayoutSync.dll'))</RuntimeLayoutSyncAssembly>
@@ -25,15 +26,18 @@
   <ItemGroup>
     <ProjectReference Include="..\IIoT.Edge.Shell\IIoT.Edge.Shell.csproj"
                       ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\Application\IIoT.Edge.Application\IIoT.Edge.Application.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\IIoT.Edge.Infrastructure.Update\IIoT.Edge.Infrastructure.Update.csproj" />
+    <ProjectReference Include="..\..\Shared\IIoT.Edge.SharedKernel\IIoT.Edge.SharedKernel.csproj" />
     <ProjectReference Include="..\..\Shared\IIoT.Edge.UI.Shared\IIoT.Edge.UI.Shared.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="launcher.accounts.json" Condition="Exists('launcher.accounts.json')">
+    <None Update="launcher.accounts.sample.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </None>
-    <None Update="launcher.accounts.sample.json">
+    <None Update="launcher.update.sample.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </None>
@@ -54,7 +58,7 @@
              Targets="Build"
              BuildInParallel="false"
              Properties="Configuration=$(Configuration);TargetFramework=net10.0" />
-    <Exec Command="dotnet &quot;$(RuntimeLayoutSyncAssembly)&quot; --configuration &quot;$(Configuration)&quot; --repo-root &quot;$(RepoRoot)&quot; --manifest-path &quot;scripts/edge-runtime.publish.json&quot; --launcher-profile-catalog-path &quot;src/Edge/IIoT.Edge.Launcher/launcher.profiles.json&quot; --layout-root &quot;$(TargetDir)..&quot; --launcher-runtime-root &quot;$(TargetDir).&quot; --shell-runtime-root &quot;$(TargetDir)../shell/.&quot;"
+    <Exec Command="dotnet &quot;$(RuntimeLayoutSyncAssembly)&quot; --configuration &quot;$(Configuration)&quot; --repo-root &quot;$(RepoRoot)&quot; --manifest-path &quot;scripts/edge-runtime.publish.json&quot; --launcher-profile-catalog-path &quot;src/Edge/IIoT.Edge.Launcher/launcher.profiles.json&quot; --layout-root &quot;$(TargetDir)..&quot; --launcher-runtime-root &quot;$(TargetDir).&quot; --shell-runtime-root &quot;$(TargetDir)../host/.&quot;"
           WorkingDirectory="$(RepoRoot)" />
   </Target>
 

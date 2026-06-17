@@ -1,5 +1,20 @@
 $ErrorActionPreference = 'Stop'
 
+function Invoke-EdgeNativeCommand {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$FilePath,
+
+        [AllowEmptyCollection()]
+        [string[]]$Arguments = @()
+    )
+
+    & $FilePath @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Native command failed with exit code $LASTEXITCODE`: $FilePath $($Arguments -join ' ')"
+    }
+}
+
 function Resolve-EdgeAbsolutePath {
     param(
         [Parameter(Mandatory = $true)]
@@ -58,36 +73,34 @@ function Load-EdgeRuntimePublishManifest {
         throw "Edge runtime publish manifest '$resolvedManifestPath' is missing launcherDirectory."
     }
 
-    if ($null -eq $manifest.runtimes -or $manifest.runtimes.Count -eq 0) {
-        throw "Edge runtime publish manifest '$resolvedManifestPath' does not contain any runtimes."
+    if ([string]::IsNullOrWhiteSpace($manifest.hostDirectory)) {
+        throw "Edge runtime publish manifest '$resolvedManifestPath' is missing hostDirectory."
     }
 
-    $runtimeIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-    $outputDirectories = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    if ([string]::IsNullOrWhiteSpace($manifest.pluginsRoot)) {
+        throw "Edge runtime publish manifest '$resolvedManifestPath' is missing pluginsRoot."
+    }
+
+    if ($null -eq $manifest.profiles -or $manifest.profiles.Count -eq 0) {
+        throw "Edge runtime publish manifest '$resolvedManifestPath' does not contain any profiles."
+    }
+
     $profileIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 
-    foreach ($runtime in $manifest.runtimes) {
-        foreach ($requiredProperty in @('runtimeId', 'profileId', 'machineProfile', 'outputDirectory', 'machineConfig')) {
-            $value = $runtime.$requiredProperty
+    foreach ($profile in $manifest.profiles) {
+        foreach ($requiredProperty in @('profileId', 'machineProfile', 'machineConfig')) {
+            $value = $profile.$requiredProperty
             if ([string]::IsNullOrWhiteSpace($value)) {
-                throw "Runtime entry in '$resolvedManifestPath' is missing $requiredProperty."
+                throw "Profile entry in '$resolvedManifestPath' is missing $requiredProperty."
             }
         }
 
-        if ($null -eq $runtime.moduleIds -or $runtime.moduleIds.Count -eq 0) {
-            throw "Runtime entry '$($runtime.runtimeId)' in '$resolvedManifestPath' does not define moduleIds."
+        if ($null -eq $profile.moduleIds -or $profile.moduleIds.Count -eq 0) {
+            throw "Profile entry '$($profile.profileId)' in '$resolvedManifestPath' does not define moduleIds."
         }
 
-        if (-not $runtimeIds.Add($runtime.runtimeId)) {
-            throw "Runtime id '$($runtime.runtimeId)' is duplicated in '$resolvedManifestPath'."
-        }
-
-        if (-not $outputDirectories.Add($runtime.outputDirectory)) {
-            throw "Runtime outputDirectory '$($runtime.outputDirectory)' is duplicated in '$resolvedManifestPath'."
-        }
-
-        if (-not $profileIds.Add($runtime.profileId)) {
-            throw "Runtime profileId '$($runtime.profileId)' is duplicated in '$resolvedManifestPath'."
+        if (-not $profileIds.Add($profile.profileId)) {
+            throw "Runtime profileId '$($profile.profileId)' is duplicated in '$resolvedManifestPath'."
         }
     }
 
@@ -143,13 +156,20 @@ function Build-EdgeModuleProjects {
         }
 
         $project = $ModuleProjectMap[$moduleId]
-        dotnet build $project.ProjectPath `
-            --configuration $Configuration `
-            --nologo `
-            --verbosity minimal `
-            --disable-build-servers `
-            -p:BuildInParallel=false `
-            -p:RestoreDisableParallel=true
+        Invoke-EdgeNativeCommand `
+            -FilePath 'dotnet' `
+            -Arguments @(
+                'build',
+                $project.ProjectPath,
+                '--configuration',
+                $Configuration,
+                '--nologo',
+                '--verbosity',
+                'minimal',
+                '--disable-build-servers',
+                '-p:BuildInParallel=false',
+                '-p:RestoreDisableParallel=true'
+            )
     }
 }
 
@@ -240,15 +260,15 @@ function Get-EdgeExecutableCandidates {
         $baseLeaf = $leaf.Substring(0, $leaf.Length - 4)
     }
 
-    $isWindows = Test-EdgeIsWindowsPlatform
+    $runningOnWindows = Test-EdgeIsWindowsPlatform
     $hasExeExtension = $leaf.EndsWith('.exe', [System.StringComparison]::OrdinalIgnoreCase)
     $hasDllExtension = $leaf.EndsWith('.dll', [System.StringComparison]::OrdinalIgnoreCase)
     $candidates = [System.Collections.Generic.List[string]]::new()
 
-    if ($isWindows -and -not $hasExeExtension -and -not $hasDllExtension) {
+    if ($runningOnWindows -and -not $hasExeExtension -and -not $hasDllExtension) {
         Add-EdgeExecutableCandidate -Candidates $candidates -PathValue (Join-Path $directory "$baseLeaf.exe")
     }
-    elseif (-not $isWindows -and $hasExeExtension) {
+    elseif (-not $runningOnWindows -and $hasExeExtension) {
         Add-EdgeExecutableCandidate -Candidates $candidates -PathValue (Join-Path $directory $baseLeaf)
     }
 
@@ -263,6 +283,7 @@ function Get-EdgeExecutableCandidates {
 function Add-EdgeExecutableCandidate {
     param(
         [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
         [System.Collections.Generic.List[string]]$Candidates,
 
         [Parameter(Mandatory = $true)]
@@ -327,21 +348,21 @@ function Test-EdgeLauncherProfilesMatchManifest {
         [switch]$CheckExecutablePath
     )
 
-    $runtimeByProfileId = @{}
-    foreach ($runtime in $Manifest.runtimes) {
-        $runtimeByProfileId[$runtime.profileId] = $runtime
+    $profileByProfileId = @{}
+    foreach ($entry in $Manifest.profiles) {
+        $profileByProfileId[$entry.profileId] = $entry
     }
 
     $profileIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     foreach ($profile in $Profiles) {
         [void]$profileIds.Add($profile.ProfileId)
-        if (-not $runtimeByProfileId.ContainsKey($profile.ProfileId)) {
-            throw "Launcher profile '$($profile.ProfileId)' does not match any runtime profileId in edge-runtime.publish.json."
+        if (-not $profileByProfileId.ContainsKey($profile.ProfileId)) {
+            throw "Launcher profile '$($profile.ProfileId)' does not match any profileId in edge-runtime.publish.json."
         }
 
-        $runtime = $runtimeByProfileId[$profile.ProfileId]
-        if ($profile.MachineProfile -ne $runtime.machineProfile) {
-            throw "Launcher profile '$($profile.ProfileId)' machineProfile '$($profile.MachineProfile)' does not match runtime machineProfile '$($runtime.machineProfile)'."
+        $entry = $profileByProfileId[$profile.ProfileId]
+        if ($profile.MachineProfile -ne $entry.machineProfile) {
+            throw "Launcher profile '$($profile.ProfileId)' machineProfile '$($profile.MachineProfile)' does not match publish profile machineProfile '$($entry.machineProfile)'."
         }
 
         if ($CheckExecutablePath) {
@@ -352,9 +373,9 @@ function Test-EdgeLauncherProfilesMatchManifest {
         }
     }
 
-    foreach ($runtime in $Manifest.runtimes) {
-        if (-not $profileIds.Contains($runtime.profileId)) {
-            throw "Runtime '$($runtime.runtimeId)' profileId '$($runtime.profileId)' is missing from launcher.profiles.json."
+    foreach ($entry in $Manifest.profiles) {
+        if (-not $profileIds.Contains($entry.profileId)) {
+            throw "Publish profile '$($entry.profileId)' is missing from launcher.profiles.json."
         }
     }
 }
@@ -430,7 +451,7 @@ function Test-EdgePluginManifestFile {
     }
 }
 
-function Publish-EdgeModulesToRuntimeRoot {
+function Publish-EdgeModulesToPluginsRoot {
     param(
         [Parameter(Mandatory = $true)]
         [string]$RepoRoot,
@@ -442,19 +463,19 @@ function Publish-EdgeModulesToRuntimeRoot {
         [string[]]$ModuleIds,
 
         [Parameter(Mandatory = $true)]
-        [string]$TargetModulesRoot,
+        [string]$TargetPluginsRoot,
 
-        [switch]$CleanModulesDirectory
+        [switch]$CleanPluginsDirectory
     )
 
     $moduleProjectMap = Get-EdgeModuleProjectMap -RepoRoot $RepoRoot
     Build-EdgeModuleProjects -ModuleIds $ModuleIds -ModuleProjectMap $moduleProjectMap -Configuration $Configuration
 
-    if ($CleanModulesDirectory -and (Test-Path $TargetModulesRoot)) {
-        Remove-Item -Path $TargetModulesRoot -Recurse -Force
+    if ($CleanPluginsDirectory -and (Test-Path $TargetPluginsRoot)) {
+        Remove-Item -Path $TargetPluginsRoot -Recurse -Force
     }
 
-    New-Item -Path $TargetModulesRoot -ItemType Directory -Force | Out-Null
+    New-Item -Path $TargetPluginsRoot -ItemType Directory -Force | Out-Null
 
     foreach ($moduleId in ($ModuleIds | Select-Object -Unique)) {
         $project = $moduleProjectMap[$moduleId]
@@ -463,19 +484,68 @@ function Publish-EdgeModulesToRuntimeRoot {
             throw "Module build output was not found: $moduleBuildRoot"
         }
 
-        $moduleRuntimeDirectory = Join-Path $TargetModulesRoot $moduleId
-        if (Test-Path $moduleRuntimeDirectory) {
-            Remove-Item -Path $moduleRuntimeDirectory -Recurse -Force
+        $modulePluginDirectory = Join-Path $TargetPluginsRoot $moduleId
+        if (Test-Path $modulePluginDirectory) {
+            Remove-Item -Path $modulePluginDirectory -Recurse -Force
         }
 
-        New-Item -Path $moduleRuntimeDirectory -ItemType Directory -Force | Out-Null
-        Copy-Item -Path (Join-Path $moduleBuildRoot '*') -Destination $moduleRuntimeDirectory -Recurse -Force
+        New-Item -Path $modulePluginDirectory -ItemType Directory -Force | Out-Null
+        Copy-Item -Path (Join-Path $moduleBuildRoot '*') -Destination $modulePluginDirectory -Recurse -Force
 
-        Test-EdgePluginManifestFile -ManifestPath (Join-Path $moduleRuntimeDirectory 'plugin.json')
+        Test-EdgePluginManifestFile -ManifestPath (Join-Path $modulePluginDirectory 'plugin.json')
     }
 }
 
-function Sync-EdgeProcessRuntime {
+function Sync-EdgeHostLayout {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RepoRoot,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ShellRuntimeSource,
+
+        [Parameter(Mandatory = $true)]
+        $Manifest,
+
+        [Parameter(Mandatory = $true)]
+        [string]$LayoutRoot
+    )
+
+    $hostRoot = Join-Path $LayoutRoot $Manifest.hostDirectory
+    if (Test-Path $hostRoot) {
+        Get-ChildItem -Path $hostRoot -Force -ErrorAction SilentlyContinue |
+            Remove-Item -Recurse -Force -ErrorAction Stop
+    }
+    else {
+        New-Item -Path $hostRoot -ItemType Directory -Force | Out-Null
+    }
+
+    Copy-EdgeDirectoryContent -SourceDirectory $ShellRuntimeSource -TargetDirectory $hostRoot
+
+    Get-ChildItem -Path $hostRoot -Filter 'appsettings.machine.*.json' -File -ErrorAction SilentlyContinue |
+        Remove-Item -Force
+
+    foreach ($profile in $Manifest.profiles) {
+        $machineConfigSource = Resolve-EdgeAbsolutePath -BasePath $RepoRoot -PathValue $profile.machineConfig
+        if (-not (Test-Path $machineConfigSource)) {
+            throw "Machine profile config was not found for profile '$($profile.profileId)': $machineConfigSource"
+        }
+
+        Copy-Item -Path $machineConfigSource -Destination (Join-Path $hostRoot (Split-Path -Leaf $machineConfigSource)) -Force
+    }
+
+    $staleModulesRoot = Join-Path $hostRoot 'Modules'
+    if (Test-Path $staleModulesRoot) {
+        Remove-Item -Path $staleModulesRoot -Recurse -Force
+    }
+
+    Assert-EdgeExecutablePath `
+        -BasePath $hostRoot `
+        -PathValue 'IIoT.Edge.Shell' `
+        -Message "Shell executable was not found in host directory '$hostRoot'." | Out-Null
+}
+
+function Sync-EdgePluginsLayout {
     param(
         [Parameter(Mandatory = $true)]
         [string]$RepoRoot,
@@ -484,46 +554,18 @@ function Sync-EdgeProcessRuntime {
         [string]$Configuration,
 
         [Parameter(Mandatory = $true)]
-        [string]$ShellRuntimeSource,
-
-        [Parameter(Mandatory = $true)]
-        $RuntimeDefinition,
+        $Manifest,
 
         [Parameter(Mandatory = $true)]
         [string]$LayoutRoot
     )
 
-    $runtimeRoot = Join-Path $LayoutRoot $RuntimeDefinition.outputDirectory
-    if (Test-Path $runtimeRoot) {
-        Get-ChildItem -Path $runtimeRoot -Force -ErrorAction SilentlyContinue |
-            Remove-Item -Recurse -Force -ErrorAction Stop
-    }
-    else {
-        New-Item -Path $runtimeRoot -ItemType Directory -Force | Out-Null
-    }
-
-    Copy-EdgeDirectoryContent -SourceDirectory $ShellRuntimeSource -TargetDirectory $runtimeRoot
-
-    Get-ChildItem -Path $runtimeRoot -Filter 'appsettings.machine.*.json' -File -ErrorAction SilentlyContinue |
-        Remove-Item -Force
-
-    $machineConfigSource = Resolve-EdgeAbsolutePath -BasePath $RepoRoot -PathValue $RuntimeDefinition.machineConfig
-    if (-not (Test-Path $machineConfigSource)) {
-        throw "Machine profile config was not found for runtime '$($RuntimeDefinition.runtimeId)': $machineConfigSource"
-    }
-
-    Copy-Item -Path $machineConfigSource -Destination (Join-Path $runtimeRoot (Split-Path -Leaf $machineConfigSource)) -Force
-
-    $modulesRoot = Join-Path $runtimeRoot 'Modules'
-    Publish-EdgeModulesToRuntimeRoot `
+    $moduleIds = @($Manifest.profiles | ForEach-Object { $_.moduleIds } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    $pluginsRoot = Join-Path $LayoutRoot $Manifest.pluginsRoot
+    Publish-EdgeModulesToPluginsRoot `
         -RepoRoot $RepoRoot `
         -Configuration $Configuration `
-        -ModuleIds @($RuntimeDefinition.moduleIds) `
-        -TargetModulesRoot $modulesRoot `
-        -CleanModulesDirectory
-
-    Assert-EdgeExecutablePath `
-        -BasePath $runtimeRoot `
-        -PathValue 'IIoT.Edge.Shell' `
-        -Message "Shell executable was not found in runtime directory '$runtimeRoot'." | Out-Null
+        -ModuleIds $moduleIds `
+        -TargetPluginsRoot $pluginsRoot `
+        -CleanPluginsDirectory
 }

@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Features.Production.Monitor;
+using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.UI.Shared.Localization;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Production.Monitor;
@@ -18,9 +19,7 @@ internal sealed class MonitorViewModelSummaryFormatter(IAppLanguageService langu
         [
             new(
                 GetText("Navigation_Monitor_ColumnConnectionStatus", "连接状态"),
-                snapshot.IsConnected
-                    ? GetText("Navigation_Monitor_ConnectionOnline", "已连接")
-                    : GetText("Navigation_Monitor_ConnectionOffline", "未连接")),
+                FormatConnectionState(snapshot)),
             new(GetText("Navigation_Monitor_Source", "数据来源"), FormatSource(snapshot.Source)),
             new(
                 GetText("Navigation_Monitor_ConfigurationState", "配置状态"),
@@ -64,6 +63,22 @@ internal sealed class MonitorViewModelSummaryFormatter(IAppLanguageService langu
         return snapshot.IsPlcConfigurationEnabled
             ? GetText("Navigation_Monitor_ConfigurationEnabled", "已启用")
             : GetText("Navigation_Monitor_ConfigurationDisabled", "未启用");
+    }
+
+    private string FormatConnectionState(DeviceMonitorSnapshot snapshot)
+    {
+        if (snapshot.IsConnected)
+        {
+            return GetText("Navigation_Monitor_ConnectionOnline", "已连接");
+        }
+
+        return snapshot.ConnectionState switch
+        {
+            PlcConnectionState.Connecting => GetText("Navigation_Monitor_ConnectionConnecting", "连接中"),
+            PlcConnectionState.Retrying => GetText("Navigation_Monitor_ConnectionRetrying", "重试中"),
+            PlcConnectionState.Faulted => GetText("Navigation_Monitor_ConnectionFaulted", "运行异常"),
+            _ => GetText("Navigation_Monitor_ConnectionOffline", "未连接")
+        };
     }
 
     private string GetText(string resourceKey, string fallback)

@@ -1,3 +1,4 @@
+using IIoT.Edge.SharedKernel.Configuration;
 using Microsoft.Extensions.Configuration;
 using System.IO;
 
@@ -8,7 +9,14 @@ public sealed record ShellConfigurationLoadResult(
     string EnvironmentName,
     string? MachineProfile,
     string? MachineProfileFileName,
-    bool IsMachineProfileLoaded);
+    bool IsMachineProfileLoaded)
+{
+    public string? MachineProfilePath { get; init; }
+
+    public string? ExternalMachineProfilePath { get; init; }
+
+    public bool IsExternalMachineProfileLoaded { get; init; }
+}
 
 public interface IShellConfigurationLoader
 {
@@ -33,16 +41,31 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
         var machineProfileFileName = string.IsNullOrWhiteSpace(machineProfile)
             ? null
             : $"appsettings.machine.{machineProfile}.json";
-        var machineProfilePath = machineProfileFileName is null
+        var packagedMachineProfilePath = machineProfileFileName is null
             ? null
             : Path.Combine(baseDirectory, machineProfileFileName);
-        var machineProfileLoaded = machineProfilePath is not null
-            && File.Exists(machineProfilePath);
+        var packagedMachineProfileLoaded = packagedMachineProfilePath is not null
+            && File.Exists(packagedMachineProfilePath);
+        var externalMachineProfilePath = string.IsNullOrWhiteSpace(machineProfile)
+            ? null
+            : EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(machineProfile, baseDirectory);
+
+        if (externalMachineProfilePath is not null)
+        {
+            TryInitializeExternalMachineProfile(packagedMachineProfilePath, externalMachineProfilePath);
+        }
+
+        var externalMachineProfileLoaded = externalMachineProfilePath is not null
+            && File.Exists(externalMachineProfilePath);
+        var machineProfileLoaded = externalMachineProfileLoaded || packagedMachineProfileLoaded;
+        var effectiveMachineProfilePath = externalMachineProfileLoaded
+            ? externalMachineProfilePath
+            : packagedMachineProfilePath;
 
         var configuration = new ConfigurationBuilder()
             .SetBasePath(baseDirectory);
 
-        foreach (var pluginConfigPath in FindPluginDefaultConfigurationFiles(baseDirectory))
+        foreach (var pluginConfigPath in FindPluginDefaultConfigurationFiles(baseDirectory, bootstrapConfiguration))
         {
             configuration.AddJsonFile(pluginConfigPath, optional: true, reloadOnChange: false);
         }
@@ -51,9 +74,14 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
             .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
             .AddJsonFile($"appsettings.{environmentName}.json", optional: true, reloadOnChange: true);
 
-        if (machineProfileFileName is not null)
+        if (packagedMachineProfilePath is not null)
         {
-            configuration.AddJsonFile(machineProfileFileName, optional: true, reloadOnChange: true);
+            configuration.AddJsonFile(packagedMachineProfilePath, optional: true, reloadOnChange: true);
+        }
+
+        if (externalMachineProfilePath is not null)
+        {
+            configuration.AddJsonFile(externalMachineProfilePath, optional: true, reloadOnChange: true);
         }
 
         configuration
@@ -63,7 +91,10 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
                 ["Shell:Environment"] = environmentName,
                 ["Shell:MachineProfile"] = machineProfile,
                 ["Shell:MachineProfileFileName"] = machineProfileFileName,
-                ["Shell:MachineProfileLoaded"] = machineProfileLoaded.ToString()
+                ["Shell:MachineProfileLoaded"] = machineProfileLoaded.ToString(),
+                ["Shell:MachineProfilePath"] = effectiveMachineProfilePath,
+                ["Shell:ExternalMachineProfilePath"] = externalMachineProfilePath,
+                ["Shell:ExternalMachineProfileLoaded"] = externalMachineProfileLoaded.ToString()
             });
 
         return new ShellConfigurationLoadResult(
@@ -71,7 +102,12 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
             environmentName,
             machineProfile,
             machineProfileFileName,
-            machineProfileLoaded);
+            machineProfileLoaded)
+        {
+            MachineProfilePath = effectiveMachineProfilePath,
+            ExternalMachineProfilePath = externalMachineProfilePath,
+            IsExternalMachineProfileLoaded = externalMachineProfileLoaded
+        };
     }
 
     private string GetEnvironmentName()
@@ -79,16 +115,61 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
             ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
             ?? "Production";
 
-    private IReadOnlyList<string> FindPluginDefaultConfigurationFiles(string baseDirectory)
+    private IReadOnlyList<string> FindPluginDefaultConfigurationFiles(string baseDirectory, IConfiguration configuration)
     {
-        var pluginRoot = Path.Combine(baseDirectory, "Modules");
-        if (!Directory.Exists(pluginRoot))
+        var configuredRoots = configuration
+            .GetSection("Modules:PluginRoots")
+            .Get<string[]>()
+            ?? [];
+        var pluginRoots = configuredRoots
+            .Where(static path => !string.IsNullOrWhiteSpace(path))
+            .Select(path => ResolveConfiguredPluginRoot(baseDirectory, path))
+            .ToList();
+        if (pluginRoots.Count == 0)
         {
-            return [];
+            pluginRoots.Add(EdgeClientProgramDataPaths.ResolveApplicationPluginRoot(baseDirectory));
         }
 
-        return Directory.GetFiles(pluginRoot, "*.module.json", SearchOption.AllDirectories)
-            .OrderBy(static path => path, StringComparer.OrdinalIgnoreCase)
+        return pluginRoots
+            .Where(Directory.Exists)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .SelectMany(static (pluginRoot, rootIndex) => Directory
+                .GetFiles(pluginRoot, "*.module.json", SearchOption.AllDirectories)
+                .OrderBy(static path => path, StringComparer.OrdinalIgnoreCase)
+                .Select(path => new { Path = path, RootIndex = rootIndex }))
+            .OrderBy(static item => item.RootIndex)
+            .ThenBy(static item => item.Path, StringComparer.OrdinalIgnoreCase)
+            .Select(static item => item.Path)
             .ToArray();
+    }
+
+    private static string ResolveConfiguredPluginRoot(string baseDirectory, string path)
+        => EdgeClientProgramDataPaths.ResolveConfiguredPluginRoot(baseDirectory, path);
+
+    private static void TryInitializeExternalMachineProfile(string? sourcePath, string targetPath)
+    {
+        if (string.IsNullOrWhiteSpace(sourcePath)
+            || !File.Exists(sourcePath)
+            || File.Exists(targetPath))
+        {
+            return;
+        }
+
+        try
+        {
+            var directory = Path.GetDirectoryName(targetPath);
+            if (!string.IsNullOrWhiteSpace(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            File.Copy(sourcePath, targetPath, overwrite: false);
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
     }
 }

@@ -17,10 +17,13 @@ internal sealed class StartupAppSettingsValidator(
         "CloudApi:Paths:HumanIdentityRefresh",
         "CloudApi:Paths:DeviceLog",
         "CloudApi:Paths:ProcessUpload",
+        "CloudApi:Paths:PassStationBatchTemplate",
         "CloudApi:Paths:CapacityHourly",
         "CloudApi:Paths:CapacitySummary",
         "CloudApi:Paths:CapacitySummaryRange",
-        "CloudApi:Paths:RecipeByDeviceTemplate"
+        "CloudApi:Paths:RecipeByDeviceTemplate",
+        "CloudApi:Paths:ClientReleaseCatalogTemplate",
+        "CloudApi:Paths:ClientVersionReport"
     ];
 
     public void Validate(StartupValidationContext context, List<StartupDiagnosticIssue> issues)
@@ -55,6 +58,24 @@ internal sealed class StartupAppSettingsValidator(
             issues.Add(StartupDiagnosticIssueFactory.Create(
                 "CONFIG_INVALID",
                 "CloudApi:Paths:RecipeByDeviceTemplate 必须包含 {deviceId} 占位符。"));
+        }
+
+        var passStationPath = configuration["CloudApi:Paths:PassStationBatchTemplate"]?.Trim();
+        if (!string.IsNullOrWhiteSpace(passStationPath)
+            && !passStationPath.Contains("{typeKey}", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add(StartupDiagnosticIssueFactory.Create(
+                "CONFIG_INVALID",
+                "CloudApi:Paths:PassStationBatchTemplate 必须包含 {typeKey} 占位符。"));
+        }
+
+        var clientReleaseCatalogPath = configuration["CloudApi:Paths:ClientReleaseCatalogTemplate"]?.Trim();
+        if (!string.IsNullOrWhiteSpace(clientReleaseCatalogPath)
+            && !clientReleaseCatalogPath.Contains("{deviceId}", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add(StartupDiagnosticIssueFactory.Create(
+                "CONFIG_INVALID",
+                "CloudApi:Paths:ClientReleaseCatalogTemplate 必须包含 {deviceId} 占位符。"));
         }
 
         ValidateShiftWindow(issues);

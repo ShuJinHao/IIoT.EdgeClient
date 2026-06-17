@@ -6,6 +6,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
 
+using IIoT.Edge.Application.Abstractions.Cloud;
 namespace IIoT.Edge.NonUiRegressionTests;
 
 public sealed class CloudHttpClientBehaviorTests

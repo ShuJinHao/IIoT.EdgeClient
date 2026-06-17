@@ -7,50 +7,46 @@ internal sealed class RuntimeLayoutSyncValidation(IRuntimeLayoutSyncFileSystem f
             throw new InvalidOperationException($"Edge runtime publish manifest '{manifestPath}' is missing launcherDirectory.");
         }
 
-        if (manifest.Runtimes.Count == 0)
+        if (string.IsNullOrWhiteSpace(manifest.HostDirectory))
         {
-            throw new InvalidOperationException($"Edge runtime publish manifest '{manifestPath}' does not contain any runtimes.");
+            throw new InvalidOperationException($"Edge runtime publish manifest '{manifestPath}' is missing hostDirectory.");
         }
 
-        var runtimeIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var outputDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(manifest.PluginsRoot))
+        {
+            throw new InvalidOperationException($"Edge runtime publish manifest '{manifestPath}' is missing pluginsRoot.");
+        }
+
+        if (manifest.Profiles.Count == 0)
+        {
+            throw new InvalidOperationException($"Edge runtime publish manifest '{manifestPath}' does not contain any profiles.");
+        }
+
         var profileIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var runtime in manifest.Runtimes)
+        foreach (var profile in manifest.Profiles)
         {
             foreach (var (name, value) in new[]
                      {
-                         ("runtimeId", runtime.RuntimeId),
-                         ("profileId", runtime.ProfileId),
-                         ("machineProfile", runtime.MachineProfile),
-                         ("outputDirectory", runtime.OutputDirectory),
-                         ("machineConfig", runtime.MachineConfig)
+                         ("profileId", profile.ProfileId),
+                         ("machineProfile", profile.MachineProfile),
+                         ("machineConfig", profile.MachineConfig)
                      })
             {
                 if (string.IsNullOrWhiteSpace(value))
                 {
-                    throw new InvalidOperationException($"Runtime entry in '{manifestPath}' is missing {name}.");
+                    throw new InvalidOperationException($"Profile entry in '{manifestPath}' is missing {name}.");
                 }
             }
 
-            if (runtime.ModuleIds.Count == 0)
+            if (profile.ModuleIds.Count == 0)
             {
-                throw new InvalidOperationException($"Runtime entry '{runtime.RuntimeId}' in '{manifestPath}' does not define moduleIds.");
+                throw new InvalidOperationException($"Profile entry '{profile.ProfileId}' in '{manifestPath}' does not define moduleIds.");
             }
 
-            if (!runtimeIds.Add(runtime.RuntimeId))
+            if (!profileIds.Add(profile.ProfileId))
             {
-                throw new InvalidOperationException($"Runtime id '{runtime.RuntimeId}' is duplicated in '{manifestPath}'.");
-            }
-
-            if (!outputDirectories.Add(runtime.OutputDirectory))
-            {
-                throw new InvalidOperationException($"Runtime outputDirectory '{runtime.OutputDirectory}' is duplicated in '{manifestPath}'.");
-            }
-
-            if (!profileIds.Add(runtime.ProfileId))
-            {
-                throw new InvalidOperationException($"Runtime profileId '{runtime.ProfileId}' is duplicated in '{manifestPath}'.");
+                throw new InvalidOperationException($"Profile id '{profile.ProfileId}' is duplicated in '{manifestPath}'.");
             }
         }
     }
@@ -66,7 +62,7 @@ internal sealed class RuntimeLayoutSyncValidation(IRuntimeLayoutSyncFileSystem f
             throw new InvalidOperationException("Launcher profile catalog is empty.");
         }
 
-        var runtimeByProfileId = manifest.Runtimes.ToDictionary(runtime => runtime.ProfileId, StringComparer.OrdinalIgnoreCase);
+        var publishProfileByProfileId = manifest.Profiles.ToDictionary(profile => profile.ProfileId, StringComparer.OrdinalIgnoreCase);
         var profileIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var profile in profiles)
@@ -86,14 +82,14 @@ internal sealed class RuntimeLayoutSyncValidation(IRuntimeLayoutSyncFileSystem f
             }
 
             profileIds.Add(profile.ProfileId);
-            if (!runtimeByProfileId.TryGetValue(profile.ProfileId, out var runtime))
+            if (!publishProfileByProfileId.TryGetValue(profile.ProfileId, out var publishProfile))
             {
-                throw new InvalidOperationException($"Launcher profile '{profile.ProfileId}' does not match any runtime profileId in edge-runtime.publish.json.");
+                throw new InvalidOperationException($"Launcher profile '{profile.ProfileId}' does not match any profileId in edge-runtime.publish.json.");
             }
 
-            if (!string.Equals(profile.MachineProfile, runtime.MachineProfile, StringComparison.Ordinal))
+            if (!string.Equals(profile.MachineProfile, publishProfile.MachineProfile, StringComparison.Ordinal))
             {
-                throw new InvalidOperationException($"Launcher profile '{profile.ProfileId}' machineProfile '{profile.MachineProfile}' does not match runtime machineProfile '{runtime.MachineProfile}'.");
+                throw new InvalidOperationException($"Launcher profile '{profile.ProfileId}' machineProfile '{profile.MachineProfile}' does not match publish profile machineProfile '{publishProfile.MachineProfile}'.");
             }
 
             if (checkExecutablePath)
@@ -109,11 +105,11 @@ internal sealed class RuntimeLayoutSyncValidation(IRuntimeLayoutSyncFileSystem f
             }
         }
 
-        foreach (var runtime in manifest.Runtimes)
+        foreach (var profile in manifest.Profiles)
         {
-            if (!profileIds.Contains(runtime.ProfileId))
+            if (!profileIds.Contains(profile.ProfileId))
             {
-                throw new InvalidOperationException($"Runtime '{runtime.RuntimeId}' profileId '{runtime.ProfileId}' is missing from launcher.profiles.json.");
+                throw new InvalidOperationException($"Publish profile '{profile.ProfileId}' is missing from launcher.profiles.json.");
             }
         }
     }

@@ -107,6 +107,8 @@ public sealed class ModuleDiscoveryContractTests
             Assert.Single(cellDataRegistry.GetRegistrations());
             Assert.Single(runtimeRegistry.GetRegistrations());
             Assert.Single(integrationRegistry.GetCloudUploaders());
+            Assert.True(integrationRegistry.TryGetCloudUploader("Homogenization", out var cloudRegistration));
+            Assert.Equal(ProcessUploadMode.Batch, cloudRegistration.UploadMode);
             Assert.Single(moduleParamRegistry.GetRegistrations());
             Assert.NotNull(viewRegistry.GetViewRegistration("Homogenization.DataView"));
         }
@@ -137,7 +139,7 @@ public sealed class ModuleDiscoveryContractTests
     }
 
     [Fact]
-    public void ProductModules_ShouldUseStandardRuntimeAndSampleDirectories()
+    public void ProductModules_ShouldUseStandardProductionAndSampleDirectories()
     {
         var repoRoot = ContractTestPathHelper.FindRepoRoot();
 
@@ -151,14 +153,14 @@ public sealed class ModuleDiscoveryContractTests
             "src",
             "Modules",
             "IIoT.Edge.Module.Homogenization",
-            "Runtime",
+            "Production",
             "HomogenizationStationRuntimeFactory.cs")));
         Assert.False(File.Exists(Path.Combine(
             repoRoot,
             "src",
             "Modules",
             "IIoT.Edge.Module.Homogenization",
-            "Runtime",
+            "Production",
             "HomogenizationDevelopmentSampleContributor.cs")));
         Assert.True(File.Exists(Path.Combine(
             repoRoot,
@@ -214,7 +216,7 @@ public sealed class ModuleDiscoveryContractTests
 
         public override string DisplayName => "模拟工序";
 
-        protected override ProcessUploadMode CloudUploadMode => ProcessUploadMode.Single;
+        protected override ProcessUploadMode? CloudUploadMode => ProcessUploadMode.Single;
 
         protected override IStationRuntimeFactory CreateRuntimeFactory()
             => new MockRuntimeFactory();

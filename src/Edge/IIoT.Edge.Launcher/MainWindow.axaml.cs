@@ -5,23 +5,35 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using IIoT.Edge.Launcher.Models;
 using IIoT.Edge.Launcher.ViewModels;
+using IIoT.Edge.UI.Shared.Avalonia.Windowing;
 using IIoT.Edge.UI.Shared.Localization;
 
 namespace IIoT.Edge.Launcher;
 
 public partial class MainWindow : Window
 {
+    private const int WindowCornerRadius = 16;
     private readonly LauncherMainViewModel _viewModel;
     private readonly IAppLanguageService _languageService;
+
+    public MainWindow()
+    {
+        InitializeComponent();
+        EdgeRoundedWindowRegion.Attach(this, WindowCornerRadius);
+        _viewModel = null!;
+        _languageService = null!;
+    }
 
     public MainWindow(
         LauncherMainViewModel viewModel,
         IAppLanguageService languageService)
     {
         InitializeComponent();
+        EdgeRoundedWindowRegion.Attach(this, WindowCornerRadius);
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _languageService = languageService ?? throw new ArgumentNullException(nameof(languageService));
         DataContext = _viewModel;
+        _viewModel.ClientReleasePanel.ConfirmVersionChangeAsync = ConfirmVersionChangeAsync;
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
         Opened += OnOpened;
         Closed += OnClosed;
@@ -70,10 +82,53 @@ public partial class MainWindow : Window
 
     private async void LaunchProfileButton_Click(object? sender, RoutedEventArgs e)
     {
-        if ((sender as Control)?.DataContext is LauncherProfileDefinition profile)
+        if ((sender as Control)?.DataContext is not LauncherProfileCardViewModel card)
         {
-            await _viewModel.LaunchAsync(profile);
+            return;
         }
+
+        await _viewModel.LaunchProfileCardAsync(card);
+    }
+
+    private async void RefreshUpdateCenterButton_Click(object? sender, RoutedEventArgs e)
+    {
+        await _viewModel.RefreshUpdateCenterAsync();
+    }
+
+    private async void InstallPluginUpdateButton_Click(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is not LauncherClientPluginItem row)
+        {
+            return;
+        }
+
+        await _viewModel.ExecuteUpdateRowActionAsync(row);
+    }
+
+    private void ToggleVersionComponentButton_Click(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is not LauncherVersionComponentItem component)
+        {
+            return;
+        }
+
+        _viewModel.ClientReleasePanel.ToggleComponent(component);
+    }
+
+    private async void ApplyVersionButton_Click(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is not LauncherVersionOptionItem option)
+        {
+            return;
+        }
+
+        await _viewModel.ClientReleasePanel.ApplyVersionAsync(option);
+    }
+
+    private async Task<bool> ConfirmVersionChangeAsync(LauncherVersionChangeConfirmationRequest request)
+    {
+        var dialog = new VersionChangeConfirmationWindow(request, _languageService);
+        return await dialog.ShowDialog<bool>(this);
     }
 
     private void UpdateVisualState()

@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Abstractions.Cloud;
 ﻿using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Common.Device;
 using IIoT.Edge.Application.Abstractions.Logging;

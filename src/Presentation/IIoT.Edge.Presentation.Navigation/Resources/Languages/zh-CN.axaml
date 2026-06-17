@@ -170,6 +170,8 @@
     <sys:String x:Key="Navigation_Param_CloudApi_DeviceLogPath_Description">客户端上传设备日志的接口路径。</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_ProcessUploadPath_DisplayName">生产数据上传接口</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_ProcessUploadPath_Description">客户端上传工序生产数据的接口路径。</sys:String>
+    <sys:String x:Key="Navigation_Param_CloudApi_PassStationBatchTemplatePath_DisplayName">过站批量上传接口模板</sys:String>
+    <sys:String x:Key="Navigation_Param_CloudApi_PassStationBatchTemplatePath_Description">客户端上传工序过站数据的接口模板，必须包含 {typeKey}。</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_CapacityHourlyPath_DisplayName">小时产能接口</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_CapacityHourlyPath_Description">客户端上传或查询小时产能的接口路径。</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_CapacitySummaryPath_DisplayName">产能汇总接口</sys:String>
@@ -178,6 +180,10 @@
     <sys:String x:Key="Navigation_Param_CloudApi_CapacitySummaryRangePath_Description">客户端查询区间产能汇总的接口路径。</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_RecipeByDeviceTemplatePath_DisplayName">设备配方接口模板</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_RecipeByDeviceTemplatePath_Description">按设备查询云端配方的接口模板，必须包含 {deviceId}。</sys:String>
+    <sys:String x:Key="Navigation_Param_CloudApi_ClientReleaseCatalogTemplatePath_DisplayName">客户端版本目录接口模板</sys:String>
+    <sys:String x:Key="Navigation_Param_CloudApi_ClientReleaseCatalogTemplatePath_Description">Launcher 按设备拉取宿主和插件 catalog 的接口模板，必须包含 {deviceId}。</sys:String>
+    <sys:String x:Key="Navigation_Param_CloudApi_ClientVersionReportPath_DisplayName">客户端版本上报接口</sys:String>
+    <sys:String x:Key="Navigation_Param_CloudApi_ClientVersionReportPath_Description">Launcher 上报宿主版本、HostApiVersion、已安装插件和启用插件的接口路径。</sys:String>
     <sys:String x:Key="Navigation_Column_ParamName">参数名称</sys:String>
     <sys:String x:Key="Navigation_Column_ParamValue">参数值</sys:String>
     <sys:String x:Key="Navigation_Column_ParamType">类型</sys:String>
@@ -397,6 +403,9 @@
     <sys:String x:Key="Navigation_Monitor_ColumnValue">当前值</sys:String>
     <sys:String x:Key="Navigation_Monitor_ConnectionOnline">已连接</sys:String>
     <sys:String x:Key="Navigation_Monitor_ConnectionOffline">未连接</sys:String>
+    <sys:String x:Key="Navigation_Monitor_ConnectionConnecting">连接中</sys:String>
+    <sys:String x:Key="Navigation_Monitor_ConnectionRetrying">重试中</sys:String>
+    <sys:String x:Key="Navigation_Monitor_ConnectionFaulted">运行异常</sys:String>
     <sys:String x:Key="Navigation_Monitor_RowCountFormat">{0} 项</sys:String>
     <sys:String x:Key="Navigation_Monitor_StateMachinePrefix">状态机：</sys:String>
     <sys:String x:Key="Navigation_Monitor_DeviceDataPrefix">设备数据：</sys:String>
@@ -663,7 +672,7 @@
     <sys:String x:Key="Navigation_Io_Direction_PlcToHost">PLC 到上位机</sys:String>
     <sys:String x:Key="Navigation_Io_TooltipSeparator">；</sys:String>
     <sys:String x:Key="Navigation_Io_TooltipCurrentValueFormat">，当前值：{0}</sys:String>
-    <sys:String x:Key="Navigation_Io_TooltipSignalFormat">信号键：{0}，地址：{1}{2}</sys:String>
+    <sys:String x:Key="Navigation_Io_TooltipSignalFormat">备注：{0}，地址：{1}{2}</sys:String>
     <sys:String x:Key="Navigation_Io_NoContinuousValues">暂无连续值</sys:String>
     <sys:String x:Key="Navigation_Io_ArraySummaryFormat">{0} 行 x {1} 项</sys:String>
     <sys:String x:Key="Navigation_Io_CollapseDetails">收起明细</sys:String>

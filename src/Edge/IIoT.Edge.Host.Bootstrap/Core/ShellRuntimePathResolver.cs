@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.SharedKernel.Configuration;
 using Microsoft.Extensions.Configuration;
 using System.IO;
 
@@ -22,7 +23,7 @@ public sealed class ShellRuntimePathResolver : IShellRuntimePathResolver
             : machineProfile;
         var runtimeDataRootSetting = configuration["Shell:RuntimeDataRoot"]?.Trim();
         var runtimeDataRoot = string.IsNullOrWhiteSpace(runtimeDataRootSetting)
-            ? Path.Combine(baseDirectory, "data", "profiles", SanitizePathSegment(profileName))
+            ? EdgeClientProgramDataPaths.ResolveProfileDataRoot(profileName, baseDirectory)
             : ResolvePath(baseDirectory, runtimeDataRootSetting);
         var diagnosticsDirectory = Path.Combine(runtimeDataRoot, "diagnostics");
         var logDirectory = Path.Combine(diagnosticsDirectory, "logs");
@@ -39,18 +40,12 @@ public sealed class ShellRuntimePathResolver : IShellRuntimePathResolver
             LogDirectory: logDirectory,
             DeviceCacheFilePath: Path.Combine(runtimeDataRoot, "device_cache.json"),
             PrimaryCrashLogPath: Path.Combine(diagnosticsDirectory, "crash.log"),
-            FallbackCrashLogPath: Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "IIoT.Edge",
-                "profiles",
-                SanitizePathSegment(profileName),
-                "diagnostics",
-                "crash.fallback.log"));
+            FallbackCrashLogPath: EdgeClientProgramDataPaths.ResolveProfileFallbackCrashLogPath(profileName, baseDirectory));
     }
 
     private string ResolvePath(string baseDirectory, string path)
     {
-        var expanded = Environment.ExpandEnvironmentVariables(path);
+        var expanded = EdgeClientProgramDataPaths.ExpandProgramDataTokens(path, baseDirectory);
         var normalized = NormalizePathSeparators(expanded);
         return Path.GetFullPath(
             Path.IsPathRooted(normalized)
@@ -63,16 +58,4 @@ public sealed class ShellRuntimePathResolver : IShellRuntimePathResolver
             .Replace('\\', Path.DirectorySeparatorChar)
             .Replace('/', Path.DirectorySeparatorChar);
 
-    private string SanitizePathSegment(string value)
-    {
-        var invalidChars = Path.GetInvalidFileNameChars();
-        var sanitized = new string(value
-            .Select(ch => invalidChars.Contains(ch) ? '_' : ch)
-            .ToArray())
-            .Trim();
-
-        return string.IsNullOrWhiteSpace(sanitized)
-            ? "Default"
-            : sanitized;
-    }
 }

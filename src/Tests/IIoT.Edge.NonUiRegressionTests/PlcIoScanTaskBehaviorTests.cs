@@ -7,7 +7,7 @@ using IIoT.Edge.Infrastructure.DeviceComm.Barcode.Readers;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Infrastructure.DeviceComm.Signals;
-using IIoT.Edge.Runtime.Signals;
+using IIoT.Edge.Module.Sdk.Signals;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.Enums;
 using System.Diagnostics;
@@ -80,7 +80,7 @@ public sealed class PlcIoScanTaskBehaviorTests
     }
 
     [Fact]
-    public async Task PlcIoScanTask_ConnectAsync_ShouldPassConfiguredTcpEndpoint()
+    public async Task PlcIoScanTask_ConnectAsync_ShouldCapConfiguredTcpEndpointTimeout()
     {
         var plcService = new ScriptedPlcService();
         plcService.ConnectOutcomes.Enqueue(true);
@@ -100,7 +100,37 @@ public sealed class PlcIoScanTaskBehaviorTests
         var endpoint = Assert.IsType<TcpPlcEndpoint>(plcService.Endpoint);
         Assert.Equal("10.1.2.3", endpoint.Host);
         Assert.Equal(502, endpoint.Port);
-        Assert.Equal(4500, endpoint.ConnectTimeoutMs);
+        Assert.Equal(3000, endpoint.ConnectTimeoutMs);
+    }
+
+    [Fact]
+    public async Task PlcIoScanTask_ConnectAsync_WhenConnectNeverReturns_ShouldTimeoutAndCloseConnection()
+    {
+        var plcService = new NeverCompletingConnectPlcService();
+        var device = CreateDevice(12, "PLC-HANG");
+        device.UpdateEndpoint("10.1.2.4", 502, null, 30);
+        var statusStore = new PlcConnectionStatusStore();
+
+        var interaction = new PlcIoScanTask(
+            plcService,
+            new PlcDataStore(),
+            device,
+            [],
+            new FakeLogService(),
+            SignalBlockPlanner,
+            statusStore);
+
+        var stopwatch = Stopwatch.StartNew();
+        await interaction.ConnectAsync();
+
+        Assert.True(stopwatch.ElapsedMilliseconds < 1000);
+        Assert.Equal(1, plcService.ConnectAsyncCallCount);
+        Assert.Equal(1, plcService.DisconnectCallCount);
+        var snapshot = statusStore.GetSnapshot(device.Id);
+        Assert.NotNull(snapshot);
+        Assert.False(snapshot!.IsConnected);
+        Assert.Equal(PlcConnectionState.Retrying, snapshot.ConnectionState);
+        Assert.False(string.IsNullOrWhiteSpace(snapshot.LastError));
     }
 
     [Fact]
@@ -629,6 +659,43 @@ public sealed class PlcIoScanTaskBehaviorTests
 
             return Task.CompletedTask;
         }
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class NeverCompletingConnectPlcService : IPlcService
+    {
+        public bool IsConnected => false;
+
+        public PlcEndpoint? Endpoint { get; private set; }
+
+        public int ConnectAsyncCallCount { get; private set; }
+
+        public int DisconnectCallCount { get; private set; }
+
+        public void Init(PlcEndpoint endpoint)
+        {
+            Endpoint = endpoint;
+        }
+
+        public Task<bool> ConnectAsync()
+        {
+            ConnectAsyncCallCount++;
+            return new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously).Task;
+        }
+
+        public void Disconnect()
+        {
+            DisconnectCallCount++;
+        }
+
+        public Task<List<T>> ReadDataAsync<T>(string address, ushort length)
+            => throw new NotSupportedException();
+
+        public Task WriteDataAsync<T>(string address, List<T> data)
+            => throw new NotSupportedException();
 
         public void Dispose()
         {

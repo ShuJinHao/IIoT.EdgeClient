@@ -1,5 +1,16 @@
 <Project>
   <PropertyGroup>
+    <Company>IIoT</Company>
+    <Authors>IIoT</Authors>
+    <Product>IIoT Edge Client</Product>
+    <Description>IIoT Edge Client</Description>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <InformationalVersion>1.0.0-dev</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <NeutralLanguage>zh-CN</NeutralLanguage>
+
     <!-- Work around local .NET workload resolver issues that break restore/build
          for plain EdgeClient projects even though they do not consume Android/iOS workloads. -->
     <MSBuildEnableWorkloadResolver>false</MSBuildEnableWorkloadResolver>

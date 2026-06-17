@@ -87,6 +87,22 @@ public class CloudApiEndpointProvider : ICloudApiEndpointProvider
             FirstLocalConfigString(CloudApiConfigParamSchema.ProcessUploadPath) ?? _cloudApiOptions.CurrentValue.Paths.ProcessUpload,
             "CloudApi:Paths:ProcessUpload");
 
+    public string GetPassStationBatchPath(string typeKey)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(typeKey);
+        var template = RequirePath(
+            FirstLocalConfigString(CloudApiConfigParamSchema.PassStationBatchTemplatePath)
+                ?? _cloudApiOptions.CurrentValue.Paths.PassStationBatchTemplate,
+            "CloudApi:Paths:PassStationBatchTemplate");
+        if (!template.Contains("{typeKey}", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Invalid config: CloudApi:Paths:PassStationBatchTemplate must contain {typeKey}");
+
+        return template.Replace(
+            "{typeKey}",
+            Uri.EscapeDataString(typeKey.Trim().ToLowerInvariant()),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
     public string GetCapacityHourlyPath()
         => RequirePath(
             FirstLocalConfigString(CloudApiConfigParamSchema.CapacityHourlyPath) ?? _cloudApiOptions.CurrentValue.Paths.CapacityHourly,

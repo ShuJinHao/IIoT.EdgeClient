@@ -13,10 +13,13 @@ public sealed record CloudApiConfigSnapshot(
     string HumanIdentityRefreshPath,
     string DeviceLogPath,
     string ProcessUploadPath,
+    string PassStationBatchTemplatePath,
     string CapacityHourlyPath,
     string CapacitySummaryPath,
     string CapacitySummaryRangePath,
-    string RecipeByDeviceTemplatePath);
+    string RecipeByDeviceTemplatePath,
+    string ClientReleaseCatalogTemplatePath,
+    string ClientVersionReportPath);
 
 /// <summary>
 /// 云端 API 配置快照读取入口，由基础设施层从 appsettings/options 映射。

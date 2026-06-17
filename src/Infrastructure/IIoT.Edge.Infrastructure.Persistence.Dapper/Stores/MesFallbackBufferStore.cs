@@ -4,6 +4,7 @@ using IIoT.Edge.Infrastructure.Persistence.Dapper.Connection;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 
+using IIoT.Edge.Application.Abstractions.Mes;
 namespace IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
 
 /// <summary>

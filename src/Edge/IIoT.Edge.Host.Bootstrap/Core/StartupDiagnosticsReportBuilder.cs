@@ -25,6 +25,7 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
     private readonly IReadOnlyDictionary<string, IEdgeProcessModule> _modulesById;
     private readonly IReadOnlyDictionary<string, ModulePluginDescriptor> _discoveredModulesById;
     private readonly IReadOnlyList<ModuleCatalogIssue> _moduleCatalogIssues;
+    private readonly IReadOnlyList<StartupDiagnosticIssue> _bootstrapDiagnosticIssues;
     private readonly IReadOnlyDictionary<string, IModuleHardwareProfileProvider> _hardwareProfilesByModuleId;
     private readonly string[] _configuredEnabledModuleIds;
     private readonly string[] _activatedModuleIds;
@@ -38,6 +39,7 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
         IStartupPluginLifecycleSnapshotBuilder pluginLifecycleSnapshotBuilder,
         IReadOnlyCollection<ModulePluginDescriptor> discoveredModules,
         IReadOnlyCollection<ModuleCatalogIssue> moduleCatalogIssues,
+        IReadOnlyCollection<StartupDiagnosticIssue> bootstrapDiagnosticIssues,
         IReadOnlyCollection<string> configuredEnabledModuleIds,
         IEnumerable<IEdgeProcessModule> modules,
         IEnumerable<IModuleHardwareProfileProvider> hardwareProfiles,
@@ -53,6 +55,7 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
         _modulesById = modules.ToDictionary(x => x.ModuleId, StringComparer.OrdinalIgnoreCase);
         _discoveredModulesById = discoveredModules.ToDictionary(x => x.ModuleId, StringComparer.OrdinalIgnoreCase);
         _moduleCatalogIssues = moduleCatalogIssues.ToArray();
+        _bootstrapDiagnosticIssues = bootstrapDiagnosticIssues.ToArray();
         _hardwareProfilesByModuleId = hardwareProfiles.ToDictionary(x => x.ModuleId, StringComparer.OrdinalIgnoreCase);
         _configuredEnabledModuleIds = configuredEnabledModuleIds
             .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
@@ -87,6 +90,7 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
                 issue.Code,
                 issue.Message,
                 issue.ModuleId)));
+        issues.AddRange(_bootstrapDiagnosticIssues);
 
         var configurationProfile = _configurationProfileBuilder.Build();
         var plcDevices = await LoadPlcDevicesAsync(issues, cancellationToken).ConfigureAwait(false);

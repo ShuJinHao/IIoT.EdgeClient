@@ -10,6 +10,7 @@ using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 
+using IIoT.Edge.Application.Abstractions.Mes;
 namespace IIoT.Edge.Application.Modules.Mes;
 
 /// <summary>
@@ -115,6 +116,34 @@ public abstract class MesScenarioChannelBase<TCellData> : IProcessMesUploader
             cancellationToken);
     }
 
+    protected async Task<MesCallResult> ExecuteRequiredMesAsync(
+        string scenarioName,
+        Func<CancellationToken, Task<string?>> relativePathResolver,
+        DeviceSession? device,
+        Func<MesEnvelope, object> payloadFactory,
+        CancellationToken cancellationToken)
+    {
+        var relativePath = await ResolveRequiredPathAsync(scenarioName, relativePathResolver, cancellationToken)
+            .ConfigureAwait(false);
+        return string.IsNullOrWhiteSpace(relativePath)
+            ? MesCallResult.InvalidContext($"必选 MES 场景 {scenarioName} 未配置路径。")
+            : await ExecuteMesAsync(device, relativePath, payloadFactory, cancellationToken).ConfigureAwait(false);
+    }
+
+    protected async Task<MesCallResult> ExecuteOptionalMesAsync(
+        string scenarioName,
+        Func<CancellationToken, Task<string?>> relativePathResolver,
+        DeviceSession? device,
+        Func<MesEnvelope, object> payloadFactory,
+        CancellationToken cancellationToken)
+    {
+        var relativePath = await ResolveOptionalPathAsync(scenarioName, relativePathResolver, cancellationToken)
+            .ConfigureAwait(false);
+        return string.IsNullOrWhiteSpace(relativePath)
+            ? MesCallResult.Disabled($"可选 MES 场景 {scenarioName} 未配置，已跳过。")
+            : await ExecuteMesAsync(device, relativePath, payloadFactory, cancellationToken).ConfigureAwait(false);
+    }
+
     protected Task<MesCallResult<TData>> ExecuteMesGetAsync<TData>(
         string relativePath,
         IReadOnlyDictionary<string, string?> query,
@@ -132,6 +161,20 @@ public abstract class MesScenarioChannelBase<TCellData> : IProcessMesUploader
             cancellationToken);
     }
 
+    protected async Task<MesCallResult<TData>> ExecuteOptionalMesGetAsync<TData>(
+        string scenarioName,
+        Func<CancellationToken, Task<string?>> relativePathResolver,
+        IReadOnlyDictionary<string, string?> query,
+        Func<JsonElement, TData> dataParser,
+        CancellationToken cancellationToken)
+    {
+        var relativePath = await ResolveOptionalPathAsync(scenarioName, relativePathResolver, cancellationToken)
+            .ConfigureAwait(false);
+        return string.IsNullOrWhiteSpace(relativePath)
+            ? MesCallResult<TData>.Disabled($"可选 MES 场景 {scenarioName} 未配置，已跳过。")
+            : await ExecuteMesGetAsync(relativePath, query, dataParser, cancellationToken).ConfigureAwait(false);
+    }
+
     protected Task<MesCallResult<TData>> ExecuteMesPostAsync<TData>(
         string relativePath,
         object payload,
@@ -147,6 +190,20 @@ public abstract class MesScenarioChannelBase<TCellData> : IProcessMesUploader
             payload,
             dataParser,
             cancellationToken);
+    }
+
+    protected async Task<MesCallResult<TData>> ExecuteOptionalMesPostAsync<TData>(
+        string scenarioName,
+        Func<CancellationToken, Task<string?>> relativePathResolver,
+        object payload,
+        Func<JsonElement, TData> dataParser,
+        CancellationToken cancellationToken)
+    {
+        var relativePath = await ResolveOptionalPathAsync(scenarioName, relativePathResolver, cancellationToken)
+            .ConfigureAwait(false);
+        return string.IsNullOrWhiteSpace(relativePath)
+            ? MesCallResult<TData>.Disabled($"可选 MES 场景 {scenarioName} 未配置，已跳过。")
+            : await ExecuteMesPostAsync(relativePath, payload, dataParser, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -189,6 +246,52 @@ public abstract class MesScenarioChannelBase<TCellData> : IProcessMesUploader
 
     protected string FormatTimestamp(DateTime time)
         => _productionTime.FormatBusinessTimestamp(time);
+
+    protected static object CreateStandardMesPayload(MesEnvelope envelope, object data)
+        => new
+        {
+            upperComputerNo = envelope.UpperComputerNo,
+            timestamp = envelope.Timestamp,
+            sign = envelope.Sign,
+            stationNo = envelope.StationNo,
+            data
+        };
+
+    private async Task<string?> ResolveRequiredPathAsync(
+        string scenarioName,
+        Func<CancellationToken, Task<string?>> relativePathResolver,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(scenarioName);
+        ArgumentNullException.ThrowIfNull(relativePathResolver);
+
+        var relativePath = await relativePathResolver(cancellationToken).ConfigureAwait(false);
+        if (!string.IsNullOrWhiteSpace(relativePath))
+        {
+            return relativePath.Trim();
+        }
+
+        Logger.Error($"[MES] 必选场景 {scenarioName} 未配置路径，数据将保留在补偿链路。ProcessType={ProcessType}");
+        return null;
+    }
+
+    private async Task<string?> ResolveOptionalPathAsync(
+        string scenarioName,
+        Func<CancellationToken, Task<string?>> relativePathResolver,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(scenarioName);
+        ArgumentNullException.ThrowIfNull(relativePathResolver);
+
+        var relativePath = await relativePathResolver(cancellationToken).ConfigureAwait(false);
+        if (!string.IsNullOrWhiteSpace(relativePath))
+        {
+            return relativePath.Trim();
+        }
+
+        Logger.Warn($"[MES] 可选场景 {scenarioName} 未配置路径，已跳过。ProcessType={ProcessType}");
+        return null;
+    }
 
     private MesEnvelope CreateEnvelope(DeviceSession device, string stationNo, string signToken)
     {

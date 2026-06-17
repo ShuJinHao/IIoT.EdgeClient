@@ -12,16 +12,17 @@ public sealed class VisualTestProductionDataQueryFacade(VisualTestDataOptions op
         DateTime dateTo,
         CancellationToken cancellationToken = default)
     {
+        var batchCode = VisualTestScenario.ResolveBatchCode(options);
         var records = Enumerable.Range(0, 24)
             .Select(index =>
             {
                 var time = dateFrom.Date.AddHours(8).AddMinutes(index * 25);
-                var total = 52 + index % 6 * 4;
-                var ng = index % 7 == 0 ? 1 : 0;
+                var total = 68 + index % 6 * 5;
+                var ng = index % 7 == 0 ? 2 : index % 4 == 0 ? 1 : 0;
                 var ok = total - ng;
                 return new ProductionRecordItem(
                     Time: time.ToString("HH:mm"),
-                    BatchNo: $"{options.BatchCode}-{index + 1:D2}",
+                    BatchNo: $"{batchCode}-{index + 1:D2}",
                     Total: total,
                     OkCount: ok,
                     NgCount: ng,

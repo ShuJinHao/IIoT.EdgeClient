@@ -2,12 +2,14 @@ using IIoT.Edge.Application.Modules.Diagnostics;
 using IIoT.Edge.Application.Context;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Context;
-using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Application.Common.Diagnostics;
 using IIoT.Edge.UI.Shared.Localization;
 
+using IIoT.Edge.Application.Abstractions.Cloud;
+using IIoT.Edge.Application.Abstractions.Mes;
+using IIoT.Edge.Application.Abstractions.Shared;
 namespace IIoT.Edge.Presentation.Navigation.Localization;
 
 internal sealed class LocalizedSyncDiagnosticsText(

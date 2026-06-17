@@ -1,4 +1,5 @@
 using IIoT.Edge.Launcher.Models;
+using IIoT.Edge.SharedKernel.Configuration;
 using System.IO;
 using System.Text.Json;
 
@@ -6,10 +7,9 @@ namespace IIoT.Edge.Launcher.Services;
 
 public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
 {
-    private const string DefaultExecutableFileName = "IIoT.Edge.Shell";
+    private static readonly string DefaultExecutablePath = Path.Combine("..", "host", "IIoT.Edge.Shell");
     private const string DefaultIconKind = "Cog";
     private const string DefaultAccentColor = "#0F766E";
-    private const string ModulesDirectoryName = "Modules";
     private const string PluginManifestFileName = "plugin.json";
 
     private readonly string _baseDirectory;
@@ -60,7 +60,7 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
         }
 
         var executablePath = string.IsNullOrWhiteSpace(entry.ExecutablePath)
-            ? Path.Combine(_baseDirectory, DefaultExecutableFileName)
+            ? ResolvePath(DefaultExecutablePath)
             : ResolvePath(entry.ExecutablePath);
         var imagePath = string.IsNullOrWhiteSpace(entry.ImagePath)
             ? null
@@ -72,7 +72,7 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
             ? DefaultAccentColor
             : entry.AccentColor.Trim();
         var machineProfile = entry.MachineProfile.Trim();
-        var runtimeDirectory = Path.GetDirectoryName(executablePath) ?? _baseDirectory;
+        var hostDirectory = Path.GetDirectoryName(executablePath) ?? _baseDirectory;
 
         return new LauncherProfileDefinition(
             entry.ProfileId.Trim(),
@@ -84,14 +84,14 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
             iconKind,
             accentColor)
         {
-            PluginDisplayPath = ResolvePluginDisplayPath(runtimeDirectory),
-            DataDisplayPath = ResolveDataDisplayPath(runtimeDirectory, machineProfile)
+            PluginDisplayPath = ResolvePluginDisplayPath(hostDirectory),
+            DataDisplayPath = ResolveDataDisplayPath(hostDirectory, machineProfile)
         };
     }
 
     private string ResolvePath(string path)
     {
-        var expanded = NormalizePathSeparators(Environment.ExpandEnvironmentVariables(path.Trim()));
+        var expanded = NormalizePathSeparators(EdgeClientProgramDataPaths.ExpandProgramDataTokens(path.Trim(), _baseDirectory));
         return Path.GetFullPath(
             Path.IsPathRooted(expanded)
                 ? expanded
@@ -101,16 +101,16 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
     private static string NormalizePathSeparators(string path)
         => path.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
 
-    private static string ResolvePluginDisplayPath(string runtimeDirectory)
+    private static string ResolvePluginDisplayPath(string hostDirectory)
     {
-        var modulesDirectory = Path.Combine(runtimeDirectory, ModulesDirectoryName);
-        if (!Directory.Exists(modulesDirectory))
+        var pluginsDirectory = EdgeClientProgramDataPaths.ResolveApplicationPluginRoot(hostDirectory);
+        if (!Directory.Exists(pluginsDirectory))
         {
             return string.Empty;
         }
 
         var manifestPath = Directory
-            .EnumerateFiles(modulesDirectory, PluginManifestFileName, SearchOption.AllDirectories)
+            .EnumerateFiles(pluginsDirectory, PluginManifestFileName, SearchOption.AllDirectories)
             .OrderBy(static path => path, StringComparer.OrdinalIgnoreCase)
             .FirstOrDefault();
         if (manifestPath is null)
@@ -126,10 +126,12 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
             var entryAssembly = ReadString(root, "entryAssembly");
             if (string.IsNullOrWhiteSpace(moduleId) || string.IsNullOrWhiteSpace(entryAssembly))
             {
-                return NormalizeDisplayPath(Path.GetRelativePath(runtimeDirectory, manifestPath));
+                return NormalizeDisplayPath(Path.GetRelativePath(pluginsDirectory, manifestPath));
             }
 
-            return Path.GetFileNameWithoutExtension(entryAssembly);
+            return NormalizeDisplayPath(Path.GetRelativePath(
+                Directory.GetParent(hostDirectory)?.FullName ?? hostDirectory,
+                Path.GetDirectoryName(manifestPath)!));
         }
         catch (JsonException)
         {
@@ -145,22 +147,33 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
         }
     }
 
-    private static string ResolveDataDisplayPath(string runtimeDirectory, string machineProfile)
+    private static string ResolveDataDisplayPath(string hostDirectory, string machineProfile)
     {
-        var configPath = Path.Combine(runtimeDirectory, $"appsettings.machine.{machineProfile}.json");
+        var configPath = ResolveMachineProfileConfigPath(hostDirectory, machineProfile);
         var runtimeDataRoot = ReadRuntimeDataRoot(configPath);
         if (string.IsNullOrWhiteSpace(runtimeDataRoot))
         {
-            return NormalizeDisplayPath(Path.Combine("data", "profiles", machineProfile));
+            return NormalizeDisplayPath(EdgeClientProgramDataPaths.ResolveProfileDataRoot(machineProfile, hostDirectory));
         }
 
-        var normalizedRoot = NormalizePathSeparators(Environment.ExpandEnvironmentVariables(runtimeDataRoot));
+        var normalizedRoot = NormalizePathSeparators(
+            EdgeClientProgramDataPaths.ExpandProgramDataTokens(runtimeDataRoot, hostDirectory));
         var absoluteRoot = Path.GetFullPath(
             Path.IsPathRooted(normalizedRoot)
                 ? normalizedRoot
-                : Path.Combine(runtimeDirectory, normalizedRoot));
-        var layoutRoot = Directory.GetParent(runtimeDirectory)?.FullName ?? runtimeDirectory;
-        return NormalizeDisplayPath(Path.GetRelativePath(layoutRoot, absoluteRoot));
+                : Path.Combine(hostDirectory, normalizedRoot));
+        var layoutRoot = Directory.GetParent(hostDirectory)?.FullName ?? hostDirectory;
+        return IsUnderDirectory(layoutRoot, absoluteRoot)
+            ? NormalizeDisplayPath(Path.GetRelativePath(layoutRoot, absoluteRoot))
+            : NormalizeDisplayPath(absoluteRoot);
+    }
+
+    private static string ResolveMachineProfileConfigPath(string hostDirectory, string machineProfile)
+    {
+        var externalConfigPath = EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(machineProfile, hostDirectory);
+        return File.Exists(externalConfigPath)
+            ? externalConfigPath
+            : Path.Combine(hostDirectory, $"appsettings.machine.{machineProfile}.json");
     }
 
     private static string? ReadRuntimeDataRoot(string configPath)
@@ -203,10 +216,29 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
 
     private static string NormalizeDisplayPath(string path)
     {
-        return path
-            .Replace('\\', '/')
-            .TrimStart('.', '/');
+        var normalized = path.Replace('\\', '/');
+        if (Path.IsPathRooted(path) || IsWindowsRootedPath(normalized))
+        {
+            return normalized;
+        }
+
+        return normalized.TrimStart('.', '/');
     }
+
+    private static bool IsUnderDirectory(string parentDirectory, string childPath)
+    {
+        var parent = Path.GetFullPath(parentDirectory)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
+        var child = Path.GetFullPath(childPath);
+        return child.StartsWith(parent, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsWindowsRootedPath(string path)
+        => path.Length >= 3
+            && char.IsLetter(path[0])
+            && path[1] == ':'
+            && path[2] == '/';
 
     private static JsonSerializerOptions JsonOptions()
         => new()

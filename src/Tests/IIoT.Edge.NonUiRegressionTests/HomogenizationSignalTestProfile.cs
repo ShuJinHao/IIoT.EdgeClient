@@ -2,7 +2,9 @@ using IIoT.Edge.Application.Abstractions.Plc.Signals;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Features.Hardware.IoMappings;
 using IIoT.Edge.Application.Modules.Hardware;
-using IIoT.Edge.Module.Homogenization.Config.Hardware;
+using IIoT.Edge.Module.Homogenization.Config;
+using IIoT.Edge.Module.Homogenization.Config.Io;
+using IIoT.Edge.Module.Homogenization.Config.Parameters;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 

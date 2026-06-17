@@ -1,9 +1,11 @@
+using IIoT.Edge.Application.Abstractions.Cloud;
+using IIoT.Edge.Application.Abstractions.Mes;
 ﻿using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.Runtime.Signals;
+using IIoT.Edge.Module.Sdk.Signals;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.DataPipeline;
 
@@ -14,6 +16,7 @@ public abstract class ModuleContractTestBase<TModule>
 {
     private readonly ModuleContractFixture _fixture = new();
 
+    protected virtual bool RequiresCloudUploader => false;
     protected virtual bool RequiresHardwareProfile => false;
     protected virtual bool RequiresMesUploader => false;
     protected virtual int ExpectedRuntimeTaskCount => 0;
@@ -36,7 +39,9 @@ public abstract class ModuleContractTestBase<TModule>
 
         Assert.True(result.CellDataRegistry.IsRegistered(module.ProcessType));
         Assert.True(result.RuntimeRegistry.HasFactory(module.ModuleId));
-        Assert.True(result.IntegrationRegistry.HasCloudUploader(module.ProcessType));
+        Assert.Equal(
+            RequiresCloudUploader,
+            result.IntegrationRegistry.HasCloudUploader(module.ProcessType));
         Assert.Equal(
             RequiresMesUploader,
             result.IntegrationRegistry.HasMesUploader(module.ProcessType));
@@ -54,7 +59,7 @@ public abstract class ModuleContractTestBase<TModule>
     }
 
     [Fact]
-    public void RegisterServices_ShouldRegisterCloudUploaderAndOptionalHardwareProfile()
+    public void RegisterServices_ShouldRegisterOptionalCloudUploaderAndHardwareProfile()
     {
         var module = CreateModule();
         var result = _fixture.RegisterModule(module);
@@ -62,7 +67,7 @@ public abstract class ModuleContractTestBase<TModule>
         var cloudUploaderDescriptors = result.Services
             .Where(static x => x.ServiceType == typeof(IProcessCloudUploader))
             .ToArray();
-        Assert.NotEmpty(cloudUploaderDescriptors);
+        Assert.Empty(cloudUploaderDescriptors);
 
         var hardwareProfileDescriptors = result.Services
             .Where(static x => x.ServiceType == typeof(IModuleHardwareProfileProvider))

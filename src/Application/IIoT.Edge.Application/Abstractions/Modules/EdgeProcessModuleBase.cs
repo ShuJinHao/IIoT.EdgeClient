@@ -11,7 +11,7 @@ public abstract class EdgeProcessModuleBase<TCellData> : IEdgeProcessModule
 
     public abstract string DisplayName { get; }
 
-    protected abstract ProcessUploadMode CloudUploadMode { get; }
+    protected virtual ProcessUploadMode? CloudUploadMode => null;
 
     protected virtual ProcessUploadMode? MesUploadMode => null;
 
@@ -25,7 +25,10 @@ public abstract class EdgeProcessModuleBase<TCellData> : IEdgeProcessModule
 
         builder.RegisterCellData(typeof(TCellData));
         builder.RegisterRuntimeFactory(CreateRuntimeFactory());
-        builder.RegisterCloudUploader(CloudUploadMode);
+        if (CloudUploadMode is { } cloudUploadMode)
+        {
+            builder.RegisterCloudUploader(cloudUploadMode);
+        }
 
         if (MesUploadMode is { } mesUploadMode)
         {

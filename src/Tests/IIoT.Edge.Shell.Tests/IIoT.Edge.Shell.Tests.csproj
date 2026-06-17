@@ -25,13 +25,15 @@
     <ProjectReference Include="..\..\Infrastructure\IIoT.Edge.Infrastructure.Persistence.Dapper\IIoT.Edge.Infrastructure.Persistence.Dapper.csproj" />
     <ProjectReference Include="..\..\Infrastructure\IIoT.Edge.Infrastructure.Persistence.EfCore\IIoT.Edge.Infrastructure.Persistence.EfCore.csproj" />
     <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.Homogenization\IIoT.Edge.Module.Homogenization.csproj" />
+    <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.Sdk\IIoT.Edge.Module.Sdk.csproj" />
     <ProjectReference Include="..\..\Presentation\IIoT.Edge.Presentation.VisualTestData\IIoT.Edge.Presentation.VisualTestData.csproj" />
-    <ProjectReference Include="..\..\Runtime\IIoT.Edge.Runtime\IIoT.Edge.Runtime.csproj" />
+    <ProjectReference Include="..\..\Edge\IIoT.Edge.Host.DataPipeline\IIoT.Edge.Host.DataPipeline.csproj" />
     <ProjectReference Include="..\..\Shared\IIoT.Edge.SharedKernel\IIoT.Edge.SharedKernel.csproj" />
+    <ProjectReference Include="..\..\Tools\IIoT.Edge.RuntimeLayoutSync\IIoT.Edge.RuntimeLayoutSync.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <PluginModuleProject Include="..\..\Modules\**\*.csproj" />
+    <PluginModuleProject Include="..\..\Modules\**\*.csproj" Exclude="..\..\Modules\IIoT.Edge.Module.Sdk\IIoT.Edge.Module.Sdk.csproj" />
   </ItemGroup>
 
   <Target Name="ResolvePluginModuleArtifacts">
@@ -45,10 +47,10 @@
   </Target>
 
   <Target Name="CopyPluginModulesToTestOutput" AfterTargets="Build" DependsOnTargets="ResolvePluginModuleArtifacts" Condition="'@(PluginModuleArtifact)' != ''">
-    <MakeDir Directories="@(PluginModuleArtifact -> '$(TargetDir)Modules\%(ModuleId)\%(RecursiveDir)')" />
+    <MakeDir Directories="@(PluginModuleArtifact -> '$(TargetDir)..\plugins\%(ModuleId)\%(RecursiveDir)')" />
     <Copy
       SourceFiles="@(PluginModuleArtifact)"
-      DestinationFiles="@(PluginModuleArtifact -> '$(TargetDir)Modules\%(ModuleId)\%(RecursiveDir)%(Filename)%(Extension)')"
+      DestinationFiles="@(PluginModuleArtifact -> '$(TargetDir)..\plugins\%(ModuleId)\%(RecursiveDir)%(Filename)%(Extension)')"
       SkipUnchangedFiles="true" />
   </Target>
 

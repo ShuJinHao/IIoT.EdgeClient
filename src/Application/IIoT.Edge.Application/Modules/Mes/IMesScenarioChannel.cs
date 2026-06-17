@@ -2,6 +2,7 @@ using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 
+using IIoT.Edge.Application.Abstractions.Mes;
 namespace IIoT.Edge.Application.Modules.Mes;
 
 /// <summary>

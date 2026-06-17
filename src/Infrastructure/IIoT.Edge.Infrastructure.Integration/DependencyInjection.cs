@@ -2,9 +2,8 @@ using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Consumers;
-using IIoT.Edge.Application.Abstractions.DataPipeline.SyncTask;
+using IIoT.Edge.Application.Abstractions.Cloud;
 using IIoT.Edge.Application.Abstractions.Device;
-using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Recipe;
@@ -28,6 +27,7 @@ using Microsoft.Extensions.Options;
 using Polly;
 using System.Threading;
 
+using IIoT.Edge.Application.Abstractions.Mes;
 namespace IIoT.Edge.Infrastructure.Integration;
 
 public static class DependencyInjection
@@ -110,6 +110,7 @@ public static class DependencyInjection
         services.AddSingleton<MesRequestExecutor>();
         services.AddSingleton<MesHeartbeatTask>();
 
+        services.AddSingleton<StandardPassStationCloudUploader>();
         services.AddSingleton<ICloudConsumer, CloudConsumer>();
         services.AddSingleton<ICloudBatchConsumer>(sp =>
             (ICloudBatchConsumer)sp.GetRequiredService<ICloudConsumer>());

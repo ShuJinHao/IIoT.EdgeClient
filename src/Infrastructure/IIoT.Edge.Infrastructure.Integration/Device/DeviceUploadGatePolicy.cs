@@ -1,6 +1,7 @@
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Common.Device;
 
+using IIoT.Edge.Application.Abstractions.Cloud;
 namespace IIoT.Edge.Infrastructure.Integration.Device;
 
 public interface IDeviceUploadGatePolicy

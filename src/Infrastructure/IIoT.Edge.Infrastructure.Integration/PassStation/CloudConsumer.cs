@@ -1,20 +1,22 @@
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Consumers;
 using IIoT.Edge.Application.Abstractions.Device;
-using IIoT.Edge.Application.Abstractions.Integration;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Common.Device;
-using IIoT.Edge.Infrastructure.Integration;
 using IIoT.Edge.SharedKernel.DataPipeline;
 
+using IIoT.Edge.Application.Abstractions.Cloud;
 namespace IIoT.Edge.Infrastructure.Integration.PassStation;
 
-public class CloudConsumer : ProcessUploaderConsumerBase<IProcessCloudUploader, CloudCallResult>, ICloudConsumer, ICloudBatchConsumer
+public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
 {
+    private readonly IDeviceService _deviceService;
     private readonly ICloudUploadGate _uploadGate;
+    private readonly StandardPassStationCloudUploader _standardUploader;
     private readonly IProcessIntegrationRegistry _processIntegrationRegistry;
     private readonly ICloudUploadDiagnosticsStore _diagnosticsStore;
+    private readonly ILogService _logger;
 
     public DataPipelineRetryChannel RetryChannel => DataPipelineRetryChannel.Cloud;
     public string Name => "Cloud";
@@ -24,15 +26,17 @@ public class CloudConsumer : ProcessUploaderConsumerBase<IProcessCloudUploader, 
     public CloudConsumer(
         IDeviceService deviceService,
         ICloudUploadGate uploadGate,
-        IEnumerable<IProcessCloudUploader> uploaders,
+        StandardPassStationCloudUploader standardUploader,
         IProcessIntegrationRegistry processIntegrationRegistry,
         ICloudUploadDiagnosticsStore diagnosticsStore,
         ILogService logger)
-        : base(deviceService, uploaders, logger)
     {
+        _deviceService = deviceService;
         _uploadGate = uploadGate;
+        _standardUploader = standardUploader;
         _processIntegrationRegistry = processIntegrationRegistry;
         _diagnosticsStore = diagnosticsStore;
+        _logger = logger;
     }
 
     public async Task<bool> ProcessAsync(CellCompletedRecord record, CancellationToken cancellationToken = default)
@@ -54,21 +58,9 @@ public class CloudConsumer : ProcessUploaderConsumerBase<IProcessCloudUploader, 
 
         foreach (var group in records.GroupBy(x => x.CellData.ProcessType, StringComparer.OrdinalIgnoreCase))
         {
-            if (!TryResolveUploader(
-                    "Cloud",
-                    group.Key,
-                    _processIntegrationRegistry.HasCloudUploader(group.Key),
-                    out var uploader,
-                    out var shouldFail))
+            if (!_processIntegrationRegistry.TryGetCloudUploader(group.Key, out var registration))
             {
-                if (!shouldFail)
-                {
-                    continue;
-                }
-
-                var uploaderMissing = CloudCallResult.Failure(CloudCallOutcome.Exception, "uploader_not_found");
-                _diagnosticsStore.RecordResult(group.Key, uploaderMissing);
-                return uploaderMissing;
+                continue;
             }
 
             var gate = _uploadGate.GetSnapshot();
@@ -84,31 +76,57 @@ public class CloudConsumer : ProcessUploaderConsumerBase<IProcessCloudUploader, 
                 var blockedResult = CloudCallResult.Failure(
                     CloudCallOutcome.SkippedUploadNotReady,
                     gate.ReasonCode);
-                Logger.Warn(
+                _logger.Warn(
                     $"[Cloud] 上传门控已阻塞（{gate.ReasonCode}），{group.Count()} 条记录转入 retry 队列。");
                 _diagnosticsStore.RecordResult(group.Key, blockedResult);
                 return blockedResult;
             }
 
-            var device = CurrentDevice;
+            var device = _deviceService.CurrentDevice;
             if (device is null)
             {
                 var unidentifiedResult = CloudCallResult.Failure(
                     CloudCallOutcome.SkippedUploadNotReady,
                     EdgeUploadBlockReason.DeviceUnidentified.ToReasonCode());
-                Logger.Warn("[Cloud] 设备尚未识别，记录转入 retry 队列。");
+                _logger.Warn("[Cloud] 设备尚未识别，记录转入 retry 队列。");
                 _diagnosticsStore.RecordResult(group.Key, unidentifiedResult);
                 return unidentifiedResult;
             }
 
             var groupRecords = group.ToList();
             var context = new ProcessUploadContext(device);
-            var result = await uploader.UploadAsync(context, groupRecords, cancellationToken).ConfigureAwait(false);
+            var result = registration.UploadMode == ProcessUploadMode.Batch
+                ? await _standardUploader.UploadAsync(context, group.Key, groupRecords, cancellationToken).ConfigureAwait(false)
+                : await UploadOneByOneAsync(context, group.Key, groupRecords, cancellationToken).ConfigureAwait(false);
             _diagnosticsStore.RecordResult(group.Key, result);
             if (!result.IsSuccess)
             {
-                Logger.Error(
+                _logger.Error(
                     $"[Cloud] 工序 {group.Key} 上传失败，数量：{groupRecords.Count}，结果：{result.Outcome}，原因：{result.ReasonCode}。");
+                return result;
+            }
+        }
+
+        return CloudCallResult.Success();
+    }
+
+    private async Task<CloudCallResult> UploadOneByOneAsync(
+        ProcessUploadContext context,
+        string processType,
+        IReadOnlyList<CellCompletedRecord> records,
+        CancellationToken cancellationToken)
+    {
+        foreach (var record in records)
+        {
+            var result = await _standardUploader.UploadAsync(
+                    context,
+                    processType,
+                    [record],
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            if (!result.IsSuccess)
+            {
                 return result;
             }
         }

@@ -2,33 +2,47 @@ namespace IIoT.Edge.Launcher.Services;
 
 public sealed class LauncherAccountCatalogInitializer : ILauncherAccountCatalogInitializer
 {
-    private readonly string _baseDirectory;
+    private readonly LauncherAccountCatalogPaths _paths;
+
+    public LauncherAccountCatalogInitializer(LauncherAccountCatalogPaths paths)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        ArgumentException.ThrowIfNullOrWhiteSpace(paths.CatalogPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(paths.SampleCatalogPath);
+
+        _paths = paths;
+    }
 
     public LauncherAccountCatalogInitializer(string baseDirectory)
+        : this(new LauncherAccountCatalogPaths(
+            LauncherAccountCatalog.GetCatalogPath(baseDirectory),
+            LauncherAccountCatalog.GetCatalogPath(baseDirectory, LauncherAccountCatalog.SampleCatalogFileName)))
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
-
-        _baseDirectory = baseDirectory;
     }
 
     public void EnsureCatalogExists()
     {
-        var accountsPath = LauncherAccountCatalog.GetCatalogPath(_baseDirectory);
-        if (File.Exists(accountsPath))
+        if (File.Exists(_paths.CatalogPath) || !File.Exists(_paths.SampleCatalogPath))
         {
             return;
         }
 
-        var samplePath = LauncherAccountCatalog.GetCatalogPath(
-            _baseDirectory,
-            LauncherAccountCatalog.SampleCatalogFileName);
-        if (!File.Exists(samplePath))
+        try
         {
-            throw new FileNotFoundException(
-                $"本地账号文件不存在，且未找到样例文件：{samplePath}",
-                samplePath);
-        }
+            var directory = Path.GetDirectoryName(_paths.CatalogPath);
+            if (!string.IsNullOrWhiteSpace(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
 
-        File.Copy(samplePath, accountsPath, overwrite: false);
+            File.Copy(_paths.SampleCatalogPath, _paths.CatalogPath, overwrite: false);
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
     }
 }

@@ -9,7 +9,9 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Markup.Xaml.Styling;
 using Avalonia.Media;
 using Avalonia.Styling;
+using IIoT.Edge.Application.Abstractions.Updates;
 using IIoT.Edge.Launcher.Services;
+using IIoT.Edge.SharedKernel.Configuration;
 using IIoT.Edge.UI.Shared.Localization;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -45,6 +47,10 @@ public partial class App : Avalonia.Application
             _serviceProvider.GetRequiredService<IAppLanguageService>().Initialize();
             _serviceProvider.GetRequiredService<ILauncherAccountCatalogInitializer>()
                 .EnsureCatalogExists();
+            _serviceProvider.GetRequiredService<IEdgeUpdateConfigInitializer>()
+                .EnsureConfigExists();
+            _serviceProvider.GetRequiredService<ILauncherDeviceBindingImporter>()
+                .ApplyPendingBindings();
 
             var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
             desktop.MainWindow = mainWindow;
@@ -151,15 +157,11 @@ public partial class App : Avalonia.Application
 internal sealed class LauncherLanguageService : IAppLanguageService
 {
     private const string DefaultCultureName = "zh-CN";
-    private const string LanguageFileName = "language.json";
     private readonly string _storagePath;
     private CultureInfo _current;
 
     public LauncherLanguageService()
-        : this(Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "IIoT.Edge",
-            LanguageFileName))
+        : this(EdgeClientProgramDataPaths.ResolveLauncherLanguagePath())
     {
     }
 

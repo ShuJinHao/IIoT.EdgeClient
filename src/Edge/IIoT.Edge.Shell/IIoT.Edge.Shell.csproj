@@ -5,11 +5,11 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationIcon>..\..\Shared\IIoT.Edge.UI.Shared\Assets\images\icon.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
     <BaseOutputPath>..\..\..\..\publish\</BaseOutputPath>
-    <OutputPath>..\..\..\..\publish\$(Configuration)\shell\</OutputPath>
+    <OutputPath>..\..\..\..\publish\$(Configuration)\host\</OutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <EnableLocalPluginModuleBuild Condition="'$(EnableLocalPluginModuleBuild)' == ''">false</EnableLocalPluginModuleBuild>
   </PropertyGroup>
 
   <ItemGroup>
@@ -31,10 +31,6 @@
     <ProjectReference Include="..\..\Application\IIoT.Edge.Application\IIoT.Edge.Application.csproj" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(EnableLocalPluginModuleBuild)' == 'true'">
-    <PluginModuleProject Include="..\..\Modules\**\*.csproj" />
-  </ItemGroup>
-
   <ItemGroup>
     <None Update="appsettings.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
@@ -54,21 +50,5 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
-
-  <Target Name="ResolvePluginModuleArtifacts" Condition="'$(EnableLocalPluginModuleBuild)' == 'true'">
-    <MSBuild Projects="@(PluginModuleProject)" Targets="GetPluginArtifacts" BuildInParallel="false" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
-      <Output TaskParameter="TargetOutputs" ItemName="PluginModuleArtifact" />
-    </MSBuild>
-  </Target>
-
-  <Target Name="CopyPluginModulesToBuildOutput" AfterTargets="Build" DependsOnTargets="ResolvePluginModuleArtifacts" Condition="'$(EnableLocalPluginModuleBuild)' == 'true'">
-    <MakeDir Directories="@(PluginModuleArtifact -> '$(TargetDir)Modules\%(ModuleId)\%(RecursiveDir)')" />
-    <Copy SourceFiles="@(PluginModuleArtifact)" DestinationFiles="@(PluginModuleArtifact -> '$(TargetDir)Modules\%(ModuleId)\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
-  </Target>
-
-  <Target Name="CopyPluginModulesToPublishOutput" AfterTargets="Publish" DependsOnTargets="ResolvePluginModuleArtifacts" Condition="'$(EnableLocalPluginModuleBuild)' == 'true' and '$(PublishDir)' != ''">
-    <MakeDir Directories="@(PluginModuleArtifact -> '$(PublishDir)Modules\%(ModuleId)\%(RecursiveDir)')" />
-    <Copy SourceFiles="@(PluginModuleArtifact)" DestinationFiles="@(PluginModuleArtifact -> '$(PublishDir)Modules\%(ModuleId)\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
-  </Target>
 
 </Project>

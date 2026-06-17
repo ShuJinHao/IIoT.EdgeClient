@@ -14,6 +14,7 @@ namespace IIoT.Edge.Infrastructure.DeviceComm.Signals;
 public abstract class PlcIoScanTaskBase : IPlcIoScanTask
 {
     private const int DisconnectLogIntervalSeconds = 30;
+    private const int MaxConnectTimeoutMs = 3000;
 
     private readonly IPlcService _plcService;
     private readonly IPlcDataStore _dataStore;
@@ -74,11 +75,15 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
     public async Task ConnectAsync()
     {
         Stopwatch? stopwatch = null;
+        var endpoint = ClampConnectTimeout(_device.Endpoint);
         try
         {
-            _plcService.Init(_device.Endpoint);
+            _plcService.Init(endpoint);
+            MarkConnecting();
             stopwatch = Stopwatch.StartNew();
-            var connected = await _plcService.ConnectAsync().ConfigureAwait(false);
+            var connected = await _plcService.ConnectAsync()
+                .WaitAsync(endpoint.ConnectTimeout)
+                .ConfigureAwait(false);
             MarkLatency(ToLatencyMs(stopwatch.ElapsedMilliseconds));
             if (connected)
             {
@@ -102,6 +107,7 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
         }
         catch (Exception ex)
         {
+            CloseHangingConnection();
             _retryCount++;
             MarkLatency(ToLatencyMs(stopwatch?.ElapsedMilliseconds));
             MarkDisconnected(ex.Message);
@@ -147,6 +153,10 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
     }
 
     protected virtual void MarkConnected()
+    {
+    }
+
+    protected virtual void MarkConnecting()
     {
     }
 
@@ -284,6 +294,39 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
         => elapsedMilliseconds.HasValue
             ? (int)Math.Min(int.MaxValue, Math.Max(0, elapsedMilliseconds.Value))
             : null;
+
+    private static PlcEndpoint ClampConnectTimeout(PlcEndpoint endpoint)
+    {
+        var timeoutMs = endpoint.ConnectTimeoutMs <= 0
+            ? MaxConnectTimeoutMs
+            : Math.Min(endpoint.ConnectTimeoutMs, MaxConnectTimeoutMs);
+
+        return endpoint switch
+        {
+            TcpPlcEndpoint tcp => new TcpPlcEndpoint(tcp.Host, tcp.Port, timeoutMs),
+            SerialPlcEndpoint serial => new SerialPlcEndpoint(
+                serial.PortName,
+                serial.BaudRate,
+                serial.DataBits,
+                serial.StopBits,
+                serial.Parity,
+                serial.SlaveId,
+                timeoutMs),
+            _ => endpoint
+        };
+    }
+
+    private void CloseHangingConnection()
+    {
+        try
+        {
+            _plcService.Disconnect();
+        }
+        catch
+        {
+            // 连接失败后的主动关闭不能反向打断扫描循环的重试路径。
+        }
+    }
 
     private bool ShouldLogDisconnect()
     {

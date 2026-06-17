@@ -3,6 +3,8 @@ using IIoT.Edge.Launcher.Models;
 
 namespace IIoT.Edge.Launcher.Services;
 
+public sealed record LauncherAccountCatalogPaths(string CatalogPath, string SampleCatalogPath);
+
 public sealed class LauncherAccountCatalog : ILauncherAccountCatalog
 {
     public const string DefaultCatalogFileName = "launcher.accounts.json";
@@ -11,12 +13,27 @@ public sealed class LauncherAccountCatalog : ILauncherAccountCatalog
 
     private readonly string _catalogPath;
 
+    public LauncherAccountCatalog(LauncherAccountCatalogPaths paths)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        ArgumentException.ThrowIfNullOrWhiteSpace(paths.CatalogPath);
+
+        _catalogPath = paths.CatalogPath;
+    }
+
     public LauncherAccountCatalog(string baseDirectory, string catalogFileName = DefaultCatalogFileName)
+        : this(new LauncherAccountCatalogPaths(
+            GetCatalogPath(baseDirectory, catalogFileName),
+            GetCatalogPath(baseDirectory, SampleCatalogFileName)))
+    {
+    }
+
+    public static string GetCatalogPath(string baseDirectory, string catalogFileName = DefaultCatalogFileName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
         ArgumentException.ThrowIfNullOrWhiteSpace(catalogFileName);
 
-        _catalogPath = GetCatalogPath(baseDirectory, catalogFileName);
+        return Path.Combine(baseDirectory, catalogFileName);
     }
 
     public IReadOnlyList<LauncherAccountRecord> LoadAccounts()
@@ -52,14 +69,6 @@ public sealed class LauncherAccountCatalog : ILauncherAccountCatalog
         File.WriteAllText(
             _catalogPath,
             JsonSerializer.Serialize(entries, JsonOptionsIndented()));
-    }
-
-    public static string GetCatalogPath(string baseDirectory, string catalogFileName = DefaultCatalogFileName)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
-        ArgumentException.ThrowIfNullOrWhiteSpace(catalogFileName);
-
-        return Path.Combine(baseDirectory, catalogFileName);
     }
 
     private static LauncherAccountRecord Map(LauncherAccountFileEntry entry)

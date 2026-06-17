@@ -1,6 +1,6 @@
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
-using IIoT.Edge.Runtime.Base;
+using IIoT.Edge.Module.Sdk.Base;
 using IIoT.Edge.SharedKernel.Context;
 
 namespace IIoT.Edge.NonUiRegressionTests;

@@ -103,6 +103,7 @@ public sealed class ShellLaunchServiceTests
             Assert.Equal(executablePath, starter.StartInfo!.FileName);
             Assert.Equal("HomogenizationLine", starter.StartInfo.EnvironmentVariables["Shell__MachineProfile"]);
             Assert.False(starter.StartInfo.UseShellExecute);
+            Assert.True(service.HasRunningShellProcess);
         }
         finally
         {

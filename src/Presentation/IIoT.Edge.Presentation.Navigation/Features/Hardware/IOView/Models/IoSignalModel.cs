@@ -6,6 +6,7 @@ namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
 public class IoSignalModel : BaseNotifyPropertyChanged
 {
     private Func<string, string, string>? _textProvider;
+    private string? _remark;
 
     public string SignalKey { get; set; } = "";
     public string PlcAddress { get; set; } = "";
@@ -14,8 +15,12 @@ public class IoSignalModel : BaseNotifyPropertyChanged
         ? GetText("Navigation_Io_Direction_HostToPlc", "上位机到 PLC")
         : GetText("Navigation_Io_Direction_PlcToHost", "PLC 到上位机");
     public string DataType { get; set; } = "Int16";
-    public string MatrixColumnTitle => SignalKey;
-    public string? Remark { get; set; }
+    public string MatrixColumnTitle => string.IsNullOrWhiteSpace(Remark) ? "-" : Remark;
+    public string? Remark
+    {
+        get => _remark;
+        set => _remark = NormalizeRuntimeRemark(value);
+    }
     public int StartIndex { get; set; }
     public int AddressCount { get; set; } = 1;
     public int SortOrder { get; set; }
@@ -87,6 +92,33 @@ public class IoSignalModel : BaseNotifyPropertyChanged
 
     private string GetText(string key, string fallback)
         => _textProvider?.Invoke(key, fallback) ?? fallback;
+
+    private static string? NormalizeRuntimeRemark(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+        foreach (var separator in new[] { " - ", "－", "—" })
+        {
+            var index = trimmed.IndexOf(separator, StringComparison.Ordinal);
+            if (index <= 0)
+            {
+                continue;
+            }
+
+            var prefix = trimmed[..index].Trim();
+            var suffix = trimmed[(index + separator.Length)..].Trim();
+            if (prefix.EndsWith("模块", StringComparison.Ordinal) && suffix.Length > 0)
+            {
+                return suffix;
+            }
+        }
+
+        return trimmed;
+    }
 }
 
 public sealed class IoSignalValueModel

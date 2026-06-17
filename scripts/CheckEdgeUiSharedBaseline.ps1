@@ -28,13 +28,13 @@ if (Test-Path $edgeControlsDir) {
 }
 
 $controlFiles = @(Get-ChildItem -Path $controlsDir -Filter "*.cs" -Recurse -File)
-if ($controlFiles.Count -ne 36) {
-    Write-Error "Expected 36 shared control .cs files, found $($controlFiles.Count)."
+if ($controlFiles.Count -ne 41) {
+    Write-Error "Expected 41 shared control .cs files, found $($controlFiles.Count)."
 }
 
 $publicEdgeClasses = @(Select-String -Path $controlFiles.FullName -Pattern "^public .*class Edge")
-if ($publicEdgeClasses.Count -ne 36) {
-    Write-Error "Expected 36 public Edge* classes, found $($publicEdgeClasses.Count)."
+if ($publicEdgeClasses.Count -ne 41) {
+    Write-Error "Expected 41 public Edge* classes, found $($publicEdgeClasses.Count)."
 }
 
 $expectedPublicEdgeClasses = @(
@@ -54,6 +54,7 @@ $expectedPublicEdgeClasses = @(
     "EdgeFilterDatePicker",
     "EdgeHeaderBrand",
     "EdgeHeaderDivider",
+    "EdgeInfoSummaryCard",
     "EdgeListBox",
     "EdgeLogList",
     "EdgeLogListItem",
@@ -67,7 +68,11 @@ $expectedPublicEdgeClasses = @(
     "EdgeStatusControlBase",
     "EdgeStatusDot",
     "EdgeStatusListItem",
+    "EdgeStatusSegment",
+    "EdgeStatusSegmentBar",
+    "EdgeStatusTimeline",
     "EdgeSummaryItem",
+    "EdgeSummaryItemsControl",
     "EdgeTabControl",
     "EdgeTablePanel",
     "EdgeTemplateColumn",
@@ -167,7 +172,7 @@ if ($missingButtonClasses.Count -ne 0) {
     Write-Error "Required Edge button controls missing: $($missingButtonClasses -join ', ')."
 }
 
-$allowedCardClasses = @("EdgeCard", "EdgeMetricCard")
+$allowedCardClasses = @("EdgeCard", "EdgeInfoSummaryCard", "EdgeMetricCard")
 $cardClassHits = @(Select-String -Path $controlFiles.FullName -Pattern "^public .*class Edge.*Card\b")
 $cardClassNames = @(
     $cardClassHits | ForEach-Object {
@@ -179,7 +184,7 @@ $cardClassNames = @(
 
 $unexpectedCardClasses = @($cardClassNames | Where-Object { $_ -notin $allowedCardClasses })
 if ($unexpectedCardClasses.Count -ne 0) {
-    Write-Error "Unexpected Edge card controls found: $($unexpectedCardClasses -join ', '). Use EdgeCard, EdgeMetricCard, and shared classes."
+    Write-Error "Unexpected Edge card controls found: $($unexpectedCardClasses -join ', '). Use EdgeCard, EdgeInfoSummaryCard, EdgeMetricCard, and shared classes."
 }
 
 $missingCardClasses = @($allowedCardClasses | Where-Object { $_ -notin $cardClassNames })
@@ -187,7 +192,7 @@ if ($missingCardClasses.Count -ne 0) {
     Write-Error "Required Edge card controls missing: $($missingCardClasses -join ', ')."
 }
 
-$allowedMetricClasses = @("EdgeMetricCard", "EdgeSummaryItem")
+$allowedMetricClasses = @("EdgeInfoSummaryCard", "EdgeMetricCard", "EdgeSummaryItem", "EdgeSummaryItemsControl")
 $metricClassHits = @(Select-String -Path $controlFiles.FullName -Pattern "^public .*class Edge.*(Metric|Summary)")
 $metricClassNames = @(
     $metricClassHits | ForEach-Object {
@@ -199,7 +204,7 @@ $metricClassNames = @(
 
 $unexpectedMetricClasses = @($metricClassNames | Where-Object { $_ -notin $allowedMetricClasses })
 if ($unexpectedMetricClasses.Count -ne 0) {
-    Write-Error "Unexpected Edge metric or summary classes found: $($unexpectedMetricClasses -join ', '). Use EdgeMetricCard or EdgeSummaryItem."
+    Write-Error "Unexpected Edge metric or summary classes found: $($unexpectedMetricClasses -join ', '). Use EdgeInfoSummaryCard, EdgeMetricCard, EdgeSummaryItem, or EdgeSummaryItemsControl."
 }
 
 $allowedChartClasses = @("EdgeBarLineChart", "EdgeChartSeries", "EdgeChartPoint")
@@ -264,7 +269,9 @@ $statusDerivedClasses = @(
     "EdgeStatusDot",
     "EdgeStatusListItem",
     "EdgeNoticeBar",
-    "EdgeMetricCard"
+    "EdgeMetricCard",
+    "EdgeInfoSummaryCard",
+    "EdgeStatusSegment"
 )
 
 foreach ($className in $statusDerivedClasses) {

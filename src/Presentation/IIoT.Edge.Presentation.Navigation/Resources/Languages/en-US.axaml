@@ -170,6 +170,8 @@
     <sys:String x:Key="Navigation_Param_CloudApi_DeviceLogPath_Description">API path used to upload device logs.</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_ProcessUploadPath_DisplayName">Process Upload Path</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_ProcessUploadPath_Description">API path used to upload process production records.</sys:String>
+    <sys:String x:Key="Navigation_Param_CloudApi_PassStationBatchTemplatePath_DisplayName">Pass Station Batch Path Template</sys:String>
+    <sys:String x:Key="Navigation_Param_CloudApi_PassStationBatchTemplatePath_Description">API path template used to upload process pass-station batches. It must contain {typeKey}.</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_CapacityHourlyPath_DisplayName">Hourly Capacity Path</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_CapacityHourlyPath_Description">API path used to upload or query hourly capacity.</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_CapacitySummaryPath_DisplayName">Capacity Summary Path</sys:String>
@@ -178,6 +180,10 @@
     <sys:String x:Key="Navigation_Param_CloudApi_CapacitySummaryRangePath_Description">API path used to query capacity summaries for a time range.</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_RecipeByDeviceTemplatePath_DisplayName">Device Recipe Path Template</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_RecipeByDeviceTemplatePath_Description">API path template for querying device recipes. It must contain {deviceId}.</sys:String>
+    <sys:String x:Key="Navigation_Param_CloudApi_ClientReleaseCatalogTemplatePath_DisplayName">Client Release Catalog Path Template</sys:String>
+    <sys:String x:Key="Navigation_Param_CloudApi_ClientReleaseCatalogTemplatePath_Description">API path template used by Launcher to fetch host and plugin catalog for a device. It must contain {deviceId}.</sys:String>
+    <sys:String x:Key="Navigation_Param_CloudApi_ClientVersionReportPath_DisplayName">Client Version Report Path</sys:String>
+    <sys:String x:Key="Navigation_Param_CloudApi_ClientVersionReportPath_Description">API path used by Launcher to report host version, HostApiVersion, installed plugins, and enabled plugins.</sys:String>
     <sys:String x:Key="Navigation_Column_ParamName">Parameter Name</sys:String>
     <sys:String x:Key="Navigation_Column_ParamValue">Parameter Value</sys:String>
     <sys:String x:Key="Navigation_Column_ParamType">Type</sys:String>
@@ -397,6 +403,9 @@
     <sys:String x:Key="Navigation_Monitor_ColumnValue">Current Value</sys:String>
     <sys:String x:Key="Navigation_Monitor_ConnectionOnline">Connected</sys:String>
     <sys:String x:Key="Navigation_Monitor_ConnectionOffline">Disconnected</sys:String>
+    <sys:String x:Key="Navigation_Monitor_ConnectionConnecting">Connecting</sys:String>
+    <sys:String x:Key="Navigation_Monitor_ConnectionRetrying">Retrying</sys:String>
+    <sys:String x:Key="Navigation_Monitor_ConnectionFaulted">Runtime fault</sys:String>
     <sys:String x:Key="Navigation_Monitor_RowCountFormat">{0} items</sys:String>
     <sys:String x:Key="Navigation_Monitor_StateMachinePrefix">State Machine: </sys:String>
     <sys:String x:Key="Navigation_Monitor_DeviceDataPrefix">Device Data: </sys:String>
@@ -663,7 +672,7 @@
     <sys:String x:Key="Navigation_Io_Direction_PlcToHost">PLC to Host</sys:String>
     <sys:String x:Key="Navigation_Io_TooltipSeparator">; </sys:String>
     <sys:String x:Key="Navigation_Io_TooltipCurrentValueFormat">, current value: {0}</sys:String>
-    <sys:String x:Key="Navigation_Io_TooltipSignalFormat">Signal key: {0}, address: {1}{2}</sys:String>
+    <sys:String x:Key="Navigation_Io_TooltipSignalFormat">Remark: {0}, address: {1}{2}</sys:String>
     <sys:String x:Key="Navigation_Io_NoContinuousValues">No continuous values</sys:String>
     <sys:String x:Key="Navigation_Io_ArraySummaryFormat">{0} rows x {1} columns</sys:String>
     <sys:String x:Key="Navigation_Io_CollapseDetails">Collapse details</sys:String>

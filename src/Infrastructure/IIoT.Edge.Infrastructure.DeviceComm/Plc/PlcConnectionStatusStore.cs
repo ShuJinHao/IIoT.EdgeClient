@@ -24,7 +24,23 @@ public sealed class PlcConnectionStatusStore
             {
                 NetworkDeviceId = networkDeviceId,
                 DeviceName = deviceName,
-                IsConnected = false
+                IsConnected = false,
+                ConnectionState = PlcConnectionState.Connecting
+            };
+        }
+    }
+
+    public void MarkConnecting(int networkDeviceId, string deviceName)
+    {
+        lock (_stateLock)
+        {
+            var existing = GetOrCreateSnapshot(networkDeviceId, deviceName);
+            _snapshots[networkDeviceId] = existing with
+            {
+                DeviceName = deviceName,
+                IsConnected = false,
+                ConnectionState = PlcConnectionState.Connecting,
+                LastError = null
             };
         }
     }
@@ -38,6 +54,7 @@ public sealed class PlcConnectionStatusStore
             {
                 DeviceName = deviceName,
                 IsConnected = true,
+                ConnectionState = PlcConnectionState.Connected,
                 LastConnectedAtUtc = DateTimeOffset.UtcNow,
                 LastError = null
             };
@@ -53,6 +70,9 @@ public sealed class PlcConnectionStatusStore
             {
                 DeviceName = deviceName,
                 IsConnected = false,
+                ConnectionState = string.IsNullOrWhiteSpace(error)
+                    ? PlcConnectionState.Disconnected
+                    : PlcConnectionState.Retrying,
                 LastFailureAtUtc = string.IsNullOrWhiteSpace(error)
                     ? existing.LastFailureAtUtc
                     : DateTimeOffset.UtcNow,
@@ -64,7 +84,20 @@ public sealed class PlcConnectionStatusStore
     }
 
     public void MarkRuntimeFault(int networkDeviceId, string deviceName, string error)
-        => MarkDisconnected(networkDeviceId, deviceName, error);
+    {
+        lock (_stateLock)
+        {
+            var existing = GetOrCreateSnapshot(networkDeviceId, deviceName);
+            _snapshots[networkDeviceId] = existing with
+            {
+                DeviceName = deviceName,
+                IsConnected = false,
+                ConnectionState = PlcConnectionState.Faulted,
+                LastFailureAtUtc = DateTimeOffset.UtcNow,
+                LastError = error
+            };
+        }
+    }
 
     public void MarkLatency(int networkDeviceId, string deviceName, int? latencyMs)
     {
@@ -110,7 +143,8 @@ public sealed class PlcConnectionStatusStore
         {
             NetworkDeviceId = networkDeviceId,
             DeviceName = deviceName,
-            IsConnected = false
+            IsConnected = false,
+            ConnectionState = PlcConnectionState.Connecting
         };
     }
 }

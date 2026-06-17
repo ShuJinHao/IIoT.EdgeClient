@@ -123,6 +123,17 @@ public sealed class RepositoryHygieneTests
                 "src/Core/IIoT.Edge.Domain/IIoT.Edge.Domain.csproj",
                 "src/Shared/IIoT.Edge.SharedKernel/IIoT.Edge.SharedKernel.csproj"
             ],
+            ["src/Modules/IIoT.Edge.Module.Sdk/IIoT.Edge.Module.Sdk.csproj"] =
+            [
+                "src/Application/IIoT.Edge.Application/IIoT.Edge.Application.csproj",
+                "src/Shared/IIoT.Edge.SharedKernel/IIoT.Edge.SharedKernel.csproj"
+            ],
+            ["src/Edge/IIoT.Edge.Host.DataPipeline/IIoT.Edge.Host.DataPipeline.csproj"] =
+            [
+                "src/Application/IIoT.Edge.Application/IIoT.Edge.Application.csproj",
+                "src/Modules/IIoT.Edge.Module.Sdk/IIoT.Edge.Module.Sdk.csproj",
+                "src/Shared/IIoT.Edge.SharedKernel/IIoT.Edge.SharedKernel.csproj"
+            ],
             ["src/Infrastructure/IIoT.Edge.Infrastructure.DeviceComm/IIoT.Edge.Infrastructure.DeviceComm.csproj"] =
             [
                 "src/Application/IIoT.Edge.Application/IIoT.Edge.Application.csproj"
@@ -152,26 +163,33 @@ public sealed class RepositoryHygieneTests
             ["src/Core/IIoT.Edge.Domain"] =
             [
                 "IIoT.Edge.Application",
+                "IIoT.Edge.Host.DataPipeline",
                 "IIoT.Edge.Infrastructure",
+                "IIoT.Edge.Module.Sdk",
                 "IIoT.Edge.Runtime",
                 "IIoT.Edge.Presentation",
                 "IIoT.Edge.UI.Shared"
             ],
             ["src/Application/IIoT.Edge.Application"] =
             [
+                "IIoT.Edge.Host.DataPipeline",
                 "IIoT.Edge.Infrastructure",
+                "IIoT.Edge.Module.Sdk",
                 "IIoT.Edge.Runtime",
                 "IIoT.Edge.Presentation",
                 "IIoT.Edge.UI.Shared"
             ],
             ["src/Infrastructure/IIoT.Edge.Infrastructure.DeviceComm"] =
             [
+                "IIoT.Edge.Host.DataPipeline",
                 "IIoT.Edge.Runtime"
             ],
             ["src/Shared/IIoT.Edge.SharedKernel"] =
             [
                 "IIoT.Edge.Application",
+                "IIoT.Edge.Host.DataPipeline",
                 "IIoT.Edge.Infrastructure",
+                "IIoT.Edge.Module.Sdk",
                 "IIoT.Edge.Runtime",
                 "IIoT.Edge.Presentation",
                 "IIoT.Edge.UI.Shared"
@@ -269,6 +287,58 @@ public sealed class RepositoryHygieneTests
     }
 
     [Fact]
+    public void RoundedWindowRegion_ShouldLiveInSharedUiAndBeReusedByShellLauncherAndPanels()
+    {
+        var root = FindRepositoryRoot();
+        var allowedRegionOwner = "src/Shared/IIoT.Edge.UI.Shared/Avalonia/Windowing/EdgeRoundedWindowRegion.cs";
+        var sharedRegion = File.ReadAllText(ToFullPath(root, allowedRegionOwner));
+        var regionUsers = new[]
+        {
+            "src/Edge/IIoT.Edge.Shell/MainWindow.axaml.cs",
+            "src/Edge/IIoT.Edge.Launcher/MainWindow.axaml.cs",
+            "src/Edge/IIoT.Edge.Launcher/ChangePasswordWindow.axaml.cs",
+            "src/Presentation/IIoT.Edge.Presentation.Panels/Features/Equipment/Views/ProductionPlanSelectionWindow.axaml.cs"
+        };
+        var forbiddenRegionMarkers = new[]
+        {
+            "CreateRoundRectRgn",
+            "SetWindowRgn",
+            "DeleteObject",
+            "DllImport(\"gdi32.dll\")",
+            "DllImport(\"user32.dll\")"
+        };
+
+        Assert.Contains("CreateRoundRectRgn", sharedRegion, StringComparison.Ordinal);
+        Assert.Contains("SetWindowRgn", sharedRegion, StringComparison.Ordinal);
+        Assert.DoesNotContain("ApplyStartupLeftBias", sharedRegion, StringComparison.Ordinal);
+
+        foreach (var regionUser in regionUsers)
+        {
+            var source = File.ReadAllText(ToFullPath(root, regionUser));
+            Assert.Contains("EdgeRoundedWindowRegion.Attach(this, WindowCornerRadius)", source, StringComparison.Ordinal);
+        }
+
+        var duplicatedRegionMatches = new[]
+            {
+                Path.Combine(root, "src", "Edge"),
+                Path.Combine(root, "src", "Presentation"),
+                Path.Combine(root, "src", "Shared")
+            }
+            .SelectMany(path => EnumerateFiles(path, "*.cs"))
+            .Where(path => !string.Equals(ToRepositoryPath(root, path), allowedRegionOwner, StringComparison.OrdinalIgnoreCase))
+            .SelectMany(path =>
+            {
+                var source = File.ReadAllText(path);
+                return forbiddenRegionMarkers
+                    .Where(marker => source.Contains(marker, StringComparison.Ordinal))
+                    .Select(marker => $"{ToRepositoryPath(root, path)} contains duplicate rounded-window region marker {marker}");
+            })
+            .ToArray();
+
+        Assert.Empty(duplicatedRegionMatches);
+    }
+
+    [Fact]
     public void ShellAppSettings_ShouldNotContainCommittedLicenseOrJwtSecrets()
     {
         var root = FindRepositoryRoot();
@@ -297,7 +367,8 @@ public sealed class RepositoryHygieneTests
             "IIoT.Edge.Launcher",
             "IIoT.Edge.Launcher.csproj"));
 
-        Assert.Contains("../homogenization/IIoT.Edge.Shell", profileCatalog, StringComparison.Ordinal);
+        Assert.Contains("../host/IIoT.Edge.Shell", profileCatalog, StringComparison.Ordinal);
+        Assert.DoesNotContain("../homogenization/IIoT.Edge.Shell", profileCatalog, StringComparison.Ordinal);
         Assert.DoesNotContain("IIoT.Edge.Shell.exe", profileCatalog, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("RuntimeLayoutSync", launcherProject, StringComparison.Ordinal);
         Assert.DoesNotContain("powershell" + " -ExecutionPolicy", launcherProject, StringComparison.OrdinalIgnoreCase);
@@ -315,8 +386,36 @@ public sealed class RepositoryHygieneTests
             "RuntimeLayoutSyncFileSystem.cs"));
 
         Assert.Contains("\"IIoT.Edge.Application.dll\"", fileSystem, StringComparison.Ordinal);
-        Assert.Contains("\"IIoT.Edge.Runtime.dll\"", fileSystem, StringComparison.Ordinal);
+        Assert.Contains("\"IIoT.Edge.Host.DataPipeline.dll\"", fileSystem, StringComparison.Ordinal);
+        Assert.Contains("\"IIoT.Edge.Module.Sdk.dll\"", fileSystem, StringComparison.Ordinal);
         Assert.Contains("\"Modules\"", fileSystem, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RuntimeLayoutSync_ShouldPublishSingleHostAndConfiguredPluginsRoot()
+    {
+        var root = FindRepositoryRoot();
+        var app = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "Tools",
+            "IIoT.Edge.RuntimeLayoutSync",
+            "RuntimeLayoutSyncApp.cs"));
+        var fileSystem = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "Tools",
+            "IIoT.Edge.RuntimeLayoutSync",
+            "RuntimeLayoutSyncFileSystem.cs"));
+
+        Assert.Contains("fileSystem.CleanDirectory(hostRoot)", app, StringComparison.Ordinal);
+        Assert.Contains("Path.Combine(hostRoot, \"Modules\")", app, StringComparison.Ordinal);
+        Assert.Contains("SyncPluginsLayout(repoRoot, options.Configuration, manifest, layoutRoot)", app, StringComparison.Ordinal);
+        Assert.Contains("RemoveLauncherShellArtifacts(launcherRuntimeRoot)", app, StringComparison.Ordinal);
+        Assert.DoesNotContain("ResolveProfilePluginRootPath", app, StringComparison.Ordinal);
+        Assert.DoesNotContain("ResolveProfilePluginRootPath", fileSystem, StringComparison.Ordinal);
+        Assert.DoesNotContain("ProgramDataRootEnvironmentVariable", app, StringComparison.Ordinal);
+        Assert.DoesNotContain("ProgramDataRootEnvironmentVariable", fileSystem, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -394,6 +493,81 @@ public sealed class RepositoryHygieneTests
             .ToArray();
 
         Assert.Empty(matches);
+    }
+
+    [Fact]
+    public void EdgeDocs_ShouldNotDocumentLegacyLauncherUpdateJsonPascalCaseKeys()
+    {
+        var root = FindRepositoryRoot();
+        var docsRoot = Path.Combine(root, "docs");
+        var legacyPatterns = new[]
+        {
+            "`launcher.update.json` 中的 `Source`",
+            "`launcher.update.json` 中的 `Channel`",
+            "`launcher.update.json` 中的 `TargetRuntime`",
+            "`Source`、`Channel`",
+            "`Channel`、`TargetRuntime`"
+        };
+
+        var matches = EnumerateFiles(docsRoot, "*.md")
+            .SelectMany(path => FindForbiddenMatches(root, path, legacyPatterns))
+            .ToArray();
+
+        Assert.Empty(matches);
+    }
+
+    [Fact]
+    public void EdgePackWorkflow_ShouldBuildOnWindowsAndPublishFromIntranetRunner()
+    {
+        var root = FindRepositoryRoot();
+        var workflowPath = Path.Combine(root, ".github", "workflows", "edge-pack-modules.yml");
+        var workflow = File.ReadAllText(workflowPath);
+
+        Assert.Contains("workflow_dispatch:", workflow, StringComparison.Ordinal);
+        Assert.Contains("EDGE_RELEASE_VERSION", workflow, StringComparison.Ordinal);
+        Assert.Contains("EDGE_RELEASE_CHANNEL", workflow, StringComparison.Ordinal);
+        Assert.Contains("runs-on: windows-latest", workflow, StringComparison.Ordinal);
+        Assert.Contains("PackEdgeClientVelopack.ps1", workflow, StringComparison.Ordinal);
+        Assert.Contains("TestEdgeVelopackPackage.ps1", workflow, StringComparison.Ordinal);
+        Assert.Contains("edge-installer-artifact", workflow, StringComparison.Ordinal);
+        Assert.Contains("edge-velopack-releases", workflow, StringComparison.Ordinal);
+        Assert.Contains("publish-edge-updates:", workflow, StringComparison.Ordinal);
+        Assert.Contains("self-hosted", workflow, StringComparison.Ordinal);
+        Assert.Contains("iiot-linux-prod", workflow, StringComparison.Ordinal);
+        Assert.Contains("actions/download-artifact@v4", workflow, StringComparison.Ordinal);
+        Assert.Contains("EDGE_UPDATES_DIR", workflow, StringComparison.Ordinal);
+        Assert.Contains("installers/$EDGE_RELEASE_CHANNEL/$EDGE_RELEASE_VERSION", workflow, StringComparison.Ordinal);
+        Assert.Contains("velopack/$EDGE_RELEASE_CHANNEL", workflow, StringComparison.Ordinal);
+
+        foreach (var forbidden in new[] { "scp", "ssh", "docker build", "ghcr.io", "Harbor" })
+        {
+            Assert.DoesNotContain(forbidden, workflow, StringComparison.OrdinalIgnoreCase);
+        }
+
+        var installerPublisher = File.ReadAllText(Path.Combine(root, "scripts", "PublishEdgeClientInstallerArtifact.ps1"));
+        foreach (var forbidden in new[] { "SshTarget", "RemoteEdgeUpdatesDir", "scp", "ssh" })
+        {
+            Assert.DoesNotContain(forbidden, installerPublisher, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Fact]
+    public void EdgeInstallUpdateDocs_ShouldDocumentStandardArtifactPublishPath()
+    {
+        var root = FindRepositoryRoot();
+        var installDoc = File.ReadAllText(Path.Combine(root, "docs", "Edge安装更新验收.md"));
+        var contractDoc = File.ReadAllText(Path.Combine(root, "docs", "Edge客户端宿主插件分发契约.md"));
+        var ruleDoc = File.ReadAllText(Path.Combine(root, "docs", "客户端规则.md"));
+
+        Assert.Contains("唯一客户端侧验收入口", installDoc, StringComparison.Ordinal);
+        Assert.Contains("GitHub hosted Windows runner", installDoc, StringComparison.Ordinal);
+        Assert.Contains("内网 Linux self-hosted runner", installDoc, StringComparison.Ordinal);
+        Assert.Contains("/srv/iiot/edge-updates", installDoc, StringComparison.Ordinal);
+        Assert.Contains("EdgeClient 不发布 Docker 镜像，不推 Harbor", installDoc, StringComparison.Ordinal);
+        Assert.Contains("Windows hosted runner 只负责构建", ruleDoc, StringComparison.Ordinal);
+        Assert.Contains("内网 Linux self-hosted runner 只负责", ruleDoc, StringComparison.Ordinal);
+        Assert.Contains("CI artifact 发布契约", contractDoc, StringComparison.Ordinal);
+        Assert.Contains("Linux runner 只做文件分发，不重新构建 EdgeClient", contractDoc, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -1,12 +1,12 @@
 internal sealed record RuntimePublishManifest(
     string LauncherDirectory,
-    List<RuntimeDefinition> Runtimes);
+    string HostDirectory,
+    string PluginsRoot,
+    List<RuntimeProfileDefinition> Profiles);
 
-internal sealed record RuntimeDefinition(
-    string RuntimeId,
+internal sealed record RuntimeProfileDefinition(
     string ProfileId,
     string MachineProfile,
-    string OutputDirectory,
     string MachineConfig,
     List<string> ModuleIds);
 
@@ -57,7 +57,7 @@ internal sealed record CommandLineOptions(
             Get(values, "launcher-profile-catalog-path", "src/Edge/IIoT.Edge.Launcher/launcher.profiles.json"),
             Get(values, "layout-root", "../publish/Debug"),
             Get(values, "launcher-runtime-root", "../publish/Debug/launcher"),
-            Get(values, "shell-runtime-root", "../publish/Debug/shell"));
+            Get(values, "shell-runtime-root", "../publish/Debug/host"));
     }
 
     private static string Get(IReadOnlyDictionary<string, string> values, string key, string defaultValue)

@@ -18,12 +18,14 @@ public sealed class CloudApiEndpointProviderBehaviorTests
                 new LocalSystemConfigSnapshot(1, CloudApiConfigParamSchema.BaseUrl, "https://local-cloud.test", null, 1),
                 new LocalSystemConfigSnapshot(2, CloudApiConfigParamSchema.ClientCode, "LOCAL-CLIENT", null, 2),
                 new LocalSystemConfigSnapshot(3, CloudApiConfigParamSchema.ProcessUploadPath, "/local/process", null, 3),
-                new LocalSystemConfigSnapshot(4, CloudApiConfigParamSchema.RecipeByDeviceTemplatePath, "/local/recipes/{deviceId}", null, 4)
+                new LocalSystemConfigSnapshot(4, CloudApiConfigParamSchema.PassStationBatchTemplatePath, "/local/pass-stations/{typeKey}/batch", null, 4),
+                new LocalSystemConfigSnapshot(5, CloudApiConfigParamSchema.RecipeByDeviceTemplatePath, "/local/recipes/{deviceId}", null, 5)
             ]));
 
         Assert.Equal("https://local-cloud.test/api/ping", provider.BuildUrl("/api/ping"));
         Assert.Equal("LOCAL-CLIENT", provider.GetClientCode());
         Assert.Equal("/local/process", provider.GetProcessUploadPath());
+        Assert.Equal("/local/pass-stations/homogenization/batch", provider.GetPassStationBatchPath("Homogenization"));
         Assert.Equal($"/local/recipes/{deviceId}", provider.BuildRecipeByDevicePath(deviceId));
     }
 
@@ -37,6 +39,7 @@ public sealed class CloudApiEndpointProviderBehaviorTests
         Assert.Equal("https://config-cloud.test/api/ping", provider.BuildUrl("/api/ping"));
         Assert.Equal("CONFIG-CLIENT", provider.GetClientCode());
         Assert.Equal("/config/process", provider.GetProcessUploadPath());
+        Assert.Equal("/config/pass-stations/homogenization/batch", provider.GetPassStationBatchPath("Homogenization"));
     }
 
     private static CloudApiConfig CreateConfig()
@@ -53,6 +56,7 @@ public sealed class CloudApiEndpointProviderBehaviorTests
                 HumanIdentityRefresh = "/config/human-refresh",
                 DeviceLog = "/config/logs",
                 ProcessUpload = "/config/process",
+                PassStationBatchTemplate = "/config/pass-stations/{typeKey}/batch",
                 CapacityHourly = "/config/capacity-hourly",
                 CapacitySummary = "/config/capacity-summary",
                 CapacitySummaryRange = "/config/capacity-range",

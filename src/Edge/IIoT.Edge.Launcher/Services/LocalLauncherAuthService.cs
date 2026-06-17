@@ -1,9 +1,12 @@
+using System.Text.Json;
 using IIoT.Edge.Launcher.Models;
 
 namespace IIoT.Edge.Launcher.Services;
 
 public sealed class LocalLauncherAuthService : ILocalLauncherAuthService
 {
+    public const string AccountConfigurationUnavailableError = "本地账号配置不可用。";
+
     private readonly ILauncherAccountCatalog _accountCatalog;
 
     public LocalLauncherAuthService(ILauncherAccountCatalog accountCatalog)
@@ -23,8 +26,17 @@ public sealed class LocalLauncherAuthService : ILocalLauncherAuthService
             return LauncherAuthenticationResult.Failed("请输入密码。");
         }
 
-        var account = _accountCatalog.LoadAccounts()
-            .FirstOrDefault(x => string.Equals(x.UserName, userName.Trim(), StringComparison.OrdinalIgnoreCase));
+        LauncherAccountRecord? account;
+        try
+        {
+            account = _accountCatalog.LoadAccounts()
+                .FirstOrDefault(x => string.Equals(x.UserName, userName.Trim(), StringComparison.OrdinalIgnoreCase));
+        }
+        catch (Exception ex) when (IsAccountConfigurationException(ex))
+        {
+            return LauncherAuthenticationResult.Failed(AccountConfigurationUnavailableError);
+        }
+
         if (account is null || !account.IsEnabled)
         {
             return LauncherAuthenticationResult.Failed("本地账号不存在，或已被禁用。");
@@ -59,9 +71,24 @@ public sealed class LocalLauncherAuthService : ILocalLauncherAuthService
             return LauncherPasswordChangeResult.Failed(authentication.ErrorMessage ?? "旧密码校验失败。");
         }
 
-        _accountCatalog.UpdatePasswordHash(
-            userName!.Trim(),
-            LauncherPasswordHasher.ComputeSha256(newPassword));
-        return LauncherPasswordChangeResult.Passed();
+        try
+        {
+            _accountCatalog.UpdatePasswordHash(
+                userName!.Trim(),
+                LauncherPasswordHasher.ComputeSha256(newPassword));
+            return LauncherPasswordChangeResult.Passed();
+        }
+        catch (Exception ex) when (IsAccountConfigurationException(ex))
+        {
+            return LauncherPasswordChangeResult.Failed(AccountConfigurationUnavailableError);
+        }
     }
+
+    private static bool IsAccountConfigurationException(Exception ex)
+        => ex is FileNotFoundException
+            or DirectoryNotFoundException
+            or IOException
+            or UnauthorizedAccessException
+            or InvalidOperationException
+            or JsonException;
 }

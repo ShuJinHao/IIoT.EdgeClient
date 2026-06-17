@@ -1,5 +1,5 @@
 using IIoT.Edge.Application.Abstractions.DataPipeline;
-using IIoT.Edge.Runtime.DataPipeline.Services;
+using IIoT.Edge.Host.DataPipeline.Services;
 using IIoT.Edge.SharedKernel.DataPipeline;
 
 namespace IIoT.Edge.NonUiRegressionTests;
