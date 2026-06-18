@@ -48,7 +48,7 @@ public class PlcBuffer : IPlcBufferTransport
 
         if (TryGetBinding(_readBindings, signalKey, out var binding))
         {
-            values = ReadLegacyWords(binding);
+            values = ReadWordsFromReadBuffer(binding);
             return true;
         }
 
@@ -232,7 +232,7 @@ public class PlcBuffer : IPlcBufferTransport
         return readLength == Math.Max(0, readSize) && _writeBuffer.Length == Math.Max(0, writeSize);
     }
 
-    private ushort[] ReadLegacyWords(PlcBufferSignalBinding binding)
+    private ushort[] ReadWordsFromReadBuffer(PlcBufferSignalBinding binding)
         => ReadWords(Volatile.Read(ref _readBuffer), binding.Offset, binding.AddressCount);
 
     private static ushort[] ReadWords(IReadOnlyList<ushort> source, int offset, int count)

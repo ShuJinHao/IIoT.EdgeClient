@@ -213,6 +213,20 @@ if (-not [string]::IsNullOrWhiteSpace($ExpectedVersion) -and $manifest.version -
     throw "Artifact version '$($manifest.version)' does not match expected '$ExpectedVersion'."
 }
 
+foreach ($requiredProperty in @('generatedAtUtc', 'sourceCommit', 'previousVersion', 'previousSourceCommit', 'releaseNotes')) {
+    if ($manifest.PSObject.Properties.Name -notcontains $requiredProperty) {
+        throw "Installer artifact manifest is missing release metadata property: $requiredProperty"
+    }
+}
+
+if ([string]::IsNullOrWhiteSpace([string]$manifest.sourceCommit)) {
+    throw 'Installer artifact manifest sourceCommit must not be empty.'
+}
+
+if ([string]::IsNullOrWhiteSpace([string]$manifest.releaseNotes)) {
+    throw 'Installer artifact manifest releaseNotes must not be empty.'
+}
+
 if ($manifest.installerStubSha256 -ne (Get-TestSha256 -PathValue $stubPath)) {
     throw "Installer stub sha256 does not match installer-artifact.json."
 }

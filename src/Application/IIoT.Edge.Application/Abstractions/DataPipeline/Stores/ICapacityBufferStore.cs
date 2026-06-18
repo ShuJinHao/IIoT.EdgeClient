@@ -3,18 +3,6 @@
 namespace IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 
 /// <summary>
-/// 离线缓冲汇总传输对象，按日期和班次聚合。
-/// </summary>
-public class BufferSummaryDto
-{
-    public string Date { get; set; } = string.Empty;
-    public string ShiftCode { get; set; } = string.Empty;
-    public int Total { get; set; }
-    public int OkCount { get; set; }
-    public int NgCount { get; set; }
-}
-
-/// <summary>
 /// 离线缓冲的小时汇总传输对象，按日期、小时、分钟桶、班次和 PLC 聚合。
 /// </summary>
 public class BufferHourlySummaryDto
@@ -49,9 +37,6 @@ public interface ICapacityBufferStore
 
     /// <summary>批量写入离线缓冲记录。</summary>
     Task SaveBatchAsync(IEnumerable<CapacityRecord> records);
-
-    /// <summary>按日期和班次汇总，兼容旧版补传逻辑。</summary>
-    Task<List<BufferSummaryDto>> GetShiftSummaryAsync();
 
     /// <summary>按日期、小时、分钟桶、班次和 PLC 汇总，供补传使用。</summary>
     Task<List<BufferHourlySummaryDto>> GetHourlySummaryAsync();

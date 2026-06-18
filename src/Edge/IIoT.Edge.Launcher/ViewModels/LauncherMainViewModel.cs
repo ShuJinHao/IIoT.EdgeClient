@@ -75,6 +75,7 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
             _launchService,
             languageService);
         HostUpdatePanel.PropertyChanged += OnHostUpdatePanelChanged;
+        ClientReleasePanel.PropertyChanged += OnClientReleasePanelChanged;
         if (_languageService is not null)
         {
             _languageService.LanguageChanged += OnLanguageChanged;
@@ -387,6 +388,7 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         }
 
         HostUpdatePanel.PropertyChanged -= OnHostUpdatePanelChanged;
+        ClientReleasePanel.PropertyChanged -= OnClientReleasePanelChanged;
         HostUpdatePanel.Dispose();
         ClientReleasePanel.Dispose();
     }
@@ -470,19 +472,53 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         }
     }
 
+    private void OnClientReleasePanelChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(ClientReleasePanel.IsVisible)
+            or nameof(ClientReleasePanel.Components))
+        {
+            RebuildUpdateRows();
+        }
+    }
+
     private void RebuildUpdateRows()
     {
         UpdateRows.Clear();
-        UpdateRows.Add(HostUpdatePanel.CreateHostRow());
+        var catalogRows = ClientReleasePanel.Components
+            .OrderBy(static component => component.ComponentKind == EdgeComponentKind.Host ? 0 : 1)
+            .ThenBy(static component => component.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .Select(BuildCatalogUpdateRow)
+            .Where(static row => row is not null)
+            .Cast<LauncherClientPluginItem>()
+            .ToArray();
+
+        if (catalogRows.Length == 0)
+        {
+            UpdateRows.Add(HostUpdatePanel.CreateHostRow());
+            return;
+        }
+
+        foreach (var row in catalogRows)
+        {
+            UpdateRows.Add(row);
+        }
     }
 
     public async Task ExecuteUpdateRowActionAsync(LauncherClientPluginItem row)
     {
         ArgumentNullException.ThrowIfNull(row);
 
+        if (row.VersionOption is not null && row.CanInstallOrUpdate)
+        {
+            await ClientReleasePanel.ApplyVersionAsync(row.VersionOption).ConfigureAwait(true);
+            RebuildUpdateRows();
+            return;
+        }
+
         if (string.Equals(row.ModuleId, LauncherHostUpdatePanelViewModel.HostRowModuleId, StringComparison.Ordinal))
         {
             await HostUpdatePanel.ApplyUpdateAsync().ConfigureAwait(true);
+            RebuildUpdateRows();
             return;
         }
 
@@ -494,17 +530,108 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         if (SelectedUpdateProfile is null)
         {
             ClientReleasePanel.Reset();
+            RebuildUpdateRows();
             return;
         }
 
         try
         {
             await ClientReleasePanel.CheckAsync(SelectedUpdateProfile.Profile).ConfigureAwait(true);
+            RebuildUpdateRows();
         }
         catch
         {
             // 更新栏检查是非阻断链路，失败只体现在更新栏状态，不能影响工序启动。
+            RebuildUpdateRows();
         }
+    }
+
+    private LauncherClientPluginItem? BuildCatalogUpdateRow(LauncherVersionComponentItem component)
+    {
+        var option = SelectUpdateCenterOption(component);
+        var currentVersion = string.IsNullOrWhiteSpace(component.CurrentVersion)
+            ? Text("Launcher_ClientRelease_Plugin_NotInstalled")
+            : component.CurrentVersion;
+        var targetVersion = option?.Version ?? currentVersion;
+        var canUpdate = option is not null
+                        && option.CanApply
+                        && option.Status is EdgeVersionStatus.NotInstalled or EdgeVersionStatus.Newer;
+        var status = option?.Status ?? EdgeVersionStatus.Current;
+        var packageSizeText = string.IsNullOrWhiteSpace(option?.PackageSizeText)
+            ? "-"
+            : option.PackageSizeText;
+
+        return new LauncherClientPluginItem(
+            component.ModuleId,
+            ResolveUpdateRowDisplayName(component),
+            currentVersion,
+            targetVersion,
+            packageSizeText,
+            option?.CompatibilityIssue ?? option?.ReleaseNotes ?? string.Empty,
+            canUpdate,
+            ResolveUpdateRowStatusKind(status),
+            ResolveUpdateRowStatusText(status),
+            ResolveUpdateRowActionText(status, canUpdate),
+            status,
+            canUpdate ? option : null);
+    }
+
+    private string ResolveUpdateRowDisplayName(LauncherVersionComponentItem component)
+    {
+        if (component.ComponentKind == EdgeComponentKind.Host)
+        {
+            return Text("Launcher_UpdateCenter_HostTitle");
+        }
+
+        return string.IsNullOrWhiteSpace(component.DisplayName)
+            ? component.ModuleId
+            : component.DisplayName;
+    }
+
+    private static LauncherVersionOptionItem? SelectUpdateCenterOption(LauncherVersionComponentItem component)
+        => component.Versions.FirstOrDefault(static option => option.Status == EdgeVersionStatus.Newer)
+           ?? component.Versions.FirstOrDefault(static option => option.Status == EdgeVersionStatus.NotInstalled)
+           ?? component.Versions.FirstOrDefault(static option => option.Status == EdgeVersionStatus.Current)
+           ?? component.Versions.FirstOrDefault(static option => option.Status == EdgeVersionStatus.Incompatible)
+           ?? component.Versions.FirstOrDefault();
+
+    private string ResolveUpdateRowStatusKind(EdgeVersionStatus status)
+        => status switch
+        {
+            EdgeVersionStatus.Current => "Running",
+            EdgeVersionStatus.Newer or EdgeVersionStatus.NotInstalled => "Warning",
+            EdgeVersionStatus.Incompatible => "Error",
+            EdgeVersionStatus.InstalledNewer => "Info",
+            EdgeVersionStatus.Older or EdgeVersionStatus.Deprecated => "Default",
+            _ => "Default"
+        };
+
+    private string ResolveUpdateRowStatusText(EdgeVersionStatus status)
+        => status switch
+        {
+            EdgeVersionStatus.NotInstalled => Text("Launcher_ClientRelease_Plugin_StatusNotInstalled"),
+            EdgeVersionStatus.Newer => Text("Launcher_ClientRelease_Plugin_StatusUpdateAvailable"),
+            EdgeVersionStatus.Current => Text("Launcher_ProfileCard_StatusLatest"),
+            EdgeVersionStatus.InstalledNewer => Text("Launcher_ClientRelease_Plugin_StatusInstalledNewer"),
+            EdgeVersionStatus.Incompatible => Text("Launcher_ClientRelease_Plugin_StatusIncompatible"),
+            EdgeVersionStatus.Deprecated => Text("Launcher_VersionManagement_StatusDeprecated"),
+            EdgeVersionStatus.Older => Text("Launcher_VersionManagement_StatusOlder"),
+            _ => Text("Launcher_ClientRelease_Plugin_StatusUnknown")
+        };
+
+    private string ResolveUpdateRowActionText(EdgeVersionStatus status, bool canUpdate)
+    {
+        if (canUpdate)
+        {
+            return Text("Launcher_UpdateCenter_ButtonHostUpdate");
+        }
+
+        return status switch
+        {
+            EdgeVersionStatus.Current => Text("Launcher_ProfileCard_StatusLatest"),
+            EdgeVersionStatus.Incompatible => Text("Launcher_VersionManagement_ButtonUnavailable"),
+            _ => Text("Launcher_ClientRelease_ButtonNoAction")
+        };
     }
 
     private string? LocalizeAuthenticationError(string? message)

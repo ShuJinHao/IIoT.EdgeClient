@@ -38,6 +38,14 @@ param(
 
     [string]$PublicBaseUrl,
 
+    [string]$SourceCommit = '',
+
+    [string]$PreviousVersion = '',
+
+    [string]$PreviousSourceCommit = '',
+
+    [string]$ReleaseNotes = '',
+
     [string]$Publisher = 'IIoT'
 )
 
@@ -113,6 +121,50 @@ function Get-ArtifactRelativePath {
     )
 
     return [System.IO.Path]::GetRelativePath($BaseDirectory, $PathValue).Replace('\', '/')
+}
+
+function Invoke-ArtifactGitText {
+    param([Parameter(Mandatory = $true)][string[]]$Arguments)
+
+    $output = & git @Arguments 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        return ''
+    }
+
+    return [string]($output -join "`n")
+}
+
+function Test-ArtifactGitCommitExists {
+    param([string]$Commit)
+
+    if ([string]::IsNullOrWhiteSpace($Commit)) {
+        return $false
+    }
+
+    & git cat-file -e "$Commit^{commit}" 2>$null
+    return $LASTEXITCODE -eq 0
+}
+
+function New-ArtifactReleaseNotes {
+    param(
+        [string]$PreviousCommit,
+        [string]$CurrentCommit
+    )
+
+    if ((Test-ArtifactGitCommitExists $PreviousCommit) -and (Test-ArtifactGitCommitExists $CurrentCommit)) {
+        $range = "$PreviousCommit..$CurrentCommit"
+        $notes = Invoke-ArtifactGitText -Arguments @('log', '--oneline', '--no-decorate', $range)
+        if (-not [string]::IsNullOrWhiteSpace($notes)) {
+            return $notes.Trim()
+        }
+    }
+
+    $recent = Invoke-ArtifactGitText -Arguments @('log', '--oneline', '--no-decorate', '-n', '20')
+    if (-not [string]::IsNullOrWhiteSpace($recent)) {
+        return $recent.Trim()
+    }
+
+    return "Edge installer artifact $Version"
 }
 
 function Assert-ArtifactForbiddenContentMissing {
@@ -317,7 +369,7 @@ function Register-CloudCatalog {
         downloadUrl = $ArtifactPublicUrl
         sha256 = $Artifact.installerStubSha256
         packageSize = $Artifact.installerStubSize
-        releaseNotes = "Edge installer artifact $($Artifact.version)"
+        releaseNotes = $Artifact.releaseNotes
         status = 'Published'
         signature = $null
         publisher = $Publisher
@@ -340,7 +392,7 @@ function Register-CloudCatalog {
             downloadUrl = "$ArtifactPublicUrl#moduleId=$($module.moduleId)"
             sha256 = $module.pluginSha256
             packageSize = $module.pluginSize
-            releaseNotes = "Bundled in Edge installer artifact $($Artifact.version)"
+            releaseNotes = $Artifact.releaseNotes
             dependenciesJson = '[]'
             status = 'Published'
             signature = $null
@@ -364,6 +416,27 @@ $installerStubTargetPath = Join-Path $artifactRoot 'IIoT.Edge.Setup.exe'
 $artifactManifestPath = Join-Path $artifactRoot 'installer-artifact.json'
 $velopackSetupRelativePath = $null
 $velopackSetupTargetPath = $null
+
+if ([string]::IsNullOrWhiteSpace($SourceCommit)) {
+    $SourceCommit = Invoke-ArtifactGitText -Arguments @('rev-parse', 'HEAD')
+}
+
+if ([string]::IsNullOrWhiteSpace($SourceCommit)) {
+    $SourceCommit = 'unknown'
+}
+else {
+    $SourceCommit = $SourceCommit.Trim()
+}
+
+if ([string]::IsNullOrWhiteSpace($ReleaseNotes)) {
+    $ReleaseNotes = New-ArtifactReleaseNotes -PreviousCommit $PreviousSourceCommit -CurrentCommit $SourceCommit
+}
+else {
+    $ReleaseNotes = $ReleaseNotes.Trim()
+}
+
+$previousVersionManifestValue = if ([string]::IsNullOrWhiteSpace($PreviousVersion)) { $null } else { $PreviousVersion }
+$previousSourceCommitManifestValue = if ([string]::IsNullOrWhiteSpace($PreviousSourceCommit)) { $null } else { $PreviousSourceCommit }
 
 if ($CleanOutput -and (Test-Path $artifactRoot)) {
     Remove-Item -Path $artifactRoot -Recurse -Force
@@ -448,6 +521,10 @@ $artifactProperties = [ordered]@{
     targetRuntime = $RuntimeIdentifier
     targetFramework = $TargetFramework
     generatedAtUtc = [DateTime]::UtcNow.ToString('O')
+    sourceCommit = $SourceCommit
+    previousVersion = $previousVersionManifestValue
+    previousSourceCommit = $previousSourceCommitManifestValue
+    releaseNotes = $ReleaseNotes
     installerStubFile = 'IIoT.Edge.Setup.exe'
     installerStubSha256 = Get-ArtifactSha256 -PathValue $installerStubTargetPath
     installerStubSize = (Get-Item $installerStubTargetPath).Length

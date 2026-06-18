@@ -356,6 +356,59 @@ public sealed class LauncherMainViewModelTests
         Assert.Single(viewModel.Profiles);
         Assert.NotNull(viewModel.SelectedUpdateProfile);
         Assert.Contains(viewModel.ClientReleasePanel.Components, component => component.ModuleId == "IIoT.Edge.Module.Homogenization");
+        Assert.Contains(viewModel.UpdateRows, row => row.ModuleId == "IIoT.Edge.Module.Homogenization");
+    }
+
+    [Fact]
+    public async Task LoginAsync_WhenCatalogContainsHostAndPlugins_ShouldExposeSingleUpdateRowsTable()
+    {
+        var profile = Profile("shell", "Shell");
+        var releaseService = new RecordingUpdateClientReleaseService(
+            CreateReleaseCheckWithMultiplePluginRows());
+        var viewModel = new LauncherMainViewModel(
+            new StubLauncherProfileCatalog([profile]),
+            new StubLocalAccountAuthService(
+                LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
+            new StubShellLaunchService(),
+            clientReleaseService: releaseService);
+
+        await viewModel.LoginAsync("operator", "secret");
+        await releaseService.WaitForCheckAsync();
+        await WaitUntilAsync(() => viewModel.UpdateRows.Count == 3);
+
+        Assert.Equal(3, viewModel.UpdateRows.Count);
+        Assert.Contains(viewModel.UpdateRows, row => row.ModuleId == "Host" && !row.CanInstallOrUpdate);
+        var homogenization = Assert.Single(viewModel.UpdateRows, row => row.ModuleId == "IIoT.Edge.Module.Homogenization");
+        Assert.Equal("1.1.0", homogenization.TargetVersion);
+        Assert.True(homogenization.CanInstallOrUpdate);
+        Assert.NotNull(homogenization.VersionOption);
+        var coating = Assert.Single(viewModel.UpdateRows, row => row.ModuleId == "IIoT.Edge.Module.Coating");
+        Assert.False(coating.CanInstallOrUpdate);
+        Assert.Null(coating.VersionOption);
+    }
+
+    [Fact]
+    public async Task ExecuteUpdateRowActionAsync_WhenPluginRowHasUpdate_ShouldApplySelectedCatalogVersion()
+    {
+        var profile = Profile("shell", "Shell");
+        var releaseService = new RecordingUpdateClientReleaseService(
+            CreateReleaseCheckWithPluginUpdate());
+        var viewModel = new LauncherMainViewModel(
+            new StubLauncherProfileCatalog([profile]),
+            new StubLocalAccountAuthService(
+                LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
+            new StubShellLaunchService(),
+            clientReleaseService: releaseService);
+
+        await viewModel.LoginAsync("operator", "secret");
+        await releaseService.WaitForCheckAsync();
+        await WaitUntilAsync(() => viewModel.UpdateRows.Any(row => row.ModuleId == "IIoT.Edge.Module.Homogenization"));
+        var row = Assert.Single(viewModel.UpdateRows, item => item.ModuleId == "IIoT.Edge.Module.Homogenization");
+
+        await viewModel.ExecuteUpdateRowActionAsync(row);
+
+        Assert.Equal(1, releaseService.InstallCallCount);
+        Assert.Equal(["IIoT.Edge.Module.Homogenization"], releaseService.InstalledModuleIds);
     }
 
     [Fact]
@@ -462,6 +515,124 @@ public sealed class LauncherMainViewModelTests
                                     DateTime.UtcNow)))
                     ])
             ]);
+
+    private static EdgeReleaseCatalogResult CreateReleaseCheckWithMultiplePluginRows()
+        => new(
+            EdgeReleaseCatalogState.Succeeded,
+            "stable",
+            "win-x64",
+            "1.0.0",
+            "1.0.0",
+            [
+                CreateHostPlan(),
+                CreatePluginPlan(
+                    "IIoT.Edge.Module.Homogenization",
+                    "均浆",
+                    "1.0.0",
+                    new EdgeVersionOption(
+                        "1.1.0",
+                        EdgeVersionStatus.Newer,
+                        true,
+                        null,
+                        PluginRelease: CreatePluginRelease("IIoT.Edge.Module.Homogenization", "均浆", "1.1.0", 2048))),
+                CreatePluginPlan(
+                    "IIoT.Edge.Module.Coating",
+                    "涂布",
+                    "2.0.0",
+                    new EdgeVersionOption(
+                        "2.0.0",
+                        EdgeVersionStatus.Current,
+                        false,
+                        null,
+                        PluginRelease: CreatePluginRelease("IIoT.Edge.Module.Coating", "涂布", "2.0.0", 1024)))
+            ]);
+
+    private static EdgeComponentVersionPlan CreateHostPlan()
+        => new(
+            EdgeComponentKind.Host,
+            "Host",
+            "Edge Host",
+            "1.0.0",
+            [
+                new EdgeVersionOption(
+                    "1.0.0",
+                    EdgeVersionStatus.Current,
+                    false,
+                    null,
+                    HostRelease: new EdgeHostVersionRelease(new EdgeHostVersionEntry(
+                        Guid.NewGuid(),
+                        "stable",
+                        "1.0.0",
+                        "1.0.0",
+                        "win-x64",
+                        "net10.0",
+                        "https://example.invalid/host.nupkg",
+                        "sha256",
+                        1024,
+                        null,
+                        "Published",
+                        null,
+                        null,
+                        DateTime.UtcNow,
+                        DateTime.UtcNow)))
+            ]);
+
+    private static EdgeComponentVersionPlan CreatePluginPlan(
+        string moduleId,
+        string displayName,
+        string currentVersion,
+        params EdgeVersionOption[] versions)
+        => new(
+            EdgeComponentKind.Plugin,
+            moduleId,
+            displayName,
+            currentVersion,
+            versions);
+
+    private static EdgePluginVersionRelease CreatePluginRelease(
+        string moduleId,
+        string displayName,
+        string version,
+        long packageSize)
+        => new(
+            moduleId,
+            displayName,
+            null,
+            null,
+            null,
+            new EdgePluginVersionEntry(
+                Guid.NewGuid(),
+                "stable",
+                version,
+                "1.0.0",
+                "1.0.0",
+                "99.0.0",
+                "win-x64",
+                "net10.0",
+                $"https://example.invalid/{moduleId}-{version}.zip",
+                "sha256",
+                packageSize,
+                null,
+                [],
+                "Published",
+                null,
+                null,
+                DateTime.UtcNow,
+                DateTime.UtcNow));
+
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(2);
+        while (!condition())
+        {
+            if (DateTime.UtcNow >= deadline)
+            {
+                Assert.True(condition(), "Timed out waiting for Launcher update rows.");
+            }
+
+            await Task.Delay(20, TestContext.Current.CancellationToken);
+        }
+    }
 
     private sealed class StubLauncherProfileCatalog(IReadOnlyList<LauncherProfileDefinition> profiles)
         : ILauncherProfileCatalog

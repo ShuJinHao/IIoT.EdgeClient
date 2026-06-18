@@ -89,22 +89,6 @@ public class CapacityBufferStore : ClaimBufferStoreBase<CapacityRecord>, ICapaci
         };
     }
 
-    public async Task<List<BufferSummaryDto>> GetShiftSummaryAsync()
-    {
-        const string sql = @"
-            SELECT
-                substr(CompletedTime, 1, 10)                     AS Date,
-                ShiftCode,
-                COUNT(*)                                         AS Total,
-                SUM(CASE WHEN CellResult = 1 THEN 1 ELSE 0 END) AS OkCount,
-                SUM(CASE WHEN CellResult = 0 THEN 1 ELSE 0 END) AS NgCount
-            FROM capacity_buffer
-            GROUP BY substr(CompletedTime, 1, 10), ShiftCode
-            ORDER BY Date ASC, ShiftCode ASC";
-
-        return await SafeQueryListAsync<BufferSummaryDto>(sql);
-    }
-
     public async Task<List<BufferHourlySummaryDto>> GetHourlySummaryAsync()
     {
         return await SafeQueryListAsync<BufferHourlySummaryDto>(

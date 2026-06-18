@@ -1182,7 +1182,6 @@ internal sealed class FakeCapacityBufferStore : ICapacityBufferStore
     private readonly Dictionary<string, List<BufferHourlySummaryDto>> _claims = new(StringComparer.OrdinalIgnoreCase);
 
     public List<CapacityRecord> Records { get; } = new();
-    public List<BufferSummaryDto> ShiftSummaries { get; } = new();
     public List<BufferHourlySummaryDto> HourlySummaries { get; } = new();
     public List<string> ReleasedClaimTokens { get; } = new();
     public List<(string ClaimToken, string Date, int Hour, int MinuteBucket, string ShiftCode, string PlcName)> DeletedSummaries { get; } = new();
@@ -1202,9 +1201,6 @@ internal sealed class FakeCapacityBufferStore : ICapacityBufferStore
         Records.AddRange(records);
         return Task.CompletedTask;
     }
-
-    public Task<List<BufferSummaryDto>> GetShiftSummaryAsync()
-        => Task.FromResult(ShiftSummaries.Select(CloneShiftSummary).ToList());
 
     public Task<List<BufferHourlySummaryDto>> GetHourlySummaryAsync()
         => Task.FromResult(HourlySummaries.Select(CloneHourlySummary).ToList());
@@ -1277,7 +1273,6 @@ internal sealed class FakeCapacityBufferStore : ICapacityBufferStore
     {
         ClearAllCallCount++;
         HourlySummaries.Clear();
-        ShiftSummaries.Clear();
         Records.Clear();
         _claims.Clear();
         return Task.CompletedTask;
@@ -1298,16 +1293,6 @@ internal sealed class FakeCapacityBufferStore : ICapacityBufferStore
 
         return Records.Count;
     }
-
-    private static BufferSummaryDto CloneShiftSummary(BufferSummaryDto source)
-        => new()
-        {
-            Date = source.Date,
-            ShiftCode = source.ShiftCode,
-            Total = source.Total,
-            OkCount = source.OkCount,
-            NgCount = source.NgCount
-        };
 
     private static BufferHourlySummaryDto CloneHourlySummary(BufferHourlySummaryDto source)
         => new()

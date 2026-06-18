@@ -1,7 +1,6 @@
 param(
-    [Parameter(Mandatory = $true)]
     [ValidatePattern('^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$')]
-    [string]$Version,
+    [string]$Version = '',
 
     [ValidateSet('stable')]
     [string]$Channel = 'stable',
@@ -34,23 +33,14 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$releaseRoot = Join-Path $repoRoot "publish/local-edge-release/$Channel/$Version"
-$runtimeRoot = Join-Path $releaseRoot 'edge-runtime'
-$velopackRoot = Join-Path $releaseRoot 'edge-velopack'
-$installerOutputRoot = Join-Path $releaseRoot 'edge-installer-artifacts'
-$installerArtifactRoot = Join-Path $installerOutputRoot "$Channel/$Version"
-$velopackSetupPath = Join-Path $velopackRoot "$PackId-$Channel-Setup.exe"
 $remote = "$DeployUser@$DeployHost"
-$remoteTmp = "$EdgeUpdatesDir/.edge-local-publish-$Channel-$Version-$([Guid]::NewGuid().ToString('N'))"
-$installerTarget = "$EdgeUpdatesDir/installers/$Channel/$Version"
-$velopackTarget = "$EdgeUpdatesDir/velopack/$Channel"
-
-if ($Version -match '[\\/]' -or $Channel -match '[\\/]') {
-    throw 'Version and Channel must not contain path separators.'
-}
 
 if ($Channel -ne 'stable') {
     throw 'Production Edge releases must use stable channel.'
+}
+
+if ($Channel -match '[\\/]') {
+    throw 'Channel must not contain path separators.'
 }
 
 function Invoke-EdgeScript {
@@ -121,6 +111,126 @@ function Invoke-RemoteBash {
     }
 }
 
+function Invoke-RemoteBashCapture {
+    param([Parameter(Mandatory = $true)][string]$Script)
+
+    $sshArgs = @('-p', [string]$DeployPort, $remote, 'bash -s')
+    $output = $Script | & ssh @sshArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "Remote bash command failed with exit code $LASTEXITCODE."
+    }
+
+    return @($output)
+}
+
+function Try-GetLatestRemoteStableRelease {
+    $script = @"
+set -euo pipefail
+root=$(ConvertTo-ShellSingleQuoted "$EdgeUpdatesDir/installers/stable")
+if [ ! -d "`$root" ]; then
+  exit 0
+fi
+latest_version="`$(find "`$root" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)"
+if [ -z "`$latest_version" ]; then
+  exit 0
+fi
+source_commit=""
+manifest="`$root/`$latest_version/installer-artifact.json"
+if [ -f "`$manifest" ] && command -v python3 >/dev/null 2>&1; then
+  source_commit="`$(python3 - "`$manifest" <<'PY' 2>/dev/null || true
+import json
+import sys
+with open(sys.argv[1], encoding='utf-8-sig') as f:
+    data = json.load(f)
+print(data.get('sourceCommit') or '')
+PY
+)"
+fi
+printf '%s\t%s\n' "`$latest_version" "`$source_commit"
+"@
+
+    try {
+        $lines = Invoke-RemoteBashCapture $script
+        $line = @($lines | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -First 1)
+        if ($line.Count -eq 0) {
+            return $null
+        }
+
+        $parts = ([string]$line[0]).Split("`t", 2)
+        if ($parts.Count -eq 0 -or [string]::IsNullOrWhiteSpace($parts[0])) {
+            return $null
+        }
+
+        return [PSCustomObject]@{
+            Version = $parts[0]
+            SourceCommit = if ($parts.Count -gt 1) { $parts[1] } else { '' }
+        }
+    }
+    catch {
+        Write-Warning "Could not read latest remote Edge release. Falling back to 0.0.1. $($_.Exception.Message)"
+        return $null
+    }
+}
+
+function Get-NextPatchVersion {
+    param([string]$CurrentVersion)
+
+    if ([string]::IsNullOrWhiteSpace($CurrentVersion)) {
+        return '0.0.1'
+    }
+
+    $parts = $CurrentVersion.Split('.')
+    if ($parts.Count -ne 3) {
+        return '0.0.1'
+    }
+
+    return '{0}.{1}.{2}' -f ([int]$parts[0]), ([int]$parts[1]), (([int]$parts[2]) + 1)
+}
+
+function Invoke-GitText {
+    param([Parameter(Mandatory = $true)][string[]]$Arguments)
+
+    $output = & git @Arguments 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        return ''
+    }
+
+    return [string]($output -join "`n")
+}
+
+function Test-GitCommitExists {
+    param([string]$Commit)
+
+    if ([string]::IsNullOrWhiteSpace($Commit)) {
+        return $false
+    }
+
+    & git cat-file -e "$Commit^{commit}" 2>$null
+    return $LASTEXITCODE -eq 0
+}
+
+function New-ReleaseNotes {
+    param(
+        [string]$PreviousSourceCommit,
+        [string]$CurrentSourceCommit
+    )
+
+    if ((Test-GitCommitExists $PreviousSourceCommit) -and (Test-GitCommitExists $CurrentSourceCommit)) {
+        $range = "$PreviousSourceCommit..$CurrentSourceCommit"
+        $notes = Invoke-GitText -Arguments @('log', '--oneline', '--no-decorate', $range)
+        if (-not [string]::IsNullOrWhiteSpace($notes)) {
+            return $notes.Trim()
+        }
+    }
+
+    $recent = Invoke-GitText -Arguments @('log', '--oneline', '--no-decorate', '-n', '20')
+    if (-not [string]::IsNullOrWhiteSpace($recent)) {
+        return $recent.Trim()
+    }
+
+    return "Edge local release $Version"
+}
+
 function Publish-DirectoryWithRsync {
     param(
         [Parameter(Mandatory = $true)][string]$SourceDirectory,
@@ -158,7 +268,44 @@ function Publish-DirectoryWithScp {
 
 Push-Location $repoRoot
 try {
+    $previousRelease = Try-GetLatestRemoteStableRelease
+    $previousVersion = if ($null -ne $previousRelease) { [string]$previousRelease.Version } else { '' }
+    $previousSourceCommit = if ($null -ne $previousRelease) { [string]$previousRelease.SourceCommit } else { '' }
+
+    if ([string]::IsNullOrWhiteSpace($Version)) {
+        $Version = Get-NextPatchVersion -CurrentVersion $previousVersion
+        Write-Host "Auto-generated Edge version: $Version"
+    }
+
+    if ($Version -match '[\\/]') {
+        throw 'Version must not contain path separators.'
+    }
+
+    $sourceCommit = Invoke-GitText -Arguments @('rev-parse', 'HEAD')
+    if ([string]::IsNullOrWhiteSpace($sourceCommit)) {
+        $sourceCommit = 'unknown'
+    }
+    else {
+        $sourceCommit = $sourceCommit.Trim()
+    }
+
+    $releaseNotes = New-ReleaseNotes -PreviousSourceCommit $previousSourceCommit -CurrentSourceCommit $sourceCommit
+
+    $releaseRoot = Join-Path $repoRoot "publish/local-edge-release/$Channel/$Version"
+    $runtimeRoot = Join-Path $releaseRoot 'edge-runtime'
+    $velopackRoot = Join-Path $releaseRoot 'edge-velopack'
+    $installerOutputRoot = Join-Path $releaseRoot 'edge-installer-artifacts'
+    $installerArtifactRoot = Join-Path $installerOutputRoot "$Channel/$Version"
+    $velopackSetupPath = Join-Path $velopackRoot "$PackId-$Channel-Setup.exe"
+    $remoteTmp = "$EdgeUpdatesDir/.edge-local-publish-$Channel-$Version-$([Guid]::NewGuid().ToString('N'))"
+    $installerTarget = "$EdgeUpdatesDir/installers/$Channel/$Version"
+    $velopackTarget = "$EdgeUpdatesDir/velopack/$Channel"
+
     Write-Host "Publishing Edge local release: version=$Version channel=$Channel runtime=$RuntimeIdentifier"
+    if (-not [string]::IsNullOrWhiteSpace($previousVersion)) {
+        Write-Host "Previous Edge stable release: $previousVersion"
+    }
+    Write-Host "Source commit: $sourceCommit"
     if (Test-Path $releaseRoot) {
         Remove-Item -Path $releaseRoot -Recurse -Force
     }
@@ -197,6 +344,10 @@ try {
         '-OutputRoot', $installerOutputRoot,
         '-RuntimeLayoutRoot', $runtimeRoot,
         '-VelopackSetupPath', $velopackSetupPath,
+        '-SourceCommit', $sourceCommit,
+        '-PreviousVersion', $previousVersion,
+        '-PreviousSourceCommit', $previousSourceCommit,
+        '-ReleaseNotes', $releaseNotes,
         '-CleanOutput'
     )
 

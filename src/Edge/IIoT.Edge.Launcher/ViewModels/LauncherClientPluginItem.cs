@@ -21,7 +21,8 @@ public sealed class LauncherClientPluginItem : BaseNotifyPropertyChanged
         string statusKind,
         string statusText,
         string actionText,
-        EdgeVersionStatus state)
+        EdgeVersionStatus state,
+        LauncherVersionOptionItem? versionOption = null)
     {
         ModuleId = moduleId;
         DisplayName = displayName;
@@ -34,6 +35,7 @@ public sealed class LauncherClientPluginItem : BaseNotifyPropertyChanged
         _statusText = statusText;
         _actionText = actionText;
         State = state;
+        VersionOption = versionOption;
     }
 
     public string ModuleId { get; }
@@ -66,6 +68,8 @@ public sealed class LauncherClientPluginItem : BaseNotifyPropertyChanged
     public string StatusKind { get; }
 
     public EdgeVersionStatus State { get; }
+
+    public LauncherVersionOptionItem? VersionOption { get; }
 
     public string StatusText
     {

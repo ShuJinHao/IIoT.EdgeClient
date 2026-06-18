@@ -95,6 +95,12 @@ public partial class MainWindow : Window
         await _viewModel.RefreshUpdateCenterAsync();
     }
 
+    private async void OpenVersionHistoryButton_Click(object? sender, RoutedEventArgs e)
+    {
+        var dialog = new VersionHistoryWindow(_viewModel.ClientReleasePanel);
+        await dialog.ShowDialog(this);
+    }
+
     private async void InstallPluginUpdateButton_Click(object? sender, RoutedEventArgs e)
     {
         if ((sender as Control)?.DataContext is not LauncherClientPluginItem row)
@@ -103,26 +109,6 @@ public partial class MainWindow : Window
         }
 
         await _viewModel.ExecuteUpdateRowActionAsync(row);
-    }
-
-    private void ToggleVersionComponentButton_Click(object? sender, RoutedEventArgs e)
-    {
-        if ((sender as Control)?.DataContext is not LauncherVersionComponentItem component)
-        {
-            return;
-        }
-
-        _viewModel.ClientReleasePanel.ToggleComponent(component);
-    }
-
-    private async void ApplyVersionButton_Click(object? sender, RoutedEventArgs e)
-    {
-        if ((sender as Control)?.DataContext is not LauncherVersionOptionItem option)
-        {
-            return;
-        }
-
-        await _viewModel.ClientReleasePanel.ApplyVersionAsync(option);
     }
 
     private async Task<bool> ConfirmVersionChangeAsync(LauncherVersionChangeConfirmationRequest request)

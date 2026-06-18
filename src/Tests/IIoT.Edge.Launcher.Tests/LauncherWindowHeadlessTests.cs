@@ -59,6 +59,9 @@ public sealed class LauncherWindowHeadlessTests
             window.Show();
 
             Assert.True(window.FindControl<Control>("UpdateCenterPanelRoot")?.IsVisible);
+            Assert.NotNull(window.FindControl<Control>("RefreshUpdateCenterButton"));
+            Assert.NotNull(window.FindControl<Control>("VersionHistoryButton"));
+            Assert.NotNull(window.FindControl<Control>("UpdateCenterRowsGrid"));
             Assert.Null(window.FindControl<Control>("ClientReleasePanelRoot"));
             Assert.Null(window.FindControl<ProgressBar>("ClientReleaseProgressBar"));
         }
@@ -83,6 +86,29 @@ public sealed class LauncherWindowHeadlessTests
 
             Assert.True(window.FindControl<Control>("OldPasswordInput")?.IsVisible);
             Assert.True(window.FindControl<Control>("ConfirmButton")?.IsVisible);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public void VersionHistoryWindow_ShouldLoadDialog()
+    {
+        var viewModel = CreateViewModel();
+        var window = new VersionHistoryWindow(viewModel.ClientReleasePanel)
+        {
+            Width = 920,
+            Height = 620
+        };
+
+        try
+        {
+            window.Show();
+
+            Assert.True(window.FindControl<Control>("VersionHistoryWindowRoot")?.IsVisible);
+            Assert.NotNull(window.FindControl<Control>("VersionHistoryComponentsList"));
         }
         finally
         {

@@ -50,12 +50,13 @@ workflow_dispatch / edge-v* tag / v* tag
 
 ```powershell
 pwsh ./scripts/LocalPublishAndDeploy.ps1 `
-  -Version 1.2.0 `
   -Channel stable `
   -DeployHost 10.98.90.154 `
   -DeployUser root `
   -EdgeUpdatesDir /srv/iiot/edge-updates
 ```
+
+未传 `-Version` 时，脚本读取服务器 stable 最新版本并自动递增 patch；需要固定版本时才显式传 `-Version`。本机快发的完整操作入口见 `docs/客户端部署.md`。
 
 快发只负责让文件落盘。Cloud 负责在 catalog 请求时扫描 `/app/edge-updates/installers/stable/<version>/installer-artifact.json` 并与数据库 release 记录合并；数据库同 key 记录优先，可用 Draft/Archived 抑制文件版本。
 
@@ -83,6 +84,7 @@ CI 发布验收：
 - `push main` 不跑完整打包；只允许 smoke 编译和测试。
 - `edge-pack-modules.yml` 在 `workflow_dispatch` 或 `edge-v*` / `v*` tag 时必须生成 `edge-runtime-package`、`edge-installer-artifact`、`edge-velopack-releases` 三个 artifacts。
 - `workflow_dispatch` 必须显式输入生产版本号；tag 触发时版本来自 tag。
+- 本机快发未显式传 `-Version` 时必须自动生成下一个 stable patch 版本，并在 `installer-artifact.json` 写入 `sourceCommit`、`previousVersion`、`previousSourceCommit`、`releaseNotes` 和 `generatedAtUtc`。
 - `PublishEdgeRuntime.ps1 -Version` 必须同步写入 runtime 的 `AssemblyVersion` / `FileVersion`，否则 `TestEdgeVelopackPackage.ps1` 会拒绝包版本和 Launcher 程序集版本不一致。
 - CI 允许对 `PackEdgeClientVelopack.ps1` 使用 `-SkipVeloAppCheck:$true`，原因是 Launcher 通过 `EdgeUpdateVelopackStartup.Run()` 包装 `VelopackApp.Build().Run()`，Velopack CLI 静态扫描无法识别该包装；真实包仍必须通过 `TestEdgeVelopackPackage.ps1`。
 - `edge-installer-artifact` 必须通过 `TestEdgeClientInstallerArtifact.ps1`，并包含 `installer-artifact.json`、安装器 exe、宿主、Launcher、插件和 Velopack setup。

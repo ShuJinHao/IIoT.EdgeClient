@@ -308,12 +308,22 @@
                         PaddingMode="Compact"
                         Surface="Card">
                         <Grid RowDefinitions="Auto,*" RowSpacing="14">
-                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
                                 <edge:EdgeSectionHeader
                                     Title="{DynamicResource Launcher_UpdateCenter_Title}"
                                     Subtitle="{DynamicResource Launcher_UpdateCenter_Description}" />
                                 <edge:EdgeActionButton
+                                    x:Name="VersionHistoryButton"
                                     Grid.Column="1"
+                                    Click="OpenVersionHistoryButton_Click"
+                                    Content="{DynamicResource Launcher_UpdateCenter_ButtonHistory}"
+                                    Icon="{StaticResource Edge.Icon.Calendar}"
+                                    IsEnabled="{Binding ClientReleasePanel.IsVisible}"
+                                    Kind="Secondary"
+                                    Size="Compact" />
+                                <edge:EdgeActionButton
+                                    x:Name="RefreshUpdateCenterButton"
+                                    Grid.Column="2"
                                     Click="RefreshUpdateCenterButton_Click"
                                     Content="{DynamicResource Launcher_UpdateCenter_ButtonRefresh}"
                                     Icon="{StaticResource Edge.Icon.Sync}"
@@ -322,7 +332,6 @@
                                     Size="Compact" />
                             </Grid>
 
-                            <!-- 上方 Host 总览仍由 Velopack 驱动；下方版本管理列表由 v2 catalog 驱动。 -->
                             <StackPanel Grid.Row="1" Spacing="10">
                                 <TextBlock
                                     Classes="launcher-inline-status"
@@ -341,14 +350,15 @@
                                     TextWrapping="Wrap" />
 
                                 <edge:EdgeDataGrid
-                                    MaxHeight="96"
+                                    x:Name="UpdateCenterRowsGrid"
+                                    MaxHeight="180"
                                     HeadersVisibility="Column"
                                     IsReadOnly="True"
                                     ItemsSource="{Binding UpdateRows}">
                                     <edge:EdgeDataGrid.Columns>
                                         <edge:EdgeTextColumn
                                             Binding="{Binding DisplayName}"
-                                            Header="{DynamicResource Launcher_UpdateCenter_ColumnName}"
+                                            Header="{DynamicResource Launcher_UpdateCenter_ColumnComponent}"
                                             IsReadOnly="True"
                                             MinWidth="160"
                                             Width="2*" />
@@ -360,7 +370,7 @@
                                             Width="120" />
                                         <edge:EdgeTextColumn
                                             Binding="{Binding TargetVersion}"
-                                            Header="{DynamicResource Launcher_ClientRelease_TargetVersionLabel}"
+                                            Header="{DynamicResource Launcher_UpdateCenter_ColumnLatestVersion}"
                                             IsReadOnly="True"
                                             MinWidth="90"
                                             Width="120" />
@@ -402,136 +412,6 @@
                                         </edge:EdgeActionColumn>
                                     </edge:EdgeDataGrid.Columns>
                                 </edge:EdgeDataGrid>
-
-                                <Grid
-                                    Margin="0,6,0,0"
-                                    ColumnDefinitions="*,Auto">
-                                    <TextBlock
-                                        Classes="launcher-chip-text"
-                                        Text="{DynamicResource Launcher_VersionManagement_Title}" />
-                                    <TextBlock
-                                        Grid.Column="1"
-                                        Classes="launcher-chip-text subtle"
-                                        Text="{DynamicResource Launcher_VersionManagement_AllVersions}" />
-                                </Grid>
-
-                                <ItemsControl
-                                    IsVisible="{Binding ClientReleasePanel.IsVisible}"
-                                    ItemsSource="{Binding ClientReleasePanel.Components}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <edge:EdgeCard
-                                                Margin="0,0,0,10"
-                                                Elevation="Flat"
-                                                PaddingMode="Compact"
-                                                Surface="Raised">
-                                                <Grid RowDefinitions="Auto,Auto" RowSpacing="10">
-                                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                                        <StackPanel Spacing="6">
-                                                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                                                <edge:EdgeStatusChip
-                                                                    Status="Info"
-                                                                    Text="{Binding ComponentKindText}" />
-                                                                <TextBlock
-                                                                    Classes="launcher-chip-text"
-                                                                    Text="{Binding DisplayName}" />
-                                                            </StackPanel>
-                                                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                                                <TextBlock
-                                                                    Classes="launcher-chip-text subtle"
-                                                                    Text="{DynamicResource Launcher_VersionManagement_CurrentVersion}" />
-                                                                <TextBlock
-                                                                    Classes="launcher-chip-text"
-                                                                    Text="{Binding CurrentVersion}" />
-                                                            </StackPanel>
-                                                        </StackPanel>
-                                                        <edge:EdgeActionButton
-                                                            Grid.Column="1"
-                                                            VerticalAlignment="Center"
-                                                            Click="ToggleVersionComponentButton_Click"
-                                                            Content="{Binding ExpandActionText}"
-                                                            Kind="Secondary"
-                                                            Size="Compact" />
-                                                    </Grid>
-
-                                                    <edge:EdgeDataGrid
-                                                        Grid.Row="1"
-                                                        MaxHeight="220"
-                                                        HeadersVisibility="Column"
-                                                        IsReadOnly="True"
-                                                        IsVisible="{Binding IsExpanded}"
-                                                        ItemsSource="{Binding Versions}">
-                                                        <edge:EdgeDataGrid.Columns>
-                                                            <edge:EdgeTextColumn
-                                                                Binding="{Binding Version}"
-                                                                Header="{DynamicResource Launcher_VersionManagement_TargetVersion}"
-                                                                IsReadOnly="True"
-                                                                MinWidth="100"
-                                                                Width="120" />
-                                                            <edge:EdgeTemplateColumn
-                                                                Header="{DynamicResource Launcher_UpdateCenter_ColumnStatus}"
-                                                                MinWidth="120"
-                                                                Width="130">
-                                                                <edge:EdgeTemplateColumn.CellTemplate>
-                                                                    <DataTemplate>
-                                                                        <edge:EdgeStatusChip
-                                                                            VerticalAlignment="Center"
-                                                                            Status="{Binding StatusKind}"
-                                                                            Text="{Binding StatusText}" />
-                                                                    </DataTemplate>
-                                                                </edge:EdgeTemplateColumn.CellTemplate>
-                                                            </edge:EdgeTemplateColumn>
-                                                            <edge:EdgeTextColumn
-                                                                Binding="{Binding PublishedAtText}"
-                                                                Header="{DynamicResource Launcher_VersionManagement_PublishedAt}"
-                                                                IsReadOnly="True"
-                                                                MinWidth="130"
-                                                                Width="150" />
-                                                            <edge:EdgeTextColumn
-                                                                Binding="{Binding PackageSizeText}"
-                                                                Header="{DynamicResource Launcher_ClientRelease_SizeLabel}"
-                                                                IsReadOnly="True"
-                                                                MinWidth="80"
-                                                                Width="90" />
-                                                            <edge:EdgeTemplateColumn
-                                                                Header="{DynamicResource Launcher_VersionManagement_ReleaseNotes}"
-                                                                MinWidth="180"
-                                                                Width="2*">
-                                                                <edge:EdgeTemplateColumn.CellTemplate>
-                                                                    <DataTemplate>
-                                                                        <TextBlock
-                                                                            Classes="launcher-chip-text subtle"
-                                                                            MaxLines="2"
-                                                                            Text="{Binding ReleaseNotes}"
-                                                                            TextTrimming="CharacterEllipsis"
-                                                                            TextWrapping="Wrap" />
-                                                                    </DataTemplate>
-                                                                </edge:EdgeTemplateColumn.CellTemplate>
-                                                            </edge:EdgeTemplateColumn>
-                                                            <edge:EdgeActionColumn
-                                                                Header="{DynamicResource Launcher_UpdateCenter_ColumnAction}"
-                                                                MinWidth="120"
-                                                                Width="130">
-                                                                <edge:EdgeActionColumn.CellTemplate>
-                                                                    <DataTemplate>
-                                                                        <edge:EdgeActionButton
-                                                                            VerticalAlignment="Center"
-                                                                            Click="ApplyVersionButton_Click"
-                                                                            Content="{Binding ActionText}"
-                                                                            Icon="{StaticResource Edge.Icon.Sync}"
-                                                                            IsEnabled="{Binding CanApply}"
-                                                                            Kind="{Binding ActionKind}"
-                                                                            Size="Compact" />
-                                                                    </DataTemplate>
-                                                                </edge:EdgeActionColumn.CellTemplate>
-                                                            </edge:EdgeActionColumn>
-                                                        </edge:EdgeDataGrid.Columns>
-                                                    </edge:EdgeDataGrid>
-                                                </Grid>
-                                            </edge:EdgeCard>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
                             </StackPanel>
                         </Grid>
                     </edge:EdgeCard>

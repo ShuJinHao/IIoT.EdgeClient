@@ -212,6 +212,7 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
     public void Reset()
     {
         Components.Clear();
+        OnPropertyChanged(nameof(Components));
         _activeProfile = null;
         IsVisible = false;
         DetailText = string.Empty;
@@ -308,6 +309,7 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
                 LauncherText.Get(_languageService, "Launcher_VersionManagement_ButtonExpand"),
                 versions));
         }
+        OnPropertyChanged(nameof(Components));
 
         DetailText = LauncherText.Compact(result.ErrorMessage);
         switch (result.State)
