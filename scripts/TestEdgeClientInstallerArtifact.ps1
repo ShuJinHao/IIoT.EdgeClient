@@ -150,7 +150,10 @@ function Assert-CloudIdentityTemplatesAreEmpty {
 }
 
 function Assert-InstallerVersionInfo {
-    param([Parameter(Mandatory = $true)][string]$PathValue)
+    param(
+        [Parameter(Mandatory = $true)][string]$PathValue,
+        [Parameter(Mandatory = $true)][string]$ExpectedProductVersion
+    )
 
     if (-not $IsWindows) {
         Write-Host "Skipping PE VersionInfo check on non-Windows host: $PathValue"
@@ -174,8 +177,8 @@ function Assert-InstallerVersionInfo {
         throw "Installer FileVersion must be '1.0.0.0', actual: '$($versionInfo.FileVersion)'."
     }
 
-    if ($versionInfo.ProductVersion -ne '1.0.0-dev') {
-        throw "Installer ProductVersion must be '1.0.0-dev', actual: '$($versionInfo.ProductVersion)'."
+    if ($versionInfo.ProductVersion -ne $ExpectedProductVersion) {
+        throw "Installer ProductVersion must be '$ExpectedProductVersion', actual: '$($versionInfo.ProductVersion)'."
     }
 }
 
@@ -186,7 +189,7 @@ $stubPath = Join-Path $resolvedArtifactRoot 'IIoT.Edge.Setup.exe'
 
 Assert-PathExists -PathValue $manifestPath -Message "Artifact manifest was not found: $manifestPath"
 Assert-PathExists -PathValue $stubPath -Message "Installer stub was not found: $stubPath"
-Assert-InstallerVersionInfo -PathValue $stubPath
+Assert-InstallerVersionInfo -PathValue $stubPath -ExpectedProductVersion $ExpectedVersion
 if (Test-Path $legacyLayoutZipPath) {
     throw "Legacy layout.zip must not be present in installer artifact: $legacyLayoutZipPath"
 }
