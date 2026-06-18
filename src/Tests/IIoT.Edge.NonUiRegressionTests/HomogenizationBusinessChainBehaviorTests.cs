@@ -16,6 +16,7 @@ using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Production;
 using IIoT.Edge.Module.Sdk.Signals;
 using IIoT.Edge.SharedKernel.DataPipeline;
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -24,8 +25,24 @@ using IIoT.Edge.Application.Abstractions.Cloud;
 using IIoT.Edge.Application.Abstractions.Mes;
 namespace IIoT.Edge.NonUiRegressionTests;
 
-public sealed class HomogenizationBusinessChainBehaviorTests
+public sealed class HomogenizationBusinessChainBehaviorTests : IDisposable
 {
+    private readonly CultureInfo _originalCulture = CultureInfo.CurrentCulture;
+    private readonly CultureInfo _originalUiCulture = CultureInfo.CurrentUICulture;
+
+    public HomogenizationBusinessChainBehaviorTests()
+    {
+        var culture = CultureInfo.GetCultureInfo("zh-CN");
+        CultureInfo.CurrentCulture = culture;
+        CultureInfo.CurrentUICulture = culture;
+    }
+
+    public void Dispose()
+    {
+        CultureInfo.CurrentCulture = _originalCulture;
+        CultureInfo.CurrentUICulture = _originalUiCulture;
+    }
+
     [Fact]
     public async Task Inbound_WhenTrayCodeIsEmpty_ShouldAckExceptionAndNotCallMes()
     {
