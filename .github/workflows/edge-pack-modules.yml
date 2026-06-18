@@ -1,12 +1,10 @@
 name: edge-runtime-package
 
 on:
-  pull_request:
-    branches:
-      - main
   push:
-    branches:
-      - main
+    tags:
+      - 'edge-v*'
+      - 'v*'
   workflow_dispatch:
     inputs:
       version:
@@ -37,6 +35,27 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
+
+      - name: Resolve release metadata
+        shell: pwsh
+        run: |
+          $version = $env:EDGE_RELEASE_VERSION
+          $channel = $env:EDGE_RELEASE_CHANNEL
+          if ($env:GITHUB_REF_TYPE -eq 'tag') {
+            $tag = $env:GITHUB_REF_NAME
+            if ($tag.StartsWith('edge-v')) {
+              $version = $tag.Substring(6)
+            } elseif ($tag.StartsWith('v')) {
+              $version = $tag.Substring(1)
+            } else {
+              $version = $tag
+            }
+            $channel = 'stable'
+          }
+
+          "EDGE_RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "EDGE_RELEASE_CHANNEL=$channel" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Resolved Edge release: version=$version channel=$channel"
 
       - name: Restore edge solution
         shell: pwsh
@@ -75,7 +94,7 @@ jobs:
         run: ./scripts/TestEdgePackageVulnerabilities.ps1
 
   package-runtime:
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
     runs-on: windows-latest
     needs: validate-runtime
     steps:
@@ -88,6 +107,27 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
+
+      - name: Resolve release metadata
+        shell: pwsh
+        run: |
+          $version = $env:EDGE_RELEASE_VERSION
+          $channel = $env:EDGE_RELEASE_CHANNEL
+          if ($env:GITHUB_REF_TYPE -eq 'tag') {
+            $tag = $env:GITHUB_REF_NAME
+            if ($tag.StartsWith('edge-v')) {
+              $version = $tag.Substring(6)
+            } elseif ($tag.StartsWith('v')) {
+              $version = $tag.Substring(1)
+            } else {
+              $version = $tag
+            }
+            $channel = 'stable'
+          }
+
+          "EDGE_RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "EDGE_RELEASE_CHANNEL=$channel" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Resolved Edge release: version=$version channel=$channel"
 
       - name: Run runtime publish smoke test
         shell: pwsh
@@ -132,12 +172,35 @@ jobs:
           path: publish/edge-velopack/**
 
   publish-edge-updates:
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
     runs-on:
       - self-hosted
       - iiot-linux-prod
     needs: package-runtime
     steps:
+      - name: Resolve release metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          version="$EDGE_RELEASE_VERSION"
+          channel="$EDGE_RELEASE_CHANNEL"
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            tag="${GITHUB_REF_NAME:-}"
+            case "$tag" in
+              edge-v*) version="${tag#edge-v}" ;;
+              v*) version="${tag#v}" ;;
+              *) version="$tag" ;;
+            esac
+            channel="stable"
+          fi
+
+          {
+            echo "EDGE_RELEASE_VERSION=$version"
+            echo "EDGE_RELEASE_CHANNEL=$channel"
+          } >> "$GITHUB_ENV"
+          echo "Resolved Edge release: version=$version channel=$channel"
+
       - name: Download installer artifact
         uses: actions/download-artifact@v4
         with:

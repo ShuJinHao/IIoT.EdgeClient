@@ -564,7 +564,8 @@ public sealed class RepositoryHygieneTests
         Assert.Contains("内网 Linux self-hosted runner", installDoc, StringComparison.Ordinal);
         Assert.Contains("/srv/iiot/edge-updates", installDoc, StringComparison.Ordinal);
         Assert.Contains("EdgeClient 不发布 Docker 镜像，不推 Harbor", installDoc, StringComparison.Ordinal);
-        Assert.Contains("Windows hosted runner 只负责构建", ruleDoc, StringComparison.Ordinal);
+        Assert.Contains("GitHub hosted Windows runner 只负责构建", ruleDoc, StringComparison.Ordinal);
+        Assert.Contains("LocalPublishAndDeploy.ps1", ruleDoc, StringComparison.Ordinal);
         Assert.Contains("内网 Linux self-hosted runner 只负责", ruleDoc, StringComparison.Ordinal);
         Assert.Contains("CI artifact 发布契约", contractDoc, StringComparison.Ordinal);
         Assert.Contains("Linux runner 只做文件分发，不重新构建 EdgeClient", contractDoc, StringComparison.Ordinal);

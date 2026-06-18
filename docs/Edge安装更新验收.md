@@ -4,10 +4,16 @@
 
 ## 0. 标准发布链路
 
-EdgeClient 不发布 Docker 镜像，不推 Harbor，也不从 GitHub runner 直连内网服务器。标准链路固定为：
+EdgeClient 不发布 Docker 镜像，不推 Harbor，也不从 GitHub hosted runner 直连内网服务器。当前链路分为日常 smoke、正式 GitHub 打包和本机快发：
+
+- `push main`：只跑 smoke 编译和测试，不生成安装包和 Velopack 发布包。
+- `workflow_dispatch` 或 `edge-v*` / `v*` tag：完整 GitHub 打包并发布到内网静态目录。
+- 本机快发：操作者本机运行 `scripts/LocalPublishAndDeploy.ps1`，本机编译、打包、生成 installer artifact 后通过 rsync/scp 发布到服务器；这是运维快发路径，不属于 GitHub CI/CD job。
+
+正式 GitHub 打包链路固定为：
 
 ```text
-git push / workflow_dispatch
+workflow_dispatch / edge-v* tag / v* tag
 -> GitHub hosted Windows runner 构建 runtime、installer artifact、Velopack releases
 -> 上传 GitHub Actions artifacts
 -> 内网 Linux self-hosted runner 下载 artifacts
@@ -39,6 +45,19 @@ git push / workflow_dispatch
     *-Portable.zip
 ```
 
+本机快发命令示例：
+
+```powershell
+pwsh ./scripts/LocalPublishAndDeploy.ps1 `
+  -Version 1.2.0 `
+  -Channel stable `
+  -DeployHost 10.98.90.154 `
+  -DeployUser root `
+  -EdgeUpdatesDir /srv/iiot/edge-updates
+```
+
+快发只负责让文件落盘。Cloud 负责在 catalog 请求时扫描 `/app/edge-updates/installers/<channel>/<version>/installer-artifact.json` 并与数据库 release 记录合并；数据库同 key 记录优先，可用 Draft/Archived 抑制文件版本。
+
 ## 1. 固定契约
 
 - 安装器只接受当前 Velopack payload 和固定发布布局，不保留旧解压安装路径、exe 旁边 bootstrap、旧 `runtimeDirectory` 或 `layout.zip` 兼容。
@@ -60,8 +79,9 @@ dotnet test src/Tests/IIoT.Edge.Installer.Tests/IIoT.Edge.Installer.Tests.csproj
 
 CI 发布验收：
 
-- `edge-pack-modules.yml` 在 push main 或 `workflow_dispatch` 时必须生成 `edge-runtime-package`、`edge-installer-artifact`、`edge-velopack-releases` 三个 artifacts。
-- push main 未显式输入版本时，CI 版本必须使用 `0.0.<run_number>-ci`，不能回退到无效的 `0.0.0-ci`。
+- `push main` 不跑完整打包；只允许 smoke 编译和测试。
+- `edge-pack-modules.yml` 在 `workflow_dispatch` 或 `edge-v*` / `v*` tag 时必须生成 `edge-runtime-package`、`edge-installer-artifact`、`edge-velopack-releases` 三个 artifacts。
+- `workflow_dispatch` 未显式输入版本时，CI 版本必须使用 `0.0.<run_number>-ci`，不能回退到无效的 `0.0.0-ci`；tag 触发时版本来自 tag。
 - `PublishEdgeRuntime.ps1 -Version` 必须同步写入 runtime 的 `AssemblyVersion` / `FileVersion`，否则 `TestEdgeVelopackPackage.ps1` 会拒绝包版本和 Launcher 程序集版本不一致。
 - CI 允许对 `PackEdgeClientVelopack.ps1` 使用 `-SkipVeloAppCheck:$true`，原因是 Launcher 通过 `EdgeUpdateVelopackStartup.Run()` 包装 `VelopackApp.Build().Run()`，Velopack CLI 静态扫描无法识别该包装；真实包仍必须通过 `TestEdgeVelopackPackage.ps1`。
 - `edge-installer-artifact` 必须通过 `TestEdgeClientInstallerArtifact.ps1`，并包含 `installer-artifact.json`、安装器 exe、宿主、Launcher、插件和 Velopack setup。
