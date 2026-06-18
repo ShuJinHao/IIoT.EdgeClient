@@ -12,7 +12,7 @@ on:
       version:
         description: Edge client release version
         required: false
-        default: 0.0.0-ci
+        default: 0.0.1-ci
       channel:
         description: Edge client release channel
         required: false
@@ -20,7 +20,7 @@ on:
 
 env:
   DOTNET_NOLOGO: true
-  EDGE_RELEASE_VERSION: ${{ github.event.inputs.version || '0.0.0-ci' }}
+  EDGE_RELEASE_VERSION: ${{ github.event.inputs.version || format('0.0.{0}-ci', github.run_number) }}
   EDGE_RELEASE_CHANNEL: ${{ github.event.inputs.channel || 'ci' }}
   EDGE_PACK_ID: IIoT.EdgeClient.Homogenization
 
