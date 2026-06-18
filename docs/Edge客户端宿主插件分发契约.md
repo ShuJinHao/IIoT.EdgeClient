@@ -263,7 +263,7 @@ Cloud 下载中心、插件选择安装、设备盘点和版本上报属于后�
 
 EdgeClient 的交付物是 Windows 安装器、安装素材和 Velopack 更新包，不是 Docker 镜像。CI/CD 不允许推 Harbor、GHCR，也不允许从 GitHub hosted runner 通过 SSH/SCP 直连内网服务器。
 
-`push main` 只跑 smoke 编译和测试，不生成安装包。完整 GitHub 打包只在 `workflow_dispatch` 或 `edge-v*` / `v*` tag 时执行。日常快发可由操作者本机运行 `scripts/LocalPublishAndDeploy.ps1`，本机完成编译、Velopack 打包和 installer artifact 生成后，通过 rsync/scp 发布到 `/srv/iiot/edge-updates`；该路径不属于 GitHub CI/CD job。
+`push main` 只跑 smoke 编译和测试，不生成安装包。完整 GitHub 打包只在 `workflow_dispatch` 或 `edge-v*` / `v*` tag 时执行。日常快发可由操作者本机运行 `scripts/LocalPublishAndDeploy.ps1`，本机完成编译、Velopack 打包和 installer artifact 生成后，通过 rsync/scp 发布到 `/srv/iiot/edge-updates`；该路径不属于 GitHub CI/CD job。生产服务器只允许 `stable` 渠道，发布脚本必须拒绝并清理非 `stable` 渠道目录。
 
 正式 GitHub 发布分两段：
 
@@ -276,28 +276,28 @@ windows-latest
 
 [self-hosted, iiot-linux-prod]
 -> download GitHub Actions artifacts
--> copy installers/<channel>/<version> and velopack/<channel> to /srv/iiot/edge-updates
+-> copy installers/stable/<version> and velopack/stable to /srv/iiot/edge-updates
 ```
 
 内网 Linux runner 只做文件分发，不重新构建 EdgeClient。原因是 Avalonia 桌面应用、Windows installer 和 Velopack Windows 包必须在 Windows runner 上构建和验证。Linux runner 必须用非 root 专用用户运行，并只授予 Docker 之外的最小文件权限：读取 Actions 工作目录、写入 `/srv/iiot/edge-updates`。
 
-版本号由打包入口统一生成。`workflow_dispatch` 默认使用 `0.0.<run_number>-ci`，tag 触发时版本来自 `edge-v*` 或 `v*` tag，本机快发由操作者显式传 `-Version`；`PublishEdgeRuntime.ps1 -Version` 会同步设置 Launcher/Shell runtime 的 `AssemblyVersion`、`FileVersion` 和 `InformationalVersion`，Velopack 包验收以该版本为准。不要把 runtime 程序集版本固定回 `1.0.0.0` 后再发布 Velopack 包。
+版本号由打包入口显式指定。`workflow_dispatch` 必须输入生产版本号，tag 触发时版本来自 `edge-v*` 或 `v*` tag，本机快发由操作者显式传 `-Version`；`PublishEdgeRuntime.ps1 -Version` 会同步设置 Launcher/Shell runtime 的 `AssemblyVersion`、`FileVersion` 和 `InformationalVersion`，Velopack 包验收以该版本为准。不要把 runtime 程序集版本固定回 `1.0.0.0` 后再发布 Velopack 包。
 
 发布目录固定为：
 
 ```text
 edge-updates/
-  installers/<channel>/<version>/installer-artifact.json
-  installers/<channel>/<version>/IIoT.Edge.Setup.exe
-  installers/<channel>/<version>/launcher/
-  installers/<channel>/<version>/host/
-  installers/<channel>/<version>/plugins/
-  installers/<channel>/<version>/velopack/
-  velopack/<channel>/releases.<channel>.json
-  velopack/<channel>/assets.<channel>.json
+  installers/stable/<version>/installer-artifact.json
+  installers/stable/<version>/IIoT.Edge.Setup.exe
+  installers/stable/<version>/launcher/
+  installers/stable/<version>/host/
+  installers/stable/<version>/plugins/
+  installers/stable/<version>/velopack/
+  velopack/stable/releases.stable.json
+  velopack/stable/assets.stable.json
 ```
 
-Cloud 端通过只读挂载扫描 `edge-updates/installers/<channel>/<version>/installer-artifact.json`，并把文件版本合并到公开下载目录、Edge catalog 和 Human catalog。数据库 release 记录仍是状态管理来源：同 key 数据库记录优先，Draft/Archived 可抑制已经落盘的文件版本。
+Cloud 端通过只读挂载扫描 `edge-updates/installers/stable/<version>/installer-artifact.json`，并把文件版本合并到公开下载目录、Edge catalog 和 Human catalog。数据库 release 记录仍是状态管理来源：同 key 数据库记录优先，Draft/Archived 可抑制已经落盘的文件版本。
 
 ## 9. Phase 2 Cloud 落地
 

@@ -9,17 +9,13 @@ on:
     inputs:
       version:
         description: Edge client release version
-        required: false
-        default: 0.0.1-ci
-      channel:
-        description: Edge client release channel
-        required: false
-        default: ci
+        required: true
+        default: 1.0.0
 
 env:
   DOTNET_NOLOGO: true
-  EDGE_RELEASE_VERSION: ${{ github.event.inputs.version || format('0.0.{0}-ci', github.run_number) }}
-  EDGE_RELEASE_CHANNEL: ${{ github.event.inputs.channel || 'ci' }}
+  EDGE_RELEASE_VERSION: ${{ github.event.inputs.version || '1.0.0' }}
+  EDGE_RELEASE_CHANNEL: stable
   EDGE_PACK_ID: IIoT.EdgeClient.Homogenization
 
 jobs:
@@ -51,6 +47,10 @@ jobs:
               $version = $tag
             }
             $channel = 'stable'
+          }
+
+          if ($channel -ne 'stable') {
+            throw "Production Edge releases must use stable channel."
           }
 
           "EDGE_RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
@@ -125,6 +125,10 @@ jobs:
             $channel = 'stable'
           }
 
+          if ($channel -ne 'stable') {
+            throw "Production Edge releases must use stable channel."
+          }
+
           "EDGE_RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "EDGE_RELEASE_CHANNEL=$channel" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host "Resolved Edge release: version=$version channel=$channel"
@@ -195,6 +199,11 @@ jobs:
             channel="stable"
           fi
 
+          if [ "$channel" != "stable" ]; then
+            echo "Production Edge releases must use stable channel." >&2
+            exit 64
+          fi
+
           {
             echo "EDGE_RELEASE_VERSION=$version"
             echo "EDGE_RELEASE_CHANNEL=$channel"
@@ -226,6 +235,11 @@ jobs:
           fi
 
           edge_updates_dir="${EDGE_UPDATES_DIR:-/srv/iiot/edge-updates}"
+          if [ "$EDGE_RELEASE_CHANNEL" != "stable" ]; then
+            echo "Production Edge releases must use stable channel." >&2
+            exit 64
+          fi
+
           installer_source="$GITHUB_WORKSPACE/publish-download/installer"
           velopack_source="$GITHUB_WORKSPACE/publish-download/velopack"
           installer_target="$edge_updates_dir/installers/$EDGE_RELEASE_CHANNEL/$EDGE_RELEASE_VERSION"
@@ -248,6 +262,8 @@ jobs:
           cp -a "$velopack_source"/. "$tmp_root/velopack"/
 
           mkdir -p "$(dirname "$installer_target")" "$velopack_target"
+          find "$edge_updates_dir/installers" -mindepth 1 -maxdepth 1 -type d ! -name stable -exec rm -rf {} + 2>/dev/null || true
+          find "$edge_updates_dir/velopack" -mindepth 1 -maxdepth 1 -type d ! -name stable -exec rm -rf {} + 2>/dev/null || true
           rm -rf "$installer_target"
           mv "$tmp_root/installer" "$installer_target"
           cp -a "$tmp_root/velopack"/. "$velopack_target"/

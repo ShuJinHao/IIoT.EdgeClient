@@ -1,7 +1,10 @@
 param(
-    [string]$Version = "0.0.$((Get-Date).ToUniversalTime().ToString('yyyyMMddHHmm'))-local",
+    [Parameter(Mandatory = $true)]
+    [ValidatePattern('^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$')]
+    [string]$Version,
 
-    [string]$Channel = 'ci',
+    [ValidateSet('stable')]
+    [string]$Channel = 'stable',
 
     [string]$Configuration = 'Release',
 
@@ -44,6 +47,10 @@ $velopackTarget = "$EdgeUpdatesDir/velopack/$Channel"
 
 if ($Version -match '[\\/]' -or $Channel -match '[\\/]') {
     throw 'Version and Channel must not contain path separators.'
+}
+
+if ($Channel -ne 'stable') {
+    throw 'Production Edge releases must use stable channel.'
 }
 
 function Invoke-EdgeScript {
@@ -234,6 +241,8 @@ tmp_root=$(ConvertTo-ShellSingleQuoted $remoteTmp)
 installer_target=$(ConvertTo-ShellSingleQuoted $installerTarget)
 velopack_target=$(ConvertTo-ShellSingleQuoted $velopackTarget)
 mkdir -p "`$(dirname "`$installer_target")" "`$velopack_target"
+find $(ConvertTo-ShellSingleQuoted "$EdgeUpdatesDir/installers") -mindepth 1 -maxdepth 1 -type d ! -name stable -exec rm -rf {} + 2>/dev/null || true
+find $(ConvertTo-ShellSingleQuoted "$EdgeUpdatesDir/velopack") -mindepth 1 -maxdepth 1 -type d ! -name stable -exec rm -rf {} + 2>/dev/null || true
 test -f "`$tmp_root/installer/installer-artifact.json"
 test -f "`$tmp_root/installer/IIoT.Edge.Setup.exe"
 test -d "`$tmp_root/installer/launcher"
