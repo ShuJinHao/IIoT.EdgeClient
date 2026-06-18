@@ -52,15 +52,18 @@ git push / workflow_dispatch
 ```powershell
 dotnet test src/Tests/IIoT.Edge.Installer.Tests/IIoT.Edge.Installer.Tests.csproj -p:BuildInParallel=false --disable-build-servers
 ./scripts/TestEdgeRuntimePublish.ps1 -Configuration Release
-./scripts/PackEdgeClientVelopack.ps1 -Version 0.0.0-ci -Channel ci -OutputRoot publish/edge-velopack -CleanOutput
-./scripts/TestEdgeVelopackPackage.ps1 -OutputRoot publish/edge-velopack -Channel ci -Version 0.0.0-ci
-./scripts/TestEdgeClientInstallerArtifact.ps1 -ArtifactRoot publish/edge-installer-artifacts/ci/0.0.0-ci -ExpectedChannel ci -ExpectedVersion 0.0.0-ci
+./scripts/PackEdgeClientVelopack.ps1 -Version 0.0.1-ci -Channel ci -OutputRoot publish/edge-velopack -CleanOutput -SkipVeloAppCheck:$true
+./scripts/TestEdgeVelopackPackage.ps1 -OutputRoot publish/edge-velopack -Channel ci -Version 0.0.1-ci
+./scripts/TestEdgeClientInstallerArtifact.ps1 -ArtifactRoot publish/edge-installer-artifacts/ci/0.0.1-ci -ExpectedChannel ci -ExpectedVersion 0.0.1-ci
 ./scripts/TestEdgePackageVulnerabilities.ps1
 ```
 
 CI 发布验收：
 
 - `edge-pack-modules.yml` 在 push main 或 `workflow_dispatch` 时必须生成 `edge-runtime-package`、`edge-installer-artifact`、`edge-velopack-releases` 三个 artifacts。
+- push main 未显式输入版本时，CI 版本必须使用 `0.0.<run_number>-ci`，不能回退到无效的 `0.0.0-ci`。
+- `PublishEdgeRuntime.ps1 -Version` 必须同步写入 runtime 的 `AssemblyVersion` / `FileVersion`，否则 `TestEdgeVelopackPackage.ps1` 会拒绝包版本和 Launcher 程序集版本不一致。
+- CI 允许对 `PackEdgeClientVelopack.ps1` 使用 `-SkipVeloAppCheck:$true`，原因是 Launcher 通过 `EdgeUpdateVelopackStartup.Run()` 包装 `VelopackApp.Build().Run()`，Velopack CLI 静态扫描无法识别该包装；真实包仍必须通过 `TestEdgeVelopackPackage.ps1`。
 - `edge-installer-artifact` 必须通过 `TestEdgeClientInstallerArtifact.ps1`，并包含 `installer-artifact.json`、安装器 exe、宿主、Launcher、插件和 Velopack setup。
 - `edge-velopack-releases` 必须通过 `TestEdgeVelopackPackage.ps1`，并包含 `releases.<channel>.json`、`assets.<channel>.json`、full nupkg、setup exe 和 portable zip。
 - `publish-edge-updates` 发布后必须能在 `/srv/iiot/edge-updates/installers/<channel>/<version>/installer-artifact.json` 和 `/srv/iiot/edge-updates/velopack/<channel>/releases.<channel>.json` 找到对应产物。
