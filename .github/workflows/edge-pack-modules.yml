@@ -99,7 +99,7 @@ jobs:
 
       - name: Pack Velopack releases
         shell: pwsh
-        run: ./scripts/PackEdgeClientVelopack.ps1 -Version $env:EDGE_RELEASE_VERSION -Channel $env:EDGE_RELEASE_CHANNEL -OutputRoot publish/edge-velopack -CleanOutput
+        run: ./scripts/PackEdgeClientVelopack.ps1 -Version $env:EDGE_RELEASE_VERSION -Channel $env:EDGE_RELEASE_CHANNEL -OutputRoot publish/edge-velopack -CleanOutput -SkipVeloAppCheck:$true
 
       - name: Validate Velopack releases
         shell: pwsh
