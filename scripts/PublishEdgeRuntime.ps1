@@ -67,8 +67,15 @@ function Publish-Project {
     }
 
     if (-not [string]::IsNullOrWhiteSpace($Version)) {
+        $assemblyVersionPrefix = ($Version -split '[-+]')[0]
+        $assemblyVersionPartCount = $assemblyVersionPrefix.Split('.').Length
+        $assemblyVersion = if ($assemblyVersionPartCount -eq 3) { "$assemblyVersionPrefix.0" } else { $assemblyVersionPrefix }
+        [System.Version]::Parse($assemblyVersion) | Out-Null
+
         $publishArgs += @(
             "-p:Version=$Version",
+            "-p:AssemblyVersion=$assemblyVersion",
+            "-p:FileVersion=$assemblyVersion",
             "-p:InformationalVersion=$Version"
         )
     }
