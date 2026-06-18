@@ -38,6 +38,10 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Restore edge solution
+        shell: pwsh
+        run: dotnet restore IIoT.EdgeClient.slnx -p:RestoreDisableParallel=true --disable-build-servers
+
       - name: Build launcher
         shell: pwsh
         run: dotnet build src/Edge/IIoT.Edge.Launcher/IIoT.Edge.Launcher.csproj -p:BuildInParallel=false --disable-build-servers
