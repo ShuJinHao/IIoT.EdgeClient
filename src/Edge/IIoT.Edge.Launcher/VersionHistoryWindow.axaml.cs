@@ -18,12 +18,14 @@ public partial class VersionHistoryWindow : Window
         _panel = null!;
     }
 
-    public VersionHistoryWindow(LauncherClientReleasePanelViewModel panel)
+    public VersionHistoryWindow(
+        LauncherVersionComponentItem component,
+        LauncherClientReleasePanelViewModel panel)
     {
         InitializeComponent();
         EdgeRoundedWindowRegion.Attach(this, WindowCornerRadius);
         _panel = panel ?? throw new ArgumentNullException(nameof(panel));
-        DataContext = _panel;
+        DataContext = new LauncherVersionHistoryViewModel(component, _panel);
     }
 
     private async void ApplyVersionButton_Click(object? sender, RoutedEventArgs e)

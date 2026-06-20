@@ -560,6 +560,7 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         var packageSizeText = string.IsNullOrWhiteSpace(option?.PackageSizeText)
             ? "-"
             : option.PackageSizeText;
+        var releaseNotesText = ResolveUpdateRowReleaseNotes(option);
 
         return new LauncherClientPluginItem(
             component.ModuleId,
@@ -567,13 +568,21 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
             currentVersion,
             targetVersion,
             packageSizeText,
-            option?.CompatibilityIssue ?? option?.ReleaseNotes ?? string.Empty,
+            releaseNotesText,
             canUpdate,
             ResolveUpdateRowStatusKind(status),
             ResolveUpdateRowStatusText(status),
-            ResolveUpdateRowActionText(status, canUpdate),
+            canUpdate && option is not null
+                ? option.ActionText
+                : ResolveUpdateRowActionText(status),
             status,
-            canUpdate ? option : null);
+            canUpdate ? option : null,
+            component.ComponentKindText,
+            option?.PublishedAtText ?? string.Empty,
+            releaseNotesText,
+            component,
+            Format("Launcher_UpdateCenter_ButtonViewHistory", component.Versions.Count),
+            Text("Launcher_UpdateCenter_NoHistory"));
     }
 
     private string ResolveUpdateRowDisplayName(LauncherVersionComponentItem component)
@@ -594,6 +603,18 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
            ?? component.Versions.FirstOrDefault(static option => option.Status == EdgeVersionStatus.Current)
            ?? component.Versions.FirstOrDefault(static option => option.Status == EdgeVersionStatus.Incompatible)
            ?? component.Versions.FirstOrDefault();
+
+    private static string ResolveUpdateRowReleaseNotes(LauncherVersionOptionItem? option)
+    {
+        if (option is null)
+        {
+            return string.Empty;
+        }
+
+        return !string.IsNullOrWhiteSpace(option.CompatibilityIssue)
+            ? option.CompatibilityIssue
+            : option.ReleaseNotes;
+    }
 
     private string ResolveUpdateRowStatusKind(EdgeVersionStatus status)
         => status switch
@@ -619,20 +640,13 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
             _ => Text("Launcher_ClientRelease_Plugin_StatusUnknown")
         };
 
-    private string ResolveUpdateRowActionText(EdgeVersionStatus status, bool canUpdate)
-    {
-        if (canUpdate)
-        {
-            return Text("Launcher_UpdateCenter_ButtonHostUpdate");
-        }
-
-        return status switch
+    private string ResolveUpdateRowActionText(EdgeVersionStatus status)
+        => status switch
         {
             EdgeVersionStatus.Current => Text("Launcher_ProfileCard_StatusLatest"),
             EdgeVersionStatus.Incompatible => Text("Launcher_VersionManagement_ButtonUnavailable"),
             _ => Text("Launcher_ClientRelease_ButtonNoAction")
         };
-    }
 
     private string? LocalizeAuthenticationError(string? message)
     {

@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using IIoT.Edge.Application.Abstractions.Updates;
 using IIoT.Edge.Launcher.Models;
 using IIoT.Edge.Launcher.Services;
 using IIoT.Edge.Launcher.ViewModels;
@@ -60,7 +61,7 @@ public sealed class LauncherWindowHeadlessTests
 
             Assert.True(window.FindControl<Control>("UpdateCenterPanelRoot")?.IsVisible);
             Assert.NotNull(window.FindControl<Control>("RefreshUpdateCenterButton"));
-            Assert.NotNull(window.FindControl<Control>("VersionHistoryButton"));
+            Assert.Null(window.FindControl<Control>("VersionHistoryButton"));
             Assert.NotNull(window.FindControl<Control>("UpdateCenterRowsGrid"));
             Assert.Null(window.FindControl<Control>("ClientReleasePanelRoot"));
             Assert.Null(window.FindControl<ProgressBar>("ClientReleaseProgressBar"));
@@ -97,10 +98,18 @@ public sealed class LauncherWindowHeadlessTests
     public void VersionHistoryWindow_ShouldLoadDialog()
     {
         var viewModel = CreateViewModel();
-        var window = new VersionHistoryWindow(viewModel.ClientReleasePanel)
+        var component = new LauncherVersionComponentItem(
+            EdgeComponentKind.Host,
+            "Host",
+            "Edge Host",
+            "1.0.0",
+            "宿主",
+            "查看版本",
+            []);
+        var window = new VersionHistoryWindow(component, viewModel.ClientReleasePanel)
         {
-            Width = 920,
-            Height = 620
+            Width = 860,
+            Height = 540
         };
 
         try
@@ -108,7 +117,7 @@ public sealed class LauncherWindowHeadlessTests
             window.Show();
 
             Assert.True(window.FindControl<Control>("VersionHistoryWindowRoot")?.IsVisible);
-            Assert.NotNull(window.FindControl<Control>("VersionHistoryComponentsList"));
+            Assert.NotNull(window.FindControl<Control>("VersionHistoryRowsGrid"));
         }
         finally
         {

@@ -22,7 +22,13 @@ public sealed class LauncherClientPluginItem : BaseNotifyPropertyChanged
         string statusText,
         string actionText,
         EdgeVersionStatus state,
-        LauncherVersionOptionItem? versionOption = null)
+        LauncherVersionOptionItem? versionOption = null,
+        string componentKindText = "",
+        string publishedAtText = "",
+        string releaseNotesText = "",
+        LauncherVersionComponentItem? versionComponent = null,
+        string historyActionText = "",
+        string emptyHistoryText = "")
     {
         ModuleId = moduleId;
         DisplayName = displayName;
@@ -36,6 +42,14 @@ public sealed class LauncherClientPluginItem : BaseNotifyPropertyChanged
         _actionText = actionText;
         State = state;
         VersionOption = versionOption;
+        ComponentKindText = string.IsNullOrWhiteSpace(componentKindText) ? "-" : componentKindText;
+        PublishedAtText = string.IsNullOrWhiteSpace(publishedAtText) ? "-" : publishedAtText;
+        ReleaseNotesText = string.IsNullOrWhiteSpace(releaseNotesText) ? "-" : releaseNotesText;
+        VersionComponent = versionComponent;
+        HistoryCount = versionComponent?.Versions.Count ?? 0;
+        HasVersionHistory = VersionComponent is not null && HistoryCount > 0;
+        HistoryActionText = historyActionText;
+        EmptyHistoryText = string.IsNullOrWhiteSpace(emptyHistoryText) ? "-" : emptyHistoryText;
     }
 
     public string ModuleId { get; }
@@ -61,15 +75,37 @@ public sealed class LauncherClientPluginItem : BaseNotifyPropertyChanged
 
     public string PackageSizeText { get; }
 
+    public string PackageSizeDisplayText => string.IsNullOrWhiteSpace(PackageSizeText) ? "-" : PackageSizeText;
+
     public string DetailText { get; }
 
     public bool CanInstallOrUpdate { get; }
+
+    public bool HasNoInstallOrUpdate => !CanInstallOrUpdate;
 
     public string StatusKind { get; }
 
     public EdgeVersionStatus State { get; }
 
     public LauncherVersionOptionItem? VersionOption { get; }
+
+    public string ComponentKindText { get; }
+
+    public string PublishedAtText { get; }
+
+    public string ReleaseNotesText { get; }
+
+    public LauncherVersionComponentItem? VersionComponent { get; }
+
+    public int HistoryCount { get; }
+
+    public bool HasVersionHistory { get; }
+
+    public bool HasNoVersionHistory => !HasVersionHistory;
+
+    public string HistoryActionText { get; }
+
+    public string EmptyHistoryText { get; }
 
     public string StatusText
     {

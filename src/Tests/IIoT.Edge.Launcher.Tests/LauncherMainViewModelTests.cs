@@ -382,9 +382,18 @@ public sealed class LauncherMainViewModelTests
         Assert.Equal("1.1.0", homogenization.TargetVersion);
         Assert.True(homogenization.CanInstallOrUpdate);
         Assert.NotNull(homogenization.VersionOption);
+        Assert.Equal("插件", homogenization.ComponentKindText);
+        Assert.Equal("2.0 KB", homogenization.PackageSizeDisplayText);
+        Assert.Equal("均浆 release 1.1.0", homogenization.ReleaseNotesText);
+        Assert.Equal(CatalogPublishedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm"), homogenization.PublishedAtText);
+        Assert.Equal(1, homogenization.HistoryCount);
+        Assert.Equal("查看 1", homogenization.HistoryActionText);
+        Assert.NotNull(homogenization.VersionComponent);
         var coating = Assert.Single(viewModel.UpdateRows, row => row.ModuleId == "IIoT.Edge.Module.Coating");
         Assert.False(coating.CanInstallOrUpdate);
         Assert.Null(coating.VersionOption);
+        Assert.True(coating.HasVersionHistory);
+        Assert.True(coating.HasNoInstallOrUpdate);
     }
 
     [Fact]
@@ -438,6 +447,8 @@ public sealed class LauncherMainViewModelTests
     private static LauncherAccountRecord Account(string userName, string displayName) =>
         new(userName, displayName, "hash", true);
 
+    private static readonly DateTime CatalogPublishedAtUtc = new(2026, 6, 20, 13, 45, 0, DateTimeKind.Utc);
+
     private static LauncherProfileDefinition Profile(string profileId, string displayName) =>
         new(profileId, displayName, "测试工序", null, profileId, "IIoT.Edge.Shell", "Shell", "#000000");
 
@@ -474,8 +485,8 @@ public sealed class LauncherMainViewModelTests
                                 "Published",
                                 null,
                                 null,
-                                DateTime.UtcNow,
-                                DateTime.UtcNow)))
+                                CatalogPublishedAtUtc,
+                                CatalogPublishedAtUtc)))
                     ]),
                 new EdgeComponentVersionPlan(
                     EdgeComponentKind.Plugin,
@@ -506,13 +517,13 @@ public sealed class LauncherMainViewModelTests
                                     "https://example.invalid/plugin.zip",
                                     "sha256",
                                     1024,
-                                    null,
+                                    "Plugin update",
                                     [],
                                     "Published",
                                     null,
                                     null,
-                                    DateTime.UtcNow,
-                                    DateTime.UtcNow)))
+                                    CatalogPublishedAtUtc,
+                                    CatalogPublishedAtUtc)))
                     ])
             ]);
 
@@ -573,8 +584,8 @@ public sealed class LauncherMainViewModelTests
                         "Published",
                         null,
                         null,
-                        DateTime.UtcNow,
-                        DateTime.UtcNow)))
+                        CatalogPublishedAtUtc,
+                        CatalogPublishedAtUtc)))
             ]);
 
     private static EdgeComponentVersionPlan CreatePluginPlan(
@@ -612,13 +623,13 @@ public sealed class LauncherMainViewModelTests
                 $"https://example.invalid/{moduleId}-{version}.zip",
                 "sha256",
                 packageSize,
-                null,
+                $"{displayName} release {version}",
                 [],
                 "Published",
                 null,
                 null,
-                DateTime.UtcNow,
-                DateTime.UtcNow));
+                CatalogPublishedAtUtc,
+                CatalogPublishedAtUtc));
 
     private static async Task WaitUntilAsync(Func<bool> condition)
     {
