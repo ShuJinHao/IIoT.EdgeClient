@@ -32,6 +32,9 @@
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageVersion Include="NModbus" Version="3.0.83" />
     <PackageVersion Include="NModbus.Serial" Version="3.0.83" />
+    <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
+    <PackageVersion Include="SQLitePCLRaw.core" Version="3.0.3" />
+    <PackageVersion Include="SQLitePCLRaw.provider.e_sqlite3" Version="3.0.3" />
     <PackageVersion Include="S7netplus" Version="0.20.0" />
     <PackageVersion Include="System.IO.Ports" Version="10.0.9" />
     <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.16.0" />
