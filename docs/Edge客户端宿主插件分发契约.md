@@ -153,7 +153,7 @@ Draft | Published | Deprecated | Archived
 - `Archived`：不进入 Edge catalog，包文件允许被异步清理。
 - `Draft`：只允许 Human 管理端查看，不进入 Edge catalog。
 
-发布保留上限由云端统一配置 `EdgeRelease:MaxVersionsPerComponent`，默认 5。发布新版本后，云端对同一组件、同一 channel、同一 targetRuntime 执行保留策略：超过上限的老版本如果没有设备上报使用则归档；仍有设备使用则降级为 `Deprecated`，等待管理员处理。
+发布保留上限由云端统一配置 `EdgeRelease:MaxVersionsPerComponent`，默认 3。发布新版本后，云端对同一组件、同一 channel、同一 targetRuntime 执行保留策略：超过上限的老版本如果没有设备上报使用则归档；仍有设备使用则降级为 `Deprecated`，等待管理员处理。HTTP 快发成功后还会回收“已归档且无设备在用”的旧安装素材文件，避免服务器磁盘无限增长。
 
 客户端 Application 层输出给 UI 的版本计划结构必须表达多版本，不允许 UI 自己猜：
 
@@ -263,7 +263,7 @@ Cloud 下载中心、插件选择安装、设备盘点和版本上报属于后�
 
 EdgeClient 的交付物是 Windows 安装器、安装素材和 Velopack 更新包，不是 Docker 镜像。CI/CD 不允许推 Harbor、GHCR，也不允许从 GitHub hosted runner 通过 SSH/SCP 直连内网服务器。
 
-`push main` 只跑 smoke 编译和测试，不生成安装包。完整 GitHub 打包只在 `workflow_dispatch` 或 `edge-v*` / `v*` tag 时执行。日常快发可由操作者本机运行 `scripts/LocalPublishAndDeploy.ps1`，本机完成编译、Velopack 打包和 installer artifact 生成后，通过 rsync/scp 发布到 `/srv/iiot/edge-updates`；该路径不属于 GitHub CI/CD job。生产服务器只允许 `stable` 渠道，发布脚本必须拒绝并清理非 `stable` 渠道目录。
+`push main` 只跑 smoke 编译和测试，不生成安装包。完整 GitHub 打包只在 `workflow_dispatch` 或 `edge-v*` / `v*` tag 时执行。日常快发可由操作者本机运行 `scripts/LocalPublishAndDeploy.ps1 -Transport http`，本机完成编译、Velopack 打包和 installer artifact 生成后，通过 Cloud Human API 上传 release bundle 到 `/srv/iiot/edge-updates`；该路径不属于 GitHub CI/CD job。HTTP 上传默认限速 100 Mbps、单并发、服务端审计，并在脚本结束时输出发布摘要。`rsync/scp` 只作为 HTTP 发布不可用时的 fallback。生产服务器只允许 `stable` 渠道，发布脚本必须拒绝并清理非 `stable` 渠道目录。
 
 正式 GitHub 发布分两段：
 
@@ -281,7 +281,7 @@ windows-latest
 
 内网 Linux runner 只做文件分发，不重新构建 EdgeClient。原因是 Avalonia 桌面应用、Windows installer 和 Velopack Windows 包必须在 Windows runner 上构建和验证。Linux runner 必须用非 root 专用用户运行，并只授予 Docker 之外的最小文件权限：读取 Actions 工作目录、写入 `/srv/iiot/edge-updates`。
 
-版本号由打包入口确定。`workflow_dispatch` 必须输入生产版本号，tag 触发时版本来自 `edge-v*` 或 `v*` tag；本机快发未传 `-Version` 时读取服务器 stable 最新版本并自动递增 patch，传入 `-Version` 时严格使用传入值。`PublishEdgeRuntime.ps1 -Version` 会同步设置 Launcher/Shell runtime 的 `AssemblyVersion`、`FileVersion` 和 `InformationalVersion`，Velopack 包验收以该版本为准。不要把 runtime 程序集版本固定回 `1.0.0.0` 后再发布 Velopack 包。
+版本号由打包入口确定。`workflow_dispatch` 必须输入生产版本号，tag 触发时版本来自 `edge-v*` 或 `v*` tag；HTTP 本机快发未传 `-Version` 时读取 Cloud Human catalog 最新 stable 版本并自动递增 patch，SSH fallback 才读取服务器 stable 目录，传入 `-Version` 时严格使用传入值。`PublishEdgeRuntime.ps1 -Version` 会同步设置 Launcher/Shell runtime 的 `AssemblyVersion`、`FileVersion` 和 `InformationalVersion`，Velopack 包验收以该版本为准。不要把 runtime 程序集版本固定回 `1.0.0.0` 后再发布 Velopack 包。
 
 发布目录固定为：
 
@@ -297,7 +297,7 @@ edge-updates/
   velopack/stable/assets.stable.json
 ```
 
-Cloud 端通过只读挂载扫描 `edge-updates/installers/stable/<version>/installer-artifact.json`，并把文件版本合并到公开下载目录、Edge catalog 和 Human catalog。数据库 release 记录仍是状态管理来源：同 key 数据库记录优先，Draft/Archived 可抑制已经落盘的文件版本。
+Cloud HttpApi 通过内网受控 HTTP 发布接口对 `edge-updates` 持有可写挂载，只允许写 staging 和发布目录；nginx 对同一目录保持只读静态下载。Cloud catalog 扫描 `edge-updates/installers/stable/<version>/installer-artifact.json`，并把文件版本合并到公开下载目录、Edge catalog 和 Human catalog。数据库 release 记录仍是状态管理来源：同 key 数据库记录优先，Draft/Archived 可抑制已经落盘的文件版本。
 
 `installer-artifact.json` 必须包含发布追溯字段：`sourceCommit`、`previousVersion`、`previousSourceCommit`、`releaseNotes` 和 `generatedAtUtc`。首次发布或旧 artifact 无 commit 记录时，`previousVersion` / `previousSourceCommit` 可为空，但 `sourceCommit` 和 `releaseNotes` 不得为空。
 

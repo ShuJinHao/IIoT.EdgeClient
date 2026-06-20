@@ -19,8 +19,15 @@ param(
 
     [string]$EdgeUpdatesDir = '/srv/iiot/edge-updates',
 
-    [ValidateSet('auto', 'rsync', 'scp')]
+    [ValidateSet('auto', 'rsync', 'scp', 'http')]
     [string]$Transport = 'auto',
+
+    [string]$CloudApiBaseUrl = '',
+
+    [string]$CloudToken = '',
+
+    [ValidateRange(1, 1000)]
+    [int]$UploadRateLimitMbps = 100,
 
     [bool]$SkipVeloAppCheck = $true,
 
@@ -90,6 +97,10 @@ function Resolve-Transport {
         return $Transport
     }
 
+    if (-not [string]::IsNullOrWhiteSpace($CloudApiBaseUrl) -and -not [string]::IsNullOrWhiteSpace($CloudToken)) {
+        return 'http'
+    }
+
     if (Get-Command rsync -ErrorAction SilentlyContinue) {
         return 'rsync'
     }
@@ -99,6 +110,72 @@ function Resolve-Transport {
     }
 
     throw 'Neither rsync nor scp was found. Install one of them, or pass -Transport explicitly.'
+}
+
+function Assert-HttpPublishConfiguration {
+    if ([string]::IsNullOrWhiteSpace($CloudApiBaseUrl)) {
+        throw 'CloudApiBaseUrl is required when -Transport http is used.'
+    }
+
+    if ([string]::IsNullOrWhiteSpace($CloudToken)) {
+        throw 'CloudToken is required when -Transport http is used.'
+    }
+}
+
+function Invoke-CloudJsonGet {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    Assert-HttpPublishConfiguration
+    $apiRoot = $CloudApiBaseUrl.TrimEnd('/')
+    $uri = "$apiRoot/$($Path.TrimStart('/'))"
+    $headers = @{
+        Authorization = "Bearer $CloudToken"
+    }
+    return Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
+}
+
+function Try-GetLatestCloudStableRelease {
+    try {
+        $catalog = Invoke-CloudJsonGet -Path "/human/client-releases/catalog?channel=$Channel&targetRuntime=$RuntimeIdentifier&onlyPublished=true"
+        $versions = @($catalog.host.versions | Where-Object {
+            $_.version -match '^\d+\.\d+\.\d+$' -and
+            ($_.status -eq 'Published' -or $_.status -eq 'Deprecated')
+        })
+
+        if ($versions.Count -eq 0) {
+            return $null
+        }
+
+        $latest = $versions |
+            Sort-Object @{ Expression = { [version]$_.version } } |
+            Select-Object -Last 1
+
+        $sourceCommit = ''
+        if (-not [string]::IsNullOrWhiteSpace([string]$latest.downloadUrl)) {
+            try {
+                $downloadBase = Resolve-DownloadBaseUrl
+                $manifestUrl = [string]$latest.downloadUrl
+                if (-not $manifestUrl.StartsWith('http', [System.StringComparison]::OrdinalIgnoreCase)) {
+                    $manifestUrl = "$downloadBase/$($manifestUrl.TrimStart('/'))"
+                }
+
+                $manifest = Invoke-RestMethod -Method Get -Uri $manifestUrl
+                $sourceCommit = [string]$manifest.sourceCommit
+            }
+            catch {
+                Write-Warning "Could not read previous Edge release manifest sourceCommit. $($_.Exception.Message)"
+            }
+        }
+
+        return [PSCustomObject]@{
+            Version = [string]$latest.version
+            SourceCommit = $sourceCommit
+        }
+    }
+    catch {
+        Write-Warning "Could not read latest Cloud Edge release. Falling back to 0.0.1. $($_.Exception.Message)"
+        return $null
+    }
 }
 
 function Invoke-RemoteBash {
@@ -266,9 +343,149 @@ function Publish-DirectoryWithScp {
     )
 }
 
+function New-EdgeHttpReleaseBundle {
+    param(
+        [Parameter(Mandatory = $true)][string]$InstallerArtifactRoot,
+        [Parameter(Mandatory = $true)][string]$VelopackRoot,
+        [Parameter(Mandatory = $true)][string]$OutputZip
+    )
+
+    $bundleRoot = Join-Path (Split-Path -Parent $OutputZip) 'edge-http-bundle'
+    if (Test-Path $bundleRoot) {
+        Remove-Item -Path $bundleRoot -Recurse -Force
+    }
+
+    New-Item -Path (Join-Path $bundleRoot 'installer') -ItemType Directory -Force | Out-Null
+    New-Item -Path (Join-Path $bundleRoot 'velopack') -ItemType Directory -Force | Out-Null
+    Copy-Item -Path (Join-Path $InstallerArtifactRoot '*') -Destination (Join-Path $bundleRoot 'installer') -Recurse -Force
+    Copy-Item -Path (Join-Path $VelopackRoot '*') -Destination (Join-Path $bundleRoot 'velopack') -Recurse -Force
+
+    if (Test-Path $OutputZip) {
+        Remove-Item -Path $OutputZip -Force
+    }
+
+    Compress-Archive -Path (Join-Path $bundleRoot '*') -DestinationPath $OutputZip -CompressionLevel Fastest -Force
+    Remove-Item -Path $bundleRoot -Recurse -Force
+    return $OutputZip
+}
+
+function Invoke-EdgeHttpReleaseUpload {
+    param([Parameter(Mandatory = $true)][string]$BundleZip)
+
+    Assert-HttpPublishConfiguration
+    $curl = Get-Command curl -CommandType Application -ErrorAction SilentlyContinue
+    if ($null -eq $curl) {
+        throw 'curl is required for HTTP Edge release upload with client-side rate limiting.'
+    }
+
+    $apiRoot = $CloudApiBaseUrl.TrimEnd('/')
+    $uri = "$apiRoot/human/client-releases/edge-release-bundles"
+    $responsePath = Join-Path (Split-Path -Parent $BundleZip) 'edge-http-upload-response.json'
+    $rateBytesPerSecond = [int64]([math]::Floor($UploadRateLimitMbps * 1024 * 1024 / 8))
+
+    if (Test-Path $responsePath) {
+        Remove-Item -Path $responsePath -Force
+    }
+
+    & $curl.Source `
+        --fail `
+        --show-error `
+        --silent `
+        --request POST `
+        --header "Authorization: Bearer $CloudToken" `
+        --header "Content-Type: application/zip" `
+        --limit-rate "$rateBytesPerSecond" `
+        --data-binary "@$BundleZip" `
+        --output "$responsePath" `
+        "$uri"
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "HTTP Edge release upload failed with exit code $LASTEXITCODE."
+    }
+
+    if (-not (Test-Path $responsePath)) {
+        throw 'HTTP Edge release upload did not return a response body.'
+    }
+
+    return Get-Content -Raw -Encoding UTF8 -Path $responsePath | ConvertFrom-Json
+}
+
+function Resolve-DownloadBaseUrl {
+    Assert-HttpPublishConfiguration
+    $uri = [Uri]$CloudApiBaseUrl
+    $builder = [System.UriBuilder]::new($uri)
+    $path = $builder.Path.TrimEnd('/')
+    if ($path.EndsWith('/api/v1', [System.StringComparison]::OrdinalIgnoreCase)) {
+        $builder.Path = $path.Substring(0, $path.Length - '/api/v1'.Length)
+    }
+    elseif ($path.EndsWith('/api', [System.StringComparison]::OrdinalIgnoreCase)) {
+        $builder.Path = $path.Substring(0, $path.Length - '/api'.Length)
+    }
+    else {
+        $builder.Path = $path
+    }
+
+    return $builder.Uri.AbsoluteUri.TrimEnd('/')
+}
+
+function Test-EdgeHttpReleaseUrls {
+    param([Parameter(Mandatory = $true)]$PublishResult)
+
+    $downloadBase = Resolve-DownloadBaseUrl
+    $curl = Get-Command curl -CommandType Application -ErrorAction SilentlyContinue
+    if ($null -eq $curl) {
+        throw 'curl is required for HTTP Edge release verification.'
+    }
+
+    foreach ($relativeUrl in @($PublishResult.verificationUrls)) {
+        $uri = "$downloadBase/$(([string]$relativeUrl).TrimStart('/'))"
+        & $curl.Source --fail --silent --show-error --head "$uri" | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "HTTP verification failed: $uri"
+        }
+    }
+}
+
+function Write-EdgePublishSummary {
+    param([Parameter(Mandatory = $true)]$PublishResult)
+
+    Write-Host ''
+    Write-Host 'Edge HTTP release deployment summary'
+    Write-Host "  channel: $($PublishResult.channel)"
+    Write-Host "  version: $($PublishResult.version)"
+    Write-Host "  sourceCommit: $($PublishResult.sourceCommit)"
+    Write-Host "  previousSourceCommit: $($PublishResult.previousSourceCommit)"
+    Write-Host "  bundleSize: $($PublishResult.bundleSize)"
+    Write-Host "  uploadSeconds: $([math]::Round([double]$PublishResult.uploadSeconds, 2))"
+    Write-Host "  uploadRateLimitMbps: $($PublishResult.uploadRateLimitMbps)"
+    Write-Host "  installerPath: $($PublishResult.installerPath)"
+    Write-Host "  velopackPath: $($PublishResult.velopackPath)"
+    Write-Host "  components: $(@($PublishResult.components) -join ', ')"
+    Write-Host "  archivedVersions: $(@($PublishResult.archivedVersions) -join ', ')"
+    Write-Host "  deletedInstallerVersions: $(@($PublishResult.deletedInstallerVersions) -join ', ')"
+    Write-Host "  deletedVelopackFiles: $(@($PublishResult.deletedVelopackFiles) -join ', ')"
+    Write-Host "  cleanupSucceeded: $($PublishResult.cleanupSucceeded)"
+    if (-not [string]::IsNullOrWhiteSpace([string]$PublishResult.cleanupWarning)) {
+        Write-Host "  cleanupWarning: $($PublishResult.cleanupWarning)"
+    }
+    Write-Host '  httpVerification: ok'
+    Write-Host "  verificationUrls: $(@($PublishResult.verificationUrls) -join ', ')"
+    Write-Host '  releaseNotes:'
+    foreach ($line in @($PublishResult.changedCommits)) {
+        Write-Host "    $line"
+    }
+}
+
 Push-Location $repoRoot
 try {
-    $previousRelease = Try-GetLatestRemoteStableRelease
+    $selectedTransport = Resolve-Transport
+    if ($selectedTransport -eq 'http') {
+        Assert-HttpPublishConfiguration
+        $previousRelease = Try-GetLatestCloudStableRelease
+    }
+    else {
+        $previousRelease = Try-GetLatestRemoteStableRelease
+    }
     $previousVersion = if ($null -ne $previousRelease) { [string]$previousRelease.Version } else { '' }
     $previousSourceCommit = if ($null -ne $previousRelease) { [string]$previousRelease.SourceCommit } else { '' }
 
@@ -367,7 +584,20 @@ try {
         throw "Velopack releases manifest was not generated: $velopackRoot"
     }
 
-    $selectedTransport = Resolve-Transport
+    if ($selectedTransport -eq 'http') {
+        $bundleZip = Join-Path $releaseRoot "edge-release-bundle-$Channel-$Version.zip"
+        New-EdgeHttpReleaseBundle `
+            -InstallerArtifactRoot $installerArtifactRoot `
+            -VelopackRoot $velopackRoot `
+            -OutputZip $bundleZip | Out-Null
+
+        Write-Host "Publishing Edge release bundle over HTTP: $CloudApiBaseUrl (limit=${UploadRateLimitMbps}Mbps)"
+        $publishResult = Invoke-EdgeHttpReleaseUpload -BundleZip $bundleZip
+        Test-EdgeHttpReleaseUrls -PublishResult $publishResult
+        Write-EdgePublishSummary -PublishResult $publishResult
+        return
+    }
+
     Write-Host "Publishing to ${remote}:$EdgeUpdatesDir with $selectedTransport"
     $prepareScript = @"
 set -euo pipefail

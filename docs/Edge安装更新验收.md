@@ -8,7 +8,7 @@ EdgeClient 不发布 Docker 镜像，不推 Harbor，也不从 GitHub hosted run
 
 - `push main`：只跑 smoke 编译和测试，不生成安装包和 Velopack 发布包。
 - `workflow_dispatch` 或 `edge-v*` / `v*` tag：完整 GitHub 打包并发布到内网静态目录，渠道固定为 `stable`。
-- 本机快发：操作者本机运行 `scripts/LocalPublishAndDeploy.ps1`，本机编译、打包、生成 installer artifact 后通过 rsync/scp 发布到服务器；这是运维快发路径，不属于 GitHub CI/CD job。
+- 本机快发：操作者本机运行 `scripts/LocalPublishAndDeploy.ps1 -Transport http`，本机编译、打包、生成 installer artifact 后通过 Cloud Human API 上传 release bundle；这是运维快发路径，不属于 GitHub CI/CD job。`rsync/scp` 只作为 HTTP 发布不可用时的 fallback。
 - 生产服务器只允许 `stable` 渠道，不保留 `ci`、`dev`、`test` 或其他测试渠道目录。
 
 正式 GitHub 打包链路固定为：
@@ -51,14 +51,15 @@ workflow_dispatch / edge-v* tag / v* tag
 ```powershell
 pwsh ./scripts/LocalPublishAndDeploy.ps1 `
   -Channel stable `
-  -DeployHost 10.98.90.154 `
-  -DeployUser root `
-  -EdgeUpdatesDir /srv/iiot/edge-updates
+  -Transport http `
+  -CloudApiBaseUrl http://10.98.90.154:81/api/v1 `
+  -CloudToken $env:IIOT_CLOUD_TOKEN `
+  -UploadRateLimitMbps 100
 ```
 
-未传 `-Version` 时，脚本读取服务器 stable 最新版本并自动递增 patch；需要固定版本时才显式传 `-Version`。本机快发的完整操作入口见 `docs/客户端部署.md`。
+未传 `-Version` 时，HTTP 发布会读取 Cloud Human catalog 最新 stable 版本并自动递增 patch；需要固定版本时才显式传 `-Version`。本机快发的完整操作入口见 `docs/客户端部署.md`。
 
-快发只负责让文件落盘。Cloud 负责在 catalog 请求时扫描 `/app/edge-updates/installers/stable/<version>/installer-artifact.json` 并与数据库 release 记录合并；数据库同 key 记录优先，可用 Draft/Archived 抑制文件版本。
+HTTP 快发会先让文件安全落盘，再由 Cloud 服务端从 manifest 派生 DB release 行、写审计、执行最多保留 3 次的策略，并返回部署摘要。Cloud 负责在 catalog 请求时扫描 `/app/edge-updates/installers/stable/<version>/installer-artifact.json` 并与数据库 release 记录合并；数据库同 key 记录优先，可用 Draft/Archived 抑制文件版本。
 
 ## 1. 固定契约
 
