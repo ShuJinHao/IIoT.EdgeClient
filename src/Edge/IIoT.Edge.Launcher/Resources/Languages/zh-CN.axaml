@@ -58,8 +58,6 @@
     <sys:String x:Key="Launcher_UpdateCenter_ButtonViewHistory">查看 {0}</sys:String>
     <sys:String x:Key="Launcher_UpdateCenter_NoHistory">-</sys:String>
     <sys:String x:Key="Launcher_UpdateCenter_HostStatusNotReady">未配置</sys:String>
-    <sys:String x:Key="Launcher_Profile_PluginLabel">插件</sys:String>
-    <sys:String x:Key="Launcher_Profile_DataLabel">数据</sys:String>
     <sys:String x:Key="Launcher_Profile_PluginMissing">未发现插件清单</sys:String>
     <sys:String x:Key="Launcher_Profile_DataMissing">未发现数据目录配置</sys:String>
     <sys:String x:Key="Launcher_ProfileCard_StatusChecking">检查中</sys:String>

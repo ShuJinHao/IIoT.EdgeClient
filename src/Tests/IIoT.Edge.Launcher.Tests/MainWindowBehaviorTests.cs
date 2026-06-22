@@ -35,6 +35,17 @@ public sealed class MainWindowBehaviorTests
     }
 
     [Fact]
+    public void MainWindow_ShouldKeepOperatorProcessNamesClean()
+    {
+        var axaml = File.ReadAllText(ResolveLauncherAxamlPath("MainWindow.axaml"));
+
+        Assert.DoesNotContain("Text=\"{Binding ModuleId}\"", axaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Text=\"{Binding MachineProfile}\"", axaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Text=\"{Binding PluginDisplayPath}\"", axaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Text=\"{Binding DataDisplayPath}\"", axaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ChangePasswordWindow_ShouldDeclareMaskedPasswordFields()
     {
         var axaml = File.ReadAllText(ResolveLauncherAxamlPath("ChangePasswordWindow.axaml"));

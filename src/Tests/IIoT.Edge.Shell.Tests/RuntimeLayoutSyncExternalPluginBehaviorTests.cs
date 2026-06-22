@@ -21,9 +21,14 @@ public sealed class RuntimeLayoutSyncExternalPluginBehaviorTests
             var hostRoot = Path.Combine(layoutRoot, "host");
             var pluginsRoot = Path.Combine(layoutRoot, "plugins");
             var dataSentinelPath = Path.Combine(layoutRoot, "data", "sentinel.txt");
+            var launcherApplicationPath = Path.Combine(launcherRuntimeRoot, "IIoT.Edge.Application.dll");
+            var launcherDomainPath = Path.Combine(launcherRuntimeRoot, "IIoT.Edge.Domain.dll");
 
             Directory.CreateDirectory(launcherRuntimeRoot);
             Directory.CreateDirectory(shellRuntimeRoot);
+            WriteText(launcherApplicationPath, "launcher application dependency");
+            WriteText(launcherDomainPath, "launcher domain dependency");
+            WriteText(Path.Combine(launcherRuntimeRoot, "IIoT.Edge.Host.DataPipeline.dll"), "stale shell dependency");
             WriteText(Path.Combine(shellRuntimeRoot, "IIoT.Edge.Shell"), string.Empty);
             WriteText(Path.Combine(shellRuntimeRoot, "IIoT.Edge.Shell.dll"), string.Empty);
             WriteText(Path.Combine(hostRoot, "stale.txt"), "old host content");
@@ -84,6 +89,11 @@ public sealed class RuntimeLayoutSyncExternalPluginBehaviorTests
             Assert.True(File.Exists(Path.Combine(pluginsRoot, "Homogenization", "plugin.json")));
             Assert.True(File.Exists(dataSentinelPath));
             Assert.Equal("runtime data content", File.ReadAllText(dataSentinelPath));
+            Assert.True(File.Exists(launcherApplicationPath));
+            Assert.True(File.Exists(launcherDomainPath));
+            Assert.Equal("launcher application dependency", File.ReadAllText(launcherApplicationPath));
+            Assert.Equal("launcher domain dependency", File.ReadAllText(launcherDomainPath));
+            Assert.False(File.Exists(Path.Combine(launcherRuntimeRoot, "IIoT.Edge.Host.DataPipeline.dll")));
         }
         finally
         {

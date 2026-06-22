@@ -58,8 +58,6 @@
     <sys:String x:Key="Launcher_UpdateCenter_ButtonViewHistory">View {0}</sys:String>
     <sys:String x:Key="Launcher_UpdateCenter_NoHistory">-</sys:String>
     <sys:String x:Key="Launcher_UpdateCenter_HostStatusNotReady">Not configured</sys:String>
-    <sys:String x:Key="Launcher_Profile_PluginLabel">Plugin</sys:String>
-    <sys:String x:Key="Launcher_Profile_DataLabel">Data</sys:String>
     <sys:String x:Key="Launcher_Profile_PluginMissing">Plugin manifest missing</sys:String>
     <sys:String x:Key="Launcher_Profile_DataMissing">Data path missing</sys:String>
     <sys:String x:Key="Launcher_ProfileCard_StatusChecking">Checking</sys:String>

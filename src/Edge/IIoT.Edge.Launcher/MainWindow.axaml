@@ -353,16 +353,10 @@
                                             Width="2*">
                                             <edge:EdgeTemplateColumn.CellTemplate>
                                                 <DataTemplate>
-                                                    <StackPanel Spacing="2">
-                                                        <TextBlock
-                                                            Classes="launcher-chip-text"
-                                                            Text="{Binding DisplayName}"
-                                                            TextTrimming="CharacterEllipsis" />
-                                                        <TextBlock
-                                                            Classes="launcher-chip-text subtle"
-                                                            Text="{Binding ModuleId}"
-                                                            TextTrimming="CharacterEllipsis" />
-                                                    </StackPanel>
+                                                    <TextBlock
+                                                        Classes="launcher-chip-text"
+                                                        Text="{Binding DisplayName}"
+                                                        TextTrimming="CharacterEllipsis" />
                                                 </DataTemplate>
                                             </edge:EdgeTemplateColumn.CellTemplate>
                                         </edge:EdgeTemplateColumn>
@@ -519,51 +513,12 @@
                                                     </Border>
                                                 </Border>
 
-                                                <StackPanel
+                                                <TextBlock
                                                     Grid.Column="1"
-                                                    Classes="launcher-process-title-stack">
-                                                    <TextBlock
-                                                        Classes="launcher-process-title"
-                                                        Text="{Binding DisplayName}" />
-                                                    <edge:EdgeStatusChip
-                                                        HorizontalAlignment="Left"
-                                                        Status="Default"
-                                                        Text="{Binding MachineProfile}" />
-                                                </StackPanel>
+                                                    Classes="launcher-process-title"
+                                                    VerticalAlignment="Center"
+                                                    Text="{Binding DisplayName}" />
                                             </Grid>
-
-                                            <StackPanel
-                                                Grid.Row="1"
-                                                Classes="launcher-process-paths">
-                                                <Border Classes="launcher-process-path-row">
-                                                    <Grid
-                                                        ColumnDefinitions="42,*"
-                                                        ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
-                                                        <TextBlock
-                                                            Grid.Column="0"
-                                                            Classes="launcher-process-path-label"
-                                                            Text="{DynamicResource Launcher_Profile_PluginLabel}" />
-                                                        <TextBlock
-                                                            Grid.Column="1"
-                                                            Classes="launcher-process-path-value"
-                                                            Text="{Binding PluginDisplayPath}" />
-                                                    </Grid>
-                                                </Border>
-                                                <Border Classes="launcher-process-path-row">
-                                                    <Grid
-                                                        ColumnDefinitions="42,*"
-                                                        ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
-                                                        <TextBlock
-                                                            Grid.Column="0"
-                                                            Classes="launcher-process-path-label"
-                                                            Text="{DynamicResource Launcher_Profile_DataLabel}" />
-                                                        <TextBlock
-                                                            Grid.Column="1"
-                                                            Classes="launcher-process-path-value"
-                                                            Text="{Binding DataDisplayPath}" />
-                                                    </Grid>
-                                                </Border>
-                                            </StackPanel>
 
                                             <Grid
                                                 Grid.Row="2"

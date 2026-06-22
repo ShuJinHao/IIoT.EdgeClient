@@ -385,9 +385,10 @@ public sealed class RepositoryHygieneTests
             "IIoT.Edge.RuntimeLayoutSync",
             "RuntimeLayoutSyncFileSystem.cs"));
 
-        Assert.Contains("\"IIoT.Edge.Application.dll\"", fileSystem, StringComparison.Ordinal);
         Assert.Contains("\"IIoT.Edge.Host.DataPipeline.dll\"", fileSystem, StringComparison.Ordinal);
         Assert.Contains("\"IIoT.Edge.Module.Sdk.dll\"", fileSystem, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"IIoT.Edge.Application.dll\"", fileSystem, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"IIoT.Edge.Domain.dll\"", fileSystem, StringComparison.Ordinal);
         Assert.Contains("\"Modules\"", fileSystem, StringComparison.Ordinal);
     }
 

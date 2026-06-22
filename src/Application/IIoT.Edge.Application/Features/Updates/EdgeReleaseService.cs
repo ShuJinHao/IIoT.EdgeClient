@@ -50,6 +50,7 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
         var releaseOptions = _configurationProvider.ResolveReleaseOptions();
         var hostVersion = ResolveHostVersion(target);
         var hostApiVersion = EdgeClientHostRuntime.HostApiVersion;
+        var installedPlugins = _installedPluginCatalog.LoadInstalledPlugins(target);
         var configuration = _configurationProvider.Resolve(target);
         if (!configuration.Success || configuration.Options is null)
         {
@@ -58,7 +59,7 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
                 releaseOptions,
                 hostVersion,
                 hostApiVersion,
-                [],
+                BuildLocalVersionPlans(installedPlugins, hostVersion),
                 configuration.ErrorMessage);
         }
 
@@ -72,7 +73,7 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
                 releaseOptions,
                 hostVersion,
                 hostApiVersion,
-                [],
+                BuildLocalVersionPlans(installedPlugins, hostVersion),
                 session.ErrorMessage);
         }
 
@@ -88,7 +89,7 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
                 releaseOptions,
                 hostVersion,
                 hostApiVersion,
-                [],
+                BuildLocalVersionPlans(installedPlugins, hostVersion),
                 catalog.ErrorMessage);
         }
 
@@ -97,7 +98,6 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
             _updateConfigInitializer.TrySyncUpdateSource(catalog.Value.HostUpdateSource);
         }
 
-        var installedPlugins = _installedPluginCatalog.LoadInstalledPlugins(target);
         var enabledPlugins = _profileModuleConfigurationStore.ReadEnabledModules(target);
         _ = await _versionReporter
             .ReportVersionAsync(
@@ -321,8 +321,10 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
         var installedByModule = installedPlugins.ToDictionary(
             static plugin => plugin.ModuleId,
             StringComparer.OrdinalIgnoreCase);
+        var plannedModules = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var component in catalog.Plugins.OrderBy(static plugin => plugin.DisplayName, StringComparer.OrdinalIgnoreCase))
         {
+            plannedModules.Add(component.ModuleId);
             installedByModule.TryGetValue(component.ModuleId, out var installed);
             var releases = component.Versions
                 .Select(version => new EdgePluginVersionRelease(
@@ -356,8 +358,50 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
                 }).ToList()));
         }
 
+        foreach (var installed in installedPlugins
+                     .Where(plugin => !plannedModules.Contains(plugin.ModuleId))
+                     .OrderBy(static plugin => plugin.DisplayName, StringComparer.OrdinalIgnoreCase)
+                     .ThenBy(static plugin => plugin.ModuleId, StringComparer.OrdinalIgnoreCase))
+        {
+            plans.Add(BuildInstalledPluginPlan(installed));
+        }
+
         return plans;
     }
+
+    public static IReadOnlyList<EdgeComponentVersionPlan> BuildLocalVersionPlans(
+        IReadOnlyList<EdgeInstalledPlugin> installedPlugins,
+        string hostVersion)
+    {
+        ArgumentNullException.ThrowIfNull(installedPlugins);
+
+        var plans = new List<EdgeComponentVersionPlan>
+        {
+            new(
+                EdgeComponentKind.Host,
+                "Host",
+                "Edge Host",
+                hostVersion,
+                [])
+        };
+
+        foreach (var installed in installedPlugins
+                     .OrderBy(static plugin => plugin.DisplayName, StringComparer.OrdinalIgnoreCase)
+                     .ThenBy(static plugin => plugin.ModuleId, StringComparer.OrdinalIgnoreCase))
+        {
+            plans.Add(BuildInstalledPluginPlan(installed));
+        }
+
+        return plans;
+    }
+
+    private static EdgeComponentVersionPlan BuildInstalledPluginPlan(EdgeInstalledPlugin installed)
+        => new(
+            EdgeComponentKind.Plugin,
+            installed.ModuleId,
+            string.IsNullOrWhiteSpace(installed.DisplayName) ? installed.ModuleId : installed.DisplayName,
+            installed.Version,
+            []);
 
     private async Task<EdgePluginInstallResult> InstallPluginReleasesAsync(
         EdgeUpdateTarget target,

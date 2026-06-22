@@ -30,7 +30,7 @@
     <sys:String x:Key="Shell_Login_CloudDescription">Sign in with employee ID and password.</sys:String>
     <sys:String x:Key="Shell_Login_EmployeeNoHint">Employee No</sys:String>
     <sys:String x:Key="Shell_Login_PasswordHint">Password</sys:String>
-    <sys:String x:Key="Shell_Login_CloudUnavailable">Cloud device identity is not ready, so cloud employee login is unavailable.</sys:String>
+    <sys:String x:Key="Shell_Login_CloudUnavailable">This device is not identified by Cloud yet. Use local emergency login first, then check device binding and Cloud network diagnostics.</sys:String>
     <sys:String x:Key="Shell_Login_LocalFailed">Local emergency login failed.</sys:String>
     <sys:String x:Key="Shell_Login_CloudFailed">Cloud employee login failed.</sys:String>
     <sys:String x:Key="Shell_Login_Cancel">Cancel</sys:String>
