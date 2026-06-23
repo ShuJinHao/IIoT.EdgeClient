@@ -36,8 +36,8 @@
     <sys:String x:Key="Launcher_Selection_Description">Process cards only start the corresponding client. Version checks and updates are handled in the update panel below.</sys:String>
     <sys:String x:Key="Launcher_Selection_SearchPlaceholder">Search process, profile, or card id</sys:String>
     <sys:String x:Key="Launcher_Button_LaunchProfile">Start process</sys:String>
-    <sys:String x:Key="Launcher_UpdateCenter_Title">Version catalog</sys:String>
-    <sys:String x:Key="Launcher_UpdateCenter_Description">Host and process plugin versions are shown together. Open history from each row; update actions only run through the real local update flow.</sys:String>
+    <sys:String x:Key="Launcher_UpdateCenter_Title">Current process versions</sys:String>
+    <sys:String x:Key="Launcher_UpdateCenter_Description">Only the host and plugin versions for the current process are shown. Update actions only run through the real local update flow.</sys:String>
     <sys:String x:Key="Launcher_UpdateCenter_HostTitle">Host</sys:String>
     <sys:String x:Key="Launcher_UpdateCenter_PluginTitle">Process plugins</sys:String>
     <sys:String x:Key="Launcher_UpdateCenter_MachineLevel">Machine</sys:String>
@@ -107,7 +107,7 @@
     <sys:String x:Key="Launcher_VersionManagement_ComponentPlugin">Plugin</sys:String>
     <sys:String x:Key="Launcher_VersionManagement_CurrentVersion">Current version</sys:String>
     <sys:String x:Key="Launcher_VersionManagement_TargetVersion">Target version</sys:String>
-    <sys:String x:Key="Launcher_VersionManagement_AllVersions">All catalog versions</sys:String>
+    <sys:String x:Key="Launcher_VersionManagement_AllVersions">Available versions</sys:String>
     <sys:String x:Key="Launcher_VersionManagement_PublishedAt">Published</sys:String>
     <sys:String x:Key="Launcher_VersionManagement_ReleaseNotes">Notes</sys:String>
     <sys:String x:Key="Launcher_VersionManagement_ButtonExpand">Show versions</sys:String>
@@ -133,13 +133,14 @@
     <sys:String x:Key="Launcher_VersionHistory_WindowTitle">Version history</sys:String>
     <sys:String x:Key="Launcher_VersionHistory_Badge">Version records</sys:String>
     <sys:String x:Key="Launcher_VersionHistory_Title">Version history</sys:String>
-    <sys:String x:Key="Launcher_VersionHistory_Description">Review all catalog versions for the selected component, then install, update, or roll back through the real update flow.</sys:String>
+    <sys:String x:Key="Launcher_VersionHistory_Description">Review available versions for the selected component, then install, update, or roll back through the real update flow.</sys:String>
     <sys:String x:Key="Launcher_ReleaseNotes_WindowTitle">Release notes details</sys:String>
     <sys:String x:Key="Launcher_ReleaseNotes_Badge">Release notes</sys:String>
     <sys:String x:Key="Launcher_ReleaseNotes_Title">Release notes details</sys:String>
     <sys:String x:Key="Launcher_ReleaseNotes_Description">Review the complete release notes registered for this version.</sys:String>
     <sys:String x:Key="Launcher_ReleaseNotes_Component">Component</sys:String>
     <sys:String x:Key="Launcher_ReleaseNotes_ComponentType">Type</sys:String>
+    <sys:String x:Key="Launcher_ReleaseNotes_Version">Version</sys:String>
     <sys:String x:Key="Launcher_ReleaseNotes_FullContent">Full release notes</sys:String>
 
     <sys:String x:Key="Launcher_ChangePassword_WindowTitle">Change local password</sys:String>
@@ -185,17 +186,17 @@
     <sys:String x:Key="Launcher_Update_ErrorUnknown">Unknown update error.</sys:String>
     <sys:String x:Key="Launcher_ClientRelease_StatusInitial">Process update state has not been checked.</sys:String>
     <sys:String x:Key="Launcher_ClientRelease_StatusChecking">Checking process update state for {0}...</sys:String>
-    <sys:String x:Key="Launcher_ClientRelease_StatusReady">Host {0}, latest host {1}, {2} plugins.</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_StatusReady">Host {0}, latest host {1}, {2} current-process plugins.</sys:String>
     <sys:String x:Key="Launcher_ClientRelease_StatusNotConfigured">Device not registered. Please contact your administrator.</sys:String>
     <sys:String x:Key="Launcher_ClientRelease_StatusBootstrapFailed">Cloud bootstrap failed, so plugin catalog cannot be read.</sys:String>
-    <sys:String x:Key="Launcher_ClientRelease_StatusCatalogFailed">Failed to fetch cloud plugin catalog.</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_StatusCatalogFailed">Failed to fetch cloud version information.</sys:String>
     <sys:String x:Key="Launcher_ClientRelease_StatusInstalling">Installing or updating plugin: {0}</sys:String>
     <sys:String x:Key="Launcher_ClientRelease_StatusApplyingVersion">Applying {0} version {1}.</sys:String>
     <sys:String x:Key="Launcher_ClientRelease_StatusHostApplyStarted">Host version {0} started applying. Launcher will restart through the update flow.</sys:String>
     <sys:String x:Key="Launcher_ClientRelease_StatusInstalled">Installed plugins: {0}</sys:String>
     <sys:String x:Key="Launcher_ClientRelease_StatusShellRunning">A process client is running, so plugins cannot be replaced.</sys:String>
     <sys:String x:Key="Launcher_ClientRelease_ShellRunningDetail">Close the running Shell before installing, updating, or rolling back versions.</sys:String>
-    <sys:String x:Key="Launcher_ClientRelease_StatusNoProfile">Open plugin updates from a profile card first.</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_StatusNoProfile">Select a process before checking plugin updates.</sys:String>
     <sys:String x:Key="Launcher_ClientRelease_StatusCanceled">Plugin update operation was canceled.</sys:String>
     <sys:String x:Key="Launcher_ClientRelease_StatusFailed">Plugin check or install failed.</sys:String>
     <sys:String x:Key="Launcher_Error_LoginFailed">Local login failed.</sys:String>

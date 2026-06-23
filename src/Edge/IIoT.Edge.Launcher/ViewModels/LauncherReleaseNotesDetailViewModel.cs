@@ -5,6 +5,7 @@ public sealed class LauncherReleaseNotesDetailViewModel
     private const string EmptyText = "-";
 
     private LauncherReleaseNotesDetailViewModel(
+        string moduleId,
         string displayName,
         string componentKindText,
         string currentVersion,
@@ -15,6 +16,7 @@ public sealed class LauncherReleaseNotesDetailViewModel
         string packageSizeText,
         string releaseNotesText)
     {
+        ModuleId = Normalize(moduleId);
         DisplayName = Normalize(displayName);
         ComponentKindText = Normalize(componentKindText);
         CurrentVersion = Normalize(currentVersion);
@@ -25,6 +27,8 @@ public sealed class LauncherReleaseNotesDetailViewModel
         PackageSizeText = Normalize(packageSizeText);
         ReleaseNotesText = Normalize(releaseNotesText);
     }
+
+    public string ModuleId { get; }
 
     public string DisplayName { get; }
 
@@ -49,6 +53,7 @@ public sealed class LauncherReleaseNotesDetailViewModel
         ArgumentNullException.ThrowIfNull(row);
 
         return new LauncherReleaseNotesDetailViewModel(
+            row.ModuleId,
             row.DisplayName,
             row.ComponentKindText,
             row.CurrentVersion,
@@ -67,6 +72,7 @@ public sealed class LauncherReleaseNotesDetailViewModel
         ArgumentNullException.ThrowIfNull(option);
 
         return new LauncherReleaseNotesDetailViewModel(
+            option.ModuleId,
             option.DisplayName,
             componentKindText,
             option.CurrentVersion,
