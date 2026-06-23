@@ -1,0 +1,24 @@
+{
+  "Modules": {
+    "DieCutting": {
+      "Module": {
+        "Presentation": {
+          "DataViewRefreshIntervalMs": 1000
+        },
+        "Runtime": {
+          "DataReadLoopIntervalMs": 1000,
+          "UploadLoopIntervalMs": 10000,
+          "DataFreshnessTimeoutMs": 5000
+        },
+        "MesIdentity": {
+          "UseDeviceNameWhenCodeMissing": false,
+          "Devices": {}
+        }
+      },
+      "DeviceSeed": {
+        "Enabled": false,
+        "ResetBeforeImport": false
+      }
+    }
+  }
+}

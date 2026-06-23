@@ -63,3 +63,11 @@ public interface IPlcBufferTransport : IPlcBuffer
 
     void SetSignalBindings(IReadOnlyCollection<PlcBufferSignalBinding> bindings);
 }
+
+/// <summary>
+/// PLC 读信号新鲜度查询，用于只读采样上传避免把旧 buffer 当作新数据。
+/// </summary>
+public interface IPlcReadSignalFreshness
+{
+    bool TryGetReadSignalUpdatedAt(string signalKey, out DateTimeOffset updatedAt);
+}

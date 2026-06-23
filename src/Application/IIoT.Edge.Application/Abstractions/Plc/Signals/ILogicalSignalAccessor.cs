@@ -17,6 +17,10 @@ public interface ILogicalSignalAccessor<TSignalKey>
 
     short ReadInt16(TSignalKey key);
 
+    uint ReadUInt32(TSignalKey key);
+
+    int ReadInt32(TSignalKey key);
+
     string ReadAscii(TSignalKey key);
 
     IReadOnlyList<int> ReadIntArray(TSignalKey key, int count);

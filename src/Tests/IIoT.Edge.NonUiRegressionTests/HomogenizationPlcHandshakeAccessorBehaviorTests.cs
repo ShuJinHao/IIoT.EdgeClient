@@ -87,6 +87,12 @@ public sealed class HomogenizationPlcHandshakeAccessorBehaviorTests
         public short ReadInt16(HomogenizationPlcSignals.Interaction key)
             => throw new NotSupportedException();
 
+        public uint ReadUInt32(HomogenizationPlcSignals.Interaction key)
+            => throw new NotSupportedException();
+
+        public int ReadInt32(HomogenizationPlcSignals.Interaction key)
+            => throw new NotSupportedException();
+
         public string ReadAscii(HomogenizationPlcSignals.Interaction key)
             => throw new NotSupportedException();
 
@@ -109,4 +115,3 @@ public sealed class HomogenizationPlcHandshakeAccessorBehaviorTests
             => _writes[key];
     }
 }
-

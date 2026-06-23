@@ -4,7 +4,7 @@ using System.Threading;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 
-public class PlcBuffer : IPlcBufferTransport
+public class PlcBuffer : IPlcBufferTransport, IPlcReadSignalFreshness
 {
     private ushort[] _readBuffer;
     private readonly ushort[] _writeBuffer;
@@ -18,6 +18,7 @@ public class PlcBuffer : IPlcBufferTransport
         new Dictionary<string, PlcBufferSignalBinding>(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, ushort[]> _readSignals = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, ushort[]> _writeSignals = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, DateTimeOffset> _readSignalUpdatedAt = new(StringComparer.OrdinalIgnoreCase);
 
     public PlcBuffer(
         int readSize,
@@ -55,6 +56,9 @@ public class PlcBuffer : IPlcBufferTransport
         values = [];
         return false;
     }
+
+    public bool TryGetReadSignalUpdatedAt(string signalKey, out DateTimeOffset updatedAt)
+        => _readSignalUpdatedAt.TryGetValue(signalKey, out updatedAt);
 
     public bool TryGetWriteWords(string signalKey, out ushort[] values)
     {
@@ -165,10 +169,12 @@ public class PlcBuffer : IPlcBufferTransport
         var next = new ushort[_readBuffer.Length];
         Array.Copy(data, next, Math.Min(data.Length, next.Length));
         Interlocked.Exchange(ref _readBuffer, next);
+        var updatedAt = DateTimeOffset.UtcNow;
 
         foreach (var binding in _readBindings.Values)
         {
             _readSignals[binding.SignalKey] = ReadWords(next, binding.Offset, binding.AddressCount);
+            _readSignalUpdatedAt[binding.SignalKey] = updatedAt;
             NotifyChanged(binding.SignalKey, "Read");
         }
     }
@@ -177,6 +183,7 @@ public class PlcBuffer : IPlcBufferTransport
     {
         var words = NormalizeWords(data);
         _readSignals[signalKey] = words;
+        _readSignalUpdatedAt[signalKey] = DateTimeOffset.UtcNow;
 
         if (TryGetBinding(_readBindings, signalKey, out var binding))
         {

@@ -1,0 +1,6 @@
+{
+  "bundleId": "diecutting-line",
+  "displayName": "Die Cutting Readonly Collector Bundle",
+  "includeModules": [ "DieCutting" ],
+  "machineProfiles": [ "DieCuttingLine" ]
+}

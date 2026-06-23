@@ -13,5 +13,6 @@ public enum ModuleParamRole
     MesOperationCode,
     MesSignToken,
     StationNo,
-    CloudEnabled
+    CloudEnabled,
+    DataReadLoopIntervalMs
 }

@@ -9,6 +9,12 @@
       "machineProfile": "HomogenizationLine",
       "machineConfig": "src/Edge/IIoT.Edge.Shell/appsettings.machine.HomogenizationLine.json",
       "moduleIds": [ "Homogenization" ]
+    },
+    {
+      "profileId": "DieCuttingLine",
+      "machineProfile": "DieCuttingLine",
+      "machineConfig": "src/Edge/IIoT.Edge.Shell/appsettings.machine.DieCuttingLine.json",
+      "moduleIds": [ "DieCutting" ]
     }
   ]
 }

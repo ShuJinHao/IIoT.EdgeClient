@@ -400,6 +400,70 @@ public sealed class PlcIoScanTaskBehaviorTests
     }
 
     [Fact]
+    public async Task PlcDataReadScanTask_ShouldOnlyScanReadDataCategoriesAndUpdateFreshness()
+    {
+        var plcService = new ScriptedPlcService();
+        plcService.ConnectOutcomes.Enqueue(true);
+        plcService.ReadOutcomes.Enqueue(new ushort[] { 10, 20, 21 });
+        await plcService.ConnectAsync();
+
+        var dataStore = new PlcDataStore();
+        dataStore.Register(13, readSize: 0, writeSize: 0);
+
+        var dataReadScan = new PlcDataReadScanTask(
+            plcService,
+            dataStore,
+            CreateDevice(13, "PLC-DATA"),
+            [
+                CreateIoMapping(13, "Read", "D300", 1, category: IoMappingOptionCatalog.CategorySingleRead, sortOrder: 1),
+                CreateIoMapping(13, "Read", "D301", 2, category: IoMappingOptionCatalog.CategoryContinuousRead, sortOrder: 2),
+                CreateIoMapping(13, "Read", "D700", 1, category: IoMappingOptionCatalog.CategoryInteraction, sortOrder: 3),
+                CreateIoMapping(13, "Write", "D200", 1, category: IoMappingOptionCatalog.CategorySingleWrite, sortOrder: 4)
+            ],
+            new FakeLogService(),
+            SignalBlockPlanner);
+
+        await dataReadScan.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
+
+        var request = Assert.Single(plcService.ReadRequests);
+        Assert.Equal("D300", request.Address);
+        Assert.Equal((ushort)3, request.Length);
+        Assert.Empty(plcService.WriteRequests);
+
+        var buffer = Assert.IsType<PlcBuffer>(dataStore.GetBuffer(13));
+        Assert.True(buffer.TryGetReadWords("Read-D300", out var singleRead));
+        Assert.Equal((ushort)10, Assert.Single(singleRead));
+        Assert.True(buffer.TryGetReadWords("Read-D301", out var continuousRead));
+        Assert.Equal([(ushort)20, (ushort)21], continuousRead);
+        Assert.False(buffer.TryGetReadWords("Read-D700", out _));
+        Assert.True(buffer.TryGetReadSignalUpdatedAt("Read-D300", out var updatedAt));
+        Assert.True(DateTimeOffset.UtcNow - updatedAt < TimeSpan.FromSeconds(2));
+    }
+
+    [Fact]
+    public async Task PlcDataReadScanTask_WhenDisconnected_ShouldNotOpenSecondConnection()
+    {
+        var plcService = new ScriptedPlcService();
+        var dataStore = new PlcDataStore();
+        dataStore.Register(14, readSize: 0, writeSize: 0);
+
+        var dataReadScan = new PlcDataReadScanTask(
+            plcService,
+            dataStore,
+            CreateDevice(14, "PLC-DATA-DISCONNECTED"),
+            [CreateIoMapping(14, "Read", "D300", 1, category: IoMappingOptionCatalog.CategorySingleRead)],
+            new FakeLogService(),
+            SignalBlockPlanner);
+
+        await dataReadScan.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
+
+        Assert.False(plcService.IsConnected);
+        Assert.Equal(0, plcService.ConnectAsyncCallCount);
+        Assert.Equal(0, plcService.ReadAsyncCallCount);
+        Assert.Empty(plcService.WriteRequests);
+    }
+
+    [Fact]
     public async Task PlcIoScanTask_StartAsync_WhenCanceled_ShouldStopPolling()
     {
         var plcService = new ScriptedPlcService();

@@ -162,10 +162,15 @@ public sealed class LauncherProfileCatalogTests
         var catalogPath = Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.Launcher", "launcher.profiles.json");
         var catalog = new LauncherProfileCatalog(Path.GetDirectoryName(catalogPath)!, Path.GetFileName(catalogPath));
 
-        var profile = Assert.Single(catalog.LoadProfiles());
-        Assert.Equal("HomogenizationLine", profile.ProfileId);
+        var profiles = catalog.LoadProfiles();
+        Assert.Equal(["DieCuttingLine", "HomogenizationLine"], profiles.Select(static x => x.ProfileId).OrderBy(static x => x).ToArray());
+
+        var profile = Assert.Single(profiles, static x => x.ProfileId == "HomogenizationLine");
         Assert.Equal("匀浆", profile.DisplayName);
         Assert.Equal("HomogenizationLine", profile.MachineProfile);
+        var dieCuttingProfile = Assert.Single(profiles, static x => x.ProfileId == "DieCuttingLine");
+        Assert.Equal("模切", dieCuttingProfile.DisplayName);
+        Assert.Equal("DieCuttingLine", dieCuttingProfile.MachineProfile);
         Assert.EndsWith(
             Path.Combine("host", "IIoT.Edge.Shell"),
             profile.ExecutablePath,

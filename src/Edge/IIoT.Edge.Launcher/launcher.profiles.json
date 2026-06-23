@@ -8,5 +8,15 @@
     "AccentColor": "#4D7C0F",
     "MachineProfile": "HomogenizationLine",
     "ExecutablePath": "../host/IIoT.Edge.Shell"
+  },
+  {
+    "ProfileId": "DieCuttingLine",
+    "DisplayName": "模切",
+    "Description": "使用模切只读采集 profile 启动客户端，面向替代老采集盒子的工控机部署。",
+    "ImagePath": "Assets/Profiles/homogenization.png",
+    "IconKind": "ChartBar",
+    "AccentColor": "#2563EB",
+    "MachineProfile": "DieCuttingLine",
+    "ExecutablePath": "../host/IIoT.Edge.Shell"
   }
 ]
