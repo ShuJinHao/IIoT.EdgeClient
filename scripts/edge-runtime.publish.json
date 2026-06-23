@@ -11,10 +11,16 @@
       "moduleIds": [ "Homogenization" ]
     },
     {
-      "profileId": "DieCuttingLine",
-      "machineProfile": "DieCuttingLine",
-      "machineConfig": "src/Edge/IIoT.Edge.Shell/appsettings.machine.DieCuttingLine.json",
-      "moduleIds": [ "DieCutting" ]
+      "profileId": "DieCuttingAnodeLine",
+      "machineProfile": "DieCuttingAnodeLine",
+      "machineConfig": "src/Edge/IIoT.Edge.Shell/appsettings.machine.DieCuttingAnodeLine.json",
+      "moduleIds": [ "DieCuttingAnode" ]
+    },
+    {
+      "profileId": "DieCuttingCathodeLine",
+      "machineProfile": "DieCuttingCathodeLine",
+      "machineConfig": "src/Edge/IIoT.Edge.Shell/appsettings.machine.DieCuttingCathodeLine.json",
+      "moduleIds": [ "DieCuttingCathode" ]
     }
   ]
 }

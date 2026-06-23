@@ -35,10 +35,17 @@ public sealed class DieCuttingContext : ProductionContext
 /// </summary>
 internal sealed class DieCuttingContextFactory : IProductionContextFactory
 {
+    private readonly DieCuttingModuleDefinition _definition;
+
+    public DieCuttingContextFactory(DieCuttingModuleDefinition definition)
+    {
+        _definition = definition ?? throw new ArgumentNullException(nameof(definition));
+    }
+
     /// <summary>
     /// 当前工厂所属模切模块标识。
     /// </summary>
-    public string ModuleId => DependencyInjection.ModuleKey;
+    public string ModuleId => _definition.ModuleId;
 
     /// <summary>
     /// 宿主可创建的模切上下文类型。

@@ -17,8 +17,7 @@ namespace IIoT.Edge.Module.DieCutting.Production.Tasks;
 /// </summary>
 internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
 {
-    private const string DiagnosticsChannel = "DieCutting.Realtime";
-
+    private readonly DieCuttingModuleDefinition _definition;
     private readonly DieCuttingSignalCodec _codec;
     private readonly DieCuttingContext _context;
     private readonly IDieCuttingMesScenarioChannel _mesChannel;
@@ -31,6 +30,7 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
     /// 创建模切实时采样上传任务。
     /// </summary>
     public DieCuttingRealtimeSampleUploadTask(
+        DieCuttingModuleDefinition definition,
         IPlcBuffer buffer,
         DieCuttingSignalCodec codec,
         DieCuttingContext context,
@@ -41,6 +41,7 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
         IOptions<DieCuttingModuleOptions> moduleOptions)
         : base(buffer, context, logger)
     {
+        _definition = definition ?? throw new ArgumentNullException(nameof(definition));
         _codec = codec;
         _context = context;
         _mesChannel = mesChannel;
@@ -50,7 +51,7 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
         _taskLoopInterval = NormalizeInterval(_moduleOptions.Runtime.UploadLoopIntervalMs, 10000);
     }
 
-    public override string TaskName => "DieCutting.RealtimeSampleUpload";
+    public override string TaskName => _definition.RealtimeSampleUploadTaskKey;
 
     protected override int TaskLoopInterval => _taskLoopInterval;
 
@@ -105,11 +106,11 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
     {
         if (result.IsSuccess)
         {
-            _diagnosticsStore.RecordSuccess(DiagnosticsChannel);
+            _diagnosticsStore.RecordSuccess(_definition.RealtimeDiagnosticsChannel);
         }
         else
         {
-            _diagnosticsStore.RecordFailure(DiagnosticsChannel, result.Message);
+            _diagnosticsStore.RecordFailure(_definition.RealtimeDiagnosticsChannel, result.Message);
         }
 
         _context.LastRealtimeAt = snapshot?.CapturedAt ?? DateTime.Now;

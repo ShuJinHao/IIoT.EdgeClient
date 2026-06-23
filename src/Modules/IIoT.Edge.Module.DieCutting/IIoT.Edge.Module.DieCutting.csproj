@@ -6,10 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>false</UseWPF>
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
-    <IsPackable>true</IsPackable>
+    <IsPackable>false</IsPackable>
     <PackageId>IIoT.Edge.Module.DieCutting</PackageId>
-    <IsEdgePluginModule>true</IsEdgePluginModule>
-    <PluginModuleId>DieCutting</PluginModuleId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -32,18 +30,6 @@
     <ProjectReference Include="..\..\Shared\IIoT.Edge.SharedKernel\IIoT.Edge.SharedKernel.csproj" />
     <ProjectReference Include="..\..\Shared\IIoT.Edge.UI.Shared\IIoT.Edge.UI.Shared.csproj" />
     <ProjectReference Include="..\..\Application\IIoT.Edge.Application\IIoT.Edge.Application.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Update="plugin.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </None>
-    <None Update="Config\diecutting.module.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      <TargetPath>Config\diecutting.module.json</TargetPath>
-    </None>
   </ItemGroup>
 
 </Project>

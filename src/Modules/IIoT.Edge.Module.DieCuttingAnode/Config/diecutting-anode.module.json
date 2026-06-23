@@ -1,6 +1,6 @@
 {
   "Modules": {
-    "DieCutting": {
+    "DieCuttingAnode": {
       "Module": {
         "Presentation": {
           "DataViewRefreshIntervalMs": 1000

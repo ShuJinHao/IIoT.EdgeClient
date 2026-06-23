@@ -23,22 +23,28 @@ namespace IIoT.Edge.Module.DieCutting.Production;
 /// </summary>
 public sealed class DieCuttingStationRuntimeFactory : IStationRuntimeFactory
 {
-    private const string RealtimeSampleUploadTaskKey = "DieCutting.RealtimeSampleUpload";
+    private readonly DieCuttingModuleDefinition _definition;
 
-    private static readonly IReadOnlyCollection<TaskCandidate> TaskCandidates =
-    [
-        PlcTaskCandidateBuilder.Create(RealtimeSampleUploadTaskKey, "模切采样上传")
+    public DieCuttingStationRuntimeFactory(DieCuttingModuleDefinition definition)
+    {
+        _definition = definition ?? throw new ArgumentNullException(nameof(definition));
+        TaskCandidates =
+        [
+            PlcTaskCandidateBuilder.Create(_definition.RealtimeSampleUploadTaskKey, $"{_definition.DisplayName}采样上传")
             .RequiresRead(DieCuttingPlcSignals.SingleRead.实际产量)
             .RequiresRead(DieCuttingPlcSignals.SingleRead.冲切速度)
             .RequiresRead(DieCuttingPlcSignals.ContinuousRead.弹夹号MG1)
             .RequiresRead(DieCuttingPlcSignals.ContinuousRead.弹夹号MG2)
             .Build()
-    ];
+        ];
+    }
+
+    private IReadOnlyCollection<TaskCandidate> TaskCandidates { get; }
 
     /// <summary>
     /// 工厂归属的模切模块标识。
     /// </summary>
-    public string ModuleId => DependencyInjection.ModuleKey;
+    public string ModuleId => _definition.ModuleId;
 
     public IReadOnlyCollection<TaskCandidate> GetTaskCandidates()
         => TaskCandidates;
@@ -62,7 +68,7 @@ public sealed class DieCuttingStationRuntimeFactory : IStationRuntimeFactory
             throw new InvalidOperationException("模切运行时需要由 ProductionContextStore 创建 DieCuttingContext。");
         }
 
-        if (!enabledTaskKeys.Contains(RealtimeSampleUploadTaskKey))
+        if (!enabledTaskKeys.Contains(_definition.RealtimeSampleUploadTaskKey))
         {
             return [];
         }
@@ -87,6 +93,7 @@ public sealed class DieCuttingStationRuntimeFactory : IStationRuntimeFactory
         return
         [
             new DieCuttingRealtimeSampleUploadTask(
+                _definition,
                 buffer,
                 codec,
                 dieCuttingContext,

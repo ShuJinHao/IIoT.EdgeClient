@@ -1,0 +1,12 @@
+{
+  "moduleId": "DieCuttingCathode",
+  "displayName": "正极模切",
+  "version": "1.0.0",
+  "hostApiVersion": "1.0.0",
+  "minHostVersion": "1.0.0",
+  "maxHostVersion": "99.0.0",
+  "entryAssembly": "IIoT.Edge.Module.DieCuttingCathode.dll",
+  "entryType": "IIoT.Edge.Module.DieCuttingCathode.DependencyInjection",
+  "supportedProcessType": "DieCuttingCathode",
+  "dependencies": []
+}

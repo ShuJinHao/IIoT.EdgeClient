@@ -349,7 +349,7 @@ public sealed class EdgeUpdateInfrastructureTests
     {
         var catalog = Catalog(
             PluginComponent("Homogenization", Release("Homogenization", "1.2.0", EdgeClientHostRuntime.HostApiVersion)),
-            PluginComponent("DieCutting", Release("DieCutting", "1.0.0", EdgeClientHostRuntime.HostApiVersion)));
+            PluginComponent("DieCuttingAnode", Release("DieCuttingAnode", "1.0.0", EdgeClientHostRuntime.HostApiVersion)));
 
         var plans = EdgeReleaseService.BuildVersionPlans(
             catalog,
@@ -369,7 +369,7 @@ public sealed class EdgeUpdateInfrastructureTests
     {
         var catalog = Catalog(
             PluginComponent("Homogenization", Release("Homogenization", "1.2.0", EdgeClientHostRuntime.HostApiVersion)),
-            PluginComponent("DieCutting", Release("DieCutting", "1.0.0", EdgeClientHostRuntime.HostApiVersion)));
+            PluginComponent("DieCuttingAnode", Release("DieCuttingAnode", "1.0.0", EdgeClientHostRuntime.HostApiVersion)));
 
         var plans = EdgeReleaseService.BuildVersionPlans(
             catalog,
@@ -389,7 +389,7 @@ public sealed class EdgeUpdateInfrastructureTests
         var tempDirectory = CreateTempDirectory();
         var catalog = Catalog(
             PluginComponent("Homogenization", Release("Homogenization", "1.2.0", EdgeClientHostRuntime.HostApiVersion)),
-            PluginComponent("DieCutting", Release("DieCutting", "1.0.0", EdgeClientHostRuntime.HostApiVersion)));
+            PluginComponent("DieCuttingAnode", Release("DieCuttingAnode", "1.0.0", EdgeClientHostRuntime.HostApiVersion)));
         try
         {
             var service = new EdgeReleaseService(
@@ -427,7 +427,7 @@ public sealed class EdgeUpdateInfrastructureTests
         var tempDirectory = CreateTempDirectory();
         var catalog = Catalog(
             PluginComponent("Homogenization", Release("Homogenization", "1.2.0", EdgeClientHostRuntime.HostApiVersion)),
-            PluginComponent("DieCutting", Release("DieCutting", "1.0.0", EdgeClientHostRuntime.HostApiVersion)));
+            PluginComponent("DieCuttingAnode", Release("DieCuttingAnode", "1.0.0", EdgeClientHostRuntime.HostApiVersion)));
         try
         {
             var installer = new RecordingPluginPackageInstaller();
@@ -445,7 +445,7 @@ public sealed class EdgeUpdateInfrastructureTests
 
             var result = await service.ApplyPluginVersionAsync(
                 Target(tempDirectory),
-                "DieCutting",
+                "DieCuttingAnode",
                 "1.0.0",
                 cancellationToken: TestContext.Current.CancellationToken);
 

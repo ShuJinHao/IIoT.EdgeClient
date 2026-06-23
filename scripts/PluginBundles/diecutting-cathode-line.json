@@ -1,0 +1,6 @@
+{
+  "bundleId": "diecutting-cathode-line",
+  "displayName": "正极模切线",
+  "includeModules": [ "DieCuttingCathode" ],
+  "machineProfiles": [ "DieCuttingCathodeLine" ]
+}

@@ -22,13 +22,15 @@ public sealed class DieCuttingMesChannel
     private readonly IModuleParamProvider<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business> _parameters;
 
     public DieCuttingMesChannel(
+        DieCuttingModuleDefinition definition,
         MesRequestExecutor requestExecutor,
         IModuleParamRoleProvider moduleParamRoleProvider,
         IModuleParamProvider<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business> parameters,
         ILogService logger,
         IProductionTimeProvider productionTime)
-        : base(DependencyInjection.ModuleKey, logger, requestExecutor, moduleParamRoleProvider, productionTime)
+        : base(definition.ProcessType, logger, requestExecutor, moduleParamRoleProvider, productionTime)
     {
+        ArgumentNullException.ThrowIfNull(definition);
         _parameters = parameters;
     }
 

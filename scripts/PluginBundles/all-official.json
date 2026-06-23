@@ -1,6 +1,6 @@
 {
   "bundleId": "all-official",
   "displayName": "Official Edge Modules",
-  "includeModules": [ "Homogenization", "DieCutting" ],
-  "machineProfiles": [ "HomogenizationLine", "DieCuttingLine" ]
+  "includeModules": [ "Homogenization", "DieCuttingAnode", "DieCuttingCathode" ],
+  "machineProfiles": [ "HomogenizationLine", "DieCuttingAnodeLine", "DieCuttingCathodeLine" ]
 }

@@ -1,0 +1,12 @@
+{
+  "moduleId": "DieCuttingAnode",
+  "displayName": "负极模切",
+  "version": "1.0.0",
+  "hostApiVersion": "1.0.0",
+  "minHostVersion": "1.0.0",
+  "maxHostVersion": "99.0.0",
+  "entryAssembly": "IIoT.Edge.Module.DieCuttingAnode.dll",
+  "entryType": "IIoT.Edge.Module.DieCuttingAnode.DependencyInjection",
+  "supportedProcessType": "DieCuttingAnode",
+  "dependencies": []
+}

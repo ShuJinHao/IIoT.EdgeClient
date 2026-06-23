@@ -17,20 +17,11 @@ public sealed class DieCuttingHardwareProfileProvider
         DieCuttingPlcSignals.SingleWrite,
         DieCuttingPlcSignals.ContinuousWrite>
 {
+    private readonly DieCuttingModuleDefinition _definition;
     private readonly DieCuttingModuleOptions _moduleOptions;
 
-    public DieCuttingHardwareProfileProvider()
-        : this(
-            new EnumInteractionSignalProfile<DieCuttingPlcSignals.Interaction>(DependencyInjection.ModuleKey),
-            new EnumReadSignalProfile<DieCuttingPlcSignals.SingleRead>(DependencyInjection.ModuleKey, "单点读数据"),
-            new EnumReadSignalProfile<DieCuttingPlcSignals.ContinuousRead>(DependencyInjection.ModuleKey, "连续读数据"),
-            new EnumWriteSignalProfile<DieCuttingPlcSignals.SingleWrite>(DependencyInjection.ModuleKey, "单点写数据"),
-            new EnumWriteSignalProfile<DieCuttingPlcSignals.ContinuousWrite>(DependencyInjection.ModuleKey, "连续写数据"),
-            Options.Create(new DieCuttingModuleOptions()))
-    {
-    }
-
     public DieCuttingHardwareProfileProvider(
+        DieCuttingModuleDefinition definition,
         IModulePlcSignalProfile<DieCuttingPlcSignals.Interaction> interactionProfile,
         IModulePlcSignalProfile<DieCuttingPlcSignals.SingleRead> singleReadProfile,
         IModulePlcSignalProfile<DieCuttingPlcSignals.ContinuousRead> continuousReadProfile,
@@ -44,13 +35,14 @@ public sealed class DieCuttingHardwareProfileProvider
             singleWriteProfile,
             continuousWriteProfile)
     {
+        _definition = definition ?? throw new ArgumentNullException(nameof(definition));
         _moduleOptions = moduleOptions.Value;
     }
 
     /// <summary>
     /// 模切模板备注使用的中文模块名。
     /// </summary>
-    protected override string ModuleDisplayName => "模切只读采集模块";
+    protected override string ModuleDisplayName => $"{_definition.DisplayName}只读采集模块";
 
     public override ModulePlcDefaults GetDefaultPlcSettings()
         => new(PlcType.Mc.ToString(), 3000, 65530);

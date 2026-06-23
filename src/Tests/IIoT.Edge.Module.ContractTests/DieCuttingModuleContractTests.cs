@@ -13,32 +13,75 @@ using IIoT.Edge.SharedKernel.Context;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
+using AnodeModule = IIoT.Edge.Module.DieCuttingAnode.DependencyInjection;
+using CathodeModule = IIoT.Edge.Module.DieCuttingCathode.DependencyInjection;
 
 namespace IIoT.Edge.Module.ContractTests;
 
-public sealed class DieCuttingModuleContractTests : ModuleContractTestBase<DependencyInjection>
+public sealed class DieCuttingAnodeModuleContractTests : DieCuttingModuleContractTestsBase<AnodeModule>
 {
+    protected override string ExpectedModuleId => AnodeModule.ModuleKey;
+    protected override string ExpectedDisplayName => "负极模切";
+    protected override string ExpectedConfigFileName => "diecutting-anode.module.json";
+    protected override string ExpectedEntryType => "IIoT.Edge.Module.DieCuttingAnode.DependencyInjection";
+    protected override string ExpectedMachineProfileFileName => "appsettings.machine.DieCuttingAnodeLine.json";
+    protected override string ExpectedFirstDevice => "P1-AP01";
+    protected override string ExpectedLastDevice => "P1-AP12";
+    protected override string ExpectedFirstIpAddress => "10.110.0.11";
+    protected override string ExpectedLastIpAddress => "10.110.0.22";
+    protected override string ExpectedUpperComputerNo => "P1-APUC";
+}
+
+public sealed class DieCuttingCathodeModuleContractTests : DieCuttingModuleContractTestsBase<CathodeModule>
+{
+    protected override string ExpectedModuleId => CathodeModule.ModuleKey;
+    protected override string ExpectedDisplayName => "正极模切";
+    protected override string ExpectedConfigFileName => "diecutting-cathode.module.json";
+    protected override string ExpectedEntryType => "IIoT.Edge.Module.DieCuttingCathode.DependencyInjection";
+    protected override string ExpectedMachineProfileFileName => "appsettings.machine.DieCuttingCathodeLine.json";
+    protected override string ExpectedFirstDevice => "P2-CP01";
+    protected override string ExpectedLastDevice => "P2-CP12";
+    protected override string ExpectedFirstIpAddress => "10.110.1.11";
+    protected override string ExpectedLastIpAddress => "10.110.1.22";
+    protected override string ExpectedUpperComputerNo => "P2-CPUC";
+}
+
+public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContractTestBase<TModule>
+    where TModule : IEdgeProcessModule, new()
+{
+    protected abstract string ExpectedModuleId { get; }
+    protected abstract string ExpectedDisplayName { get; }
+    protected abstract string ExpectedConfigFileName { get; }
+    protected abstract string ExpectedEntryType { get; }
+    protected abstract string ExpectedMachineProfileFileName { get; }
+    protected abstract string ExpectedFirstDevice { get; }
+    protected abstract string ExpectedLastDevice { get; }
+    protected abstract string ExpectedFirstIpAddress { get; }
+    protected abstract string ExpectedLastIpAddress { get; }
+    protected abstract string ExpectedUpperComputerNo { get; }
+
     protected override bool RequiresHardwareProfile => true;
     protected override bool RequiresMesUploader => true;
     protected override int ExpectedRuntimeTaskCount => 1;
     protected override int MinimumRouteCount => 6;
 
     protected override ProductionContext CreateRuntimeContext()
-        => new DieCuttingContext { DeviceName = "P1-AP01" };
+        => new DieCuttingContext { DeviceName = ExpectedFirstDevice };
 
     protected override void ConfigureRuntimeServices(IServiceCollection services)
     {
         AddDefaultRuntimeServices(services);
         services.AddSingleton<IMesUploadDiagnosticsStore, ContractMesUploadDiagnosticsStore>();
-        services.AddSingleton<IDieCuttingMesScenarioChannel, ContractDieCuttingMesChannel>();
-        services.AddSingleton<IModuleParamProvider<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business>, ContractDieCuttingModuleParamProvider>();
+        services.AddSingleton<IDieCuttingMesScenarioChannel>(new ContractDieCuttingMesChannel(ExpectedModuleId));
+        services.AddSingleton<IModuleParamProvider<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business>>(
+            new ContractDieCuttingModuleParamProvider(ExpectedModuleId));
         services.AddSingleton(Options.Create(new DieCuttingModuleOptions()));
     }
 
     [Fact]
     public void RegisterServices_ShouldRegisterDevelopmentSampleContributor()
     {
-        var result = new ModuleContractFixture().RegisterModule(new DependencyInjection());
+        var result = new ModuleContractFixture().RegisterModule(new TModule());
 
         Assert.Contains(
             result.Services,
@@ -47,29 +90,26 @@ public sealed class DieCuttingModuleContractTests : ModuleContractTestBase<Depen
     }
 
     [Fact]
-    public void PluginManifest_ShouldMatchDieCuttingModuleEntry()
+    public void PluginManifest_ShouldMatchModuleEntry()
     {
         var manifestPath = Path.Combine(
-            ContractTestPathHelper.GetModuleSourceDirectory("DieCutting"),
+            ContractTestPathHelper.GetModuleSourceDirectory(ExpectedModuleId),
             "plugin.json");
 
         using var document = JsonDocument.Parse(File.ReadAllText(manifestPath));
         var root = document.RootElement;
 
-        Assert.Equal("DieCutting", root.GetProperty("moduleId").GetString());
-        Assert.Equal("DieCutting", root.GetProperty("supportedProcessType").GetString());
-        Assert.Equal("IIoT.Edge.Module.DieCutting.DependencyInjection", root.GetProperty("entryType").GetString());
+        Assert.Equal(ExpectedModuleId, root.GetProperty("moduleId").GetString());
+        Assert.Equal(ExpectedDisplayName, root.GetProperty("displayName").GetString());
+        Assert.Equal(ExpectedModuleId, root.GetProperty("supportedProcessType").GetString());
+        Assert.Equal(ExpectedEntryType, root.GetProperty("entryType").GetString());
     }
 
     [Fact]
-    public void RegisterServices_ShouldRegisterMesChannelAsProcessUploader()
+    public void RegisterServices_ShouldRegisterMesScenarioChannelAsProcessUploader()
     {
-        var result = new ModuleContractFixture().RegisterModule(new DependencyInjection());
+        var result = new ModuleContractFixture().RegisterModule(new TModule());
 
-        Assert.Contains(
-            result.Services,
-            descriptor => descriptor.ServiceType == typeof(DieCuttingMesChannel)
-                          && descriptor.ImplementationType == typeof(DieCuttingMesChannel));
         Assert.Contains(
             result.Services,
             descriptor => descriptor.ServiceType == typeof(IDieCuttingMesScenarioChannel)
@@ -81,24 +121,45 @@ public sealed class DieCuttingModuleContractTests : ModuleContractTestBase<Depen
     }
 
     [Fact]
+    public void ModuleDefinition_ShouldSeedOnlyOneLineOfTwelvePlcs()
+    {
+        var result = new ModuleContractFixture().RegisterModule(new TModule());
+        using var provider = result.Services.BuildServiceProvider();
+        var definition = provider.GetRequiredService<DieCuttingModuleDefinition>();
+
+        Assert.Equal(ExpectedModuleId, definition.ModuleId);
+        Assert.Equal(ExpectedDisplayName, definition.DisplayName);
+        Assert.Equal(12, definition.DefaultDevices.Count);
+        AssertDefaultDevice(definition.DefaultDevices[0], ExpectedFirstDevice, ExpectedFirstIpAddress);
+        AssertDefaultDevice(definition.DefaultDevices[^1], ExpectedLastDevice, ExpectedLastIpAddress);
+        Assert.All(
+            definition.DefaultDevices,
+            device =>
+            {
+                Assert.Equal(ExpectedUpperComputerNo, device.UpperComputerNo);
+                Assert.True(device.IsEnabled);
+            });
+    }
+
+    [Fact]
     public void DependencyInjection_Configure_BindsLocalOptionsAndParameterRoles()
     {
         var configuration = new ConfigurationBuilder()
             .AddJsonFile(
                 Path.Combine(
-                    ContractTestPathHelper.GetModuleSourceDirectory("DieCutting"),
+                    ContractTestPathHelper.GetModuleSourceDirectory(ExpectedModuleId),
                     "Config",
-                    "diecutting.module.json"),
+                    ExpectedConfigFileName),
                 optional: false,
                 reloadOnChange: false)
             .Build();
 
-        var result = new ModuleContractFixture().RegisterModule(new DependencyInjection(), configuration);
+        var result = new ModuleContractFixture().RegisterModule(new TModule(), configuration);
         using var provider = result.Services.BuildServiceProvider();
 
         Assert.Equal(1000, provider.GetRequiredService<IOptions<DieCuttingModuleOptions>>().Value.Runtime.DataReadLoopIntervalMs);
         Assert.Contains(
-            result.ModuleParamRegistry.GetDescriptors(DependencyInjection.ModuleKey, ModuleParamCategory.Business),
+            result.ModuleParamRegistry.GetDescriptors(ExpectedModuleId, ModuleParamCategory.Business),
             descriptor => descriptor.Role == ModuleParamRole.DataReadLoopIntervalMs
                           && descriptor.Name == nameof(DieCuttingParams.Business.采集频率毫秒));
     }
@@ -106,37 +167,39 @@ public sealed class DieCuttingModuleContractTests : ModuleContractTestBase<Depen
     [Fact]
     public void MesIdentity_WhenCodeIsMissing_ShouldReserveEmptyDeviceCodeByDefault()
     {
-        var identity = new DieCuttingMesIdentityOptions().Resolve("P1-AP01");
+        var identity = new DieCuttingMesIdentityOptions().Resolve(ExpectedFirstDevice);
 
         Assert.Equal(string.Empty, identity.DeviceCode);
-        Assert.Equal("P1-AP01", identity.DeviceName);
-        Assert.Equal("P1-AP01", identity.UpperComputerNo);
+        Assert.Equal(ExpectedFirstDevice, identity.DeviceName);
+        Assert.Equal(ExpectedFirstDevice, identity.UpperComputerNo);
     }
 
     [Fact]
-    public void DieCuttingLineMachineProfile_ShouldSeedMesDeviceCodesFromMesDocument()
+    public void MachineProfile_ShouldSeedTwelveMesDeviceCodesFromMesDocument()
     {
         var machineProfilePath = Path.Combine(
             ContractTestPathHelper.FindRepoRoot(),
             "src",
             "Edge",
             "IIoT.Edge.Shell",
-            "appsettings.machine.DieCuttingLine.json");
+            ExpectedMachineProfileFileName);
 
         using var document = JsonDocument.Parse(File.ReadAllText(machineProfilePath));
-        var mesIdentity = document.RootElement
-            .GetProperty("Modules")
-            .GetProperty("DieCutting")
+        var modules = document.RootElement.GetProperty("Modules");
+        var enabledModules = modules.GetProperty("Enabled").EnumerateArray()
+            .Select(static x => x.GetString() ?? string.Empty)
+            .ToArray();
+        var mesIdentity = modules
+            .GetProperty(ExpectedModuleId)
             .GetProperty("Module")
             .GetProperty("MesIdentity");
         var devices = mesIdentity.GetProperty("Devices");
 
+        Assert.Equal([ExpectedModuleId], enabledModules);
         Assert.False(mesIdentity.GetProperty("UseDeviceNameWhenCodeMissing").GetBoolean());
-        Assert.Equal(24, devices.EnumerateObject().Count());
-        AssertSeededMesIdentity(devices, "P1-AP01", "P1-APUC");
-        AssertSeededMesIdentity(devices, "P1-AP12", "P1-APUC");
-        AssertSeededMesIdentity(devices, "P2-CP01", "P2-CPUC");
-        AssertSeededMesIdentity(devices, "P2-CP12", "P2-CPUC");
+        Assert.Equal(12, devices.EnumerateObject().Count());
+        AssertSeededMesIdentity(devices, ExpectedFirstDevice, ExpectedUpperComputerNo);
+        AssertSeededMesIdentity(devices, ExpectedLastDevice, ExpectedUpperComputerNo);
     }
 
     private static void AssertSeededMesIdentity(JsonElement devices, string deviceCode, string upperComputerNo)
@@ -145,6 +208,15 @@ public sealed class DieCuttingModuleContractTests : ModuleContractTestBase<Depen
         Assert.Equal(deviceCode, identity.GetProperty("DeviceCode").GetString());
         Assert.Equal(deviceCode, identity.GetProperty("DeviceName").GetString());
         Assert.Equal(upperComputerNo, identity.GetProperty("UpperComputerNo").GetString());
+    }
+
+    private static void AssertDefaultDevice(DieCuttingDeviceSeed device, string deviceName, string ipAddress)
+    {
+        Assert.Equal(deviceName, device.DeviceName);
+        Assert.Equal(deviceName, device.DeviceCode);
+        Assert.Equal(deviceName, device.DeviceDisplayName);
+        Assert.Equal(ipAddress, device.IpAddress);
+        Assert.Equal(65530, device.Port1);
     }
 
     private sealed class ContractMesUploadDiagnosticsStore : IMesUploadDiagnosticsStore
@@ -158,12 +230,19 @@ public sealed class DieCuttingModuleContractTests : ModuleContractTestBase<Depen
     private sealed class ContractDieCuttingModuleParamProvider
         : IModuleParamProvider<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business>
     {
+        private readonly string _moduleId;
+
+        public ContractDieCuttingModuleParamProvider(string moduleId)
+        {
+            _moduleId = moduleId;
+        }
+
         public Task<ModuleParamSnapshot<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business>> GetAsync(
             CancellationToken cancellationToken = default)
             => Task.FromResult(new ModuleParamSnapshot<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business>(
-                "DieCutting",
+                _moduleId,
                 new ModuleParamGroup<DieCuttingParams.Mes>(
-                    "DieCutting",
+                    _moduleId,
                     ModuleParamCategory.Mes,
                     new Dictionary<DieCuttingParams.Mes, string>(),
                     new Dictionary<DieCuttingParams.Mes, string?>
@@ -178,14 +257,14 @@ public sealed class DieCuttingModuleContractTests : ModuleContractTestBase<Depen
                     },
                     warn: null),
                 new ModuleParamGroup<DieCuttingParams.Cloud>(
-                    "DieCutting",
+                    _moduleId,
                     ModuleParamCategory.Cloud,
                     new Dictionary<DieCuttingParams.Cloud, string>(),
                     new Dictionary<DieCuttingParams.Cloud, string?>(),
                     new Dictionary<DieCuttingParams.Cloud, ParamValueKind>(),
                     warn: null),
                 new ModuleParamGroup<DieCuttingParams.Business>(
-                    "DieCutting",
+                    _moduleId,
                     ModuleParamCategory.Business,
                     new Dictionary<DieCuttingParams.Business, string>(),
                     new Dictionary<DieCuttingParams.Business, string?>
@@ -201,7 +280,12 @@ public sealed class DieCuttingModuleContractTests : ModuleContractTestBase<Depen
 
     private sealed class ContractDieCuttingMesChannel : IDieCuttingMesScenarioChannel
     {
-        public string ProcessType => "DieCutting";
+        public ContractDieCuttingMesChannel(string processType)
+        {
+            ProcessType = processType;
+        }
+
+        public string ProcessType { get; }
         public ProcessUploadMode UploadMode => ProcessUploadMode.Single;
 
         public Task<MesCallResult> UploadAsync(

@@ -8,9 +8,16 @@ namespace IIoT.Edge.Module.DieCutting.Payload;
 public sealed class DieCuttingCellData : CellDataBase
 {
     /// <summary>
-    /// 工序类型固定为模切模块。
+    /// 工序类型由 AP/CP 插件写入；模切当前不走 DataPipeline 出料补传。
     /// </summary>
-    public override string ProcessType => DependencyInjection.ModuleKey;
+    public override string ProcessType => string.IsNullOrWhiteSpace(ModuleProcessType)
+        ? "DieCutting"
+        : ModuleProcessType;
+
+    /// <summary>
+    /// AP/CP 模切插件的实际工序类型。
+    /// </summary>
+    public string ModuleProcessType { get; set; } = string.Empty;
 
     /// <summary>
     /// 模切记录展示名，优先显示弹夹号。

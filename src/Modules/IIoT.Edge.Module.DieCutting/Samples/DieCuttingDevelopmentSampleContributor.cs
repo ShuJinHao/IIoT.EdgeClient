@@ -11,18 +11,18 @@ using Microsoft.Extensions.Configuration;
 namespace IIoT.Edge.Module.DieCutting.Samples;
 
 /// <summary>
-/// 模切开发样本导入器，播种 24 台老设备 PLC 样本和标准只读 IO 映射模板。
+/// 模切开发样本导入器，按 AP/CP 插件定义播种本线体 PLC 样本和标准只读 IO 映射模板。
 /// </summary>
 public sealed class DieCuttingDevelopmentSampleContributor : DevelopmentSampleContributorBase
 {
-    private const string SeedRemark = "模切只读采集开发样本";
-
+    private readonly DieCuttingModuleDefinition _definition;
     private readonly ILogService _logger;
     private readonly IRepository<NetworkDeviceEntity> _networkDevices;
     private readonly IRepository<IoMappingEntity> _ioMappings;
     private readonly DieCuttingDeviceSeedOptions _options;
 
     public DieCuttingDevelopmentSampleContributor(
+        DieCuttingModuleDefinition definition,
         IConfiguration configuration,
         IRepository<NetworkDeviceEntity> networkDevices,
         IRepository<IoMappingEntity> ioMappings,
@@ -31,26 +31,27 @@ public sealed class DieCuttingDevelopmentSampleContributor : DevelopmentSampleCo
         EdgeRuntimePaths? runtimePaths = null)
         : base(configuration, hardwareProfiles)
     {
+        _definition = definition ?? throw new ArgumentNullException(nameof(definition));
         _networkDevices = networkDevices;
         _ioMappings = ioMappings;
         _logger = logger;
-        _options = BindOptions<DieCuttingDeviceSeedOptions>($"Modules:{DependencyInjection.ModuleKey}:DeviceSeed");
+        _options = BindOptions<DieCuttingDeviceSeedOptions>($"Modules:{_definition.ModuleId}:DeviceSeed");
     }
 
     /// <summary>
     /// 样本导入器归属的模切模块标识。
     /// </summary>
-    public override string ModuleId => DependencyInjection.ModuleKey;
+    public override string ModuleId => _definition.ModuleId;
 
     protected override bool ShouldEnsureConfigurationSamples()
         => _options.Enabled;
 
     protected override void OnConfigurationSamplesSkipped()
-        => _logger.Info("[模切][设备样本] 自动播种已关闭。");
+        => _logger.Info($"[{_definition.DisplayName}][设备样本] 自动播种已关闭。");
 
     protected override async Task EnsureConfigurationSamplesCoreAsync(CancellationToken cancellationToken)
     {
-        _logger.Info("[模切][设备样本] 开始检查 24 台模切 PLC 设备和只读 IO 映射。");
+        _logger.Info($"[{_definition.DisplayName}][设备样本] 开始检查 {_definition.DefaultDevices.Count} 台 PLC 设备和只读 IO 映射。");
 
         if (_options.ResetBeforeImport)
         {
@@ -61,25 +62,25 @@ public sealed class DieCuttingDevelopmentSampleContributor : DevelopmentSampleCo
         var importedDeviceCount = 0;
         var importedMappingCount = 0;
 
-        foreach (var seedDevice in BuildDefaultDevices())
+        foreach (var seedDevice in _definition.DefaultDevices)
         {
             var device = await EnsureDeviceAsync(seedDevice, hardwareProfile, cancellationToken).ConfigureAwait(false);
             importedDeviceCount++;
             importedMappingCount += await EnsureMappingsAsync(device, hardwareProfile, cancellationToken).ConfigureAwait(false);
         }
 
-        _logger.Info($"[模切][设备样本] 播种检查完成。设备 {importedDeviceCount} 台，新增 IO 映射 {importedMappingCount} 条。");
+        _logger.Info($"[{_definition.DisplayName}][设备样本] 播种检查完成。设备 {importedDeviceCount} 台，新增 IO 映射 {importedMappingCount} 条。");
     }
 
     private async Task ResetDieCuttingConfigurationAsync(CancellationToken cancellationToken)
     {
-        var seedNames = BuildDefaultDevices()
+        var seedNames = _definition.DefaultDevices
             .Select(static x => x.DeviceName)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var existingDevices = await _networkDevices.GetListAsync(_ => true, cancellationToken).ConfigureAwait(false);
         var targetDevices = existingDevices
             .Where(device => seedNames.Contains(device.DeviceName)
-                             || string.Equals(device.Remark, SeedRemark, StringComparison.OrdinalIgnoreCase))
+                             || string.Equals(device.Remark, _definition.SeedRemark, StringComparison.OrdinalIgnoreCase))
             .ToArray();
         if (targetDevices.Length == 0)
         {
@@ -107,7 +108,7 @@ public sealed class DieCuttingDevelopmentSampleContributor : DevelopmentSampleCo
         }
 
         await _networkDevices.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-        _logger.Info($"[模切][设备样本] 已重置 {targetDevices.Length} 台模切样本设备和 {mappings.Count} 条映射。");
+        _logger.Info($"[{_definition.DisplayName}][设备样本] 已重置 {targetDevices.Length} 台样本设备和 {mappings.Count} 条映射。");
     }
 
     private async Task<NetworkDeviceEntity> EnsureDeviceAsync(
@@ -120,7 +121,7 @@ public sealed class DieCuttingDevelopmentSampleContributor : DevelopmentSampleCo
             cancellationToken: cancellationToken).ConfigureAwait(false);
         if (existingDevice is not null)
         {
-            _logger.Info($"[模切][设备样本] 设备“{seedDevice.DeviceName}”已存在，跳过设备写入。");
+            _logger.Info($"[{_definition.DisplayName}][设备样本] 设备“{seedDevice.DeviceName}”已存在，跳过设备写入。");
             return existingDevice;
         }
 
@@ -139,12 +140,12 @@ public sealed class DieCuttingDevelopmentSampleContributor : DevelopmentSampleCo
             device.Port2,
             seedDevice.ConnectTimeout > 0 ? seedDevice.ConnectTimeout : defaults.ConnectTimeout ?? 3000);
         device.SetEnabled(seedDevice.IsEnabled);
-        device.UpdateRemark(SeedRemark);
+        device.UpdateRemark(seedDevice.Remark);
 
         _networkDevices.Add(device);
         await _networkDevices.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        _logger.Info($"[模切][设备样本] 已写入设备“{device.DeviceName}”。");
+        _logger.Info($"[{_definition.DisplayName}][设备样本] 已写入设备“{device.DeviceName}”。");
         return device;
     }
 
@@ -158,7 +159,7 @@ public sealed class DieCuttingDevelopmentSampleContributor : DevelopmentSampleCo
             cancellationToken).ConfigureAwait(false);
         if (existingMappings.Count > 0)
         {
-            _logger.Info($"[模切][设备样本] 设备“{device.DeviceName}”已有 IO 映射，跳过标准点位播种。");
+            _logger.Info($"[{_definition.DisplayName}][设备样本] 设备“{device.DeviceName}”已有 IO 映射，跳过标准点位播种。");
             return 0;
         }
 
@@ -175,7 +176,7 @@ public sealed class DieCuttingDevelopmentSampleContributor : DevelopmentSampleCo
         }
 
         await _ioMappings.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-        _logger.Info($"[模切][设备样本] 设备“{device.DeviceName}”首次初始化 IO 映射，已播种 {templates.Length} 条标准点位。");
+        _logger.Info($"[{_definition.DisplayName}][设备样本] 设备“{device.DeviceName}”首次初始化 IO 映射，已播种 {templates.Length} 条标准点位。");
         return templates.Length;
     }
 
@@ -197,31 +198,12 @@ public sealed class DieCuttingDevelopmentSampleContributor : DevelopmentSampleCo
             template.Direction,
             template.Category,
             template.BusinessGroup,
-            string.IsNullOrWhiteSpace(template.Remark) ? SeedRemark : template.Remark);
+            string.IsNullOrWhiteSpace(template.Remark) ? "模切只读采集开发样本" : template.Remark);
         return entity;
     }
 
     private IModuleHardwareProfileProvider GetHardwareProfile()
-        => GetHardwareProfile($"模切设备样本导入需要模块“{DependencyInjection.ModuleKey}”的硬件模板提供器。");
-
-    private static IReadOnlyList<DieCuttingDeviceSeed> BuildDefaultDevices()
-        =>
-        [
-            .. Enumerable.Range(1, 12)
-                .Select(index => new DieCuttingDeviceSeed
-                {
-                    DeviceName = $"P1-AP{index:D2}",
-                    IpAddress = $"10.110.0.{10 + index}",
-                    Remark = "负极模切 AP"
-                }),
-            .. Enumerable.Range(1, 12)
-                .Select(index => new DieCuttingDeviceSeed
-                {
-                    DeviceName = $"P2-CP{index:D2}",
-                    IpAddress = $"10.110.1.{10 + index}",
-                    Remark = "正极模切 CP"
-                })
-        ];
+        => GetHardwareProfile($"模切设备样本导入需要模块“{_definition.ModuleId}”的硬件模板提供器。");
 
     /// <summary>
     /// 模切设备样本导入开关。
@@ -237,46 +219,5 @@ public sealed class DieCuttingDevelopmentSampleContributor : DevelopmentSampleCo
         /// 导入前是否删除旧的模切样本设备和 IO 映射。
         /// </summary>
         public bool ResetBeforeImport { get; set; }
-    }
-
-    /// <summary>
-    /// 模切样本 PLC 设备配置。
-    /// </summary>
-    private sealed class DieCuttingDeviceSeed
-    {
-        /// <summary>
-        /// 样本 PLC 设备名。
-        /// </summary>
-        public string DeviceName { get; set; } = string.Empty;
-
-        /// <summary>
-        /// PLC 设备型号。
-        /// </summary>
-        public string DeviceModel { get; set; } = "Mc";
-
-        /// <summary>
-        /// PLC IP 地址。
-        /// </summary>
-        public string IpAddress { get; set; } = string.Empty;
-
-        /// <summary>
-        /// PLC 通讯端口。
-        /// </summary>
-        public int Port1 { get; set; } = 65530;
-
-        /// <summary>
-        /// PLC 连接超时时间。
-        /// </summary>
-        public int ConnectTimeout { get; set; } = 3000;
-
-        /// <summary>
-        /// 样本设备是否启用。
-        /// </summary>
-        public bool IsEnabled { get; set; } = true;
-
-        /// <summary>
-        /// 样本设备所属工序备注。
-        /// </summary>
-        public string? Remark { get; set; }
     }
 }
