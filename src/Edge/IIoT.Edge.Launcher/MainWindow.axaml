@@ -416,12 +416,24 @@
                                             Width="2*">
                                             <edge:EdgeTemplateColumn.CellTemplate>
                                                 <DataTemplate>
-                                                    <TextBlock
-                                                        Classes="launcher-chip-text subtle"
-                                                        MaxLines="2"
-                                                        Text="{Binding ReleaseNotesText}"
-                                                        TextTrimming="CharacterEllipsis"
-                                                        TextWrapping="Wrap" />
+                                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                                        <TextBlock
+                                                            VerticalAlignment="Center"
+                                                            Classes="launcher-chip-text subtle"
+                                                            MaxLines="2"
+                                                            Text="{Binding ReleaseNotesText}"
+                                                            TextTrimming="CharacterEllipsis"
+                                                            TextWrapping="Wrap" />
+                                                        <edge:EdgeActionButton
+                                                            Grid.Column="1"
+                                                            VerticalAlignment="Center"
+                                                            Click="OpenReleaseNotesButton_Click"
+                                                            Content="{DynamicResource Launcher_UpdateCenter_ButtonViewReleaseNotes}"
+                                                            Icon="{StaticResource Edge.Icon.Info}"
+                                                            Kind="Ghost"
+                                                            Role="Cell"
+                                                            Size="Compact" />
+                                                    </Grid>
                                                 </DataTemplate>
                                             </edge:EdgeTemplateColumn.CellTemplate>
                                         </edge:EdgeTemplateColumn>

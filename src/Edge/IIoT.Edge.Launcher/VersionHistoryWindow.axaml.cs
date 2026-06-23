@@ -38,6 +38,18 @@ public partial class VersionHistoryWindow : Window
         await _panel.ApplyVersionAsync(option);
     }
 
+    private async void OpenReleaseNotesButton_Click(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is not LauncherVersionOptionItem option)
+        {
+            return;
+        }
+
+        var componentKindText = (DataContext as LauncherVersionHistoryViewModel)?.Component.ComponentKindText ?? "-";
+        var dialog = new ReleaseNotesWindow(LauncherReleaseNotesDetailViewModel.FromVersionOption(option, componentKindText));
+        await dialog.ShowDialog(this);
+    }
+
     private void TitleBar_PointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)

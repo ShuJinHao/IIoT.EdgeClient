@@ -117,6 +117,17 @@ public partial class MainWindow : Window
         await dialog.ShowDialog(this);
     }
 
+    private async void OpenReleaseNotesButton_Click(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is not LauncherClientPluginItem row)
+        {
+            return;
+        }
+
+        var dialog = new ReleaseNotesWindow(LauncherReleaseNotesDetailViewModel.FromUpdateRow(row));
+        await dialog.ShowDialog(this);
+    }
+
     private async Task<bool> ConfirmVersionChangeAsync(LauncherVersionChangeConfirmationRequest request)
     {
         var dialog = new VersionChangeConfirmationWindow(request, _languageService);

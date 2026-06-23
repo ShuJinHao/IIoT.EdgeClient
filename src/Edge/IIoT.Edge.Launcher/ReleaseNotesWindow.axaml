@@ -1,0 +1,170 @@
+<Window
+    x:Class="IIoT.Edge.Launcher.ReleaseNotesWindow"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
+    Title="{DynamicResource Launcher_ReleaseNotes_WindowTitle}"
+    Width="640"
+    Height="520"
+    MinWidth="560"
+    MinHeight="440"
+    Background="Transparent"
+    CanResize="True"
+    ExtendClientAreaToDecorationsHint="True"
+    ShowInTaskbar="False"
+    TransparencyLevelHint="Transparent"
+    WindowDecorations="None"
+    WindowStartupLocation="CenterOwner">
+    <edge:EdgeCard
+        x:Name="ReleaseNotesWindowRoot"
+        Margin="1"
+        Elevation="Float"
+        PaddingMode="Normal"
+        Surface="Card">
+        <Grid RowDefinitions="Auto,*,Auto" RowSpacing="16">
+            <Grid
+                ColumnDefinitions="*,Auto"
+                PointerPressed="TitleBar_PointerPressed">
+                <StackPanel Spacing="10">
+                    <Border Classes="launcher-badge">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <PathIcon
+                                Classes="launcher-badge-icon"
+                                Data="{StaticResource Edge.Icon.Info}" />
+                            <TextBlock
+                                Classes="launcher-badge-text"
+                                Text="{DynamicResource Launcher_ReleaseNotes_Badge}" />
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock
+                        Classes="launcher-login-title"
+                        Text="{DynamicResource Launcher_ReleaseNotes_Title}"
+                        TextWrapping="Wrap" />
+                    <TextBlock
+                        Classes="launcher-panel-description"
+                        Text="{DynamicResource Launcher_ReleaseNotes_Description}"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+
+                <edge:EdgeWindowButton
+                    Grid.Column="1"
+                    Action="Close"
+                    Margin="0,-8,-8,0"
+                    VerticalAlignment="Top"
+                    Click="CloseWindowButton_Click"
+                    ToolTip.Tip="{DynamicResource Launcher_ToolTip_Close}" />
+            </Grid>
+
+            <Grid Grid.Row="1" RowDefinitions="Auto,*" RowSpacing="12">
+                <edge:EdgeCard
+                    Elevation="Flat"
+                    PaddingMode="Compact"
+                    Surface="Raised">
+                    <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="16" RowSpacing="10">
+                        <StackPanel Spacing="4">
+                            <TextBlock
+                                Classes="launcher-chip-text subtle"
+                                Text="{DynamicResource Launcher_ReleaseNotes_Component}" />
+                            <TextBlock
+                                Classes="launcher-chip-text"
+                                Text="{Binding DisplayName}"
+                                TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="1" Spacing="4">
+                            <TextBlock
+                                Classes="launcher-chip-text subtle"
+                                Text="{DynamicResource Launcher_ReleaseNotes_ComponentType}" />
+                            <edge:EdgeStatusChip
+                                HorizontalAlignment="Left"
+                                Status="Info"
+                                Text="{Binding ComponentKindText}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="1" Spacing="4">
+                            <TextBlock
+                                Classes="launcher-chip-text subtle"
+                                Text="{DynamicResource Launcher_VersionManagement_CurrentVersion}" />
+                            <TextBlock
+                                Classes="launcher-chip-text"
+                                Text="{Binding CurrentVersion}"
+                                TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="1" Grid.Column="1" Spacing="4">
+                            <TextBlock
+                                Classes="launcher-chip-text subtle"
+                                Text="{DynamicResource Launcher_VersionManagement_TargetVersion}" />
+                            <TextBlock
+                                Classes="launcher-chip-text"
+                                Text="{Binding TargetVersion}"
+                                TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="2" Spacing="4">
+                            <TextBlock
+                                Classes="launcher-chip-text subtle"
+                                Text="{DynamicResource Launcher_UpdateCenter_ColumnStatus}" />
+                            <edge:EdgeStatusChip
+                                HorizontalAlignment="Left"
+                                Status="{Binding StatusKind}"
+                                Text="{Binding StatusText}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="2" Grid.Column="1" Spacing="4">
+                            <TextBlock
+                                Classes="launcher-chip-text subtle"
+                                Text="{DynamicResource Launcher_UpdateCenter_ColumnPublishedAt}" />
+                            <TextBlock
+                                Classes="launcher-chip-text"
+                                Text="{Binding PublishedAtText}"
+                                TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="3" Spacing="4">
+                            <TextBlock
+                                Classes="launcher-chip-text subtle"
+                                Text="{DynamicResource Launcher_UpdateCenter_ColumnSize}" />
+                            <TextBlock
+                                Classes="launcher-chip-text"
+                                Text="{Binding PackageSizeText}"
+                                TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Grid>
+                </edge:EdgeCard>
+
+                <edge:EdgeCard
+                    Grid.Row="1"
+                    Elevation="Flat"
+                    PaddingMode="Compact"
+                    Surface="Raised">
+                    <Grid RowDefinitions="Auto,*" RowSpacing="10">
+                        <TextBlock
+                            Classes="launcher-chip-text"
+                            Text="{DynamicResource Launcher_ReleaseNotes_FullContent}" />
+                        <edge:EdgeScrollHost
+                            Grid.Row="1"
+                            Variant="Dialog"
+                            VerticalScrollBarVisibility="Auto"
+                            HorizontalScrollBarVisibility="Disabled">
+                            <TextBlock
+                                x:Name="ReleaseNotesTextBlock"
+                                Classes="launcher-chip-text subtle"
+                                Text="{Binding ReleaseNotesText}"
+                                TextWrapping="Wrap" />
+                        </edge:EdgeScrollHost>
+                    </Grid>
+                </edge:EdgeCard>
+            </Grid>
+
+            <edge:EdgeActionButton
+                Grid.Row="2"
+                HorizontalAlignment="Right"
+                Click="CloseButton_Click"
+                Content="{DynamicResource Launcher_Button_Close}"
+                Kind="Secondary"
+                Size="Compact" />
+        </Grid>
+    </edge:EdgeCard>
+</Window>

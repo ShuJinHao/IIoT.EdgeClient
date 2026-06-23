@@ -55,6 +55,7 @@
     <sys:String x:Key="Launcher_UpdateCenter_ColumnSize">Size</sys:String>
     <sys:String x:Key="Launcher_UpdateCenter_ColumnReleaseNotes">Release notes</sys:String>
     <sys:String x:Key="Launcher_UpdateCenter_ColumnHistory">History</sys:String>
+    <sys:String x:Key="Launcher_UpdateCenter_ButtonViewReleaseNotes">Details</sys:String>
     <sys:String x:Key="Launcher_UpdateCenter_ButtonViewHistory">View {0}</sys:String>
     <sys:String x:Key="Launcher_UpdateCenter_NoHistory">-</sys:String>
     <sys:String x:Key="Launcher_UpdateCenter_HostStatusNotReady">Not configured</sys:String>
@@ -133,6 +134,13 @@
     <sys:String x:Key="Launcher_VersionHistory_Badge">Version records</sys:String>
     <sys:String x:Key="Launcher_VersionHistory_Title">Version history</sys:String>
     <sys:String x:Key="Launcher_VersionHistory_Description">Review all catalog versions for the selected component, then install, update, or roll back through the real update flow.</sys:String>
+    <sys:String x:Key="Launcher_ReleaseNotes_WindowTitle">Release notes details</sys:String>
+    <sys:String x:Key="Launcher_ReleaseNotes_Badge">Release notes</sys:String>
+    <sys:String x:Key="Launcher_ReleaseNotes_Title">Release notes details</sys:String>
+    <sys:String x:Key="Launcher_ReleaseNotes_Description">Review the complete release notes registered for this version.</sys:String>
+    <sys:String x:Key="Launcher_ReleaseNotes_Component">Component</sys:String>
+    <sys:String x:Key="Launcher_ReleaseNotes_ComponentType">Type</sys:String>
+    <sys:String x:Key="Launcher_ReleaseNotes_FullContent">Full release notes</sys:String>
 
     <sys:String x:Key="Launcher_ChangePassword_WindowTitle">Change local password</sys:String>
     <sys:String x:Key="Launcher_ChangePassword_Badge">Local administrator</sys:String>
@@ -142,6 +150,7 @@
     <sys:String x:Key="Launcher_ChangePassword_NewPasswordPlaceholder">New password</sys:String>
     <sys:String x:Key="Launcher_ChangePassword_ConfirmPasswordPlaceholder">Confirm new password</sys:String>
     <sys:String x:Key="Launcher_Button_Cancel">Cancel</sys:String>
+    <sys:String x:Key="Launcher_Button_Close">Close</sys:String>
     <sys:String x:Key="Launcher_Button_ConfirmChange">Confirm change</sys:String>
     <sys:String x:Key="Launcher_ChangePassword_UserNameRequired">Account is required.</sys:String>
     <sys:String x:Key="Launcher_ChangePassword_OldPasswordRequired">Old password is required.</sys:String>

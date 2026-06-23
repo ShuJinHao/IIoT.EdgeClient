@@ -126,6 +126,48 @@ public sealed class LauncherWindowHeadlessTests
     }
 
     [AvaloniaFact]
+    public void ReleaseNotesWindow_ShouldLoadDialog()
+    {
+        var detail = LauncherReleaseNotesDetailViewModel.FromVersionOption(
+            new LauncherVersionOptionItem(
+                EdgeComponentKind.Plugin,
+                "Homogenization",
+                "均浆",
+                "1.0.0",
+                "1.1.0",
+                EdgeVersionStatus.Newer,
+                canApply: true,
+                compatibilityIssue: string.Empty,
+                packageSizeText: "101.0 KB",
+                publishedAtUtc: new DateTime(2026, 6, 22, 16, 15, 54, DateTimeKind.Utc),
+                releaseNotes: "客户端更新：设备安装状态上报本机 IP/远端 IP、宿主和插件版本。",
+                statusKind: "Warning",
+                statusText: "可更新",
+                actionKind: "Secondary",
+                actionText: "更新"),
+            "工序插件");
+        var window = new ReleaseNotesWindow(detail)
+        {
+            Width = 640,
+            Height = 520
+        };
+
+        try
+        {
+            window.Show();
+
+            Assert.True(window.FindControl<Control>("ReleaseNotesWindowRoot")?.IsVisible);
+            Assert.Equal(
+                detail.ReleaseNotesText,
+                window.FindControl<TextBlock>("ReleaseNotesTextBlock")?.Text);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
     public void MainWindow_ShouldNotExposeSeparateUpdateControls()
     {
         var window = CreateMainWindow(CreateViewModel());
