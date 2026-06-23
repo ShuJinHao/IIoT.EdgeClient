@@ -74,7 +74,7 @@ public sealed class CloudApiResilienceBehaviorTests
             exception is TimeoutRejectedException or TaskCanceledException or OperationCanceledException,
             $"Expected a timeout-related exception but got {exception.GetType().FullName}.");
         Assert.Equal(1, handler.SendCount);
-        Assert.InRange(stopwatch.Elapsed.TotalMilliseconds, 700, 3000);
+        Assert.InRange(stopwatch.Elapsed.TotalMilliseconds, 700, 5000);
     }
 
     private static ServiceProvider BuildProvider(

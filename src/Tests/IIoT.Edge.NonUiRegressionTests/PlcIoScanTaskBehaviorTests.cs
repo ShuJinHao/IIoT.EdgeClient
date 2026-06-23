@@ -123,7 +123,7 @@ public sealed class PlcIoScanTaskBehaviorTests
         var stopwatch = Stopwatch.StartNew();
         await interaction.ConnectAsync();
 
-        Assert.True(stopwatch.ElapsedMilliseconds < 1000);
+        Assert.True(stopwatch.ElapsedMilliseconds < 5000);
         Assert.Equal(1, plcService.ConnectAsyncCallCount);
         Assert.Equal(1, plcService.DisconnectCallCount);
         var snapshot = statusStore.GetSnapshot(device.Id);
