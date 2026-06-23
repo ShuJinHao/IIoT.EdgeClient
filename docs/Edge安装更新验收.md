@@ -57,7 +57,7 @@ pwsh ./scripts/LocalPublishAndDeploy.ps1 `
   -Channel stable `
   -Transport http `
   -CloudApiBaseUrl http://10.98.90.154:81/api/v1 `
-  -CloudToken $env:IIOT_CLOUD_TOKEN `
+  -CloudToken $env:IIOT_CLOUD_RELEASE_TOKEN `
   -ReleaseNotesPath ./release-notes.md `
   -UploadRateLimitMbps 100
 ```

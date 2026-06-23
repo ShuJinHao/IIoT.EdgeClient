@@ -271,7 +271,7 @@ EdgeClient 的交付物是 Windows 安装器、安装素材和 Velopack 更新�
 pwsh ./scripts/PublishEdgePluginRelease.ps1 `
   -ModuleId <ModuleId> `
   -CloudApiBaseUrl http://10.98.90.154:81/api/v1 `
-  -CloudToken $env:IIOT_CLOUD_TOKEN `
+  -CloudToken $env:IIOT_CLOUD_RELEASE_TOKEN `
   -ReleaseNotesPath ./release-notes.md
 ```
 
@@ -289,10 +289,11 @@ windows-latest
 [self-hosted, iiot-linux-prod]
 -> download GitHub Actions artifacts
 -> assemble edge release bundle
+-> login Cloud with release account secrets
 -> POST Cloud Human edge-release-bundles API
 ```
 
-内网 Linux runner 只做发布编排，不重新构建 EdgeClient。原因是 Avalonia 桌面应用、Windows installer 和 Velopack Windows 包必须在 Windows runner 上构建和验证。Linux runner 必须用非 root 专用用户运行，通过 Cloud Human API 上传 release bundle，由 Cloud 服务端校验、落盘、写 DB、审计和执行保留策略。
+内网 Linux runner 只做发布编排，不重新构建 EdgeClient。原因是 Avalonia 桌面应用、Windows installer 和 Velopack Windows 包必须在 Windows runner 上构建和验证。Linux runner 必须用非 root 专用用户运行，通过 Cloud Human API 上传 release bundle，由 Cloud 服务端校验、落盘、写 DB、审计和执行保留策略。GitHub 正式发布不长期保存 Human JWT；`publish-edge-updates` 使用 `IIOT_CLOUD_RELEASE_EMPLOYEE_NO` / `IIOT_CLOUD_RELEASE_PASSWORD` 登录 `/api/v1/human/identity/login` 换取本次 job 的短期 access token，该发布账号只要求具备 `ClientRelease.Publish` 权限。
 
 版本号由打包入口确定。`workflow_dispatch` 必须输入生产版本号，tag 触发时版本来自 `edge-v*` 或 `v*` tag；HTTP 本机宿主快发未传 `-Version` 时读取 Cloud Human catalog 最新 stable 版本并自动递增 patch，传入 `-Version` 时严格使用传入值。`PublishEdgeRuntime.ps1 -Version` 会同步设置 Launcher/Shell runtime 的 `AssemblyVersion`、`FileVersion` 和 `InformationalVersion`，Velopack 包验收以该版本为准。不要把 runtime 程序集版本固定回 `1.0.0.0` 后再发布 Velopack 包。
 
