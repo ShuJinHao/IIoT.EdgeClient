@@ -113,6 +113,40 @@ public sealed class DieCuttingModuleContractTests : ModuleContractTestBase<Depen
         Assert.Equal("P1-AP01", identity.UpperComputerNo);
     }
 
+    [Fact]
+    public void DieCuttingLineMachineProfile_ShouldSeedMesDeviceCodesFromMesDocument()
+    {
+        var machineProfilePath = Path.Combine(
+            ContractTestPathHelper.FindRepoRoot(),
+            "src",
+            "Edge",
+            "IIoT.Edge.Shell",
+            "appsettings.machine.DieCuttingLine.json");
+
+        using var document = JsonDocument.Parse(File.ReadAllText(machineProfilePath));
+        var mesIdentity = document.RootElement
+            .GetProperty("Modules")
+            .GetProperty("DieCutting")
+            .GetProperty("Module")
+            .GetProperty("MesIdentity");
+        var devices = mesIdentity.GetProperty("Devices");
+
+        Assert.False(mesIdentity.GetProperty("UseDeviceNameWhenCodeMissing").GetBoolean());
+        Assert.Equal(24, devices.EnumerateObject().Count());
+        AssertSeededMesIdentity(devices, "P1-AP01", "P1-APUC");
+        AssertSeededMesIdentity(devices, "P1-AP12", "P1-APUC");
+        AssertSeededMesIdentity(devices, "P2-CP01", "P2-CPUC");
+        AssertSeededMesIdentity(devices, "P2-CP12", "P2-CPUC");
+    }
+
+    private static void AssertSeededMesIdentity(JsonElement devices, string deviceCode, string upperComputerNo)
+    {
+        var identity = devices.GetProperty(deviceCode);
+        Assert.Equal(deviceCode, identity.GetProperty("DeviceCode").GetString());
+        Assert.Equal(deviceCode, identity.GetProperty("DeviceName").GetString());
+        Assert.Equal(upperComputerNo, identity.GetProperty("UpperComputerNo").GetString());
+    }
+
     private sealed class ContractMesUploadDiagnosticsStore : IMesUploadDiagnosticsStore
     {
         public IReadOnlyList<MesChannelDiagnostics> GetAll() => [];
