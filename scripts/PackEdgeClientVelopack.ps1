@@ -73,7 +73,7 @@ function Resolve-EdgeVpkCommand {
                 '--tool-manifest',
                 $toolManifestPath,
                 '--disable-parallel'
-            )
+            ) | Out-Null
 
         return [pscustomobject]@{
             FilePath = 'dotnet'
@@ -170,12 +170,13 @@ function Assert-EdgePackCloudIdentityTemplatesAreEmpty {
             throw "Packaged config file could not be parsed: $relativePath"
         }
 
-        if ($null -eq $config.CloudApi) {
+        $cloudApiProperty = $config.PSObject.Properties['CloudApi']
+        if ($null -eq $cloudApiProperty -or $null -eq $cloudApiProperty.Value) {
             continue
         }
 
         foreach ($key in @('ClientCode', 'BootstrapSecret')) {
-            $property = $config.CloudApi.PSObject.Properties[$key]
+            $property = $cloudApiProperty.Value.PSObject.Properties[$key]
             if ($null -eq $property) {
                 continue
             }

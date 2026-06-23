@@ -1,4 +1,6 @@
 using System.Net.Http.Headers;
+using System.Net;
+using System.Net.NetworkInformation;
 using IIoT.Edge.Application.Abstractions.Updates;
 using IIoT.Edge.Infrastructure.CloudClient;
 using static IIoT.Edge.Infrastructure.Update.Cloud.EdgeUpdateCloudUrl;
@@ -161,7 +163,8 @@ public sealed class HttpEdgeVersionReporter : IEdgeVersionReporter
                         }).ToArray(),
                         enabledPlugins,
                         channel = releaseOptions.Channel,
-                        reportedAtUtc = DateTime.UtcNow
+                        reportedAtUtc = DateTime.UtcNow,
+                        localIpAddresses = GetLocalIpAddresses()
                     },
                     ResolveTimeout(options),
                     headers => headers.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken),
@@ -175,6 +178,31 @@ public sealed class HttpEdgeVersionReporter : IEdgeVersionReporter
         catch (Exception ex)
         {
             return EdgeVersionReportResult.Failed($"版本上报失败: {ex.Message}");
+        }
+    }
+
+    private static IReadOnlyList<string> GetLocalIpAddresses()
+    {
+        try
+        {
+            return NetworkInterface
+                .GetAllNetworkInterfaces()
+                .Where(item => item.OperationalStatus == OperationalStatus.Up
+                    && item.NetworkInterfaceType != NetworkInterfaceType.Loopback
+                    && item.NetworkInterfaceType != NetworkInterfaceType.Tunnel)
+                .SelectMany(item => item.GetIPProperties().UnicastAddresses)
+                .Where(address => address.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+                .Select(address => address.Address)
+                .Where(address => !IPAddress.IsLoopback(address)
+                    && !address.ToString().StartsWith("169.254.", StringComparison.Ordinal))
+                .Select(address => address.ToString())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(16)
+                .ToList();
+        }
+        catch
+        {
+            return [];
         }
     }
 }

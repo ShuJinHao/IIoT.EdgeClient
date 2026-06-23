@@ -97,12 +97,13 @@ function Assert-CloudIdentityTemplateIsEmpty {
     )
 
     $config = $Json | ConvertFrom-Json
-    if ($null -eq $config.CloudApi) {
+    $cloudApiProperty = $config.PSObject.Properties['CloudApi']
+    if ($null -eq $cloudApiProperty -or $null -eq $cloudApiProperty.Value) {
         return
     }
 
     foreach ($key in @('ClientCode', 'BootstrapSecret')) {
-        $property = $config.CloudApi.PSObject.Properties[$key]
+        $property = $cloudApiProperty.Value.PSObject.Properties[$key]
         if ($null -eq $property) {
             continue
         }

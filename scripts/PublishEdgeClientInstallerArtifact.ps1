@@ -46,6 +46,8 @@ param(
 
     [string]$ReleaseNotes = '',
 
+    [string]$ReleaseNotesPath = '',
+
     [string]$Publisher = 'IIoT'
 )
 
@@ -84,11 +86,21 @@ function Get-ArtifactDirectorySha256 {
 
     $hasher = [System.Security.Cryptography.IncrementalHash]::CreateHash([System.Security.Cryptography.HashAlgorithmName]::SHA256)
     try {
-        $files = Get-ChildItem -Path $Directory -Recurse -File -ErrorAction SilentlyContinue |
-            Sort-Object @{ Expression = { Get-ArtifactRelativePath -BaseDirectory $Directory -PathValue $_.FullName } }
+        $files = @(Get-ChildItem -Path $Directory -Recurse -File -ErrorAction SilentlyContinue |
+            ForEach-Object {
+                [PSCustomObject]@{
+                    File = $_
+                    RelativePath = Get-ArtifactRelativePath -BaseDirectory $Directory -PathValue $_.FullName
+                }
+            })
+        [array]::Sort($files, [System.Comparison[object]]{
+            param($left, $right)
+            return [System.StringComparer]::Ordinal.Compare($left.RelativePath, $right.RelativePath)
+        })
 
-        foreach ($file in $files) {
-            $relativePath = Get-ArtifactRelativePath -BaseDirectory $Directory -PathValue $file.FullName
+        foreach ($entry in $files) {
+            $file = $entry.File
+            $relativePath = $entry.RelativePath
             $pathBytes = [System.Text.Encoding]::UTF8.GetBytes($relativePath)
             $hasher.AppendData($pathBytes)
             $hasher.AppendData([byte[]](0))
@@ -145,28 +157,6 @@ function Test-ArtifactGitCommitExists {
     return $LASTEXITCODE -eq 0
 }
 
-function New-ArtifactReleaseNotes {
-    param(
-        [string]$PreviousCommit,
-        [string]$CurrentCommit
-    )
-
-    if ((Test-ArtifactGitCommitExists $PreviousCommit) -and (Test-ArtifactGitCommitExists $CurrentCommit)) {
-        $range = "$PreviousCommit..$CurrentCommit"
-        $notes = Invoke-ArtifactGitText -Arguments @('log', '--oneline', '--no-decorate', $range)
-        if (-not [string]::IsNullOrWhiteSpace($notes)) {
-            return $notes.Trim()
-        }
-    }
-
-    $recent = Invoke-ArtifactGitText -Arguments @('log', '--oneline', '--no-decorate', '-n', '20')
-    if (-not [string]::IsNullOrWhiteSpace($recent)) {
-        return $recent.Trim()
-    }
-
-    return "Edge installer artifact $Version"
-}
-
 function Assert-ArtifactForbiddenContentMissing {
     param([Parameter(Mandatory = $true)][string]$Directory)
 
@@ -208,12 +198,13 @@ function Assert-ArtifactCloudIdentityTemplatesAreEmpty {
             throw "Artifact config file could not be parsed: $relativePath"
         }
 
-        if ($null -eq $config.CloudApi) {
+        $cloudApiProperty = $config.PSObject.Properties['CloudApi']
+        if ($null -eq $cloudApiProperty -or $null -eq $cloudApiProperty.Value) {
             continue
         }
 
         foreach ($key in @('ClientCode', 'BootstrapSecret')) {
-            $property = $config.CloudApi.PSObject.Properties[$key]
+            $property = $cloudApiProperty.Value.PSObject.Properties[$key]
             if ($null -eq $property) {
                 continue
             }
@@ -379,7 +370,7 @@ function Register-CloudCatalog {
         Invoke-CloudJsonPost -Path '/human/client-releases/plugin-releases' -Body @{
             moduleId = $module.moduleId
             displayName = $module.displayName
-            description = $module.description
+            description = if ($module.PSObject.Properties['description']) { $module.description } else { $null }
             iconKind = $null
             accentColor = $null
             channel = $Artifact.channel
@@ -399,6 +390,32 @@ function Register-CloudCatalog {
             publisher = $Publisher
         }
     }
+}
+
+function Resolve-ArtifactReleaseNotes {
+    if (-not [string]::IsNullOrWhiteSpace($ReleaseNotes) -and -not [string]::IsNullOrWhiteSpace($ReleaseNotesPath)) {
+        throw 'Use either -ReleaseNotes or -ReleaseNotesPath, not both.'
+    }
+
+    $resolvedNotes = ''
+    if (-not [string]::IsNullOrWhiteSpace($ReleaseNotesPath)) {
+        $resolvedPath = Resolve-EdgeAbsolutePath -BasePath $repoRoot -PathValue $ReleaseNotesPath
+        if (-not (Test-Path -LiteralPath $resolvedPath)) {
+            throw "Release notes file was not found: $resolvedPath"
+        }
+
+        $resolvedNotes = Get-Content -Raw -Encoding UTF8 -LiteralPath $resolvedPath
+    }
+    else {
+        $resolvedNotes = $ReleaseNotes
+    }
+
+    $resolvedNotes = $resolvedNotes.Trim()
+    if ([string]::IsNullOrWhiteSpace($resolvedNotes)) {
+        throw 'ReleaseNotes is required for Edge installer artifacts. Production releases must include real update content.'
+    }
+
+    return $resolvedNotes
 }
 
 $manifest = Load-EdgeRuntimePublishManifest -RepoRoot $repoRoot -ManifestPath $ManifestPath
@@ -428,12 +445,7 @@ else {
     $SourceCommit = $SourceCommit.Trim()
 }
 
-if ([string]::IsNullOrWhiteSpace($ReleaseNotes)) {
-    $ReleaseNotes = New-ArtifactReleaseNotes -PreviousCommit $PreviousSourceCommit -CurrentCommit $SourceCommit
-}
-else {
-    $ReleaseNotes = $ReleaseNotes.Trim()
-}
+$ReleaseNotes = Resolve-ArtifactReleaseNotes
 
 $previousVersionManifestValue = if ([string]::IsNullOrWhiteSpace($PreviousVersion)) { $null } else { $PreviousVersion }
 $previousSourceCommitManifestValue = if ([string]::IsNullOrWhiteSpace($PreviousSourceCommit)) { $null } else { $PreviousSourceCommit }
@@ -482,7 +494,7 @@ foreach ($moduleId in $moduleIds) {
     $modules += [PSCustomObject]@{
         moduleId = [string]$plugin.moduleId
         displayName = [string]$plugin.displayName
-        description = [string]$plugin.description
+        description = if ($plugin.PSObject.Properties['description']) { [string]$plugin.description } else { $null }
         version = [string]$plugin.version
         hostApiVersion = [string]$plugin.hostApiVersion
         minHostVersion = [string]$plugin.minHostVersion

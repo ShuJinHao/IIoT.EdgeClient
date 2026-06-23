@@ -26,6 +26,10 @@ param(
 
     [string]$CloudToken = '',
 
+    [string]$ReleaseNotes = '',
+
+    [string]$ReleaseNotesPath = '',
+
     [ValidateRange(1, 1000)]
     [int]$UploadRateLimitMbps = 100,
 
@@ -64,7 +68,26 @@ function Invoke-EdgeScript {
         throw "Script was not found: $scriptPath"
     }
 
-    & $scriptPath @Arguments
+    $parameterSplat = @{}
+    for ($i = 0; $i -lt $Arguments.Count; $i++) {
+        $name = [string]$Arguments[$i]
+        if (-not $name.StartsWith('-', [System.StringComparison]::Ordinal)) {
+            throw "Script argument name must start with '-': $name"
+        }
+
+        $key = $name.TrimStart('-')
+        $hasValue = $i + 1 -lt $Arguments.Count -and
+            -not ([string]$Arguments[$i + 1]).StartsWith('-', [System.StringComparison]::Ordinal)
+        if ($hasValue) {
+            $i++
+            $parameterSplat[$key] = $Arguments[$i]
+        }
+        else {
+            $parameterSplat[$key] = $true
+        }
+    }
+
+    & $scriptPath @parameterSplat
     if ($LASTEXITCODE -ne 0) {
         throw "$ScriptName failed with exit code $LASTEXITCODE."
     }
@@ -93,23 +116,19 @@ function ConvertTo-ShellSingleQuoted {
 }
 
 function Resolve-Transport {
+    if ($Channel -eq 'stable' -and $Transport -ne 'http' -and $Transport -ne 'auto') {
+        throw 'Stable Edge host releases must use -Transport http so Cloud can enforce release notes, DB registration, audit and retention.'
+    }
+
     if ($Transport -ne 'auto') {
         return $Transport
     }
 
-    if (-not [string]::IsNullOrWhiteSpace($CloudApiBaseUrl) -and -not [string]::IsNullOrWhiteSpace($CloudToken)) {
+    if ($Channel -eq 'stable') {
         return 'http'
     }
 
-    if (Get-Command rsync -ErrorAction SilentlyContinue) {
-        return 'rsync'
-    }
-
-    if (Get-Command scp -ErrorAction SilentlyContinue) {
-        return 'scp'
-    }
-
-    throw 'Neither rsync nor scp was found. Install one of them, or pass -Transport explicitly.'
+    throw 'Only stable Edge releases are supported by this script.'
 }
 
 function Assert-HttpPublishConfiguration {
@@ -286,26 +305,36 @@ function Test-GitCommitExists {
     return $LASTEXITCODE -eq 0
 }
 
-function New-ReleaseNotes {
-    param(
-        [string]$PreviousSourceCommit,
-        [string]$CurrentSourceCommit
-    )
+function Resolve-ExplicitReleaseNotes {
+    if (-not [string]::IsNullOrWhiteSpace($ReleaseNotes) -and -not [string]::IsNullOrWhiteSpace($ReleaseNotesPath)) {
+        throw 'Use either -ReleaseNotes or -ReleaseNotesPath, not both.'
+    }
 
-    if ((Test-GitCommitExists $PreviousSourceCommit) -and (Test-GitCommitExists $CurrentSourceCommit)) {
-        $range = "$PreviousSourceCommit..$CurrentSourceCommit"
-        $notes = Invoke-GitText -Arguments @('log', '--oneline', '--no-decorate', $range)
-        if (-not [string]::IsNullOrWhiteSpace($notes)) {
-            return $notes.Trim()
+    $resolvedNotes = ''
+    if (-not [string]::IsNullOrWhiteSpace($ReleaseNotesPath)) {
+        $path = if ([System.IO.Path]::IsPathRooted($ReleaseNotesPath)) {
+            $ReleaseNotesPath
         }
+        else {
+            Join-Path $repoRoot $ReleaseNotesPath
+        }
+
+        if (-not (Test-Path -LiteralPath $path)) {
+            throw "Release notes file was not found: $path"
+        }
+
+        $resolvedNotes = Get-Content -Raw -Encoding UTF8 -LiteralPath $path
+    }
+    else {
+        $resolvedNotes = $ReleaseNotes
     }
 
-    $recent = Invoke-GitText -Arguments @('log', '--oneline', '--no-decorate', '-n', '20')
-    if (-not [string]::IsNullOrWhiteSpace($recent)) {
-        return $recent.Trim()
+    $resolvedNotes = $resolvedNotes.Trim()
+    if ([string]::IsNullOrWhiteSpace($resolvedNotes)) {
+        throw 'Production Edge release notes are required. Pass -ReleaseNotes or -ReleaseNotesPath with the real update content.'
     }
 
-    return "Edge local release $Version"
+    return $resolvedNotes
 }
 
 function Publish-DirectoryWithRsync {
@@ -506,7 +535,7 @@ try {
         $sourceCommit = $sourceCommit.Trim()
     }
 
-    $releaseNotes = New-ReleaseNotes -PreviousSourceCommit $previousSourceCommit -CurrentSourceCommit $sourceCommit
+    $releaseNotes = Resolve-ExplicitReleaseNotes
 
     $releaseRoot = Join-Path $repoRoot "publish/local-edge-release/$Channel/$Version"
     $runtimeRoot = Join-Path $releaseRoot 'edge-runtime'
@@ -526,8 +555,12 @@ try {
     if (Test-Path $releaseRoot) {
         Remove-Item -Path $releaseRoot -Recurse -Force
     }
+    New-Item -Path $releaseRoot -ItemType Directory -Force | Out-Null
 
-    Invoke-EdgeScript 'PublishEdgeRuntime.ps1' @(
+    $releaseNotesFile = Join-Path $releaseRoot 'release-notes.md'
+    Set-Content -Path $releaseNotesFile -Encoding UTF8 -Value $releaseNotes
+
+    Invoke-EdgeScript 'PublishEdgeRuntime.ps1' -Arguments @(
         '-Configuration', $Configuration,
         '-RuntimeIdentifier', $RuntimeIdentifier,
         '-Version', $Version,
@@ -535,25 +568,26 @@ try {
         '-CleanOutput'
     )
 
-    Invoke-EdgeScript 'PackEdgeClientVelopack.ps1' @(
+    Invoke-EdgeScript 'PackEdgeClientVelopack.ps1' -Arguments @(
         '-Version', $Version,
         '-Channel', $Channel,
         '-Configuration', $Configuration,
         '-RuntimeIdentifier', $RuntimeIdentifier,
         '-OutputRoot', $velopackRoot,
+        '-ReleaseNotes', $releaseNotesFile,
         '-CleanOutput',
         '-SkipVeloAppCheck', $SkipVeloAppCheck
     )
 
     if (-not $SkipVelopackValidation) {
-        Invoke-EdgeScript 'TestEdgeVelopackPackage.ps1' @(
+        Invoke-EdgeScript 'TestEdgeVelopackPackage.ps1' -Arguments @(
             '-OutputRoot', $velopackRoot,
             '-Channel', $Channel,
             '-Version', $Version
         )
     }
 
-    Invoke-EdgeScript 'PublishEdgeClientInstallerArtifact.ps1' @(
+    Invoke-EdgeScript 'PublishEdgeClientInstallerArtifact.ps1' -Arguments @(
         '-Version', $Version,
         '-ReleaseChannel', $Channel,
         '-Configuration', $Configuration,
@@ -569,7 +603,7 @@ try {
     )
 
     if (-not $SkipInstallerValidation) {
-        Invoke-EdgeScript 'TestEdgeClientInstallerArtifact.ps1' @(
+        Invoke-EdgeScript 'TestEdgeClientInstallerArtifact.ps1' -Arguments @(
             '-ArtifactRoot', $installerArtifactRoot,
             '-ExpectedChannel', $Channel,
             '-ExpectedVersion', $Version
@@ -634,6 +668,48 @@ test -f "`$tmp_root/velopack/assets.$Channel.json"
 rm -rf "`$installer_target"
 mv "`$tmp_root/installer" "`$installer_target"
 cp -a "`$tmp_root/velopack/." "`$velopack_target/"
+installer_channel_root="`$(dirname "`$installer_target")"
+mapfile -t keep_versions < <(find "`$installer_channel_root" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' | sort -V | tail -n 3 || true)
+for version_dir in "`$installer_channel_root"/*
+do
+  [ -d "`$version_dir" ] || continue
+  version_name="`$(basename "`$version_dir")"
+  keep=false
+  for keep_version in "`${keep_versions[@]}"
+  do
+    if [ "`$version_name" = "`$keep_version" ]; then
+      keep=true
+      break
+    fi
+  done
+  [ "`$keep" = "true" ] || rm -rf "`$version_dir"
+done
+for velopack_file in "`$velopack_target"/*
+do
+  [ -f "`$velopack_file" ] || continue
+  file_name="`$(basename "`$velopack_file")"
+  case "`$file_name" in
+    releases.*.json|assets.*.json|RELEASES)
+      continue
+      ;;
+  esac
+  file_version=""
+  if [[ "`$file_name" =~ -([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?)-$Channel- ]]; then
+    file_version="`${BASH_REMATCH[1]}"
+  else
+    file_version="`$(printf '%s\n' "`$file_name" | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?' | head -n 1 || true)"
+  fi
+  [ -n "`$file_version" ] || continue
+  keep=false
+  for keep_version in "`${keep_versions[@]}"
+  do
+    if [ "`$file_version" = "`$keep_version" ]; then
+      keep=true
+      break
+    fi
+  done
+  [ "`$keep" = "true" ] || rm -f "`$velopack_file"
+done
 rm -rf "`$tmp_root"
 test -f "`$installer_target/installer-artifact.json"
 test -f "`$installer_target/IIoT.Edge.Setup.exe"

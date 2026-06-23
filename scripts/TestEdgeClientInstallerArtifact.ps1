@@ -58,11 +58,21 @@ function Get-TestDirectorySha256 {
 
     $hasher = [System.Security.Cryptography.IncrementalHash]::CreateHash([System.Security.Cryptography.HashAlgorithmName]::SHA256)
     try {
-        $files = Get-ChildItem -Path $Directory -Recurse -File -ErrorAction SilentlyContinue |
-            Sort-Object @{ Expression = { Get-TestRelativePath -BaseDirectory $Directory -PathValue $_.FullName } }
+        $files = @(Get-ChildItem -Path $Directory -Recurse -File -ErrorAction SilentlyContinue |
+            ForEach-Object {
+                [PSCustomObject]@{
+                    File = $_
+                    RelativePath = Get-TestRelativePath -BaseDirectory $Directory -PathValue $_.FullName
+                }
+            })
+        [array]::Sort($files, [System.Comparison[object]]{
+            param($left, $right)
+            return [System.StringComparer]::Ordinal.Compare($left.RelativePath, $right.RelativePath)
+        })
 
-        foreach ($file in $files) {
-            $relativePath = Get-TestRelativePath -BaseDirectory $Directory -PathValue $file.FullName
+        foreach ($entry in $files) {
+            $file = $entry.File
+            $relativePath = $entry.RelativePath
             $pathBytes = [System.Text.Encoding]::UTF8.GetBytes($relativePath)
             $hasher.AppendData($pathBytes)
             $hasher.AppendData([byte[]](0))
@@ -131,12 +141,13 @@ function Assert-CloudIdentityTemplatesAreEmpty {
             throw "Artifact config file could not be parsed: $relativePath"
         }
 
-        if ($null -eq $config.CloudApi) {
+        $cloudApiProperty = $config.PSObject.Properties['CloudApi']
+        if ($null -eq $cloudApiProperty -or $null -eq $cloudApiProperty.Value) {
             continue
         }
 
         foreach ($key in @('ClientCode', 'BootstrapSecret')) {
-            $property = $config.CloudApi.PSObject.Properties[$key]
+            $property = $cloudApiProperty.Value.PSObject.Properties[$key]
             if ($null -eq $property) {
                 continue
             }

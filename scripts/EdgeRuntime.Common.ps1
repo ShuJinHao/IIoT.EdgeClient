@@ -41,7 +41,12 @@ function Get-EdgeProjectPropertyValue {
     )
 
     foreach ($propertyGroup in $ProjectXml.Project.PropertyGroup) {
-        $value = $propertyGroup.$PropertyName
+        $property = $propertyGroup.PSObject.Properties[$PropertyName]
+        if ($null -eq $property) {
+            continue
+        }
+
+        $value = $property.Value
         if (-not [string]::IsNullOrWhiteSpace($value)) {
             return $value.Trim()
         }

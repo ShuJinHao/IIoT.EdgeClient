@@ -525,10 +525,14 @@ public sealed class RepositoryHygieneTests
         var workflow = File.ReadAllText(workflowPath);
 
         Assert.Contains("workflow_dispatch:", workflow, StringComparison.Ordinal);
+        Assert.Contains("release_notes:", workflow, StringComparison.Ordinal);
+        Assert.Contains("Production Edge releases require explicit release notes", workflow, StringComparison.Ordinal);
         Assert.Contains("EDGE_RELEASE_VERSION", workflow, StringComparison.Ordinal);
         Assert.Contains("EDGE_RELEASE_CHANNEL", workflow, StringComparison.Ordinal);
+        Assert.Contains("EDGE_RELEASE_NOTES_PATH", workflow, StringComparison.Ordinal);
         Assert.Contains("runs-on: windows-latest", workflow, StringComparison.Ordinal);
         Assert.Contains("PackEdgeClientVelopack.ps1", workflow, StringComparison.Ordinal);
+        Assert.Contains("-ReleaseNotes $env:EDGE_RELEASE_NOTES_PATH", workflow, StringComparison.Ordinal);
         Assert.Contains("TestEdgeVelopackPackage.ps1", workflow, StringComparison.Ordinal);
         Assert.Contains("edge-installer-artifact", workflow, StringComparison.Ordinal);
         Assert.Contains("edge-velopack-releases", workflow, StringComparison.Ordinal);
@@ -536,9 +540,10 @@ public sealed class RepositoryHygieneTests
         Assert.Contains("self-hosted", workflow, StringComparison.Ordinal);
         Assert.Contains("iiot-linux-prod", workflow, StringComparison.Ordinal);
         Assert.Contains("actions/download-artifact@v4", workflow, StringComparison.Ordinal);
-        Assert.Contains("EDGE_UPDATES_DIR", workflow, StringComparison.Ordinal);
-        Assert.Contains("installers/$EDGE_RELEASE_CHANNEL/$EDGE_RELEASE_VERSION", workflow, StringComparison.Ordinal);
-        Assert.Contains("velopack/$EDGE_RELEASE_CHANNEL", workflow, StringComparison.Ordinal);
+        Assert.Contains("EDGE_CLOUD_API_BASE_URL", workflow, StringComparison.Ordinal);
+        Assert.Contains("IIOT_CLOUD_TOKEN", workflow, StringComparison.Ordinal);
+        Assert.Contains("edge-release-bundles", workflow, StringComparison.Ordinal);
+        Assert.Contains("Published Edge release through Cloud API", workflow, StringComparison.Ordinal);
 
         foreach (var forbidden in new[] { "scp", "ssh", "docker build", "ghcr.io", "Harbor" })
         {
@@ -546,10 +551,15 @@ public sealed class RepositoryHygieneTests
         }
 
         var installerPublisher = File.ReadAllText(Path.Combine(root, "scripts", "PublishEdgeClientInstallerArtifact.ps1"));
+        Assert.Contains("ReleaseNotes is required for Edge installer artifacts", installerPublisher, StringComparison.Ordinal);
         foreach (var forbidden in new[] { "SshTarget", "RemoteEdgeUpdatesDir", "scp", "ssh" })
         {
             Assert.DoesNotContain(forbidden, installerPublisher, StringComparison.OrdinalIgnoreCase);
         }
+
+        var localPublisher = File.ReadAllText(Path.Combine(root, "scripts", "LocalPublishAndDeploy.ps1"));
+        Assert.Contains("Production Edge release notes are required", localPublisher, StringComparison.Ordinal);
+        Assert.Contains("tail -n 3", localPublisher, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -565,11 +575,13 @@ public sealed class RepositoryHygieneTests
         Assert.Contains("内网 Linux self-hosted runner", installDoc, StringComparison.Ordinal);
         Assert.Contains("/srv/iiot/edge-updates", installDoc, StringComparison.Ordinal);
         Assert.Contains("EdgeClient 不发布 Docker 镜像，不推 Harbor", installDoc, StringComparison.Ordinal);
+        Assert.Contains("更新内容必须显式填写", installDoc, StringComparison.Ordinal);
         Assert.Contains("GitHub hosted Windows runner 只负责构建", ruleDoc, StringComparison.Ordinal);
         Assert.Contains("LocalPublishAndDeploy.ps1", ruleDoc, StringComparison.Ordinal);
         Assert.Contains("内网 Linux self-hosted runner 只负责", ruleDoc, StringComparison.Ordinal);
         Assert.Contains("CI artifact 发布契约", contractDoc, StringComparison.Ordinal);
-        Assert.Contains("Linux runner 只做文件分发，不重新构建 EdgeClient", contractDoc, StringComparison.Ordinal);
+        Assert.Contains("内网 Linux runner 只做发布编排，不重新构建 EdgeClient", contractDoc, StringComparison.Ordinal);
+        Assert.Contains("通过 Cloud Human API 上传 release bundle", contractDoc, StringComparison.Ordinal);
     }
 
     [Fact]
