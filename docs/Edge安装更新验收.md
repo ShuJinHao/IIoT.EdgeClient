@@ -64,7 +64,7 @@ pwsh ./scripts/LocalPublishAndDeploy.ps1 `
 
 未传 `-Version` 时，HTTP 发布会读取 Cloud Human catalog 最新 stable 版本并自动递增 patch；需要固定版本时才显式传 `-Version`。本机快发的完整操作入口见 `docs/客户端部署.md`。
 
-HTTP 快发会先让文件安全落盘，再由 Cloud 服务端从 manifest 派生 DB release 行、写审计、执行最多保留 3 次的策略，并返回部署摘要。GitHub 正式发布路径同样通过 Cloud Human 发布 API 上传 bundle，由服务端清理 `installers/stable`、`velopack/stable` 和独立插件 zip 中超出保留策略的文件。Cloud 负责在 catalog 请求时扫描 `/app/edge-updates/installers/stable/<version>/installer-artifact.json` 和独立插件 zip，并与数据库 release 记录合并；数据库同 key 记录优先，可用 Draft/Archived 抑制文件版本。
+HTTP 快发会先让文件安全落盘，再由 Cloud 服务端从 manifest 派生 DB release 行、写审计、按 SemVer 执行最新 3 个 stable 版本保留策略，并返回部署摘要。GitHub 正式发布路径同样通过 Cloud Human 发布 API 上传 bundle，由服务端清理 `installers/stable`、`velopack/stable` 和独立插件 zip 中超出保留策略的文件。Cloud 负责在 catalog 请求时扫描 `/app/edge-updates/installers/stable/<version>/installer-artifact.json` 和独立插件 zip，并与数据库 release 记录合并；数据库同 key 记录优先，可用 Draft/Archived 抑制文件版本。
 
 插件独立发布必须满足：
 

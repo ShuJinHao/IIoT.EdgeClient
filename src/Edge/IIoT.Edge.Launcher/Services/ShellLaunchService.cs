@@ -8,12 +8,19 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
     private const string ShellProcessName = "IIoT.Edge.Shell";
 
     private readonly IProcessStarter _processStarter;
+    private readonly IShellInstanceIdResolver _instanceIdResolver;
+    private readonly IShellInstanceProbe _instanceProbe;
     private readonly object _syncRoot = new();
     private readonly List<TrackedShellProcess> _startedProcesses = [];
 
-    public ShellLaunchService(IProcessStarter processStarter)
+    public ShellLaunchService(
+        IProcessStarter processStarter,
+        IShellInstanceIdResolver instanceIdResolver,
+        IShellInstanceProbe instanceProbe)
     {
         _processStarter = processStarter ?? throw new ArgumentNullException(nameof(processStarter));
+        _instanceIdResolver = instanceIdResolver ?? throw new ArgumentNullException(nameof(instanceIdResolver));
+        _instanceProbe = instanceProbe ?? throw new ArgumentNullException(nameof(instanceProbe));
     }
 
     public bool HasAnyRunningShellProcess()
@@ -22,7 +29,14 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
     public bool IsProfileRunning(LauncherProfileDefinition profile)
     {
         ArgumentNullException.ThrowIfNull(profile);
-        return HasTrackedRunningShellProcess(profile.MachineProfile);
+        if (HasTrackedRunningShellProcess(profile.MachineProfile))
+        {
+            return true;
+        }
+
+        var instanceId = _instanceIdResolver.ResolveInstanceId(profile);
+        return !string.IsNullOrWhiteSpace(instanceId)
+               && _instanceProbe.IsInstanceRunning(instanceId);
     }
 
     public void Launch(LauncherProfileDefinition profile)

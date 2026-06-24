@@ -46,6 +46,8 @@ public static class LauncherDependencyInjection
                 provider.GetRequiredService<IEdgeProfileModuleConfigurationStore>(),
                 provider.GetRequiredService<ILauncherUpdateTargetFactory>()));
         services.AddSingleton<IProcessStarter, ProcessStarter>();
+        services.AddSingleton<IShellInstanceIdResolver, ShellInstanceIdResolver>();
+        services.AddSingleton<IShellInstanceProbe, NamedMutexShellInstanceProbe>();
         services.AddSingleton<IShellLaunchService, ShellLaunchService>();
         services.AddSingleton<LauncherMainViewModel>();
         services.AddSingleton<MainWindow>();

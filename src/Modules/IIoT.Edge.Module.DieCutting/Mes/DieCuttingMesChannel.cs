@@ -19,6 +19,7 @@ public sealed class DieCuttingMesChannel
     : MesScenarioChannelBase<DieCuttingCellData>, IDieCuttingMesScenarioChannel
 {
     private const string EmptyField = "";
+    private readonly DieCuttingModuleDefinition _definition;
     private readonly IModuleParamProvider<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business> _parameters;
 
     public DieCuttingMesChannel(
@@ -31,11 +32,12 @@ public sealed class DieCuttingMesChannel
         : base(definition.ProcessType, logger, requestExecutor, moduleParamRoleProvider, productionTime)
     {
         ArgumentNullException.ThrowIfNull(definition);
+        _definition = definition;
         _parameters = parameters;
     }
 
     /// <summary>
-    /// 上传模切当前采样快照，空字段按 MES 确认传空字符串。
+    /// 上传模切当前追溯快照，空字段按 MES 确认传空字符串。
     /// </summary>
     public async Task<MesCallResult> UploadRealtimeAsync(
         DeviceSession? device,
@@ -45,18 +47,24 @@ public sealed class DieCuttingMesChannel
         ArgumentNullException.ThrowIfNull(snapshot);
 
         return await ExecuteOptionalMesAsync(
-            "模切采样",
-            ct => GetMesPathAsync(DieCuttingParams.Mes.RealtimePath, ct),
+            "模切追溯出站",
+            ct => GetMesPathAsync(DieCuttingParams.Mes.OutboundPath, ct),
             device,
-            envelope => CreateStandardMesPayload(
-                envelope,
-                new
+            envelope => new
+            {
+                upperComputerNo = envelope.UpperComputerNo,
+                timestamp = envelope.Timestamp,
+                sign = envelope.Sign,
+                stationNo = envelope.StationNo,
+                outboundTime = FormatTimestamp(snapshot.WindowCompleteAt),
+                batchNumber = snapshot.PunchingLotNumber,
+                serialNumber = EmptyField,
+                operationCode = _definition.OperationCode,
+                data = new
                 {
-                    devices = new[]
-                    {
-                        BuildPunchingPayload(envelope, snapshot)
-                    }
-                }),
+                    produce = BuildPunchingProduce(snapshot)
+                }
+            },
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -67,37 +75,43 @@ public sealed class DieCuttingMesChannel
         CancellationToken cancellationToken)
         => Task.FromResult(MesCallResult.Disabled("模切首版为采样上传，不走 DataPipeline 出料补传。"));
 
-    private object BuildPunchingPayload(MesEnvelope envelope, DieCuttingRealtimeSnapshot snapshot)
+    private IReadOnlyList<object> BuildPunchingProduce(DieCuttingRealtimeSnapshot snapshot)
+        =>
+        [
+            CreateProduceItem("punchingLotNumber", "批次号", snapshot.PunchingLotNumber),
+            CreateProduceItem("clipNo", "弹夹号", snapshot.ClipNo),
+            CreateProduceItem("punchingDeviceCode", "设备编码", snapshot.PunchingDeviceCode),
+            CreateProduceItem("punchingDeviceName", "设备名称", snapshot.PunchingDeviceName),
+            CreateProduceItem("punchingQuantity", "产量", snapshot.PunchingQuantity),
+            CreateProduceItem("punchingUom", "单位", snapshot.PunchingUom),
+            CreateProduceItem("punchingStartTime", "开始时间", FormatTimestamp(snapshot.WindowStartAt)),
+            CreateProduceItem("punchingCompleteTime", "结束时间", FormatTimestamp(snapshot.WindowCompleteAt)),
+            CreateProduceItem("slittingConsumeQuantity", "分切消耗量", EmptyField),
+            CreateProduceItem("punchingSpeed", "模切速度", snapshot.PunchingSpeed),
+            CreateProduceItem("polePieceLength", "极片长度", EmptyField),
+            CreateProduceItem("polePieceWidth", "极片宽度", EmptyField),
+            CreateProduceItem("collectorLength", "集流体长度", EmptyField),
+            CreateProduceItem("collectorWidth", "集流体宽度", EmptyField),
+            CreateProduceItem("collectorLongMargin", "集流体长边距", EmptyField),
+            CreateProduceItem("collectorShortMargin", "集流体短边距", EmptyField),
+            CreateProduceItem("collectorFullInspectionSurface", "集流体全检面", EmptyField),
+            CreateProduceItem("collectorNoFullInspectionSurface", "集流体非全检面", EmptyField),
+            CreateProduceItem("collectorWhiteMaterial", "集流体白料", EmptyField),
+            CreateProduceItem("polePieceWeight", "极片重量", EmptyField),
+            CreateProduceItem("transverseBurr", "横向毛刺", EmptyField),
+            CreateProduceItem("longitudinalBurr", "纵向毛刺", EmptyField),
+            CreateProduceItem("transverseBurrs", "横向毛边", EmptyField),
+            CreateProduceItem("longitudinalBurrs", "纵向毛边", EmptyField),
+            CreateProduceItem("receivingSheetAlignment", "收料对齐度", EmptyField),
+            CreateProduceItem("punchingAppearance", "外观", EmptyField)
+        ];
+
+    private static object CreateProduceItem(string code, string name, object? value)
         => new
         {
-            stationNo = envelope.StationNo,
-            collectTime = FormatTimestamp(snapshot.CapturedAt),
-            punchingLotNumber = snapshot.PunchingLotNumber,
-            clipNo = snapshot.ClipNo,
-            punchingDeviceCode = snapshot.PunchingDeviceCode,
-            punchingDeviceName = snapshot.PunchingDeviceName,
-            punchingQuantity = snapshot.PunchingQuantity,
-            punchingUom = snapshot.PunchingUom,
-            punchingStartTime = FormatTimestamp(snapshot.WindowStartAt),
-            punchingCompleteTime = FormatTimestamp(snapshot.WindowCompleteAt),
-            slittingConsumeQuantity = EmptyField,
-            punchingSpeed = snapshot.PunchingSpeed,
-            polePieceLength = EmptyField,
-            polePieceWidth = EmptyField,
-            collectorLength = EmptyField,
-            collectorWidth = EmptyField,
-            collectorLongMargin = EmptyField,
-            collectorShortMargin = EmptyField,
-            collectorFullInspectionSurface = EmptyField,
-            collectorNoFullInspectionSurface = EmptyField,
-            collectorWhiteMaterial = EmptyField,
-            polePieceWeight = EmptyField,
-            transverseBurr = EmptyField,
-            longitudinalBurr = EmptyField,
-            transverseBurrs = EmptyField,
-            longitudinalBurrs = EmptyField,
-            receivingSheetAlignment = EmptyField,
-            punchingAppearance = EmptyField
+            code,
+            name,
+            val = value?.ToString() ?? EmptyField
         };
 
     private async Task<string?> GetMesPathAsync(

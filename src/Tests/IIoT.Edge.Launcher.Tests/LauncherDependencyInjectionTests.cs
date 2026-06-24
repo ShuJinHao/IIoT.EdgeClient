@@ -29,6 +29,8 @@ public sealed class LauncherDependencyInjectionTests
 
             Assert.IsType<LauncherProfileCatalog>(provider.GetRequiredService<ILauncherProfileCatalog>());
             Assert.IsType<ProcessStarter>(provider.GetRequiredService<IProcessStarter>());
+            Assert.IsType<ShellInstanceIdResolver>(provider.GetRequiredService<IShellInstanceIdResolver>());
+            Assert.IsType<NamedMutexShellInstanceProbe>(provider.GetRequiredService<IShellInstanceProbe>());
             Assert.IsType<ShellLaunchService>(provider.GetRequiredService<IShellLaunchService>());
             Assert.IsType<LauncherAccountCatalogInitializer>(
                 provider.GetRequiredService<ILauncherAccountCatalogInitializer>());

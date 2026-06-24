@@ -3,6 +3,7 @@ using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Auth;
+using IIoT.Edge.Application.Features.Config.ModuleParameters;
 using IIoT.Edge.Application.Features.Config.ParamView;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView;
 using IIoT.Edge.Application.Features.Hardware.Queries;
@@ -78,7 +79,8 @@ public sealed class ConfigPermissionGuardBehaviorTests
         var sender = new CountingSender();
         var handler = new SaveParamViewHandler(
             sender,
-            new StubPermissionService { CanEditParams = false });
+            new StubPermissionService { CanEditParams = false },
+            new ModuleParamRegistry());
 
         var result = await handler.Handle(
             new SaveParamViewCommand(

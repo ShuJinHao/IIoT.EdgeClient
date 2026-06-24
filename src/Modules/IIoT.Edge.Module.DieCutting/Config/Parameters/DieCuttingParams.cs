@@ -28,30 +28,11 @@ public static class DieCuttingParams
         /// </summary>
         [ModuleParam(
             ParamValueKind.String,
+            DefaultValue = "http://10.98.101.247:8080",
             Role = ModuleParamRole.MesBaseUrl,
             DisplayNameFallback = "MES服务地址",
             DescriptionFallback = "MES 接口基础地址。")]
         服务地址,
-
-        /// <summary>
-        /// MES 工站编号，未配置时按当前 PLC 设备名回退。
-        /// </summary>
-        [ModuleParam(
-            ParamValueKind.String,
-            Role = ModuleParamRole.StationNo,
-            DisplayNameFallback = "MES工站编号",
-            DescriptionFallback = "MES 侧工站编号；模切 24 台 PLC 建议留空，让任务按单台 PLC 设备名回退，正式规则确认后再配置。")]
-        工站编号,
-
-        /// <summary>
-        /// MES 上位机编码，通用链路参数。
-        /// </summary>
-        [ModuleParam(
-            ParamValueKind.String,
-            Role = ModuleParamRole.MesUpperComputerNo,
-            DisplayNameFallback = "MES上位机编码",
-            DescriptionFallback = "通用 MES 上位机编码。模切每台 PLC 的设备身份优先走 MesIdentity 映射。")]
-        UpperComputerNo,
 
         /// <summary>
         /// MES 健康检查路径。
@@ -65,24 +46,14 @@ public static class DieCuttingParams
         MesHealthPath,
 
         /// <summary>
-        /// 模切采样上传路径。
+        /// 模切追溯出站上传路径。
         /// </summary>
         [ModuleParam(
             ParamValueKind.String,
-            DefaultValue = "/dev/dev/run/info",
-            DisplayNameFallback = "MES采样上传路径",
-            DescriptionFallback = "模切只读采样快照上传接口相对路径，现场按 MES 文档调整。")]
-        RealtimePath,
-
-        /// <summary>
-        /// MES 签名令牌。
-        /// </summary>
-        [ModuleParam(
-            ParamValueKind.String,
-            Role = ModuleParamRole.MesSignToken,
-            DisplayNameFallback = "MES签名令牌",
-            DescriptionFallback = "MES 接口签名令牌。")]
-        签名令牌,
+            DefaultValue = "/dev/dev/electrode/exit/push",
+            DisplayNameFallback = "MES追溯出站上传路径",
+            DescriptionFallback = "模切追溯报表出站上传接口相对路径。")]
+        OutboundPath,
 
         /// <summary>
         /// MES 上传频率，单位毫秒。

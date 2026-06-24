@@ -11,6 +11,7 @@ public sealed class DieCuttingModuleDefinition
         string deviceNamePrefix,
         string ipPrefix,
         string upperComputerNo,
+        string operationCode,
         string seedRemark)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(moduleId);
@@ -18,6 +19,7 @@ public sealed class DieCuttingModuleDefinition
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceNamePrefix);
         ArgumentException.ThrowIfNullOrWhiteSpace(ipPrefix);
         ArgumentException.ThrowIfNullOrWhiteSpace(upperComputerNo);
+        ArgumentException.ThrowIfNullOrWhiteSpace(operationCode);
         ArgumentException.ThrowIfNullOrWhiteSpace(seedRemark);
 
         ModuleId = moduleId;
@@ -26,6 +28,7 @@ public sealed class DieCuttingModuleDefinition
         DeviceNamePrefix = deviceNamePrefix;
         IpPrefix = ipPrefix;
         UpperComputerNo = upperComputerNo;
+        OperationCode = operationCode;
         SeedRemark = seedRemark;
         DefaultDevices = BuildLineDevices();
     }
@@ -41,6 +44,8 @@ public sealed class DieCuttingModuleDefinition
     public string IpPrefix { get; }
 
     public string UpperComputerNo { get; }
+
+    public string OperationCode { get; }
 
     public string SeedRemark { get; }
 

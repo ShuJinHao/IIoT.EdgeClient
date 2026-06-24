@@ -95,17 +95,13 @@ public sealed class ModuleParameterBehaviorTests
         Assert.Equal("云端上传启用", cloudEnabled.DisplayNameFallback);
         Assert.Contains("不访问 Cloud", cloudEnabled.DescriptionFallback, StringComparison.Ordinal);
         Assert.Equal(
-            CloudApiConfigParamSchema.Descriptors.Count + Enum.GetNames<HomogenizationCloudParam>().Length,
+            Enum.GetNames<HomogenizationCloudParam>().Length + 1,
             cloudParams.Count);
         Assert.Contains(cloudParams, x =>
             x.Key == CloudApiConfigParamSchema.BaseUrl
             && x.Value == "https://config-cloud.test");
-        Assert.Contains(cloudParams, x =>
-            x.Key == CloudApiConfigParamSchema.ProcessUploadPath
-            && x.Value == "/config/process");
-        Assert.Contains(cloudParams, x =>
-            x.Key == CloudApiConfigParamSchema.PassStationBatchTemplatePath
-            && x.Value == "/config/pass-stations/{typeKey}/batch");
+        Assert.DoesNotContain(cloudParams, x => x.Key == CloudApiConfigParamSchema.ProcessUploadPath);
+        Assert.DoesNotContain(cloudParams, x => x.Key == CloudApiConfigParamSchema.PassStationBatchTemplatePath);
     }
 
     [Fact]

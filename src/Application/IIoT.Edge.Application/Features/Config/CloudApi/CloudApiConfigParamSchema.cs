@@ -39,6 +39,9 @@ public static class CloudApiConfigParamSchema
         => !string.IsNullOrWhiteSpace(key)
            && Descriptors.Any(descriptor => string.Equals(descriptor.Key, key.Trim(), StringComparison.OrdinalIgnoreCase));
 
+    public static bool IsParamViewEditableKey(string key)
+        => string.Equals(key?.Trim(), BaseUrl, StringComparison.OrdinalIgnoreCase);
+
     public static bool IsCloudApiConfigPrefix(string key)
         => !string.IsNullOrWhiteSpace(key)
            && key.Trim().StartsWith(KeyPrefix, StringComparison.OrdinalIgnoreCase);

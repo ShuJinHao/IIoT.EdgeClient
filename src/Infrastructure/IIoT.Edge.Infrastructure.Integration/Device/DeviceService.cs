@@ -180,7 +180,7 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
         await _identifyGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            if (!_runtimeConfig.Current.CloudUploadEnabled)
+            if (!_runtimeConfig.Current.CloudUploadEnabled && CurrentDevice is not null)
             {
                 MarkCloudUploadDisabled(DateTimeOffset.UtcNow);
                 return;
@@ -333,7 +333,14 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
         if (!_uploadGatePolicy.TryResolveTokenBlockReason(session, out var invalidReason))
         {
             _bootstrapEventLogger.LogSessionAccepted(successEventName, session);
-            GoOnline(session, attemptedAtUtc, latencyMs);
+            if (_runtimeConfig.Current.CloudUploadEnabled)
+            {
+                GoOnline(session, attemptedAtUtc, latencyMs);
+            }
+            else
+            {
+                GoIdentifiedWithCloudUploadDisabled(session, attemptedAtUtc, latencyMs);
+            }
             return;
         }
 
@@ -380,6 +387,52 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
 
         UpdateUploadGate(nextGate);
         _heartbeatStateStore?.MarkReady(ExternalSystemKind.Cloud, attemptedAtUtc.UtcDateTime, latencyMs: latencyMs);
+    }
+
+    private void GoIdentifiedWithCloudUploadDisabled(DeviceSession session, DateTimeOffset attemptedAtUtc, int? latencyMs)
+    {
+        var raiseStateChanged = false;
+        var raiseDeviceIdentified = false;
+        EdgeUploadGateSnapshot? nextGate = null;
+
+        lock (_stateLock)
+        {
+            raiseDeviceIdentified = SetCurrentDevice(session, persistToCache: true);
+
+            if (CurrentState != NetworkState.Offline)
+            {
+                CurrentState = NetworkState.Offline;
+                _logger.Info("[设备服务] 设备已识别，云端上传关闭，状态保持离线。");
+                raiseStateChanged = true;
+            }
+
+            nextGate = CurrentUploadGate with
+            {
+                State = EdgeUploadGateState.Blocked,
+                Reason = EdgeUploadBlockReason.CloudUploadDisabled,
+                TokenExpiresAtUtc = session.UploadAccessTokenExpiresAtUtc,
+                LastBootstrapAttemptedAtUtc = attemptedAtUtc,
+                LastBootstrapSucceededAtUtc = attemptedAtUtc
+            };
+        }
+
+        if (raiseDeviceIdentified)
+        {
+            DeviceIdentified?.Invoke(CurrentDevice);
+        }
+
+        if (raiseStateChanged)
+        {
+            NetworkStateChanged?.Invoke(NetworkState.Offline);
+        }
+
+        UpdateUploadGate(nextGate);
+        _heartbeatStateStore?.MarkNotReady(
+            ExternalSystemKind.Cloud,
+            EdgeUploadBlockReason.CloudUploadDisabled.ToReasonCode(),
+            "设备已完成云端识别，生产数据云端上传关闭。",
+            attemptedAtUtc.UtcDateTime,
+            latencyMs);
     }
 
     private void GoOffline(

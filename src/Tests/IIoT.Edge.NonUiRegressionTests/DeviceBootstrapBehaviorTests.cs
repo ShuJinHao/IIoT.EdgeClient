@@ -361,13 +361,26 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
     }
 
     [Fact]
-    public async Task StartAsync_WhenCloudUploadDisabled_ShouldNotCallBootstrap()
+    public async Task StartAsync_WhenCloudUploadDisabled_ShouldIdentifyDeviceButKeepUploadBlocked()
     {
+        var deviceId = Guid.NewGuid();
+        var processId = Guid.NewGuid();
         var requestCount = 0;
         var handler = new RecordingHttpMessageHandler(_ =>
         {
             Interlocked.Increment(ref requestCount);
-            return new HttpResponseMessage(HttpStatusCode.OK);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new
+                {
+                    Id = deviceId,
+                    DeviceName = "Disabled Upload Device",
+                    ClientCode = "LINE-OFFLINE-01",
+                    ProcessId = processId,
+                    UploadAccessToken = "disabled-upload-token",
+                    UploadAccessTokenExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(10)
+                })
+            };
         });
 
         var service = CreateDeviceService(
@@ -384,13 +397,19 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
         using var cts = new CancellationTokenSource();
 
         await service.StartAsync(cts.Token);
-        await WaitForAsync(() => service.CurrentUploadGate.Reason == EdgeUploadBlockReason.CloudUploadDisabled);
+        await handler.WaitForRequestUriAsync();
+        await WaitForAsync(() => service.CurrentDevice is not null
+                                  && service.CurrentUploadGate.Reason == EdgeUploadBlockReason.CloudUploadDisabled);
         await AssertRequestCountRemainsAsync(
             () => Volatile.Read(ref requestCount),
-            expected: 0,
+            expected: 1,
             TimeSpan.FromMilliseconds(300));
         await service.StopAsync();
 
+        Assert.NotNull(service.CurrentDevice);
+        Assert.Equal(deviceId, service.CurrentDevice!.DeviceId);
+        Assert.Equal(processId, service.CurrentDevice.ProcessId);
+        Assert.Equal("LINE-OFFLINE-01", service.CurrentDevice.ClientCode);
         Assert.Equal(NetworkState.Offline, service.CurrentState);
         Assert.False(service.CanUploadToCloud);
         Assert.Equal(EdgeUploadBlockReason.CloudUploadDisabled, service.CurrentUploadGate.Reason);

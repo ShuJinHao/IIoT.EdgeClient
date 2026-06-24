@@ -19,6 +19,7 @@ namespace IIoT.Edge.Application.Modules.Mes;
 public abstract class MesScenarioChannelBase<TCellData> : IProcessMesUploader
     where TCellData : CellDataBase
 {
+    private const string DefaultMesSignToken = "hdc2023";
     private readonly MesRequestExecutor _requestExecutor;
     private readonly IModuleParamRoleProvider _moduleParamRoleProvider;
     private readonly IProductionTimeProvider _productionTime;
@@ -237,11 +238,13 @@ public abstract class MesScenarioChannelBase<TCellData> : IProcessMesUploader
             .GetMesStringAsync(
                 ProcessType,
                 ModuleParamRole.MesSignToken,
-                defaultValue: string.Empty,
+                defaultValue: DefaultMesSignToken,
                 cancellationToken: cancellationToken)
             .ConfigureAwait(false);
 
-        return configuredValue?.Trim() ?? string.Empty;
+        return string.IsNullOrWhiteSpace(configuredValue)
+            ? DefaultMesSignToken
+            : configuredValue.Trim();
     }
 
     protected string FormatTimestamp(DateTime time)

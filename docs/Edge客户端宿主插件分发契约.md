@@ -1,5 +1,7 @@
 # Edge 客户端宿主插件分发契约
 
+本文是宿主/插件分发模型的长期契约参考，不是日常部署执行入口。日常宿主快发以 `docs/客户端部署.md` 为准，安装和更新验收以 `docs/Edge安装更新验收.md` 为准，三项目并行部署协调以 `../../docs/上传部署总览.md` 为准。
+
 本文档定义 EdgeClient 从“按工序整包”升级为“通用宿主 + 外部插件目录 + 云端插件 catalog”的阶段契约。它约束后续 Edge 与 Cloud 的实现，避免下载中心、版本盘点和插件更新建立在错误的整包模型上。
 
 ## 1. 目标模型
@@ -153,7 +155,7 @@ Draft | Published | Deprecated | Archived
 - `Archived`：不进入 Edge catalog，包文件允许被异步清理。
 - `Draft`：只允许 Human 管理端查看，不进入 Edge catalog。
 
-发布保留上限由云端统一配置 `EdgeRelease:MaxVersionsPerComponent`，默认 3。发布新版本后，云端对同一组件、同一 channel、同一 targetRuntime 执行保留策略：超过上限的老版本如果没有设备上报使用则归档；仍有设备使用则降级为 `Deprecated`，等待管理员处理。HTTP 快发成功后还会回收“已归档且无设备在用”的旧安装素材文件，避免服务器磁盘无限增长。
+发布保留上限由云端统一配置 `EdgeRelease:MaxVersionsPerComponent`，默认 3，并按 stable SemVer 排序取最新版本，不按目录时间判断。发布新版本后，云端对同一组件、同一 channel、同一 targetRuntime 执行保留策略：超过上限的老版本如果没有设备上报使用则归档；仍有设备使用则降级为 `Deprecated`，等待管理员处理。HTTP 快发成功后还会回收“已归档且无设备在用”的旧安装素材文件，避免服务器磁盘无限增长。
 
 客户端 Application 层输出给 UI 的版本计划结构必须表达多版本，不允许 UI 自己猜：
 
@@ -312,7 +314,7 @@ edge-updates/
   plugins/stable/<ModuleId>/<version>/IIoT.EdgePlugin.<ModuleId>-<version>-<runtime>.zip
 ```
 
-Cloud HttpApi 通过内网受控 HTTP 发布接口对 `edge-updates` 持有可写挂载，只允许写 staging 和发布目录；nginx 对同一目录保持只读静态下载。Cloud catalog 扫描 `edge-updates/installers/stable/<version>/installer-artifact.json` 和 `edge-updates/plugins/stable/<ModuleId>/<version>/`，并把文件版本合并到公开下载目录、Edge catalog 和 Human catalog。数据库 release 记录仍是状态管理来源：同 key 数据库记录优先，Draft/Archived 可抑制已经落盘的文件版本。Cloud HTTP 发布必须控制为最近 3 个 stable 版本；已归档且无设备在用的插件 zip 才允许回收。
+Cloud HttpApi 通过内网受控 HTTP 发布接口对 `edge-updates` 持有可写挂载，只允许写 staging 和发布目录；nginx 对同一目录保持只读静态下载。Cloud catalog 扫描 `edge-updates/installers/stable/<version>/installer-artifact.json` 和 `edge-updates/plugins/stable/<ModuleId>/<version>/`，并把文件版本合并到公开下载目录、Edge catalog 和 Human catalog。数据库 release 记录仍是状态管理来源：同 key 数据库记录优先，Draft/Archived 可抑制已经落盘的文件版本。Cloud HTTP 发布必须按 SemVer 控制为最新 3 个 stable 版本；已归档且无设备在用的插件 zip 才允许回收。
 
 `installer-artifact.json` 必须包含发布追溯字段：`sourceCommit`、`previousVersion`、`previousSourceCommit`、`releaseNotes` 和 `generatedAtUtc`。首次发布或旧 artifact 无 commit 记录时，`previousVersion` / `previousSourceCommit` 可为空，但 `sourceCommit` 和 `releaseNotes` 不得为空。
 
