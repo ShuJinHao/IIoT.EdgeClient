@@ -103,7 +103,49 @@ public sealed class ShellLaunchServiceTests
             Assert.Equal(executablePath, starter.StartInfo!.FileName);
             Assert.Equal("HomogenizationLine", starter.StartInfo.EnvironmentVariables["Shell__MachineProfile"]);
             Assert.False(starter.StartInfo.UseShellExecute);
-            Assert.True(service.HasRunningShellProcess);
+            Assert.True(service.HasAnyRunningShellProcess());
+            Assert.True(service.IsProfileRunning(profile));
+        }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(executablePath)!, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void IsProfileRunning_WhenDifferentProfileIsTracked_ShouldReturnFalse()
+    {
+        var executablePath = Path.Combine(
+            Path.GetTempPath(),
+            "edge-launcher-shell-tests",
+            Guid.NewGuid().ToString("N"),
+            OperatingSystem.IsWindows() ? "IIoT.Edge.Shell.exe" : "IIoT.Edge.Shell");
+        Directory.CreateDirectory(Path.GetDirectoryName(executablePath)!);
+        File.WriteAllText(executablePath, string.Empty);
+        var service = new ShellLaunchService(new SpyProcessStarter());
+        var anode = new LauncherProfileDefinition(
+            "DieCuttingAnodeLine",
+            "负极模切",
+            "AP profile",
+            null,
+            "DieCuttingAnodeLine",
+            executablePath,
+            "ChartBar",
+            "#2563EB");
+        var cathode = anode with
+        {
+            ProfileId = "DieCuttingCathodeLine",
+            DisplayName = "正极模切",
+            MachineProfile = "DieCuttingCathodeLine"
+        };
+
+        try
+        {
+            service.Launch(anode);
+
+            Assert.True(service.HasAnyRunningShellProcess());
+            Assert.True(service.IsProfileRunning(anode));
+            Assert.False(service.IsProfileRunning(cathode));
         }
         finally
         {

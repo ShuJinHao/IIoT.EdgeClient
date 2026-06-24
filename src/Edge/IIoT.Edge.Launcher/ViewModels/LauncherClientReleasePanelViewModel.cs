@@ -14,7 +14,9 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
     private readonly ILauncherUpdateTargetFactory _targetFactory;
     private readonly IShellLaunchService _launchService;
     private readonly IAppLanguageService? _languageService;
+    private readonly Dictionary<string, LauncherProfileDefinition> _profileByModuleId = new(StringComparer.OrdinalIgnoreCase);
     private LauncherProfileDefinition? _activeProfile;
+    private IReadOnlyList<LauncherProfileDefinition> _activeProfiles = [];
     private string _statusKey = "Launcher_ClientRelease_StatusInitial";
     private object[] _statusArgs = [];
     private string _statusMessage = string.Empty;
@@ -94,19 +96,44 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
     public async Task CheckAsync(LauncherProfileDefinition profile)
     {
         ArgumentNullException.ThrowIfNull(profile);
+        await CheckAsync([profile]).ConfigureAwait(true);
+    }
 
-        _activeProfile = profile;
+    public async Task CheckAsync(IReadOnlyList<LauncherProfileDefinition> profiles)
+    {
+        ArgumentNullException.ThrowIfNull(profiles);
+        if (profiles.Count == 0)
+        {
+            Reset();
+            SetStatus("Launcher_ClientRelease_StatusNoProfile");
+            return;
+        }
+
+        var profilesSnapshot = profiles
+            .Where(static profile => profile is not null)
+            .DistinctBy(static profile => profile.ProfileId, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        _activeProfiles = profilesSnapshot;
+        _activeProfile = profilesSnapshot[0];
         IsVisible = true;
         IsProgressVisible = false;
         Progress = 0;
         DetailText = string.Empty;
-        SetStatus("Launcher_ClientRelease_StatusChecking", profile.DisplayName);
+        SetStatus("Launcher_ClientRelease_StatusChecking", _activeProfile.DisplayName);
         IsBusy = true;
 
         try
         {
-            var result = await _clientReleaseService.CheckReleaseCatalogAsync(_targetFactory.Create(profile)).ConfigureAwait(true);
-            ApplyCheckResult(result);
+            var results = new List<ProfileReleaseCheckResult>();
+            foreach (var profile in profilesSnapshot)
+            {
+                var result = await _clientReleaseService
+                    .CheckReleaseCatalogAsync(_targetFactory.Create(profile))
+                    .ConfigureAwait(true);
+                results.Add(new ProfileReleaseCheckResult(profile, result));
+            }
+
+            ApplyCheckResults(results);
         }
         catch (OperationCanceledException)
         {
@@ -122,7 +149,7 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
     {
         ArgumentNullException.ThrowIfNull(option);
 
-        if (_activeProfile is null)
+        if (_activeProfiles.Count == 0)
         {
             SetStatus("Launcher_ClientRelease_StatusNoProfile");
             return;
@@ -133,7 +160,7 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
             return;
         }
 
-        if (_launchService.HasRunningShellProcess)
+        if (_launchService.HasAnyRunningShellProcess())
         {
             IsProgressVisible = false;
             Progress = 0;
@@ -214,6 +241,8 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
         Components.Clear();
         OnPropertyChanged(nameof(Components));
         _activeProfile = null;
+        _activeProfiles = [];
+        _profileByModuleId.Clear();
         IsVisible = false;
         DetailText = string.Empty;
         Progress = 0;
@@ -231,8 +260,15 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
 
     private async Task ApplyPluginVersionAsync(LauncherVersionOptionItem option, IProgress<int> progress)
     {
+        var profile = ResolveProfileForVersionOption(option);
+        if (profile is null)
+        {
+            SetStatus("Launcher_ClientRelease_StatusNoProfile");
+            return;
+        }
+
         var result = await _clientReleaseService
-            .ApplyPluginVersionAsync(_targetFactory.Create(_activeProfile!), option.ModuleId, option.Version, progress)
+            .ApplyPluginVersionAsync(_targetFactory.Create(profile), option.ModuleId, option.Version, progress)
             .ConfigureAwait(true);
         if (!result.Success)
         {
@@ -244,13 +280,20 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
         SetStatus(
             "Launcher_ClientRelease_StatusInstalled",
             string.Join(", ", result.InstalledModuleIds));
-        await CheckAsync(_activeProfile!).ConfigureAwait(true);
+        await CheckAsync(_activeProfiles).ConfigureAwait(true);
     }
 
     private async Task ApplyHostVersionAsync(LauncherVersionOptionItem option, IProgress<int> progress)
     {
+        var profile = ResolveProfileForVersionOption(option);
+        if (profile is null)
+        {
+            SetStatus("Launcher_ClientRelease_StatusNoProfile");
+            return;
+        }
+
         var result = await _clientReleaseService
-            .ApplyHostVersionAsync(_targetFactory.Create(_activeProfile!), option.Version, progress)
+            .ApplyHostVersionAsync(_targetFactory.Create(profile), option.Version, progress)
             .ConfigureAwait(true);
         if (!result.Started)
         {
@@ -289,12 +332,37 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
         StatusMessage = LauncherText.Format(_languageService, key, args);
     }
 
+    private LauncherProfileDefinition? ResolveProfileForVersionOption(LauncherVersionOptionItem option)
+    {
+        if (option.ComponentKind == EdgeComponentKind.Host)
+        {
+            return _activeProfile ?? _activeProfiles.FirstOrDefault();
+        }
+
+        return _profileByModuleId.TryGetValue(option.ModuleId, out var profile)
+            ? profile
+            : _activeProfiles.FirstOrDefault();
+    }
+
     private void ApplyCheckResult(EdgeReleaseCatalogResult result)
     {
+        if (_activeProfile is null)
+        {
+            Reset();
+            SetStatus("Launcher_ClientRelease_StatusNoProfile");
+            return;
+        }
+
+        ApplyCheckResults([new ProfileReleaseCheckResult(_activeProfile, result)]);
+    }
+
+    private void ApplyCheckResults(IReadOnlyList<ProfileReleaseCheckResult> results)
+    {
         Components.Clear();
-        foreach (var plan in result.Components
-                     .OrderBy(static component => component.ComponentKind == EdgeComponentKind.Host ? 0 : 1)
-                     .ThenBy(static component => component.DisplayName, StringComparer.OrdinalIgnoreCase))
+        _profileByModuleId.Clear();
+
+        var orderedPlans = BuildAggregatedPlans(results);
+        foreach (var plan in orderedPlans)
         {
             var versions = plan.Versions
                 .Select(option => BuildVersionOption(plan, option))
@@ -311,15 +379,21 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
         }
         OnPropertyChanged(nameof(Components));
 
-        DetailText = LauncherText.Compact(result.ErrorMessage);
-        switch (result.State)
+        var statusResult = ResolveStatusResult(results);
+        DetailText = LauncherText.Compact(string.Join(
+            Environment.NewLine,
+            results
+                .Select(static result => result.Result.ErrorMessage)
+                .Where(static message => !string.IsNullOrWhiteSpace(message))
+                .Distinct(StringComparer.OrdinalIgnoreCase)));
+        switch (statusResult.State)
         {
             case EdgeReleaseCatalogState.Succeeded:
                 SetStatus(
                     "Launcher_ClientRelease_StatusReady",
-                    result.HostVersion,
-                    ResolveHostTargetVersion(result),
-                    result.Components.Count(static component => component.ComponentKind == EdgeComponentKind.Plugin));
+                    statusResult.HostVersion,
+                    ResolveHostTargetVersion(statusResult),
+                    orderedPlans.Count(static component => component.ComponentKind == EdgeComponentKind.Plugin));
                 break;
             case EdgeReleaseCatalogState.NotConfigured:
                 SetStatus("Launcher_ClientRelease_StatusNotConfigured");
@@ -334,6 +408,59 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
                 SetStatus("Launcher_ClientRelease_StatusFailed");
                 break;
         }
+    }
+
+    private IReadOnlyList<EdgeComponentVersionPlan> BuildAggregatedPlans(
+        IReadOnlyList<ProfileReleaseCheckResult> results)
+    {
+        var plans = new List<EdgeComponentVersionPlan>();
+        var plannedModules = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in results)
+        {
+            foreach (var plan in item.Result.Components
+                         .OrderBy(static component => component.ComponentKind == EdgeComponentKind.Host ? 0 : 1)
+                         .ThenBy(static component => component.DisplayName, StringComparer.OrdinalIgnoreCase))
+            {
+                if (plan.ComponentKind == EdgeComponentKind.Host)
+                {
+                    if (plans.Any(static component => component.ComponentKind == EdgeComponentKind.Host))
+                    {
+                        continue;
+                    }
+
+                    plans.Add(plan);
+                    continue;
+                }
+
+                if (!plannedModules.Add(plan.ModuleId))
+                {
+                    continue;
+                }
+
+                _profileByModuleId[plan.ModuleId] = item.Profile;
+                plans.Add(plan);
+            }
+        }
+
+        return plans
+            .OrderBy(static component => component.ComponentKind == EdgeComponentKind.Host ? 0 : 1)
+            .ThenBy(static component => component.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static EdgeReleaseCatalogResult ResolveStatusResult(IReadOnlyList<ProfileReleaseCheckResult> results)
+    {
+        var preferred = results.FirstOrDefault(static item => item.Result.State == EdgeReleaseCatalogState.Succeeded)
+                        ?? results.FirstOrDefault();
+        return preferred?.Result
+               ?? new EdgeReleaseCatalogResult(
+                   EdgeReleaseCatalogState.NotConfigured,
+                   string.Empty,
+                   string.Empty,
+                   string.Empty,
+                   string.Empty,
+                   [],
+                   "未选择工序。");
     }
 
     private LauncherVersionOptionItem BuildVersionOption(EdgeComponentVersionPlan plan, EdgeVersionOption option)
@@ -456,4 +583,8 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
         OnPropertyChanged(propertyName);
         return true;
     }
+
+    private sealed record ProfileReleaseCheckResult(
+        LauncherProfileDefinition Profile,
+        EdgeReleaseCatalogResult Result);
 }

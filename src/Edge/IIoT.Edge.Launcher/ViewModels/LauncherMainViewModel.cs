@@ -318,7 +318,7 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
     {
         ArgumentNullException.ThrowIfNull(card);
 
-        if (_launchService.HasRunningShellProcess)
+        if (_launchService.IsProfileRunning(card.Profile))
         {
             card.SetRunning();
             SetStatus("Launcher_ProfileCard_DetailRunning");
@@ -535,7 +535,7 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
 
     private async Task CheckSelectedProfilePluginsAsync()
     {
-        if (SelectedUpdateProfile is null)
+        if (_allProfiles.Count == 0)
         {
             ClientReleasePanel.Reset();
             RebuildUpdateRows();
@@ -544,7 +544,7 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
 
         try
         {
-            await ClientReleasePanel.CheckAsync(SelectedUpdateProfile.Profile).ConfigureAwait(true);
+            await ClientReleasePanel.CheckAsync(_allProfiles.ToArray()).ConfigureAwait(true);
             RebuildUpdateRows();
         }
         catch

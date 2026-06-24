@@ -424,6 +424,37 @@ public sealed class LauncherMainViewModelTests
     }
 
     [Fact]
+    public async Task LoginAsync_WhenMultipleProfilesVisible_ShouldAggregateUpdateRowsAcrossProfiles()
+    {
+        var profiles = new[]
+        {
+            Profile("DieCuttingAnodeLine", "负极模切"),
+            Profile("DieCuttingCathodeLine", "正极模切")
+        };
+        var releaseService = new ProfileAwareClientReleaseService(
+            new Dictionary<string, EdgeReleaseCatalogResult>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["DieCuttingAnodeLine"] = CreateReleaseCheckForModule("DieCuttingAnode", "负极模切"),
+                ["DieCuttingCathodeLine"] = CreateReleaseCheckForModule("DieCuttingCathode", "正极模切")
+            });
+        var viewModel = new LauncherMainViewModel(
+            new StubLauncherProfileCatalog(profiles),
+            new StubLocalAccountAuthService(
+                LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
+            new StubShellLaunchService(),
+            clientReleaseService: releaseService);
+
+        await viewModel.LoginAsync("operator", "secret");
+        await releaseService.WaitForChecksAsync(2);
+        await WaitUntilAsync(() => viewModel.UpdateRows.Count == 3);
+
+        Assert.Equal(3, viewModel.UpdateRows.Count);
+        Assert.Contains(viewModel.UpdateRows, row => row.ModuleId == "Host");
+        Assert.Contains(viewModel.UpdateRows, row => row.ModuleId == "DieCuttingAnode");
+        Assert.Contains(viewModel.UpdateRows, row => row.ModuleId == "DieCuttingCathode");
+    }
+
+    [Fact]
     public async Task ExecuteUpdateRowActionAsync_WhenPluginRowHasUpdate_ShouldApplySelectedCatalogVersion()
     {
         var profile = Profile("shell", "Shell");
@@ -469,6 +500,42 @@ public sealed class LauncherMainViewModelTests
 
         Assert.Empty(releaseService.InstalledModuleIds);
         Assert.Equal(1, launchService.LaunchCallCount);
+    }
+
+    [Fact]
+    public async Task LaunchProfileCardAsync_WhenDifferentProfileIsRunning_ShouldStillLaunchSelectedProfile()
+    {
+        var anode = Profile("DieCuttingAnodeLine", "负极模切");
+        var cathode = Profile("DieCuttingCathodeLine", "正极模切");
+        var launchService = new StubShellLaunchService(runningMachineProfiles: ["DieCuttingAnodeLine"]);
+        var viewModel = new LauncherMainViewModel(
+            new StubLauncherProfileCatalog([anode, cathode]),
+            new StubLocalAccountAuthService(
+                LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
+            launchService);
+        var cathodeCard = new LauncherProfileCardViewModel(cathode);
+
+        await viewModel.LaunchProfileCardAsync(cathodeCard);
+
+        Assert.Equal(1, launchService.LaunchCallCount);
+        Assert.Equal(["DieCuttingCathodeLine"], launchService.LaunchedMachineProfiles);
+    }
+
+    [Fact]
+    public async Task LaunchProfileCardAsync_WhenSameProfileIsRunning_ShouldNotLaunchAgain()
+    {
+        var anode = Profile("DieCuttingAnodeLine", "负极模切");
+        var launchService = new StubShellLaunchService(runningMachineProfiles: ["DieCuttingAnodeLine"]);
+        var viewModel = new LauncherMainViewModel(
+            new StubLauncherProfileCatalog([anode]),
+            new StubLocalAccountAuthService(
+                LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
+            launchService);
+        var anodeCard = new LauncherProfileCardViewModel(anode);
+
+        await viewModel.LaunchProfileCardAsync(anodeCard);
+
+        Assert.Equal(0, launchService.LaunchCallCount);
     }
 
     private static LauncherAccountRecord Account(string userName, string displayName) =>
@@ -583,6 +650,27 @@ public sealed class LauncherMainViewModelTests
                         false,
                         null,
                         PluginRelease: CreatePluginRelease("IIoT.Edge.Module.Coating", "涂布", "2.0.0", 1024)))
+            ]);
+
+    private static EdgeReleaseCatalogResult CreateReleaseCheckForModule(string moduleId, string displayName)
+        => new(
+            EdgeReleaseCatalogState.Succeeded,
+            "stable",
+            "win-x64",
+            "1.0.8",
+            "1.0.0",
+            [
+                CreateHostPlan(),
+                CreatePluginPlan(
+                    moduleId,
+                    displayName,
+                    "1.0.0",
+                    new EdgeVersionOption(
+                        "1.0.0",
+                        EdgeVersionStatus.Current,
+                        false,
+                        null,
+                        PluginRelease: CreatePluginRelease(moduleId, displayName, "1.0.0", 1024)))
             ]);
 
     private static EdgeComponentVersionPlan CreateHostPlan()
@@ -772,16 +860,38 @@ public sealed class LauncherMainViewModelTests
                 .ToArray();
             return visible.Length == 0 ? profiles : visible;
         }
+
+        public LauncherProfileSelection ResolveSelection(
+            IReadOnlyList<LauncherProfileDefinition> profiles)
+            => new(
+                SelectVisibleProfiles(profiles),
+                [],
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
     }
 
-    private sealed class StubShellLaunchService(bool hasRunningShellProcess = false) : IShellLaunchService
+    private sealed class StubShellLaunchService(
+        bool hasRunningShellProcess = false,
+        IReadOnlyList<string>? runningMachineProfiles = null) : IShellLaunchService
     {
-        public bool HasRunningShellProcess { get; } = hasRunningShellProcess;
+        private readonly HashSet<string> _runningMachineProfiles = new(
+            runningMachineProfiles ?? [],
+            StringComparer.OrdinalIgnoreCase);
+        private readonly List<string> _launchedMachineProfiles = [];
+
         public int LaunchCallCount { get; private set; }
+
+        public IReadOnlyList<string> LaunchedMachineProfiles => _launchedMachineProfiles.ToArray();
+
+        public bool HasAnyRunningShellProcess()
+            => hasRunningShellProcess || _runningMachineProfiles.Count > 0;
+
+        public bool IsProfileRunning(LauncherProfileDefinition profile)
+            => _runningMachineProfiles.Contains(profile.MachineProfile);
 
         public void Launch(LauncherProfileDefinition profile)
         {
             LaunchCallCount++;
+            _launchedMachineProfiles.Add(profile.MachineProfile);
         }
     }
 
@@ -1004,5 +1114,69 @@ public sealed class LauncherMainViewModelTests
 
         public async Task WaitForCheckAsync()
             => await _checkCompleted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+    }
+
+    private sealed class ProfileAwareClientReleaseService(
+        IReadOnlyDictionary<string, EdgeReleaseCatalogResult> checksByMachineProfile) : IEdgeReleaseService
+    {
+        private readonly object _syncRoot = new();
+        private readonly List<string> _checkedMachineProfiles = [];
+        private readonly TaskCompletionSource _checksCompleted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task<EdgeReleaseCatalogResult> CheckReleaseCatalogAsync(
+            EdgeUpdateTarget target,
+            CancellationToken cancellationToken = default)
+        {
+            lock (_syncRoot)
+            {
+                _checkedMachineProfiles.Add(target.MachineProfile);
+                if (_checkedMachineProfiles.Count >= checksByMachineProfile.Count)
+                {
+                    _checksCompleted.TrySetResult();
+                }
+            }
+
+            return Task.FromResult(checksByMachineProfile[target.MachineProfile]);
+        }
+
+        public Task<EdgePluginInstallResult> ApplyPluginVersionAsync(
+            EdgeUpdateTarget target,
+            string moduleId,
+            string version,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(EdgePluginInstallResult.Succeeded([moduleId]));
+
+        public Task<EdgeHostUpdateApplyResult> ApplyHostVersionAsync(
+            EdgeUpdateTarget target,
+            string version,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new EdgeHostUpdateApplyResult(true));
+
+        public Task<EdgePluginInstallResult> ApplyVersionCompositionAsync(
+            EdgeUpdateTarget target,
+            EdgeVersionSelection selection,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(EdgePluginInstallResult.Failed("not used"));
+
+        public Task<EdgeVersionReportResult> ReportCurrentVersionsAsync(
+            EdgeUpdateTarget target,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(EdgeVersionReportResult.Succeeded());
+
+        public async Task WaitForChecksAsync(int expectedCount)
+        {
+            lock (_syncRoot)
+            {
+                if (_checkedMachineProfiles.Count >= expectedCount)
+                {
+                    return;
+                }
+            }
+
+            await _checksCompleted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        }
     }
 }

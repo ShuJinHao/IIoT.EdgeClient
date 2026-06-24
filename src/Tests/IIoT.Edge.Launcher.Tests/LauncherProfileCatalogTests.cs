@@ -1,5 +1,6 @@
 using IIoT.Edge.Launcher.Services;
 using System.Text;
+using System.Text.Json;
 using Xunit;
 
 namespace IIoT.Edge.Launcher.Tests;
@@ -180,6 +181,32 @@ public sealed class LauncherProfileCatalogTests
             Path.Combine("host", "IIoT.Edge.Shell"),
             profile.ExecutablePath,
             StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SourceMachineProfiles_ShouldHaveUniqueNonDefaultInstanceIds()
+    {
+        var repoRoot = FindRepoRoot();
+        var launcherRoot = Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.Launcher");
+        var shellRoot = Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.Shell");
+        var catalog = new LauncherProfileCatalog(launcherRoot);
+        var profiles = catalog.LoadProfiles();
+        var instanceIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var profile in profiles)
+        {
+            var configPath = Path.Combine(shellRoot, $"appsettings.machine.{profile.MachineProfile}.json");
+            Assert.True(File.Exists(configPath), $"Missing machine profile config: {configPath}");
+            using var document = JsonDocument.Parse(File.ReadAllText(configPath));
+            Assert.True(document.RootElement.TryGetProperty("InstanceId", out var instanceIdElement));
+            Assert.Equal(JsonValueKind.String, instanceIdElement.ValueKind);
+            var instanceId = instanceIdElement.GetString();
+            Assert.False(string.IsNullOrWhiteSpace(instanceId));
+            Assert.False(
+                string.Equals("IIoT-Edge-Default", instanceId, StringComparison.OrdinalIgnoreCase),
+                $"Machine profile '{profile.MachineProfile}' must not use the default InstanceId.");
+            Assert.True(instanceIds.Add(instanceId!), $"Duplicate machine profile InstanceId: {instanceId}");
+        }
     }
 
     private static string FindRepoRoot()

@@ -235,7 +235,9 @@ public sealed class LauncherWindowHeadlessTests
 
     private sealed class StubShellLaunchService : IShellLaunchService
     {
-        public bool HasRunningShellProcess => false;
+        public bool HasAnyRunningShellProcess() => false;
+
+        public bool IsProfileRunning(LauncherProfileDefinition profile) => false;
 
         public void Launch(LauncherProfileDefinition profile)
         {

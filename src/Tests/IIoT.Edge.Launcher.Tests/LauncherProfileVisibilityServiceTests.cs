@@ -38,10 +38,16 @@ public sealed class LauncherProfileVisibilityServiceTests
                 new LauncherUpdateTargetFactory());
 
             var visible = service.SelectVisibleProfiles(profiles);
+            var selection = service.ResolveSelection(profiles);
 
             Assert.Equal(
                 ["DieCuttingAnodeLine", "DieCuttingCathodeLine"],
                 visible.Select(static profile => profile.ProfileId).OrderBy(static x => x).ToArray());
+            Assert.Equal(
+                ["DieCuttingAnode", "DieCuttingCathode"],
+                selection.EnabledModuleIds.OrderBy(static x => x).ToArray());
+            Assert.Equal("DieCuttingAnodeLine", selection.ModuleProfileIds["DieCuttingAnode"]);
+            Assert.Equal("DieCuttingCathodeLine", selection.ModuleProfileIds["DieCuttingCathode"]);
         }
         finally
         {

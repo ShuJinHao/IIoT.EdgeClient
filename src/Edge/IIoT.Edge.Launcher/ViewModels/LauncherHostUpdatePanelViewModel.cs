@@ -108,7 +108,7 @@ public sealed class LauncherHostUpdatePanelViewModel : BaseNotifyPropertyChanged
 
     public async Task ApplyUpdateAsync()
     {
-        if (_launchService.HasRunningShellProcess)
+        if (_launchService.HasAnyRunningShellProcess())
         {
             IsProgressVisible = false;
             Progress = 0;

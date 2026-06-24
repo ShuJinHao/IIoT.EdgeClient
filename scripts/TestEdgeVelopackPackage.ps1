@@ -227,20 +227,44 @@ try {
     $profilesJson = Read-ZipEntryText -Archive $archive -EntryName 'lib/app/launcher.profiles.json'
     $profiles = @($profilesJson | ConvertFrom-Json)
     $expectedProfileIds = @('HomogenizationLine', 'DieCuttingAnodeLine', 'DieCuttingCathodeLine')
+    if ($profiles.Count -lt $expectedProfileIds.Count) {
+        throw "Velopack package launcher.profiles.json contains $($profiles.Count) profile(s), expected at least $($expectedProfileIds.Count)."
+    }
+
     foreach ($expectedProfileId in $expectedProfileIds) {
         if (-not @($profiles | Where-Object { $_.ProfileId -eq $expectedProfileId }).Count) {
             throw "Velopack package launcher.profiles.json is missing profile '$expectedProfileId'."
         }
     }
 
+    $machineProfiles = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     foreach ($profile in $profiles) {
         if ($profile.ExecutablePath -ne "$ExpectedHostDirectory/IIoT.Edge.Shell") {
             throw "Launcher profile executable path should point to '$ExpectedHostDirectory/IIoT.Edge.Shell', actual: $($profile.ExecutablePath)"
         }
 
+        $executableCandidates = @(
+            "lib/app/$($profile.ExecutablePath).exe",
+            "lib/app/$($profile.ExecutablePath)",
+            "lib/app/$($profile.ExecutablePath).dll"
+        )
+        $hasExecutableCandidate = $false
+        foreach ($candidate in $executableCandidates) {
+            if ($null -ne (Get-ZipEntry -Archive $archive -EntryName $candidate)) {
+                $hasExecutableCandidate = $true
+                break
+            }
+        }
+        if (-not $hasExecutableCandidate) {
+            throw "Launcher profile '$($profile.ProfileId)' executable path '$($profile.ExecutablePath)' does not resolve to an executable file in package."
+        }
+
         $machineProfile = [string]$profile.MachineProfile
         if ([string]::IsNullOrWhiteSpace($machineProfile)) {
             throw "Launcher profile is missing MachineProfile."
+        }
+        if (-not $machineProfiles.Add($machineProfile)) {
+            throw "Launcher profile MachineProfile is duplicated: $machineProfile"
         }
 
         $machineConfigEntryName = "lib/app/$ExpectedHostDirectory/appsettings.machine.$machineProfile.json"

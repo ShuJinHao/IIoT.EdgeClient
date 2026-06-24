@@ -9,7 +9,15 @@ public interface ILauncherProfileVisibilityService
 {
     IReadOnlyList<LauncherProfileDefinition> SelectVisibleProfiles(
         IReadOnlyList<LauncherProfileDefinition> profiles);
+
+    LauncherProfileSelection ResolveSelection(
+        IReadOnlyList<LauncherProfileDefinition> profiles);
 }
+
+public sealed record LauncherProfileSelection(
+    IReadOnlyList<LauncherProfileDefinition> VisibleProfiles,
+    IReadOnlyList<string> EnabledModuleIds,
+    IReadOnlyDictionary<string, string> ModuleProfileIds);
 
 public sealed class LauncherProfileVisibilityService(
     string baseDirectory,
@@ -21,11 +29,15 @@ public sealed class LauncherProfileVisibilityService(
 
     public IReadOnlyList<LauncherProfileDefinition> SelectVisibleProfiles(
         IReadOnlyList<LauncherProfileDefinition> profiles)
+        => ResolveSelection(profiles).VisibleProfiles;
+
+    public LauncherProfileSelection ResolveSelection(
+        IReadOnlyList<LauncherProfileDefinition> profiles)
     {
         ArgumentNullException.ThrowIfNull(profiles);
         if (profiles.Count == 0)
         {
-            return profiles;
+            return new LauncherProfileSelection(profiles, [], new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
         }
 
         var selectedModuleIds = ReadEnabledPluginModuleIds();
@@ -36,14 +48,16 @@ public sealed class LauncherProfileVisibilityService(
 
         if (selectedModuleIds.Count == 0)
         {
-            return profiles;
+            return BuildSelection(profiles);
         }
 
         var visibleProfiles = profiles
             .Where(profile => ProfileUsesAnySelectedModule(profile, selectedModuleIds))
             .ToArray();
 
-        return visibleProfiles.Length > 0 ? visibleProfiles : profiles;
+        return visibleProfiles.Length > 0
+            ? BuildSelection(visibleProfiles, selectedModuleIds)
+            : BuildSelection(profiles);
     }
 
     private HashSet<string> ReadEnabledPluginModuleIds()
@@ -147,6 +161,52 @@ public sealed class LauncherProfileVisibilityService(
         catch (InvalidOperationException)
         {
             return false;
+        }
+    }
+
+    private LauncherProfileSelection BuildSelection(
+        IReadOnlyList<LauncherProfileDefinition> profiles,
+        IReadOnlySet<string>? selectedModuleIds = null)
+    {
+        var enabledModuleIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var moduleProfileIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var profile in profiles)
+        {
+            foreach (var moduleId in ReadProfileModuleIds(profile))
+            {
+                if (selectedModuleIds is not null && !selectedModuleIds.Contains(moduleId))
+                {
+                    continue;
+                }
+
+                enabledModuleIds.Add(moduleId);
+                moduleProfileIds.TryAdd(moduleId, profile.ProfileId);
+            }
+        }
+
+        return new LauncherProfileSelection(
+            profiles,
+            enabledModuleIds.OrderBy(static moduleId => moduleId, StringComparer.OrdinalIgnoreCase).ToArray(),
+            moduleProfileIds);
+    }
+
+    private IReadOnlyList<string> ReadProfileModuleIds(LauncherProfileDefinition profile)
+    {
+        try
+        {
+            return moduleConfiguration.ReadEnabledModules(targetFactory.Create(profile));
+        }
+        catch (IOException)
+        {
+            return [];
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return [];
+        }
+        catch (InvalidOperationException)
+        {
+            return [];
         }
     }
 
