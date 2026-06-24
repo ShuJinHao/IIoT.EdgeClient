@@ -1,0 +1,183 @@
+using System.Text.Json;
+using IIoT.Edge.Application.Abstractions.Updates;
+using IIoT.Edge.Launcher.Models;
+using IIoT.Edge.SharedKernel.Configuration;
+
+namespace IIoT.Edge.Launcher.Services;
+
+public interface ILauncherProfileVisibilityService
+{
+    IReadOnlyList<LauncherProfileDefinition> SelectVisibleProfiles(
+        IReadOnlyList<LauncherProfileDefinition> profiles);
+}
+
+public sealed class LauncherProfileVisibilityService(
+    string baseDirectory,
+    IEdgeInstalledPluginCatalog installedPluginCatalog,
+    IEdgeProfileModuleConfigurationStore moduleConfiguration,
+    ILauncherUpdateTargetFactory targetFactory) : ILauncherProfileVisibilityService
+{
+    private const string EnabledPluginsFileName = "iiot-enabled-plugins.json";
+
+    public IReadOnlyList<LauncherProfileDefinition> SelectVisibleProfiles(
+        IReadOnlyList<LauncherProfileDefinition> profiles)
+    {
+        ArgumentNullException.ThrowIfNull(profiles);
+        if (profiles.Count == 0)
+        {
+            return profiles;
+        }
+
+        var selectedModuleIds = ReadEnabledPluginModuleIds();
+        if (selectedModuleIds.Count == 0)
+        {
+            selectedModuleIds = ReadInstalledPluginModuleIds(profiles);
+        }
+
+        if (selectedModuleIds.Count == 0)
+        {
+            return profiles;
+        }
+
+        var visibleProfiles = profiles
+            .Where(profile => ProfileUsesAnySelectedModule(profile, selectedModuleIds))
+            .ToArray();
+
+        return visibleProfiles.Length > 0 ? visibleProfiles : profiles;
+    }
+
+    private HashSet<string> ReadEnabledPluginModuleIds()
+    {
+        var path = Path.Combine(
+            EdgeClientProgramDataPaths.ResolveLauncherDirectory(baseDirectory),
+            EnabledPluginsFileName);
+        if (!File.Exists(path))
+        {
+            return [];
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(path));
+            var root = document.RootElement;
+            if (!TryGetProperty(root, "plugins", out var plugins)
+                || plugins.ValueKind != JsonValueKind.Array)
+            {
+                return [];
+            }
+
+            var moduleIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var plugin in plugins.EnumerateArray())
+            {
+                if (plugin.ValueKind != JsonValueKind.Object)
+                {
+                    continue;
+                }
+
+                var moduleId = ReadString(plugin, "moduleId");
+                if (!string.IsNullOrWhiteSpace(moduleId))
+                {
+                    moduleIds.Add(moduleId);
+                }
+            }
+
+            return moduleIds;
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+        catch (IOException)
+        {
+            return [];
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return [];
+        }
+    }
+
+    private HashSet<string> ReadInstalledPluginModuleIds(
+        IReadOnlyList<LauncherProfileDefinition> profiles)
+    {
+        var moduleIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var profile in profiles)
+        {
+            try
+            {
+                var target = targetFactory.Create(profile);
+                foreach (var plugin in installedPluginCatalog.LoadInstalledPlugins(target))
+                {
+                    moduleIds.Add(plugin.ModuleId);
+                }
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        }
+
+        return moduleIds;
+    }
+
+    private bool ProfileUsesAnySelectedModule(
+        LauncherProfileDefinition profile,
+        IReadOnlySet<string> selectedModuleIds)
+    {
+        try
+        {
+            var target = targetFactory.Create(profile);
+            return moduleConfiguration
+                .ReadEnabledModules(target)
+                .Any(selectedModuleIds.Contains);
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
+    private static string? ReadString(JsonElement element, string propertyName)
+        => TryGetProperty(element, propertyName, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()?.Trim()
+            : null;
+
+    private static bool TryGetProperty(JsonElement element, string propertyName, out JsonElement value)
+    {
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            value = default;
+            return false;
+        }
+
+        if (element.TryGetProperty(propertyName, out value))
+        {
+            return true;
+        }
+
+        foreach (var property in element.EnumerateObject())
+        {
+            if (string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase))
+            {
+                value = property.Value;
+                return true;
+            }
+        }
+
+        value = default;
+        return false;
+    }
+}

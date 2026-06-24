@@ -9,7 +9,7 @@ param(
 
     [string]$RuntimeIdentifier = 'win-x64',
 
-    [string]$PackId = 'IIoT.EdgeClient.Homogenization',
+    [string]$PackId = 'IIoT.EdgeClient',
 
     [string]$DeployHost = '10.98.90.154',
 

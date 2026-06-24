@@ -56,6 +56,33 @@ public sealed class LauncherMainViewModelTests
     }
 
     [Fact]
+    public async Task LoginAsync_ShouldUsePluginVisibilityInsteadOfCloudApiConfiguration()
+    {
+        var profiles = new[]
+        {
+            Profile("HomogenizationLine", "匀浆"),
+            Profile("DieCuttingAnodeLine", "负极模切"),
+            Profile("DieCuttingCathodeLine", "正极模切")
+        };
+        var viewModel = new LauncherMainViewModel(
+            new StubLauncherProfileCatalog(profiles),
+            new StubLocalAccountAuthService(
+                LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
+            new StubShellLaunchService(),
+            updateConfigurationProvider: new StubUpdateConfigurationProvider(),
+            profileVisibilityService: new StubProfileVisibilityService(
+                "DieCuttingAnodeLine",
+                "DieCuttingCathodeLine"));
+
+        await viewModel.LoginAsync("operator", "secret");
+
+        Assert.Equal(2, viewModel.Profiles.Count);
+        Assert.Contains(viewModel.Profiles, card => card.DisplayName == "负极模切");
+        Assert.Contains(viewModel.Profiles, card => card.DisplayName == "正极模切");
+        Assert.DoesNotContain(viewModel.Profiles, card => card.DisplayName == "匀浆");
+    }
+
+    [Fact]
     public async Task LoginAsync_ShouldLoadProfilesAndResolveCloudApiOffCallerThread()
     {
         var profiles = new[]
@@ -730,6 +757,21 @@ public sealed class LauncherMainViewModelTests
         }
 
         public EdgeReleaseOptions ResolveReleaseOptions() => new("stable", "win-x64");
+    }
+
+    private sealed class StubProfileVisibilityService(params string[] visibleProfileIds)
+        : ILauncherProfileVisibilityService
+    {
+        private readonly HashSet<string> _visibleProfileIds = new(visibleProfileIds, StringComparer.Ordinal);
+
+        public IReadOnlyList<LauncherProfileDefinition> SelectVisibleProfiles(
+            IReadOnlyList<LauncherProfileDefinition> profiles)
+        {
+            var visible = profiles
+                .Where(profile => _visibleProfileIds.Contains(profile.ProfileId))
+                .ToArray();
+            return visible.Length == 0 ? profiles : visible;
+        }
     }
 
     private sealed class StubShellLaunchService(bool hasRunningShellProcess = false) : IShellLaunchService

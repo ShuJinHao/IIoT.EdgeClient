@@ -19,6 +19,7 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
     private readonly IShellLaunchService _launchService;
     private readonly IEdgeHostUpdateService _updateService;
     private readonly IEdgeReleaseService _clientReleaseService;
+    private readonly ILauncherProfileVisibilityService? _profileVisibilityService;
     private readonly IAppLanguageService? _languageService;
     private readonly List<LauncherProfileDefinition> _allProfiles = [];
     private readonly List<LauncherProfileCardViewModel> _allProfileCards = [];
@@ -55,7 +56,8 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         IAppLanguageService? languageService = null,
         IEdgeReleaseService? clientReleaseService = null,
         IEdgeUpdateConfigurationProvider? updateConfigurationProvider = null,
-        ILauncherUpdateTargetFactory? targetFactory = null)
+        ILauncherUpdateTargetFactory? targetFactory = null,
+        ILauncherProfileVisibilityService? profileVisibilityService = null)
     {
         _profileCatalog = profileCatalog ?? throw new ArgumentNullException(nameof(profileCatalog));
         _updateConfigurationProvider = updateConfigurationProvider;
@@ -64,6 +66,7 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         _launchService = launchService ?? throw new ArgumentNullException(nameof(launchService));
         _updateService = updateService ?? NullEdgeHostUpdateService.Instance;
         _clientReleaseService = clientReleaseService ?? NullEdgeReleaseService.Instance;
+        _profileVisibilityService = profileVisibilityService;
         _languageService = languageService;
         HostUpdatePanel = new LauncherHostUpdatePanelViewModel(
             _updateService,
@@ -86,7 +89,7 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         RebuildUpdateRows();
     }
 
-    // 只显示“已配置(下载时选装、已写入云端唯一码)的 profile”；一个都没配置好则回退显示全部，
+    // 只显示当前首装选装或本机已安装插件对应的 profile；没有可判断的插件信息则回退显示全部，
     // 避免 Launcher 空屏(客户端规则·启动红线：必须能启动到可登录、可诊断、可修配置的 UI)。
     private sealed record LauncherLoginLoadResult(
         LauncherAuthenticationResult Authentication,
@@ -107,6 +110,11 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
     private IReadOnlyList<LauncherProfileDefinition> SelectVisibleProfiles(
         IReadOnlyList<LauncherProfileDefinition> profiles)
     {
+        if (_profileVisibilityService is not null)
+        {
+            return _profileVisibilityService.SelectVisibleProfiles(profiles);
+        }
+
         if (_updateConfigurationProvider is null)
         {
             return profiles;

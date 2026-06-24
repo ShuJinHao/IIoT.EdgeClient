@@ -2,15 +2,13 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$Version,
 
-    [string]$Channel = 'homogenization',
+    [string]$Channel = 'stable',
 
-    [string]$PackId = 'IIoT.EdgeClient.Homogenization',
+    [string]$PackId = 'IIoT.EdgeClient',
 
-    [string]$PackTitle = 'IIoT Edge Client Homogenization',
+    [string]$PackTitle = 'IIoT Edge Client',
 
     [string]$PackAuthors = 'IIoT',
-
-    [string]$ProfileId = 'HomogenizationLine',
 
     [string]$Configuration = 'Release',
 
@@ -237,26 +235,23 @@ function Write-EdgeVelopackProfileCatalog {
         [System.Collections.IEnumerable]$Profiles,
 
         [Parameter(Mandatory = $true)]
-        $ProfileDefinition,
-
-        [Parameter(Mandatory = $true)]
         $Manifest,
 
         [Parameter(Mandatory = $true)]
         [string]$PackDirectory
     )
 
-    $selectedProfile = @($Profiles | Where-Object {
-        $_.ProfileId -eq $ProfileDefinition.profileId
+    $packProfiles = @($Profiles | ForEach-Object {
+        $profile = $_
+        $profile.ExecutablePath = "$($Manifest.hostDirectory)/IIoT.Edge.Shell"
+        $profile
     })
 
-    if ($selectedProfile.Count -ne 1) {
-        throw "Could not find exactly one launcher profile for profile '$($ProfileDefinition.profileId)'."
+    if ($packProfiles.Count -eq 0) {
+        throw 'Launcher profile catalog is empty.'
     }
 
-    $profile = $selectedProfile[0]
-    $profile.ExecutablePath = "$($Manifest.hostDirectory)/IIoT.Edge.Shell"
-    ConvertTo-Json -InputObject @($profile) -Depth 20 | Set-Content `
+    ConvertTo-Json -InputObject $packProfiles -Depth 20 | Set-Content `
         -Encoding UTF8 `
         -Path (Join-Path $PackDirectory 'launcher.profiles.json')
 }
@@ -291,14 +286,6 @@ function Get-EdgeVelopackReleaseNotesPath {
 
 $manifest = Load-EdgeRuntimePublishManifest -RepoRoot $repoRoot -ManifestPath $ManifestPath
 $launcherProfileCatalog = Get-EdgeLauncherProfileCatalog -RepoRoot $repoRoot -ProfileCatalogPath $LauncherProfileCatalogPath
-$profileDefinition = @($manifest.profiles | Where-Object {
-    $_.profileId -eq $ProfileId
-})[0]
-
-if ($null -eq $profileDefinition) {
-    throw "ProfileId '$ProfileId' does not match any profile in '$ManifestPath'."
-}
-
 $resolvedRuntimeLayoutRoot = Resolve-EdgeAbsolutePath -BasePath $repoRoot -PathValue $RuntimeLayoutRoot
 $resolvedOutputRoot = Resolve-EdgeAbsolutePath -BasePath $repoRoot -PathValue $OutputRoot
 $packDirectory = Join-Path $resolvedOutputRoot ".staging\$Channel"
@@ -331,7 +318,6 @@ Copy-EdgeVelopackDirectory `
     -TargetDirectory (Join-Path $packDirectory $manifest.hostDirectory)
 Write-EdgeVelopackProfileCatalog `
     -Profiles $launcherProfileCatalog.Profiles `
-    -ProfileDefinition $profileDefinition `
     -Manifest $manifest `
     -PackDirectory $packDirectory
 Assert-EdgeVelopackStagingRedlines -PackDirectory $packDirectory

@@ -33,6 +33,12 @@ public static class LauncherDependencyInjection
         services.AddSingleton<ILauncherProfileCatalog>(
             provider => ActivatorUtilities.CreateInstance<LauncherProfileCatalog>(provider, baseDirectory));
         services.AddSingleton<ILauncherUpdateTargetFactory, LauncherUpdateTargetFactory>();
+        services.AddSingleton<ILauncherProfileVisibilityService>(
+            provider => new LauncherProfileVisibilityService(
+                baseDirectory,
+                provider.GetRequiredService<IEdgeInstalledPluginCatalog>(),
+                provider.GetRequiredService<IEdgeProfileModuleConfigurationStore>(),
+                provider.GetRequiredService<ILauncherUpdateTargetFactory>()));
         services.AddSingleton<ILauncherDeviceBindingImporter>(
             provider => new LauncherDeviceBindingImporter(
                 baseDirectory,
