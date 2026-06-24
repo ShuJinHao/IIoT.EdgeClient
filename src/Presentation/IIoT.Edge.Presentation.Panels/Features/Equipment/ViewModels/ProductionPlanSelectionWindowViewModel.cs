@@ -11,15 +11,15 @@ public sealed class ProductionPlanSelectionWindowViewModel : PresentationViewMod
 {
     private const string EmptyFallback = "—";
 
-    private readonly IProductionPlanSelectionService? planSelectionService;
+    private readonly IProductionPlanSelectionServiceResolver planSelectionServiceResolver;
     private readonly IAppLanguageService languageService;
     private ProductionPlanOption? selectedPlan;
 
     public ProductionPlanSelectionWindowViewModel(
-        IEnumerable<IProductionPlanSelectionService> planSelectionServices,
+        IProductionPlanSelectionServiceResolver planSelectionServiceResolver,
         IAppLanguageService languageService)
     {
-        planSelectionService = planSelectionServices.FirstOrDefault();
+        this.planSelectionServiceResolver = planSelectionServiceResolver;
         this.languageService = languageService;
         RefreshCommand = new AsyncCommand(LoadAsync);
     }
@@ -63,6 +63,7 @@ public sealed class ProductionPlanSelectionWindowViewModel : PresentationViewMod
 
         try
         {
+            var planSelectionService = planSelectionServiceResolver.ResolveCurrent();
             if (planSelectionService is null)
             {
                 SetError(languageService.GetString(

@@ -11,7 +11,12 @@ public sealed class ModuleParamRegistry : IModuleParamRegistry
     private readonly Dictionary<string, ModuleParamRegistration> _registrations = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, List<ModuleParamDescriptor>> _descriptors = new(StringComparer.OrdinalIgnoreCase);
 
-    public void Register(string moduleId, Type mesParamType, Type cloudParamType, Type businessParamType)
+    public void Register(
+        string moduleId,
+        Type mesParamType,
+        Type cloudParamType,
+        Type businessParamType,
+        IReadOnlyCollection<ModuleParamDefaultOverride>? defaultOverrides = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(moduleId);
         ValidateEnumType(mesParamType, nameof(mesParamType));
@@ -28,11 +33,17 @@ public sealed class ModuleParamRegistry : IModuleParamRegistry
             mesParamType,
             cloudParamType,
             businessParamType);
+        var overridesByKey = (defaultOverrides ?? [])
+            .ToDictionary(
+                static x => BuildOverrideKey(x.Category, x.Name),
+                static x => x.DefaultValue,
+                StringComparer.OrdinalIgnoreCase);
+
         _descriptors[moduleId] =
         [
-            .. CreateDescriptors(moduleId, ModuleParamCategory.Mes, mesParamType),
-            .. CreateDescriptors(moduleId, ModuleParamCategory.Cloud, cloudParamType),
-            .. CreateDescriptors(moduleId, ModuleParamCategory.Business, businessParamType)
+            .. CreateDescriptors(moduleId, ModuleParamCategory.Mes, mesParamType, overridesByKey),
+            .. CreateDescriptors(moduleId, ModuleParamCategory.Cloud, cloudParamType, overridesByKey),
+            .. CreateDescriptors(moduleId, ModuleParamCategory.Business, businessParamType, overridesByKey)
         ];
     }
 
@@ -71,7 +82,8 @@ public sealed class ModuleParamRegistry : IModuleParamRegistry
     private static IEnumerable<ModuleParamDescriptor> CreateDescriptors(
         string moduleId,
         ModuleParamCategory category,
-        Type enumType)
+        Type enumType,
+        IReadOnlyDictionary<string, string> defaultOverrides)
     {
         var values = Enum.GetNames(enumType);
         for (var index = 0; index < values.Length; index++)
@@ -84,6 +96,10 @@ public sealed class ModuleParamRegistry : IModuleParamRegistry
                 continue;
             }
 
+            var defaultValue = defaultOverrides.TryGetValue(BuildOverrideKey(category, name), out var overriddenDefault)
+                ? overriddenDefault
+                : attribute.DefaultValue;
+
             yield return new ModuleParamDescriptor(
                 moduleId,
                 category,
@@ -91,7 +107,7 @@ public sealed class ModuleParamRegistry : IModuleParamRegistry
                 name,
                 ModuleParamKeys.StorageKey(moduleId, category, name),
                 attribute.ValueKind,
-                attribute.DefaultValue,
+                defaultValue,
                 attribute.Unit,
                 attribute.MinValue,
                 attribute.MaxValue,
@@ -103,6 +119,9 @@ public sealed class ModuleParamRegistry : IModuleParamRegistry
                 index + 1);
         }
     }
+
+    private static string BuildOverrideKey(ModuleParamCategory category, string name)
+        => $"{category}:{name}";
 
     private static void ValidateEnumType(Type enumType, string parameterName)
     {

@@ -98,6 +98,7 @@ public sealed class DieCuttingStationRuntimeFactory : IStationRuntimeFactory
                 codec,
                 dieCuttingContext,
                 serviceProvider.GetRequiredService<IDieCuttingMesScenarioChannel>(),
+                serviceProvider.GetRequiredService<DieCuttingProductionPlanService>(),
                 serviceProvider.GetRequiredService<IMesUploadDiagnosticsStore>(),
                 serviceProvider.GetRequiredService<IModuleParamProvider<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business>>(),
                 logger,

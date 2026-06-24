@@ -40,7 +40,12 @@ public static class CloudApiConfigParamSchema
            && Descriptors.Any(descriptor => string.Equals(descriptor.Key, key.Trim(), StringComparison.OrdinalIgnoreCase));
 
     public static bool IsParamViewEditableKey(string key)
-        => string.Equals(key?.Trim(), BaseUrl, StringComparison.OrdinalIgnoreCase);
+    {
+        var normalizedKey = key?.Trim();
+        return IsCloudApiConfigKey(normalizedKey ?? string.Empty)
+               && !string.Equals(normalizedKey, ClientCode, StringComparison.OrdinalIgnoreCase)
+               && !string.Equals(normalizedKey, BootstrapSecret, StringComparison.OrdinalIgnoreCase);
+    }
 
     public static bool IsCloudApiConfigPrefix(string key)
         => !string.IsNullOrWhiteSpace(key)

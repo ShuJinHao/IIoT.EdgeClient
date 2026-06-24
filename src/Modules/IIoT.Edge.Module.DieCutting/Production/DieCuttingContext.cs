@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Abstractions.Context;
+using IIoT.Edge.Application.Features.Production.Planning;
 using IIoT.Edge.Module.DieCutting.Payload;
 using IIoT.Edge.SharedKernel.Context;
 
@@ -28,6 +29,26 @@ public sealed class DieCuttingContext : ProductionContext
     /// 下一轮采样窗口开始时间。
     /// </summary>
     public DateTime? NextWindowStartAt { get; set; }
+
+    /// <summary>
+    /// 当前已选择的 MES 主批计划。
+    /// </summary>
+    public ProductionPlanOption? SelectedProductionPlan { get; set; }
+
+    /// <summary>
+    /// 当前主批计划对应的 MES 追溯批次号。
+    /// </summary>
+    public string? TraceBatchNumber { get; set; }
+
+    /// <summary>
+    /// 最近一次追溯批次号生成时间。
+    /// </summary>
+    public DateTime? TraceBatchGeneratedAt { get; set; }
+
+    /// <summary>
+    /// 最近一次追溯批次号生成错误。
+    /// </summary>
+    public string? TraceBatchError { get; set; }
 }
 
 /// <summary>

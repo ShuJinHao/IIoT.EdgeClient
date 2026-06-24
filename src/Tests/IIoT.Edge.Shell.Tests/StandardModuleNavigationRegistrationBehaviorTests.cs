@@ -143,7 +143,8 @@ public sealed class StandardModuleNavigationRegistrationBehaviorTests
         {
         }
 
-        public void RegisterParameters<TMes, TCloud, TBusiness>()
+        public void RegisterParameters<TMes, TCloud, TBusiness>(
+            IReadOnlyCollection<ModuleParamDefaultOverride>? defaultOverrides = null)
             where TMes : struct, Enum
             where TCloud : struct, Enum
             where TBusiness : struct, Enum

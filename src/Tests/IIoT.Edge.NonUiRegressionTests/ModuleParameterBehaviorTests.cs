@@ -94,14 +94,22 @@ public sealed class ModuleParameterBehaviorTests
         Assert.Equal("启用", cloudEnabled.Name);
         Assert.Equal("云端上传启用", cloudEnabled.DisplayNameFallback);
         Assert.Contains("不访问 Cloud", cloudEnabled.DescriptionFallback, StringComparison.Ordinal);
+        var expectedCloudApiParamCount = CloudApiConfigParamSchema.Descriptors
+            .Count(static descriptor => CloudApiConfigParamSchema.IsParamViewEditableKey(descriptor.Key));
         Assert.Equal(
-            Enum.GetNames<HomogenizationCloudParam>().Length + 1,
+            Enum.GetNames<HomogenizationCloudParam>().Length + expectedCloudApiParamCount,
             cloudParams.Count);
         Assert.Contains(cloudParams, x =>
             x.Key == CloudApiConfigParamSchema.BaseUrl
             && x.Value == "https://config-cloud.test");
-        Assert.DoesNotContain(cloudParams, x => x.Key == CloudApiConfigParamSchema.ProcessUploadPath);
-        Assert.DoesNotContain(cloudParams, x => x.Key == CloudApiConfigParamSchema.PassStationBatchTemplatePath);
+        Assert.Contains(cloudParams, x =>
+            x.Key == CloudApiConfigParamSchema.ProcessUploadPath
+            && x.Value == "/config/process");
+        Assert.Contains(cloudParams, x =>
+            x.Key == CloudApiConfigParamSchema.PassStationBatchTemplatePath
+            && x.Value == "/config/pass-stations/{typeKey}/batch");
+        Assert.DoesNotContain(cloudParams, x => x.Key == CloudApiConfigParamSchema.ClientCode);
+        Assert.DoesNotContain(cloudParams, x => x.Key == CloudApiConfigParamSchema.BootstrapSecret);
     }
 
     [Fact]

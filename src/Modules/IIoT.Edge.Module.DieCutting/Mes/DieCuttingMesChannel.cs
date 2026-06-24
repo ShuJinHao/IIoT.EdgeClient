@@ -37,6 +37,69 @@ public sealed class DieCuttingMesChannel
     }
 
     /// <summary>
+    /// 获取 MES 主批计划。
+    /// </summary>
+    public async Task<MesCallResult<DieCuttingMainPlan>> GetMainPlanAsync(
+        DieCuttingMainPlanRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (string.IsNullOrWhiteSpace(request.UpperComputerNo))
+        {
+            return MesCallResult<DieCuttingMainPlan>.InvalidContext("上位机编码不能为空。");
+        }
+
+        var query = new Dictionary<string, string?>
+        {
+            ["upperComputerNo"] = request.UpperComputerNo.Trim(),
+            ["timestamp"] = FormatTimestamp(request.Timestamp)
+        };
+
+        return await ExecuteOptionalMesGetAsync(
+                "主批计划",
+                ct => GetMesPathAsync(DieCuttingParams.Mes.OrderPath, ct),
+                query,
+                DieCuttingMesResponseParser.ParseMainPlan,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// 按主批计划和工序编码生成 MES 追溯批次号。
+    /// </summary>
+    public async Task<MesCallResult<DieCuttingTraceBatchResult>> GenerateTraceBatchNumberAsync(
+        DieCuttingTraceBatchRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (string.IsNullOrWhiteSpace(request.MasterPlanCode))
+        {
+            return MesCallResult<DieCuttingTraceBatchResult>.InvalidContext("主批次号不能为空。");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.OperationCode))
+        {
+            return MesCallResult<DieCuttingTraceBatchResult>.InvalidContext("工序编码不能为空。");
+        }
+
+        var payload = new
+        {
+            masterPlanCode = request.MasterPlanCode.Trim(),
+            operationCode = request.OperationCode.Trim()
+        };
+
+        return await ExecuteOptionalMesPostAsync(
+                "追溯批次号",
+                ct => GetMesPathAsync(DieCuttingParams.Mes.BatchNumberPath, ct),
+                payload,
+                DieCuttingMesResponseParser.ParseTraceBatch,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// 上传模切当前追溯快照，空字段按 MES 确认传空字符串。
     /// </summary>
     public async Task<MesCallResult> UploadRealtimeAsync(
@@ -46,7 +109,7 @@ public sealed class DieCuttingMesChannel
     {
         ArgumentNullException.ThrowIfNull(snapshot);
 
-        return await ExecuteOptionalMesAsync(
+        return await ExecuteRequiredMesAsync(
             "模切追溯出站",
             ct => GetMesPathAsync(DieCuttingParams.Mes.OutboundPath, ct),
             device,
@@ -128,6 +191,14 @@ public sealed class DieCuttingMesChannel
 /// </summary>
 public interface IDieCuttingMesScenarioChannel : IProcessMesUploader
 {
+    Task<MesCallResult<DieCuttingMainPlan>> GetMainPlanAsync(
+        DieCuttingMainPlanRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<MesCallResult<DieCuttingTraceBatchResult>> GenerateTraceBatchNumberAsync(
+        DieCuttingTraceBatchRequest request,
+        CancellationToken cancellationToken = default);
+
     Task<MesCallResult> UploadRealtimeAsync(
         DeviceSession? device,
         DieCuttingRealtimeSnapshot snapshot,

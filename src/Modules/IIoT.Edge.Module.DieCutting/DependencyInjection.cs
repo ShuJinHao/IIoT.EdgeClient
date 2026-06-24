@@ -4,6 +4,7 @@ using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Mes;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Time;
+using IIoT.Edge.Application.Features.Production.Planning;
 using IIoT.Edge.Application.Modules;
 using IIoT.Edge.Module.DieCutting.Config;
 using IIoT.Edge.Module.DieCutting.Config.Io;
@@ -43,22 +44,37 @@ public abstract class DieCuttingModuleBase : EdgeProcessModuleBase<DieCuttingCel
     protected override void ConfigureModuleServices(IEdgeProcessModuleBuilder builder)
     {
         builder.Services.AddSingleton(_definition);
-        builder.RegisterParameters<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business>();
+        builder.RegisterParameters<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business>(
+        [
+            new ModuleParamDefaultOverride(
+                ModuleParamCategory.Mes,
+                nameof(DieCuttingParams.Mes.UpperComputerNo),
+                _definition.UpperComputerNo),
+            new ModuleParamDefaultOverride(
+                ModuleParamCategory.Mes,
+                nameof(DieCuttingParams.Mes.OperationCode),
+                _definition.OperationCode)
+        ]);
 
         var section = builder.Configuration.GetSection($"Modules:{ModuleId}");
         builder.Services.AddOptions<DieCuttingModuleOptions>()
             .Bind(section.GetSection("Module"));
 
-        builder.Services.AddSingleton<IDieCuttingMesScenarioChannel>(sp =>
-            new DieCuttingMesChannel(
+        builder.Services.AddSingleton<DieCuttingMesChannel>(sp =>
+            new(
                 _definition,
                 sp.GetRequiredService<MesRequestExecutor>(),
                 sp.GetRequiredService<IModuleParamRoleProvider>(),
                 sp.GetRequiredService<IModuleParamProvider<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business>>(),
                 sp.GetRequiredService<ILogService>(),
                 sp.GetRequiredService<IProductionTimeProvider>()));
+        builder.Services.AddSingleton<IDieCuttingMesScenarioChannel>(sp =>
+            sp.GetRequiredService<DieCuttingMesChannel>());
         builder.Services.AddSingleton<IProcessMesUploader>(sp =>
             sp.GetRequiredService<IDieCuttingMesScenarioChannel>());
+        builder.Services.AddSingleton<DieCuttingProductionPlanService>();
+        builder.Services.AddSingleton<IProductionPlanSelectionService>(sp =>
+            sp.GetRequiredService<DieCuttingProductionPlanService>());
         builder.Services.AddSingleton<IProductionContextFactory, DieCuttingContextFactory>();
         builder.RegisterStandardPlcSignalProfiles<
             DieCuttingPlcSignals.Interaction,

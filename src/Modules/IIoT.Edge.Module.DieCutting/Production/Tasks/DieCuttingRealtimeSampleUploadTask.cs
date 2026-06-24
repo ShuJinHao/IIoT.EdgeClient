@@ -21,6 +21,7 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
     private readonly DieCuttingSignalCodec _codec;
     private readonly DieCuttingContext _context;
     private readonly IDieCuttingMesScenarioChannel _mesChannel;
+    private readonly DieCuttingProductionPlanService _productionPlanService;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
     private readonly IModuleParamProvider<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business> _parameters;
     private readonly DieCuttingModuleOptions _moduleOptions;
@@ -35,6 +36,7 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
         DieCuttingSignalCodec codec,
         DieCuttingContext context,
         IDieCuttingMesScenarioChannel mesChannel,
+        DieCuttingProductionPlanService productionPlanService,
         IMesUploadDiagnosticsStore diagnosticsStore,
         IModuleParamProvider<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business> parameters,
         ILogService logger,
@@ -45,6 +47,7 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
         _codec = codec;
         _context = context;
         _mesChannel = mesChannel;
+        _productionPlanService = productionPlanService;
         _diagnosticsStore = diagnosticsStore;
         _parameters = parameters;
         _moduleOptions = moduleOptions.Value;
@@ -72,9 +75,24 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
             return;
         }
 
+        var planState = await _productionPlanService.GetStateAsync(TaskCancellationToken).ConfigureAwait(false);
+        _context.SelectedProductionPlan = planState.CurrentPlan;
+        _context.TraceBatchNumber = planState.TraceBatchNumber;
+        _context.TraceBatchGeneratedAt = planState.TraceBatchGeneratedAt;
+        _context.TraceBatchError = planState.TraceBatchError;
+
+        if (planState.IsMesEnabled && planState.RequiresSelection && !planState.HasTraceBatchNumber)
+        {
+            var message = planState.HasSelectedPlan
+                ? "MES 已启用，但当前主批计划尚未生成追溯批次号。"
+                : "MES 已启用，请先选择主批计划并生成追溯批次号。";
+            await RecordResultAsync(null, MesCallResult.BusinessRejected(message)).ConfigureAwait(false);
+            return;
+        }
+
         var identity = _moduleOptions.MesIdentity.Resolve(_context.DeviceName);
         var windowStartAt = _context.NextWindowStartAt ?? DateTime.Now;
-        var snapshot = _codec.CaptureRealtimeSnapshot(identity, windowStartAt);
+        var snapshot = _codec.CaptureRealtimeSnapshot(identity, windowStartAt, planState.TraceBatchNumber);
         var result = await _mesChannel
             .UploadRealtimeAsync(CreateDeviceSession(identity), snapshot, TaskCancellationToken)
             .ConfigureAwait(false);

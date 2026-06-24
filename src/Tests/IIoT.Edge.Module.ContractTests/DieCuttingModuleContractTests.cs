@@ -4,6 +4,7 @@ using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Mes;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Time;
+using IIoT.Edge.Application.Features.Production.Planning;
 using IIoT.Edge.Application.Modules;
 using IIoT.Edge.Module.DieCutting;
 using IIoT.Edge.Module.DieCutting.Config;
@@ -80,9 +81,16 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
     {
         AddDefaultRuntimeServices(services);
         services.AddSingleton<IMesUploadDiagnosticsStore, ContractMesUploadDiagnosticsStore>();
+        services.AddSingleton<IMesHttpClient, CapturingMesHttpClient>();
+        services.AddSingleton<IMesEndpointProvider, ContractMesEndpointProvider>();
+        services.AddSingleton<IModuleParamRoleProvider>(new ContractModuleParamRoleProvider(ExpectedFirstDevice));
+        services.AddSingleton<MesRequestExecutor>();
         services.AddSingleton<IDieCuttingMesScenarioChannel>(new ContractDieCuttingMesChannel(ExpectedModuleId));
         services.AddSingleton<IModuleParamProvider<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business>>(
-            new ContractDieCuttingModuleParamProvider(ExpectedModuleId));
+            new ContractDieCuttingModuleParamProvider(
+                ExpectedModuleId,
+                ExpectedUpperComputerNo,
+                ExpectedOperationCode));
         services.AddSingleton(Options.Create(new DieCuttingModuleOptions()));
     }
 
@@ -111,6 +119,21 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         Assert.Equal(ExpectedDisplayName, root.GetProperty("displayName").GetString());
         Assert.Equal(ExpectedModuleId, root.GetProperty("supportedProcessType").GetString());
         Assert.Equal(ExpectedEntryType, root.GetProperty("entryType").GetString());
+    }
+
+    [Fact]
+    public void SharedDieCuttingLibrary_ShouldNotDeclarePluginManifest()
+    {
+        var sharedManifestPath = Path.Combine(
+            ContractTestPathHelper.FindRepoRoot(),
+            "src",
+            "Modules",
+            "IIoT.Edge.Module.DieCutting",
+            "plugin.json");
+
+        Assert.False(
+            File.Exists(sharedManifestPath),
+            "共享模切库不能声明 plugin.json，避免打包扫描时把抽象共享库误当成可加载插件。");
     }
 
     [Fact]
@@ -174,6 +197,28 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         Assert.DoesNotContain(
             result.ModuleParamRegistry.GetDescriptors(ExpectedModuleId, ModuleParamCategory.Mes),
             descriptor => descriptor.Role == ModuleParamRole.MesSignToken);
+        Assert.Contains(
+            result.ModuleParamRegistry.GetDescriptors(ExpectedModuleId, ModuleParamCategory.Mes),
+            descriptor => descriptor.Role == ModuleParamRole.MesUpperComputerNo
+                          && descriptor.Name == nameof(DieCuttingParams.Mes.UpperComputerNo)
+                          && descriptor.DefaultValue == ExpectedUpperComputerNo);
+        Assert.Contains(
+            result.ModuleParamRegistry.GetDescriptors(ExpectedModuleId, ModuleParamCategory.Mes),
+            descriptor => descriptor.Role == ModuleParamRole.MesOperationCode
+                          && descriptor.Name == nameof(DieCuttingParams.Mes.OperationCode)
+                          && descriptor.DefaultValue == ExpectedOperationCode);
+        Assert.Contains(
+            result.ModuleParamRegistry.GetDescriptors(ExpectedModuleId, ModuleParamCategory.Mes),
+            descriptor => descriptor.Name == nameof(DieCuttingParams.Mes.OrderPath)
+                          && descriptor.DefaultValue == "/dev/dev/get/order");
+        Assert.Contains(
+            result.ModuleParamRegistry.GetDescriptors(ExpectedModuleId, ModuleParamCategory.Mes),
+            descriptor => descriptor.Name == nameof(DieCuttingParams.Mes.BatchNumberPath)
+                          && descriptor.DefaultValue == "/dev/dev/get/batchNumber");
+        Assert.Contains(
+            result.Services,
+            descriptor => descriptor.ServiceType == typeof(IProductionPlanSelectionService)
+                          && descriptor.ImplementationFactory is not null);
     }
 
     [Fact]
@@ -230,7 +275,10 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
                 roleProvider,
                 new ContractLogService()),
             roleProvider,
-            new ContractDieCuttingModuleParamProvider(ExpectedModuleId),
+            new ContractDieCuttingModuleParamProvider(
+                ExpectedModuleId,
+                ExpectedUpperComputerNo,
+                ExpectedOperationCode),
             new ContractLogService(),
             new ContractProductionTimeProvider());
         var snapshot = new DieCuttingRealtimeSnapshot
@@ -243,7 +291,7 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
             PunchingDeviceName = ExpectedFirstDevice,
             PunchingQuantity = 123,
             PunchingSpeed = 45.6m,
-            PunchingLotNumber = string.Empty
+            PunchingLotNumber = "TRACE-AP-001"
         };
 
         var uploadResult = await channel.UploadRealtimeAsync(
@@ -254,7 +302,8 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
                 DeviceName = ExpectedFirstDevice,
                 ClientCode = ExpectedUpperComputerNo
             },
-            snapshot);
+            snapshot,
+            TestContext.Current.CancellationToken);
 
         Assert.True(uploadResult.IsSuccess, uploadResult.Message);
         Assert.Equal("/dev/dev/electrode/exit/push", httpClient.LastUrl);
@@ -268,7 +317,11 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
             root.GetProperty("sign").GetString());
         Assert.Equal(ExpectedFirstDevice, root.GetProperty("stationNo").GetString());
         Assert.Equal(ExpectedOperationCode, root.GetProperty("operationCode").GetString());
+        Assert.Equal("TRACE-AP-001", root.GetProperty("batchNumber").GetString());
         var produce = root.GetProperty("data").GetProperty("produce").EnumerateArray().ToArray();
+        Assert.Contains(produce, item =>
+            item.GetProperty("code").GetString() == "punchingLotNumber"
+            && item.GetProperty("val").GetString() == "TRACE-AP-001");
         Assert.Contains(produce, item =>
             item.GetProperty("code").GetString() == "punchingDeviceCode"
             && item.GetProperty("val").GetString() == ExpectedFirstDevice);
@@ -278,6 +331,130 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         Assert.Contains(produce, item =>
             item.GetProperty("code").GetString() == "polePieceLength"
             && item.GetProperty("val").GetString() == string.Empty);
+    }
+
+    [Fact]
+    public async Task MesChannel_GetMainPlan_ShouldUseOrderPathAndUpperComputerNo()
+    {
+        var result = new ModuleContractFixture().RegisterModule(new TModule());
+        using var provider = result.Services.BuildServiceProvider();
+        var definition = provider.GetRequiredService<DieCuttingModuleDefinition>();
+        var httpClient = new CapturingMesHttpClient
+        {
+            GetResponse = """{"code":200,"msg":"OK","data":{"orders":[[{"code":"orderNo","name":"主批次号","val":"MP-001"}]]}}"""
+        };
+        var roleProvider = new ContractModuleParamRoleProvider(ExpectedFirstDevice);
+        var channel = new DieCuttingMesChannel(
+            definition,
+            new MesRequestExecutor(
+                httpClient,
+                new ContractMesEndpointProvider(),
+                roleProvider,
+                new ContractLogService()),
+            roleProvider,
+            new ContractDieCuttingModuleParamProvider(
+                ExpectedModuleId,
+                ExpectedUpperComputerNo,
+                ExpectedOperationCode),
+            new ContractLogService(),
+            new ContractProductionTimeProvider());
+
+        var plans = await channel.GetMainPlanAsync(
+            new DieCuttingMainPlanRequest(ExpectedUpperComputerNo, new DateTime(2026, 6, 24, 10, 0, 0)),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(plans.IsSuccess, plans.Message);
+        Assert.StartsWith("/dev/dev/get/order?", httpClient.LastUrl, StringComparison.Ordinal);
+        Assert.Contains($"upperComputerNo={ExpectedUpperComputerNo}", httpClient.LastUrl, StringComparison.Ordinal);
+        Assert.Equal("MP-001", plans.Data!.Orders.Single().Single().Value);
+    }
+
+    [Fact]
+    public async Task MesChannel_GenerateTraceBatchNumber_ShouldUseBatchNumberPathAndPayload()
+    {
+        var result = new ModuleContractFixture().RegisterModule(new TModule());
+        using var provider = result.Services.BuildServiceProvider();
+        var definition = provider.GetRequiredService<DieCuttingModuleDefinition>();
+        var httpClient = new CapturingMesHttpClient
+        {
+            PostResponse = """{"code":200,"msg":"OK","data":{"batchNumber":"TRACE-001"}}"""
+        };
+        var roleProvider = new ContractModuleParamRoleProvider(ExpectedFirstDevice);
+        var channel = new DieCuttingMesChannel(
+            definition,
+            new MesRequestExecutor(
+                httpClient,
+                new ContractMesEndpointProvider(),
+                roleProvider,
+                new ContractLogService()),
+            roleProvider,
+            new ContractDieCuttingModuleParamProvider(
+                ExpectedModuleId,
+                ExpectedUpperComputerNo,
+                ExpectedOperationCode),
+            new ContractLogService(),
+            new ContractProductionTimeProvider());
+
+        var batch = await channel.GenerateTraceBatchNumberAsync(
+            new DieCuttingTraceBatchRequest("MP-001", ExpectedOperationCode),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(batch.IsSuccess, batch.Message);
+        Assert.Equal("/dev/dev/get/batchNumber", httpClient.LastUrl);
+        Assert.Equal("TRACE-001", batch.Data!.BatchNumber);
+        using var payloadJson = JsonDocument.Parse(JsonSerializer.Serialize(httpClient.LastPayload));
+        Assert.Equal("MP-001", payloadJson.RootElement.GetProperty("masterPlanCode").GetString());
+        Assert.Equal(ExpectedOperationCode, payloadJson.RootElement.GetProperty("operationCode").GetString());
+    }
+
+    [Fact]
+    public async Task MesChannel_UploadRealtime_WhenOutboundPathMissing_ShouldFailWithoutPosting()
+    {
+        var result = new ModuleContractFixture().RegisterModule(new TModule());
+        using var provider = result.Services.BuildServiceProvider();
+        var definition = provider.GetRequiredService<DieCuttingModuleDefinition>();
+        var httpClient = new CapturingMesHttpClient();
+        var roleProvider = new ContractModuleParamRoleProvider(ExpectedFirstDevice);
+        var channel = new DieCuttingMesChannel(
+            definition,
+            new MesRequestExecutor(
+                httpClient,
+                new ContractMesEndpointProvider(),
+                roleProvider,
+                new ContractLogService()),
+            roleProvider,
+            new ContractDieCuttingModuleParamProvider(
+                ExpectedModuleId,
+                ExpectedUpperComputerNo,
+                ExpectedOperationCode,
+                outboundPath: string.Empty),
+            new ContractLogService(),
+            new ContractProductionTimeProvider());
+
+        var uploadResult = await channel.UploadRealtimeAsync(
+            new DeviceSession
+            {
+                DeviceId = Guid.NewGuid(),
+                ProcessId = Guid.NewGuid(),
+                DeviceName = ExpectedFirstDevice,
+                ClientCode = ExpectedUpperComputerNo
+            },
+            new DieCuttingRealtimeSnapshot
+            {
+                CapturedAt = new DateTime(2026, 6, 24, 10, 1, 2),
+                WindowStartAt = new DateTime(2026, 6, 24, 10, 0, 0),
+                WindowCompleteAt = new DateTime(2026, 6, 24, 10, 1, 0),
+                ClipNo = "MG-01",
+                PunchingDeviceCode = ExpectedFirstDevice,
+                PunchingDeviceName = ExpectedFirstDevice,
+                PunchingQuantity = 123,
+                PunchingSpeed = 45.6m,
+                PunchingLotNumber = "TRACE-001"
+            },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(MesCallOutcome.InvalidContext, uploadResult.Outcome);
+        Assert.Null(httpClient.LastUrl);
     }
 
     private static void AssertSeededMesIdentity(JsonElement devices, string deviceCode, string upperComputerNo)
@@ -323,10 +500,20 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         : IModuleParamProvider<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business>
     {
         private readonly string _moduleId;
+        private readonly string _upperComputerNo;
+        private readonly string _operationCode;
+        private readonly string _outboundPath;
 
-        public ContractDieCuttingModuleParamProvider(string moduleId)
+        public ContractDieCuttingModuleParamProvider(
+            string moduleId,
+            string upperComputerNo,
+            string operationCode,
+            string outboundPath = "/dev/dev/electrode/exit/push")
         {
             _moduleId = moduleId;
+            _upperComputerNo = upperComputerNo;
+            _operationCode = operationCode;
+            _outboundPath = outboundPath;
         }
 
         public Task<ModuleParamSnapshot<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business>> GetAsync(
@@ -340,13 +527,21 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
                     new Dictionary<DieCuttingParams.Mes, string?>
                     {
                         [DieCuttingParams.Mes.启用] = "true",
-                        [DieCuttingParams.Mes.OutboundPath] = "/dev/dev/electrode/exit/push",
+                        [DieCuttingParams.Mes.UpperComputerNo] = _upperComputerNo,
+                        [DieCuttingParams.Mes.OperationCode] = _operationCode,
+                        [DieCuttingParams.Mes.OrderPath] = "/dev/dev/get/order",
+                        [DieCuttingParams.Mes.BatchNumberPath] = "/dev/dev/get/batchNumber",
+                        [DieCuttingParams.Mes.OutboundPath] = _outboundPath,
                         [DieCuttingParams.Mes.上传频率毫秒] = "10000",
                         [DieCuttingParams.Mes.数据新鲜度超时毫秒] = "5000"
                     },
                     new Dictionary<DieCuttingParams.Mes, ParamValueKind>
                     {
                         [DieCuttingParams.Mes.启用] = ParamValueKind.Bool,
+                        [DieCuttingParams.Mes.UpperComputerNo] = ParamValueKind.String,
+                        [DieCuttingParams.Mes.OperationCode] = ParamValueKind.String,
+                        [DieCuttingParams.Mes.OrderPath] = ParamValueKind.String,
+                        [DieCuttingParams.Mes.BatchNumberPath] = ParamValueKind.String,
                         [DieCuttingParams.Mes.OutboundPath] = ParamValueKind.String,
                         [DieCuttingParams.Mes.上传频率毫秒] = ParamValueKind.Int,
                         [DieCuttingParams.Mes.数据新鲜度超时毫秒] = ParamValueKind.Int
@@ -390,6 +585,17 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
             CancellationToken cancellationToken = default)
             => Task.FromResult(MesCallResult.Success());
 
+        public Task<MesCallResult<DieCuttingMainPlan>> GetMainPlanAsync(
+            DieCuttingMainPlanRequest request,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(MesCallResult<DieCuttingMainPlan>.Success(new DieCuttingMainPlan([])));
+
+        public Task<MesCallResult<DieCuttingTraceBatchResult>> GenerateTraceBatchNumberAsync(
+            DieCuttingTraceBatchRequest request,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(MesCallResult<DieCuttingTraceBatchResult>.Success(
+                new DieCuttingTraceBatchResult("TRACE-TEST", default)));
+
         public Task<MesCallResult> UploadRealtimeAsync(
             DeviceSession? device,
             DieCuttingRealtimeSnapshot snapshot,
@@ -399,6 +605,8 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
 
     private sealed class CapturingMesHttpClient : IMesHttpClient
     {
+        public string PostResponse { get; init; } = """{"code":200,"msg":"OK"}""";
+        public string GetResponse { get; init; } = """{"code":200,"msg":"OK","data":{}}""";
         public string? LastUrl { get; private set; }
         public object? LastPayload { get; private set; }
 
@@ -419,7 +627,7 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         {
             LastUrl = url;
             LastPayload = payload;
-            return Task.FromResult<string?>("""{"code":200,"msg":"OK"}""");
+            return Task.FromResult<string?>(PostResponse);
         }
 
         public Task<string?> GetAsync(
@@ -427,7 +635,10 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
             string url,
             IReadOnlyDictionary<string, string>? headers = null,
             CancellationToken cancellationToken = default)
-            => Task.FromResult<string?>("""{"code":200,"msg":"OK","data":{}}""");
+        {
+            LastUrl = url;
+            return Task.FromResult<string?>(GetResponse);
+        }
     }
 
     private sealed class ContractMesEndpointProvider : IMesEndpointProvider

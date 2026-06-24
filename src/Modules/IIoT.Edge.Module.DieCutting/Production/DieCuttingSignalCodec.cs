@@ -42,7 +42,8 @@ internal sealed class DieCuttingSignalCodec
     /// </summary>
     public DieCuttingRealtimeSnapshot CaptureRealtimeSnapshot(
         DieCuttingDeviceIdentity identity,
-        DateTime windowStartAt)
+        DateTime windowStartAt,
+        string? punchingLotNumber)
     {
         var capturedAt = _productionTime.BusinessNow;
         return new DieCuttingRealtimeSnapshot
@@ -58,7 +59,7 @@ internal sealed class DieCuttingSignalCodec
             PunchingUom = "PCS",
             PunchingDeviceCode = identity.DeviceCode,
             PunchingDeviceName = identity.DeviceName,
-            PunchingLotNumber = string.Empty
+            PunchingLotNumber = punchingLotNumber?.Trim() ?? string.Empty
         };
     }
 

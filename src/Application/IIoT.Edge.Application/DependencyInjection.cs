@@ -19,6 +19,7 @@ using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 using IIoT.Edge.Application.Features.Production.CapacityView;
 using IIoT.Edge.Application.Features.Production.DataView;
 using IIoT.Edge.Application.Features.Production.Equipment;
+using IIoT.Edge.Application.Features.Production.Planning;
 using IIoT.Edge.Application.Features.Production.Monitor;
 using IIoT.Edge.Application.Features.Updates;
 using IIoT.Edge.Application.Modules.Hardware;
@@ -73,6 +74,7 @@ public static class DependencyInjection
         services.AddTransient<IMonitorSnapshotSourceMatcher, MonitorSnapshotSourceMatcher>();
         services.AddTransient<IMonitorSnapshotProjectionBuilder, MonitorSnapshotProjectionBuilder>();
         services.AddTransient<IEquipmentPanelService, EquipmentPanelService>();
+        services.AddSingleton<IProductionPlanSelectionServiceResolver, ProductionPlanSelectionServiceResolver>();
         services.AddSingleton<IEdgeVersionCompatibilityPolicy, EdgeVersionCompatibilityPolicy>();
         services.AddSingleton<IEdgeReleaseService, EdgeReleaseService>();
         services.AddSingleton<IEdgeSyncDiagnosticsQuery, EdgeSyncDiagnosticsQuery>();

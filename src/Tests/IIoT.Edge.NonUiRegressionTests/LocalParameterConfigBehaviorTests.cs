@@ -157,6 +157,9 @@ public sealed class LocalParameterConfigBehaviorTests
             ModuleParamKeys.StorageKey(ModuleId, ModuleParamCategory.Cloud, nameof(TestCloudParams.启用)),
             cloudParams[0].Key);
         Assert.Contains(cloudParams, param => param.Key == CloudApiConfigParamSchema.BaseUrl);
+        Assert.Contains(cloudParams, param => param.Key == CloudApiConfigParamSchema.ProcessUploadPath);
+        Assert.Contains(cloudParams, param => param.Key == CloudApiConfigParamSchema.PassStationBatchTemplatePath);
+        Assert.DoesNotContain(cloudParams, param => param.Key == CloudApiConfigParamSchema.ClientCode);
         Assert.DoesNotContain(cloudParams, param => param.Key == CloudApiConfigParamSchema.BootstrapSecret);
     }
 
@@ -168,14 +171,15 @@ public sealed class LocalParameterConfigBehaviorTests
 
         var saveResult = await service.SaveAsync(
             [
-                new ParamViewValueDto(CloudApiConfigParamSchema.BaseUrl, "https://cloud.local")
+                new ParamViewValueDto(CloudApiConfigParamSchema.BaseUrl, "https://cloud.local"),
+                new ParamViewValueDto(CloudApiConfigParamSchema.ProcessUploadPath, "/edge/process")
             ]);
 
         Assert.True(saveResult.IsSuccess, saveResult.Message);
         var values = (await host.LocalParameterConfigService.GetSystemConfigsAsync())
             .ToDictionary(static x => x.Key, static x => x.Value, StringComparer.OrdinalIgnoreCase);
         Assert.Equal("https://cloud.local", values[CloudApiConfigParamSchema.BaseUrl]);
-        Assert.DoesNotContain(CloudApiConfigParamSchema.ProcessUploadPath, values.Keys);
+        Assert.Equal("/edge/process", values[CloudApiConfigParamSchema.ProcessUploadPath]);
     }
 
     [Fact]

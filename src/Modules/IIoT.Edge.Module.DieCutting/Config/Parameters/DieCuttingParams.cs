@@ -35,6 +35,26 @@ public static class DieCuttingParams
         服务地址,
 
         /// <summary>
+        /// MES 上位机编码，用于查询主批计划。
+        /// </summary>
+        [ModuleParam(
+            ParamValueKind.String,
+            Role = ModuleParamRole.MesUpperComputerNo,
+            DisplayNameFallback = "MES上位机编码",
+            DescriptionFallback = "获取主批计划接口使用的 upperComputerNo。负极默认 P1-APUC，正极默认 P2-CPUC。")]
+        UpperComputerNo,
+
+        /// <summary>
+        /// MES 工序编码，用于生成追溯批次号。
+        /// </summary>
+        [ModuleParam(
+            ParamValueKind.String,
+            Role = ModuleParamRole.MesOperationCode,
+            DisplayNameFallback = "MES工序编码",
+            DescriptionFallback = "生成追溯批次号接口使用的 operationCode。负极默认 AP，正极默认 CP。")]
+        OperationCode,
+
+        /// <summary>
         /// MES 健康检查路径。
         /// </summary>
         [ModuleParam(
@@ -44,6 +64,26 @@ public static class DieCuttingParams
             DisplayNameFallback = "MES健康检查路径",
             DescriptionFallback = "MES 健康检查接口相对路径。")]
         MesHealthPath,
+
+        /// <summary>
+        /// MES 主批计划查询路径。
+        /// </summary>
+        [ModuleParam(
+            ParamValueKind.String,
+            DefaultValue = "/dev/dev/get/order",
+            DisplayNameFallback = "MES主批计划查询路径",
+            DescriptionFallback = "按 upperComputerNo 和 timestamp 查询主批计划的接口相对路径。")]
+        OrderPath,
+
+        /// <summary>
+        /// MES 追溯批次号生成路径。
+        /// </summary>
+        [ModuleParam(
+            ParamValueKind.String,
+            DefaultValue = "/dev/dev/get/batchNumber",
+            DisplayNameFallback = "MES追溯批次号生成路径",
+            DescriptionFallback = "按 masterPlanCode 和 operationCode 生成追溯批次号的接口相对路径。")]
+        BatchNumberPath,
 
         /// <summary>
         /// 模切追溯出站上传路径。

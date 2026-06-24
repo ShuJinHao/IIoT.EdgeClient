@@ -17,7 +17,7 @@ public class EquipmentViewModel : PresentationViewModelBase
 
     private readonly IEquipmentPanelService _equipmentPanelService;
     private readonly IRecipeService _recipeService;
-    private readonly IProductionPlanSelectionService? _planSelectionService;
+    private readonly IProductionPlanSelectionServiceResolver _planSelectionServiceResolver;
     private readonly IProductionPlanSelectionPopupService _planSelectionPopupService;
     private readonly IAppLanguageService _languageService;
     private readonly AvaloniaDispatcherTimer _hwRefreshTimer;
@@ -138,13 +138,13 @@ public class EquipmentViewModel : PresentationViewModelBase
     public EquipmentViewModel(
         IEquipmentPanelService equipmentPanelService,
         IRecipeService recipeService,
-        IEnumerable<IProductionPlanSelectionService> planSelectionServices,
+        IProductionPlanSelectionServiceResolver planSelectionServiceResolver,
         IProductionPlanSelectionPopupService planSelectionPopupService,
         IAppLanguageService languageService)
     {
         _equipmentPanelService = equipmentPanelService;
         _recipeService = recipeService;
-        _planSelectionService = planSelectionServices.FirstOrDefault();
+        _planSelectionServiceResolver = planSelectionServiceResolver;
         _planSelectionPopupService = planSelectionPopupService;
         _languageService = languageService;
         SelectProductionPlanCommand = new AsyncCommand(
@@ -270,7 +270,8 @@ public class EquipmentViewModel : PresentationViewModelBase
 
     private async Task RefreshProductionPlanStateAsync()
     {
-        if (_planSelectionService is null)
+        var planSelectionService = _planSelectionServiceResolver.ResolveCurrent();
+        if (planSelectionService is null)
         {
             IsMesPlanSelectionRequired = false;
             SelectedProductionPlan = null;
@@ -279,7 +280,7 @@ public class EquipmentViewModel : PresentationViewModelBase
             return;
         }
 
-        var state = await _planSelectionService.GetStateAsync();
+        var state = await planSelectionService.GetStateAsync();
         await AvaloniaDispatcher.UIThread.InvokeAsync(() =>
         {
             IsMesPlanSelectionRequired = state.RequiresSelection;
@@ -291,7 +292,8 @@ public class EquipmentViewModel : PresentationViewModelBase
 
     private async Task SelectProductionPlanCoreAsync()
     {
-        if (_planSelectionService is null)
+        var planSelectionService = _planSelectionServiceResolver.ResolveCurrent();
+        if (planSelectionService is null)
         {
             return;
         }
@@ -306,7 +308,7 @@ public class EquipmentViewModel : PresentationViewModelBase
 
         try
         {
-            await _planSelectionService.SelectPlanAsync(selected);
+            await planSelectionService.SelectPlanAsync(selected);
             await RefreshProductionPlanStateAsync();
         }
         catch (Exception ex)
