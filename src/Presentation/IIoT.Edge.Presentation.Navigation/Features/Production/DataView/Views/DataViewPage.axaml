@@ -10,68 +10,10 @@
                 Title="{Binding ViewTitle}"
                 Subtitle="{Binding StatusMessage}" />
 
-            <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing12}">
-                <edge:EdgeMetricCard
-                    Classes="kpi-compact"
-                    Status="Info"
-                    Title="{DynamicResource Navigation_Label_TodayOutput}"
-                    Value="{Binding TodayTotal}" />
-                <edge:EdgeMetricCard
-                    Grid.Column="1"
-                    Classes="kpi-compact"
-                    Status="Running"
-                    Title="{DynamicResource Navigation_Label_GoodCount}"
-                    Value="{Binding TodayOk}" />
-                <edge:EdgeMetricCard
-                    Grid.Column="2"
-                    Classes="kpi-compact"
-                    Status="Error"
-                    Title="{DynamicResource Navigation_Label_BadCount}"
-                    Value="{Binding TodayNg}" />
-                <edge:EdgeMetricCard
-                    Grid.Column="3"
-                    Classes="kpi-compact"
-                    Status="Warning"
-                    Title="{DynamicResource Navigation_Label_Yield}"
-                    Value="{Binding TodayYield}" />
-            </Grid>
-
             <edge:EdgeTablePanel
                 EmptyMessage="{DynamicResource Navigation_Data_EmptyMessage}"
                 EmptyTitle="{DynamicResource Navigation_Data_EmptyTitle}"
                 IsEmpty="{Binding IsRecordsEmpty}">
-                <edge:EdgeTablePanel.FilterContent>
-                    <WrapPanel>
-                        <edge:EdgeFilterDatePicker
-                            Width="150"
-                            Margin="0,0,8,0"
-                            SelectedDate="{Binding DateFrom}" />
-                        <TextBlock
-                            Margin="0,0,8,0"
-                            VerticalAlignment="Center"
-                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
-                            Text="{DynamicResource Navigation_Label_To}" />
-                        <edge:EdgeFilterDatePicker
-                            Width="150"
-                            SelectedDate="{Binding DateTo}" />
-                    </WrapPanel>
-                </edge:EdgeTablePanel.FilterContent>
-                <edge:EdgeTablePanel.ActionContent>
-                    <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Edge.Size.Spacing8}">
-                        <edge:EdgeActionButton
-                            Command="{Binding QueryCommand}"
-                            Content="{DynamicResource Navigation_Button_Query}"
-                            Icon="{StaticResource Edge.Icon.Search}"
-                            Kind="Primary"
-                            Size="Compact" />
-                        <edge:EdgeActionButton
-                            Command="{Binding ExportCommand}"
-                            Content="{DynamicResource Navigation_Button_ExportExcel}"
-                            Icon="{StaticResource Edge.Icon.Export}"
-                            Kind="Primary"
-                            Size="Compact" />
-                    </StackPanel>
-                </edge:EdgeTablePanel.ActionContent>
                     <edge:EdgeDataGrid
                         AutoGenerateColumns="False"
                         CanUserReorderColumns="False"
@@ -83,6 +25,7 @@
                         IsReadOnly="True"
                         ItemsSource="{Binding Records}">
                         <edge:EdgeDataGrid.Columns>
+                            <edge:EdgeTextColumn Binding="{Binding DeviceName}" Header="{DynamicResource Navigation_Column_DeviceName}" MinWidth="120" Width="1.2*" />
                             <edge:EdgeTextColumn Binding="{Binding Time}" Header="{DynamicResource Navigation_Column_Time}" MinWidth="90" Width="90" />
                             <edge:EdgeTextColumn Binding="{Binding BatchNo}" Header="{DynamicResource Navigation_Column_BatchNumber}" MinWidth="160" Width="2*" />
                             <edge:EdgeTextColumn Binding="{Binding Total}" Header="{DynamicResource Navigation_Column_Total}" MinWidth="90" Width="*" />

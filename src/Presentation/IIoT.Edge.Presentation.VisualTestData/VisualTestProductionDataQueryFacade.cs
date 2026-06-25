@@ -8,19 +8,22 @@ namespace IIoT.Edge.Presentation.VisualTestData;
 public sealed class VisualTestProductionDataQueryFacade(VisualTestDataOptions options) : IProductionDataQueryFacade
 {
     public Task<DataViewSnapshot> QueryAsync(
-        DateTime dateFrom,
-        DateTime dateTo,
+        string selectedDeviceKey,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        const string allFilterKey = "__all__";
         var batchCode = VisualTestScenario.ResolveBatchCode(options);
+        var deviceNames = new[] { "P1-AP01", "P1-AP02", "P1-AP03" };
         var records = Enumerable.Range(0, 24)
             .Select(index =>
             {
-                var time = dateFrom.Date.AddHours(8).AddMinutes(index * 25);
+                var time = DateTime.Today.AddHours(8).AddMinutes(index * 25);
                 var total = 68 + index % 6 * 5;
                 var ng = index % 7 == 0 ? 2 : index % 4 == 0 ? 1 : 0;
                 var ok = total - ng;
                 return new ProductionRecordItem(
+                    DeviceName: deviceNames[index % deviceNames.Length],
                     Time: time.ToString("HH:mm"),
                     BatchNo: $"{batchCode}-{index + 1:D2}",
                     Total: total,
@@ -28,13 +31,12 @@ public sealed class VisualTestProductionDataQueryFacade(VisualTestDataOptions op
                     NgCount: ng,
                     Yield: $"{ok * 100.0 / total:F1}%");
             })
+            .Where(row =>
+                string.IsNullOrWhiteSpace(selectedDeviceKey)
+                || string.Equals(selectedDeviceKey, allFilterKey, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(row.DeviceName, selectedDeviceKey, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
-        var todayTotal = records.Sum(static row => row.Total);
-        var todayOk = records.Sum(static row => row.OkCount);
-        var todayNg = records.Sum(static row => row.NgCount);
-        var todayYield = todayTotal > 0 ? $"{todayOk * 100.0 / todayTotal:F2}%" : "0.00%";
-
-        return Task.FromResult(new DataViewSnapshot(todayTotal, todayOk, todayNg, todayYield, records));
+        return Task.FromResult(new DataViewSnapshot(records));
     }
 }

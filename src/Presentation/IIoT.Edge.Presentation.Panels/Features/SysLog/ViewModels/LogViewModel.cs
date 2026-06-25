@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Windows.Input;
 using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
 using IIoT.Edge.UI.Shared.PluginSystem;
@@ -13,12 +14,12 @@ namespace IIoT.Edge.Presentation.Panels.Features.SysLog;
 /// </summary>
 public class LogViewModel : PresentationViewModelBase
 {
-    private const string AllFilterKey = ILogDeviceSelectionService.AllFilterKey;
+    private const string AllFilterKey = IDeviceSelectionService.AllFilterKey;
 
     private readonly ISystemLogDisplayStore _logDisplayStore;
     private readonly ISystemLogDisplayProjector _logProjector;
     private readonly IAppLanguageService _languageService;
-    private readonly ILogDeviceSelectionService _deviceSelectionService;
+    private readonly IDeviceSelectionService _deviceSelectionService;
     private LogDeviceFilterOption? _selectedDeviceFilter;
     private bool _isApplyingSharedSelection;
 
@@ -58,7 +59,7 @@ public class LogViewModel : PresentationViewModelBase
         ISystemLogDisplayStore logDisplayStore,
         ISystemLogDisplayProjector logProjector,
         IAppLanguageService languageService,
-        ILogDeviceSelectionService deviceSelectionService)
+        IDeviceSelectionService deviceSelectionService)
     {
         _logDisplayStore = logDisplayStore;
         _logProjector = logProjector;
@@ -103,7 +104,8 @@ public class LogViewModel : PresentationViewModelBase
             string.Equals(filter.Key, selectedKey, StringComparison.OrdinalIgnoreCase));
         if (option is null)
         {
-            return;
+            option = new LogDeviceFilterOption(selectedKey, selectedKey);
+            DeviceFilters.Add(option);
         }
 
         _isApplyingSharedSelection = true;
@@ -129,6 +131,12 @@ public class LogViewModel : PresentationViewModelBase
         foreach (var device in devices)
         {
             DeviceFilters.Add(device);
+        }
+
+        if (!string.Equals(preferredKey, AllFilterKey, StringComparison.OrdinalIgnoreCase)
+            && DeviceFilters.All(filter => !string.Equals(filter.Key, preferredKey, StringComparison.OrdinalIgnoreCase)))
+        {
+            DeviceFilters.Add(new LogDeviceFilterOption(preferredKey, preferredKey));
         }
 
         SelectedDeviceFilter = DeviceFilters.FirstOrDefault(filter =>

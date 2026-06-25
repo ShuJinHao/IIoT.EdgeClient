@@ -15,40 +15,6 @@ public interface ISystemLogDisplayStore
     void Clear();
 }
 
-public interface ILogDeviceSelectionService
-{
-    const string AllFilterKey = "__all__";
-
-    string SelectedDeviceKey { get; }
-
-    event EventHandler? SelectionChanged;
-
-    void SelectDevice(string deviceKey);
-}
-
-public sealed class LogDeviceSelectionService : ILogDeviceSelectionService
-{
-    private string _selectedDeviceKey = ILogDeviceSelectionService.AllFilterKey;
-
-    public string SelectedDeviceKey => _selectedDeviceKey;
-
-    public event EventHandler? SelectionChanged;
-
-    public void SelectDevice(string deviceKey)
-    {
-        var normalizedKey = string.IsNullOrWhiteSpace(deviceKey)
-            ? ILogDeviceSelectionService.AllFilterKey
-            : deviceKey;
-        if (string.Equals(_selectedDeviceKey, normalizedKey, StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
-        _selectedDeviceKey = normalizedKey;
-        SelectionChanged?.Invoke(this, EventArgs.Empty);
-    }
-}
-
 /// <summary>
 /// 日志展示服务，负责把真实日志事件批量同步到 Avalonia UI 集合。
 /// </summary>

@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.Presentation.Panels.Features.Equipment;
 using IIoT.Edge.Presentation.Panels.Features.SysLog;
 using IIoT.Edge.UI.Shared.Modularity;
@@ -15,7 +16,7 @@ public static class DependencyInjection
         services.AddSingleton<LogDisplayService>();
         services.AddSingleton<ISystemLogDisplayStore>(sp => sp.GetRequiredService<LogDisplayService>());
         services.AddSingleton<ISystemLogDisplayProjector, SystemLogDisplayProjector>();
-        services.AddSingleton<ILogDeviceSelectionService, LogDeviceSelectionService>();
+        services.AddSingleton<IDeviceSelectionService, DeviceSelectionService>();
 
         services.AddSingleton<EquipmentViewModel>();
         services.AddSingleton<LogViewModel>();

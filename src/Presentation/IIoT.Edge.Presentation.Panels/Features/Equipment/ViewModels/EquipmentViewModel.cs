@@ -5,6 +5,7 @@ using AvaloniaDispatcherTimer = Avalonia.Threading.DispatcherTimer;
 using IIoT.Edge.Application.Abstractions.Recipe;
 using IIoT.Edge.Application.Features.Production.Planning;
 using IIoT.Edge.Application.Features.Production.Equipment;
+using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
 using IIoT.Edge.UI.Shared.PluginSystem;
@@ -20,6 +21,7 @@ public class EquipmentViewModel : PresentationViewModelBase
     private readonly IProductionPlanSelectionServiceResolver _planSelectionServiceResolver;
     private readonly IProductionPlanSelectionPopupService _planSelectionPopupService;
     private readonly IAppLanguageService _languageService;
+    private readonly IDeviceSelectionService _deviceSelectionService;
     private readonly AvaloniaDispatcherTimer _hwRefreshTimer;
     private int _selectedTabIndex;
     private string _recipeName = EmptyDisplayText;
@@ -32,6 +34,8 @@ public class EquipmentViewModel : PresentationViewModelBase
     private string _currentBatch = EmptyDisplayText;
     private bool _isMesPlanSelectionRequired;
     private ProductionPlanOption? _selectedProductionPlan;
+    private DeviceSelectionOption? _selectedDeviceFilter;
+    private bool _isApplyingDeviceSelection;
     private string _traceBatchNumber = EmptyDisplayText;
     private string _traceBatchError = string.Empty;
 
@@ -46,6 +50,7 @@ public class EquipmentViewModel : PresentationViewModelBase
 
     public ObservableCollection<HardwareItemViewModel> HardwareItems { get; } = new();
     public ObservableCollection<RecipeParamViewModel> Parameters { get; } = new();
+    public ObservableCollection<DeviceSelectionOption> DeviceFilters { get; } = [];
 
     public bool HasHardwareItems => HardwareItems.Count > 0;
     public bool IsHardwareEmpty => !HasHardwareItems;
@@ -133,6 +138,26 @@ public class EquipmentViewModel : PresentationViewModelBase
     }
 
     public bool HasTraceBatchError => !string.IsNullOrWhiteSpace(TraceBatchError);
+
+    public DeviceSelectionOption? SelectedDeviceFilter
+    {
+        get => _selectedDeviceFilter;
+        set
+        {
+            if (Equals(_selectedDeviceFilter, value))
+            {
+                return;
+            }
+
+            _selectedDeviceFilter = value;
+            OnPropertyChanged();
+            if (!_isApplyingDeviceSelection)
+            {
+                _deviceSelectionService.SelectDevice(value?.Key ?? IDeviceSelectionService.AllFilterKey);
+            }
+        }
+    }
+
     public ICommand SelectProductionPlanCommand { get; }
 
     public EquipmentViewModel(
@@ -140,13 +165,15 @@ public class EquipmentViewModel : PresentationViewModelBase
         IRecipeService recipeService,
         IProductionPlanSelectionServiceResolver planSelectionServiceResolver,
         IProductionPlanSelectionPopupService planSelectionPopupService,
-        IAppLanguageService languageService)
+        IAppLanguageService languageService,
+        IDeviceSelectionService deviceSelectionService)
     {
         _equipmentPanelService = equipmentPanelService;
         _recipeService = recipeService;
         _planSelectionServiceResolver = planSelectionServiceResolver;
         _planSelectionPopupService = planSelectionPopupService;
         _languageService = languageService;
+        _deviceSelectionService = deviceSelectionService;
         SelectProductionPlanCommand = new AsyncCommand(
             () => RunViewTaskAsync(
                 SelectProductionPlanCoreAsync,
@@ -156,6 +183,8 @@ public class EquipmentViewModel : PresentationViewModelBase
         LayoutColumn = 1;
 
         _recipeService.RecipeChanged += RefreshRecipe;
+        _deviceSelectionService.SelectionChanged += OnSharedDeviceSelectionChanged;
+        SyncDeviceSelectionOptions([]);
 
         _hwRefreshTimer = new AvaloniaDispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
         _hwRefreshTimer.Tick += (_, _) => RunViewTaskInBackground(RefreshHardwareAsync, "刷新硬件状态失败");
@@ -209,8 +238,62 @@ public class EquipmentViewModel : PresentationViewModelBase
                     item.Address = snapshot.Address;
                     item.IsConnected = snapshot.IsConnected;
                 });
+            SyncDeviceSelectionOptions(snapshots);
             NotifyHardwareStateChanged();
         });
+    }
+
+    private void SyncDeviceSelectionOptions(IReadOnlyCollection<HardwareSnapshot> snapshots)
+    {
+        var preferredKey = _deviceSelectionService.SelectedDeviceKey;
+        var options = new List<DeviceSelectionOption>
+        {
+            CreateAllDeviceOption()
+        };
+
+        options.AddRange(
+            snapshots
+                .Where(static snapshot => string.Equals(snapshot.DeviceType, "PLC", StringComparison.OrdinalIgnoreCase))
+                .Select(static snapshot => snapshot.Name)
+                .Where(static name => !string.IsNullOrWhiteSpace(name))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(static name => name, StringComparer.OrdinalIgnoreCase)
+                .Select(static name => new DeviceSelectionOption(name, name)));
+
+        if (!string.Equals(preferredKey, IDeviceSelectionService.AllFilterKey, StringComparison.OrdinalIgnoreCase)
+            && options.All(option => !string.Equals(option.Key, preferredKey, StringComparison.OrdinalIgnoreCase)))
+        {
+            options.Add(new DeviceSelectionOption(preferredKey, preferredKey));
+        }
+
+        ReplaceItems(DeviceFilters, options);
+        ApplySelectedDevice(preferredKey);
+    }
+
+    private DeviceSelectionOption CreateAllDeviceOption()
+        => new(
+            IDeviceSelectionService.AllFilterKey,
+            _languageService.GetString("Panels_Filter_AllOrSummary", "全部/汇总"));
+
+    private void OnSharedDeviceSelectionChanged(object? sender, EventArgs e)
+        => AvaloniaDispatcher.UIThread.Post(
+            () => ApplySelectedDevice(_deviceSelectionService.SelectedDeviceKey));
+
+    private void ApplySelectedDevice(string selectedKey)
+    {
+        var option = DeviceFilters.FirstOrDefault(filter =>
+                string.Equals(filter.Key, selectedKey, StringComparison.OrdinalIgnoreCase))
+            ?? DeviceFilters.FirstOrDefault();
+
+        _isApplyingDeviceSelection = true;
+        try
+        {
+            SelectedDeviceFilter = option;
+        }
+        finally
+        {
+            _isApplyingDeviceSelection = false;
+        }
     }
 
     private void RefreshRecipe()

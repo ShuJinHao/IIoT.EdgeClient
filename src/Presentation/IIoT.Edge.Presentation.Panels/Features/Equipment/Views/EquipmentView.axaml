@@ -19,29 +19,18 @@
                     ColumnDefinitions="*,Auto">
                     <TextBlock
                         Classes="edge-equipment-label"
-                        Text="{DynamicResource Panels_Label_EquipmentStatus}" />
-                    <Grid Grid.Column="1">
-                        <StackPanel
-                            Classes="edge-equipment-state"
-                            IsVisible="{Binding IsRecipeActive}">
-                            <edge:EdgeStatusDot
-                                Classes="edge-equipment-status-dot"
-                                Status="Running" />
-                            <TextBlock
-                                Classes="edge-equipment-state-text"
-                                Text="{DynamicResource Panels_Status_Running}" />
-                        </StackPanel>
-                        <StackPanel
-                            Classes="edge-equipment-state"
-                            IsVisible="{Binding !IsRecipeActive}">
-                            <edge:EdgeStatusDot
-                                Classes="edge-equipment-status-dot"
-                                Status="Offline" />
-                            <TextBlock
-                                Classes="edge-equipment-state-text"
-                                Text="{DynamicResource Panels_Status_Inactive}" />
-                        </StackPanel>
-                    </Grid>
+                        Text="{DynamicResource Panels_Label_LogDeviceFilter}" />
+                    <edge:EdgeFilterComboBox
+                        Grid.Column="1"
+                        Width="150"
+                        ItemsSource="{Binding DeviceFilters}"
+                        SelectedItem="{Binding SelectedDeviceFilter}">
+                        <edge:EdgeFilterComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding DisplayName}" />
+                            </DataTemplate>
+                        </edge:EdgeFilterComboBox.ItemTemplate>
+                    </edge:EdgeFilterComboBox>
                 </Grid>
             </Border>
 

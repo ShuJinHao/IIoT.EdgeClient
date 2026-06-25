@@ -1,5 +1,6 @@
 using IIoT.Edge.Application.Features.Production.DataView;
 using IIoT.Edge.Presentation.Navigation.Localization;
+using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
 using System.Collections.ObjectModel;
@@ -10,60 +11,22 @@ namespace IIoT.Edge.Presentation.Navigation.Features.Production.DataView;
 public class DataViewModel : NavigationViewModelBase
 {
     private readonly IProductionDataQueryFacade _productionDataQueryFacade;
-
-    private int _todayTotal;
-    public int TodayTotal
-    {
-        get => _todayTotal;
-        set { _todayTotal = value; OnPropertyChanged(); }
-    }
-
-    private int _todayOk;
-    public int TodayOk
-    {
-        get => _todayOk;
-        set { _todayOk = value; OnPropertyChanged(); }
-    }
-
-    private int _todayNg;
-    public int TodayNg
-    {
-        get => _todayNg;
-        set { _todayNg = value; OnPropertyChanged(); }
-    }
-
-    private string _todayYield = "0.00%";
-    public string TodayYield
-    {
-        get => _todayYield;
-        set { _todayYield = value; OnPropertyChanged(); }
-    }
+    private readonly IDeviceSelectionService _deviceSelectionService;
 
     public ObservableCollection<ProductionRecordVm> Records { get; } = new();
     public bool HasRecords => Records.Count > 0;
     public bool IsRecordsEmpty => Records.Count == 0;
 
-    private DateTime _dateFrom = DateTime.Today;
-    public DateTime DateFrom
-    {
-        get => _dateFrom;
-        set { _dateFrom = value; OnPropertyChanged(); }
-    }
-
-    private DateTime _dateTo = DateTime.Today;
-    public DateTime DateTo
-    {
-        get => _dateTo;
-        set { _dateTo = value; OnPropertyChanged(); }
-    }
-
     public ICommand QueryCommand { get; }
-    public ICommand ExportCommand { get; }
 
-    public DataViewModel(IProductionDataQueryFacade productionDataQueryFacade, IAppLanguageService languageService)
+    public DataViewModel(
+        IProductionDataQueryFacade productionDataQueryFacade,
+        IAppLanguageService languageService,
+        IDeviceSelectionService deviceSelectionService)
         : this(
             productionDataQueryFacade,
             languageService,
+            deviceSelectionService,
             "Production.DataView",
             "Navigation_Title_Data",
             "生产数据")
@@ -73,16 +36,18 @@ public class DataViewModel : NavigationViewModelBase
     public DataViewModel(
         IProductionDataQueryFacade productionDataQueryFacade,
         IAppLanguageService languageService,
+        IDeviceSelectionService deviceSelectionService,
         string viewId,
         string titleResourceKey,
         string titleFallback)
         : base(languageService, viewId, titleResourceKey, titleFallback)
     {
         _productionDataQueryFacade = productionDataQueryFacade;
+        _deviceSelectionService = deviceSelectionService;
+        _deviceSelectionService.SelectionChanged += OnDeviceSelectionChanged;
         QueryCommand = new AsyncCommand(() => RunViewTaskAsync(
             QueryAsync,
             GetText("Navigation_Data_QueryFailed", "生产数据查询失败。")));
-        ExportCommand = new BaseCommand(_ => { });
     }
 
     public override async Task OnActivatedAsync()
@@ -94,17 +59,13 @@ public class DataViewModel : NavigationViewModelBase
 
     private async Task QueryAsync()
     {
-        var snapshot = await _productionDataQueryFacade.QueryAsync(DateFrom, DateTo);
-
-        TodayTotal = snapshot.TodayTotal;
-        TodayOk = snapshot.TodayOk;
-        TodayNg = snapshot.TodayNg;
-        TodayYield = snapshot.TodayYield;
+        var snapshot = await _productionDataQueryFacade.QueryAsync(_deviceSelectionService.SelectedDeviceKey);
 
         ReplaceItems(
             Records,
             snapshot.Records.Select(record => new ProductionRecordVm
             {
+                DeviceName = record.DeviceName,
                 Time = record.Time,
                 BatchNo = record.BatchNo,
                 Total = record.Total,
@@ -115,10 +76,16 @@ public class DataViewModel : NavigationViewModelBase
         OnPropertyChanged(nameof(HasRecords));
         OnPropertyChanged(nameof(IsRecordsEmpty));
     }
+
+    private void OnDeviceSelectionChanged(object? sender, EventArgs e)
+        => RunViewTaskInBackground(
+            QueryAsync,
+            GetText("Navigation_Data_LoadFailed", "生产数据加载失败。"));
 }
 
 public class ProductionRecordVm
 {
+    public string DeviceName { get; set; } = "";
     public string Time { get; set; } = "";
     public string BatchNo { get; set; } = "";
     public int Total { get; set; }

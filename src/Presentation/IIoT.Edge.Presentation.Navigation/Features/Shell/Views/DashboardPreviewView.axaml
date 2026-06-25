@@ -158,7 +158,7 @@
                         Classes="edge-dashboard-data-panel-title"
                         Text="{DynamicResource Navigation_DashboardPreview_PlcStatusTableTitle}" />
                     <Border Classes="edge-dashboard-alert-header">
-                        <Grid ColumnDefinitions="82,94,72,*,82,82" ColumnSpacing="10">
+                        <Grid ColumnDefinitions="82,90,66,*,78,78,52" ColumnSpacing="8">
                             <TextBlock
                                 Classes="edge-dashboard-alert-header-text"
                                 Text="{DynamicResource Navigation_DashboardPreview_PlcDevice}" />
@@ -182,6 +182,10 @@
                                 Grid.Column="5"
                                 Classes="edge-dashboard-alert-header-text"
                                 Text="{DynamicResource Navigation_DashboardPreview_PlcLastFailure}" />
+                            <TextBlock
+                                Grid.Column="6"
+                                Classes="edge-dashboard-alert-header-text"
+                                Text="{DynamicResource Navigation_DashboardPreview_PlcDetails}" />
                         </Grid>
                     </Border>
                     <Grid Grid.Row="2" Classes="edge-dashboard-data-panel-body">
@@ -191,8 +195,10 @@
                             <ItemsControl ItemsSource="{Binding PlcStatusTableItems}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Border Classes="edge-dashboard-alert-row">
-                                            <Grid ColumnDefinitions="82,94,72,*,82,82" ColumnSpacing="10">
+                                        <Border
+                                            Classes="edge-dashboard-alert-row"
+                                            MinHeight="34">
+                                            <Grid ColumnDefinitions="82,90,66,*,78,78,52" ColumnSpacing="8">
                                                 <TextBlock
                                                     Classes="edge-dashboard-alert-time"
                                                     Text="{Binding DeviceName}" />
@@ -211,7 +217,10 @@
                                                 <TextBlock
                                                     Grid.Column="3"
                                                     Classes="edge-dashboard-alert-message"
-                                                    Text="{Binding LastError}" />
+                                                    MaxLines="1"
+                                                    Text="{Binding LastError}"
+                                                    TextTrimming="CharacterEllipsis"
+                                                    ToolTip.Tip="{Binding LastErrorDetail}" />
                                                 <TextBlock
                                                     Grid.Column="4"
                                                     Classes="edge-dashboard-alert-time"
@@ -220,6 +229,16 @@
                                                     Grid.Column="5"
                                                     Classes="edge-dashboard-alert-time"
                                                     Text="{Binding LastFailureText}" />
+                                                <edge:EdgeActionButton
+                                                    Grid.Column="6"
+                                                    Command="{Binding DataContext.ShowPlcStatusDetailCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}"
+                                                    Content="{DynamicResource Navigation_DashboardPreview_PlcDetails}"
+                                                    IsEnabled="{Binding HasLastErrorDetail}"
+                                                    Kind="Ghost"
+                                                    Role="Cell"
+                                                    Size="Compact"
+                                                    VerticalAlignment="Center" />
                                             </Grid>
                                         </Border>
                                     </DataTemplate>
@@ -364,5 +383,72 @@
                 </Grid>
             </edge:EdgeCard>
         </Grid>
+        <Border
+            Grid.RowSpan="3"
+            Classes="edge-dialog-overlay"
+            IsVisible="{Binding IsPlcStatusDetailOpen}">
+            <edge:EdgeDialogChrome
+                Classes="inline-dialog"
+                CloseCommand="{Binding ClosePlcStatusDetailCommand}"
+                CloseTopLevelOnClose="False"
+                HorizontalAlignment="Center"
+                MaxWidth="620"
+                MinWidth="460"
+                Title="{DynamicResource Navigation_DashboardPreview_PlcDetailTitle}"
+                VerticalAlignment="Center">
+                <Grid RowDefinitions="Auto,Auto,Auto,*" RowSpacing="{DynamicResource Edge.Size.Spacing8}">
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
+                        <TextBlock
+                            Classes="edge-summary-card-label"
+                            Text="{DynamicResource Navigation_DashboardPreview_PlcDevice}" />
+                        <TextBlock
+                            Grid.Column="1"
+                            Classes="edge-summary-card-value"
+                            Text="{Binding SelectedPlcStatusDetail.DeviceName}" />
+                    </Grid>
+                    <Grid
+                        Grid.Row="1"
+                        ColumnDefinitions="Auto,*"
+                        ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
+                        <TextBlock
+                            Classes="edge-summary-card-label"
+                            Text="{DynamicResource Navigation_DashboardPreview_PlcState}" />
+                        <TextBlock
+                            Grid.Column="1"
+                            Classes="edge-summary-card-value"
+                            Text="{Binding SelectedPlcStatusDetail.StateText}" />
+                    </Grid>
+                    <Grid
+                        Grid.Row="2"
+                        ColumnDefinitions="Auto,*"
+                        ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
+                        <TextBlock
+                            Classes="edge-summary-card-label"
+                            Text="{DynamicResource Navigation_DashboardPreview_PlcLastFailure}" />
+                        <TextBlock
+                            Grid.Column="1"
+                            Classes="edge-summary-card-value"
+                            Text="{Binding SelectedPlcStatusDetail.LastFailureText}" />
+                    </Grid>
+                    <edge:EdgeScrollHost
+                        Grid.Row="3"
+                        MaxHeight="220"
+                        VerticalScrollBarVisibility="Auto">
+                        <TextBlock
+                            Text="{Binding SelectedPlcStatusDetail.LastErrorDetail}"
+                            TextWrapping="Wrap" />
+                    </edge:EdgeScrollHost>
+                </Grid>
+                <edge:EdgeDialogChrome.FooterContent>
+                    <StackPanel Classes="edge-dialog-actions">
+                        <edge:EdgeActionButton
+                            Command="{Binding ClosePlcStatusDetailCommand}"
+                            Content="{DynamicResource Navigation_DashboardPreview_Close}"
+                            Kind="Secondary"
+                            Size="Compact" />
+                    </StackPanel>
+                </edge:EdgeDialogChrome.FooterContent>
+            </edge:EdgeDialogChrome>
+        </Border>
     </Grid>
 </UserControl>

@@ -226,6 +226,20 @@ public sealed class RepositoryHygieneTests
     }
 
     [Fact]
+    public void ProductionDataQueryFacade_ShouldNotGenerateRuntimeSampleProductionRows()
+    {
+        var root = FindRepositoryRoot();
+        var path = ToFullPath(
+            root,
+            "src/Application/IIoT.Edge.Application/Features/Production/DataView/ProductionDataQueryFacade.cs");
+        var source = File.ReadAllText(path);
+
+        Assert.DoesNotContain("new Random", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("LOT-", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("dateFrom", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SourceTree_ShouldNotContainGeneratedOrDuplicateArtifacts()
     {
         var root = FindRepositoryRoot();

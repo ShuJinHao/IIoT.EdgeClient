@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.Presentation.Panels.Features.SysLog;
 using Xunit;
 
@@ -15,7 +16,7 @@ public sealed class LogViewModelBehaviorTests
             store,
             new SystemLogDisplayProjector(),
             new TestAppLanguageService(),
-            new LogDeviceSelectionService());
+            new DeviceSelectionService());
 
         store.Entries.Add(CreateEntry("ERROR", "[P1-AP01] 读取 R2450 失败：Read R2450 failed.", second: 1));
         store.Entries.Add(CreateEntry("ERROR", "[P1-AP02] 读取 R2450 失败：Read R2450 failed.", second: 2));
@@ -35,7 +36,7 @@ public sealed class LogViewModelBehaviorTests
             store,
             new SystemLogDisplayProjector(),
             new TestAppLanguageService(),
-            new LogDeviceSelectionService());
+            new DeviceSelectionService());
 
         store.Entries.Add(CreateEntry("ERROR", "[P1-AP01] 读取 R2450 失败：Read R2450 failed.", second: 1));
         store.Entries.Add(CreateEntry("ERROR", "[P1-AP02] 读取 R2450 失败：Read R2450 failed.", second: 2));
@@ -53,7 +54,7 @@ public sealed class LogViewModelBehaviorTests
     public void SelectedDeviceFilter_WhenChanged_ShouldPublishSharedSelection()
     {
         var store = new TestSystemLogDisplayStore();
-        var selectionService = new LogDeviceSelectionService();
+        var selectionService = new DeviceSelectionService();
         var viewModel = new LogViewModel(
             store,
             new SystemLogDisplayProjector(),
@@ -67,6 +68,24 @@ public sealed class LogViewModelBehaviorTests
             static option => option.Key == "P1-AP01");
 
         Assert.Equal("P1-AP01", selectionService.SelectedDeviceKey);
+    }
+
+    [Fact]
+    public void Entries_WhenSharedSelectionHasNoCurrentLogRows_ShouldKeepSelectedDeviceFilter()
+    {
+        var store = new TestSystemLogDisplayStore();
+        var selectionService = new DeviceSelectionService();
+        var viewModel = new LogViewModel(
+            store,
+            new SystemLogDisplayProjector(),
+            new TestAppLanguageService(),
+            selectionService);
+
+        selectionService.SelectDevice("P1-AP09");
+
+        Assert.Equal("P1-AP09", viewModel.SelectedDeviceFilter?.Key);
+        Assert.Contains(viewModel.DeviceFilters, static option => option.Key == "P1-AP09");
+        Assert.True(viewModel.IsLogEmpty);
     }
 
     private static LogEntry CreateEntry(string level, string message, int second)

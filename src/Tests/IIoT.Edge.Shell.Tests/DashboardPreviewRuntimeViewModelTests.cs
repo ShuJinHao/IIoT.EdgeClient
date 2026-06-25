@@ -12,6 +12,7 @@ using IIoT.Edge.Application.Context;
 using IIoT.Edge.Application.Features.Production.Equipment;
 using IIoT.Edge.Presentation.Navigation.Features.Dashboard;
 using IIoT.Edge.Presentation.Navigation.Features.Shell;
+using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.Presentation.Panels.Features.SysLog;
 using IIoT.Edge.SharedKernel.Context;
 using Xunit;
@@ -27,7 +28,7 @@ public sealed class DashboardPreviewRuntimeViewModelTests
         var viewModel = new DashboardPreviewRuntimeViewModel(
             new DashboardViewModel(new TestEquipmentPanelService(), languageService),
             languageService,
-            new LogDeviceSelectionService(),
+            new DeviceSelectionService(),
             new TestRuntimeConfigService(),
             new TestEdgeSyncDiagnosticsQuery(),
             new TestPlcConnectionManager());
@@ -71,7 +72,8 @@ public sealed class DashboardPreviewRuntimeViewModelTests
                 Assert.Equal("P1-AP02", item.DeviceName);
                 Assert.Equal("重试中", item.StateText);
                 Assert.Equal("—", item.LatencyText);
-                Assert.Equal("Read R2450 failed.", item.LastError);
+                Assert.Equal("读取失败", item.LastError);
+                Assert.Equal("Read R2450 failed.", item.LastErrorDetail);
             });
         Assert.Contains(viewModel.ProductionSummaryItems, item =>
             string.Equals(item.Label?.ToString(), "通讯异常", StringComparison.Ordinal)
@@ -79,10 +81,10 @@ public sealed class DashboardPreviewRuntimeViewModelTests
     }
 
     [Fact]
-    public void PlcStatusTableItems_WhenSharedDeviceFilterChanges_ShouldFilterToSelectedDevice()
+    public void PlcStatusTableItems_WhenSharedDeviceFilterChanges_ShouldShowSelectedDeviceOnly()
     {
         var store = new TestSystemLogDisplayStore();
-        var selectionService = new LogDeviceSelectionService();
+        var selectionService = new DeviceSelectionService();
         var logViewModel = new LogViewModel(
             store,
             new SystemLogDisplayProjector(),
@@ -112,6 +114,44 @@ public sealed class DashboardPreviewRuntimeViewModelTests
 
         var item = Assert.Single(viewModel.PlcStatusTableItems);
         Assert.Equal("P1-AP01", item.DeviceName);
+        Assert.True(item.IsSelected);
+    }
+
+    [Fact]
+    public void PlcStatusTableItems_WhenLastErrorIsLong_ShouldExposeSummaryAndDetail()
+    {
+        var languageService = new TestAppLanguageService();
+        var viewModel = new DashboardPreviewRuntimeViewModel(
+            new DashboardViewModel(new TestEquipmentPanelService(), languageService),
+            languageService,
+            new DeviceSelectionService(),
+            new TestRuntimeConfigService(),
+            new TestEdgeSyncDiagnosticsQuery(),
+            new TestPlcConnectionManager());
+
+        ApplyDiagnostics(
+            viewModel,
+            [
+                new()
+                {
+                    NetworkDeviceId = 1,
+                    DeviceName = "P1-AP01",
+                    IsConnected = false,
+                    ConnectionState = PlcConnectionState.Retrying,
+                    LastError = "The operation has timed out after 3s while reading R2450.",
+                    LastFailureAtUtc = new DateTimeOffset(2026, 6, 24, 16, 24, 2, TimeSpan.Zero)
+                }
+            ]);
+
+        var item = Assert.Single(viewModel.PlcStatusTableItems);
+        Assert.Equal("通信超时", item.LastError);
+        Assert.Equal("The operation has timed out after 3s while reading R2450.", item.LastErrorDetail);
+        Assert.True(item.HasLastErrorDetail);
+
+        viewModel.ShowPlcStatusDetailCommand.Execute(item);
+
+        Assert.True(viewModel.IsPlcStatusDetailOpen);
+        Assert.Same(item, viewModel.SelectedPlcStatusDetail);
     }
 
     private static void ApplyDiagnostics(

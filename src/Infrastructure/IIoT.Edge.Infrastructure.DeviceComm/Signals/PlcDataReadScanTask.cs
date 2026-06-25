@@ -5,7 +5,6 @@ using IIoT.Edge.Application.Features.Hardware.IoMappings;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc;
-using System.Diagnostics;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Signals;
 
@@ -85,7 +84,9 @@ public sealed class PlcDataReadScanTask : IPlcTask
 
     public async Task ExecuteOneCycleAsync(CancellationToken ct)
     {
-        if (_readBlocks.Count == 0 || !_plcService.IsConnected)
+        if (_readBlocks.Count == 0
+            || !_plcService.IsConnected
+            || (_statusStore is not null && !_statusStore.IsStableOnline(_device.Id)))
         {
             return;
         }
@@ -129,7 +130,6 @@ public sealed class PlcDataReadScanTask : IPlcTask
     {
         try
         {
-            var stopwatch = Stopwatch.StartNew();
             foreach (var block in _readBlocks)
             {
                 var data = await _plcService
@@ -145,7 +145,6 @@ public sealed class PlcDataReadScanTask : IPlcTask
                 }
             }
 
-            _statusStore?.MarkConnected(_device.Id, _device.DeviceName, ToLatencyMs(stopwatch.ElapsedMilliseconds));
             if (_retryCount > 0)
             {
                 _retryCount = 0;
@@ -201,9 +200,6 @@ public sealed class PlcDataReadScanTask : IPlcTask
         _lastDisconnectLogTime = now;
         return true;
     }
-
-    private static int? ToLatencyMs(long elapsedMilliseconds)
-        => (int)Math.Min(int.MaxValue, Math.Max(0, elapsedMilliseconds));
 
     private static ushort[] SliceWords(IReadOnlyList<ushort> words, int offset, int count)
     {

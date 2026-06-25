@@ -3,26 +3,8 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
-    <Grid RowDefinitions="Auto,*" RowSpacing="8">
-        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
-            <TextBlock
-                VerticalAlignment="Center"
-                Classes="Edge.FormLabel"
-                Text="{DynamicResource Panels_Label_LogDeviceFilter}" />
-            <edge:EdgeFilterComboBox
-                Grid.Column="1"
-                ItemsSource="{Binding DeviceFilters}"
-                SelectedItem="{Binding SelectedDeviceFilter}">
-                <edge:EdgeFilterComboBox.ItemTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding DisplayName}" />
-                    </DataTemplate>
-                </edge:EdgeFilterComboBox.ItemTemplate>
-            </edge:EdgeFilterComboBox>
-        </Grid>
-
+    <Grid>
         <edge:EdgeLogList
-            Grid.Row="1"
             Title="{DynamicResource Panels_Title_SystemLog}"
             ItemsSource="{Binding Entries}"
             IsEmpty="{Binding IsLogEmpty}"

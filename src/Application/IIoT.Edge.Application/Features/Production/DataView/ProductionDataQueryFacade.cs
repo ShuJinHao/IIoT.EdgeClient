@@ -4,6 +4,7 @@ namespace IIoT.Edge.Application.Features.Production.DataView;
 /// 生产记录列表项。
 /// </summary>
 public record ProductionRecordItem(
+    string DeviceName,
     string Time,
     string BatchNo,
     int Total,
@@ -15,10 +16,6 @@ public record ProductionRecordItem(
 /// 生产数据页面快照。
 /// </summary>
 public record DataViewSnapshot(
-    int TodayTotal,
-    int TodayOk,
-    int TodayNg,
-    string TodayYield,
     List<ProductionRecordItem> Records);
 
 /// <summary>
@@ -26,40 +23,19 @@ public record DataViewSnapshot(
 /// </summary>
 public interface IProductionDataQueryFacade
 {
-    Task<DataViewSnapshot> QueryAsync(DateTime dateFrom, DateTime dateTo, CancellationToken cancellationToken = default);
+    Task<DataViewSnapshot> QueryAsync(string selectedDeviceKey, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
 /// 生产数据查询 facade。
-/// 当前返回模拟数据，用于界面展示与联调。
+/// 正式运行路径只允许返回真实采集链路或真实本地缓存记录。
 /// </summary>
 public sealed class ProductionDataQueryFacade : IProductionDataQueryFacade
 {
-    public Task<DataViewSnapshot> QueryAsync(DateTime dateFrom, DateTime dateTo, CancellationToken cancellationToken = default)
+    public Task<DataViewSnapshot> QueryAsync(string selectedDeviceKey, CancellationToken cancellationToken = default)
     {
-        var seed = HashCode.Combine(dateFrom.Date, dateTo.Date);
-        var random = new Random(seed);
-        var records = new List<ProductionRecordItem>();
-
-        for (int i = 0; i < 30; i++)
-        {
-            var time = dateFrom.Date.AddHours(8).AddMinutes(i * 15);
-            var total = random.Next(30, 60);
-            var ng = random.Next(0, 3);
-            records.Add(new ProductionRecordItem(
-                Time: time.ToString("HH:mm"),
-                BatchNo: $"LOT-{dateFrom:yyyyMMdd}-{i + 1:D3}",
-                Total: total,
-                OkCount: total - ng,
-                NgCount: ng,
-                Yield: $"{(total - ng) * 100.0 / total:F1}%"));
-        }
-
-        var todayTotal = records.Sum(item => item.Total);
-        var todayOk = records.Sum(item => item.OkCount);
-        var todayNg = records.Sum(item => item.NgCount);
-        var todayYield = todayTotal > 0 ? $"{todayOk * 100.0 / todayTotal:F2}%" : "0.00%";
-
-        return Task.FromResult(new DataViewSnapshot(todayTotal, todayOk, todayNg, todayYield, records));
+        _ = selectedDeviceKey;
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(new DataViewSnapshot([]));
     }
 }

@@ -1,0 +1,40 @@
+namespace IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
+
+public interface IDeviceSelectionService
+{
+    const string AllFilterKey = "__all__";
+
+    string SelectedDeviceKey { get; }
+
+    event EventHandler? SelectionChanged;
+
+    void SelectDevice(string deviceKey);
+}
+
+public sealed class DeviceSelectionService : IDeviceSelectionService
+{
+    private string _selectedDeviceKey = IDeviceSelectionService.AllFilterKey;
+
+    public string SelectedDeviceKey => _selectedDeviceKey;
+
+    public event EventHandler? SelectionChanged;
+
+    public void SelectDevice(string deviceKey)
+    {
+        var normalizedKey = string.IsNullOrWhiteSpace(deviceKey)
+            ? IDeviceSelectionService.AllFilterKey
+            : deviceKey;
+        if (string.Equals(_selectedDeviceKey, normalizedKey, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _selectedDeviceKey = normalizedKey;
+        SelectionChanged?.Invoke(this, EventArgs.Empty);
+    }
+}
+
+public sealed record DeviceSelectionOption(string Key, string DisplayName)
+{
+    public override string ToString() => DisplayName;
+}

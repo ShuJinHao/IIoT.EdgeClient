@@ -141,6 +141,9 @@
     <sys:String x:Key="Navigation_DashboardPreview_PlcLastError">Last Error</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_PlcLastConnected">Last Link</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_PlcLastFailure">Last Fail</sys:String>
+    <sys:String x:Key="Navigation_DashboardPreview_PlcDetails">Details</sys:String>
+    <sys:String x:Key="Navigation_DashboardPreview_PlcDetailTitle">PLC Error Details</sys:String>
+    <sys:String x:Key="Navigation_DashboardPreview_Close">Close</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_NoPlcStatusTitle">No PLC status</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_NoPlcStatusSource">Waiting for PLC runtime snapshots.</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_PlcExceptions">Link Faults</sys:String>
@@ -152,6 +155,11 @@
     <sys:String x:Key="Navigation_DashboardPreview_PlcStateRetrying">Retrying</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_PlcStateDisconnected">Disconnected</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_PlcStateFaulted">Faulted</sys:String>
+    <sys:String x:Key="Navigation_DashboardPreview_PlcErrorTimeout">Timeout</sys:String>
+    <sys:String x:Key="Navigation_DashboardPreview_PlcErrorProtocolProbeMissing">Probe missing</sys:String>
+    <sys:String x:Key="Navigation_DashboardPreview_PlcErrorReadFailure">Read failed</sys:String>
+    <sys:String x:Key="Navigation_DashboardPreview_PlcErrorWriteFailure">Write failed</sys:String>
+    <sys:String x:Key="Navigation_DashboardPreview_PlcErrorConnectFailure">Connect failed</sys:String>
     <sys:String x:Key="Navigation_Title_ProductRecipe">Product Recipe</sys:String>
     <sys:String x:Key="Navigation_Title_ParamConfig">Parameter Configuration</sys:String>
     <sys:String x:Key="Navigation_Button_Save">Save</sys:String>
@@ -313,7 +321,7 @@
     <sys:String x:Key="Navigation_Data_QueryFailed">Failed to query production data.</sys:String>
     <sys:String x:Key="Navigation_Data_LoadFailed">Failed to load production data.</sys:String>
     <sys:String x:Key="Navigation_Data_EmptyTitle">No production data</sys:String>
-    <sys:String x:Key="Navigation_Data_EmptyMessage">No real production records exist in the selected range.</sys:String>
+    <sys:String x:Key="Navigation_Data_EmptyMessage">No real production records are available.</sys:String>
     <sys:String x:Key="Navigation_Capacity_TotalOutput">Total Output</sys:String>
     <sys:String x:Key="Navigation_Capacity_Good">Good</sys:String>
     <sys:String x:Key="Navigation_Capacity_Bad">Bad</sys:String>

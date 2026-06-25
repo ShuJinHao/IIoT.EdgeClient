@@ -136,23 +136,46 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
             return;
         }
 
-        var hasProtocolWork = _readBlocks.Count > 0 || _writeBlocks.Count > 0;
-        var cycleStopwatch = hasProtocolWork ? Stopwatch.StartNew() : null;
-        await ReadPlcToBufferAsync(buffer).ConfigureAwait(false);
-        await WriteBufferToPlcAsync(buffer).ConfigureAwait(false);
-        if (hasProtocolWork)
+        if (_readBlocks.Count == 0)
         {
-            MarkConnected(ToLatencyMs(cycleStopwatch?.ElapsedMilliseconds));
-            if (_retryCount > 0 || _lastDisconnectLogTime != DateTime.MinValue)
+            if (_writeBlocks.Count > 0)
             {
-                _logger.Info($"[{_device.DeviceName}] PLC 连接已恢复。");
-                _lastDisconnectLogTime = DateTime.MinValue;
-                _retryCount = 0;
+                const string reason = "PLC 缺少只读协议校验点位，禁止执行写入。";
+                MarkRuntimeFault(reason);
+                if (ShouldLogDisconnect())
+                {
+                    _logger.Warn($"[{_device.DeviceName}] {reason}");
+                }
             }
+
+            return;
         }
+
+        var wasStableOnline = IsStableOnline();
+        var cycleStopwatch = Stopwatch.StartNew();
+        await ReadPlcToBufferAsync(buffer, updateBuffer: wasStableOnline).ConfigureAwait(false);
+        var isStableOnline = MarkProtocolSuccess(ToLatencyMs(cycleStopwatch.ElapsedMilliseconds));
+        if (!wasStableOnline)
+        {
+            LogRecoveredIfNeeded(isStableOnline);
+            return;
+        }
+
+        await WriteBufferToPlcAsync(buffer).ConfigureAwait(false);
+        LogRecoveredIfNeeded(isStableOnline);
     }
 
     protected virtual void MarkConnected(int? latencyMs)
+    {
+    }
+
+    protected virtual bool MarkProtocolSuccess(int? latencyMs)
+        => true;
+
+    protected virtual bool IsStableOnline()
+        => true;
+
+    protected virtual void MarkRuntimeFault(string reason)
     {
     }
 
@@ -190,7 +213,7 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
         }
     }
 
-    private async Task ReadPlcToBufferAsync(IPlcBufferTransport buffer)
+    private async Task ReadPlcToBufferAsync(IPlcBufferTransport buffer, bool updateBuffer)
     {
         try
         {
@@ -203,9 +226,12 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
 
                 foreach (var item in block.Items)
                 {
-                    buffer.UpdateReadSignal(
-                        item.Mapping.SignalKey,
-                        SliceWords(words, item.Offset, item.Mapping.AddressCount));
+                    if (updateBuffer)
+                    {
+                        buffer.UpdateReadSignal(
+                            item.Mapping.SignalKey,
+                            SliceWords(words, item.Offset, item.Mapping.AddressCount));
+                    }
                 }
             }
         }
@@ -220,6 +246,18 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
             MarkDisconnected($"PLC 读取失败：{ex.Message}");
             throw new InvalidOperationException("PLC 读取链路失败，连接已重置。", ex);
         }
+    }
+
+    private void LogRecoveredIfNeeded(bool isStableOnline)
+    {
+        if (!isStableOnline || (_retryCount <= 0 && _lastDisconnectLogTime == DateTime.MinValue))
+        {
+            return;
+        }
+
+        _logger.Info($"[{_device.DeviceName}] PLC 连接已恢复。");
+        _lastDisconnectLogTime = DateTime.MinValue;
+        _retryCount = 0;
     }
 
     private async Task WriteBufferToPlcAsync(IPlcBufferTransport buffer)

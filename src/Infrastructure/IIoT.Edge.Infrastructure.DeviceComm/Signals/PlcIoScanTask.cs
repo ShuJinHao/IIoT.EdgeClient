@@ -54,6 +54,15 @@ public sealed class PlcIoScanTask : PlcIoScanTaskBase
     protected override void MarkConnected(int? latencyMs)
         => _statusStore?.MarkConnected(DeviceId, DeviceName, latencyMs);
 
+    protected override bool MarkProtocolSuccess(int? latencyMs)
+        => _statusStore?.MarkProtocolSuccess(DeviceId, DeviceName, latencyMs) ?? true;
+
+    protected override bool IsStableOnline()
+        => _statusStore?.IsStableOnline(DeviceId) ?? true;
+
+    protected override void MarkRuntimeFault(string reason)
+        => _statusStore?.MarkRuntimeFault(DeviceId, DeviceName, reason);
+
     protected override void MarkConnecting()
         => _statusStore?.MarkConnecting(DeviceId, DeviceName);
 
