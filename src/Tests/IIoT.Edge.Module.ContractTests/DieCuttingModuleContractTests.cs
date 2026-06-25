@@ -3,9 +3,12 @@ using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Mes;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Abstractions.Plc;
+using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Application.Features.Production.Planning;
 using IIoT.Edge.Application.Modules;
+using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Module.DieCutting;
 using IIoT.Edge.Module.DieCutting.Config;
 using IIoT.Edge.Module.DieCutting.Config.Parameters;
@@ -83,6 +86,7 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         services.AddSingleton<IMesUploadDiagnosticsStore, ContractMesUploadDiagnosticsStore>();
         services.AddSingleton<IMesHttpClient, CapturingMesHttpClient>();
         services.AddSingleton<IMesEndpointProvider, ContractMesEndpointProvider>();
+        services.AddSingleton<IPlcConnectionManager, ContractPlcConnectionManager>();
         services.AddSingleton<IModuleParamRoleProvider>(new ContractModuleParamRoleProvider(ExpectedFirstDevice));
         services.AddSingleton<MesRequestExecutor>();
         services.AddSingleton<IDieCuttingMesScenarioChannel>(new ContractDieCuttingMesChannel(ExpectedModuleId));
@@ -171,6 +175,43 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
                 Assert.Equal(ExpectedUpperComputerNo, device.UpperComputerNo);
                 Assert.True(device.IsEnabled);
             });
+    }
+
+    [Fact]
+    public void RuntimeFactory_TaskCandidate_ShouldRequireOnlyMesTraceReadableSignals()
+    {
+        var result = new ModuleContractFixture().RegisterModule(new TModule());
+        Assert.True(result.RuntimeRegistry.TryGetFactory(ExpectedModuleId, out var factory));
+
+        var candidate = Assert.Single(factory.GetTaskCandidates());
+        var requiredSignals = candidate.RequiredSignals
+            .Select(static signal => signal.SignalKey)
+            .ToArray();
+
+        Assert.Equal(
+            [
+                "DieCutting.PunchingQuantity",
+                "DieCutting.PunchingSpeed",
+                "DieCutting.ClipNo.Mg1",
+                "DieCutting.ClipNo.Mg2"
+            ],
+            requiredSignals);
+    }
+
+    [Fact]
+    public void RuntimeFactory_WhenRealtimeSampleUploadTaskDisabled_ShouldCreateNoTasks()
+    {
+        var result = new ModuleContractFixture().RegisterModule(new TModule());
+        Assert.True(result.RuntimeRegistry.TryGetFactory(ExpectedModuleId, out var factory));
+
+        using var provider = new ServiceCollection().BuildServiceProvider();
+        var tasks = factory.CreateTasks(
+            provider,
+            new PlcBuffer(16, 16),
+            new DieCuttingContext { DeviceName = ExpectedFirstDevice },
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+
+        Assert.Empty(tasks);
     }
 
     [Fact]
@@ -754,6 +795,45 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         public void Error(string message) => Raise(message);
         public void Fatal(string message) => Raise(message);
         private void Raise(string message) => EntryAdded?.Invoke(new LogEntry { Level = "Test", Message = message, Time = DateTime.UtcNow });
+    }
+
+    private sealed class ContractPlcConnectionManager : IPlcConnectionManager
+    {
+        public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
+
+        public Task StopAsync(CancellationToken ct = default) => Task.CompletedTask;
+
+        public Task ReloadAsync(string deviceName, CancellationToken ct = default) => Task.CompletedTask;
+
+        public Task StopDeviceAsync(int networkDeviceId, CancellationToken ct = default) => Task.CompletedTask;
+
+        public void RegisterTasks(string deviceName, Func<IPlcBuffer, ProductionContext, List<IPlcTask>> factory)
+        {
+        }
+
+        public IPlcService? GetPlc(int networkDeviceId) => null;
+
+        public ProductionContext? GetContext(string deviceName) => null;
+
+        public void MarkRuntimeFault(int networkDeviceId, string deviceName, string error)
+        {
+        }
+
+        public PlcConnectionRuntimeSnapshot? GetRuntimeStatus(int networkDeviceId)
+            => new()
+            {
+                NetworkDeviceId = networkDeviceId,
+                DeviceName = "Contract-PLC",
+                IsConnected = true
+            };
+
+        public IReadOnlyCollection<PlcConnectionRuntimeSnapshot> GetRuntimeStatuses() => [];
+
+        public void Dispose()
+        {
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
     private sealed class ContractProductionTimeProvider : IProductionTimeProvider

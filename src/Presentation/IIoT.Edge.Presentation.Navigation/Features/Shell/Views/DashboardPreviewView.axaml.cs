@@ -27,6 +27,7 @@ public partial class DashboardPreviewView : UserControl
         DashboardViewModel viewModel,
         IAppLanguageService languageService,
         ISystemLogDisplayStore logDisplayStore,
+        ISystemLogDisplayProjector logProjector,
         ILocalSystemRuntimeConfigService runtimeConfig,
         IEdgeSyncDiagnosticsQuery diagnosticsQuery,
         IPlcConnectionManager plcConnectionManager)
@@ -44,6 +45,7 @@ public partial class DashboardPreviewView : UserControl
             viewModel,
             languageService,
             logDisplayStore,
+            logProjector,
             runtimeConfig,
             diagnosticsQuery,
             plcConnectionManager);

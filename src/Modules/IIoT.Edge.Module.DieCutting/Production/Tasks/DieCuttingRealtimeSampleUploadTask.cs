@@ -2,6 +2,7 @@ using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Mes;
+using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Module.DieCutting.Config;
 using IIoT.Edge.Module.DieCutting.Config.Parameters;
@@ -23,6 +24,7 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
     private readonly IDieCuttingMesScenarioChannel _mesChannel;
     private readonly DieCuttingProductionPlanService _productionPlanService;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
+    private readonly IPlcConnectionManager _plcConnectionManager;
     private readonly IModuleParamProvider<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business> _parameters;
     private readonly DieCuttingModuleOptions _moduleOptions;
     private int _taskLoopInterval;
@@ -38,6 +40,7 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
         IDieCuttingMesScenarioChannel mesChannel,
         DieCuttingProductionPlanService productionPlanService,
         IMesUploadDiagnosticsStore diagnosticsStore,
+        IPlcConnectionManager plcConnectionManager,
         IModuleParamProvider<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business> parameters,
         ILogService logger,
         IOptions<DieCuttingModuleOptions> moduleOptions)
@@ -49,6 +52,7 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
         _mesChannel = mesChannel;
         _productionPlanService = productionPlanService;
         _diagnosticsStore = diagnosticsStore;
+        _plcConnectionManager = plcConnectionManager;
         _parameters = parameters;
         _moduleOptions = moduleOptions.Value;
         _taskLoopInterval = NormalizeInterval(_moduleOptions.Runtime.UploadLoopIntervalMs, 10000);
@@ -68,18 +72,17 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
             parameterSnapshot.Mes<int>(DieCuttingParams.Mes.数据新鲜度超时毫秒),
             _moduleOptions.Runtime.DataFreshnessTimeoutMs);
 
-        var freshnessResult = EnsureFreshReadData(freshnessTimeoutMs);
-        if (!freshnessResult.IsSuccess)
-        {
-            await RecordResultAsync(null, freshnessResult).ConfigureAwait(false);
-            return;
-        }
-
         var planState = await _productionPlanService.GetStateAsync(TaskCancellationToken).ConfigureAwait(false);
         _context.SelectedProductionPlan = planState.CurrentPlan;
         _context.TraceBatchNumber = planState.TraceBatchNumber;
         _context.TraceBatchGeneratedAt = planState.TraceBatchGeneratedAt;
         _context.TraceBatchError = planState.TraceBatchError;
+
+        if (!planState.IsMesEnabled)
+        {
+            await RecordResultAsync(null, MesCallResult.Disabled("MES 上传已关闭，模切采样上传暂停。")).ConfigureAwait(false);
+            return;
+        }
 
         if (planState.IsMesEnabled && planState.RequiresSelection && !planState.HasTraceBatchNumber)
         {
@@ -87,6 +90,20 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
                 ? "MES 已启用，但当前主批计划尚未生成追溯批次号。"
                 : "MES 已启用，请先选择主批计划并生成追溯批次号。";
             await RecordResultAsync(null, MesCallResult.BusinessRejected(message)).ConfigureAwait(false);
+            return;
+        }
+
+        var connectionResult = EnsurePlcConnected();
+        if (!connectionResult.IsSuccess)
+        {
+            await RecordResultAsync(null, connectionResult).ConfigureAwait(false);
+            return;
+        }
+
+        var freshnessResult = EnsureFreshReadData(freshnessTimeoutMs);
+        if (!freshnessResult.IsSuccess)
+        {
+            await RecordResultAsync(null, freshnessResult).ConfigureAwait(false);
             return;
         }
 
@@ -118,6 +135,17 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
         }
 
         return MesCallResult.Success("PLC 只读数据新鲜。");
+    }
+
+    private MesCallResult EnsurePlcConnected()
+    {
+        var status = _plcConnectionManager.GetRuntimeStatus(_context.NetworkDeviceId);
+        if (status?.IsConnected == true)
+        {
+            return MesCallResult.Success("PLC 已连接。");
+        }
+
+        return MesCallResult.InvalidContext("PLC 未连接，模切采样上传暂停。");
     }
 
     private Task RecordResultAsync(DieCuttingRealtimeSnapshot? snapshot, MesCallResult result)

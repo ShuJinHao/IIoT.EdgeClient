@@ -28,6 +28,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
 
     private readonly DashboardViewModel _source;
     private readonly ISystemLogDisplayStore _logDisplayStore;
+    private readonly ISystemLogDisplayProjector _logProjector;
     private readonly ILocalSystemRuntimeConfigService _runtimeConfig;
     private readonly IEdgeSyncDiagnosticsQuery _diagnosticsQuery;
     private readonly IPlcConnectionManager _plcConnectionManager;
@@ -59,6 +60,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
         DashboardViewModel source,
         IAppLanguageService languageService,
         ISystemLogDisplayStore logDisplayStore,
+        ISystemLogDisplayProjector logProjector,
         ILocalSystemRuntimeConfigService runtimeConfig,
         IEdgeSyncDiagnosticsQuery diagnosticsQuery,
         IPlcConnectionManager plcConnectionManager)
@@ -66,6 +68,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
     {
         _source = source;
         _logDisplayStore = logDisplayStore;
+        _logProjector = logProjector;
         _runtimeConfig = runtimeConfig;
         _diagnosticsQuery = diagnosticsQuery;
         _plcConnectionManager = plcConnectionManager;
@@ -627,7 +630,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
 
     private void RefreshAlertsFromLogStore()
     {
-        var alerts = _logDisplayStore.Entries
+        var alerts = _logProjector.BuildAggregatedEntries(_logDisplayStore.Entries)
             .Where(static x => IsAlertLevel(x.Level))
             .Take(AlertLimit)
             .Select(ToAlertItem)

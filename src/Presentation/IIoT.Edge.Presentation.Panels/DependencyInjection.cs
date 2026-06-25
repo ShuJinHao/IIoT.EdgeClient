@@ -14,6 +14,7 @@ public static class DependencyInjection
 
         services.AddSingleton<LogDisplayService>();
         services.AddSingleton<ISystemLogDisplayStore>(sp => sp.GetRequiredService<LogDisplayService>());
+        services.AddSingleton<ISystemLogDisplayProjector, SystemLogDisplayProjector>();
 
         services.AddSingleton<EquipmentViewModel>();
         services.AddSingleton<LogViewModel>();
