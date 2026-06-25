@@ -74,27 +74,16 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
 
     public async Task ConnectAsync()
     {
-        Stopwatch? stopwatch = null;
         var endpoint = ClampConnectTimeout(_device.Endpoint);
         try
         {
             _plcService.Init(endpoint);
             MarkConnecting();
-            stopwatch = Stopwatch.StartNew();
             var connected = await _plcService.ConnectAsync()
                 .WaitAsync(endpoint.ConnectTimeout)
                 .ConfigureAwait(false);
-            MarkLatency(ToLatencyMs(stopwatch.ElapsedMilliseconds));
             if (connected)
             {
-                MarkConnected();
-                if (_retryCount > 0 || _lastDisconnectLogTime != DateTime.MinValue)
-                {
-                    _logger.Info($"[{_device.DeviceName}] PLC 连接已恢复。");
-                    _lastDisconnectLogTime = DateTime.MinValue;
-                    _retryCount = 0;
-                }
-
                 return;
             }
 
@@ -109,7 +98,6 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
         {
             CloseHangingConnection();
             _retryCount++;
-            MarkLatency(ToLatencyMs(stopwatch?.ElapsedMilliseconds));
             MarkDisconnected(ex.Message);
             if (ShouldLogDisconnect())
             {
@@ -148,11 +136,23 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
             return;
         }
 
+        var hasProtocolWork = _readBlocks.Count > 0 || _writeBlocks.Count > 0;
+        var cycleStopwatch = hasProtocolWork ? Stopwatch.StartNew() : null;
         await ReadPlcToBufferAsync(buffer).ConfigureAwait(false);
         await WriteBufferToPlcAsync(buffer).ConfigureAwait(false);
+        if (hasProtocolWork)
+        {
+            MarkConnected(ToLatencyMs(cycleStopwatch?.ElapsedMilliseconds));
+            if (_retryCount > 0 || _lastDisconnectLogTime != DateTime.MinValue)
+            {
+                _logger.Info($"[{_device.DeviceName}] PLC 连接已恢复。");
+                _lastDisconnectLogTime = DateTime.MinValue;
+                _retryCount = 0;
+            }
+        }
     }
 
-    protected virtual void MarkConnected()
+    protected virtual void MarkConnected(int? latencyMs)
     {
     }
 
@@ -161,10 +161,6 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
     }
 
     protected virtual void MarkDisconnected(string reason)
-    {
-    }
-
-    protected virtual void MarkLatency(int? latencyMs)
     {
     }
 
@@ -200,11 +196,9 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
         {
             foreach (var block in _readBlocks)
             {
-                var stopwatch = Stopwatch.StartNew();
                 var data = await _plcService
                     .ReadDataAsync<ushort>(block.StartAddress, (ushort)block.WordCount)
                     .ConfigureAwait(false);
-                MarkLatency(ToLatencyMs(stopwatch.ElapsedMilliseconds));
                 var words = data.ToArray();
 
                 foreach (var item in block.Items)
@@ -252,9 +246,7 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
                     }
                 }
 
-                var stopwatch = Stopwatch.StartNew();
                 await _plcService.WriteDataAsync(block.StartAddress, blockWords.ToList()).ConfigureAwait(false);
-                MarkLatency(ToLatencyMs(stopwatch.ElapsedMilliseconds));
             }
         }
         catch (Exception ex)
@@ -274,7 +266,7 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
     {
         if (_retryCount <= 3)
         {
-            return 50;
+            return 2000;
         }
 
         if (_retryCount <= 10)

@@ -40,12 +40,13 @@ public sealed class PlcConnectionStatusStore
                 DeviceName = deviceName,
                 IsConnected = false,
                 ConnectionState = PlcConnectionState.Connecting,
-                LastError = null
+                LastError = null,
+                LatencyMs = null
             };
         }
     }
 
-    public void MarkConnected(int networkDeviceId, string deviceName)
+    public void MarkConnected(int networkDeviceId, string deviceName, int? latencyMs = null)
     {
         lock (_stateLock)
         {
@@ -56,7 +57,8 @@ public sealed class PlcConnectionStatusStore
                 IsConnected = true,
                 ConnectionState = PlcConnectionState.Connected,
                 LastConnectedAtUtc = DateTimeOffset.UtcNow,
-                LastError = null
+                LastError = null,
+                LatencyMs = latencyMs
             };
         }
     }
@@ -78,7 +80,8 @@ public sealed class PlcConnectionStatusStore
                     : DateTimeOffset.UtcNow,
                 LastError = string.IsNullOrWhiteSpace(error)
                     ? existing.LastError
-                    : error
+                    : error,
+                LatencyMs = null
             };
         }
     }
@@ -94,20 +97,8 @@ public sealed class PlcConnectionStatusStore
                 IsConnected = false,
                 ConnectionState = PlcConnectionState.Faulted,
                 LastFailureAtUtc = DateTimeOffset.UtcNow,
-                LastError = error
-            };
-        }
-    }
-
-    public void MarkLatency(int networkDeviceId, string deviceName, int? latencyMs)
-    {
-        lock (_stateLock)
-        {
-            var existing = GetOrCreateSnapshot(networkDeviceId, deviceName);
-            _snapshots[networkDeviceId] = existing with
-            {
-                DeviceName = deviceName,
-                LatencyMs = latencyMs
+                LastError = error,
+                LatencyMs = null
             };
         }
     }

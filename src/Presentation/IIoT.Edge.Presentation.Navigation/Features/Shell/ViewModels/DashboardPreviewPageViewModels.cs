@@ -1,10 +1,9 @@
 using System.Collections.ObjectModel;
-using System.Collections.Specialized;
 using System.ComponentModel;
 using Avalonia.Threading;
+using IIoT.Edge.Application.Abstractions.Cloud;
 using IIoT.Edge.Application.Abstractions.Config;
-using IIoT.Edge.Application.Abstractions.Device;
-using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Application.Abstractions.Mes;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Common.Diagnostics;
@@ -14,21 +13,17 @@ using IIoT.Edge.UI.Shared.Avalonia.Controls;
 using IIoT.Edge.UI.Shared.Localization;
 using AvaloniaDispatcher = Avalonia.Threading.Dispatcher;
 
-using IIoT.Edge.Application.Abstractions.Cloud;
-using IIoT.Edge.Application.Abstractions.Mes;
 namespace IIoT.Edge.Presentation.Navigation.Features.Shell;
 
 internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocalizedViewModel
 {
     private const string EmptyValue = "—";
-    private const int AlertLimit = 50;
     private const int UploadHealthSegmentLimit = 6;
     private const int LatencyWarningThresholdMs = 5000;
     private static readonly TimeSpan DiagnosticsRefreshInterval = TimeSpan.FromSeconds(5);
 
     private readonly DashboardViewModel _source;
-    private readonly ISystemLogDisplayStore _logDisplayStore;
-    private readonly ISystemLogDisplayProjector _logProjector;
+    private readonly ILogDeviceSelectionService _deviceSelectionService;
     private readonly ILocalSystemRuntimeConfigService _runtimeConfig;
     private readonly IEdgeSyncDiagnosticsQuery _diagnosticsQuery;
     private readonly IPlcConnectionManager _plcConnectionManager;
@@ -42,7 +37,6 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
     private DateTime? _latestUploadFailureAt;
     private bool _cloudUploadEnabled;
     private bool _mesUploadEnabled;
-    private bool _isLogStoreSubscribed;
     private int _diagnosticsRefreshInFlight;
     private int _deadLetterUploadCount;
     private string _cloudStateText = EmptyValue;
@@ -50,25 +44,26 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
     private string _mesStateText = EmptyValue;
     private string _mesProbeText = string.Empty;
     private string _plcLatencyText = EmptyValue;
+    private string _connectedDevicesText = EmptyValue;
+    private string _plcFaultStateText = EmptyValue;
     private EdgeVisualStatus _cloudStatus = EdgeVisualStatus.Offline;
     private EdgeVisualStatus _mesStatus = EdgeVisualStatus.Offline;
     private EdgeVisualStatus _plcLatencyStatus = EdgeVisualStatus.Offline;
     private EdgeVisualStatus _deviceLinksStatus = EdgeVisualStatus.Offline;
     private EdgeVisualStatus _uploadHealthStatus = EdgeVisualStatus.Offline;
+    private IReadOnlyCollection<PlcConnectionRuntimeSnapshot> _lastPlcSnapshots = [];
 
     public DashboardPreviewRuntimeViewModel(
         DashboardViewModel source,
         IAppLanguageService languageService,
-        ISystemLogDisplayStore logDisplayStore,
-        ISystemLogDisplayProjector logProjector,
+        ILogDeviceSelectionService deviceSelectionService,
         ILocalSystemRuntimeConfigService runtimeConfig,
         IEdgeSyncDiagnosticsQuery diagnosticsQuery,
         IPlcConnectionManager plcConnectionManager)
         : base(languageService)
     {
         _source = source;
-        _logDisplayStore = logDisplayStore;
-        _logProjector = logProjector;
+        _deviceSelectionService = deviceSelectionService;
         _runtimeConfig = runtimeConfig;
         _diagnosticsQuery = diagnosticsQuery;
         _plcConnectionManager = plcConnectionManager;
@@ -80,9 +75,10 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
         _mesUploadEnabled = runtimeSnapshot.MesUploadEnabled;
 
         _source.PropertyChanged += OnSourcePropertyChanged;
+        _deviceSelectionService.SelectionChanged += OnSharedDeviceSelectionChanged;
     }
 
-    public ObservableCollection<DashboardPreviewAlertItem> AlertItems { get; } = [];
+    public ObservableCollection<DashboardPreviewPlcStatusItem> PlcStatusTableItems { get; } = [];
 
     public ObservableCollection<DashboardPreviewUploadChannelItem> UploadChannelItems { get; } = [];
 
@@ -95,7 +91,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
         "窗口：{0}",
         Normalize(_source.RecentHourLabel));
 
-    public string ConnectedDevices => Normalize(_source.ConnectedDevices);
+    public string ConnectedDevices => _connectedDevicesText;
 
     public string CurrentBatch => Normalize(_source.CurrentBatch);
 
@@ -161,10 +157,6 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
         ? GetText("Navigation_DashboardPreview_UploadDisabledMessage", "MES/云端上传均未启用。")
         : GetText("Navigation_DashboardPreview_UploadTrendEmptyMessage", "上传状态会按诊断采样显示。");
 
-    public string AlertStateText => IsAlertEmpty
-        ? GetText("Navigation_DashboardPreview_AlertNormal", "暂无告警")
-        : GetText("Navigation_DashboardPreview_AlertActive", "有告警");
-
     public IReadOnlyList<EdgeSummaryItem> ProductionSummaryItems =>
     [
         new()
@@ -179,17 +171,15 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
         },
         new()
         {
-            Label = GetText("Navigation_DashboardPreview_RealtimeAlert", "报警态"),
-            Value = AlertStateText
+            Label = GetText("Navigation_DashboardPreview_PlcExceptions", "通讯异常"),
+            Value = _plcFaultStateText
         }
     ];
 
-    public bool IsAlertEmpty => AlertItems.Count == 0;
+    public bool IsPlcStatusTableEmpty => PlcStatusTableItems.Count == 0;
 
     public async Task OnActivatedAsync()
     {
-        SubscribeLogStore();
-        RefreshAlertsFromLogStore();
         _diagnosticsTimer.Start();
         await _source.OnActivatedAsync();
         await RefreshDiagnosticsAsync();
@@ -198,7 +188,6 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
     public async Task OnDeactivatedAsync()
     {
         _diagnosticsTimer.Stop();
-        UnsubscribeLogStore();
         await _source.OnDeactivatedAsync();
     }
 
@@ -207,29 +196,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
         _diagnosticsTimer.Stop();
         _diagnosticsTimer.Tick -= OnDiagnosticsTimerTick;
         _source.PropertyChanged -= OnSourcePropertyChanged;
-        UnsubscribeLogStore();
-    }
-
-    private void SubscribeLogStore()
-    {
-        if (_isLogStoreSubscribed)
-        {
-            return;
-        }
-
-        _logDisplayStore.Entries.CollectionChanged += OnLogStoreEntriesChanged;
-        _isLogStoreSubscribed = true;
-    }
-
-    private void UnsubscribeLogStore()
-    {
-        if (!_isLogStoreSubscribed)
-        {
-            return;
-        }
-
-        _logDisplayStore.Entries.CollectionChanged -= OnLogStoreEntriesChanged;
-        _isLogStoreSubscribed = false;
+        _deviceSelectionService.SelectionChanged -= OnSharedDeviceSelectionChanged;
     }
 
     private async void OnDiagnosticsTimerTick(object? sender, EventArgs e)
@@ -267,6 +234,9 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
         var cloudState = ResolveCloudState(diagnostics.Cloud);
         var mesState = ResolveMesState(diagnostics.Mes);
         var averagePlcLatency = ResolveAverageLatency(plcSnapshots);
+        RefreshPlcStatusTable(plcSnapshots);
+        _connectedDevicesText = ResolveConnectedDevicesText(plcSnapshots);
+        _plcFaultStateText = ResolvePlcFaultStateText(plcSnapshots);
 
         _cloudStateText = cloudState.StateText;
         _cloudProbeText = cloudState.ProbeText;
@@ -276,7 +246,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
         _mesStatus = mesState.Status;
         _plcLatencyText = FormatLatency(averagePlcLatency);
         _plcLatencyStatus = ResolveLatencyStatus(averagePlcLatency, plcSnapshots.Any(static x => x.IsConnected));
-        _deviceLinksStatus = ResolveDeviceLinksStatus();
+        _deviceLinksStatus = ResolveDeviceLinksStatus(plcSnapshots);
 
         UpdateUploadHealth(diagnostics, cloudState, mesState);
 
@@ -289,6 +259,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
         OnPropertyChanged(nameof(CloudLatencyText));
         OnPropertyChanged(nameof(MesLatencyText));
         OnPropertyChanged(nameof(PlcLatencyText));
+        OnPropertyChanged(nameof(ConnectedDevices));
         OnPropertyChanged(nameof(CloudLatencyStatus));
         OnPropertyChanged(nameof(MesLatencyStatus));
         OnPropertyChanged(nameof(CloudStatus));
@@ -297,6 +268,46 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
         OnPropertyChanged(nameof(DeviceLinksStatus));
         OnPropertyChanged(nameof(ProductionSummaryItems));
         NotifyUploadHealthChanged();
+    }
+
+    private void RefreshPlcStatusTable(IReadOnlyCollection<PlcConnectionRuntimeSnapshot> plcSnapshots)
+    {
+        _lastPlcSnapshots = plcSnapshots
+            .OrderBy(static x => x.DeviceName, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        var selectedKey = _deviceSelectionService.SelectedDeviceKey;
+        var visibleSnapshots = string.Equals(
+                selectedKey,
+                ILogDeviceSelectionService.AllFilterKey,
+                StringComparison.OrdinalIgnoreCase)
+            ? _lastPlcSnapshots
+            : _lastPlcSnapshots.Where(snapshot =>
+                string.Equals(snapshot.DeviceName, selectedKey, StringComparison.OrdinalIgnoreCase)).ToArray();
+
+        PlcStatusTableItems.Clear();
+        foreach (var snapshot in visibleSnapshots)
+        {
+            PlcStatusTableItems.Add(CreatePlcStatusItem(snapshot, selectedKey));
+        }
+
+        OnPropertyChanged(nameof(IsPlcStatusTableEmpty));
+    }
+
+    private DashboardPreviewPlcStatusItem CreatePlcStatusItem(
+        PlcConnectionRuntimeSnapshot snapshot,
+        string selectedKey)
+    {
+        var isSelected = string.Equals(snapshot.DeviceName, selectedKey, StringComparison.OrdinalIgnoreCase);
+        return new DashboardPreviewPlcStatusItem(
+            snapshot.DeviceName,
+            ResolvePlcConnectionStateText(snapshot.ConnectionState),
+            ResolvePlcVisualStatus(snapshot),
+            snapshot.IsConnected && snapshot.LatencyMs.HasValue ? FormatLatency(snapshot.LatencyMs.Value) : EmptyValue,
+            string.IsNullOrWhiteSpace(snapshot.LastError) ? EmptyValue : snapshot.LastError,
+            FormatTimestamp(snapshot.LastConnectedAtUtc),
+            FormatTimestamp(snapshot.LastFailureAtUtc),
+            isSelected);
     }
 
     private void ApplyRuntimeConfig(SystemRuntimeConfigSnapshot runtimeConfig)
@@ -617,40 +628,18 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
         => deadLetterCount > 0
             || (lastFailureAt.HasValue && (!lastSuccessAt.HasValue || lastFailureAt.Value > lastSuccessAt.Value));
 
-    private void OnLogStoreEntriesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    private void OnSharedDeviceSelectionChanged(object? sender, EventArgs e)
     {
         if (AvaloniaDispatcher.UIThread.CheckAccess())
         {
-            RefreshAlertsFromLogStore();
+            RefreshPlcStatusTable(_lastPlcSnapshots);
             return;
         }
 
-        AvaloniaDispatcher.UIThread.Post(RefreshAlertsFromLogStore, DispatcherPriority.Background);
+        AvaloniaDispatcher.UIThread.Post(
+            () => RefreshPlcStatusTable(_lastPlcSnapshots),
+            DispatcherPriority.Background);
     }
-
-    private void RefreshAlertsFromLogStore()
-    {
-        var alerts = _logProjector.BuildAggregatedEntries(_logDisplayStore.Entries)
-            .Where(static x => IsAlertLevel(x.Level))
-            .Take(AlertLimit)
-            .Select(ToAlertItem)
-            .ToArray();
-
-        AlertItems.Clear();
-        foreach (var alert in alerts)
-        {
-            AlertItems.Add(alert);
-        }
-
-        NotifyAlertsChanged();
-    }
-
-    private static DashboardPreviewAlertItem ToAlertItem(LogEntry entry)
-        => new(
-            entry.Time.ToString("HH:mm:ss"),
-            entry.Level,
-            entry.Message,
-            EdgeVisualStatus.Error);
 
     private void OnSourcePropertyChanged(object? sender, PropertyChangedEventArgs e)
         => OnPropertyChanged(string.Empty);
@@ -658,6 +647,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
     protected override void OnLanguageChanged()
     {
         RefreshUploadHealthSegmentLabels();
+        RefreshPlcStatusTable(_lastPlcSnapshots);
         OnPropertyChanged(string.Empty);
         _ = RefreshDiagnosticsAsync();
     }
@@ -669,13 +659,6 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
             var item = UploadHealthSegments[i];
             UploadHealthSegments[i] = item with { Label = ResolveUploadHealthSegmentLabel(item.Status) };
         }
-    }
-
-    private void NotifyAlertsChanged()
-    {
-        OnPropertyChanged(nameof(IsAlertEmpty));
-        OnPropertyChanged(nameof(AlertStateText));
-        OnPropertyChanged(nameof(ProductionSummaryItems));
     }
 
     private void NotifyUploadHealthChanged()
@@ -694,10 +677,62 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
         OnPropertyChanged(nameof(UploadHealthEmptyMessage));
     }
 
-    private EdgeVisualStatus ResolveDeviceLinksStatus()
-        => ConnectedDevices.StartsWith("0 /", StringComparison.Ordinal)
-            ? EdgeVisualStatus.Offline
-            : EdgeVisualStatus.Running;
+    private EdgeVisualStatus ResolveDeviceLinksStatus(IReadOnlyCollection<PlcConnectionRuntimeSnapshot> snapshots)
+    {
+        if (snapshots.Count == 0)
+        {
+            return EdgeVisualStatus.Offline;
+        }
+
+        var connected = snapshots.Count(static x => x.IsConnected);
+        if (connected == 0)
+        {
+            return EdgeVisualStatus.Offline;
+        }
+
+        return connected == snapshots.Count ? EdgeVisualStatus.Running : EdgeVisualStatus.Warning;
+    }
+
+    private string ResolveConnectedDevicesText(IReadOnlyCollection<PlcConnectionRuntimeSnapshot> snapshots)
+        => snapshots.Count == 0
+            ? Normalize(_source.ConnectedDevices)
+            : $"{snapshots.Count(static x => x.IsConnected)} / {snapshots.Count}";
+
+    private string ResolvePlcFaultStateText(IReadOnlyCollection<PlcConnectionRuntimeSnapshot> snapshots)
+    {
+        if (snapshots.Count == 0)
+        {
+            return EmptyValue;
+        }
+
+        var faulted = snapshots.Count(static x => !x.IsConnected);
+        if (faulted == 0)
+        {
+            return GetText("Navigation_DashboardPreview_PlcHealthy", "正常");
+        }
+
+        return FormatText("Navigation_DashboardPreview_PlcFaultCountFormat", "{0}/{1} 异常", faulted, snapshots.Count);
+    }
+
+    private EdgeVisualStatus ResolvePlcVisualStatus(PlcConnectionRuntimeSnapshot snapshot)
+        => snapshot.ConnectionState switch
+        {
+            PlcConnectionState.Connected when snapshot.IsConnected => EdgeVisualStatus.Running,
+            PlcConnectionState.Connecting or PlcConnectionState.Retrying => EdgeVisualStatus.Warning,
+            PlcConnectionState.Faulted => EdgeVisualStatus.Error,
+            _ => EdgeVisualStatus.Offline
+        };
+
+    private string ResolvePlcConnectionStateText(PlcConnectionState state)
+        => state switch
+        {
+            PlcConnectionState.Connecting => GetText("Navigation_DashboardPreview_PlcStateConnecting", "连接中"),
+            PlcConnectionState.Connected => GetText("Navigation_DashboardPreview_PlcStateConnected", "已连接"),
+            PlcConnectionState.Retrying => GetText("Navigation_DashboardPreview_PlcStateRetrying", "重试中"),
+            PlcConnectionState.Disconnected => GetText("Navigation_DashboardPreview_PlcStateDisconnected", "未连接"),
+            PlcConnectionState.Faulted => GetText("Navigation_DashboardPreview_PlcStateFaulted", "异常"),
+            _ => GetText("Navigation_DashboardPreview_PlcStateUnknown", "未知")
+        };
 
     private EdgeVisualStatus ResolveLatencyStatus(int? latencyMs, bool isReady)
     {
@@ -762,6 +797,11 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
             ? timestamp.Value.ToString("HH:mm:ss")
             : EmptyValue;
 
+    private string FormatTimestamp(DateTimeOffset? timestamp)
+        => timestamp.HasValue
+            ? timestamp.Value.ToLocalTime().ToString("HH:mm:ss")
+            : EmptyValue;
+
     private static DateTime? Latest(params DateTime?[] timestamps)
     {
         var values = timestamps
@@ -771,10 +811,6 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
 
         return values.Length == 0 ? null : values.Max();
     }
-
-    private static bool IsAlertLevel(string? level)
-        => string.Equals(level, "ERROR", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(level, "FATAL", StringComparison.OrdinalIgnoreCase);
 
     private static string Normalize(string? value)
         => string.IsNullOrWhiteSpace(value) || value == "--" ? EmptyValue : value;
@@ -865,10 +901,10 @@ internal sealed class DashboardPreviewDesignViewModel : DashboardPreviewLocalize
 
     public string UploadHealthEmptyMessage => GetText("Navigation_DashboardPreview_UploadTrendEmptyMessage", "上传状态会按诊断采样显示。");
 
-    public ObservableCollection<DashboardPreviewAlertItem> AlertItems { get; } =
+    public ObservableCollection<DashboardPreviewPlcStatusItem> PlcStatusTableItems { get; } =
     [
-        new("09:24", "ERROR", "PLC 返回报警状态。", EdgeVisualStatus.Error),
-        new("09:02", "FATAL", "MES 上传连续失败。", EdgeVisualStatus.Error)
+        new("P1-AP01", "已连接", EdgeVisualStatus.Running, "24 ms", "—", "15:04:03", "—", false),
+        new("P1-AP02", "重试中", EdgeVisualStatus.Warning, "—", "Read R2450 failed.", "—", "15:04:17", false)
     ];
 
     public ObservableCollection<DashboardPreviewUploadChannelItem> UploadChannelItems { get; } = [];
@@ -889,12 +925,12 @@ internal sealed class DashboardPreviewDesignViewModel : DashboardPreviewLocalize
         },
         new()
         {
-            Label = GetText("Navigation_DashboardPreview_RealtimeAlert", "报警态"),
-            Value = GetText("Navigation_DashboardPreview_AlertActive", "有告警")
+            Label = GetText("Navigation_DashboardPreview_PlcExceptions", "通讯异常"),
+            Value = FormatText("Navigation_DashboardPreview_PlcFaultCountFormat", "{0}/{1} 异常", 1, 8)
         }
     ];
 
-    public bool IsAlertEmpty => false;
+    public bool IsPlcStatusTableEmpty => false;
 
     protected override void OnLanguageChanged()
     {
@@ -941,11 +977,15 @@ internal sealed class DashboardPreviewDesignViewModel : DashboardPreviewLocalize
 
 }
 
-internal sealed record DashboardPreviewAlertItem(
-    string Time,
-    string Level,
-    string Message,
-    EdgeVisualStatus Status);
+internal sealed record DashboardPreviewPlcStatusItem(
+    string DeviceName,
+    string StateText,
+    EdgeVisualStatus Status,
+    string LatencyText,
+    string LastError,
+    string LastConnectedText,
+    string LastFailureText,
+    bool IsSelected);
 
 internal sealed record DashboardPreviewUploadChannelItem(
     string Name,

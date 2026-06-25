@@ -11,7 +11,11 @@ public sealed class LogViewModelBehaviorTests
     public void Entries_WhenMultipleDieCuttingPlcsFailSameSignal_ShouldShowSummaryByDefault()
     {
         var store = new TestSystemLogDisplayStore();
-        var viewModel = new LogViewModel(store, new SystemLogDisplayProjector(), new TestAppLanguageService());
+        var viewModel = new LogViewModel(
+            store,
+            new SystemLogDisplayProjector(),
+            new TestAppLanguageService(),
+            new LogDeviceSelectionService());
 
         store.Entries.Add(CreateEntry("ERROR", "[P1-AP01] 读取 R2450 失败：Read R2450 failed.", second: 1));
         store.Entries.Add(CreateEntry("ERROR", "[P1-AP02] 读取 R2450 失败：Read R2450 failed.", second: 2));
@@ -27,7 +31,11 @@ public sealed class LogViewModelBehaviorTests
     public void Entries_WhenDeviceFilterSelected_ShouldShowSelectedDeviceRawEntries()
     {
         var store = new TestSystemLogDisplayStore();
-        var viewModel = new LogViewModel(store, new SystemLogDisplayProjector(), new TestAppLanguageService());
+        var viewModel = new LogViewModel(
+            store,
+            new SystemLogDisplayProjector(),
+            new TestAppLanguageService(),
+            new LogDeviceSelectionService());
 
         store.Entries.Add(CreateEntry("ERROR", "[P1-AP01] 读取 R2450 失败：Read R2450 failed.", second: 1));
         store.Entries.Add(CreateEntry("ERROR", "[P1-AP02] 读取 R2450 失败：Read R2450 failed.", second: 2));
@@ -39,6 +47,26 @@ public sealed class LogViewModelBehaviorTests
         var entry = Assert.Single(viewModel.Entries);
         Assert.Contains("[P1-AP01]", entry.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("[P1-AP02]", entry.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SelectedDeviceFilter_WhenChanged_ShouldPublishSharedSelection()
+    {
+        var store = new TestSystemLogDisplayStore();
+        var selectionService = new LogDeviceSelectionService();
+        var viewModel = new LogViewModel(
+            store,
+            new SystemLogDisplayProjector(),
+            new TestAppLanguageService(),
+            selectionService);
+
+        store.Entries.Add(CreateEntry("ERROR", "[P1-AP01] 读取 R2450 失败：Read R2450 failed.", second: 1));
+
+        viewModel.SelectedDeviceFilter = Assert.Single(
+            viewModel.DeviceFilters,
+            static option => option.Key == "P1-AP01");
+
+        Assert.Equal("P1-AP01", selectionService.SelectedDeviceKey);
     }
 
     private static LogEntry CreateEntry(string level, string message, int second)

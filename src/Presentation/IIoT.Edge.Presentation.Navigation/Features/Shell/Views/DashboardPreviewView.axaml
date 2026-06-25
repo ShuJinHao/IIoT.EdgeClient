@@ -156,46 +156,70 @@
                 <Grid RowDefinitions="Auto,Auto,*">
                     <TextBlock
                         Classes="edge-dashboard-data-panel-title"
-                        Text="{DynamicResource Navigation_DashboardPreview_AlertSummary}" />
+                        Text="{DynamicResource Navigation_DashboardPreview_PlcStatusTableTitle}" />
                     <Border Classes="edge-dashboard-alert-header">
-                        <Grid ColumnDefinitions="58,58,*" ColumnSpacing="10">
+                        <Grid ColumnDefinitions="82,94,72,*,82,82" ColumnSpacing="10">
                             <TextBlock
                                 Classes="edge-dashboard-alert-header-text"
-                                Text="{DynamicResource Navigation_DashboardPreview_AlertTime}" />
+                                Text="{DynamicResource Navigation_DashboardPreview_PlcDevice}" />
                             <TextBlock
                                 Grid.Column="1"
                                 Classes="edge-dashboard-alert-header-text"
-                                Text="{DynamicResource Navigation_DashboardPreview_AlertLevel}" />
+                                Text="{DynamicResource Navigation_DashboardPreview_PlcState}" />
                             <TextBlock
                                 Grid.Column="2"
                                 Classes="edge-dashboard-alert-header-text"
-                                Text="{DynamicResource Navigation_DashboardPreview_AlertMessage}" />
+                                Text="{DynamicResource Navigation_DashboardPreview_PlcLatency}" />
+                            <TextBlock
+                                Grid.Column="3"
+                                Classes="edge-dashboard-alert-header-text"
+                                Text="{DynamicResource Navigation_DashboardPreview_PlcLastError}" />
+                            <TextBlock
+                                Grid.Column="4"
+                                Classes="edge-dashboard-alert-header-text"
+                                Text="{DynamicResource Navigation_DashboardPreview_PlcLastConnected}" />
+                            <TextBlock
+                                Grid.Column="5"
+                                Classes="edge-dashboard-alert-header-text"
+                                Text="{DynamicResource Navigation_DashboardPreview_PlcLastFailure}" />
                         </Grid>
                     </Border>
                     <Grid Grid.Row="2" Classes="edge-dashboard-data-panel-body">
                         <edge:EdgeScrollHost
-                            IsVisible="{Binding !IsAlertEmpty}"
+                            IsVisible="{Binding !IsPlcStatusTableEmpty}"
                             VerticalScrollBarVisibility="Auto">
-                            <ItemsControl ItemsSource="{Binding AlertItems}">
+                            <ItemsControl ItemsSource="{Binding PlcStatusTableItems}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <Border Classes="edge-dashboard-alert-row">
-                                            <Grid ColumnDefinitions="58,58,*" ColumnSpacing="10">
+                                            <Grid ColumnDefinitions="82,94,72,*,82,82" ColumnSpacing="10">
                                                 <TextBlock
                                                     Classes="edge-dashboard-alert-time"
-                                                    Text="{Binding Time}" />
+                                                    Text="{Binding DeviceName}" />
                                                 <StackPanel
                                                     Grid.Column="1"
                                                     Classes="edge-dashboard-alert-level">
                                                     <edge:EdgeStatusDot Status="{Binding Status}" />
                                                     <TextBlock
                                                         Classes="edge-dashboard-alert-level-text"
-                                                        Text="{Binding Level}" />
+                                                        Text="{Binding StateText}" />
                                                 </StackPanel>
                                                 <TextBlock
                                                     Grid.Column="2"
+                                                    Classes="edge-dashboard-alert-time"
+                                                    Text="{Binding LatencyText}" />
+                                                <TextBlock
+                                                    Grid.Column="3"
                                                     Classes="edge-dashboard-alert-message"
-                                                    Text="{Binding Message}" />
+                                                    Text="{Binding LastError}" />
+                                                <TextBlock
+                                                    Grid.Column="4"
+                                                    Classes="edge-dashboard-alert-time"
+                                                    Text="{Binding LastConnectedText}" />
+                                                <TextBlock
+                                                    Grid.Column="5"
+                                                    Classes="edge-dashboard-alert-time"
+                                                    Text="{Binding LastFailureText}" />
                                             </Grid>
                                         </Border>
                                     </DataTemplate>
@@ -203,9 +227,9 @@
                             </ItemsControl>
                         </edge:EdgeScrollHost>
                         <sharedViews:EmptyStateView
-                            IsVisible="{Binding IsAlertEmpty}"
-                            Message="{DynamicResource Navigation_DashboardPreview_NoAlertSource}"
-                            Title="{DynamicResource Navigation_DashboardPreview_NoAlertTitle}" />
+                            IsVisible="{Binding IsPlcStatusTableEmpty}"
+                            Message="{DynamicResource Navigation_DashboardPreview_NoPlcStatusSource}"
+                            Title="{DynamicResource Navigation_DashboardPreview_NoPlcStatusTitle}" />
                     </Grid>
                 </Grid>
             </edge:EdgeCard>

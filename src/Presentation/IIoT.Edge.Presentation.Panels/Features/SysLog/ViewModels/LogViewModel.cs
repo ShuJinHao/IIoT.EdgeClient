@@ -13,12 +13,14 @@ namespace IIoT.Edge.Presentation.Panels.Features.SysLog;
 /// </summary>
 public class LogViewModel : PresentationViewModelBase
 {
-    private const string AllFilterKey = "__all__";
+    private const string AllFilterKey = ILogDeviceSelectionService.AllFilterKey;
 
     private readonly ISystemLogDisplayStore _logDisplayStore;
     private readonly ISystemLogDisplayProjector _logProjector;
     private readonly IAppLanguageService _languageService;
+    private readonly ILogDeviceSelectionService _deviceSelectionService;
     private LogDeviceFilterOption? _selectedDeviceFilter;
+    private bool _isApplyingSharedSelection;
 
     public override string ViewId => "Core.SysLog";
     public override string ViewTitle => "系统日志";
@@ -40,6 +42,10 @@ public class LogViewModel : PresentationViewModelBase
             _selectedDeviceFilter = value;
             OnPropertyChanged();
             RebuildDisplayedEntries();
+            if (!_isApplyingSharedSelection)
+            {
+                _deviceSelectionService.SelectDevice(value?.Key ?? AllFilterKey);
+            }
         }
     }
 
@@ -51,11 +57,13 @@ public class LogViewModel : PresentationViewModelBase
     public LogViewModel(
         ISystemLogDisplayStore logDisplayStore,
         ISystemLogDisplayProjector logProjector,
-        IAppLanguageService languageService)
+        IAppLanguageService languageService,
+        ILogDeviceSelectionService deviceSelectionService)
     {
         _logDisplayStore = logDisplayStore;
         _logProjector = logProjector;
         _languageService = languageService;
+        _deviceSelectionService = deviceSelectionService;
 
         LayoutRow = 1;
         LayoutColumn = 1;
@@ -65,6 +73,7 @@ public class LogViewModel : PresentationViewModelBase
         Entries.CollectionChanged += OnEntriesChanged;
         _logDisplayStore.Entries.CollectionChanged += OnSourceEntriesChanged;
         _languageService.LanguageChanged += OnLanguageChanged;
+        _deviceSelectionService.SelectionChanged += OnSharedDeviceSelectionChanged;
         ClearCommand = new BaseCommand(_ => _logDisplayStore.Clear());
         RebuildDisplayedEntries();
     }
@@ -85,6 +94,27 @@ public class LogViewModel : PresentationViewModelBase
     {
         var selectedKey = SelectedDeviceFilter?.Key ?? AllFilterKey;
         RebuildDeviceFilters(selectedKey);
+    }
+
+    private void OnSharedDeviceSelectionChanged(object? sender, EventArgs e)
+    {
+        var selectedKey = _deviceSelectionService.SelectedDeviceKey;
+        var option = DeviceFilters.FirstOrDefault(filter =>
+            string.Equals(filter.Key, selectedKey, StringComparison.OrdinalIgnoreCase));
+        if (option is null)
+        {
+            return;
+        }
+
+        _isApplyingSharedSelection = true;
+        try
+        {
+            SelectedDeviceFilter = option;
+        }
+        finally
+        {
+            _isApplyingSharedSelection = false;
+        }
     }
 
     private void RebuildDeviceFilters(string? preferredKey = null)

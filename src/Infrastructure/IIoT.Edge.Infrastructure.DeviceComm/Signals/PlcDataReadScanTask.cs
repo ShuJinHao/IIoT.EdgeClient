@@ -129,13 +129,12 @@ public sealed class PlcDataReadScanTask : IPlcTask
     {
         try
         {
+            var stopwatch = Stopwatch.StartNew();
             foreach (var block in _readBlocks)
             {
-                var stopwatch = Stopwatch.StartNew();
                 var data = await _plcService
                     .ReadDataAsync<ushort>(block.StartAddress, (ushort)block.WordCount)
                     .ConfigureAwait(false);
-                MarkLatency(ToLatencyMs(stopwatch.ElapsedMilliseconds));
                 var words = data.ToArray();
 
                 foreach (var item in block.Items)
@@ -146,6 +145,7 @@ public sealed class PlcDataReadScanTask : IPlcTask
                 }
             }
 
+            _statusStore?.MarkConnected(_device.Id, _device.DeviceName, ToLatencyMs(stopwatch.ElapsedMilliseconds));
             if (_retryCount > 0)
             {
                 _retryCount = 0;
@@ -164,14 +164,11 @@ public sealed class PlcDataReadScanTask : IPlcTask
         }
     }
 
-    private void MarkLatency(int? latencyMs)
-        => _statusStore?.MarkLatency(_device.Id, _device.DeviceName, latencyMs);
-
     private int GetBackoffDelay()
     {
         if (_retryCount <= 3)
         {
-            return 50;
+            return 2000;
         }
 
         if (_retryCount <= 10)

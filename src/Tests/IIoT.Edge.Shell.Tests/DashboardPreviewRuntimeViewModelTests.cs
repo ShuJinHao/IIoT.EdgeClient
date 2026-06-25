@@ -1,10 +1,14 @@
 using System.Collections.ObjectModel;
 using System.Reflection;
+using IIoT.Edge.Application.Abstractions.Cloud;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Application.Abstractions.Mes;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Application.Abstractions.Shared;
+using IIoT.Edge.Application.Context;
 using IIoT.Edge.Application.Features.Production.Equipment;
 using IIoT.Edge.Presentation.Navigation.Features.Dashboard;
 using IIoT.Edge.Presentation.Navigation.Features.Shell;
@@ -17,32 +21,106 @@ namespace IIoT.Edge.Shell.Tests;
 public sealed class DashboardPreviewRuntimeViewModelTests
 {
     [Fact]
-    public void AlertItems_WhenMultipleDieCuttingPlcsFailSameSignal_ShouldShowOneSummary()
+    public void PlcStatusTableItems_WhenDiagnosticsSnapshotsRefresh_ShouldShowRuntimeStatusRows()
+    {
+        var languageService = new TestAppLanguageService();
+        var viewModel = new DashboardPreviewRuntimeViewModel(
+            new DashboardViewModel(new TestEquipmentPanelService(), languageService),
+            languageService,
+            new LogDeviceSelectionService(),
+            new TestRuntimeConfigService(),
+            new TestEdgeSyncDiagnosticsQuery(),
+            new TestPlcConnectionManager());
+
+        ApplyDiagnostics(
+            viewModel,
+            [
+                new()
+                {
+                    NetworkDeviceId = 1,
+                    DeviceName = "P1-AP01",
+                    IsConnected = true,
+                    ConnectionState = PlcConnectionState.Connected,
+                    LatencyMs = 12,
+                    LastConnectedAtUtc = new DateTimeOffset(2026, 6, 24, 16, 24, 1, TimeSpan.Zero)
+                },
+                new()
+                {
+                    NetworkDeviceId = 2,
+                    DeviceName = "P1-AP02",
+                    IsConnected = false,
+                    ConnectionState = PlcConnectionState.Retrying,
+                    LastError = "Read R2450 failed.",
+                    LastFailureAtUtc = new DateTimeOffset(2026, 6, 24, 16, 24, 2, TimeSpan.Zero)
+                }
+            ]);
+
+        Assert.Equal("1 / 2", viewModel.ConnectedDevices);
+        Assert.Equal("12 ms", viewModel.PlcLatencyText);
+        Assert.Equal(2, viewModel.PlcStatusTableItems.Count);
+        Assert.Collection(
+            viewModel.PlcStatusTableItems,
+            item =>
+            {
+                Assert.Equal("P1-AP01", item.DeviceName);
+                Assert.Equal("已连接", item.StateText);
+                Assert.Equal("12 ms", item.LatencyText);
+            },
+            item =>
+            {
+                Assert.Equal("P1-AP02", item.DeviceName);
+                Assert.Equal("重试中", item.StateText);
+                Assert.Equal("—", item.LatencyText);
+                Assert.Equal("Read R2450 failed.", item.LastError);
+            });
+        Assert.Contains(viewModel.ProductionSummaryItems, item =>
+            string.Equals(item.Label?.ToString(), "通讯异常", StringComparison.Ordinal)
+            && string.Equals(item.Value?.ToString(), "1/2 异常", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void PlcStatusTableItems_WhenSharedDeviceFilterChanges_ShouldFilterToSelectedDevice()
     {
         var store = new TestSystemLogDisplayStore();
-        store.Entries.Add(CreateEntry("ERROR", "[P1-AP01] PLC 只读数据读取失败：Read R2450 failed.", second: 1));
-        store.Entries.Add(CreateEntry("ERROR", "[P1-AP02] PLC 只读数据读取失败：Read R2450 failed.", second: 2));
+        var selectionService = new LogDeviceSelectionService();
+        var logViewModel = new LogViewModel(
+            store,
+            new SystemLogDisplayProjector(),
+            new TestAppLanguageService(),
+            selectionService);
+        store.Entries.Add(CreateEntry("ERROR", "[P1-AP01] 读取 R2450 失败：Read R2450 failed.", second: 1));
+        store.Entries.Add(CreateEntry("ERROR", "[P1-AP02] 读取 R2450 失败：Read R2450 failed.", second: 2));
+        logViewModel.SelectedDeviceFilter = Assert.Single(
+            logViewModel.DeviceFilters,
+            static option => option.Key == "P1-AP01");
 
         var languageService = new TestAppLanguageService();
         var viewModel = new DashboardPreviewRuntimeViewModel(
             new DashboardViewModel(new TestEquipmentPanelService(), languageService),
             languageService,
-            store,
-            new SystemLogDisplayProjector(),
+            selectionService,
             new TestRuntimeConfigService(),
             new TestEdgeSyncDiagnosticsQuery(),
             new TestPlcConnectionManager());
 
-        typeof(DashboardPreviewRuntimeViewModel)
-            .GetMethod("RefreshAlertsFromLogStore", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .Invoke(viewModel, null);
+        ApplyDiagnostics(
+            viewModel,
+            [
+                new() { NetworkDeviceId = 1, DeviceName = "P1-AP01", IsConnected = false, ConnectionState = PlcConnectionState.Retrying },
+                new() { NetworkDeviceId = 2, DeviceName = "P1-AP02", IsConnected = false, ConnectionState = PlcConnectionState.Retrying }
+            ]);
 
-        var alert = Assert.Single(viewModel.AlertItems);
-        Assert.Contains("负极模切采样异常", alert.Message, StringComparison.Ordinal);
-        Assert.Contains("2 台 PLC", alert.Message, StringComparison.Ordinal);
-        Assert.Contains("失败信号 R2450", alert.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("[P1-AP01]", alert.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("[P1-AP02]", alert.Message, StringComparison.Ordinal);
+        var item = Assert.Single(viewModel.PlcStatusTableItems);
+        Assert.Equal("P1-AP01", item.DeviceName);
+    }
+
+    private static void ApplyDiagnostics(
+        DashboardPreviewRuntimeViewModel viewModel,
+        IReadOnlyCollection<PlcConnectionRuntimeSnapshot> snapshots)
+    {
+        typeof(DashboardPreviewRuntimeViewModel)
+            .GetMethod("ApplyDiagnostics", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(viewModel, [CreateDiagnostics(), snapshots]);
     }
 
     private static LogEntry CreateEntry(string level, string message, int second)
@@ -52,6 +130,47 @@ public sealed class DashboardPreviewRuntimeViewModelTests
             Level = level,
             Message = message
         };
+
+    private static EdgeSyncDiagnosticsSnapshot CreateDiagnostics()
+        => new(
+            "P1-AP",
+            new CloudSyncDiagnosticsSnapshot(
+                EdgeUploadGateState.Ready,
+                EdgeUploadBlockReason.None,
+                CloudRetryRuntimeState.Idle,
+                null,
+                null,
+                null,
+                CloudCallOutcome.Success,
+                "none",
+                null,
+                0,
+                0,
+                0,
+                false,
+                false,
+                null,
+                "none",
+                null,
+                false,
+                null,
+                null),
+            new MesSyncDiagnosticsSnapshot(
+                MesRetryRuntimeState.Idle,
+                null,
+                null,
+                null,
+                null,
+                0,
+                [],
+                false,
+                null,
+                "none",
+                null,
+                false,
+                null,
+                null),
+            new ProductionContextPersistenceDiagnostics(0, null));
 
     private sealed class TestSystemLogDisplayStore : ISystemLogDisplayStore
     {

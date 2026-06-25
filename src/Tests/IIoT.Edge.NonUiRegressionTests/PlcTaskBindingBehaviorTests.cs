@@ -240,8 +240,10 @@ public sealed class PlcTaskBindingBehaviorTests
             Assert.NotNull(blockedSnapshot);
             Assert.False(blockedSnapshot!.IsConnected);
             Assert.Equal(bindingFault, blockedSnapshot.LastError);
-            await WaitUntilAsync(() => statusStore.GetSnapshot(healthyDevice.Id)?.IsConnected == true);
-            Assert.True(statusStore.GetSnapshot(healthyDevice.Id)?.IsConnected);
+            var healthySnapshot = statusStore.GetSnapshot(healthyDevice.Id);
+            Assert.NotNull(healthySnapshot);
+            Assert.False(healthySnapshot!.IsConnected);
+            Assert.NotEqual(PlcConnectionState.Faulted, healthySnapshot.ConnectionState);
         }
         finally
         {

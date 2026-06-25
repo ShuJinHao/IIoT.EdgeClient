@@ -51,15 +51,12 @@ public sealed class PlcIoScanTask : PlcIoScanTaskBase
         _statusStore = statusStore;
     }
 
-    protected override void MarkConnected()
-        => _statusStore?.MarkConnected(DeviceId, DeviceName);
+    protected override void MarkConnected(int? latencyMs)
+        => _statusStore?.MarkConnected(DeviceId, DeviceName, latencyMs);
 
     protected override void MarkConnecting()
         => _statusStore?.MarkConnecting(DeviceId, DeviceName);
 
     protected override void MarkDisconnected(string reason)
         => _statusStore?.MarkDisconnected(DeviceId, DeviceName, reason);
-
-    protected override void MarkLatency(int? latencyMs)
-        => _statusStore?.MarkLatency(DeviceId, DeviceName, latencyMs);
 }
