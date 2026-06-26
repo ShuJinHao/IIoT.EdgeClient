@@ -14,6 +14,8 @@ using IIoT.Edge.Module.DieCutting.Config;
 using IIoT.Edge.Module.DieCutting.Config.Parameters;
 using IIoT.Edge.Module.DieCutting.Mes;
 using IIoT.Edge.Module.DieCutting.Payload;
+using IIoT.Edge.Module.DieCutting.Presentation;
+using IIoT.Edge.Module.DieCutting.Presentation.Views;
 using IIoT.Edge.Module.DieCutting.Production;
 using IIoT.Edge.Module.DieCutting.Samples;
 using IIoT.Edge.SharedKernel.Context;
@@ -153,6 +155,93 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
             result.Services,
             descriptor => descriptor.ServiceType == typeof(IProcessMesUploader)
                           && descriptor.ImplementationFactory is not null);
+    }
+
+    [Fact]
+    public void RegisterViews_ShouldUseDieCuttingPluginDataView()
+    {
+        var result = new ModuleContractFixture().RegisterModule(new TModule());
+        var registration = result.ViewRegistry.GetViewRegistration($"{ExpectedModuleId}.DataView");
+
+        Assert.NotNull(registration);
+        Assert.Equal(typeof(DieCuttingDataPage), registration.ViewType);
+        Assert.Equal(typeof(DieCuttingDataViewModel), registration.ViewModelType);
+    }
+
+    [Fact]
+    public void RegisterServices_ShouldRegisterDieCuttingProductionStore()
+    {
+        var result = new ModuleContractFixture().RegisterModule(new TModule());
+
+        Assert.Contains(
+            result.Services,
+            descriptor => descriptor.ServiceType == typeof(IDieCuttingProductionRecordStore)
+                          && descriptor.ImplementationFactory is not null);
+    }
+
+    [Fact]
+    public async Task ProductionRecordStore_ShouldPersistRealRowsAndFilterBySelectedDevice()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"iiot-edge-diecutting-production-{Guid.NewGuid():N}");
+        try
+        {
+            var store = new DieCuttingProductionRecordStore(tempDir, new ContractLogService());
+            var completedAt = DateTime.UtcNow;
+
+            await store.AddAsync(
+                new DieCuttingProductionRecord
+                {
+                    ModuleId = ExpectedModuleId,
+                    DeviceName = ExpectedFirstDevice,
+                    BatchNo = "TRACE-REAL-001",
+                    Quantity = 12,
+                    WindowStartAt = completedAt.AddMinutes(-1),
+                    WindowCompleteAt = completedAt,
+                    PunchingSpeed = 60.5m,
+                    PlateLengthMm = 125.4m,
+                    PlateWidthMm = 75.2m,
+                    CreatedAtUtc = completedAt
+                },
+                TestContext.Current.CancellationToken);
+            await store.AddAsync(
+                new DieCuttingProductionRecord
+                {
+                    ModuleId = ExpectedModuleId,
+                    DeviceName = ExpectedLastDevice,
+                    BatchNo = "TRACE-REAL-002",
+                    Quantity = 5,
+                    WindowStartAt = completedAt.AddMinutes(-2),
+                    WindowCompleteAt = completedAt.AddSeconds(-30),
+                    PunchingSpeed = 55m,
+                    CreatedAtUtc = completedAt
+                },
+                TestContext.Current.CancellationToken);
+
+            var allRows = await store.QueryAsync(
+                ExpectedModuleId,
+                "__all__",
+                cancellationToken: TestContext.Current.CancellationToken);
+            var selectedRows = await store.QueryAsync(
+                ExpectedModuleId,
+                ExpectedFirstDevice,
+                cancellationToken: TestContext.Current.CancellationToken);
+
+            Assert.Equal(2, allRows.Count);
+            var row = Assert.Single(selectedRows);
+            Assert.Equal(ExpectedFirstDevice, row.DeviceName);
+            Assert.Equal("TRACE-REAL-001", row.BatchNo);
+            Assert.Equal(12, row.Quantity);
+            Assert.Equal(60.5m, row.PunchingSpeed);
+            Assert.Equal(125.4m, row.PlateLengthMm);
+            Assert.Equal(75.2m, row.PlateWidthMm);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
     }
 
     [Fact]

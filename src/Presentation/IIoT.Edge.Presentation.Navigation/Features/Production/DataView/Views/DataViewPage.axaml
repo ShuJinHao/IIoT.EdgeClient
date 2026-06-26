@@ -13,7 +13,8 @@
             <edge:EdgeTablePanel
                 EmptyMessage="{DynamicResource Navigation_Data_EmptyMessage}"
                 EmptyTitle="{DynamicResource Navigation_Data_EmptyTitle}"
-                IsEmpty="{Binding IsRecordsEmpty}">
+                IsEmpty="{Binding IsRecordsEmpty}"
+                ShowContentWhenEmpty="True">
                     <edge:EdgeDataGrid
                         AutoGenerateColumns="False"
                         CanUserReorderColumns="False"

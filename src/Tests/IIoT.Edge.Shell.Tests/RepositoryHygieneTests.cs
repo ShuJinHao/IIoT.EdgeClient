@@ -240,6 +240,21 @@ public sealed class RepositoryHygieneTests
     }
 
     [Fact]
+    public void DashboardPreviewPlcStatusTable_ShouldKeepLongErrorsOutOfMainColumns()
+    {
+        var root = FindRepositoryRoot();
+        var path = ToFullPath(
+            root,
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Shell/Views/DashboardPreviewView.axaml");
+        var xaml = File.ReadAllText(path);
+
+        Assert.DoesNotContain("Navigation_DashboardPreview_PlcLastError", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Text=\"{Binding LastError}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Command=\"{Binding DataContext.ShowPlcStatusDetailCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding SelectedPlcStatusDetail.LastErrorDetail}\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SourceTree_ShouldNotContainGeneratedOrDuplicateArtifacts()
     {
         var root = FindRepositoryRoot();

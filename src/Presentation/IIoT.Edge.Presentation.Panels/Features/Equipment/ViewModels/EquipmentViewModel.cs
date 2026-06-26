@@ -28,9 +28,6 @@ public class EquipmentViewModel : PresentationViewModelBase
     private string _recipeVersion = EmptyDisplayText;
     private string _processName = EmptyDisplayText;
     private bool _isRecipeActive;
-    private int _todayOutput;
-    private string _todayYield = "0.00%";
-    private int _ngCount;
     private string _currentBatch = EmptyDisplayText;
     private bool _isMesPlanSelectionRequired;
     private ProductionPlanOption? _selectedProductionPlan;
@@ -61,9 +58,6 @@ public class EquipmentViewModel : PresentationViewModelBase
     public string RecipeVersion { get => _recipeVersion; set { _recipeVersion = value; OnPropertyChanged(); } }
     public string ProcessName { get => _processName; set { _processName = value; OnPropertyChanged(); OnPropertyChanged(nameof(DisplayProcessName)); } }
     public bool IsRecipeActive { get => _isRecipeActive; set { _isRecipeActive = value; OnPropertyChanged(); } }
-    public int TodayOutput { get => _todayOutput; set { _todayOutput = value; OnPropertyChanged(); } }
-    public string TodayYield { get => _todayYield; set { _todayYield = value; OnPropertyChanged(); } }
-    public int NgCount { get => _ngCount; set { _ngCount = value; OnPropertyChanged(); } }
     public string CurrentBatch { get => _currentBatch; set { _currentBatch = value; OnPropertyChanged(); OnPropertyChanged(nameof(DisplayCurrentBatch)); } }
     public string DisplayRecipeName => NormalizeDisplayText(RecipeName);
     public string DisplayProcessName => NormalizeDisplayText(ProcessName);
@@ -205,13 +199,14 @@ public class EquipmentViewModel : PresentationViewModelBase
         return Task.CompletedTask;
     }
 
-    public void OnCapacityUpdated() => RunViewTaskInBackground(RefreshCapacityAsync, "刷新产量摘要失败");
+    public void OnCapacityUpdated()
+    {
+    }
 
     private async Task LoadPanelAsync()
     {
         await RefreshHardwareAsync();
         await RefreshRecipeAsync();
-        await RefreshCapacityAsync();
         await RefreshProductionPlanStateAsync();
     }
 
@@ -335,19 +330,6 @@ public class EquipmentViewModel : PresentationViewModelBase
                     WarnHigh = parameter.WarnHigh
                 }));
             NotifyRecipeParameterStateChanged();
-        });
-    }
-
-    private async Task RefreshCapacityAsync()
-    {
-        var snapshot = await _equipmentPanelService.GetCapacitySnapshotAsync();
-
-        await AvaloniaDispatcher.UIThread.InvokeAsync(() =>
-        {
-            TodayOutput = snapshot.TodayOutput;
-            NgCount = snapshot.NgCount;
-            TodayYield = snapshot.TodayYield;
-            CurrentBatch = snapshot.CurrentBatch;
         });
     }
 

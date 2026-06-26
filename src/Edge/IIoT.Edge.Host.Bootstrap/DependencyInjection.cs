@@ -27,7 +27,6 @@ using IIoT.Edge.Presentation.Navigation;
 using IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
 using IIoT.Edge.Presentation.Panels;
 using IIoT.Edge.Presentation.Shell;
-using IIoT.Edge.Presentation.VisualTestData;
 using IIoT.Edge.Host.DataPipeline;
 using IIoT.Edge.Host.DataPipeline.Tasks;
 using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
@@ -40,6 +39,9 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using System.IO;
+#if DEBUG
+using IIoT.Edge.Presentation.VisualTestData;
+#endif
 
 namespace IIoT.Edge.Host.Bootstrap;
 
@@ -139,7 +141,9 @@ public static class DependencyInjection
         services.AddShellPresentation();
         services.AddNavigationPresentation();
         services.AddPanelPresentation();
+#if DEBUG
         services.AddVisualTestDataPresentation(configuration);
+#endif
 
         RegisterHostViews(new HostViewRegistry(viewRegistry));
         RegisterModules(services, viewRegistry, configuration, enabledModules, cellDataTypeRegistry);

@@ -6,7 +6,7 @@
     <edge:EdgeCard Classes="right-rail-equipment">
         <Grid
             Classes="edge-equipment-root"
-            RowDefinitions="Auto,Auto,Auto,Auto">
+            RowDefinitions="Auto,Auto,Auto">
             <TextBlock
                 Classes="edge-equipment-title"
                 Text="{DynamicResource Panels_Title_Equipment}" />
@@ -103,42 +103,6 @@
                     </Grid>
                 </Grid>
             </Border>
-
-            <Grid
-                Classes="edge-equipment-metrics"
-                Grid.Row="3"
-                ColumnDefinitions="*,*,*">
-                <StackPanel Classes="edge-equipment-metric">
-                    <TextBlock
-                        Classes="edge-equipment-metric-value"
-                        Text="{Binding TodayOutput}" />
-                    <TextBlock
-                        Classes="edge-equipment-metric-label"
-                        Text="{DynamicResource Panels_Label_Output}" />
-                </StackPanel>
-
-                <StackPanel
-                    Classes="edge-equipment-metric"
-                    Grid.Column="1">
-                    <TextBlock
-                        Classes="edge-equipment-metric-value"
-                        Text="{Binding TodayYield}" />
-                    <TextBlock
-                        Classes="edge-equipment-metric-label"
-                        Text="{DynamicResource Panels_Label_Yield}" />
-                </StackPanel>
-
-                <StackPanel
-                    Classes="edge-equipment-metric"
-                    Grid.Column="2">
-                    <TextBlock
-                        Classes="edge-equipment-metric-value"
-                        Text="{Binding NgCount}" />
-                    <TextBlock
-                        Classes="edge-equipment-metric-label"
-                        Text="{DynamicResource Panels_Label_NgShort}" />
-                </StackPanel>
-            </Grid>
         </Grid>
     </edge:EdgeCard>
 </UserControl>

@@ -158,7 +158,7 @@
                         Classes="edge-dashboard-data-panel-title"
                         Text="{DynamicResource Navigation_DashboardPreview_PlcStatusTableTitle}" />
                     <Border Classes="edge-dashboard-alert-header">
-                        <Grid ColumnDefinitions="82,90,66,*,78,78,52" ColumnSpacing="8">
+                        <Grid ColumnDefinitions="82,98,70,82,82,56" ColumnSpacing="8">
                             <TextBlock
                                 Classes="edge-dashboard-alert-header-text"
                                 Text="{DynamicResource Navigation_DashboardPreview_PlcDevice}" />
@@ -173,17 +173,13 @@
                             <TextBlock
                                 Grid.Column="3"
                                 Classes="edge-dashboard-alert-header-text"
-                                Text="{DynamicResource Navigation_DashboardPreview_PlcLastError}" />
+                                Text="{DynamicResource Navigation_DashboardPreview_PlcLastConnected}" />
                             <TextBlock
                                 Grid.Column="4"
                                 Classes="edge-dashboard-alert-header-text"
-                                Text="{DynamicResource Navigation_DashboardPreview_PlcLastConnected}" />
-                            <TextBlock
-                                Grid.Column="5"
-                                Classes="edge-dashboard-alert-header-text"
                                 Text="{DynamicResource Navigation_DashboardPreview_PlcLastFailure}" />
                             <TextBlock
-                                Grid.Column="6"
+                                Grid.Column="5"
                                 Classes="edge-dashboard-alert-header-text"
                                 Text="{DynamicResource Navigation_DashboardPreview_PlcDetails}" />
                         </Grid>
@@ -198,7 +194,7 @@
                                         <Border
                                             Classes="edge-dashboard-alert-row"
                                             MinHeight="34">
-                                            <Grid ColumnDefinitions="82,90,66,*,78,78,52" ColumnSpacing="8">
+                                            <Grid ColumnDefinitions="82,98,70,82,82,56" ColumnSpacing="8">
                                                 <TextBlock
                                                     Classes="edge-dashboard-alert-time"
                                                     Text="{Binding DeviceName}" />
@@ -216,21 +212,14 @@
                                                     Text="{Binding LatencyText}" />
                                                 <TextBlock
                                                     Grid.Column="3"
-                                                    Classes="edge-dashboard-alert-message"
-                                                    MaxLines="1"
-                                                    Text="{Binding LastError}"
-                                                    TextTrimming="CharacterEllipsis"
-                                                    ToolTip.Tip="{Binding LastErrorDetail}" />
-                                                <TextBlock
-                                                    Grid.Column="4"
                                                     Classes="edge-dashboard-alert-time"
                                                     Text="{Binding LastConnectedText}" />
                                                 <TextBlock
-                                                    Grid.Column="5"
+                                                    Grid.Column="4"
                                                     Classes="edge-dashboard-alert-time"
                                                     Text="{Binding LastFailureText}" />
                                                 <edge:EdgeActionButton
-                                                    Grid.Column="6"
+                                                    Grid.Column="5"
                                                     Command="{Binding DataContext.ShowPlcStatusDetailCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                     CommandParameter="{Binding}"
                                                     Content="{DynamicResource Navigation_DashboardPreview_PlcDetails}"

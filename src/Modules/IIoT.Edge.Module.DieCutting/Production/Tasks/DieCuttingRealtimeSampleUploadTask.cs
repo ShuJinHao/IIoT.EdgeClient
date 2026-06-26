@@ -23,6 +23,7 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
     private readonly DieCuttingContext _context;
     private readonly IDieCuttingMesScenarioChannel _mesChannel;
     private readonly DieCuttingProductionPlanService _productionPlanService;
+    private readonly IDieCuttingProductionRecordStore _productionRecordStore;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
     private readonly IPlcConnectionManager _plcConnectionManager;
     private readonly IModuleParamProvider<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business> _parameters;
@@ -39,6 +40,7 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
         DieCuttingContext context,
         IDieCuttingMesScenarioChannel mesChannel,
         DieCuttingProductionPlanService productionPlanService,
+        IDieCuttingProductionRecordStore productionRecordStore,
         IMesUploadDiagnosticsStore diagnosticsStore,
         IPlcConnectionManager plcConnectionManager,
         IModuleParamProvider<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business> parameters,
@@ -51,6 +53,7 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
         _context = context;
         _mesChannel = mesChannel;
         _productionPlanService = productionPlanService;
+        _productionRecordStore = productionRecordStore;
         _diagnosticsStore = diagnosticsStore;
         _plcConnectionManager = plcConnectionManager;
         _parameters = parameters;
@@ -110,6 +113,7 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
         var identity = _moduleOptions.MesIdentity.Resolve(_context.DeviceName);
         var windowStartAt = _context.NextWindowStartAt ?? DateTime.Now;
         var snapshot = _codec.CaptureRealtimeSnapshot(identity, windowStartAt, planState.TraceBatchNumber);
+        await StoreProductionRecordAsync(snapshot).ConfigureAwait(false);
         var result = await _mesChannel
             .UploadRealtimeAsync(CreateDeviceSession(identity), snapshot, TaskCancellationToken)
             .ConfigureAwait(false);
@@ -146,6 +150,30 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
         }
 
         return MesCallResult.InvalidContext("PLC 未连接，模切采样上传暂停。");
+    }
+
+    private async Task StoreProductionRecordAsync(DieCuttingRealtimeSnapshot snapshot)
+    {
+        try
+        {
+            await _productionRecordStore.AddAsync(
+                new DieCuttingProductionRecord
+                {
+                    ModuleId = _definition.ModuleId,
+                    DeviceName = _context.DeviceName,
+                    BatchNo = snapshot.PunchingLotNumber,
+                    Quantity = snapshot.PunchingQuantity,
+                    WindowStartAt = snapshot.WindowStartAt,
+                    WindowCompleteAt = snapshot.WindowCompleteAt,
+                    PunchingSpeed = snapshot.PunchingSpeed,
+                    CreatedAtUtc = DateTime.UtcNow
+                },
+                TaskCancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"[{_context.DeviceName}] 模切生产数据本地保存失败: {ex.Message}");
+        }
     }
 
     private Task RecordResultAsync(DieCuttingRealtimeSnapshot? snapshot, MesCallResult result)

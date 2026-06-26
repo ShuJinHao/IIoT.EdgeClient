@@ -14,6 +14,8 @@ using IIoT.Edge.Module.DieCutting.Payload;
 using IIoT.Edge.Module.DieCutting.Presentation;
 using IIoT.Edge.Module.DieCutting.Production;
 using IIoT.Edge.Module.DieCutting.Samples;
+using IIoT.Edge.SharedKernel.Configuration;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace IIoT.Edge.Module.DieCutting;
@@ -75,6 +77,16 @@ public abstract class DieCuttingModuleBase : EdgeProcessModuleBase<DieCuttingCel
         builder.Services.AddSingleton<DieCuttingProductionPlanService>();
         builder.Services.AddSingleton<IProductionPlanSelectionService>(sp =>
             sp.GetRequiredService<DieCuttingProductionPlanService>());
+        var fallbackDatabaseDirectory = ResolveFallbackDatabaseDirectory(builder.Configuration);
+        builder.Services.AddSingleton<DieCuttingProductionRecordStore>(sp =>
+        {
+            var runtimePaths = sp.GetService<EdgeRuntimePaths>();
+            return new DieCuttingProductionRecordStore(
+                runtimePaths?.DatabaseDirectory ?? fallbackDatabaseDirectory,
+                sp.GetRequiredService<ILogService>());
+        });
+        builder.Services.AddSingleton<IDieCuttingProductionRecordStore>(sp =>
+            sp.GetRequiredService<DieCuttingProductionRecordStore>());
         builder.Services.AddSingleton<IProductionContextFactory, DieCuttingContextFactory>();
         builder.RegisterStandardPlcSignalProfiles<
             DieCuttingPlcSignals.Interaction,
@@ -84,8 +96,43 @@ public abstract class DieCuttingModuleBase : EdgeProcessModuleBase<DieCuttingCel
             DieCuttingPlcSignals.ContinuousWrite>();
         builder.RegisterHardwareProfile<DieCuttingHardwareProfileProvider>();
         builder.RegisterDevelopmentSample<DieCuttingDevelopmentSampleContributor>();
+        builder.Services.AddSingleton<DieCuttingDataViewModel>();
     }
 
     protected override void RegisterModuleViews(IEdgeProcessModuleBuilder builder)
         => builder.RegisterDieCuttingViews(DisplayName);
+
+    private static string ResolveFallbackDatabaseDirectory(IConfiguration configuration)
+    {
+        var runtimeDataRoot = configuration["Shell:RuntimeDataRoot"]?.Trim();
+        if (!string.IsNullOrWhiteSpace(runtimeDataRoot))
+        {
+            return Path.Combine(
+                ResolveConfiguredPath(runtimeDataRoot),
+                "db");
+        }
+
+        var machineProfile = configuration["Shell:MachineProfile"]?.Trim();
+        if (string.IsNullOrWhiteSpace(machineProfile))
+        {
+            machineProfile = "Default";
+        }
+
+        return Path.Combine(
+            EdgeClientProgramDataPaths.ResolveProfileDataRoot(machineProfile, AppContext.BaseDirectory),
+            "db");
+    }
+
+    private static string ResolveConfiguredPath(string path)
+    {
+        var expanded = EdgeClientProgramDataPaths
+            .ExpandProgramDataTokens(path, AppContext.BaseDirectory)
+            .Replace('\\', Path.DirectorySeparatorChar)
+            .Replace('/', Path.DirectorySeparatorChar);
+
+        return Path.GetFullPath(
+            Path.IsPathRooted(expanded)
+                ? expanded
+                : Path.Combine(AppContext.BaseDirectory, expanded));
+    }
 }

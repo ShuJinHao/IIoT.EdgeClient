@@ -84,6 +84,54 @@ public sealed class ProductionDataViewBehaviorTests
         Assert.IsType<ProductionDataQueryFacade>(provider.GetRequiredService<IProductionDataQueryFacade>());
     }
 
+    [Fact]
+    public void HostBootstrap_ReleaseBuild_ShouldNotRegisterVisualTestProductionDataFacade()
+    {
+        var root = FindRepositoryRoot();
+        var source = File.ReadAllText(Path.Combine(root, "src", "Edge", "IIoT.Edge.Host.Bootstrap", "DependencyInjection.cs"));
+        var project = File.ReadAllText(Path.Combine(root, "src", "Edge", "IIoT.Edge.Host.Bootstrap", "IIoT.Edge.Host.Bootstrap.csproj"));
+
+        Assert.Contains("#if DEBUG", source, StringComparison.Ordinal);
+        Assert.Contains("services.AddVisualTestDataPresentation(configuration);", source, StringComparison.Ordinal);
+        Assert.Contains("Condition=\"'$(Configuration)' == 'Debug'\"", project, StringComparison.Ordinal);
+        Assert.DoesNotContain("Condition=\"'$(Configuration)' != 'Release'\"", project, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DataViewPage_WhenEmpty_ShouldStillShowTableHeaders()
+    {
+        var root = FindRepositoryRoot();
+        var xaml = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "Presentation",
+            "IIoT.Edge.Presentation.Navigation",
+            "Features",
+            "Production",
+            "DataView",
+            "Views",
+            "DataViewPage.axaml"));
+
+        Assert.Contains("ShowContentWhenEmpty=\"True\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Header=\"{DynamicResource Navigation_Column_DeviceName}\"", xaml, StringComparison.Ordinal);
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var current = AppContext.BaseDirectory;
+        while (!string.IsNullOrWhiteSpace(current))
+        {
+            if (File.Exists(Path.Combine(current, "IIoT.EdgeClient.slnx")))
+            {
+                return current;
+            }
+
+            current = Directory.GetParent(current)?.FullName ?? string.Empty;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate IIoT.EdgeClient repository root.");
+    }
+
     private sealed class RecordingProductionDataQueryFacade(IReadOnlyList<ProductionRecordItem> records)
         : IProductionDataQueryFacade
     {
