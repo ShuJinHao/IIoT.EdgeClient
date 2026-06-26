@@ -5,6 +5,7 @@ using Avalonia.Media;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Features.Production.CapacityView;
 using IIoT.Edge.Presentation.Navigation.Localization;
+using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.UI.Shared.Avalonia.Controls;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
@@ -20,7 +21,7 @@ public class CapacityViewModel : NavigationViewModelBase
     private const string ChartYieldKey = "yield";
 
     private readonly ICapacityQueryFacade _capacityQueryFacade;
-    private string _selectedDeviceName = string.Empty;
+    private readonly IDeviceSelectionService _deviceSelectionService;
     private string _selectedQueryMode = CapacityQueryModes.Day;
     private CapacityQueryModeOption? _selectedQueryModeOption;
     private DateTime _queryDate = DateTime.Today;
@@ -31,7 +32,6 @@ public class CapacityViewModel : NavigationViewModelBase
     private string _periodYield = "0%";
     private string _avgDaily = "0";
 
-    public ObservableCollection<string> DeviceNames { get; } = [];
     public ObservableCollection<CapacityQueryModeOption> QueryModes { get; } = [];
     public ObservableCollection<DailyCapacitySnapshot> DailyRecords { get; } = [];
     public ObservableCollection<EdgeChartPoint> ChartPoints { get; } = [];
@@ -39,17 +39,6 @@ public class CapacityViewModel : NavigationViewModelBase
     public bool HasDailyRecords => DailyRecords.Count > 0;
     public bool IsDailyRecordsEmpty => DailyRecords.Count == 0;
     public bool HasChartRecords => ChartPoints.Count > 0;
-
-    public string SelectedDeviceName
-    {
-        get => _selectedDeviceName;
-        set
-        {
-            _selectedDeviceName = value;
-            OnPropertyChanged();
-            ScheduleLoadCurrentData();
-        }
-    }
 
     public string SelectedQueryMode
     {
@@ -170,10 +159,14 @@ public class CapacityViewModel : NavigationViewModelBase
     public ICommand QueryCommand { get; }
     public ICommand ExportCommand { get; }
 
-    public CapacityViewModel(ICapacityQueryFacade capacityQueryFacade, IAppLanguageService languageService)
+    public CapacityViewModel(
+        ICapacityQueryFacade capacityQueryFacade,
+        IAppLanguageService languageService,
+        IDeviceSelectionService deviceSelectionService)
         : this(
             capacityQueryFacade,
             languageService,
+            deviceSelectionService,
             "Production.CapacityView",
             "Navigation_Title_CapacityQuery",
             "产能查询")
@@ -183,12 +176,14 @@ public class CapacityViewModel : NavigationViewModelBase
     public CapacityViewModel(
         ICapacityQueryFacade capacityQueryFacade,
         IAppLanguageService languageService,
+        IDeviceSelectionService deviceSelectionService,
         string viewId,
         string titleResourceKey,
         string titleFallback)
         : base(languageService, viewId, titleResourceKey, titleFallback)
     {
         _capacityQueryFacade = capacityQueryFacade;
+        _deviceSelectionService = deviceSelectionService;
 
         QueryCommand = new AsyncCommand(() => RunViewTaskAsync(QueryHistoryAsync, GetText("Navigation_Capacity_QueryFailed", "产能查询失败。")));
         ExportCommand = new BaseCommand(_ => { });
@@ -197,11 +192,11 @@ public class CapacityViewModel : NavigationViewModelBase
         SetSelectedQueryMode(_selectedQueryMode, true);
 
         _capacityQueryFacade.UploadGateChanged += OnUploadGateChanged;
+        _deviceSelectionService.SelectionChanged += OnDeviceSelectionChanged;
     }
 
     public override async Task OnActivatedAsync()
     {
-        RefreshDeviceList();
         IsOnline = _capacityQueryFacade.IsOnline;
         await RunViewTaskAsync(LoadCurrentDataAsync, GetText("Navigation_Capacity_LoadFailed", "加载产能数据失败。"));
     }
@@ -218,20 +213,6 @@ public class CapacityViewModel : NavigationViewModelBase
     private void ScheduleLoadCurrentData()
         => RunOnUiThread(() => RunViewTaskInBackground(LoadCurrentDataAsync, GetText("Navigation_Capacity_LoadFailed", "加载产能数据失败。")));
 
-    private void RefreshDeviceList()
-    {
-        var names = _capacityQueryFacade.GetDeviceNames();
-        ReplaceItems(DeviceNames, names);
-
-        if (!string.IsNullOrEmpty(_selectedDeviceName) && names.Contains(_selectedDeviceName))
-        {
-            return;
-        }
-
-        _selectedDeviceName = names.FirstOrDefault() ?? string.Empty;
-        OnPropertyChanged(nameof(SelectedDeviceName));
-    }
-
     private async Task LoadCurrentDataAsync()
     {
         if (!CanQueryCloud)
@@ -242,7 +223,7 @@ public class CapacityViewModel : NavigationViewModelBase
             return;
         }
 
-        var result = await _capacityQueryFacade.LoadTodayAsync(_selectedDeviceName);
+        var result = await _capacityQueryFacade.LoadTodayAsync(ResolveSelectedDeviceName());
         ApplyResult(result);
     }
 
@@ -260,10 +241,21 @@ public class CapacityViewModel : NavigationViewModelBase
         var result = await _capacityQueryFacade.QueryHistoryAsync(
             SelectedQueryMode,
             QueryDate,
-            _selectedDeviceName);
+            ResolveSelectedDeviceName());
 
         ApplyResult(result);
     }
+
+    private string ResolveSelectedDeviceName()
+        => string.Equals(
+            _deviceSelectionService.SelectedDeviceKey,
+            IDeviceSelectionService.AllFilterKey,
+            StringComparison.OrdinalIgnoreCase)
+            ? string.Empty
+            : _deviceSelectionService.SelectedDeviceKey;
+
+    private void OnDeviceSelectionChanged(object? sender, EventArgs e)
+        => ScheduleLoadCurrentData();
 
     private void ApplyResult(CapacityViewResult result)
     {

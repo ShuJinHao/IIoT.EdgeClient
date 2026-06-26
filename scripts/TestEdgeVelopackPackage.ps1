@@ -1,9 +1,9 @@
 param(
     [string]$OutputRoot = 'publish\edge-velopack',
 
-    [string]$Channel = 'homogenization',
+    [string]$Channel = 'stable',
 
-    [string]$PackId = 'IIoT.EdgeClient.Homogenization',
+    [string]$PackId = 'IIoT.EdgeClient',
 
     [Parameter(Mandatory = $true)]
     [string]$Version,
@@ -97,12 +97,13 @@ function Assert-CloudIdentityTemplateIsEmpty {
     )
 
     $config = $Json | ConvertFrom-Json
-    if ($null -eq $config.CloudApi) {
+    $cloudApiProperty = $config.PSObject.Properties['CloudApi']
+    if ($null -eq $cloudApiProperty -or $null -eq $cloudApiProperty.Value) {
         return
     }
 
     foreach ($key in @('ClientCode', 'BootstrapSecret')) {
-        $property = $config.CloudApi.PSObject.Properties[$key]
+        $property = $cloudApiProperty.Value.PSObject.Properties[$key]
         if ($null -eq $property) {
             continue
         }
@@ -225,31 +226,59 @@ try {
 
     $profilesJson = Read-ZipEntryText -Archive $archive -EntryName 'lib/app/launcher.profiles.json'
     $profiles = @($profilesJson | ConvertFrom-Json)
-    if ($profiles.Count -ne 1) {
-        throw "Velopack package should contain exactly one launcher profile for channel '$Channel'."
+    $expectedProfileIds = @('HomogenizationLine', 'DieCuttingAnodeLine', 'DieCuttingCathodeLine')
+    if ($profiles.Count -lt $expectedProfileIds.Count) {
+        throw "Velopack package launcher.profiles.json contains $($profiles.Count) profile(s), expected at least $($expectedProfileIds.Count)."
     }
 
-    $profile = $profiles[0]
-    if ($profile.ExecutablePath -ne "$ExpectedHostDirectory/IIoT.Edge.Shell") {
-        throw "Launcher profile executable path should point to '$ExpectedHostDirectory/IIoT.Edge.Shell', actual: $($profile.ExecutablePath)"
+    foreach ($expectedProfileId in $expectedProfileIds) {
+        if (-not @($profiles | Where-Object { $_.ProfileId -eq $expectedProfileId }).Count) {
+            throw "Velopack package launcher.profiles.json is missing profile '$expectedProfileId'."
+        }
     }
 
-    $machineProfile = [string]$profile.MachineProfile
-    if ([string]::IsNullOrWhiteSpace($machineProfile)) {
-        throw "Launcher profile is missing MachineProfile."
-    }
+    $machineProfiles = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($profile in $profiles) {
+        if ($profile.ExecutablePath -ne "$ExpectedHostDirectory/IIoT.Edge.Shell") {
+            throw "Launcher profile executable path should point to '$ExpectedHostDirectory/IIoT.Edge.Shell', actual: $($profile.ExecutablePath)"
+        }
 
-    $machineConfigEntryName = "lib/app/$ExpectedHostDirectory/appsettings.machine.$machineProfile.json"
-    $machineConfigJson = Read-ZipEntryText -Archive $archive -EntryName $machineConfigEntryName
-    Assert-CloudIdentityTemplateIsEmpty -Json $machineConfigJson -EntryName $machineConfigEntryName
+        $executableCandidates = @(
+            "lib/app/$($profile.ExecutablePath).exe",
+            "lib/app/$($profile.ExecutablePath)",
+            "lib/app/$($profile.ExecutablePath).dll"
+        )
+        $hasExecutableCandidate = $false
+        foreach ($candidate in $executableCandidates) {
+            if ($null -ne (Get-ZipEntry -Archive $archive -EntryName $candidate)) {
+                $hasExecutableCandidate = $true
+                break
+            }
+        }
+        if (-not $hasExecutableCandidate) {
+            throw "Launcher profile '$($profile.ProfileId)' executable path '$($profile.ExecutablePath)' does not resolve to an executable file in package."
+        }
 
-    if ($machineConfigJson.Contains('../data', [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw "Machine profile still points to a hand-counted relative data directory: $machineConfigEntryName"
-    }
+        $machineProfile = [string]$profile.MachineProfile
+        if ([string]::IsNullOrWhiteSpace($machineProfile)) {
+            throw "Launcher profile is missing MachineProfile."
+        }
+        if (-not $machineProfiles.Add($machineProfile)) {
+            throw "Launcher profile MachineProfile is duplicated: $machineProfile"
+        }
 
-    if ($machineConfigJson.Contains('%ProgramData%', [System.StringComparison]::OrdinalIgnoreCase) -or
-        $machineConfigJson.Contains('CommonApplicationData', [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw "Machine profile must not use system data directories: $machineConfigEntryName"
+        $machineConfigEntryName = "lib/app/$ExpectedHostDirectory/appsettings.machine.$machineProfile.json"
+        $machineConfigJson = Read-ZipEntryText -Archive $archive -EntryName $machineConfigEntryName
+        Assert-CloudIdentityTemplateIsEmpty -Json $machineConfigJson -EntryName $machineConfigEntryName
+
+        if ($machineConfigJson.Contains('../data', [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Machine profile still points to a hand-counted relative data directory: $machineConfigEntryName"
+        }
+
+        if ($machineConfigJson.Contains('%ProgramData%', [System.StringComparison]::OrdinalIgnoreCase) -or
+            $machineConfigJson.Contains('CommonApplicationData', [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Machine profile must not use system data directories: $machineConfigEntryName"
+        }
     }
 
     New-Item -Path $tempDirectory -ItemType Directory -Force | Out-Null

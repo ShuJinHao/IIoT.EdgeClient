@@ -1,22 +1,19 @@
 using Avalonia.Controls;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace IIoT.Edge.Presentation.Navigation.Features.Production.DataView;
+namespace IIoT.Edge.Module.DieCutting.Presentation.Views;
 
-/// <summary>
-/// 生产数据查询页面视图。
-/// </summary>
-public partial class DataViewPage : UserControl
+public partial class DieCuttingDataPage : UserControl
 {
     private bool _activated;
 
-    public DataViewPage()
+    public DieCuttingDataPage()
     {
         InitializeComponent();
     }
 
     [ActivatorUtilitiesConstructor]
-    public DataViewPage(DataViewModel viewModel)
+    public DieCuttingDataPage(DieCuttingDataViewModel viewModel)
         : this()
     {
         DataContext = viewModel;

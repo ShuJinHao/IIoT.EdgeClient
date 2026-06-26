@@ -83,10 +83,9 @@ public class LoadParamViewHandler(
         IReadOnlyCollection<LocalSystemConfigSnapshot> systemSnapshots,
         CloudApiConfigSnapshot cloudApiSnapshot)
     {
-        var parameters = BuildCloudApiGroup(systemSnapshots, cloudApiSnapshot)
-            .Params
-            .Concat(BuildModuleGroups(ModuleParamCategory.Cloud, moduleParamRegistry, moduleNames, moduleValues)
-                .SelectMany(static group => group.Params))
+        var parameters = BuildModuleGroups(ModuleParamCategory.Cloud, moduleParamRegistry, moduleNames, moduleValues)
+            .SelectMany(static group => group.Params)
+            .Concat(BuildCloudApiGroup(systemSnapshots, cloudApiSnapshot).Params)
             .ToList();
 
         return
@@ -111,6 +110,7 @@ public class LoadParamViewHandler(
                 static snapshot => snapshot.Value,
                 StringComparer.OrdinalIgnoreCase);
         var parameters = CloudApiConfigParamSchema.Descriptors
+            .Where(static descriptor => CloudApiConfigParamSchema.IsParamViewEditableKey(descriptor.Key))
             .OrderBy(static descriptor => descriptor.SortOrder)
             .Select(descriptor => new ModuleParamSnapshot(
                 CloudApiConfigParamSchema.ModuleId,
@@ -145,6 +145,7 @@ public class LoadParamViewHandler(
         IReadOnlyDictionary<string, string> moduleNames,
         IReadOnlyDictionary<string, string> moduleValues)
         => moduleParamRegistry.GetDescriptors(category)
+            .Where(IsParamViewVisible)
             .GroupBy(x => x.ModuleId, StringComparer.OrdinalIgnoreCase)
             .Select(group =>
             {
@@ -175,11 +176,15 @@ public class LoadParamViewHandler(
                 return new ModuleParamGroupSnapshot(group.Key, moduleDisplayName, parameters);
             })
             .ToList();
+
+    internal static bool IsParamViewVisible(ModuleParamDescriptor descriptor)
+        => descriptor.Role != ModuleParamRole.MesSignToken;
 }
 
 public class SaveParamViewHandler(
     ISender sender,
-    IClientPermissionService permissionService)
+    IClientPermissionService permissionService,
+    IModuleParamRegistry moduleParamRegistry)
     : IRequestHandler<SaveParamViewCommand, CrudOperationResult>
 {
     public async Task<CrudOperationResult> Handle(SaveParamViewCommand request, CancellationToken ct)
@@ -189,17 +194,29 @@ public class SaveParamViewHandler(
             return CrudOperationResult.Failure("当前用户没有参数配置权限。");
         }
 
+        var editableModuleKeys = new HashSet<string>(
+            new[]
+                {
+                    ModuleParamCategory.Mes,
+                    ModuleParamCategory.Cloud,
+                    ModuleParamCategory.Business
+                }
+                .SelectMany(moduleParamRegistry.GetDescriptors)
+                .Where(LoadParamViewHandler.IsParamViewVisible)
+                .Select(static x => x.StorageKey),
+            StringComparer.OrdinalIgnoreCase);
+
         var moduleParams = request.Params
-            .Where(static x => ModuleParamKeys.IsModuleStorageKey(x.Key))
+            .Where(x => ModuleParamKeys.IsModuleStorageKey(x.Key) && editableModuleKeys.Contains(x.Key))
             .Select(static x => new ModuleParamDto(x.Key, x.Value, x.Description))
             .ToList();
         var cloudApiParams = request.Params
-            .Where(static x => CloudApiConfigParamSchema.IsCloudApiConfigKey(x.Key))
+            .Where(static x => CloudApiConfigParamSchema.IsCloudApiConfigKey(x.Key)
+                               && CloudApiConfigParamSchema.IsParamViewEditableKey(x.Key))
             .Select(static x => new CloudApiConfigParamDto(x.Key, x.Value, x.Description))
             .ToList();
         var invalidKeys = request.Params
-            .Where(static x => !ModuleParamKeys.IsModuleStorageKey(x.Key)
-                               && !CloudApiConfigParamSchema.IsCloudApiConfigKey(x.Key))
+            .Where(x => IsRejectedParamViewKey(x.Key, editableModuleKeys))
             .Select(static x => x.Key)
             .ToArray();
         if (invalidKeys.Length > 0)
@@ -227,6 +244,21 @@ public class SaveParamViewHandler(
 
         return CrudOperationResult.Success("参数配置已保存。");
     }
+
+    private static bool IsRejectedParamViewKey(string key, IReadOnlySet<string> editableModuleKeys)
+    {
+        if (ModuleParamKeys.IsModuleStorageKey(key))
+        {
+            return !editableModuleKeys.Contains(key);
+        }
+
+        if (CloudApiConfigParamSchema.IsCloudApiConfigKey(key))
+        {
+            return !CloudApiConfigParamSchema.IsParamViewEditableKey(key);
+        }
+
+        return true;
+    }
 }
 
 public class ResetParamViewHandler(
@@ -250,6 +282,7 @@ public class ResetParamViewHandler(
                 ModuleParamCategory.Business
             }
             .SelectMany(category => moduleParamRegistry.GetDescriptors(category))
+            .Where(LoadParamViewHandler.IsParamViewVisible)
             .OrderBy(static x => x.ModuleId, StringComparer.OrdinalIgnoreCase)
             .ThenBy(static x => x.Category)
             .ThenBy(static x => x.SortOrder)
@@ -270,6 +303,7 @@ public class ResetParamViewHandler(
 
         var cloudApiSnapshot = cloudApiConfigSnapshotProvider.GetCurrent();
         var cloudApiDefaults = CloudApiConfigParamSchema.Descriptors
+            .Where(static x => CloudApiConfigParamSchema.IsParamViewEditableKey(x.Key))
             .OrderBy(static x => x.SortOrder)
             .Select(x => new CloudApiConfigParamDto(
                 x.Key,

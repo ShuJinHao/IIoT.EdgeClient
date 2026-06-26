@@ -20,9 +20,9 @@ param(
 
     [string]$SnapshotPath,
 
-    [string]$Channel = 'homogenization',
+    [string]$Channel = 'stable',
 
-    [string]$PackId = 'IIoT.EdgeClient.Homogenization',
+    [string]$PackId = 'IIoT.EdgeClient',
 
     [string]$MachineProfile = 'HomogenizationLine'
 )

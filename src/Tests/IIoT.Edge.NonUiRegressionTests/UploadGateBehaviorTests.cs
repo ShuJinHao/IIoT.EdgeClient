@@ -40,7 +40,7 @@ public sealed class UploadGateBehaviorTests
     {
         var runtimeConfig = new FakeLocalSystemRuntimeConfigService
         {
-            Current = SystemRuntimeConfigSnapshot.Default with { CloudUploadEnabled = false }
+            Current = SystemRuntimeConfigSnapshot.Default with { SystemCloudEnabled = false }
         };
         var gate = new CloudUploadGate(runtimeConfig, CreateOnlineDeviceService());
 

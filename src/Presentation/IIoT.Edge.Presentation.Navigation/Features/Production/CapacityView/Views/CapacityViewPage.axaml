@@ -50,13 +50,8 @@
 
             <edge:EdgeTablePanel>
                 <edge:EdgeTablePanel.FilterContent>
-                    <Grid ColumnDefinitions="220,170,190" ColumnSpacing="{DynamicResource Edge.Size.Spacing10}">
+                    <Grid ColumnDefinitions="170,190" ColumnSpacing="{DynamicResource Edge.Size.Spacing10}">
                         <edge:EdgeFilterComboBox
-                            ItemsSource="{Binding DeviceNames}"
-                            PlaceholderText="{DynamicResource Navigation_Hint_SelectDevice}"
-                            SelectedItem="{Binding SelectedDeviceName}" />
-                        <edge:EdgeFilterComboBox
-                            Grid.Column="1"
                             ItemsSource="{Binding QueryModes}"
                             PlaceholderText="{DynamicResource Navigation_Hint_QueryDimension}"
                             SelectedItem="{Binding SelectedQueryModeOption}">
@@ -67,7 +62,7 @@
                             </edge:EdgeFilterComboBox.ItemTemplate>
                         </edge:EdgeFilterComboBox>
                         <edge:EdgeFilterDatePicker
-                            Grid.Column="2"
+                            Grid.Column="1"
                             SelectedDateOffset="{Binding QueryDateOffset}" />
                     </Grid>
                 </edge:EdgeTablePanel.FilterContent>

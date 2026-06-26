@@ -21,6 +21,8 @@
     <sys:String x:Key="Panels_Column_Time">Time</sys:String>
     <sys:String x:Key="Panels_Column_Level">Type</sys:String>
     <sys:String x:Key="Panels_Column_Message">Message</sys:String>
+    <sys:String x:Key="Panels_Label_LogDeviceFilter">Device</sys:String>
+    <sys:String x:Key="Panels_Filter_AllOrSummary">All / Summary</sys:String>
     <sys:String x:Key="Panels_Label_Recipe">Recipe: </sys:String>
     <sys:String x:Key="Panels_Label_Version">Version: </sys:String>
     <sys:String x:Key="Panels_Label_Process">Process: </sys:String>

@@ -1,0 +1,176 @@
+<Window
+    x:Class="IIoT.Edge.Launcher.ReleaseNotesWindow"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
+    Title="{DynamicResource Launcher_ReleaseNotes_WindowTitle}"
+    Width="780"
+    Height="580"
+    MinWidth="720"
+    MinHeight="540"
+    Background="Transparent"
+    CanResize="True"
+    ExtendClientAreaToDecorationsHint="True"
+    ShowInTaskbar="False"
+    TransparencyLevelHint="Transparent"
+    WindowDecorations="None"
+    WindowStartupLocation="CenterOwner">
+    <edge:EdgeDialogChrome
+        x:Name="ReleaseNotesWindowRoot"
+        Margin="1"
+        Subtitle="{DynamicResource Launcher_ReleaseNotes_Description}"
+        Title="{DynamicResource Launcher_ReleaseNotes_Title}">
+        <Grid RowDefinitions="Auto,Auto,*" RowSpacing="16">
+            <Border
+                Background="{DynamicResource Edge.Brush.Surface.Raised}"
+                BorderBrush="{DynamicResource Edge.Brush.Border.Subtle}"
+                BorderThickness="1"
+                CornerRadius="{DynamicResource Edge.CornerRadius.Card}"
+                Padding="{DynamicResource Edge.Thickness.16}">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                    <StackPanel Spacing="4">
+                        <TextBlock
+                            FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                            FontWeight="Bold"
+                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                            Text="{Binding DisplayName}"
+                            TextWrapping="Wrap" />
+                        <TextBlock
+                            FontSize="{DynamicResource Edge.FontSize.Body}"
+                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
+                            Text="{Binding ModuleId}"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                    <edge:EdgeStatusChip
+                        Grid.Column="1"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Center"
+                        Status="Info"
+                        Text="{Binding ComponentKindText}" />
+                </Grid>
+            </Border>
+
+            <Grid
+                Grid.Row="1"
+                ColumnDefinitions="*,*,*,*"
+                ColumnSpacing="12">
+                <Border
+                    Background="{DynamicResource Edge.Brush.Surface.Card}"
+                    BorderBrush="{DynamicResource Edge.Brush.Border.Subtle}"
+                    BorderThickness="1"
+                    CornerRadius="{DynamicResource Edge.CornerRadius.Card}"
+                    Padding="{DynamicResource Edge.Thickness.16}">
+                    <StackPanel Spacing="8">
+                        <TextBlock
+                            Classes="launcher-chip-text subtle"
+                            Text="{DynamicResource Launcher_ReleaseNotes_Version}" />
+                        <TextBlock
+                            FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                            FontWeight="Bold"
+                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                            Text="{Binding TargetVersion}"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <Border
+                    Grid.Column="1"
+                    Background="{DynamicResource Edge.Brush.Surface.Card}"
+                    BorderBrush="{DynamicResource Edge.Brush.Border.Subtle}"
+                    BorderThickness="1"
+                    CornerRadius="{DynamicResource Edge.CornerRadius.Card}"
+                    Padding="{DynamicResource Edge.Thickness.16}">
+                    <StackPanel Spacing="8">
+                        <TextBlock
+                            Classes="launcher-chip-text subtle"
+                            Text="{DynamicResource Launcher_UpdateCenter_ColumnStatus}" />
+                        <edge:EdgeStatusChip
+                            HorizontalAlignment="Stretch"
+                            Status="{Binding StatusKind}"
+                            Text="{Binding StatusText}" />
+                    </StackPanel>
+                </Border>
+
+                <Border
+                    Grid.Column="2"
+                    Background="{DynamicResource Edge.Brush.Surface.Card}"
+                    BorderBrush="{DynamicResource Edge.Brush.Border.Subtle}"
+                    BorderThickness="1"
+                    CornerRadius="{DynamicResource Edge.CornerRadius.Card}"
+                    Padding="{DynamicResource Edge.Thickness.16}">
+                    <StackPanel Spacing="8">
+                        <TextBlock
+                            Classes="launcher-chip-text subtle"
+                            Text="{DynamicResource Launcher_UpdateCenter_ColumnPublishedAt}" />
+                        <TextBlock
+                            FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                            FontWeight="Bold"
+                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                            Text="{Binding PublishedAtText}"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <Border
+                    Grid.Column="3"
+                    Background="{DynamicResource Edge.Brush.Surface.Card}"
+                    BorderBrush="{DynamicResource Edge.Brush.Border.Subtle}"
+                    BorderThickness="1"
+                    CornerRadius="{DynamicResource Edge.CornerRadius.Card}"
+                    Padding="{DynamicResource Edge.Thickness.16}">
+                    <StackPanel Spacing="8">
+                        <TextBlock
+                            Classes="launcher-chip-text subtle"
+                            Text="{DynamicResource Launcher_UpdateCenter_ColumnSize}" />
+                        <TextBlock
+                            FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                            FontWeight="Bold"
+                            Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                            Text="{Binding PackageSizeText}"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <Border
+                Grid.Row="2"
+                MinHeight="190"
+                Background="{DynamicResource Edge.Brush.Surface.Raised}"
+                BorderBrush="{DynamicResource Edge.Brush.Border.Subtle}"
+                BorderThickness="1"
+                CornerRadius="{DynamicResource Edge.CornerRadius.Card}"
+                Padding="{DynamicResource Edge.Thickness.16}">
+                <Grid RowDefinitions="Auto,*" RowSpacing="14">
+                    <TextBlock
+                        FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                        FontWeight="Bold"
+                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
+                        Text="{DynamicResource Launcher_ReleaseNotes_FullContent}" />
+                    <edge:EdgeScrollHost
+                        Grid.Row="1"
+                        MaxHeight="210"
+                        Variant="Dialog"
+                        VerticalScrollBarVisibility="Auto"
+                        HorizontalScrollBarVisibility="Disabled">
+                        <TextBlock
+                            x:Name="ReleaseNotesTextBlock"
+                            FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
+                            Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
+                            LineHeight="24"
+                            Text="{Binding ReleaseNotesText}"
+                            TextWrapping="Wrap" />
+                    </edge:EdgeScrollHost>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <edge:EdgeDialogChrome.FooterContent>
+            <edge:EdgeActionButton
+                HorizontalAlignment="Right"
+                Click="CloseButton_Click"
+                Content="{DynamicResource Launcher_Button_Close}"
+                Kind="Primary"
+                Size="Normal" />
+        </edge:EdgeDialogChrome.FooterContent>
+    </edge:EdgeDialogChrome>
+</Window>

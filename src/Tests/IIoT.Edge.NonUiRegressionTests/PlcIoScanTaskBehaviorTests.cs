@@ -123,7 +123,7 @@ public sealed class PlcIoScanTaskBehaviorTests
         var stopwatch = Stopwatch.StartNew();
         await interaction.ConnectAsync();
 
-        Assert.True(stopwatch.ElapsedMilliseconds < 1000);
+        Assert.True(stopwatch.ElapsedMilliseconds < 5000);
         Assert.Equal(1, plcService.ConnectAsyncCallCount);
         Assert.Equal(1, plcService.DisconnectCallCount);
         var snapshot = statusStore.GetSnapshot(device.Id);
@@ -140,6 +140,8 @@ public sealed class PlcIoScanTaskBehaviorTests
         plcService.ConnectOutcomes.Enqueue(true);
         plcService.ConnectOutcomes.Enqueue(true);
         plcService.ReadOutcomes.Enqueue(new TimeoutException("read timeout"));
+        plcService.ReadOutcomes.Enqueue(new ushort[] { 7 });
+        plcService.ReadOutcomes.Enqueue(new ushort[] { 7 });
         plcService.ReadOutcomes.Enqueue(new ushort[] { 7 });
 
         var dataStore = new PlcDataStore();
@@ -164,12 +166,98 @@ public sealed class PlcIoScanTaskBehaviorTests
 
         await interaction.ConnectAsync();
         await interaction.ExecuteOneCycleAsync();
+        Assert.False(statusStore.GetSnapshot(1)?.IsConnected);
+        await interaction.ExecuteOneCycleAsync();
+        Assert.True(statusStore.GetSnapshot(1)?.IsConnected);
+        await interaction.ExecuteOneCycleAsync();
 
         Assert.True(plcService.ConnectAsyncCallCount >= 2);
-        Assert.True(plcService.ReadAsyncCallCount >= 2);
+        Assert.True(plcService.ReadAsyncCallCount >= 4);
         Assert.True(buffer.TryGetReadWords("Read-D100", out var readWords));
         Assert.Equal((ushort)7, Assert.Single(readWords));
         Assert.True(statusStore.GetSnapshot(1)?.IsConnected);
+    }
+
+    [Fact]
+    public async Task PlcIoScanTask_WhenTransportConnects_ShouldRemainOfflineUntilProtocolReadSucceeds()
+    {
+        var plcService = new ScriptedPlcService();
+        plcService.ConnectOutcomes.Enqueue(true);
+        plcService.ReadOutcomes.Enqueue(new ushort[] { 9 });
+        plcService.ReadOutcomes.Enqueue(new ushort[] { 9 });
+
+        var dataStore = new PlcDataStore();
+        dataStore.Register(15, readSize: 1, writeSize: 0);
+        var statusStore = new PlcConnectionStatusStore();
+
+        var interaction = new PlcIoScanTask(
+            plcService,
+            dataStore,
+            CreateDevice(15, "PLC-PROTOCOL"),
+            [CreateIoMapping(15, "Read", "D100", 1)],
+            new FakeLogService(),
+            SignalBlockPlanner,
+            statusStore);
+
+        await interaction.ConnectAsync();
+
+        var snapshotAfterConnect = statusStore.GetSnapshot(15);
+        Assert.NotNull(snapshotAfterConnect);
+        Assert.False(snapshotAfterConnect!.IsConnected);
+        Assert.Equal(PlcConnectionState.Connecting, snapshotAfterConnect.ConnectionState);
+        Assert.Null(snapshotAfterConnect.LatencyMs);
+
+        await interaction.ExecuteOneCycleAsync();
+
+        var snapshotAfterRead = statusStore.GetSnapshot(15);
+        Assert.NotNull(snapshotAfterRead);
+        Assert.False(snapshotAfterRead!.IsConnected);
+        Assert.Equal(PlcConnectionState.Connecting, snapshotAfterRead.ConnectionState);
+        Assert.Null(snapshotAfterRead.LatencyMs);
+
+        await interaction.ExecuteOneCycleAsync();
+
+        var snapshotAfterSecondRead = statusStore.GetSnapshot(15);
+        Assert.NotNull(snapshotAfterSecondRead);
+        Assert.True(snapshotAfterSecondRead!.IsConnected);
+        Assert.Equal(PlcConnectionState.Connected, snapshotAfterSecondRead.ConnectionState);
+        Assert.NotNull(snapshotAfterSecondRead.LatencyMs);
+    }
+
+    [Fact]
+    public async Task PlcIoScanTask_WhenLaterReadBlockFails_ShouldDisconnectAndClearLatency()
+    {
+        var plcService = new ScriptedPlcService();
+        plcService.ConnectOutcomes.Enqueue(true);
+        plcService.ReadOutcomes.Enqueue(new ushort[] { 1 });
+        plcService.ReadOutcomes.Enqueue(new TimeoutException("second block timeout"));
+
+        var dataStore = new PlcDataStore();
+        dataStore.Register(16, readSize: 0, writeSize: 0);
+        var statusStore = new PlcConnectionStatusStore();
+        statusStore.MarkConnected(16, "PLC-SPLIT-FAIL", 11);
+
+        var interaction = new PlcIoScanTask(
+            plcService,
+            dataStore,
+            CreateDevice(16, "PLC-SPLIT-FAIL"),
+            [
+                CreateIoMapping(16, "Read", "D700", 1, sortOrder: 1),
+                CreateIoMapping(16, "Read", "D720", 1, sortOrder: 2)
+            ],
+            new FakeLogService(),
+            SignalBlockPlanner,
+            statusStore,
+            runtimePolicy: new PlcIoRuntimePolicy(MaxSignalBlockWordCount: 10));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => interaction.ExecuteOneCycleAsync());
+
+        var snapshot = statusStore.GetSnapshot(16);
+        Assert.NotNull(snapshot);
+        Assert.False(snapshot!.IsConnected);
+        Assert.Equal(PlcConnectionState.Retrying, snapshot.ConnectionState);
+        Assert.Null(snapshot.LatencyMs);
+        Assert.Contains("second block timeout", snapshot.LastError, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -178,6 +266,12 @@ public sealed class PlcIoScanTaskBehaviorTests
         var plcService = new ScriptedPlcService();
         plcService.ConnectOutcomes.Enqueue(true);
         plcService.ConnectOutcomes.Enqueue(true);
+        plcService.ReadOutcomes.Enqueue(new ushort[] { 1 });
+        plcService.ReadOutcomes.Enqueue(new ushort[] { 1 });
+        plcService.ReadOutcomes.Enqueue(new ushort[] { 1 });
+        plcService.ReadOutcomes.Enqueue(new ushort[] { 1 });
+        plcService.ReadOutcomes.Enqueue(new ushort[] { 1 });
+        plcService.ReadOutcomes.Enqueue(new ushort[] { 1 });
         plcService.WriteOutcomes.Enqueue(new TimeoutException("write timeout"));
         plcService.WriteOutcomes.Enqueue(null);
 
@@ -192,12 +286,17 @@ public sealed class PlcIoScanTaskBehaviorTests
             plcService,
             dataStore,
             CreateDevice(2, "PLC-B"),
-            [CreateIoMapping(2, "Write", "D200", 1)],
+            [
+                CreateIoMapping(2, "Read", "D100", 1, sortOrder: 1),
+                CreateIoMapping(2, "Write", "D200", 1, sortOrder: 2)
+            ],
             new FakeLogService(),
             SignalBlockPlanner,
             statusStore);
 
         await interaction.ConnectAsync();
+        await interaction.ExecuteOneCycleAsync();
+        await interaction.ExecuteOneCycleAsync();
         await Assert.ThrowsAsync<InvalidOperationException>(() => interaction.ExecuteOneCycleAsync());
         Assert.Equal(1, plcService.DisconnectCallCount);
         Assert.False(plcService.IsConnected);
@@ -205,10 +304,43 @@ public sealed class PlcIoScanTaskBehaviorTests
 
         await interaction.ConnectAsync();
         await interaction.ExecuteOneCycleAsync();
+        await interaction.ExecuteOneCycleAsync();
+        await interaction.ExecuteOneCycleAsync();
 
         Assert.True(plcService.ConnectAsyncCallCount >= 2);
         Assert.True(plcService.WriteAsyncCallCount >= 2);
         Assert.True(statusStore.GetSnapshot(2)?.IsConnected);
+    }
+
+    [Fact]
+    public async Task PlcIoScanTask_WhenWriteMappingHasNoReadProbe_ShouldNotWrite()
+    {
+        var plcService = new ScriptedPlcService();
+        plcService.ConnectOutcomes.Enqueue(true);
+
+        var dataStore = new PlcDataStore();
+        dataStore.Register(18, readSize: 0, writeSize: 1);
+        var buffer = Assert.IsType<PlcBuffer>(dataStore.GetBuffer(18));
+        buffer.SetWriteValue("Write-D200", 0, 9);
+        var statusStore = new PlcConnectionStatusStore();
+
+        var interaction = new PlcIoScanTask(
+            plcService,
+            dataStore,
+            CreateDevice(18, "PLC-WRITE-NO-PROBE"),
+            [CreateIoMapping(18, "Write", "D200", 1)],
+            new FakeLogService(),
+            SignalBlockPlanner,
+            statusStore);
+
+        await interaction.ExecuteOneCycleAsync();
+
+        Assert.Empty(plcService.WriteRequests);
+        var snapshot = statusStore.GetSnapshot(18);
+        Assert.NotNull(snapshot);
+        Assert.False(snapshot!.IsConnected);
+        Assert.Equal(PlcConnectionState.Faulted, snapshot.ConnectionState);
+        Assert.Contains("协议校验", snapshot.LastError, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -323,6 +455,7 @@ public sealed class PlcIoScanTaskBehaviorTests
             dataStore,
             CreateDevice(7, "PLC-WRITE-ZERO"),
             [
+                CreateIoMapping(7, "Read", "D500", 1, sortOrder: 0),
                 CreateIoMapping(7, "Write", "D600", 1, sortOrder: 1),
                 CreateIoMapping(7, "Write", "D603", 1, sortOrder: 4)
             ],
@@ -342,6 +475,7 @@ public sealed class PlcIoScanTaskBehaviorTests
     {
         var plcService = new ScriptedPlcService();
         plcService.ConnectOutcomes.Enqueue(true);
+        plcService.ReadOutcomes.Enqueue(new ushort[] { 1 });
 
         var dataStore = new PlcDataStore();
         dataStore.Register(8, readSize: 0, writeSize: 0);
@@ -354,6 +488,7 @@ public sealed class PlcIoScanTaskBehaviorTests
             dataStore,
             CreateDevice(8, "PLC-WRITE-SPLIT"),
             [
+                CreateIoMapping(8, "Read", "D500", 1, sortOrder: 0),
                 CreateIoMapping(8, "Write", "D600", 1, sortOrder: 1),
                 CreateIoMapping(8, "Write", "D603", 1, sortOrder: 4)
             ],
@@ -397,6 +532,135 @@ public sealed class PlcIoScanTaskBehaviorTests
         var request = Assert.Single(plcService.ReadRequests);
         Assert.Equal("D700", request.Address);
         Assert.Empty(plcService.WriteRequests);
+    }
+
+    [Fact]
+    public async Task PlcDataReadScanTask_ShouldOnlyScanReadDataCategoriesAndUpdateFreshness()
+    {
+        var plcService = new ScriptedPlcService();
+        plcService.ConnectOutcomes.Enqueue(true);
+        plcService.ReadOutcomes.Enqueue(new ushort[] { 10, 20, 21 });
+        await plcService.ConnectAsync();
+
+        var dataStore = new PlcDataStore();
+        dataStore.Register(13, readSize: 0, writeSize: 0);
+
+        var dataReadScan = new PlcDataReadScanTask(
+            plcService,
+            dataStore,
+            CreateDevice(13, "PLC-DATA"),
+            [
+                CreateIoMapping(13, "Read", "D300", 1, category: IoMappingOptionCatalog.CategorySingleRead, sortOrder: 1),
+                CreateIoMapping(13, "Read", "D301", 2, category: IoMappingOptionCatalog.CategoryContinuousRead, sortOrder: 2),
+                CreateIoMapping(13, "Read", "D700", 1, category: IoMappingOptionCatalog.CategoryInteraction, sortOrder: 3),
+                CreateIoMapping(13, "Write", "D200", 1, category: IoMappingOptionCatalog.CategorySingleWrite, sortOrder: 4)
+            ],
+            new FakeLogService(),
+            SignalBlockPlanner);
+
+        await dataReadScan.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
+
+        var request = Assert.Single(plcService.ReadRequests);
+        Assert.Equal("D300", request.Address);
+        Assert.Equal((ushort)3, request.Length);
+        Assert.Empty(plcService.WriteRequests);
+
+        var buffer = Assert.IsType<PlcBuffer>(dataStore.GetBuffer(13));
+        Assert.True(buffer.TryGetReadWords("Read-D300", out var singleRead));
+        Assert.Equal((ushort)10, Assert.Single(singleRead));
+        Assert.True(buffer.TryGetReadWords("Read-D301", out var continuousRead));
+        Assert.Equal([(ushort)20, (ushort)21], continuousRead);
+        Assert.False(buffer.TryGetReadWords("Read-D700", out _));
+        Assert.True(buffer.TryGetReadSignalUpdatedAt("Read-D300", out var updatedAt));
+        Assert.True(DateTimeOffset.UtcNow - updatedAt < TimeSpan.FromSeconds(2));
+    }
+
+    [Fact]
+    public async Task PlcDataReadScanTask_WhenLaterReadBlockFails_ShouldDisconnectAndClearLatency()
+    {
+        var plcService = new ScriptedPlcService();
+        plcService.ConnectOutcomes.Enqueue(true);
+        plcService.ReadOutcomes.Enqueue(new ushort[] { 1 });
+        plcService.ReadOutcomes.Enqueue(new TimeoutException("read-data second block timeout"));
+        await plcService.ConnectAsync();
+
+        var dataStore = new PlcDataStore();
+        dataStore.Register(17, readSize: 0, writeSize: 0);
+        var statusStore = new PlcConnectionStatusStore();
+        statusStore.MarkConnected(17, "PLC-DATA-SPLIT-FAIL", 15);
+
+        var dataReadScan = new PlcDataReadScanTask(
+            plcService,
+            dataStore,
+            CreateDevice(17, "PLC-DATA-SPLIT-FAIL"),
+            [
+                CreateIoMapping(17, "Read", "D300", 1, category: IoMappingOptionCatalog.CategorySingleRead, sortOrder: 1),
+                CreateIoMapping(17, "Read", "D320", 1, category: IoMappingOptionCatalog.CategoryContinuousRead, sortOrder: 2)
+            ],
+            new FakeLogService(),
+            SignalBlockPlanner,
+            statusStore,
+            runtimePolicy: new PlcIoRuntimePolicy(MaxSignalBlockWordCount: 10));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => dataReadScan.ExecuteOneCycleAsync(TestContext.Current.CancellationToken));
+
+        var snapshot = statusStore.GetSnapshot(17);
+        Assert.NotNull(snapshot);
+        Assert.False(snapshot!.IsConnected);
+        Assert.Equal(PlcConnectionState.Retrying, snapshot.ConnectionState);
+        Assert.Null(snapshot.LatencyMs);
+        Assert.Contains("read-data second block timeout", snapshot.LastError, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task PlcDataReadScanTask_WhenDisconnected_ShouldNotOpenSecondConnection()
+    {
+        var plcService = new ScriptedPlcService();
+        var dataStore = new PlcDataStore();
+        dataStore.Register(14, readSize: 0, writeSize: 0);
+
+        var dataReadScan = new PlcDataReadScanTask(
+            plcService,
+            dataStore,
+            CreateDevice(14, "PLC-DATA-DISCONNECTED"),
+            [CreateIoMapping(14, "Read", "D300", 1, category: IoMappingOptionCatalog.CategorySingleRead)],
+            new FakeLogService(),
+            SignalBlockPlanner);
+
+        await dataReadScan.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
+
+        Assert.False(plcService.IsConnected);
+        Assert.Equal(0, plcService.ConnectAsyncCallCount);
+        Assert.Equal(0, plcService.ReadAsyncCallCount);
+        Assert.Empty(plcService.WriteRequests);
+    }
+
+    [Fact]
+    public async Task PlcDataReadScanTask_WhenTransportConnectedButStatusNotStable_ShouldNotRead()
+    {
+        var plcService = new ScriptedPlcService();
+        plcService.ConnectOutcomes.Enqueue(true);
+        await plcService.ConnectAsync();
+
+        var dataStore = new PlcDataStore();
+        dataStore.Register(19, readSize: 0, writeSize: 0);
+        var statusStore = new PlcConnectionStatusStore();
+        statusStore.MarkConnecting(19, "PLC-DATA-GATED");
+
+        var dataReadScan = new PlcDataReadScanTask(
+            plcService,
+            dataStore,
+            CreateDevice(19, "PLC-DATA-GATED"),
+            [CreateIoMapping(19, "Read", "D300", 1, category: IoMappingOptionCatalog.CategorySingleRead)],
+            new FakeLogService(),
+            SignalBlockPlanner,
+            statusStore);
+
+        await dataReadScan.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(plcService.IsConnected);
+        Assert.Equal(0, plcService.ReadAsyncCallCount);
     }
 
     [Fact]

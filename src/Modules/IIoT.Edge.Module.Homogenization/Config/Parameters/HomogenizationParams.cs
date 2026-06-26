@@ -167,7 +167,7 @@ public static class HomogenizationParams
             DisplayNameResourceKey = "Homogenization_Param_CloudEnabled_DisplayName",
             DisplayNameFallback = "云端上传启用",
             DescriptionResourceKey = "Homogenization_Param_CloudEnabled_Description",
-            DescriptionFallback = "关闭后不访问 Cloud bootstrap、refresh 和同步接口、不写 Cloud 补传；本地 PLC、Excel、产能和 UI 刷新继续运行。")]
+            DescriptionFallback = "关闭后仅停止该插件生产数据 Cloud 上传；系统 bootstrap、设备日志、Cloud 补传和诊断不受该插件参数影响。")]
         启用
     }
 

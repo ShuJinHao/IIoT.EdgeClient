@@ -34,16 +34,17 @@ public sealed class IoMappingSchemaSource(
 
             foreach (var template in profile.GetIoMappingCandidates())
             {
-                if (string.IsNullOrWhiteSpace(template.SignalKey)
-                    || string.IsNullOrWhiteSpace(template.Direction))
+                var deviceTemplate = profile.ResolveIoTemplateForDevice(device.DeviceName, template);
+                if (string.IsNullOrWhiteSpace(deviceTemplate.SignalKey)
+                    || string.IsNullOrWhiteSpace(deviceTemplate.Direction))
                 {
                     continue;
                 }
 
                 items.Add(new ConfigSchemaItem(
-                    IoMappingSchemaKey.Create(device.Id, template.Direction, template.SignalKey),
-                    template.PlcAddress?.Trim() ?? string.Empty,
-                    IoMappingSchemaMetadata.Create(device.Id, template)));
+                    IoMappingSchemaKey.Create(device.Id, deviceTemplate.Direction, deviceTemplate.SignalKey),
+                    deviceTemplate.PlcAddress?.Trim() ?? string.Empty,
+                    IoMappingSchemaMetadata.Create(device.Id, deviceTemplate)));
             }
         }
 

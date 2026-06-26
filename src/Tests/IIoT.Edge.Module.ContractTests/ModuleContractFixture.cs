@@ -183,11 +183,17 @@ internal sealed class TestEdgeProcessModuleBuilder(
     public void RegisterMesUploader(ProcessUploadMode uploadMode)
         => integrationRegistry.RegisterMesUploader(ProcessType, uploadMode);
 
-    public void RegisterParameters<TMes, TCloud, TBusiness>()
+    public void RegisterParameters<TMes, TCloud, TBusiness>(
+        IReadOnlyCollection<ModuleParamDefaultOverride>? defaultOverrides = null)
         where TMes : struct, Enum
         where TCloud : struct, Enum
         where TBusiness : struct, Enum
-        => moduleParamRegistry.Register(ModuleId, typeof(TMes), typeof(TCloud), typeof(TBusiness));
+        => moduleParamRegistry.Register(
+            ModuleId,
+            typeof(TMes),
+            typeof(TCloud),
+            typeof(TBusiness),
+            defaultOverrides);
 
     public void RegisterPlcSignalProfile<TSignalKey, TProfile>()
         where TSignalKey : struct, Enum

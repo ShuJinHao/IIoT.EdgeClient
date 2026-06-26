@@ -85,12 +85,19 @@ public sealed class LocalParameterConfigBehaviorTests
     [Fact]
     public async Task ParamViewCrudService_WhenSaved_ShouldOnlyPersistModuleParameters()
     {
+        var registry = new ModuleParamRegistry();
+        registry.Register(
+            ModuleId,
+            typeof(TestMesParams),
+            typeof(TestCloudParams),
+            typeof(TestBusinessParams));
         var moduleKey = ModuleParamKeys.StorageKey(ModuleId, ModuleParamCategory.Business, "启用托盘码重码验证");
         using var host = new ParameterConfigTestHost(
             systemConfigs:
             [
                 CreateSystemConfig(1, moduleKey, "false")
-            ]);
+            ],
+            moduleParamRegistry: registry);
         var service = new ParamViewCrudService(host.Sender, host.PermissionService);
 
         var saveResult = await service.SaveAsync(
@@ -106,7 +113,58 @@ public sealed class LocalParameterConfigBehaviorTests
     }
 
     [Fact]
-    public async Task ParamViewCrudService_WhenCloudApiConfigSaved_ShouldOnlyPersistWhitelistedCloudApiKeys()
+    public async Task ParamViewCrudService_WhenHiddenMesSignTokenSubmitted_ShouldReject()
+    {
+        var registry = new ModuleParamRegistry();
+        registry.Register(
+            ModuleId,
+            typeof(SensitiveMesParams),
+            typeof(TestCloudParams),
+            typeof(TestBusinessParams));
+        var tokenKey = ModuleParamKeys.StorageKey(ModuleId, ModuleParamCategory.Mes, nameof(SensitiveMesParams.签名令牌));
+        using var host = new ParameterConfigTestHost(moduleParamRegistry: registry);
+        var service = new ParamViewCrudService(host.Sender, host.PermissionService);
+
+        var saveResult = await service.SaveAsync(
+            [
+                new ParamViewValueDto(tokenKey, "secret")
+            ]);
+
+        Assert.False(saveResult.IsSuccess);
+        Assert.Contains(tokenKey, saveResult.Message);
+        Assert.Empty(await host.LocalParameterConfigService.GetSystemConfigsAsync());
+    }
+
+    [Fact]
+    public async Task ParamViewCrudService_LoadAsync_ShouldHideSensitiveFieldsAndPutCloudEnableFirst()
+    {
+        var registry = new ModuleParamRegistry();
+        registry.Register(
+            ModuleId,
+            typeof(SensitiveMesParams),
+            typeof(TestCloudParams),
+            typeof(TestBusinessParams));
+        using var host = new ParameterConfigTestHost(moduleParamRegistry: registry);
+        var service = new ParamViewCrudService(host.Sender, host.PermissionService);
+
+        var result = await service.LoadAsync();
+
+        Assert.DoesNotContain(
+            result.MesParamGroups.SelectMany(static group => group.Params),
+            param => param.Key.EndsWith(":签名令牌", StringComparison.OrdinalIgnoreCase));
+        var cloudParams = Assert.Single(result.CloudParamGroups).Params;
+        Assert.Equal(
+            ModuleParamKeys.StorageKey(ModuleId, ModuleParamCategory.Cloud, nameof(TestCloudParams.启用)),
+            cloudParams[0].Key);
+        Assert.Contains(cloudParams, param => param.Key == CloudApiConfigParamSchema.BaseUrl);
+        Assert.Contains(cloudParams, param => param.Key == CloudApiConfigParamSchema.ProcessUploadPath);
+        Assert.Contains(cloudParams, param => param.Key == CloudApiConfigParamSchema.PassStationBatchTemplatePath);
+        Assert.DoesNotContain(cloudParams, param => param.Key == CloudApiConfigParamSchema.ClientCode);
+        Assert.DoesNotContain(cloudParams, param => param.Key == CloudApiConfigParamSchema.BootstrapSecret);
+    }
+
+    [Fact]
+    public async Task ParamViewCrudService_WhenCloudApiConfigSaved_ShouldOnlyPersistEditableCloudApiKeys()
     {
         using var host = new ParameterConfigTestHost();
         var service = new ParamViewCrudService(host.Sender, host.PermissionService);
@@ -122,6 +180,23 @@ public sealed class LocalParameterConfigBehaviorTests
             .ToDictionary(static x => x.Key, static x => x.Value, StringComparer.OrdinalIgnoreCase);
         Assert.Equal("https://cloud.local", values[CloudApiConfigParamSchema.BaseUrl]);
         Assert.Equal("/edge/process", values[CloudApiConfigParamSchema.ProcessUploadPath]);
+    }
+
+    [Fact]
+    public async Task ParamViewCrudService_WhenSensitiveCloudApiKeySubmitted_ShouldReject()
+    {
+        using var host = new ParameterConfigTestHost();
+        var service = new ParamViewCrudService(host.Sender, host.PermissionService);
+
+        var saveResult = await service.SaveAsync(
+            [
+                new ParamViewValueDto(CloudApiConfigParamSchema.BootstrapSecret, "secret"),
+                new ParamViewValueDto(CloudApiConfigParamSchema.ProcessUploadPath, "/edge/process")
+            ]);
+
+        Assert.False(saveResult.IsSuccess);
+        Assert.Contains(CloudApiConfigParamSchema.BootstrapSecret, saveResult.Message);
+        Assert.Empty(await host.LocalParameterConfigService.GetSystemConfigsAsync());
     }
 
     [Fact]
@@ -311,7 +386,7 @@ public sealed class LocalParameterConfigBehaviorTests
                 .Handle(query, cancellationToken);
 
         private async Task<TResponse> HandleSaveParamView<TResponse>(SaveParamViewCommand command, CancellationToken cancellationToken)
-            => (TResponse)(object)await new SaveParamViewHandler(this, permissionService)
+            => (TResponse)(object)await new SaveParamViewHandler(this, permissionService, moduleParamRegistry)
                 .Handle(command, cancellationToken);
 
         private async Task<TResponse> HandleResetParamView<TResponse>(ResetParamViewCommand command, CancellationToken cancellationToken)
@@ -325,7 +400,7 @@ public sealed class LocalParameterConfigBehaviorTests
         private async Task<TResponse> HandleSaveCloudApiConfigParams<TResponse>(
             SaveCloudApiConfigParamsCommand command,
             CancellationToken cancellationToken)
-            => (TResponse)(object)await new SaveCloudApiConfigParamsHandler(systemRepo, cache)
+            => (TResponse)(object)await new SaveCloudApiConfigParamsHandler(systemRepo, cache, changePublisher)
                 .Handle(command, cancellationToken);
     }
 
@@ -355,8 +430,17 @@ public sealed class LocalParameterConfigBehaviorTests
     {
     }
 
+    private enum SensitiveMesParams
+    {
+        [ModuleParam(ParamValueKind.String, DefaultValue = "hdc2023", Role = ModuleParamRole.MesSignToken)]
+        签名令牌
+    }
+
     private enum TestCloudParams
     {
+        [ModuleParam(ParamValueKind.Bool, DefaultValue = "false", Role = ModuleParamRole.CloudEnabled)]
+        启用,
+
         [ModuleParam(ParamValueKind.String, DefaultValue = "http://localhost:5180")]
         服务地址
     }

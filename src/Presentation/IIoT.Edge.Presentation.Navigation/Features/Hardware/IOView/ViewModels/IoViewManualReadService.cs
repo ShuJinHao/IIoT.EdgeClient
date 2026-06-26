@@ -23,6 +23,14 @@ public sealed class IoViewManualReadService(
         IEnumerable<IoDataSectionModel> dataSections,
         IEnumerable<IoContinuousReadMatrixSectionModel> arraySections)
     {
+        var status = plcConnectionManager.GetRuntimeStatus(networkDeviceId);
+        if (status?.IsConnected != true)
+        {
+            return new IoViewManualReadResult(
+                ShouldRefreshValues: false,
+                ErrorMessage: "PLC 未连接，无法读取。");
+        }
+
         var plc = plcConnectionManager.GetPlc(networkDeviceId);
         var buffer = dataStore.GetBuffer(networkDeviceId);
         if (plc is null || buffer is null)

@@ -1,6 +1,7 @@
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Features.Config.CloudApi;
 
 namespace IIoT.Edge.Application.Features.Config.LocalParameterConfig;
 
@@ -72,22 +73,10 @@ public sealed class LocalSystemRuntimeConfigService(
                     defaultValue: false,
                     cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
-            var cloudProcessTypes = _processIntegrationRegistry
-                .GetCloudUploaders()
-                .Keys
-                .ToArray();
-            var cloudEnabled = await _moduleParamRoleProvider
-                .AnyBoolAsync(
-                    ModuleParamCategory.Cloud,
-                    ModuleParamRole.CloudEnabled,
-                    cloudProcessTypes,
-                    defaultValue: false,
-                    cancellationToken: cancellationToken)
-                .ConfigureAwait(false);
-
+            var systemCloudEnabled = await ReadSystemCloudEnabledAsync(cancellationToken).ConfigureAwait(false);
             Current = new SystemRuntimeConfigSnapshot(
                 mesEnabled,
-                cloudEnabled,
+                systemCloudEnabled,
                 DefaultInterval,
                 DefaultInterval);
         }
@@ -95,5 +84,17 @@ public sealed class LocalSystemRuntimeConfigService(
         {
             _refreshGate.Release();
         }
+    }
+
+    private async Task<bool> ReadSystemCloudEnabledAsync(CancellationToken cancellationToken)
+    {
+        var configs = await _parameterConfigService
+            .GetSystemConfigsAsync(cancellationToken)
+            .ConfigureAwait(false);
+        var value = configs.FirstOrDefault(static x =>
+            string.Equals(x.Key, CloudApiConfigParamSchema.Enabled, StringComparison.OrdinalIgnoreCase))?.Value;
+        return string.IsNullOrWhiteSpace(value) || !bool.TryParse(value.Trim(), out var enabled)
+            ? true
+            : enabled;
     }
 }

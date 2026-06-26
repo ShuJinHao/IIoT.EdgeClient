@@ -33,6 +33,12 @@ public static class LauncherDependencyInjection
         services.AddSingleton<ILauncherProfileCatalog>(
             provider => ActivatorUtilities.CreateInstance<LauncherProfileCatalog>(provider, baseDirectory));
         services.AddSingleton<ILauncherUpdateTargetFactory, LauncherUpdateTargetFactory>();
+        services.AddSingleton<ILauncherProfileVisibilityService>(
+            provider => new LauncherProfileVisibilityService(
+                baseDirectory,
+                provider.GetRequiredService<IEdgeInstalledPluginCatalog>(),
+                provider.GetRequiredService<IEdgeProfileModuleConfigurationStore>(),
+                provider.GetRequiredService<ILauncherUpdateTargetFactory>()));
         services.AddSingleton<ILauncherDeviceBindingImporter>(
             provider => new LauncherDeviceBindingImporter(
                 baseDirectory,
@@ -40,6 +46,8 @@ public static class LauncherDependencyInjection
                 provider.GetRequiredService<IEdgeProfileModuleConfigurationStore>(),
                 provider.GetRequiredService<ILauncherUpdateTargetFactory>()));
         services.AddSingleton<IProcessStarter, ProcessStarter>();
+        services.AddSingleton<IShellInstanceIdResolver, ShellInstanceIdResolver>();
+        services.AddSingleton<IShellInstanceProbe, NamedMutexShellInstanceProbe>();
         services.AddSingleton<IShellLaunchService, ShellLaunchService>();
         services.AddSingleton<LauncherMainViewModel>();
         services.AddSingleton<MainWindow>();

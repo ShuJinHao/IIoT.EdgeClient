@@ -108,7 +108,7 @@ public sealed class LauncherHostUpdatePanelViewModel : BaseNotifyPropertyChanged
 
     public async Task ApplyUpdateAsync()
     {
-        if (_launchService.HasRunningShellProcess)
+        if (_launchService.HasAnyRunningShellProcess())
         {
             IsProgressVisible = false;
             Progress = 0;
@@ -244,7 +244,9 @@ public sealed class LauncherHostUpdatePanelViewModel : BaseNotifyPropertyChanged
             statusKind,
             LauncherText.Get(_languageService, statusKey),
             LauncherText.Get(_languageService, "Launcher_UpdateCenter_ButtonHostUpdate"),
-            _hasUpdateAvailable ? EdgeVersionStatus.Newer : EdgeVersionStatus.Current);
+            _hasUpdateAvailable ? EdgeVersionStatus.Newer : EdgeVersionStatus.Current,
+            componentKindText: LauncherText.Get(_languageService, "Launcher_VersionManagement_ComponentHost"),
+            emptyHistoryText: LauncherText.Get(_languageService, "Launcher_UpdateCenter_NoHistory"));
     }
 
     private bool SetProperty<T>(ref T field, T value, [CallerMemberName] string propertyName = "")

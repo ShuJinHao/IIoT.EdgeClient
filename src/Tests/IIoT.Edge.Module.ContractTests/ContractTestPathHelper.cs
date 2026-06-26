@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Text;
+using IIoT.Edge.Module.DieCuttingAnode;
+using IIoT.Edge.Module.DieCuttingCathode;
 using IIoT.Edge.Module.Homogenization;
 
 namespace IIoT.Edge.Module.ContractTests;
@@ -87,6 +89,8 @@ internal static class ContractTestPathHelper
         var repoRoot = FindRepoRoot();
         return moduleId switch
         {
+            "DieCuttingAnode" => Path.Combine(repoRoot, "src", "Modules", "IIoT.Edge.Module.DieCuttingAnode"),
+            "DieCuttingCathode" => Path.Combine(repoRoot, "src", "Modules", "IIoT.Edge.Module.DieCuttingCathode"),
             "Homogenization" => Path.Combine(repoRoot, "src", "Modules", "IIoT.Edge.Module.Homogenization"),
             _ => throw new InvalidOperationException($"Unsupported module id '{moduleId}'.")
         };

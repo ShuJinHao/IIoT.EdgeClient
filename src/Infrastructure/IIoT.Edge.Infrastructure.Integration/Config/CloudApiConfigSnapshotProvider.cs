@@ -26,6 +26,7 @@ public sealed class CloudApiConfigSnapshotProvider(
             paths.CapacitySummaryRange ?? string.Empty,
             paths.RecipeByDeviceTemplate ?? string.Empty,
             paths.ClientReleaseCatalogTemplate ?? string.Empty,
-            paths.ClientVersionReport ?? string.Empty);
+            paths.ClientVersionReport ?? string.Empty,
+            current.Enabled);
     }
 }

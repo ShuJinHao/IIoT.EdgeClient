@@ -50,6 +50,7 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
         var releaseOptions = _configurationProvider.ResolveReleaseOptions();
         var hostVersion = ResolveHostVersion(target);
         var hostApiVersion = EdgeClientHostRuntime.HostApiVersion;
+        var installedPlugins = _installedPluginCatalog.LoadInstalledPlugins(target);
         var configuration = _configurationProvider.Resolve(target);
         if (!configuration.Success || configuration.Options is null)
         {
@@ -58,7 +59,7 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
                 releaseOptions,
                 hostVersion,
                 hostApiVersion,
-                [],
+                BuildLocalVersionPlans(installedPlugins, hostVersion),
                 configuration.ErrorMessage);
         }
 
@@ -72,7 +73,7 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
                 releaseOptions,
                 hostVersion,
                 hostApiVersion,
-                [],
+                BuildLocalVersionPlans(installedPlugins, hostVersion),
                 session.ErrorMessage);
         }
 
@@ -88,7 +89,7 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
                 releaseOptions,
                 hostVersion,
                 hostApiVersion,
-                [],
+                BuildLocalVersionPlans(installedPlugins, hostVersion),
                 catalog.ErrorMessage);
         }
 
@@ -97,7 +98,6 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
             _updateConfigInitializer.TrySyncUpdateSource(catalog.Value.HostUpdateSource);
         }
 
-        var installedPlugins = _installedPluginCatalog.LoadInstalledPlugins(target);
         var enabledPlugins = _profileModuleConfigurationStore.ReadEnabledModules(target);
         _ = await _versionReporter
             .ReportVersionAsync(
@@ -117,7 +117,7 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
             releaseOptions,
             hostVersion,
             hostApiVersion,
-            BuildVersionPlans(catalog.Value, installedPlugins, hostVersion, hostApiVersion, _compatibilityPolicy));
+            BuildVersionPlans(catalog.Value, installedPlugins, hostVersion, hostApiVersion, _compatibilityPolicy, enabledPlugins));
     }
 
     public async Task<EdgePluginInstallResult> ApplyPluginVersionAsync(
@@ -135,6 +135,12 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
         if (context.Error is not null)
         {
             return EdgePluginInstallResult.Failed(context.Error);
+        }
+
+        var enabledModuleIssue = ValidateTargetModuleEnabled(target, moduleId);
+        if (enabledModuleIssue is not null)
+        {
+            return EdgePluginInstallResult.Failed(enabledModuleIssue);
         }
 
         var releases = FlattenPluginVersions(context.Catalog!);
@@ -197,6 +203,15 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
         if (context.Error is not null)
         {
             return EdgePluginInstallResult.Failed(context.Error);
+        }
+
+        foreach (var item in selection.PluginVersions.Keys)
+        {
+            var enabledModuleIssue = ValidateTargetModuleEnabled(target, item);
+            if (enabledModuleIssue is not null)
+            {
+                return EdgePluginInstallResult.Failed(enabledModuleIssue);
+            }
         }
 
         var releases = FlattenPluginVersions(context.Catalog!);
@@ -295,7 +310,8 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
         IReadOnlyList<EdgeInstalledPlugin> installedPlugins,
         string hostVersion,
         string hostApiVersion,
-        IEdgeVersionCompatibilityPolicy compatibilityPolicy)
+        IEdgeVersionCompatibilityPolicy compatibilityPolicy,
+        IReadOnlyList<string>? enabledModuleIds = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(installedPlugins);
@@ -321,8 +337,16 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
         var installedByModule = installedPlugins.ToDictionary(
             static plugin => plugin.ModuleId,
             StringComparer.OrdinalIgnoreCase);
+        var plannedModules = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var enabledModuleSet = CreateEnabledModuleSet(enabledModuleIds);
         foreach (var component in catalog.Plugins.OrderBy(static plugin => plugin.DisplayName, StringComparer.OrdinalIgnoreCase))
         {
+            if (!IsModuleVisible(component.ModuleId, enabledModuleSet))
+            {
+                continue;
+            }
+
+            plannedModules.Add(component.ModuleId);
             installedByModule.TryGetValue(component.ModuleId, out var installed);
             var releases = component.Versions
                 .Select(version => new EdgePluginVersionRelease(
@@ -356,8 +380,75 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
                 }).ToList()));
         }
 
+        foreach (var installed in installedPlugins
+                     .Where(plugin => !plannedModules.Contains(plugin.ModuleId)
+                                      && IsModuleVisible(plugin.ModuleId, enabledModuleSet))
+                     .OrderBy(static plugin => plugin.DisplayName, StringComparer.OrdinalIgnoreCase)
+                     .ThenBy(static plugin => plugin.ModuleId, StringComparer.OrdinalIgnoreCase))
+        {
+            plans.Add(BuildInstalledPluginPlan(installed));
+        }
+
         return plans;
     }
+
+    private string? ValidateTargetModuleEnabled(EdgeUpdateTarget target, string moduleId)
+    {
+        var enabledModules = _profileModuleConfigurationStore.ReadEnabledModules(target);
+        if (enabledModules.Count == 0)
+        {
+            return $"当前工序未配置启用插件，不能安装或更新插件 {moduleId}。";
+        }
+
+        return enabledModules.Contains(moduleId.Trim(), StringComparer.OrdinalIgnoreCase)
+            ? null
+            : $"插件 {moduleId} 不属于当前工序，不能在这里安装或更新。";
+    }
+
+    private static HashSet<string>? CreateEnabledModuleSet(IReadOnlyList<string>? enabledModuleIds)
+        => enabledModuleIds is null
+            ? null
+            : enabledModuleIds
+                .Where(static moduleId => !string.IsNullOrWhiteSpace(moduleId))
+                .Select(static moduleId => moduleId.Trim())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    private static bool IsModuleVisible(string moduleId, IReadOnlySet<string>? enabledModuleSet)
+        => enabledModuleSet is null || enabledModuleSet.Contains(moduleId);
+
+    public static IReadOnlyList<EdgeComponentVersionPlan> BuildLocalVersionPlans(
+        IReadOnlyList<EdgeInstalledPlugin> installedPlugins,
+        string hostVersion)
+    {
+        ArgumentNullException.ThrowIfNull(installedPlugins);
+
+        var plans = new List<EdgeComponentVersionPlan>
+        {
+            new(
+                EdgeComponentKind.Host,
+                "Host",
+                "Edge Host",
+                hostVersion,
+                [])
+        };
+
+        foreach (var installed in installedPlugins
+                     .OrderBy(static plugin => plugin.DisplayName, StringComparer.OrdinalIgnoreCase)
+                     .ThenBy(static plugin => plugin.ModuleId, StringComparer.OrdinalIgnoreCase))
+        {
+            plans.Add(BuildInstalledPluginPlan(installed));
+        }
+
+        return plans;
+    }
+
+    private static EdgeComponentVersionPlan BuildInstalledPluginPlan(EdgeInstalledPlugin installed)
+        => new(
+            EdgeComponentKind.Plugin,
+            installed.ModuleId,
+            string.IsNullOrWhiteSpace(installed.DisplayName) ? installed.ModuleId : installed.DisplayName,
+            installed.Version,
+            []);
 
     private async Task<EdgePluginInstallResult> InstallPluginReleasesAsync(
         EdgeUpdateTarget target,

@@ -12,6 +12,8 @@ internal sealed class IngressOverflowPersistence : IIngressOverflowPersistence
     private readonly List<ICellDataConsumer> _durableConsumers;
     private readonly int _bestEffortConsumerCount;
     private readonly ILocalSystemRuntimeConfigService _runtimeConfig;
+    private readonly IProcessIntegrationRegistry _processIntegrationRegistry;
+    private readonly IModuleParamRoleProvider _moduleParamRoleProvider;
     private readonly ICriticalPersistenceFallbackWriter _criticalFallbackWriter;
     private readonly DataPipelineCascadingPersistenceWriter _persistenceWriter;
     private readonly ILogService _logger;
@@ -19,6 +21,8 @@ internal sealed class IngressOverflowPersistence : IIngressOverflowPersistence
     public IngressOverflowPersistence(
         IEnumerable<ICellDataConsumer> consumers,
         ILocalSystemRuntimeConfigService runtimeConfig,
+        IProcessIntegrationRegistry processIntegrationRegistry,
+        IModuleParamRoleProvider moduleParamRoleProvider,
         ICriticalPersistenceFallbackWriter criticalFallbackWriter,
         DataPipelineCascadingPersistenceWriter persistenceWriter,
         ILogService logger)
@@ -29,6 +33,8 @@ internal sealed class IngressOverflowPersistence : IIngressOverflowPersistence
             .ToList();
         _bestEffortConsumerCount = consumerList.Count - _durableConsumers.Count;
         _runtimeConfig = runtimeConfig;
+        _processIntegrationRegistry = processIntegrationRegistry;
+        _moduleParamRoleProvider = moduleParamRoleProvider;
         _criticalFallbackWriter = criticalFallbackWriter;
         _persistenceWriter = persistenceWriter;
         _logger = logger;
@@ -53,7 +59,7 @@ internal sealed class IngressOverflowPersistence : IIngressOverflowPersistence
                 continue;
             }
 
-            if (IsChannelDisabled(consumer.RetryChannel))
+            if (await IsChannelDisabledAsync(record, consumer.RetryChannel).ConfigureAwait(false))
             {
                 _logger.Warn(
                     $"[DataPipeline] 队列溢出时跳过已屏蔽外部通道 {consumer.Name}，工序={record.CellData.ProcessType}。");
@@ -99,11 +105,29 @@ internal sealed class IngressOverflowPersistence : IIngressOverflowPersistence
             .ConfigureAwait(false);
     }
 
-    private bool IsChannelDisabled(DataPipelineRetryChannel channel)
-        => channel switch
+    private async Task<bool> IsChannelDisabledAsync(CellCompletedRecord record, DataPipelineRetryChannel channel)
+    {
+        return channel switch
         {
-            DataPipelineRetryChannel.Cloud => !_runtimeConfig.Current.CloudUploadEnabled,
+            DataPipelineRetryChannel.Cloud => !_runtimeConfig.Current.SystemCloudEnabled
+                                              || await IsPluginCloudDisabledAsync(record.CellData.ProcessType).ConfigureAwait(false),
             DataPipelineRetryChannel.Mes => !_runtimeConfig.Current.MesUploadEnabled,
             _ => false
         };
+    }
+
+    private async Task<bool> IsPluginCloudDisabledAsync(string processType)
+    {
+        if (!_processIntegrationRegistry.HasCloudUploader(processType))
+        {
+            return true;
+        }
+
+        return !await _moduleParamRoleProvider.GetBoolAsync(
+                processType,
+                ModuleParamCategory.Cloud,
+                ModuleParamRole.CloudEnabled,
+                defaultValue: true)
+            .ConfigureAwait(false);
+    }
 }

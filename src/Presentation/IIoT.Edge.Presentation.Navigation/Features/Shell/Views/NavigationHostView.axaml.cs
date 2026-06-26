@@ -7,7 +7,6 @@ using IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView;
 using IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
 using IIoT.Edge.Presentation.Navigation.Features.Hardware.PlcTaskBindingView;
 using IIoT.Edge.Presentation.Navigation.Features.Production.CapacityView;
-using IIoT.Edge.Presentation.Navigation.Features.Production.DataView;
 using IIoT.Edge.Presentation.Navigation.Features.Production.Monitor;
 using IIoT.Edge.UI.Shared.Modularity;
 using Microsoft.Extensions.DependencyInjection;
@@ -68,7 +67,6 @@ public partial class NavigationHostView : UserControl
             "Formula.RecipeView" => _serviceProvider.GetRequiredService<RecipeViewPage>(),
             "Config.ParamView" => _serviceProvider.GetRequiredService<ParamViewPage>(),
             CoreViewIds.Diagnostics => _serviceProvider.GetRequiredService<DiagnosticsPage>(),
-            "Production.DataView" => _serviceProvider.GetRequiredService<DataViewPage>(),
             "Production.CapacityView" => _serviceProvider.GetRequiredService<CapacityViewPage>(),
             "Production.Monitor" => _serviceProvider.GetRequiredService<MonitorViewPage>(),
             "Hardware.IOView" => _serviceProvider.GetRequiredService<IOViewPage>(),

@@ -46,6 +46,8 @@ param(
 
     [string]$ReleaseNotes = '',
 
+    [string]$ReleaseNotesPath = '',
+
     [string]$Publisher = 'IIoT'
 )
 
@@ -59,6 +61,23 @@ function Get-ArtifactSha256 {
     return (Get-FileHash -Algorithm SHA256 -Path $PathValue).Hash.ToLowerInvariant()
 }
 
+function Get-ArtifactFilePaths {
+    param(
+        [Parameter(Mandatory = $true)][string]$Directory,
+        [string]$Filter = '*'
+    )
+
+    if (-not (Test-Path $Directory)) {
+        return @()
+    }
+
+    $resolvedDirectory = [System.IO.Path]::GetFullPath($Directory)
+    return @([System.IO.Directory]::EnumerateFiles(
+        $resolvedDirectory,
+        $Filter,
+        [System.IO.SearchOption]::AllDirectories))
+}
+
 function Get-ArtifactDirectorySize {
     param([Parameter(Mandatory = $true)][string]$Directory)
 
@@ -66,13 +85,12 @@ function Get-ArtifactDirectorySize {
         return 0
     }
 
-    $measure = Get-ChildItem -Path $Directory -Recurse -File -ErrorAction SilentlyContinue |
-        Measure-Object -Property Length -Sum
-    if ($null -eq $measure.Sum) {
-        return 0
+    $size = 0L
+    foreach ($filePath in Get-ArtifactFilePaths -Directory $Directory) {
+        $size += ([System.IO.FileInfo]$filePath).Length
     }
 
-    return [long]$measure.Sum
+    return $size
 }
 
 function Get-ArtifactDirectorySha256 {
@@ -84,11 +102,21 @@ function Get-ArtifactDirectorySha256 {
 
     $hasher = [System.Security.Cryptography.IncrementalHash]::CreateHash([System.Security.Cryptography.HashAlgorithmName]::SHA256)
     try {
-        $files = Get-ChildItem -Path $Directory -Recurse -File -ErrorAction SilentlyContinue |
-            Sort-Object @{ Expression = { Get-ArtifactRelativePath -BaseDirectory $Directory -PathValue $_.FullName } }
+        $files = @(Get-ArtifactFilePaths -Directory $Directory |
+            ForEach-Object {
+                [PSCustomObject]@{
+                    File = [System.IO.FileInfo]$_
+                    RelativePath = Get-ArtifactRelativePath -BaseDirectory $Directory -PathValue $_
+                }
+            })
+        [array]::Sort($files, [System.Comparison[object]]{
+            param($left, $right)
+            return [System.StringComparer]::Ordinal.Compare($left.RelativePath, $right.RelativePath)
+        })
 
-        foreach ($file in $files) {
-            $relativePath = Get-ArtifactRelativePath -BaseDirectory $Directory -PathValue $file.FullName
+        foreach ($entry in $files) {
+            $file = $entry.File
+            $relativePath = $entry.RelativePath
             $pathBytes = [System.Text.Encoding]::UTF8.GetBytes($relativePath)
             $hasher.AppendData($pathBytes)
             $hasher.AppendData([byte[]](0))
@@ -145,28 +173,6 @@ function Test-ArtifactGitCommitExists {
     return $LASTEXITCODE -eq 0
 }
 
-function New-ArtifactReleaseNotes {
-    param(
-        [string]$PreviousCommit,
-        [string]$CurrentCommit
-    )
-
-    if ((Test-ArtifactGitCommitExists $PreviousCommit) -and (Test-ArtifactGitCommitExists $CurrentCommit)) {
-        $range = "$PreviousCommit..$CurrentCommit"
-        $notes = Invoke-ArtifactGitText -Arguments @('log', '--oneline', '--no-decorate', $range)
-        if (-not [string]::IsNullOrWhiteSpace($notes)) {
-            return $notes.Trim()
-        }
-    }
-
-    $recent = Invoke-ArtifactGitText -Arguments @('log', '--oneline', '--no-decorate', '-n', '20')
-    if (-not [string]::IsNullOrWhiteSpace($recent)) {
-        return $recent.Trim()
-    }
-
-    return "Edge installer artifact $Version"
-}
-
 function Assert-ArtifactForbiddenContentMissing {
     param([Parameter(Mandatory = $true)][string]$Directory)
 
@@ -185,8 +191,8 @@ function Assert-ArtifactForbiddenContentMissing {
         '(^|/)excel/'
     )
 
-    foreach ($file in Get-ChildItem -Path $Directory -Recurse -File -ErrorAction SilentlyContinue) {
-        $relativePath = Get-ArtifactRelativePath -BaseDirectory $Directory -PathValue $file.FullName
+    foreach ($filePath in Get-ArtifactFilePaths -Directory $Directory) {
+        $relativePath = Get-ArtifactRelativePath -BaseDirectory $Directory -PathValue $filePath
         foreach ($pattern in $forbiddenPatterns) {
             if ($relativePath -match $pattern) {
                 throw "Forbidden site config or runtime data was found in installer artifact layout: $relativePath"
@@ -198,22 +204,23 @@ function Assert-ArtifactForbiddenContentMissing {
 function Assert-ArtifactCloudIdentityTemplatesAreEmpty {
     param([Parameter(Mandatory = $true)][string]$Directory)
 
-    $configFiles = Get-ChildItem -Path $Directory -Recurse -File -Filter 'appsettings*.json' -ErrorAction SilentlyContinue
+    $configFiles = Get-ArtifactFilePaths -Directory $Directory -Filter 'appsettings*.json'
     foreach ($configFile in $configFiles) {
-        $relativePath = Get-ArtifactRelativePath -BaseDirectory $Directory -PathValue $configFile.FullName
+        $relativePath = Get-ArtifactRelativePath -BaseDirectory $Directory -PathValue $configFile
         try {
-            $config = Get-Content -Raw -Encoding UTF8 -Path $configFile.FullName | ConvertFrom-Json
+            $config = Get-Content -Raw -Encoding UTF8 -LiteralPath $configFile | ConvertFrom-Json
         }
         catch {
             throw "Artifact config file could not be parsed: $relativePath"
         }
 
-        if ($null -eq $config.CloudApi) {
+        $cloudApiProperty = $config.PSObject.Properties['CloudApi']
+        if ($null -eq $cloudApiProperty -or $null -eq $cloudApiProperty.Value) {
             continue
         }
 
         foreach ($key in @('ClientCode', 'BootstrapSecret')) {
-            $property = $config.CloudApi.PSObject.Properties[$key]
+            $property = $cloudApiProperty.Value.PSObject.Properties[$key]
             if ($null -eq $property) {
                 continue
             }
@@ -241,7 +248,23 @@ function Copy-ArtifactDirectory {
     }
 
     New-Item -Path $TargetDirectory -ItemType Directory -Force | Out-Null
-    Copy-Item -Path (Join-Path $SourceDirectory '*') -Destination $TargetDirectory -Recurse -Force
+    $sourceRoot = [System.IO.Path]::GetFullPath($SourceDirectory)
+    $targetRoot = [System.IO.Path]::GetFullPath($TargetDirectory)
+
+    foreach ($directoryPath in [System.IO.Directory]::EnumerateDirectories(
+        $sourceRoot,
+        '*',
+        [System.IO.SearchOption]::AllDirectories)) {
+        $relativePath = Get-ArtifactRelativePath -BaseDirectory $sourceRoot -PathValue $directoryPath
+        New-Item -Path (Join-Path $targetRoot $relativePath) -ItemType Directory -Force | Out-Null
+    }
+
+    foreach ($filePath in Get-ArtifactFilePaths -Directory $sourceRoot) {
+        $relativePath = Get-ArtifactRelativePath -BaseDirectory $sourceRoot -PathValue $filePath
+        $targetFile = Join-Path $targetRoot $relativePath
+        New-Item -Path (Split-Path -Parent $targetFile) -ItemType Directory -Force | Out-Null
+        Copy-Item -LiteralPath $filePath -Destination $targetFile -Force
+    }
 }
 
 function Read-ArtifactPluginManifest {
@@ -311,7 +334,7 @@ function Copy-ArtifactToEdgeUpdatesRoot {
     }
 
     New-Item -Path $targetDirectory -ItemType Directory -Force | Out-Null
-    Copy-Item -Path (Join-Path $ArtifactRoot '*') -Destination $targetDirectory -Recurse -Force
+    Copy-ArtifactDirectory -SourceDirectory $ArtifactRoot -TargetDirectory $targetDirectory
     Write-Host "Copied installer artifact to: $targetDirectory"
 }
 
@@ -327,7 +350,24 @@ function Copy-VelopackReleasesToEdgeUpdatesRoot {
         New-Item -Path $targetDirectory -ItemType Directory -Force | Out-Null
     }
 
-    Copy-Item -Path (Join-Path $SourceDirectory '*') -Destination $targetDirectory -Recurse -Force
+    $sourceRoot = [System.IO.Path]::GetFullPath($SourceDirectory)
+    $targetRoot = [System.IO.Path]::GetFullPath($targetDirectory)
+
+    foreach ($directoryPath in [System.IO.Directory]::EnumerateDirectories(
+        $sourceRoot,
+        '*',
+        [System.IO.SearchOption]::AllDirectories)) {
+        $relativePath = Get-ArtifactRelativePath -BaseDirectory $sourceRoot -PathValue $directoryPath
+        New-Item -Path (Join-Path $targetRoot $relativePath) -ItemType Directory -Force | Out-Null
+    }
+
+    foreach ($filePath in Get-ArtifactFilePaths -Directory $sourceRoot) {
+        $relativePath = Get-ArtifactRelativePath -BaseDirectory $sourceRoot -PathValue $filePath
+        $targetFile = Join-Path $targetRoot $relativePath
+        New-Item -Path (Split-Path -Parent $targetFile) -ItemType Directory -Force | Out-Null
+        Copy-Item -LiteralPath $filePath -Destination $targetFile -Force
+    }
+
     Write-Host "Copied Velopack releases to: $targetDirectory"
 }
 
@@ -379,7 +419,7 @@ function Register-CloudCatalog {
         Invoke-CloudJsonPost -Path '/human/client-releases/plugin-releases' -Body @{
             moduleId = $module.moduleId
             displayName = $module.displayName
-            description = $module.description
+            description = if ($module.PSObject.Properties['description']) { $module.description } else { $null }
             iconKind = $null
             accentColor = $null
             channel = $Artifact.channel
@@ -399,6 +439,32 @@ function Register-CloudCatalog {
             publisher = $Publisher
         }
     }
+}
+
+function Resolve-ArtifactReleaseNotes {
+    if (-not [string]::IsNullOrWhiteSpace($ReleaseNotes) -and -not [string]::IsNullOrWhiteSpace($ReleaseNotesPath)) {
+        throw 'Use either -ReleaseNotes or -ReleaseNotesPath, not both.'
+    }
+
+    $resolvedNotes = ''
+    if (-not [string]::IsNullOrWhiteSpace($ReleaseNotesPath)) {
+        $resolvedPath = Resolve-EdgeAbsolutePath -BasePath $repoRoot -PathValue $ReleaseNotesPath
+        if (-not (Test-Path -LiteralPath $resolvedPath)) {
+            throw "Release notes file was not found: $resolvedPath"
+        }
+
+        $resolvedNotes = Get-Content -Raw -Encoding UTF8 -LiteralPath $resolvedPath
+    }
+    else {
+        $resolvedNotes = $ReleaseNotes
+    }
+
+    $resolvedNotes = $resolvedNotes.Trim()
+    if ([string]::IsNullOrWhiteSpace($resolvedNotes)) {
+        throw 'ReleaseNotes is required for Edge installer artifacts. Production releases must include real update content.'
+    }
+
+    return $resolvedNotes
 }
 
 $manifest = Load-EdgeRuntimePublishManifest -RepoRoot $repoRoot -ManifestPath $ManifestPath
@@ -428,12 +494,7 @@ else {
     $SourceCommit = $SourceCommit.Trim()
 }
 
-if ([string]::IsNullOrWhiteSpace($ReleaseNotes)) {
-    $ReleaseNotes = New-ArtifactReleaseNotes -PreviousCommit $PreviousSourceCommit -CurrentCommit $SourceCommit
-}
-else {
-    $ReleaseNotes = $ReleaseNotes.Trim()
-}
+$ReleaseNotes = Resolve-ArtifactReleaseNotes
 
 $previousVersionManifestValue = if ([string]::IsNullOrWhiteSpace($PreviousVersion)) { $null } else { $PreviousVersion }
 $previousSourceCommitManifestValue = if ([string]::IsNullOrWhiteSpace($PreviousSourceCommit)) { $null } else { $PreviousSourceCommit }
@@ -482,7 +543,7 @@ foreach ($moduleId in $moduleIds) {
     $modules += [PSCustomObject]@{
         moduleId = [string]$plugin.moduleId
         displayName = [string]$plugin.displayName
-        description = [string]$plugin.description
+        description = if ($plugin.PSObject.Properties['description']) { [string]$plugin.description } else { $null }
         version = [string]$plugin.version
         hostApiVersion = [string]$plugin.hostApiVersion
         minHostVersion = [string]$plugin.minHostVersion

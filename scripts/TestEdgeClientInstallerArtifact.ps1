@@ -32,16 +32,32 @@ function Get-TestSha256 {
     return (Get-FileHash -Algorithm SHA256 -Path $PathValue).Hash.ToLowerInvariant()
 }
 
+function Get-TestFilePaths {
+    param(
+        [Parameter(Mandatory = $true)][string]$Directory,
+        [string]$Filter = '*'
+    )
+
+    if (-not (Test-Path $Directory)) {
+        return @()
+    }
+
+    $resolvedDirectory = [System.IO.Path]::GetFullPath($Directory)
+    return @([System.IO.Directory]::EnumerateFiles(
+        $resolvedDirectory,
+        $Filter,
+        [System.IO.SearchOption]::AllDirectories))
+}
+
 function Get-TestDirectorySize {
     param([Parameter(Mandatory = $true)][string]$Directory)
 
-    $measure = Get-ChildItem -Path $Directory -Recurse -File -ErrorAction SilentlyContinue |
-        Measure-Object -Property Length -Sum
-    if ($null -eq $measure.Sum) {
-        return 0
+    $size = 0L
+    foreach ($filePath in Get-TestFilePaths -Directory $Directory) {
+        $size += ([System.IO.FileInfo]$filePath).Length
     }
 
-    return [long]$measure.Sum
+    return $size
 }
 
 function Get-TestRelativePath {
@@ -58,11 +74,21 @@ function Get-TestDirectorySha256 {
 
     $hasher = [System.Security.Cryptography.IncrementalHash]::CreateHash([System.Security.Cryptography.HashAlgorithmName]::SHA256)
     try {
-        $files = Get-ChildItem -Path $Directory -Recurse -File -ErrorAction SilentlyContinue |
-            Sort-Object @{ Expression = { Get-TestRelativePath -BaseDirectory $Directory -PathValue $_.FullName } }
+        $files = @(Get-TestFilePaths -Directory $Directory |
+            ForEach-Object {
+                [PSCustomObject]@{
+                    File = [System.IO.FileInfo]$_
+                    RelativePath = Get-TestRelativePath -BaseDirectory $Directory -PathValue $_
+                }
+            })
+        [array]::Sort($files, [System.Comparison[object]]{
+            param($left, $right)
+            return [System.StringComparer]::Ordinal.Compare($left.RelativePath, $right.RelativePath)
+        })
 
-        foreach ($file in $files) {
-            $relativePath = Get-TestRelativePath -BaseDirectory $Directory -PathValue $file.FullName
+        foreach ($entry in $files) {
+            $file = $entry.File
+            $relativePath = $entry.RelativePath
             $pathBytes = [System.Text.Encoding]::UTF8.GetBytes($relativePath)
             $hasher.AppendData($pathBytes)
             $hasher.AppendData([byte[]](0))
@@ -108,8 +134,8 @@ function Assert-ForbiddenFilesMissing {
         '(^|/)excel/'
     )
 
-    foreach ($file in Get-ChildItem -Path $Directory -Recurse -File -ErrorAction SilentlyContinue) {
-        $relativePath = Get-TestRelativePath -BaseDirectory $Directory -PathValue $file.FullName
+    foreach ($filePath in Get-TestFilePaths -Directory $Directory) {
+        $relativePath = Get-TestRelativePath -BaseDirectory $Directory -PathValue $filePath
         foreach ($pattern in $forbiddenPatterns) {
             if ($relativePath -match $pattern) {
                 throw "Forbidden site config or runtime data was found in installer artifact directory: $relativePath"
@@ -121,22 +147,23 @@ function Assert-ForbiddenFilesMissing {
 function Assert-CloudIdentityTemplatesAreEmpty {
     param([Parameter(Mandatory = $true)][string]$Directory)
 
-    $configFiles = Get-ChildItem -Path $Directory -Recurse -File -Filter 'appsettings*.json' -ErrorAction SilentlyContinue
+    $configFiles = Get-TestFilePaths -Directory $Directory -Filter 'appsettings*.json'
     foreach ($configFile in $configFiles) {
-        $relativePath = Get-TestRelativePath -BaseDirectory $Directory -PathValue $configFile.FullName
+        $relativePath = Get-TestRelativePath -BaseDirectory $Directory -PathValue $configFile
         try {
-            $config = Get-Content -Raw -Encoding UTF8 -Path $configFile.FullName | ConvertFrom-Json
+            $config = Get-Content -Raw -Encoding UTF8 -LiteralPath $configFile | ConvertFrom-Json
         }
         catch {
             throw "Artifact config file could not be parsed: $relativePath"
         }
 
-        if ($null -eq $config.CloudApi) {
+        $cloudApiProperty = $config.PSObject.Properties['CloudApi']
+        if ($null -eq $cloudApiProperty -or $null -eq $cloudApiProperty.Value) {
             continue
         }
 
         foreach ($key in @('ClientCode', 'BootstrapSecret')) {
-            $property = $config.CloudApi.PSObject.Properties[$key]
+            $property = $cloudApiProperty.Value.PSObject.Properties[$key]
             if ($null -eq $property) {
                 continue
             }

@@ -16,7 +16,7 @@ public sealed class CapacityConsumerBehaviorTests
         var capacityBuffer = new FakeCapacityBufferStore();
         var runtimeConfig = new FakeLocalSystemRuntimeConfigService
         {
-            Current = SystemRuntimeConfigSnapshot.Default with { CloudUploadEnabled = false }
+            Current = SystemRuntimeConfigSnapshot.Default with { SystemCloudEnabled = false }
         };
         var consumer = new CapacityConsumer(
             todayCapacity,

@@ -11,12 +11,15 @@ on:
         description: Edge client release version
         required: true
         default: 1.0.0
+      release_notes:
+        description: Edge client release notes shown in Cloud and Launcher
+        required: true
 
 env:
   DOTNET_NOLOGO: true
   EDGE_RELEASE_VERSION: ${{ github.event.inputs.version || '1.0.0' }}
   EDGE_RELEASE_CHANNEL: stable
-  EDGE_PACK_ID: IIoT.EdgeClient.Homogenization
+  EDGE_PACK_ID: IIoT.EdgeClient
 
 jobs:
   validate-runtime:
@@ -141,9 +144,30 @@ jobs:
         shell: pwsh
         run: ./scripts/PublishEdgeRuntime.ps1 -Configuration Release -OutputRoot publish/edge-runtime -CleanOutput
 
+      - name: Resolve release notes
+        shell: pwsh
+        env:
+          EDGE_RELEASE_NOTES_INPUT: ${{ github.event.inputs.release_notes }}
+        run: |
+          $releaseNotes = ''
+          if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') {
+            $releaseNotes = $env:EDGE_RELEASE_NOTES_INPUT
+          } else {
+            $releaseNotes = git for-each-ref "refs/tags/$env:GITHUB_REF_NAME" --format='%(contents:body)'
+          }
+
+          if ([string]::IsNullOrWhiteSpace($releaseNotes)) {
+            throw "Production Edge releases require explicit release notes. For workflow_dispatch fill release_notes; for tag releases use an annotated tag with a non-empty body."
+          }
+
+          New-Item -ItemType Directory -Force -Path publish | Out-Null
+          $notesPath = "publish/edge-release-notes.md"
+          Set-Content -Path $notesPath -Encoding UTF8 -Value $releaseNotes.Trim()
+          "EDGE_RELEASE_NOTES_PATH=$notesPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Pack Velopack releases
         shell: pwsh
-        run: ./scripts/PackEdgeClientVelopack.ps1 -Version $env:EDGE_RELEASE_VERSION -Channel $env:EDGE_RELEASE_CHANNEL -OutputRoot publish/edge-velopack -CleanOutput -SkipVeloAppCheck:$true
+        run: ./scripts/PackEdgeClientVelopack.ps1 -Version $env:EDGE_RELEASE_VERSION -Channel $env:EDGE_RELEASE_CHANNEL -OutputRoot publish/edge-velopack -ReleaseNotes $env:EDGE_RELEASE_NOTES_PATH -CleanOutput -SkipVeloAppCheck:$true
 
       - name: Validate Velopack releases
         shell: pwsh
@@ -151,7 +175,7 @@ jobs:
 
       - name: Publish installer artifact
         shell: pwsh
-        run: ./scripts/PublishEdgeClientInstallerArtifact.ps1 -Version $env:EDGE_RELEASE_VERSION -ReleaseChannel $env:EDGE_RELEASE_CHANNEL -OutputRoot publish/edge-installer-artifacts -RuntimeLayoutRoot publish/edge-runtime -VelopackSetupPath "publish/edge-velopack/$env:EDGE_PACK_ID-$env:EDGE_RELEASE_CHANNEL-Setup.exe" -CleanOutput
+        run: ./scripts/PublishEdgeClientInstallerArtifact.ps1 -Version $env:EDGE_RELEASE_VERSION -ReleaseChannel $env:EDGE_RELEASE_CHANNEL -OutputRoot publish/edge-installer-artifacts -RuntimeLayoutRoot publish/edge-runtime -VelopackSetupPath "publish/edge-velopack/$env:EDGE_PACK_ID-$env:EDGE_RELEASE_CHANNEL-Setup.exe" -ReleaseNotes (Get-Content -Raw -Encoding UTF8 $env:EDGE_RELEASE_NOTES_PATH) -CleanOutput
 
       - name: Validate installer artifact
         shell: pwsh
@@ -222,10 +246,153 @@ jobs:
           name: edge-velopack-releases
           path: publish-download/velopack
 
-      - name: Publish to intranet edge-updates
+      - name: Normalize installer artifact manifest after download
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          installer_root = Path("publish-download/installer").resolve()
+          manifest_path = installer_root / "installer-artifact.json"
+
+          def sha256_file(path: Path) -> str:
+              digest = hashlib.sha256()
+              with path.open("rb") as stream:
+                  for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                      digest.update(chunk)
+              return digest.hexdigest()
+
+          def directory_files(path: Path):
+              return sorted(
+                  (file for file in path.rglob("*") if file.is_file()),
+                  key=lambda file: file.relative_to(path).as_posix(),
+              )
+
+          def sha256_directory(path: Path) -> str:
+              digest = hashlib.sha256()
+              for file in directory_files(path):
+                  relative = file.relative_to(path).as_posix()
+                  digest.update(relative.encode("utf-8"))
+                  digest.update(b"\0")
+                  with file.open("rb") as stream:
+                      for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                          digest.update(chunk)
+                  digest.update(b"\n")
+              return digest.hexdigest()
+
+          def directory_size(path: Path) -> int:
+              return sum(file.stat().st_size for file in directory_files(path))
+
+          with manifest_path.open("r", encoding="utf-8-sig") as stream:
+              manifest = json.load(stream)
+
+          installer_stub = installer_root / manifest["installerStubFile"]
+          manifest["installerStubSha256"] = sha256_file(installer_stub)
+          manifest["installerStubSize"] = installer_stub.stat().st_size
+
+          host_directory = installer_root / manifest["hostDirectory"]
+          manifest["hostDirectorySha256"] = sha256_directory(host_directory)
+          manifest["hostDirectorySize"] = directory_size(host_directory)
+
+          plugins_root = installer_root / manifest["pluginsRoot"]
+          for module in manifest.get("modules", []):
+              plugin_directory = plugins_root / module["pluginDirectory"]
+              module["pluginSha256"] = sha256_directory(plugin_directory)
+              module["pluginSize"] = directory_size(plugin_directory)
+
+          velopack_setup = manifest.get("velopackSetupFile")
+          if velopack_setup:
+              setup_path = installer_root / velopack_setup
+              manifest["velopackSetupSha256"] = sha256_file(setup_path)
+              manifest["velopackSetupSize"] = setup_path.stat().st_size
+
+          with manifest_path.open("w", encoding="utf-8") as stream:
+              json.dump(manifest, stream, ensure_ascii=False, indent=2)
+              stream.write("\n")
+
+          print("Normalized installer artifact manifest after artifact download")
+          print(f"  hostDirectorySize: {manifest['hostDirectorySize']}")
+          print(f"  hostDirectorySha256: {manifest['hostDirectorySha256']}")
+          PY
+
+      - name: Login to Cloud release API
+        id: cloud-login
         shell: bash
         env:
-          EDGE_UPDATES_DIR: ${{ vars.EDGE_UPDATES_DIR }}
+          EDGE_CLOUD_API_BASE_URL: ${{ vars.EDGE_CLOUD_API_BASE_URL }}
+          EDGE_CLOUD_RELEASE_EMPLOYEE_NO: ${{ secrets.IIOT_CLOUD_RELEASE_EMPLOYEE_NO }}
+          EDGE_CLOUD_RELEASE_PASSWORD: ${{ secrets.IIOT_CLOUD_RELEASE_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          api_base="${EDGE_CLOUD_API_BASE_URL:-http://10.98.90.154:81/api/v1}"
+          if [ -z "${EDGE_CLOUD_RELEASE_EMPLOYEE_NO:-}" ] || [ -z "${EDGE_CLOUD_RELEASE_PASSWORD:-}" ]; then
+            echo "IIOT_CLOUD_RELEASE_EMPLOYEE_NO and IIOT_CLOUD_RELEASE_PASSWORD secrets are required to publish Edge release through Cloud API." >&2
+            exit 64
+          fi
+
+          response_json="$(mktemp)"
+          request_json="$(mktemp)"
+          trap 'rm -f "$response_json" "$request_json"' EXIT
+
+          python3 - "$EDGE_CLOUD_RELEASE_EMPLOYEE_NO" "$EDGE_CLOUD_RELEASE_PASSWORD" > "$request_json" <<'PY'
+          import json
+          import sys
+
+          print(json.dumps({
+              "employeeNo": sys.argv[1],
+              "password": sys.argv[2],
+          }, separators=(",", ":")))
+          PY
+
+          curl \
+            --fail \
+            --show-error \
+            --silent \
+            --request POST \
+            --header "Content-Type: application/json" \
+            --data-binary "@$request_json" \
+            --output "$response_json" \
+            "${api_base%/}/human/identity/login"
+
+          token="$(python3 - "$response_json" <<'PY'
+          import json
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8-sig") as f:
+              raw = f.read().strip()
+
+          token = raw
+          try:
+              payload = json.loads(raw)
+          except json.JSONDecodeError:
+              payload = None
+
+          if isinstance(payload, str):
+              token = payload.strip()
+          elif isinstance(payload, dict):
+              value = payload.get("accessToken") or payload.get("token")
+              token = value.strip() if isinstance(value, str) else ""
+
+          if not token:
+              raise SystemExit("Cloud login response did not contain an access token.")
+
+          print(token)
+          PY
+          )"
+          echo "::add-mask::$token"
+          printf 'token=%s\n' "$token" >> "$GITHUB_OUTPUT"
+
+      - name: Publish to Cloud release API
+        shell: bash
+        env:
+          EDGE_CLOUD_API_BASE_URL: ${{ vars.EDGE_CLOUD_API_BASE_URL }}
+          EDGE_CLOUD_TOKEN: ${{ steps.cloud-login.outputs.token }}
         run: |
           set -euo pipefail
 
@@ -234,7 +401,12 @@ jobs:
             exit 1
           fi
 
-          edge_updates_dir="${EDGE_UPDATES_DIR:-/srv/iiot/edge-updates}"
+          api_base="${EDGE_CLOUD_API_BASE_URL:-http://10.98.90.154:81/api/v1}"
+          if [ -z "${EDGE_CLOUD_TOKEN:-}" ]; then
+            echo "Cloud release API login did not produce a token." >&2
+            exit 64
+          fi
+
           if [ "$EDGE_RELEASE_CHANNEL" != "stable" ]; then
             echo "Production Edge releases must use stable channel." >&2
             exit 64
@@ -242,10 +414,7 @@ jobs:
 
           installer_source="$GITHUB_WORKSPACE/publish-download/installer"
           velopack_source="$GITHUB_WORKSPACE/publish-download/velopack"
-          installer_target="$edge_updates_dir/installers/$EDGE_RELEASE_CHANNEL/$EDGE_RELEASE_VERSION"
-          velopack_target="$edge_updates_dir/velopack/$EDGE_RELEASE_CHANNEL"
 
-          mkdir -p "$edge_updates_dir"
           test -f "$installer_source/installer-artifact.json"
           test -f "$installer_source/IIoT.Edge.Setup.exe"
           test -d "$installer_source/launcher"
@@ -254,23 +423,61 @@ jobs:
           test -f "$velopack_source/releases.$EDGE_RELEASE_CHANNEL.json"
           test -f "$velopack_source/assets.$EDGE_RELEASE_CHANNEL.json"
 
-          tmp_root="$(mktemp -d "$edge_updates_dir/.edge-publish.XXXXXX")"
+          tmp_root="$(mktemp -d)"
           trap 'rm -rf "$tmp_root"' EXIT
 
-          mkdir -p "$tmp_root/installer" "$tmp_root/velopack"
-          cp -a "$installer_source"/. "$tmp_root/installer"/
-          cp -a "$velopack_source"/. "$tmp_root/velopack"/
+          bundle_root="$tmp_root/bundle"
+          mkdir -p "$bundle_root/installer" "$bundle_root/velopack"
+          cp -a "$installer_source"/. "$bundle_root/installer"/
+          cp -a "$velopack_source"/. "$bundle_root/velopack"/
 
-          mkdir -p "$(dirname "$installer_target")" "$velopack_target"
-          find "$edge_updates_dir/installers" -mindepth 1 -maxdepth 1 -type d ! -name stable -exec rm -rf {} + 2>/dev/null || true
-          find "$edge_updates_dir/velopack" -mindepth 1 -maxdepth 1 -type d ! -name stable -exec rm -rf {} + 2>/dev/null || true
-          rm -rf "$installer_target"
-          mv "$tmp_root/installer" "$installer_target"
-          cp -a "$tmp_root/velopack"/. "$velopack_target"/
+          bundle_zip="$tmp_root/edge-release-bundle-$EDGE_RELEASE_CHANNEL-$EDGE_RELEASE_VERSION.zip"
+          python3 - "$bundle_root" "$bundle_zip" <<'PY'
+          import shutil
+          import sys
 
-          test -f "$installer_target/installer-artifact.json"
-          test -f "$installer_target/IIoT.Edge.Setup.exe"
-          test -f "$velopack_target/releases.$EDGE_RELEASE_CHANNEL.json"
-          test -f "$velopack_target/assets.$EDGE_RELEASE_CHANNEL.json"
-          echo "Published Edge installer artifact to $installer_target"
-          echo "Published Edge Velopack releases to $velopack_target"
+          root = sys.argv[1]
+          bundle = sys.argv[2]
+          shutil.make_archive(bundle[:-4], "zip", root)
+          PY
+
+          response_json="$tmp_root/edge-release-upload-response.json"
+          rate_bytes_per_second=$((100 * 1024 * 1024 / 8))
+          curl \
+            --fail \
+            --show-error \
+            --silent \
+            --request POST \
+            --header "Authorization: Bearer $EDGE_CLOUD_TOKEN" \
+            --header "Content-Type: application/zip" \
+            --limit-rate "$rate_bytes_per_second" \
+            --data-binary "@$bundle_zip" \
+            --output "$response_json" \
+            "${api_base%/}/human/client-releases/edge-release-bundles"
+
+          python3 - "$response_json" "$api_base" <<'PY'
+          import json
+          import subprocess
+          import sys
+          from urllib.parse import urljoin
+
+          response_path = sys.argv[1]
+          api_base = sys.argv[2].rstrip("/")
+          for suffix in ("/api/v1", "/api"):
+              if api_base.lower().endswith(suffix):
+                  api_base = api_base[:-len(suffix)]
+                  break
+
+          with open(response_path, encoding="utf-8-sig") as f:
+              data = json.load(f)
+
+          for url in data.get("verificationUrls", []):
+              absolute = url if str(url).lower().startswith("http") else urljoin(api_base + "/", str(url).lstrip("/"))
+              subprocess.run(["curl", "--fail", "--silent", "--show-error", "--head", absolute], check=True)
+
+          print("Published Edge release through Cloud API")
+          print(f"  channel: {data.get('channel')}")
+          print(f"  version: {data.get('version')}")
+          print(f"  components: {', '.join(data.get('components') or [])}")
+          print(f"  cleanupSucceeded: {data.get('cleanupSucceeded')}")
+          PY

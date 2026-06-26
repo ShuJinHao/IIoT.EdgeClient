@@ -19,6 +19,7 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
     private readonly IShellLaunchService _launchService;
     private readonly IEdgeHostUpdateService _updateService;
     private readonly IEdgeReleaseService _clientReleaseService;
+    private readonly ILauncherProfileVisibilityService? _profileVisibilityService;
     private readonly IAppLanguageService? _languageService;
     private readonly List<LauncherProfileDefinition> _allProfiles = [];
     private readonly List<LauncherProfileCardViewModel> _allProfileCards = [];
@@ -55,7 +56,8 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         IAppLanguageService? languageService = null,
         IEdgeReleaseService? clientReleaseService = null,
         IEdgeUpdateConfigurationProvider? updateConfigurationProvider = null,
-        ILauncherUpdateTargetFactory? targetFactory = null)
+        ILauncherUpdateTargetFactory? targetFactory = null,
+        ILauncherProfileVisibilityService? profileVisibilityService = null)
     {
         _profileCatalog = profileCatalog ?? throw new ArgumentNullException(nameof(profileCatalog));
         _updateConfigurationProvider = updateConfigurationProvider;
@@ -64,6 +66,7 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         _launchService = launchService ?? throw new ArgumentNullException(nameof(launchService));
         _updateService = updateService ?? NullEdgeHostUpdateService.Instance;
         _clientReleaseService = clientReleaseService ?? NullEdgeReleaseService.Instance;
+        _profileVisibilityService = profileVisibilityService;
         _languageService = languageService;
         HostUpdatePanel = new LauncherHostUpdatePanelViewModel(
             _updateService,
@@ -86,7 +89,7 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         RebuildUpdateRows();
     }
 
-    // 只显示“已配置(下载时选装、已写入云端唯一码)的 profile”；一个都没配置好则回退显示全部，
+    // 只显示当前首装选装或本机已安装插件对应的 profile；没有可判断的插件信息则回退显示全部，
     // 避免 Launcher 空屏(客户端规则·启动红线：必须能启动到可登录、可诊断、可修配置的 UI)。
     private sealed record LauncherLoginLoadResult(
         LauncherAuthenticationResult Authentication,
@@ -107,6 +110,11 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
     private IReadOnlyList<LauncherProfileDefinition> SelectVisibleProfiles(
         IReadOnlyList<LauncherProfileDefinition> profiles)
     {
+        if (_profileVisibilityService is not null)
+        {
+            return _profileVisibilityService.SelectVisibleProfiles(profiles);
+        }
+
         if (_updateConfigurationProvider is null)
         {
             return profiles;
@@ -310,7 +318,7 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
     {
         ArgumentNullException.ThrowIfNull(card);
 
-        if (_launchService.HasRunningShellProcess)
+        if (_launchService.IsProfileRunning(card.Profile))
         {
             card.SetRunning();
             SetStatus("Launcher_ProfileCard_DetailRunning");
@@ -527,7 +535,7 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
 
     private async Task CheckSelectedProfilePluginsAsync()
     {
-        if (SelectedUpdateProfile is null)
+        if (_allProfiles.Count == 0)
         {
             ClientReleasePanel.Reset();
             RebuildUpdateRows();
@@ -536,7 +544,7 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
 
         try
         {
-            await ClientReleasePanel.CheckAsync(SelectedUpdateProfile.Profile).ConfigureAwait(true);
+            await ClientReleasePanel.CheckAsync(_allProfiles.ToArray()).ConfigureAwait(true);
             RebuildUpdateRows();
         }
         catch
@@ -560,6 +568,7 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         var packageSizeText = string.IsNullOrWhiteSpace(option?.PackageSizeText)
             ? "-"
             : option.PackageSizeText;
+        var releaseNotesText = ResolveUpdateRowReleaseNotes(option);
 
         return new LauncherClientPluginItem(
             component.ModuleId,
@@ -567,13 +576,21 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
             currentVersion,
             targetVersion,
             packageSizeText,
-            option?.CompatibilityIssue ?? option?.ReleaseNotes ?? string.Empty,
+            releaseNotesText,
             canUpdate,
             ResolveUpdateRowStatusKind(status),
             ResolveUpdateRowStatusText(status),
-            ResolveUpdateRowActionText(status, canUpdate),
+            canUpdate && option is not null
+                ? option.ActionText
+                : ResolveUpdateRowActionText(status),
             status,
-            canUpdate ? option : null);
+            canUpdate ? option : null,
+            component.ComponentKindText,
+            option?.PublishedAtText ?? string.Empty,
+            releaseNotesText,
+            component,
+            Format("Launcher_UpdateCenter_ButtonViewHistory", component.Versions.Count),
+            Text("Launcher_UpdateCenter_NoHistory"));
     }
 
     private string ResolveUpdateRowDisplayName(LauncherVersionComponentItem component)
@@ -594,6 +611,18 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
            ?? component.Versions.FirstOrDefault(static option => option.Status == EdgeVersionStatus.Current)
            ?? component.Versions.FirstOrDefault(static option => option.Status == EdgeVersionStatus.Incompatible)
            ?? component.Versions.FirstOrDefault();
+
+    private static string ResolveUpdateRowReleaseNotes(LauncherVersionOptionItem? option)
+    {
+        if (option is null)
+        {
+            return string.Empty;
+        }
+
+        return !string.IsNullOrWhiteSpace(option.CompatibilityIssue)
+            ? option.CompatibilityIssue
+            : option.ReleaseNotes;
+    }
 
     private string ResolveUpdateRowStatusKind(EdgeVersionStatus status)
         => status switch
@@ -619,20 +648,13 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
             _ => Text("Launcher_ClientRelease_Plugin_StatusUnknown")
         };
 
-    private string ResolveUpdateRowActionText(EdgeVersionStatus status, bool canUpdate)
-    {
-        if (canUpdate)
-        {
-            return Text("Launcher_UpdateCenter_ButtonHostUpdate");
-        }
-
-        return status switch
+    private string ResolveUpdateRowActionText(EdgeVersionStatus status)
+        => status switch
         {
             EdgeVersionStatus.Current => Text("Launcher_ProfileCard_StatusLatest"),
             EdgeVersionStatus.Incompatible => Text("Launcher_VersionManagement_ButtonUnavailable"),
             _ => Text("Launcher_ClientRelease_ButtonNoAction")
         };
-    }
 
     private string? LocalizeAuthenticationError(string? message)
     {

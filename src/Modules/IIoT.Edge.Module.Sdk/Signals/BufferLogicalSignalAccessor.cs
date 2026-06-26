@@ -79,6 +79,23 @@ public sealed class BufferLogicalSignalAccessor<TSignalKey> : ILogicalSignalAcce
         return unchecked((short)ReadWords(binding)[0]);
     }
 
+    public uint ReadUInt32(TSignalKey key)
+    {
+        var binding = GetBinding(_readBindings, key, ModuleSignalDirection.Read);
+        EnsureDataType(binding, key, "UInt32", "Int32", "DWORD", "DWord", "Float");
+        var words = ReadWords(binding);
+        if (words.Length < 2)
+        {
+            throw new InvalidOperationException(
+                $"模块【{_profile.ModuleId}】信号【{_profile.Get(key, ModuleSignalDirection.Read).DisplayName}】读取 32 位值至少需要 2 个 PLC word。");
+        }
+
+        return ((uint)words[1] << 16) | words[0];
+    }
+
+    public int ReadInt32(TSignalKey key)
+        => unchecked((int)ReadUInt32(key));
+
     public string ReadAscii(TSignalKey key)
     {
         var binding = GetBinding(_readBindings, key, ModuleSignalDirection.Read);

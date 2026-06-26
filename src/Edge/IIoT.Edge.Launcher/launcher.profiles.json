@@ -8,5 +8,25 @@
     "AccentColor": "#4D7C0F",
     "MachineProfile": "HomogenizationLine",
     "ExecutablePath": "../host/IIoT.Edge.Shell"
+  },
+  {
+    "ProfileId": "DieCuttingAnodeLine",
+    "DisplayName": "负极模切",
+    "Description": "使用负极模切 AP 只读采集 profile 启动客户端，对应 OPENLINK_008 与 P1-AP 线体。",
+    "ImagePath": "Assets/Profiles/homogenization.png",
+    "IconKind": "ChartBar",
+    "AccentColor": "#2563EB",
+    "MachineProfile": "DieCuttingAnodeLine",
+    "ExecutablePath": "../host/IIoT.Edge.Shell"
+  },
+  {
+    "ProfileId": "DieCuttingCathodeLine",
+    "DisplayName": "正极模切",
+    "Description": "使用正极模切 CP 只读采集 profile 启动客户端，对应 OPENLINK_009 与 P2-CP 线体。",
+    "ImagePath": "Assets/Profiles/homogenization.png",
+    "IconKind": "ChartBar",
+    "AccentColor": "#7C3AED",
+    "MachineProfile": "DieCuttingCathodeLine",
+    "ExecutablePath": "../host/IIoT.Edge.Shell"
   }
 ]

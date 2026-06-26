@@ -89,6 +89,15 @@ public sealed class LauncherVersionComponentItem : BaseNotifyPropertyChanged
     }
 }
 
+public sealed class LauncherVersionHistoryViewModel(
+    LauncherVersionComponentItem component,
+    LauncherClientReleasePanelViewModel panel)
+{
+    public LauncherVersionComponentItem Component { get; } = component ?? throw new ArgumentNullException(nameof(component));
+
+    public LauncherClientReleasePanelViewModel Panel { get; } = panel ?? throw new ArgumentNullException(nameof(panel));
+}
+
 public sealed class LauncherVersionOptionItem : BaseNotifyPropertyChanged
 {
     private string _statusText;
@@ -141,6 +150,8 @@ public sealed class LauncherVersionOptionItem : BaseNotifyPropertyChanged
     public EdgeVersionStatus Status { get; }
 
     public bool CanApply { get; }
+
+    public bool HasNoApplyAction => !CanApply;
 
     public bool RequiresConfirmation => Status is EdgeVersionStatus.Older or EdgeVersionStatus.Deprecated;
 

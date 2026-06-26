@@ -1,5 +1,7 @@
 # Edge 客户端宿主插件分发契约
 
+本文是宿主/插件分发模型的长期契约参考，不是日常部署执行入口。日常宿主快发以 `docs/客户端部署.md` 为准，安装和更新验收以 `docs/Edge安装更新验收.md` 为准，三项目并行部署协调以 `../../docs/上传部署总览.md` 为准。
+
 本文档定义 EdgeClient 从“按工序整包”升级为“通用宿主 + 外部插件目录 + 云端插件 catalog”的阶段契约。它约束后续 Edge 与 Cloud 的实现，避免下载中心、版本盘点和插件更新建立在错误的整包模型上。
 
 ## 1. 目标模型
@@ -153,7 +155,7 @@ Draft | Published | Deprecated | Archived
 - `Archived`：不进入 Edge catalog，包文件允许被异步清理。
 - `Draft`：只允许 Human 管理端查看，不进入 Edge catalog。
 
-发布保留上限由云端统一配置 `EdgeRelease:MaxVersionsPerComponent`，默认 5。发布新版本后，云端对同一组件、同一 channel、同一 targetRuntime 执行保留策略：超过上限的老版本如果没有设备上报使用则归档；仍有设备使用则降级为 `Deprecated`，等待管理员处理。
+发布保留上限由云端统一配置 `EdgeRelease:MaxVersionsPerComponent`，默认 3，并按 stable SemVer 排序取最新版本，不按目录时间判断。发布新版本后，云端对同一组件、同一 channel、同一 targetRuntime 执行保留策略：超过上限的老版本如果没有设备上报使用则归档；仍有设备使用则降级为 `Deprecated`，等待管理员处理。HTTP 快发成功后还会回收“已归档且无设备在用”的旧安装素材文件，避免服务器磁盘无限增长。
 
 客户端 Application 层输出给 UI 的版本计划结构必须表达多版本，不允许 UI 自己猜：
 
@@ -263,7 +265,19 @@ Cloud 下载中心、插件选择安装、设备盘点和版本上报属于后�
 
 EdgeClient 的交付物是 Windows 安装器、安装素材和 Velopack 更新包，不是 Docker 镜像。CI/CD 不允许推 Harbor、GHCR，也不允许从 GitHub hosted runner 通过 SSH/SCP 直连内网服务器。
 
-`push main` 只跑 smoke 编译和测试，不生成安装包。完整 GitHub 打包只在 `workflow_dispatch` 或 `edge-v*` / `v*` tag 时执行。日常快发可由操作者本机运行 `scripts/LocalPublishAndDeploy.ps1`，本机完成编译、Velopack 打包和 installer artifact 生成后，通过 rsync/scp 发布到 `/srv/iiot/edge-updates`；该路径不属于 GitHub CI/CD job。生产服务器只允许 `stable` 渠道，发布脚本必须拒绝并清理非 `stable` 渠道目录。
+`push main` 只跑 smoke 编译和测试，不生成安装包。完整 GitHub 打包只在 `workflow_dispatch` 或 `edge-v*` / `v*` tag 时执行。日常宿主快发可由操作者本机运行 `scripts/LocalPublishAndDeploy.ps1 -Transport http`，本机完成编译、Velopack 打包和 installer artifact 生成后，通过 Cloud Human API 上传 release bundle 到 `${EDGE_UPDATES_DIR}`；该路径不属于 GitHub CI/CD job。HTTP 上传默认限速 100 Mbps、单并发、服务端审计，并在脚本结束时输出发布摘要。更新内容必须显式填写：本机快发传 `-ReleaseNotes` 或 `-ReleaseNotesPath`，`workflow_dispatch` 填 `release_notes`，tag 发布使用带正文的 annotated tag。生产 `stable` 发布必须走 HTTP API，不允许 `rsync/scp` 绕过 Cloud DB、审计和保留策略。生产服务器只允许 `stable` 渠道，发布脚本必须拒绝并清理非 `stable` 渠道目录。
+
+只改工序插件时走独立插件发布：
+
+```powershell
+pwsh ./scripts/PublishEdgePluginRelease.ps1 `
+  -ModuleId <ModuleId> `
+  -CloudApiBaseUrl http://10.98.90.154:81/api/v1 `
+  -CloudToken $env:IIOT_CLOUD_RELEASE_TOKEN `
+  -ReleaseNotesPath ./release-notes.md
+```
+
+该脚本只上传 `IIoT.EdgePlugin.<ModuleId>-<version>-<runtime>.zip` 并写插件 release，不生成宿主 Velopack 版本。脚本会先查 Cloud catalog，发现相同 `(moduleId, channel, version, targetRuntime)` 已存在时直接失败，要求提升插件 `plugin.json` 版本。
 
 正式 GitHub 发布分两段：
 
@@ -276,12 +290,14 @@ windows-latest
 
 [self-hosted, iiot-linux-prod]
 -> download GitHub Actions artifacts
--> copy installers/stable/<version> and velopack/stable to /srv/iiot/edge-updates
+-> assemble edge release bundle
+-> login Cloud with release account secrets
+-> POST Cloud Human edge-release-bundles API
 ```
 
-内网 Linux runner 只做文件分发，不重新构建 EdgeClient。原因是 Avalonia 桌面应用、Windows installer 和 Velopack Windows 包必须在 Windows runner 上构建和验证。Linux runner 必须用非 root 专用用户运行，并只授予 Docker 之外的最小文件权限：读取 Actions 工作目录、写入 `/srv/iiot/edge-updates`。
+内网 Linux runner 只做发布编排，不重新构建 EdgeClient。原因是 Avalonia 桌面应用、Windows installer 和 Velopack Windows 包必须在 Windows runner 上构建和验证。Linux runner 必须用非 root 专用用户运行，通过 Cloud Human API 上传 release bundle，由 Cloud 服务端校验、落盘、写 DB、审计和执行保留策略。GitHub 正式发布不长期保存 Human JWT；`publish-edge-updates` 使用 `IIOT_CLOUD_RELEASE_EMPLOYEE_NO` / `IIOT_CLOUD_RELEASE_PASSWORD` 登录 `/api/v1/human/identity/login` 换取本次 job 的短期 access token，该发布账号只要求具备 `ClientRelease.Publish` 权限。
 
-版本号由打包入口确定。`workflow_dispatch` 必须输入生产版本号，tag 触发时版本来自 `edge-v*` 或 `v*` tag；本机快发未传 `-Version` 时读取服务器 stable 最新版本并自动递增 patch，传入 `-Version` 时严格使用传入值。`PublishEdgeRuntime.ps1 -Version` 会同步设置 Launcher/Shell runtime 的 `AssemblyVersion`、`FileVersion` 和 `InformationalVersion`，Velopack 包验收以该版本为准。不要把 runtime 程序集版本固定回 `1.0.0.0` 后再发布 Velopack 包。
+版本号由打包入口确定。`workflow_dispatch` 必须输入生产版本号，tag 触发时版本来自 `edge-v*` 或 `v*` tag；HTTP 本机宿主快发未传 `-Version` 时读取 Cloud Human catalog 最新 stable 版本并自动递增 patch，传入 `-Version` 时严格使用传入值。`PublishEdgeRuntime.ps1 -Version` 会同步设置 Launcher/Shell runtime 的 `AssemblyVersion`、`FileVersion` 和 `InformationalVersion`，Velopack 包验收以该版本为准。不要把 runtime 程序集版本固定回 `1.0.0.0` 后再发布 Velopack 包。
 
 发布目录固定为：
 
@@ -295,9 +311,10 @@ edge-updates/
   installers/stable/<version>/velopack/
   velopack/stable/releases.stable.json
   velopack/stable/assets.stable.json
+  plugins/stable/<ModuleId>/<version>/IIoT.EdgePlugin.<ModuleId>-<version>-<runtime>.zip
 ```
 
-Cloud 端通过只读挂载扫描 `edge-updates/installers/stable/<version>/installer-artifact.json`，并把文件版本合并到公开下载目录、Edge catalog 和 Human catalog。数据库 release 记录仍是状态管理来源：同 key 数据库记录优先，Draft/Archived 可抑制已经落盘的文件版本。
+Cloud HttpApi 通过内网受控 HTTP 发布接口对 `edge-updates` 持有可写挂载，只允许写 staging 和发布目录；nginx 对同一目录保持只读静态下载。Cloud catalog 扫描 `edge-updates/installers/stable/<version>/installer-artifact.json` 和 `edge-updates/plugins/stable/<ModuleId>/<version>/`，并把文件版本合并到公开下载目录、Edge catalog 和 Human catalog。数据库 release 记录仍是状态管理来源：同 key 数据库记录优先，Draft/Archived 可抑制已经落盘的文件版本。Cloud HTTP 发布必须按 SemVer 控制为最新 3 个 stable 版本；已归档且无设备在用的插件 zip 才允许回收。
 
 `installer-artifact.json` 必须包含发布追溯字段：`sourceCommit`、`previousVersion`、`previousSourceCommit`、`releaseNotes` 和 `generatedAtUtc`。首次发布或旧 artifact 无 commit 记录时，`previousVersion` / `previousSourceCommit` 可为空，但 `sourceCommit` 和 `releaseNotes` 不得为空。
 
@@ -328,12 +345,13 @@ Draft | Published | Deprecated | Archived
 GET  /api/v1/human/client-releases/catalog?channel=stable&targetRuntime=win-x64&onlyPublished=false
 POST /api/v1/human/client-releases/host-releases
 POST /api/v1/human/client-releases/plugin-releases
+POST /api/v1/human/client-releases/plugin-packages
 GET  /api/v1/human/client-releases/device-inventory?channel=stable&targetRuntime=win-x64&keyword=
 ```
 
 读接口使用 `Device.Read` 权限。写接口使用 `Device.Update` 并要求管理员，避免在 Phase 2 引入新的权限种子和角色迁移。
 
-`POST host-releases` 允许录入或更新同一 `(channel, version, targetRuntime)` 的宿主发布记录。`POST plugin-releases` 允许录入或更新同一 `(moduleId, channel, version, targetRuntime)` 的插件发布记录。MVP 不上传文件，只录入下载地址、SHA256、包大小、签名字段、发布者和 release notes。
+`POST host-releases` 允许录入或更新同一 `(channel, version, targetRuntime)` 的宿主发布记录。`POST plugin-releases` 只用于人工补录已有文件的插件 release；正式插件发布必须走 `POST plugin-packages` 上传 wrapper zip。`plugin-packages` 会校验插件 zip、`plugin.json`、SHA256、size、release notes 和兼容窗口，把文件落到 `edge-updates/plugins/stable/<ModuleId>/<version>/`，并写 `edge_client_plugin_releases`。同一 `(moduleId, channel, version, targetRuntime)` 已存在时拒绝重复发布。
 
 ### 9.3 Edge API
 
@@ -371,6 +389,9 @@ Edge catalog 返回 `Published` 和 `Deprecated` 发布记录，按组件分组�
 
 设备盘点页基于最近一次版本上报和当前 catalog 计算：
 
+- 设备名称、客户端上报 IP、最近上报时间、安装状态、当前版本摘要和问题。
+- 主表不展示 Channel、宿主技术状态或插件数量；这些技术字段只放详情。
+- IP 优先使用客户端上报的本机 IPv4；没有时使用 Cloud 看到的请求来源 IP。
 - 宿主当前版本 vs 最新宿主版本。
 - 插件当前版本 vs 最新插件版本。
 - `hostApiVersion` 不匹配。

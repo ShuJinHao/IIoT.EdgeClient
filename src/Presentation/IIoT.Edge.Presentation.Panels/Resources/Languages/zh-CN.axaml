@@ -21,6 +21,8 @@
     <sys:String x:Key="Panels_Column_Time">时间</sys:String>
     <sys:String x:Key="Panels_Column_Level">类型</sys:String>
     <sys:String x:Key="Panels_Column_Message">消息</sys:String>
+    <sys:String x:Key="Panels_Label_LogDeviceFilter">设备号</sys:String>
+    <sys:String x:Key="Panels_Filter_AllOrSummary">全部/汇总</sys:String>
     <sys:String x:Key="Panels_Label_Recipe">配方：</sys:String>
     <sys:String x:Key="Panels_Label_Version">版本：</sys:String>
     <sys:String x:Key="Panels_Label_Process">工序：</sys:String>

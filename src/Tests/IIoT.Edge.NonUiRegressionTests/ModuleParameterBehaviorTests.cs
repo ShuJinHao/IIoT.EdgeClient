@@ -93,9 +93,11 @@ public sealed class ModuleParameterBehaviorTests
         Assert.Equal("Module:Homogenization:Cloud:启用", cloudEnabled.Key);
         Assert.Equal("启用", cloudEnabled.Name);
         Assert.Equal("云端上传启用", cloudEnabled.DisplayNameFallback);
-        Assert.Contains("不访问 Cloud", cloudEnabled.DescriptionFallback, StringComparison.Ordinal);
+        Assert.Contains("仅停止该插件生产数据 Cloud 上传", cloudEnabled.DescriptionFallback, StringComparison.Ordinal);
+        var expectedCloudApiParamCount = CloudApiConfigParamSchema.Descriptors
+            .Count(static descriptor => CloudApiConfigParamSchema.IsParamViewEditableKey(descriptor.Key));
         Assert.Equal(
-            CloudApiConfigParamSchema.Descriptors.Count + Enum.GetNames<HomogenizationCloudParam>().Length,
+            Enum.GetNames<HomogenizationCloudParam>().Length + expectedCloudApiParamCount,
             cloudParams.Count);
         Assert.Contains(cloudParams, x =>
             x.Key == CloudApiConfigParamSchema.BaseUrl
@@ -106,6 +108,8 @@ public sealed class ModuleParameterBehaviorTests
         Assert.Contains(cloudParams, x =>
             x.Key == CloudApiConfigParamSchema.PassStationBatchTemplatePath
             && x.Value == "/config/pass-stations/{typeKey}/batch");
+        Assert.DoesNotContain(cloudParams, x => x.Key == CloudApiConfigParamSchema.ClientCode);
+        Assert.DoesNotContain(cloudParams, x => x.Key == CloudApiConfigParamSchema.BootstrapSecret);
     }
 
     [Fact]

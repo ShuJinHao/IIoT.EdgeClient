@@ -1,5 +1,4 @@
 using IIoT.Edge.Application.Features.Production.CapacityView;
-using IIoT.Edge.Application.Features.Production.DataView;
 using IIoT.Edge.Application.Features.Production.Equipment;
 using IIoT.Edge.Application.Features.Production.Monitor;
 using Microsoft.Extensions.Configuration;
@@ -29,7 +28,6 @@ public static class DependencyInjection
 
         services.Replace(ServiceDescriptor.Transient<IEquipmentPanelService, VisualTestEquipmentPanelService>());
         services.Replace(ServiceDescriptor.Transient<ICapacityQueryFacade, VisualTestCapacityQueryFacade>());
-        services.Replace(ServiceDescriptor.Transient<IProductionDataQueryFacade, VisualTestProductionDataQueryFacade>());
         services.Replace(ServiceDescriptor.Transient<IMonitorSnapshotQueryFacade, VisualTestMonitorSnapshotQueryFacade>());
         return services;
     }

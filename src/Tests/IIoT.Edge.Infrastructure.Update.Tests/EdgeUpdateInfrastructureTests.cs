@@ -5,6 +5,7 @@ using IIoT.Edge.Application.Features.Updates;
 using IIoT.Edge.Infrastructure.Update.Configuration;
 using IIoT.Edge.Infrastructure.Update.Host;
 using IIoT.Edge.Infrastructure.Update.Packages;
+using IIoT.Edge.Infrastructure.Update.Plugins;
 using IIoT.Edge.Infrastructure.Update.Profiles;
 using IIoT.Edge.SharedKernel.Configuration;
 using IIoT.Edge.SharedKernel.Runtime;
@@ -344,6 +345,183 @@ public sealed class EdgeUpdateInfrastructureTests
     }
 
     [Fact]
+    public void BuildVersionPlans_ShouldOnlyShowEnabledProfilePlugins()
+    {
+        var catalog = Catalog(
+            PluginComponent("Homogenization", Release("Homogenization", "1.2.0", EdgeClientHostRuntime.HostApiVersion)),
+            PluginComponent("DieCuttingAnode", Release("DieCuttingAnode", "1.0.0", EdgeClientHostRuntime.HostApiVersion)));
+
+        var plans = EdgeReleaseService.BuildVersionPlans(
+            catalog,
+            [],
+            "1.0.0",
+            EdgeClientHostRuntime.HostApiVersion,
+            new EdgeVersionCompatibilityPolicy(),
+            ["Homogenization"]);
+
+        Assert.Contains(plans, component => component.ComponentKind == EdgeComponentKind.Host);
+        var plugin = Assert.Single(plans, component => component.ComponentKind == EdgeComponentKind.Plugin);
+        Assert.Equal("Homogenization", plugin.ModuleId);
+    }
+
+    [Fact]
+    public void BuildVersionPlans_WhenEnabledModulesEmpty_ShouldNotExposeCloudPlugins()
+    {
+        var catalog = Catalog(
+            PluginComponent("Homogenization", Release("Homogenization", "1.2.0", EdgeClientHostRuntime.HostApiVersion)),
+            PluginComponent("DieCuttingAnode", Release("DieCuttingAnode", "1.0.0", EdgeClientHostRuntime.HostApiVersion)));
+
+        var plans = EdgeReleaseService.BuildVersionPlans(
+            catalog,
+            [],
+            "1.0.0",
+            EdgeClientHostRuntime.HostApiVersion,
+            new EdgeVersionCompatibilityPolicy(),
+            []);
+
+        Assert.Single(plans);
+        Assert.Equal(EdgeComponentKind.Host, plans[0].ComponentKind);
+    }
+
+    [Fact]
+    public async Task CheckReleaseCatalogAsync_ShouldFilterCatalogToCurrentProfileEnabledModules()
+    {
+        var tempDirectory = CreateTempDirectory();
+        var catalog = Catalog(
+            PluginComponent("Homogenization", Release("Homogenization", "1.2.0", EdgeClientHostRuntime.HostApiVersion)),
+            PluginComponent("DieCuttingAnode", Release("DieCuttingAnode", "1.0.0", EdgeClientHostRuntime.HostApiVersion)));
+        try
+        {
+            var service = new EdgeReleaseService(
+                new SuccessfulCloudConfigurationProvider(),
+                new SuccessfulDeviceSessionClient(),
+                new FixedCatalogClient(catalog),
+                new NoopVersionReporter(),
+                new FileInstalledPluginCatalog(),
+                new FixedProfileModuleConfigurationStore(["Homogenization"]),
+                new NoopPluginPackageInstaller(),
+                new NoopHostUpdateService(),
+                new NoopUpdateConfigInitializer(),
+                new EdgeVersionCompatibilityPolicy());
+
+            var result = await service.CheckReleaseCatalogAsync(
+                Target(tempDirectory),
+                TestContext.Current.CancellationToken);
+
+            Assert.Equal(EdgeReleaseCatalogState.Succeeded, result.State);
+            Assert.Contains(result.Components, component => component.ComponentKind == EdgeComponentKind.Host);
+            var plugin = Assert.Single(
+                result.Components,
+                component => component.ComponentKind == EdgeComponentKind.Plugin);
+            Assert.Equal("Homogenization", plugin.ModuleId);
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task ApplyPluginVersionAsync_WhenModuleOutsideCurrentProfile_ShouldReturnOperatorFacingFailure()
+    {
+        var tempDirectory = CreateTempDirectory();
+        var catalog = Catalog(
+            PluginComponent("Homogenization", Release("Homogenization", "1.2.0", EdgeClientHostRuntime.HostApiVersion)),
+            PluginComponent("DieCuttingAnode", Release("DieCuttingAnode", "1.0.0", EdgeClientHostRuntime.HostApiVersion)));
+        try
+        {
+            var installer = new RecordingPluginPackageInstaller();
+            var service = new EdgeReleaseService(
+                new SuccessfulCloudConfigurationProvider(),
+                new SuccessfulDeviceSessionClient(),
+                new FixedCatalogClient(catalog),
+                new NoopVersionReporter(),
+                new FileInstalledPluginCatalog(),
+                new FixedProfileModuleConfigurationStore(["Homogenization"]),
+                installer,
+                new NoopHostUpdateService(),
+                new NoopUpdateConfigInitializer(),
+                new EdgeVersionCompatibilityPolicy());
+
+            var result = await service.ApplyPluginVersionAsync(
+                Target(tempDirectory),
+                "DieCuttingAnode",
+                "1.0.0",
+                cancellationToken: TestContext.Current.CancellationToken);
+
+            Assert.False(result.Success);
+            Assert.Contains("不属于当前工序", result.ErrorMessage, StringComparison.Ordinal);
+            Assert.Equal(0, installer.InstallCallCount);
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task CheckReleaseCatalogAsync_WhenCloudConfigMissing_ShouldStillReturnLocalPlugins()
+    {
+        var tempDirectory = CreateTempDirectory();
+        var dataRoot = Path.Combine(tempDirectory, "program-data");
+        try
+        {
+            var hostDirectory = Path.Combine(tempDirectory, "host");
+            Directory.CreateDirectory(hostDirectory);
+
+            await WithDataRootAsync(dataRoot, async () =>
+            {
+                WriteText(
+                    Path.Combine(
+                        EdgeClientProgramDataPaths.ResolveApplicationPluginRoot(hostDirectory),
+                        "Homogenization",
+                        "plugin.json"),
+                    $$"""
+                    {
+                      "moduleId": "Homogenization",
+                      "displayName": "匀浆",
+                      "version": "1.0.0",
+                      "hostApiVersion": "{{EdgeClientHostRuntime.HostApiVersion}}",
+                      "minHostVersion": "1.0.0",
+                      "maxHostVersion": "99.0.0",
+                      "entryAssembly": "IIoT.Edge.Module.Homogenization.dll",
+                      "entryType": "IIoT.Edge.Module.Homogenization.DependencyInjection",
+                      "supportedProcessType": "Homogenization",
+                      "dependencies": []
+                    }
+                    """);
+                var service = new EdgeReleaseService(
+                    new MissingCloudConfigurationProvider(),
+                    new NotCalledDeviceSessionClient(),
+                    new NotCalledCatalogClient(),
+                    new NoopVersionReporter(),
+                    new FileInstalledPluginCatalog(),
+                    new EmptyProfileModuleConfigurationStore(),
+                    new NoopPluginPackageInstaller(),
+                    new NoopHostUpdateService(),
+                    new NoopUpdateConfigInitializer(),
+                    new EdgeVersionCompatibilityPolicy());
+
+                var result = await service.CheckReleaseCatalogAsync(Target(hostDirectory));
+
+                Assert.Equal(EdgeReleaseCatalogState.NotConfigured, result.State);
+                Assert.Contains(result.Components, component => component.ComponentKind == EdgeComponentKind.Host);
+                var plugin = Assert.Single(
+                    result.Components,
+                    component => component.ComponentKind == EdgeComponentKind.Plugin
+                                 && component.ModuleId == "Homogenization");
+                Assert.Equal("匀浆", plugin.DisplayName);
+                Assert.Equal("1.0.0", plugin.CurrentVersion);
+                Assert.Empty(plugin.Versions);
+            });
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
     public void HostUpdateService_WhenSourceIsLocalDirectory_ShouldResolveLocalDirectory()
     {
         var tempDirectory = CreateTempDirectory();
@@ -572,5 +750,154 @@ public sealed class EdgeUpdateInfrastructureTests
         {
             Directory.Delete(path, recursive: true);
         }
+    }
+
+    private sealed class MissingCloudConfigurationProvider : IEdgeUpdateConfigurationProvider
+    {
+        public EdgeUpdateConfigurationResult Resolve(EdgeUpdateTarget target)
+            => EdgeUpdateConfigurationResult.Failed("CloudApi 配置不完整。");
+
+        public EdgeReleaseOptions ResolveReleaseOptions()
+            => new("stable", "win-x64");
+    }
+
+    private sealed class SuccessfulCloudConfigurationProvider : IEdgeUpdateConfigurationProvider
+    {
+        public EdgeUpdateConfigurationResult Resolve(EdgeUpdateTarget target)
+            => EdgeUpdateConfigurationResult.Succeeded(CloudOptions());
+
+        public EdgeReleaseOptions ResolveReleaseOptions()
+            => new("stable", "win-x64");
+    }
+
+    private sealed class SuccessfulDeviceSessionClient : IEdgeUpdateDeviceSessionClient
+    {
+        public Task<EdgeUpdateOperationResult<EdgeUpdateDeviceSession>> BootstrapAsync(
+            EdgeUpdateCloudApiOptions options,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(EdgeUpdateOperationResult<EdgeUpdateDeviceSession>.Succeeded(
+                new EdgeUpdateDeviceSession(Guid.NewGuid(), "测试设备", options.ClientCode, "token")));
+    }
+
+    private sealed class FixedCatalogClient(EdgeReleaseCatalog catalog) : IEdgeUpdateCatalogClient
+    {
+        public Task<EdgeUpdateOperationResult<EdgeReleaseCatalog>> GetCatalogAsync(
+            EdgeUpdateCloudApiOptions options,
+            EdgeUpdateDeviceSession session,
+            EdgeReleaseOptions releaseOptions,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(EdgeUpdateOperationResult<EdgeReleaseCatalog>.Succeeded(catalog));
+    }
+
+    private sealed class NotCalledDeviceSessionClient : IEdgeUpdateDeviceSessionClient
+    {
+        public Task<EdgeUpdateOperationResult<EdgeUpdateDeviceSession>> BootstrapAsync(
+            EdgeUpdateCloudApiOptions options,
+            CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("Cloud bootstrap should not be called.");
+    }
+
+    private sealed class NotCalledCatalogClient : IEdgeUpdateCatalogClient
+    {
+        public Task<EdgeUpdateOperationResult<EdgeReleaseCatalog>> GetCatalogAsync(
+            EdgeUpdateCloudApiOptions options,
+            EdgeUpdateDeviceSession session,
+            EdgeReleaseOptions releaseOptions,
+            CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("Cloud catalog should not be called.");
+    }
+
+    private sealed class NoopVersionReporter : IEdgeVersionReporter
+    {
+        public Task<EdgeVersionReportResult> ReportVersionAsync(
+            EdgeUpdateCloudApiOptions options,
+            EdgeUpdateDeviceSession session,
+            EdgeReleaseOptions releaseOptions,
+            EdgeUpdateTarget target,
+            string hostVersion,
+            string hostApiVersion,
+            IReadOnlyList<EdgeInstalledPlugin> installedPlugins,
+            IReadOnlyList<string> enabledPlugins,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(EdgeVersionReportResult.Succeeded());
+    }
+
+    private sealed class EmptyProfileModuleConfigurationStore : IEdgeProfileModuleConfigurationStore
+    {
+        public IReadOnlyList<string> ReadEnabledModules(EdgeUpdateTarget target)
+            => [];
+
+        public void EnableModules(EdgeUpdateTarget target, IReadOnlyList<string> moduleIds)
+        {
+        }
+    }
+
+    private sealed class FixedProfileModuleConfigurationStore(IReadOnlyList<string> enabledModules)
+        : IEdgeProfileModuleConfigurationStore
+    {
+        public IReadOnlyList<string> ReadEnabledModules(EdgeUpdateTarget target)
+            => enabledModules;
+
+        public void EnableModules(EdgeUpdateTarget target, IReadOnlyList<string> moduleIds)
+        {
+        }
+    }
+
+    private sealed class NoopPluginPackageInstaller : IEdgePluginPackageInstaller
+    {
+        public Task<EdgePluginInstallResult> InstallAsync(
+            EdgeUpdateTarget target,
+            EdgePluginVersionRelease release,
+            EdgeUpdateCloudApiOptions cloudOptions,
+            string hostVersion,
+            string hostApiVersion,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(EdgePluginInstallResult.Failed("No package install in test."));
+    }
+
+    private sealed class RecordingPluginPackageInstaller : IEdgePluginPackageInstaller
+    {
+        public int InstallCallCount { get; private set; }
+
+        public Task<EdgePluginInstallResult> InstallAsync(
+            EdgeUpdateTarget target,
+            EdgePluginVersionRelease release,
+            EdgeUpdateCloudApiOptions cloudOptions,
+            string hostVersion,
+            string hostApiVersion,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+        {
+            InstallCallCount++;
+            return Task.FromResult(EdgePluginInstallResult.Succeeded([release.ModuleId]));
+        }
+    }
+
+    private sealed class NoopHostUpdateService : IEdgeHostUpdateService
+    {
+        public Task<EdgeHostUpdateCheckResult> CheckForUpdatesAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(new EdgeHostUpdateCheckResult(EdgeHostUpdateCheckState.NotConfigured));
+
+        public Task<EdgeHostUpdateApplyResult> DownloadAndApplyUpdateAsync(
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new EdgeHostUpdateApplyResult(false, "No host update in test."));
+
+        public Task<EdgeHostUpdateApplyResult> ApplyVersionAsync(
+            EdgeHostVersionRelease release,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new EdgeHostUpdateApplyResult(false, "No host update in test."));
+    }
+
+    private sealed class NoopUpdateConfigInitializer : IEdgeUpdateConfigInitializer
+    {
+        public void EnsureConfigExists()
+        {
+        }
+
+        public bool TrySyncUpdateSource(string updateSource)
+            => false;
     }
 }

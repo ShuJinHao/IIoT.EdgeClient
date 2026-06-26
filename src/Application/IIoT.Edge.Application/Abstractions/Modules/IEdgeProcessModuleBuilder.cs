@@ -77,7 +77,8 @@ public interface IEdgeProcessModuleBuilder
     void RegisterDevelopmentSample<TContributor>()
         where TContributor : class, IDevelopmentSampleContributor;
 
-    void RegisterParameters<TMes, TCloud, TBusiness>()
+    void RegisterParameters<TMes, TCloud, TBusiness>(
+        IReadOnlyCollection<ModuleParamDefaultOverride>? defaultOverrides = null)
         where TMes : struct, Enum
         where TCloud : struct, Enum
         where TBusiness : struct, Enum;

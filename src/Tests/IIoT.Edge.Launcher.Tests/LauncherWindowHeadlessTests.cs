@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using IIoT.Edge.Application.Abstractions.Updates;
 using IIoT.Edge.Launcher.Models;
 using IIoT.Edge.Launcher.Services;
 using IIoT.Edge.Launcher.ViewModels;
@@ -60,7 +61,7 @@ public sealed class LauncherWindowHeadlessTests
 
             Assert.True(window.FindControl<Control>("UpdateCenterPanelRoot")?.IsVisible);
             Assert.NotNull(window.FindControl<Control>("RefreshUpdateCenterButton"));
-            Assert.NotNull(window.FindControl<Control>("VersionHistoryButton"));
+            Assert.Null(window.FindControl<Control>("VersionHistoryButton"));
             Assert.NotNull(window.FindControl<Control>("UpdateCenterRowsGrid"));
             Assert.Null(window.FindControl<Control>("ClientReleasePanelRoot"));
             Assert.Null(window.FindControl<ProgressBar>("ClientReleaseProgressBar"));
@@ -97,10 +98,18 @@ public sealed class LauncherWindowHeadlessTests
     public void VersionHistoryWindow_ShouldLoadDialog()
     {
         var viewModel = CreateViewModel();
-        var window = new VersionHistoryWindow(viewModel.ClientReleasePanel)
+        var component = new LauncherVersionComponentItem(
+            EdgeComponentKind.Host,
+            "Host",
+            "Edge Host",
+            "1.0.0",
+            "宿主",
+            "查看版本",
+            []);
+        var window = new VersionHistoryWindow(component, viewModel.ClientReleasePanel)
         {
-            Width = 920,
-            Height = 620
+            Width = 860,
+            Height = 540
         };
 
         try
@@ -108,7 +117,49 @@ public sealed class LauncherWindowHeadlessTests
             window.Show();
 
             Assert.True(window.FindControl<Control>("VersionHistoryWindowRoot")?.IsVisible);
-            Assert.NotNull(window.FindControl<Control>("VersionHistoryComponentsList"));
+            Assert.NotNull(window.FindControl<Control>("VersionHistoryRowsGrid"));
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public void ReleaseNotesWindow_ShouldLoadDialog()
+    {
+        var detail = LauncherReleaseNotesDetailViewModel.FromVersionOption(
+            new LauncherVersionOptionItem(
+                EdgeComponentKind.Plugin,
+                "Homogenization",
+                "均浆",
+                "1.0.0",
+                "1.1.0",
+                EdgeVersionStatus.Newer,
+                canApply: true,
+                compatibilityIssue: string.Empty,
+                packageSizeText: "101.0 KB",
+                publishedAtUtc: new DateTime(2026, 6, 22, 16, 15, 54, DateTimeKind.Utc),
+                releaseNotes: "客户端更新：设备安装状态上报本机 IP/远端 IP、宿主和插件版本。",
+                statusKind: "Warning",
+                statusText: "可更新",
+                actionKind: "Secondary",
+                actionText: "更新"),
+            "工序插件");
+        var window = new ReleaseNotesWindow(detail)
+        {
+            Width = 640,
+            Height = 520
+        };
+
+        try
+        {
+            window.Show();
+
+            Assert.True(window.FindControl<Control>("ReleaseNotesWindowRoot")?.IsVisible);
+            Assert.Equal(
+                detail.ReleaseNotesText,
+                window.FindControl<TextBlock>("ReleaseNotesTextBlock")?.Text);
         }
         finally
         {
@@ -184,7 +235,9 @@ public sealed class LauncherWindowHeadlessTests
 
     private sealed class StubShellLaunchService : IShellLaunchService
     {
-        public bool HasRunningShellProcess => false;
+        public bool HasAnyRunningShellProcess() => false;
+
+        public bool IsProfileRunning(LauncherProfileDefinition profile) => false;
 
         public void Launch(LauncherProfileDefinition profile)
         {

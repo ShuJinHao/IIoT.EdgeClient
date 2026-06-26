@@ -4,7 +4,9 @@ namespace IIoT.Edge.Launcher.Services;
 
 public interface IShellLaunchService
 {
-    bool HasRunningShellProcess { get; }
+    bool HasAnyRunningShellProcess();
+
+    bool IsProfileRunning(LauncherProfileDefinition profile);
 
     void Launch(LauncherProfileDefinition profile);
 }

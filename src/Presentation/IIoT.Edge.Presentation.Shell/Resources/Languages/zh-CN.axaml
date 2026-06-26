@@ -30,7 +30,7 @@
     <sys:String x:Key="Shell_Login_CloudDescription">使用工号和密码登录当前设备。</sys:String>
     <sys:String x:Key="Shell_Login_EmployeeNoHint">工号</sys:String>
     <sys:String x:Key="Shell_Login_PasswordHint">密码</sys:String>
-    <sys:String x:Key="Shell_Login_CloudUnavailable">设备未完成云端识别，暂不能使用云端员工登录。</sys:String>
+    <sys:String x:Key="Shell_Login_CloudUnavailable">当前设备未完成云端识别，请先使用本地紧急登录进入诊断，检查设备绑定和 Cloud 网络。</sys:String>
     <sys:String x:Key="Shell_Login_LocalFailed">本地紧急登录失败。</sys:String>
     <sys:String x:Key="Shell_Login_CloudFailed">云端员工登录失败。</sys:String>
     <sys:String x:Key="Shell_Login_Cancel">取消</sys:String>

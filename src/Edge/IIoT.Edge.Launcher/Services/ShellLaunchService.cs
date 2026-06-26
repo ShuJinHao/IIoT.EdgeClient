@@ -8,15 +8,36 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
     private const string ShellProcessName = "IIoT.Edge.Shell";
 
     private readonly IProcessStarter _processStarter;
+    private readonly IShellInstanceIdResolver _instanceIdResolver;
+    private readonly IShellInstanceProbe _instanceProbe;
     private readonly object _syncRoot = new();
-    private readonly List<Process> _startedProcesses = [];
+    private readonly List<TrackedShellProcess> _startedProcesses = [];
 
-    public ShellLaunchService(IProcessStarter processStarter)
+    public ShellLaunchService(
+        IProcessStarter processStarter,
+        IShellInstanceIdResolver instanceIdResolver,
+        IShellInstanceProbe instanceProbe)
     {
         _processStarter = processStarter ?? throw new ArgumentNullException(nameof(processStarter));
+        _instanceIdResolver = instanceIdResolver ?? throw new ArgumentNullException(nameof(instanceIdResolver));
+        _instanceProbe = instanceProbe ?? throw new ArgumentNullException(nameof(instanceProbe));
     }
 
-    public bool HasRunningShellProcess => HasTrackedRunningShellProcess() || HasOperatingSystemShellProcess();
+    public bool HasAnyRunningShellProcess()
+        => HasTrackedRunningShellProcess() || HasOperatingSystemShellProcess();
+
+    public bool IsProfileRunning(LauncherProfileDefinition profile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        if (HasTrackedRunningShellProcess(profile.MachineProfile))
+        {
+            return true;
+        }
+
+        var instanceId = _instanceIdResolver.ResolveInstanceId(profile);
+        return !string.IsNullOrWhiteSpace(instanceId)
+               && _instanceProbe.IsInstanceRunning(instanceId);
+    }
 
     public void Launch(LauncherProfileDefinition profile)
     {
@@ -44,7 +65,7 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
 
         lock (_syncRoot)
         {
-            _startedProcesses.Add(process);
+            _startedProcesses.Add(new TrackedShellProcess(profile.MachineProfile, process));
         }
     }
 
@@ -52,9 +73,9 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
     {
         lock (_syncRoot)
         {
-            foreach (var process in _startedProcesses)
+            foreach (var tracked in _startedProcesses)
             {
-                process.Dispose();
+                tracked.Process.Dispose();
             }
 
             _startedProcesses.Clear();
@@ -62,16 +83,25 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
     }
 
     private bool HasTrackedRunningShellProcess()
+        => HasTrackedRunningShellProcess(machineProfile: null);
+
+    private bool HasTrackedRunningShellProcess(string? machineProfile)
     {
         lock (_syncRoot)
         {
             var hasRunningProcess = false;
             for (var i = _startedProcesses.Count - 1; i >= 0; i--)
             {
-                var process = _startedProcesses[i];
+                var tracked = _startedProcesses[i];
+                var process = tracked.Process;
                 if (IsRunning(process))
                 {
-                    hasRunningProcess = true;
+                    if (string.IsNullOrWhiteSpace(machineProfile)
+                        || string.Equals(tracked.MachineProfile, machineProfile, StringComparison.OrdinalIgnoreCase))
+                    {
+                        hasRunningProcess = true;
+                    }
+
                     continue;
                 }
 
@@ -119,4 +149,6 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
             return false;
         }
     }
+
+    private sealed record TrackedShellProcess(string MachineProfile, Process Process);
 }

@@ -85,14 +85,26 @@ public sealed class ArchitectureBoundaryContractTests
             "src/Shared/IIoT.Edge.UI.Shared/IIoT.Edge.UI.Shared.csproj",
             "src/Presentation/IIoT.Edge.Presentation.Navigation/IIoT.Edge.Presentation.Navigation.csproj"
         };
+        var dieCuttingSharedCoreReference = "src/Modules/IIoT.Edge.Module.DieCutting/IIoT.Edge.Module.DieCutting.csproj";
+        var dieCuttingEntryProjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "src/Modules/IIoT.Edge.Module.DieCuttingAnode/IIoT.Edge.Module.DieCuttingAnode.csproj",
+            "src/Modules/IIoT.Edge.Module.DieCuttingCathode/IIoT.Edge.Module.DieCuttingCathode.csproj"
+        };
 
         var offendingReferences = Directory
             .EnumerateFiles(Path.Combine(repoRoot, "src", "Modules"), "*.csproj", SearchOption.AllDirectories)
             .Where(path => !IsBuildArtifact(path))
             .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}IIoT.Edge.Module.Sdk{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
-            .SelectMany(projectPath => ReadProjectReferences(repoRoot, projectPath)
-                .Where(referencePath => !approvedReferences.Contains(referencePath))
-                .Select(referencePath => $"{ToRepositoryPath(repoRoot, projectPath)} -> {referencePath}"))
+            .SelectMany(projectPath =>
+            {
+                var projectRepositoryPath = ToRepositoryPath(repoRoot, projectPath);
+                return ReadProjectReferences(repoRoot, projectPath)
+                    .Where(referencePath => !approvedReferences.Contains(referencePath))
+                    .Where(referencePath => referencePath != dieCuttingSharedCoreReference
+                                            || !dieCuttingEntryProjects.Contains(projectRepositoryPath))
+                    .Select(referencePath => $"{projectRepositoryPath} -> {referencePath}");
+            })
             .ToArray();
 
         Assert.Empty(offendingReferences);

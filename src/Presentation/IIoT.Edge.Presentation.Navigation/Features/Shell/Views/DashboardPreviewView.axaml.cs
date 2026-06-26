@@ -3,7 +3,7 @@ using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Presentation.Navigation.Features.Dashboard;
-using IIoT.Edge.Presentation.Panels.Features.SysLog;
+using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.UI.Shared.Localization;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -26,7 +26,7 @@ public partial class DashboardPreviewView : UserControl
     public DashboardPreviewView(
         DashboardViewModel viewModel,
         IAppLanguageService languageService,
-        ISystemLogDisplayStore logDisplayStore,
+        IDeviceSelectionService deviceSelectionService,
         ILocalSystemRuntimeConfigService runtimeConfig,
         IEdgeSyncDiagnosticsQuery diagnosticsQuery,
         IPlcConnectionManager plcConnectionManager)
@@ -43,7 +43,7 @@ public partial class DashboardPreviewView : UserControl
         _runtimeViewModel = new DashboardPreviewRuntimeViewModel(
             viewModel,
             languageService,
-            logDisplayStore,
+            deviceSelectionService,
             runtimeConfig,
             diagnosticsQuery,
             plcConnectionManager);

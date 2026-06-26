@@ -1,4 +1,7 @@
+using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
 using Avalonia.Threading;
 using AvaloniaDispatcher = Avalonia.Threading.Dispatcher;
 using IIoT.Edge.Application.Abstractions.Logging;
@@ -13,13 +16,18 @@ public interface ISystemLogDisplayStore
 }
 
 /// <summary>
-/// 日志展示服务，负责把真实日志事件同步到 Avalonia UI 集合。
+/// 日志展示服务，负责把真实日志事件批量同步到 Avalonia UI 集合。
 /// </summary>
 public class LogDisplayService : ISystemLogDisplayStore
 {
-    private readonly ILogService _inner;
+    private const int MaxDisplayEntries = 200;
+    private static readonly TimeSpan FlushInterval = TimeSpan.FromMilliseconds(500);
 
-    public ObservableCollection<LogEntry> Entries { get; } = new();
+    private readonly ILogService _inner;
+    private readonly ConcurrentQueue<LogEntry> _pendingEntries = new();
+    private int _flushScheduled;
+
+    public ObservableCollection<LogEntry> Entries { get; } = new BatchedLogEntryCollection();
 
     public LogDisplayService(ILogService inner)
     {
@@ -29,26 +37,125 @@ public class LogDisplayService : ISystemLogDisplayStore
 
     public void Clear()
     {
-        Entries.Clear();
-    }
-
-    private void OnInnerEntryAdded(LogEntry entry)
-    {
-        void ApplyEntry()
+        while (_pendingEntries.TryDequeue(out _))
         {
-            Entries.Insert(0, entry);
-            if (Entries.Count > 200)
+        }
+
+        void ClearCore()
+        {
+            if (Entries is BatchedLogEntryCollection batched)
             {
-                Entries.RemoveAt(Entries.Count - 1);
+                batched.ClearBatched();
+                return;
             }
+
+            Entries.Clear();
         }
 
         if (AvaloniaDispatcher.UIThread.CheckAccess())
         {
-            ApplyEntry();
+            ClearCore();
             return;
         }
 
-        AvaloniaDispatcher.UIThread.Post(ApplyEntry, DispatcherPriority.Background);
+        AvaloniaDispatcher.UIThread.Post(ClearCore, DispatcherPriority.Background);
+    }
+
+    private void OnInnerEntryAdded(LogEntry entry)
+    {
+        _pendingEntries.Enqueue(entry);
+        ScheduleFlush();
+    }
+
+    private void ScheduleFlush()
+    {
+        if (Interlocked.CompareExchange(ref _flushScheduled, 1, 0) != 0)
+        {
+            return;
+        }
+
+        _ = FlushLaterAsync();
+    }
+
+    private async Task FlushLaterAsync()
+    {
+        await Task.Delay(FlushInterval).ConfigureAwait(false);
+        AvaloniaDispatcher.UIThread.Post(FlushPendingEntries, DispatcherPriority.Background);
+    }
+
+    private void FlushPendingEntries()
+    {
+        var entries = new List<LogEntry>();
+        while (_pendingEntries.TryDequeue(out var entry))
+        {
+            entries.Add(entry);
+        }
+
+        if (entries.Count > 0)
+        {
+            if (Entries is BatchedLogEntryCollection batched)
+            {
+                batched.PrependRange(entries, MaxDisplayEntries);
+            }
+            else
+            {
+                foreach (var entry in entries)
+                {
+                    Entries.Insert(0, entry);
+                }
+
+                while (Entries.Count > MaxDisplayEntries)
+                {
+                    Entries.RemoveAt(Entries.Count - 1);
+                }
+            }
+        }
+
+        Interlocked.Exchange(ref _flushScheduled, 0);
+        if (!_pendingEntries.IsEmpty)
+        {
+            ScheduleFlush();
+        }
+    }
+
+    private sealed class BatchedLogEntryCollection : ObservableCollection<LogEntry>
+    {
+        public void PrependRange(IReadOnlyList<LogEntry> entries, int maxCount)
+        {
+            if (entries.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var entry in entries)
+            {
+                Items.Insert(0, entry);
+            }
+
+            while (Items.Count > maxCount)
+            {
+                Items.RemoveAt(Items.Count - 1);
+            }
+
+            RaiseReset();
+        }
+
+        public void ClearBatched()
+        {
+            if (Items.Count == 0)
+            {
+                return;
+            }
+
+            Items.Clear();
+            RaiseReset();
+        }
+
+        private void RaiseReset()
+        {
+            OnPropertyChanged(new PropertyChangedEventArgs(nameof(Count)));
+            OnPropertyChanged(new PropertyChangedEventArgs("Item[]"));
+            OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
+        }
     }
 }

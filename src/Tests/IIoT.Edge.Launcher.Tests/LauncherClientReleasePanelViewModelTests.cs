@@ -238,7 +238,9 @@ public sealed class LauncherClientReleasePanelViewModelTests
 
     private sealed class StubShellLaunchService(bool hasRunningShellProcess = false) : IShellLaunchService
     {
-        public bool HasRunningShellProcess { get; } = hasRunningShellProcess;
+        public bool HasAnyRunningShellProcess() => hasRunningShellProcess;
+
+        public bool IsProfileRunning(LauncherProfileDefinition profile) => false;
 
         public void Launch(LauncherProfileDefinition profile)
         {

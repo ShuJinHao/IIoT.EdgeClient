@@ -3,25 +3,27 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
-    <edge:EdgeLogList
-        Title="{DynamicResource Panels_Title_SystemLog}"
-        ItemsSource="{Binding Entries}"
-        IsEmpty="{Binding IsLogEmpty}"
-        EmptyTitle="{DynamicResource Panels_Empty_NoLog_Title}"
-        EmptyMessage="{DynamicResource Panels_Empty_NoLog_Message}"
-        ClearCommand="{Binding ClearCommand}"
-        ClearText="{DynamicResource Panels_Button_Clear}"
-        TimeHeader="{DynamicResource Panels_Column_Time}"
-        LevelHeader="{DynamicResource Panels_Column_Level}"
-        MessageHeader="{DynamicResource Panels_Column_Message}">
-        <edge:EdgeLogList.ItemTemplate>
-            <DataTemplate>
-                <edge:EdgeLogListItem
-                    TimeText="{Binding Time, StringFormat='{}{0:HH:mm:ss}'}"
-                    LevelText="{Binding Level}"
-                    Status="{Binding Level, Converter={StaticResource Edge.Converter.LogLevelToVisualStatus}}"
-                    Message="{Binding Message}" />
-            </DataTemplate>
-        </edge:EdgeLogList.ItemTemplate>
-    </edge:EdgeLogList>
+    <Grid>
+        <edge:EdgeLogList
+            Title="{DynamicResource Panels_Title_SystemLog}"
+            ItemsSource="{Binding Entries}"
+            IsEmpty="{Binding IsLogEmpty}"
+            EmptyTitle="{DynamicResource Panels_Empty_NoLog_Title}"
+            EmptyMessage="{DynamicResource Panels_Empty_NoLog_Message}"
+            ClearCommand="{Binding ClearCommand}"
+            ClearText="{DynamicResource Panels_Button_Clear}"
+            TimeHeader="{DynamicResource Panels_Column_Time}"
+            LevelHeader="{DynamicResource Panels_Column_Level}"
+            MessageHeader="{DynamicResource Panels_Column_Message}">
+            <edge:EdgeLogList.ItemTemplate>
+                <DataTemplate>
+                    <edge:EdgeLogListItem
+                        TimeText="{Binding Time, StringFormat='{}{0:HH:mm:ss}'}"
+                        LevelText="{Binding Level}"
+                        Status="{Binding Level, Converter={StaticResource Edge.Converter.LogLevelToVisualStatus}}"
+                        Message="{Binding Message}" />
+                </DataTemplate>
+            </edge:EdgeLogList.ItemTemplate>
+        </edge:EdgeLogList>
+    </Grid>
 </UserControl>

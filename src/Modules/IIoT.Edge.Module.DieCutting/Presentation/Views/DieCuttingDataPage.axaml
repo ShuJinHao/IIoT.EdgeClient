@@ -1,0 +1,97 @@
+<UserControl
+    x:Class="IIoT.Edge.Module.DieCutting.Presentation.Views.DieCuttingDataPage"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
+    <edge:EdgeTablePanel
+        Margin="18,14,22,22"
+        EmptyMessage="{Binding EmptyMessage}"
+        EmptyTitle="{Binding EmptyTitle}"
+        IsEmpty="{Binding IsRecordsEmpty}"
+        MinHeight="620"
+        ShowContentWhenEmpty="True"
+        Title="{Binding ViewTitle}">
+        <edge:EdgeTablePanel.StatusContent>
+            <edge:EdgeNoticeBar Status="Info">
+                <TextBlock
+                    Classes="edge-notice-message"
+                    Text="{Binding StatusMessage}" />
+            </edge:EdgeNoticeBar>
+        </edge:EdgeTablePanel.StatusContent>
+
+        <edge:EdgeDataGrid
+            AutoGenerateColumns="False"
+            CanUserResizeColumns="True"
+            Density="Compact"
+            GridLinesVisibility="Horizontal"
+            HeadersVisibility="Column"
+            HorizontalScrollBarVisibility="Auto"
+            IsReadOnly="True"
+            ItemsSource="{Binding Records}"
+            MinHeight="520"
+            VerticalScrollBarVisibility="Auto">
+            <edge:EdgeDataGrid.Columns>
+                <edge:EdgeTextColumn Binding="{Binding DeviceName}" MinWidth="120" Width="130">
+                    <edge:EdgeTextColumn.Header>
+                        <TextBlock Text="{Binding DataContext.DeviceNameHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                    </edge:EdgeTextColumn.Header>
+                </edge:EdgeTextColumn>
+                <edge:EdgeTextColumn Binding="{Binding BatchNo}" MinWidth="170" Width="190">
+                    <edge:EdgeTextColumn.Header>
+                        <TextBlock Text="{Binding DataContext.BatchNoHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                    </edge:EdgeTextColumn.Header>
+                </edge:EdgeTextColumn>
+                <edge:EdgeTextColumn Binding="{Binding ClipNo}" MinWidth="140" Width="150">
+                    <edge:EdgeTextColumn.Header>
+                        <TextBlock Text="{Binding DataContext.ClipNoHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                    </edge:EdgeTextColumn.Header>
+                </edge:EdgeTextColumn>
+                <edge:EdgeTextColumn Binding="{Binding Quantity}" MinWidth="100" Width="110">
+                    <edge:EdgeTextColumn.Header>
+                        <TextBlock Text="{Binding DataContext.QuantityHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                    </edge:EdgeTextColumn.Header>
+                </edge:EdgeTextColumn>
+                <edge:EdgeTextColumn Binding="{Binding StartTime}" MinWidth="170" Width="180">
+                    <edge:EdgeTextColumn.Header>
+                        <TextBlock Text="{Binding DataContext.StartTimeHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                    </edge:EdgeTextColumn.Header>
+                </edge:EdgeTextColumn>
+                <edge:EdgeTextColumn Binding="{Binding EndTime}" MinWidth="170" Width="180">
+                    <edge:EdgeTextColumn.Header>
+                        <TextBlock Text="{Binding DataContext.EndTimeHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                    </edge:EdgeTextColumn.Header>
+                </edge:EdgeTextColumn>
+                <edge:EdgeTextColumn Binding="{Binding PunchingSpeed}" MinWidth="150" Width="160">
+                    <edge:EdgeTextColumn.Header>
+                        <TextBlock Text="{Binding DataContext.PunchingSpeedHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                    </edge:EdgeTextColumn.Header>
+                </edge:EdgeTextColumn>
+                <edge:EdgeTextColumn Binding="{Binding PlateLength}" MinWidth="130" Width="140">
+                    <edge:EdgeTextColumn.Header>
+                        <TextBlock Text="{Binding DataContext.PlateLengthHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                    </edge:EdgeTextColumn.Header>
+                </edge:EdgeTextColumn>
+                <edge:EdgeTextColumn Binding="{Binding PlateWidth}" MinWidth="130" Width="140">
+                    <edge:EdgeTextColumn.Header>
+                        <TextBlock Text="{Binding DataContext.PlateWidthHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                    </edge:EdgeTextColumn.Header>
+                </edge:EdgeTextColumn>
+                <edge:EdgeTextColumn Binding="{Binding OperatorCode}" MinWidth="130" Width="140">
+                    <edge:EdgeTextColumn.Header>
+                        <TextBlock Text="{Binding DataContext.OperatorCodeHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                    </edge:EdgeTextColumn.Header>
+                </edge:EdgeTextColumn>
+                <edge:EdgeTextColumn Binding="{Binding MoldCode}" MinWidth="130" Width="140">
+                    <edge:EdgeTextColumn.Header>
+                        <TextBlock Text="{Binding DataContext.MoldCodeHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                    </edge:EdgeTextColumn.Header>
+                </edge:EdgeTextColumn>
+                <edge:EdgeTextColumn Binding="{Binding CutterCode}" MinWidth="130" Width="140">
+                    <edge:EdgeTextColumn.Header>
+                        <TextBlock Text="{Binding DataContext.CutterCodeHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                    </edge:EdgeTextColumn.Header>
+                </edge:EdgeTextColumn>
+            </edge:EdgeDataGrid.Columns>
+        </edge:EdgeDataGrid>
+    </edge:EdgeTablePanel>
+</UserControl>

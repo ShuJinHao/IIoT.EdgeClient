@@ -1,5 +1,6 @@
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Consumers;
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
@@ -15,6 +16,7 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
     private readonly ICloudUploadGate _uploadGate;
     private readonly StandardPassStationCloudUploader _standardUploader;
     private readonly IProcessIntegrationRegistry _processIntegrationRegistry;
+    private readonly IModuleParamRoleProvider _moduleParamRoleProvider;
     private readonly ICloudUploadDiagnosticsStore _diagnosticsStore;
     private readonly ILogService _logger;
 
@@ -28,6 +30,7 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
         ICloudUploadGate uploadGate,
         StandardPassStationCloudUploader standardUploader,
         IProcessIntegrationRegistry processIntegrationRegistry,
+        IModuleParamRoleProvider moduleParamRoleProvider,
         ICloudUploadDiagnosticsStore diagnosticsStore,
         ILogService logger)
     {
@@ -35,6 +38,7 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
         _uploadGate = uploadGate;
         _standardUploader = standardUploader;
         _processIntegrationRegistry = processIntegrationRegistry;
+        _moduleParamRoleProvider = moduleParamRoleProvider;
         _diagnosticsStore = diagnosticsStore;
         _logger = logger;
     }
@@ -60,6 +64,13 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
         {
             if (!_processIntegrationRegistry.TryGetCloudUploader(group.Key, out var registration))
             {
+                continue;
+            }
+
+            if (!await IsPluginCloudEnabledAsync(group.Key, cancellationToken).ConfigureAwait(false))
+            {
+                var skippedResult = CloudCallResult.Success();
+                _diagnosticsStore.RecordResult(group.Key, skippedResult);
                 continue;
             }
 
@@ -109,6 +120,14 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
 
         return CloudCallResult.Success();
     }
+
+    private Task<bool> IsPluginCloudEnabledAsync(string processType, CancellationToken cancellationToken)
+        => _moduleParamRoleProvider.GetBoolAsync(
+            processType,
+            ModuleParamCategory.Cloud,
+            ModuleParamRole.CloudEnabled,
+            defaultValue: true,
+            cancellationToken);
 
     private async Task<CloudCallResult> UploadOneByOneAsync(
         ProcessUploadContext context,

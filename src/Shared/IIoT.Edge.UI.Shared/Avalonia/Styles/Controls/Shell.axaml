@@ -764,7 +764,7 @@
 
     <Style Selector="controls|EdgeCard.launcher-process-card">
         <Setter Property="MinWidth" Value="360" />
-        <Setter Property="MinHeight" Value="232" />
+        <Setter Property="MinHeight" Value="170" />
         <Setter Property="ClipToBounds" Value="True" />
         <Setter Property="Elevation" Value="Card" />
         <Setter Property="Surface" Value="Card" />
@@ -805,41 +805,9 @@
         <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Primary}" />
     </Style>
 
-    <Style Selector="StackPanel.launcher-process-title-stack">
-        <Setter Property="VerticalAlignment" Value="Center" />
-        <Setter Property="Spacing" Value="{DynamicResource Edge.Size.Spacing6}" />
-    </Style>
-
     <Style Selector="TextBlock.launcher-process-title">
         <Setter Property="FontSize" Value="22" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Primary}" />
-        <Setter Property="MaxLines" Value="1" />
-        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-    </Style>
-
-    <Style Selector="StackPanel.launcher-process-paths">
-        <Setter Property="VerticalAlignment" Value="Center" />
-        <Setter Property="Spacing" Value="{DynamicResource Edge.Size.Spacing8}" />
-    </Style>
-
-    <Style Selector="Border.launcher-process-path-row">
-        <Setter Property="Padding" Value="10,8" />
-        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Surface.Wash}" />
-        <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Control}" />
-    </Style>
-
-    <Style Selector="TextBlock.launcher-process-path-label">
-        <Setter Property="VerticalAlignment" Value="Center" />
-        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Caption}" />
-        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Accent.Primary}" />
-        <Setter Property="MaxLines" Value="1" />
-        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-    </Style>
-
-    <Style Selector="TextBlock.launcher-process-path-value">
-        <Setter Property="VerticalAlignment" Value="Center" />
-        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Caption}" />
         <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Primary}" />
         <Setter Property="MaxLines" Value="1" />
         <Setter Property="TextTrimming" Value="CharacterEllipsis" />

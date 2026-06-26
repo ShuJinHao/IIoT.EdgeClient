@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Abstractions.Context;
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Factory;
@@ -9,6 +10,7 @@ using IIoT.Edge.Infrastructure.DeviceComm.Signals;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.SharedKernel.Repository;
+using System.Globalization;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Plc;
 
@@ -23,6 +25,7 @@ public sealed class PlcDeviceRuntimeBuilder
     private readonly IPlcSignalBlockPlanner _signalBlockPlanner;
     private readonly IPlcEndpointResolver _endpointResolver;
     private readonly ModuleHardwareProfileResolver _hardwareProfileResolver;
+    private readonly IModuleParamRoleProvider? _moduleParamRoleProvider;
 
     public PlcDeviceRuntimeBuilder(
         IRepository<IoMappingEntity> ioMappings,
@@ -33,7 +36,8 @@ public sealed class PlcDeviceRuntimeBuilder
         PlcConnectionStatusStore statusStore,
         IPlcSignalBlockPlanner signalBlockPlanner,
         IPlcEndpointResolver endpointResolver,
-        ModuleHardwareProfileResolver hardwareProfileResolver)
+        ModuleHardwareProfileResolver hardwareProfileResolver,
+        IModuleParamRoleProvider? moduleParamRoleProvider = null)
     {
         _ioMappings = ioMappings;
         _dataStore = dataStore;
@@ -44,6 +48,7 @@ public sealed class PlcDeviceRuntimeBuilder
         _signalBlockPlanner = signalBlockPlanner;
         _endpointResolver = endpointResolver;
         _hardwareProfileResolver = hardwareProfileResolver;
+        _moduleParamRoleProvider = moduleParamRoleProvider;
     }
 
     public async Task<PlcDeviceRuntimeHandle> BuildAsync(
@@ -88,8 +93,18 @@ public sealed class PlcDeviceRuntimeBuilder
             _statusStore,
             runtimePolicy,
             endpoint);
+        var dataReadScanTask = new PlcDataReadScanTask(
+            plcService,
+            _dataStore,
+            device,
+            mappingArray,
+            _logger,
+            _signalBlockPlanner,
+            _statusStore,
+            runtimePolicy,
+            token => ResolveDataReadLoopIntervalAsync(hardwareProfile?.ModuleId, runtimePolicy, token));
 
-        var tasks = new List<IPlcTask> { ioScanTask };
+        var tasks = new List<IPlcTask> { ioScanTask, dataReadScanTask };
         if (buffer is not null && taskFactory is not null)
         {
             tasks.AddRange(taskFactory(buffer, context));
@@ -103,6 +118,30 @@ public sealed class PlcDeviceRuntimeBuilder
             CancellationTokenSource = deviceCts,
             Tasks = tasks
         };
+    }
+
+    private async Task<int> ResolveDataReadLoopIntervalAsync(
+        string? moduleId,
+        PlcIoRuntimePolicy runtimePolicy,
+        CancellationToken cancellationToken)
+    {
+        var policyValue = runtimePolicy.NormalizeDataReadLoopInterval();
+        if (string.IsNullOrWhiteSpace(moduleId) || _moduleParamRoleProvider is null)
+        {
+            return policyValue;
+        }
+
+        var configuredValue = await _moduleParamRoleProvider
+            .GetStringAsync(
+                moduleId,
+                ModuleParamCategory.Business,
+                ModuleParamRole.DataReadLoopIntervalMs,
+                cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        return int.TryParse(configuredValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var interval)
+               && interval > 0
+            ? interval
+            : policyValue;
     }
 
     private static IReadOnlyCollection<PlcBufferSignalBinding> BuildSignalBindings(

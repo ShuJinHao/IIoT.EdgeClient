@@ -17,13 +17,13 @@ public sealed class ModuleDiscoveryContractTests
     [Fact]
     public void DiscoverDirectoryPlugins_ShouldFindProductModules()
     {
-        var pluginRoot = ContractTestPathHelper.CreatePluginRuntimeRoot("Homogenization");
+        var pluginRoot = ContractTestPathHelper.CreatePluginRuntimeRoot("Homogenization", "DieCuttingAnode", "DieCuttingCathode");
         try
         {
             var discovery = DiscoverPlugins(pluginRoot);
 
             Assert.Equal(
-                ["Homogenization"],
+                ["DieCuttingAnode", "DieCuttingCathode", "Homogenization"],
                 discovery.Modules.Select(x => x.ModuleId).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray());
         }
         finally
@@ -35,14 +35,16 @@ public sealed class ModuleDiscoveryContractTests
     [Fact]
     public void CreateAllModules_ShouldInstantiateAllDiscoveredPluginsWithoutDuplicateIdentity()
     {
-        var pluginRoot = ContractTestPathHelper.CreatePluginRuntimeRoot("Homogenization");
+        var pluginRoot = ContractTestPathHelper.CreatePluginRuntimeRoot("Homogenization", "DieCuttingAnode", "DieCuttingCathode");
         try
         {
             var modules = CreateModuleCatalog().CreateAllModules(DiscoverPlugins(pluginRoot).Modules);
 
-            Assert.Single(modules);
-            Assert.Single(modules.Select(x => x.ModuleId).Distinct(StringComparer.OrdinalIgnoreCase));
-            Assert.Single(modules.Select(x => x.ProcessType).Distinct(StringComparer.OrdinalIgnoreCase));
+            Assert.Equal(3, modules.Count);
+            Assert.Equal(3, modules.Select(x => x.ModuleId).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+            Assert.Equal(3, modules.Select(x => x.ProcessType).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+            Assert.Contains(modules, x => string.Equals(x.ModuleId, "DieCuttingAnode", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(modules, x => string.Equals(x.ModuleId, "DieCuttingCathode", StringComparison.OrdinalIgnoreCase));
             Assert.Contains(modules, x => string.Equals(x.ModuleId, "Homogenization", StringComparison.OrdinalIgnoreCase));
         }
         finally
@@ -152,6 +154,38 @@ public sealed class ModuleDiscoveryContractTests
             repoRoot,
             "src",
             "Modules",
+            "IIoT.Edge.Module.DieCuttingAnode",
+            "plugin.json")));
+        Assert.True(File.Exists(Path.Combine(
+            repoRoot,
+            "src",
+            "Modules",
+            "IIoT.Edge.Module.DieCuttingCathode",
+            "plugin.json")));
+        Assert.False(File.Exists(Path.Combine(
+            repoRoot,
+            "src",
+            "Modules",
+            "IIoT.Edge.Module.DieCutting",
+            "plugin.json")));
+        Assert.True(File.Exists(Path.Combine(
+            repoRoot,
+            "src",
+            "Modules",
+            "IIoT.Edge.Module.DieCutting",
+            "Production",
+            "DieCuttingStationRuntimeFactory.cs")));
+        Assert.True(File.Exists(Path.Combine(
+            repoRoot,
+            "src",
+            "Modules",
+            "IIoT.Edge.Module.DieCutting",
+            "Samples",
+            "DieCuttingDevelopmentSampleContributor.cs")));
+        Assert.True(File.Exists(Path.Combine(
+            repoRoot,
+            "src",
+            "Modules",
             "IIoT.Edge.Module.Homogenization",
             "Production",
             "HomogenizationStationRuntimeFactory.cs")));
@@ -189,6 +223,42 @@ public sealed class ModuleDiscoveryContractTests
         Assert.Equal("homogenization-line", document.RootElement.GetProperty("bundleId").GetString());
         Assert.Equal("Homogenization", document.RootElement.GetProperty("includeModules")[0].GetString());
         Assert.Equal("HomogenizationLine", document.RootElement.GetProperty("machineProfiles")[0].GetString());
+    }
+
+    [Fact]
+    public void PluginBundles_ShouldContainPolaritySpecificDieCuttingBundles()
+    {
+        var repoRoot = ContractTestPathHelper.FindRepoRoot();
+        Assert.False(File.Exists(Path.Combine(repoRoot, "scripts", "PluginBundles", "diecutting-line.json")));
+
+        AssertDieCuttingBundle(
+            repoRoot,
+            "diecutting-anode-line.json",
+            "diecutting-anode-line",
+            "DieCuttingAnode",
+            "DieCuttingAnodeLine");
+        AssertDieCuttingBundle(
+            repoRoot,
+            "diecutting-cathode-line.json",
+            "diecutting-cathode-line",
+            "DieCuttingCathode",
+            "DieCuttingCathodeLine");
+    }
+
+    private static void AssertDieCuttingBundle(
+        string repoRoot,
+        string fileName,
+        string expectedBundleId,
+        string expectedModuleId,
+        string expectedMachineProfile)
+    {
+        var bundlePath = Path.Combine(repoRoot, "scripts", "PluginBundles", fileName);
+
+        Assert.True(File.Exists(bundlePath));
+        using var document = JsonDocument.Parse(File.ReadAllText(bundlePath));
+        Assert.Equal(expectedBundleId, document.RootElement.GetProperty("bundleId").GetString());
+        Assert.Equal(expectedModuleId, document.RootElement.GetProperty("includeModules")[0].GetString());
+        Assert.Equal(expectedMachineProfile, document.RootElement.GetProperty("machineProfiles")[0].GetString());
     }
 
     private static ModuleCatalogDiscoveryResult DiscoverPlugins(string pluginRoot)

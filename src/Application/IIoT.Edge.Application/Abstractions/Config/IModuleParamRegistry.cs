@@ -5,7 +5,12 @@ namespace IIoT.Edge.Application.Abstractions.Config;
 /// </summary>
 public interface IModuleParamRegistry
 {
-    void Register(string moduleId, Type mesParamType, Type cloudParamType, Type businessParamType);
+    void Register(
+        string moduleId,
+        Type mesParamType,
+        Type cloudParamType,
+        Type businessParamType,
+        IReadOnlyCollection<ModuleParamDefaultOverride>? defaultOverrides = null);
 
     IReadOnlyList<ModuleParamRegistration> GetRegistrations();
 
@@ -15,3 +20,11 @@ public interface IModuleParamRegistry
 
     bool TryGetRegistration(Type mesParamType, Type cloudParamType, Type businessParamType, out ModuleParamRegistration registration);
 }
+
+/// <summary>
+/// 插件参数默认值覆盖项，用于同一套参数枚举在不同模块实例下拥有不同现场默认值。
+/// </summary>
+public sealed record ModuleParamDefaultOverride(
+    ModuleParamCategory Category,
+    string Name,
+    string DefaultValue);

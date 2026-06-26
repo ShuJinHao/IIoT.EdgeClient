@@ -333,6 +333,26 @@ public sealed class IoViewViewModelBehaviorTests
         });
 
     [AvaloniaFact]
+    public Task ManualReadAsync_WhenPlcDisconnected_ShouldReturnClearErrorWithoutReading()
+        => RunOnStaThreadAsync(async () =>
+        {
+            var device = CreateDevice(39, "PLC-TestProcess-01", "TestProcess");
+            var dataStore = new PlcDataStore();
+            dataStore.Register(device.Id, readSize: 4, writeSize: 0);
+            var service = new IoViewManualReadService(
+                new FakePlcConnectionManager([]),
+                dataStore);
+
+            var result = await service.ReadAsync(
+                device.Id,
+                [],
+                []);
+
+            Assert.False(result.ShouldRefreshValues);
+            Assert.Equal("PLC 未连接，无法读取。", result.ErrorMessage);
+        });
+
+    [AvaloniaFact]
     public Task WriteInteractionRow_ShouldOnlyWriteCurrentRowOutputIndex()
         => RunOnStaThreadAsync(async () =>
         {

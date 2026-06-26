@@ -24,12 +24,19 @@ public enum PlcIoWriteGapPolicy
 public sealed record PlcIoRuntimePolicy(
     int SignalLoopIntervalMs = 10,
     int MaxSignalBlockWordCount = 100,
-    PlcIoWriteGapPolicy WriteGapPolicy = PlcIoWriteGapPolicy.Zero)
+    PlcIoWriteGapPolicy WriteGapPolicy = PlcIoWriteGapPolicy.Zero,
+    int DataReadLoopIntervalMs = 1000)
 {
     public static PlcIoRuntimePolicy Default { get; } = new();
 
-    public int NormalizeLoopInterval()
+    public int NormalizeSignalLoopInterval()
         => SignalLoopIntervalMs <= 0 ? Default.SignalLoopIntervalMs : SignalLoopIntervalMs;
+
+    public int NormalizeLoopInterval()
+        => NormalizeSignalLoopInterval();
+
+    public int NormalizeDataReadLoopInterval()
+        => DataReadLoopIntervalMs <= 0 ? Default.DataReadLoopIntervalMs : DataReadLoopIntervalMs;
 
     public int NormalizeMaxBlockWordCount()
         => MaxSignalBlockWordCount <= 0 ? Default.MaxSignalBlockWordCount : MaxSignalBlockWordCount;

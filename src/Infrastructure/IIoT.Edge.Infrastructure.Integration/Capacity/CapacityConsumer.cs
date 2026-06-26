@@ -63,7 +63,7 @@ public class CapacityConsumer : ICapacityConsumer
                 Snapshot = snapshot
             }, cancellationToken);
 
-            if (_runtimeConfig.Current.CloudUploadEnabled && !_deviceService.CanUploadToCloud)
+            if (_runtimeConfig.Current.SystemCloudEnabled && !_deviceService.CanUploadToCloud)
             {
                 await _capacityBufferStore.SaveAsync(new CapacityRecord
                 {

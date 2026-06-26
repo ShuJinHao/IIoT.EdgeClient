@@ -45,13 +45,13 @@ public sealed class PlcTaskBindingBehaviorTests
     }
 
     [Fact]
-    public async Task GetEnabledTaskKeys_WhenProductionWithoutConfiguredDefault_ShouldEnableMissingRows()
+    public async Task GetEnabledTaskKeys_WhenProductionWithoutConfiguredDefault_ShouldDisableMissingRows()
     {
         var service = CreateService(defaultEnableAllTasks: null, environmentName: "Production");
 
         var enabledKeys = await service.Service.GetEnabledTaskKeysAsync(1, TestCandidates, AllTestMappings);
 
-        Assert.Equal(["Task.A", "Task.B"], enabledKeys.OrderBy(static x => x, StringComparer.OrdinalIgnoreCase));
+        Assert.Empty(enabledKeys);
     }
 
     [Fact]
@@ -240,8 +240,10 @@ public sealed class PlcTaskBindingBehaviorTests
             Assert.NotNull(blockedSnapshot);
             Assert.False(blockedSnapshot!.IsConnected);
             Assert.Equal(bindingFault, blockedSnapshot.LastError);
-            await WaitUntilAsync(() => statusStore.GetSnapshot(healthyDevice.Id)?.IsConnected == true);
-            Assert.True(statusStore.GetSnapshot(healthyDevice.Id)?.IsConnected);
+            var healthySnapshot = statusStore.GetSnapshot(healthyDevice.Id);
+            Assert.NotNull(healthySnapshot);
+            Assert.False(healthySnapshot!.IsConnected);
+            Assert.NotEqual(PlcConnectionState.Faulted, healthySnapshot.ConnectionState);
         }
         finally
         {

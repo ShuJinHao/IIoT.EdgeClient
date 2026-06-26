@@ -26,6 +26,9 @@
     <Project Path="src/Presentation/IIoT.Edge.Presentation.VisualTestData/IIoT.Edge.Presentation.VisualTestData.csproj" />
   </Folder>
   <Folder Name="/src/Modules/">
+    <Project Path="src/Modules/IIoT.Edge.Module.DieCutting/IIoT.Edge.Module.DieCutting.csproj" />
+    <Project Path="src/Modules/IIoT.Edge.Module.DieCuttingAnode/IIoT.Edge.Module.DieCuttingAnode.csproj" />
+    <Project Path="src/Modules/IIoT.Edge.Module.DieCuttingCathode/IIoT.Edge.Module.DieCuttingCathode.csproj" />
     <Project Path="src/Modules/IIoT.Edge.Module.Homogenization/IIoT.Edge.Module.Homogenization.csproj" />
     <Project Path="src/Modules/IIoT.Edge.Module.Sdk/IIoT.Edge.Module.Sdk.csproj" />
   </Folder>

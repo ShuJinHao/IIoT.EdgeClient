@@ -2,15 +2,13 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$Version,
 
-    [string]$Channel = 'homogenization',
+    [string]$Channel = 'stable',
 
-    [string]$PackId = 'IIoT.EdgeClient.Homogenization',
+    [string]$PackId = 'IIoT.EdgeClient',
 
-    [string]$PackTitle = 'IIoT Edge Client Homogenization',
+    [string]$PackTitle = 'IIoT Edge Client',
 
     [string]$PackAuthors = 'IIoT',
-
-    [string]$ProfileId = 'HomogenizationLine',
 
     [string]$Configuration = 'Release',
 
@@ -73,7 +71,7 @@ function Resolve-EdgeVpkCommand {
                 '--tool-manifest',
                 $toolManifestPath,
                 '--disable-parallel'
-            )
+            ) | Out-Null
 
         return [pscustomobject]@{
             FilePath = 'dotnet'
@@ -123,7 +121,23 @@ function Copy-EdgeVelopackDirectory {
     }
 
     New-Item -Path $TargetDirectory -ItemType Directory -Force | Out-Null
-    Copy-Item -Path (Join-Path $SourceDirectory '*') -Destination $TargetDirectory -Recurse -Force
+    $sourceRoot = [System.IO.Path]::GetFullPath($SourceDirectory)
+    $targetRoot = [System.IO.Path]::GetFullPath($TargetDirectory)
+
+    foreach ($directoryPath in [System.IO.Directory]::EnumerateDirectories(
+        $sourceRoot,
+        '*',
+        [System.IO.SearchOption]::AllDirectories)) {
+        $relativePath = Get-EdgeRelativePackPath -BaseDirectory $sourceRoot -PathValue $directoryPath
+        New-Item -Path (Join-Path $targetRoot $relativePath) -ItemType Directory -Force | Out-Null
+    }
+
+    foreach ($filePath in Get-EdgePackFilePaths -Directory $sourceRoot) {
+        $relativePath = Get-EdgeRelativePackPath -BaseDirectory $sourceRoot -PathValue $filePath
+        $targetFile = Join-Path $targetRoot $relativePath
+        New-Item -Path (Split-Path -Parent $targetFile) -ItemType Directory -Force | Out-Null
+        Copy-Item -LiteralPath $filePath -Destination $targetFile -Force
+    }
 }
 
 function Get-EdgeRelativePackPath {
@@ -138,6 +152,25 @@ function Get-EdgeRelativePackPath {
     return [System.IO.Path]::GetRelativePath($BaseDirectory, $PathValue).Replace('\', '/')
 }
 
+function Get-EdgePackFilePaths {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Directory,
+
+        [string]$Filter = '*'
+    )
+
+    if (-not (Test-Path $Directory)) {
+        return @()
+    }
+
+    $resolvedDirectory = [System.IO.Path]::GetFullPath($Directory)
+    return @([System.IO.Directory]::EnumerateFiles(
+        $resolvedDirectory,
+        $Filter,
+        [System.IO.SearchOption]::AllDirectories))
+}
+
 function Remove-EdgeProtectedPackFiles {
     param(
         [Parameter(Mandatory = $true)]
@@ -145,10 +178,10 @@ function Remove-EdgeProtectedPackFiles {
     )
 
     foreach ($fileName in @('launcher.accounts.json', 'launcher.update.json')) {
-        $files = Get-ChildItem -Path $PackDirectory -Recurse -File -Filter $fileName -ErrorAction SilentlyContinue
+        $files = Get-EdgePackFilePaths -Directory $PackDirectory -Filter $fileName
         foreach ($file in $files) {
-            $relativePath = Get-EdgeRelativePackPath -BaseDirectory $PackDirectory -PathValue $file.FullName
-            Remove-Item -Path $file.FullName -Force
+            $relativePath = Get-EdgeRelativePackPath -BaseDirectory $PackDirectory -PathValue $file
+            Remove-Item -LiteralPath $file -Force
             Write-Host "Excluded protected site config from package staging: $relativePath"
         }
     }
@@ -160,22 +193,23 @@ function Assert-EdgePackCloudIdentityTemplatesAreEmpty {
         [string]$PackDirectory
     )
 
-    $configFiles = Get-ChildItem -Path $PackDirectory -Recurse -File -Filter 'appsettings*.json' -ErrorAction SilentlyContinue
+    $configFiles = Get-EdgePackFilePaths -Directory $PackDirectory -Filter 'appsettings*.json'
     foreach ($configFile in $configFiles) {
-        $relativePath = Get-EdgeRelativePackPath -BaseDirectory $PackDirectory -PathValue $configFile.FullName
+        $relativePath = Get-EdgeRelativePackPath -BaseDirectory $PackDirectory -PathValue $configFile
         try {
-            $config = Get-Content -Raw -Encoding UTF8 -Path $configFile.FullName | ConvertFrom-Json
+            $config = Get-Content -Raw -Encoding UTF8 -LiteralPath $configFile | ConvertFrom-Json
         }
         catch {
             throw "Packaged config file could not be parsed: $relativePath"
         }
 
-        if ($null -eq $config.CloudApi) {
+        $cloudApiProperty = $config.PSObject.Properties['CloudApi']
+        if ($null -eq $cloudApiProperty -or $null -eq $cloudApiProperty.Value) {
             continue
         }
 
         foreach ($key in @('ClientCode', 'BootstrapSecret')) {
-            $property = $config.CloudApi.PSObject.Properties[$key]
+            $property = $cloudApiProperty.Value.PSObject.Properties[$key]
             if ($null -eq $property) {
                 continue
             }
@@ -208,9 +242,9 @@ function Assert-EdgeForbiddenPackContentMissing {
         '(^|/)excel/'
     )
 
-    $files = Get-ChildItem -Path $PackDirectory -Recurse -File -ErrorAction SilentlyContinue
+    $files = Get-EdgePackFilePaths -Directory $PackDirectory
     foreach ($file in $files) {
-        $relativePath = Get-EdgeRelativePackPath -BaseDirectory $PackDirectory -PathValue $file.FullName
+        $relativePath = Get-EdgeRelativePackPath -BaseDirectory $PackDirectory -PathValue $file
         foreach ($pattern in $forbiddenPatterns) {
             if ($relativePath -match $pattern) {
                 throw "Forbidden protected runtime data or site config was found in package staging: $relativePath"
@@ -236,26 +270,23 @@ function Write-EdgeVelopackProfileCatalog {
         [System.Collections.IEnumerable]$Profiles,
 
         [Parameter(Mandatory = $true)]
-        $ProfileDefinition,
-
-        [Parameter(Mandatory = $true)]
         $Manifest,
 
         [Parameter(Mandatory = $true)]
         [string]$PackDirectory
     )
 
-    $selectedProfile = @($Profiles | Where-Object {
-        $_.ProfileId -eq $ProfileDefinition.profileId
+    $packProfiles = @($Profiles | ForEach-Object {
+        $profile = $_
+        $profile.ExecutablePath = "$($Manifest.hostDirectory)/IIoT.Edge.Shell"
+        $profile
     })
 
-    if ($selectedProfile.Count -ne 1) {
-        throw "Could not find exactly one launcher profile for profile '$($ProfileDefinition.profileId)'."
+    if ($packProfiles.Count -eq 0) {
+        throw 'Launcher profile catalog is empty.'
     }
 
-    $profile = $selectedProfile[0]
-    $profile.ExecutablePath = "$($Manifest.hostDirectory)/IIoT.Edge.Shell"
-    ConvertTo-Json -InputObject @($profile) -Depth 20 | Set-Content `
+    ConvertTo-Json -InputObject $packProfiles -Depth 20 | Set-Content `
         -Encoding UTF8 `
         -Path (Join-Path $PackDirectory 'launcher.profiles.json')
 }
@@ -290,14 +321,6 @@ function Get-EdgeVelopackReleaseNotesPath {
 
 $manifest = Load-EdgeRuntimePublishManifest -RepoRoot $repoRoot -ManifestPath $ManifestPath
 $launcherProfileCatalog = Get-EdgeLauncherProfileCatalog -RepoRoot $repoRoot -ProfileCatalogPath $LauncherProfileCatalogPath
-$profileDefinition = @($manifest.profiles | Where-Object {
-    $_.profileId -eq $ProfileId
-})[0]
-
-if ($null -eq $profileDefinition) {
-    throw "ProfileId '$ProfileId' does not match any profile in '$ManifestPath'."
-}
-
 $resolvedRuntimeLayoutRoot = Resolve-EdgeAbsolutePath -BasePath $repoRoot -PathValue $RuntimeLayoutRoot
 $resolvedOutputRoot = Resolve-EdgeAbsolutePath -BasePath $repoRoot -PathValue $OutputRoot
 $packDirectory = Join-Path $resolvedOutputRoot ".staging\$Channel"
@@ -330,7 +353,6 @@ Copy-EdgeVelopackDirectory `
     -TargetDirectory (Join-Path $packDirectory $manifest.hostDirectory)
 Write-EdgeVelopackProfileCatalog `
     -Profiles $launcherProfileCatalog.Profiles `
-    -ProfileDefinition $profileDefinition `
     -Manifest $manifest `
     -PackDirectory $packDirectory
 Assert-EdgeVelopackStagingRedlines -PackDirectory $packDirectory
