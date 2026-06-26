@@ -35,7 +35,7 @@ function Get-TestSha256 {
 function Get-TestDirectorySize {
     param([Parameter(Mandatory = $true)][string]$Directory)
 
-    $measure = Get-ChildItem -Path $Directory -Recurse -File -ErrorAction SilentlyContinue |
+    $measure = Get-ChildItem -Path $Directory -Recurse -File -Force -ErrorAction SilentlyContinue |
         Measure-Object -Property Length -Sum
     if ($null -eq $measure.Sum) {
         return 0
@@ -58,7 +58,7 @@ function Get-TestDirectorySha256 {
 
     $hasher = [System.Security.Cryptography.IncrementalHash]::CreateHash([System.Security.Cryptography.HashAlgorithmName]::SHA256)
     try {
-        $files = @(Get-ChildItem -Path $Directory -Recurse -File -ErrorAction SilentlyContinue |
+        $files = @(Get-ChildItem -Path $Directory -Recurse -File -Force -ErrorAction SilentlyContinue |
             ForEach-Object {
                 [PSCustomObject]@{
                     File = $_
@@ -118,7 +118,7 @@ function Assert-ForbiddenFilesMissing {
         '(^|/)excel/'
     )
 
-    foreach ($file in Get-ChildItem -Path $Directory -Recurse -File -ErrorAction SilentlyContinue) {
+    foreach ($file in Get-ChildItem -Path $Directory -Recurse -File -Force -ErrorAction SilentlyContinue) {
         $relativePath = Get-TestRelativePath -BaseDirectory $Directory -PathValue $file.FullName
         foreach ($pattern in $forbiddenPatterns) {
             if ($relativePath -match $pattern) {
@@ -131,7 +131,7 @@ function Assert-ForbiddenFilesMissing {
 function Assert-CloudIdentityTemplatesAreEmpty {
     param([Parameter(Mandatory = $true)][string]$Directory)
 
-    $configFiles = Get-ChildItem -Path $Directory -Recurse -File -Filter 'appsettings*.json' -ErrorAction SilentlyContinue
+    $configFiles = Get-ChildItem -Path $Directory -Recurse -File -Force -Filter 'appsettings*.json' -ErrorAction SilentlyContinue
     foreach ($configFile in $configFiles) {
         $relativePath = Get-TestRelativePath -BaseDirectory $Directory -PathValue $configFile.FullName
         try {

@@ -68,7 +68,7 @@ function Get-ArtifactDirectorySize {
         return 0
     }
 
-    $measure = Get-ChildItem -Path $Directory -Recurse -File -ErrorAction SilentlyContinue |
+    $measure = Get-ChildItem -Path $Directory -Recurse -File -Force -ErrorAction SilentlyContinue |
         Measure-Object -Property Length -Sum
     if ($null -eq $measure.Sum) {
         return 0
@@ -86,7 +86,7 @@ function Get-ArtifactDirectorySha256 {
 
     $hasher = [System.Security.Cryptography.IncrementalHash]::CreateHash([System.Security.Cryptography.HashAlgorithmName]::SHA256)
     try {
-        $files = @(Get-ChildItem -Path $Directory -Recurse -File -ErrorAction SilentlyContinue |
+        $files = @(Get-ChildItem -Path $Directory -Recurse -File -Force -ErrorAction SilentlyContinue |
             ForEach-Object {
                 [PSCustomObject]@{
                     File = $_
@@ -175,7 +175,7 @@ function Assert-ArtifactForbiddenContentMissing {
         '(^|/)excel/'
     )
 
-    foreach ($file in Get-ChildItem -Path $Directory -Recurse -File -ErrorAction SilentlyContinue) {
+    foreach ($file in Get-ChildItem -Path $Directory -Recurse -File -Force -ErrorAction SilentlyContinue) {
         $relativePath = Get-ArtifactRelativePath -BaseDirectory $Directory -PathValue $file.FullName
         foreach ($pattern in $forbiddenPatterns) {
             if ($relativePath -match $pattern) {
@@ -188,7 +188,7 @@ function Assert-ArtifactForbiddenContentMissing {
 function Assert-ArtifactCloudIdentityTemplatesAreEmpty {
     param([Parameter(Mandatory = $true)][string]$Directory)
 
-    $configFiles = Get-ChildItem -Path $Directory -Recurse -File -Filter 'appsettings*.json' -ErrorAction SilentlyContinue
+    $configFiles = Get-ChildItem -Path $Directory -Recurse -File -Force -Filter 'appsettings*.json' -ErrorAction SilentlyContinue
     foreach ($configFile in $configFiles) {
         $relativePath = Get-ArtifactRelativePath -BaseDirectory $Directory -PathValue $configFile.FullName
         try {

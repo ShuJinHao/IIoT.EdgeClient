@@ -143,7 +143,7 @@ function Remove-EdgeProtectedPackFiles {
     )
 
     foreach ($fileName in @('launcher.accounts.json', 'launcher.update.json')) {
-        $files = Get-ChildItem -Path $PackDirectory -Recurse -File -Filter $fileName -ErrorAction SilentlyContinue
+        $files = Get-ChildItem -Path $PackDirectory -Recurse -File -Force -Filter $fileName -ErrorAction SilentlyContinue
         foreach ($file in $files) {
             $relativePath = Get-EdgeRelativePackPath -BaseDirectory $PackDirectory -PathValue $file.FullName
             Remove-Item -Path $file.FullName -Force
@@ -158,7 +158,7 @@ function Assert-EdgePackCloudIdentityTemplatesAreEmpty {
         [string]$PackDirectory
     )
 
-    $configFiles = Get-ChildItem -Path $PackDirectory -Recurse -File -Filter 'appsettings*.json' -ErrorAction SilentlyContinue
+    $configFiles = Get-ChildItem -Path $PackDirectory -Recurse -File -Force -Filter 'appsettings*.json' -ErrorAction SilentlyContinue
     foreach ($configFile in $configFiles) {
         $relativePath = Get-EdgeRelativePackPath -BaseDirectory $PackDirectory -PathValue $configFile.FullName
         try {
@@ -207,7 +207,7 @@ function Assert-EdgeForbiddenPackContentMissing {
         '(^|/)excel/'
     )
 
-    $files = Get-ChildItem -Path $PackDirectory -Recurse -File -ErrorAction SilentlyContinue
+    $files = Get-ChildItem -Path $PackDirectory -Recurse -File -Force -ErrorAction SilentlyContinue
     foreach ($file in $files) {
         $relativePath = Get-EdgeRelativePackPath -BaseDirectory $PackDirectory -PathValue $file.FullName
         foreach ($pattern in $forbiddenPatterns) {
