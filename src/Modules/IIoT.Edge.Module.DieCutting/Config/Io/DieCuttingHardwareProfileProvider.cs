@@ -53,4 +53,22 @@ public sealed class DieCuttingHardwareProfileProvider
             MaxSignalBlockWordCount: 100,
             WriteGapPolicy: PlcIoWriteGapPolicy.Split,
             DataReadLoopIntervalMs: Math.Max(500, _moduleOptions.Runtime.DataReadLoopIntervalMs));
+
+    public override ModuleIoTemplateEntry ResolveIoTemplateForDevice(
+        string deviceName,
+        ModuleIoTemplateEntry template)
+    {
+        if (!string.Equals(template.SignalKey, "DieCutting.BatchNumber", StringComparison.OrdinalIgnoreCase))
+        {
+            return template;
+        }
+
+        return IsFirstDevice(deviceName)
+            ? template with { PlcAddress = "R9660" }
+            : template with { PlcAddress = "R9600" };
+    }
+
+    private static bool IsFirstDevice(string deviceName)
+        => !string.IsNullOrWhiteSpace(deviceName)
+           && deviceName.Trim().EndsWith("01", StringComparison.OrdinalIgnoreCase);
 }

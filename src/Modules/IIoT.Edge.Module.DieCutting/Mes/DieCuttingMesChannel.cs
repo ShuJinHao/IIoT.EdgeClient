@@ -131,6 +131,34 @@ public sealed class DieCuttingMesChannel
             cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<MesCallResult> UploadEquipmentStatusAsync(
+        DeviceSession? device,
+        DieCuttingDeviceStatusSnapshot snapshot,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+
+        return await ExecuteOptionalMesAsync(
+            "模切设备状态",
+            ct => GetMesPathAsync(DieCuttingParams.Mes.EquipmentStatusPath, ct),
+            device,
+            envelope => CreateStandardMesPayload(
+                envelope,
+                new
+                {
+                    devices = new[]
+                    {
+                        new
+                        {
+                            stationNo = envelope.StationNo,
+                            status = snapshot.StatusCode,
+                            msg = snapshot.Messages
+                        }
+                    }
+                }),
+            cancellationToken).ConfigureAwait(false);
+    }
+
     protected override Task<MesCallResult> UploadOutboundRecordAsync(
         DeviceSession? device,
         DieCuttingCellData cellData,
@@ -151,8 +179,8 @@ public sealed class DieCuttingMesChannel
             CreateProduceItem("punchingCompleteTime", "结束时间", FormatTimestamp(snapshot.WindowCompleteAt)),
             CreateProduceItem("slittingConsumeQuantity", "分切消耗量", EmptyField),
             CreateProduceItem("punchingSpeed", "模切速度", snapshot.PunchingSpeed),
-            CreateProduceItem("polePieceLength", "极片长度", EmptyField),
-            CreateProduceItem("polePieceWidth", "极片宽度", EmptyField),
+            CreateProduceItem("polePieceLength", "极片长度", snapshot.PlateLengthMm),
+            CreateProduceItem("polePieceWidth", "极片宽度", snapshot.PlateWidthMm),
             CreateProduceItem("collectorLength", "集流体长度", EmptyField),
             CreateProduceItem("collectorWidth", "集流体宽度", EmptyField),
             CreateProduceItem("collectorLongMargin", "集流体长边距", EmptyField),
@@ -202,5 +230,10 @@ public interface IDieCuttingMesScenarioChannel : IProcessMesUploader
     Task<MesCallResult> UploadRealtimeAsync(
         DeviceSession? device,
         DieCuttingRealtimeSnapshot snapshot,
+        CancellationToken cancellationToken = default);
+
+    Task<MesCallResult> UploadEquipmentStatusAsync(
+        DeviceSession? device,
+        DieCuttingDeviceStatusSnapshot snapshot,
         CancellationToken cancellationToken = default);
 }

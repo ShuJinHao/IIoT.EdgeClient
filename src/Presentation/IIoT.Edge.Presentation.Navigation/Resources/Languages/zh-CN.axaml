@@ -170,6 +170,8 @@
     <sys:String x:Key="Navigation_Tab_CloudParams">云端参数</sys:String>
     <sys:String x:Key="Navigation_Tab_PluginBusinessParams">插件业务参数</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_GroupTitle">云端接口配置</sys:String>
+    <sys:String x:Key="Navigation_Param_CloudApi_Enabled_DisplayName">云端启用</sys:String>
+    <sys:String x:Key="Navigation_Param_CloudApi_Enabled_Description">系统级云端上传总开关。关闭后 Cloud 上传、设备日志和补传按离线语义跳过。</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_BaseUrl_DisplayName">云端服务地址</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_BaseUrl_Description">Cloud API 基地址，用于 bootstrap、上传、日志和产能接口。</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_ClientCode_DisplayName">设备寻址码</sys:String>

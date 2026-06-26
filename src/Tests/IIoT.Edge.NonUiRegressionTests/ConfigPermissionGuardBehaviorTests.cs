@@ -394,6 +394,11 @@ public sealed class ConfigPermissionGuardBehaviorTests
                     "调试")
             ];
 
+        public ModuleIoTemplateEntry ResolveIoTemplateForDevice(
+            string deviceName,
+            ModuleIoTemplateEntry template)
+            => template;
+
         public ModuleHardwareValidationResult ValidatePlcConfiguration(
             string deviceName,
             string? deviceModel,

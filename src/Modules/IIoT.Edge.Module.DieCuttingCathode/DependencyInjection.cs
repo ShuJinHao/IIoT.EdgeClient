@@ -15,6 +15,7 @@ public sealed class DependencyInjection : DieCuttingModuleBase
             "正极模切",
             "P2-CP",
             "10.110.1",
+            "http://10.110.1.250:8081",
             "P2-CPUC",
             "CP",
             "正极模切 CP"))

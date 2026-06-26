@@ -95,6 +95,7 @@ dotnet test src/Tests/IIoT.Edge.Installer.Tests/IIoT.Edge.Installer.Tests.csproj
 CI 发布验收：
 
 - `push main` 不跑完整打包；只允许 smoke 编译和测试。
+- `workflow_dispatch` 或 tag 触发正式打包前，必须先运行 `scripts/TestEdgeDeploymentPreflight.ps1 -Mode GitHubHost`，确认版本号、release notes、workflow 包名、`publish-edge-updates`、manifest normalize 和 Cloud API 入口。
 - `edge-pack-modules.yml` 在 `workflow_dispatch` 或 `edge-v*` / `v*` tag 时必须生成 `edge-runtime-package`、`edge-installer-artifact`、`edge-velopack-releases` 三个 artifacts。
 - `workflow_dispatch` 必须显式输入生产版本号；tag 触发时版本来自 tag。
 - `workflow_dispatch` 必须显式输入 `release_notes`；tag 发布必须是 annotated tag 且正文非空；本机快发必须显式传 `-ReleaseNotes` 或 `-ReleaseNotesPath`。
@@ -104,6 +105,7 @@ CI 发布验收：
 - `edge-installer-artifact` 必须通过 `TestEdgeClientInstallerArtifact.ps1`，并包含 `installer-artifact.json`、安装器 exe、宿主、Launcher、插件和 Velopack setup。
 - `edge-velopack-releases` 必须通过 `TestEdgeVelopackPackage.ps1`，并包含 `releases.stable.json`、`assets.stable.json`、full nupkg、setup exe 和 portable zip。
 - `publish-edge-updates` 发布后必须通过 Cloud API 返回的 `verificationUrls` 做 HEAD 验证；服务器上必须能在 `${EDGE_UPDATES_DIR}/installers/stable/<version>/installer-artifact.json` 和 `${EDGE_UPDATES_DIR}/velopack/stable/releases.stable.json` 找到对应产物。
+- 发布失败后优先重跑失败 job 或复用已生成 artifacts；不得未经定位反复全量 CI。Cloud 返回 `400 hash/size` 不一致时，先在下载后的 artifact 目录对比文件列表、manifest 和 Cloud 校验算法，再决定是否修改脚本。
 - 独立插件发布后必须能在 `${EDGE_UPDATES_DIR}/plugins/stable/<ModuleId>/<version>/` 找到插件 zip，且 Cloud catalog 中对应插件 release 的 `downloadUrl` 可 HEAD 成功。
 
 Windows 实机安装验收：

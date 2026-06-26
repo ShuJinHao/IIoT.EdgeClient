@@ -13,6 +13,7 @@ public static class CloudApiConfigParamSchema
     public const string GroupDisplayNameFallback = "云端接口配置";
     public const string KeyPrefix = "CloudApi:";
 
+    public const string Enabled = "CloudApi:Enabled";
     public const string BaseUrl = "CloudApi:BaseUrl";
     public const string ClientCode = "CloudApi:ClientCode";
     public const string BootstrapSecret = "CloudApi:BootstrapSecret";
@@ -58,6 +59,7 @@ public static class CloudApiConfigParamSchema
         => key.Trim() switch
         {
             BaseUrl => snapshot.BaseUrl,
+            Enabled => snapshot.Enabled ? "true" : "false",
             ClientCode => snapshot.ClientCode,
             BootstrapSecret => snapshot.BootstrapSecret,
             DeviceInstancePath => snapshot.DeviceInstancePath,
@@ -98,6 +100,7 @@ public static class CloudApiConfigParamSchema
     private static string GetKey(CloudApiConfigParam param)
         => param switch
         {
+            CloudApiConfigParam.Enabled => Enabled,
             CloudApiConfigParam.BaseUrl => BaseUrl,
             CloudApiConfigParam.ClientCode => ClientCode,
             CloudApiConfigParam.BootstrapSecret => BootstrapSecret,
@@ -120,6 +123,14 @@ public static class CloudApiConfigParamSchema
 
 public enum CloudApiConfigParam
 {
+    [ModuleParam(
+        ParamValueKind.Bool,
+        DisplayNameResourceKey = "Navigation_Param_CloudApi_Enabled_DisplayName",
+        DisplayNameFallback = "云端启用",
+        DescriptionResourceKey = "Navigation_Param_CloudApi_Enabled_Description",
+        DescriptionFallback = "系统级云端上传总开关，关闭后 Cloud 上传、设备日志和补传门控按离线语义跳过。")]
+    Enabled,
+
     [ModuleParam(
         ParamValueKind.String,
         DisplayNameResourceKey = "Navigation_Param_CloudApi_BaseUrl_DisplayName",

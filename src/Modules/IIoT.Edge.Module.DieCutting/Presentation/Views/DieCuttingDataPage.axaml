@@ -41,6 +41,11 @@
                         <TextBlock Text="{Binding DataContext.BatchNoHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
                     </edge:EdgeTextColumn.Header>
                 </edge:EdgeTextColumn>
+                <edge:EdgeTextColumn Binding="{Binding ClipNo}" MinWidth="140" Width="150">
+                    <edge:EdgeTextColumn.Header>
+                        <TextBlock Text="{Binding DataContext.ClipNoHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                    </edge:EdgeTextColumn.Header>
+                </edge:EdgeTextColumn>
                 <edge:EdgeTextColumn Binding="{Binding Quantity}" MinWidth="100" Width="110">
                     <edge:EdgeTextColumn.Header>
                         <TextBlock Text="{Binding DataContext.QuantityHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
@@ -69,6 +74,21 @@
                 <edge:EdgeTextColumn Binding="{Binding PlateWidth}" MinWidth="130" Width="140">
                     <edge:EdgeTextColumn.Header>
                         <TextBlock Text="{Binding DataContext.PlateWidthHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                    </edge:EdgeTextColumn.Header>
+                </edge:EdgeTextColumn>
+                <edge:EdgeTextColumn Binding="{Binding OperatorCode}" MinWidth="130" Width="140">
+                    <edge:EdgeTextColumn.Header>
+                        <TextBlock Text="{Binding DataContext.OperatorCodeHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                    </edge:EdgeTextColumn.Header>
+                </edge:EdgeTextColumn>
+                <edge:EdgeTextColumn Binding="{Binding MoldCode}" MinWidth="130" Width="140">
+                    <edge:EdgeTextColumn.Header>
+                        <TextBlock Text="{Binding DataContext.MoldCodeHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                    </edge:EdgeTextColumn.Header>
+                </edge:EdgeTextColumn>
+                <edge:EdgeTextColumn Binding="{Binding CutterCode}" MinWidth="130" Width="140">
+                    <edge:EdgeTextColumn.Header>
+                        <TextBlock Text="{Binding DataContext.CutterCodeHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" />
                     </edge:EdgeTextColumn.Header>
                 </edge:EdgeTextColumn>
             </edge:EdgeDataGrid.Columns>

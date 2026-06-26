@@ -31,10 +31,8 @@ public sealed class DieCuttingStationRuntimeFactory : IStationRuntimeFactory
         TaskCandidates =
         [
             PlcTaskCandidateBuilder.Create(_definition.RealtimeSampleUploadTaskKey, $"{_definition.DisplayName}采样上传")
-            .RequiresRead(DieCuttingPlcSignals.SingleRead.实际产量)
-            .RequiresRead(DieCuttingPlcSignals.SingleRead.冲切速度)
-            .RequiresRead(DieCuttingPlcSignals.ContinuousRead.弹夹号MG1)
-            .RequiresRead(DieCuttingPlcSignals.ContinuousRead.弹夹号MG2)
+            .RequiresRead(Enum.GetValues<DieCuttingPlcSignals.SingleRead>())
+            .RequiresRead(Enum.GetValues<DieCuttingPlcSignals.ContinuousRead>())
             .Build()
         ];
     }
@@ -98,7 +96,6 @@ public sealed class DieCuttingStationRuntimeFactory : IStationRuntimeFactory
                 codec,
                 dieCuttingContext,
                 serviceProvider.GetRequiredService<IDieCuttingMesScenarioChannel>(),
-                serviceProvider.GetRequiredService<DieCuttingProductionPlanService>(),
                 serviceProvider.GetRequiredService<IDieCuttingProductionRecordStore>(),
                 serviceProvider.GetRequiredService<IMesUploadDiagnosticsStore>(),
                 serviceProvider.GetRequiredService<IPlcConnectionManager>(),

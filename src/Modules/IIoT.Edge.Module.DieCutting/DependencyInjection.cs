@@ -50,6 +50,10 @@ public abstract class DieCuttingModuleBase : EdgeProcessModuleBase<DieCuttingCel
         [
             new ModuleParamDefaultOverride(
                 ModuleParamCategory.Mes,
+                nameof(DieCuttingParams.Mes.服务地址),
+                _definition.MesBaseUrl),
+            new ModuleParamDefaultOverride(
+                ModuleParamCategory.Mes,
                 nameof(DieCuttingParams.Mes.UpperComputerNo),
                 _definition.UpperComputerNo),
             new ModuleParamDefaultOverride(

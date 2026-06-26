@@ -59,6 +59,8 @@ public sealed class DieCuttingDataViewModel : PresentationViewModelBase
 
     public string BatchNoHeader => GetText("DieCutting_Column_BatchNo", "批次号");
 
+    public string ClipNoHeader => GetText("DieCutting_Column_ClipNo", "弹夹号");
+
     public string QuantityHeader => GetText("DieCutting_Column_Quantity", "生产数量");
 
     public string StartTimeHeader => GetText("DieCutting_Column_StartTime", "开始时间");
@@ -70,6 +72,12 @@ public sealed class DieCuttingDataViewModel : PresentationViewModelBase
     public string PlateLengthHeader => GetText("DieCutting_Column_PlateLength", "极片长度(mm)");
 
     public string PlateWidthHeader => GetText("DieCutting_Column_PlateWidth", "极片宽度(mm)");
+
+    public string OperatorCodeHeader => GetText("DieCutting_Column_OperatorCode", "操作员工号");
+
+    public string MoldCodeHeader => GetText("DieCutting_Column_MoldCode", "模具编号");
+
+    public string CutterCodeHeader => GetText("DieCutting_Column_CutterCode", "切刀编号");
 
     public override Task OnActivatedAsync()
     {
@@ -114,12 +122,16 @@ public sealed class DieCuttingDataViewModel : PresentationViewModelBase
         OnPropertyChanged(nameof(EmptyMessage));
         OnPropertyChanged(nameof(DeviceNameHeader));
         OnPropertyChanged(nameof(BatchNoHeader));
+        OnPropertyChanged(nameof(ClipNoHeader));
         OnPropertyChanged(nameof(QuantityHeader));
         OnPropertyChanged(nameof(StartTimeHeader));
         OnPropertyChanged(nameof(EndTimeHeader));
         OnPropertyChanged(nameof(PunchingSpeedHeader));
         OnPropertyChanged(nameof(PlateLengthHeader));
         OnPropertyChanged(nameof(PlateWidthHeader));
+        OnPropertyChanged(nameof(OperatorCodeHeader));
+        OnPropertyChanged(nameof(MoldCodeHeader));
+        OnPropertyChanged(nameof(CutterCodeHeader));
     }
 
     private string GetText(string key, string fallback)
@@ -129,12 +141,16 @@ public sealed class DieCuttingDataViewModel : PresentationViewModelBase
         => new(
             FormatText(record.DeviceName),
             FormatText(record.BatchNo),
+            FormatText(record.ClipNo),
             record.Quantity.ToString(CultureInfo.InvariantCulture),
             FormatTime(record.WindowStartAt),
             FormatTime(record.WindowCompleteAt),
             record.PunchingSpeed.ToString("0.#####", CultureInfo.InvariantCulture),
             FormatNullableNumber(record.PlateLengthMm),
-            FormatNullableNumber(record.PlateWidthMm));
+            FormatNullableNumber(record.PlateWidthMm),
+            FormatText(record.OperatorCode),
+            FormatText(record.MoldCode),
+            FormatText(record.CutterCode));
 
     private static string FormatText(string? value)
         => string.IsNullOrWhiteSpace(value) ? EmptyValue : value.Trim();
@@ -152,9 +168,13 @@ public sealed class DieCuttingDataViewModel : PresentationViewModelBase
 public sealed record DieCuttingProductionRecordRow(
     string DeviceName,
     string BatchNo,
+    string ClipNo,
     string Quantity,
     string StartTime,
     string EndTime,
     string PunchingSpeed,
     string PlateLength,
-    string PlateWidth);
+    string PlateWidth,
+    string OperatorCode,
+    string MoldCode,
+    string CutterCode);

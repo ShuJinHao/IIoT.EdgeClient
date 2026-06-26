@@ -39,12 +39,17 @@ public sealed class DieCuttingProductionRecordStore
             ModuleId         TEXT    NOT NULL,
             DeviceName       TEXT    NOT NULL,
             BatchNo          TEXT    NOT NULL,
+            ClipNo           TEXT    NOT NULL DEFAULT '',
             Quantity         INTEGER NOT NULL,
             WindowStartAt    TEXT    NOT NULL,
             WindowCompleteAt TEXT    NOT NULL,
             PunchingSpeed    REAL    NOT NULL,
             PlateLengthMm    REAL    NULL,
             PlateWidthMm     REAL    NULL,
+            OperatorCode     TEXT    NOT NULL DEFAULT '',
+            MoldCode         TEXT    NOT NULL DEFAULT '',
+            CutterCode       TEXT    NOT NULL DEFAULT '',
+            RawFieldsJson    TEXT    NOT NULL DEFAULT '',
             CreatedAtUtc     TEXT    NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_diecutting_production_module_device_time
@@ -65,20 +70,27 @@ public sealed class DieCuttingProductionRecordStore
                 command.CommandText = @"
             INSERT INTO diecutting_production_records
                 (ModuleId, DeviceName, BatchNo, Quantity, WindowStartAt, WindowCompleteAt,
-                 PunchingSpeed, PlateLengthMm, PlateWidthMm, CreatedAtUtc)
+                 PunchingSpeed, PlateLengthMm, PlateWidthMm, CreatedAtUtc,
+                 ClipNo, OperatorCode, MoldCode, CutterCode, RawFieldsJson)
             VALUES
                 (@ModuleId, @DeviceName, @BatchNo, @Quantity, @WindowStartAt, @WindowCompleteAt,
-                 @PunchingSpeed, @PlateLengthMm, @PlateWidthMm, @CreatedAtUtc)";
+                 @PunchingSpeed, @PlateLengthMm, @PlateWidthMm, @CreatedAtUtc,
+                 @ClipNo, @OperatorCode, @MoldCode, @CutterCode, @RawFieldsJson)";
 
                 AddParameter(command, "@ModuleId", record.ModuleId);
                 AddParameter(command, "@DeviceName", record.DeviceName);
                 AddParameter(command, "@BatchNo", record.BatchNo);
+                AddParameter(command, "@ClipNo", record.ClipNo);
                 AddParameter(command, "@Quantity", record.Quantity);
                 AddParameter(command, "@WindowStartAt", record.WindowStartAt.ToString("O", CultureInfo.InvariantCulture));
                 AddParameter(command, "@WindowCompleteAt", record.WindowCompleteAt.ToString("O", CultureInfo.InvariantCulture));
                 AddParameter(command, "@PunchingSpeed", Convert.ToDouble(record.PunchingSpeed, CultureInfo.InvariantCulture));
                 AddParameter(command, "@PlateLengthMm", ToSqliteValue(record.PlateLengthMm));
                 AddParameter(command, "@PlateWidthMm", ToSqliteValue(record.PlateWidthMm));
+                AddParameter(command, "@OperatorCode", record.OperatorCode);
+                AddParameter(command, "@MoldCode", record.MoldCode);
+                AddParameter(command, "@CutterCode", record.CutterCode);
+                AddParameter(command, "@RawFieldsJson", record.RawFieldsJson);
                 AddParameter(command, "@CreatedAtUtc", record.CreatedAtUtc.ToString("O", CultureInfo.InvariantCulture));
 
                 return await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
@@ -106,14 +118,16 @@ public sealed class DieCuttingProductionRecordStore
         command.CommandText = isAllSelected
             ? $@"
                 SELECT Id, ModuleId, DeviceName, BatchNo, Quantity, WindowStartAt, WindowCompleteAt,
-                       PunchingSpeed, PlateLengthMm, PlateWidthMm, CreatedAtUtc
+                       PunchingSpeed, PlateLengthMm, PlateWidthMm, CreatedAtUtc,
+                       ClipNo, OperatorCode, MoldCode, CutterCode, RawFieldsJson
                 FROM {TableName}
                 WHERE ModuleId = @ModuleId
                 ORDER BY WindowCompleteAt DESC, Id DESC
                 LIMIT @Limit"
             : $@"
                 SELECT Id, ModuleId, DeviceName, BatchNo, Quantity, WindowStartAt, WindowCompleteAt,
-                       PunchingSpeed, PlateLengthMm, PlateWidthMm, CreatedAtUtc
+                       PunchingSpeed, PlateLengthMm, PlateWidthMm, CreatedAtUtc,
+                       ClipNo, OperatorCode, MoldCode, CutterCode, RawFieldsJson
                 FROM {TableName}
                 WHERE ModuleId = @ModuleId
                   AND DeviceName = @DeviceName
@@ -154,6 +168,13 @@ public sealed class DieCuttingProductionRecordStore
             await using var command = connection.CreateCommand();
             command.CommandText = CreateTableSql;
             await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            await EnsureColumnAsync(connection, "PlateLengthMm", "REAL NULL", cancellationToken).ConfigureAwait(false);
+            await EnsureColumnAsync(connection, "PlateWidthMm", "REAL NULL", cancellationToken).ConfigureAwait(false);
+            await EnsureColumnAsync(connection, "ClipNo", "TEXT NOT NULL DEFAULT ''", cancellationToken).ConfigureAwait(false);
+            await EnsureColumnAsync(connection, "OperatorCode", "TEXT NOT NULL DEFAULT ''", cancellationToken).ConfigureAwait(false);
+            await EnsureColumnAsync(connection, "MoldCode", "TEXT NOT NULL DEFAULT ''", cancellationToken).ConfigureAwait(false);
+            await EnsureColumnAsync(connection, "CutterCode", "TEXT NOT NULL DEFAULT ''", cancellationToken).ConfigureAwait(false);
+            await EnsureColumnAsync(connection, "RawFieldsJson", "TEXT NOT NULL DEFAULT ''", cancellationToken).ConfigureAwait(false);
             _initialized = true;
         }
         catch (Exception ex)
@@ -231,14 +252,49 @@ public sealed class DieCuttingProductionRecordStore
             ModuleId = reader.GetString(reader.GetOrdinal("ModuleId")),
             DeviceName = reader.GetString(reader.GetOrdinal("DeviceName")),
             BatchNo = reader.GetString(reader.GetOrdinal("BatchNo")),
+            ClipNo = ReadString(reader, "ClipNo"),
             Quantity = reader.GetInt64(reader.GetOrdinal("Quantity")),
             WindowStartAt = ReadDateTime(reader, "WindowStartAt"),
             WindowCompleteAt = ReadDateTime(reader, "WindowCompleteAt"),
             PunchingSpeed = ReadDecimal(reader, "PunchingSpeed"),
             PlateLengthMm = ReadNullableDecimal(reader, "PlateLengthMm"),
             PlateWidthMm = ReadNullableDecimal(reader, "PlateWidthMm"),
+            OperatorCode = ReadString(reader, "OperatorCode"),
+            MoldCode = ReadString(reader, "MoldCode"),
+            CutterCode = ReadString(reader, "CutterCode"),
+            RawFieldsJson = ReadString(reader, "RawFieldsJson"),
             CreatedAtUtc = ReadDateTime(reader, "CreatedAtUtc")
         };
+
+    private static async Task EnsureColumnAsync(
+        SqliteConnection connection,
+        string columnName,
+        string columnDefinition,
+        CancellationToken cancellationToken)
+    {
+        await using (var check = connection.CreateCommand())
+        {
+            check.CommandText = $"PRAGMA table_info({TableName});";
+            await using var reader = await check.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                if (string.Equals(reader.GetString(reader.GetOrdinal("name")), columnName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+            }
+        }
+
+        await using var alter = connection.CreateCommand();
+        alter.CommandText = $"ALTER TABLE {TableName} ADD COLUMN {columnName} {columnDefinition};";
+        await alter.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private static string ReadString(SqliteDataReader reader, string name)
+    {
+        var ordinal = reader.GetOrdinal(name);
+        return reader.IsDBNull(ordinal) ? string.Empty : reader.GetString(ordinal);
+    }
 
     private static DateTime ReadDateTime(SqliteDataReader reader, string name)
     {

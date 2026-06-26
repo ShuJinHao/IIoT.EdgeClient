@@ -8,6 +8,7 @@ using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Application.Features.Production.Planning;
 using IIoT.Edge.Application.Modules;
+using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Module.DieCutting;
 using IIoT.Edge.Module.DieCutting.Config;
@@ -19,8 +20,13 @@ using IIoT.Edge.Module.DieCutting.Presentation.Views;
 using IIoT.Edge.Module.DieCutting.Production;
 using IIoT.Edge.Module.DieCutting.Samples;
 using IIoT.Edge.SharedKernel.Context;
+using IIoT.Edge.SharedKernel.Domain;
+using IIoT.Edge.SharedKernel.Enums;
+using IIoT.Edge.SharedKernel.Repository;
+using IIoT.Edge.SharedKernel.Specification;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
+using System.Linq.Expressions;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -42,6 +48,7 @@ public sealed class DieCuttingAnodeModuleContractTests : DieCuttingModuleContrac
     protected override string ExpectedLastIpAddress => "10.110.0.22";
     protected override string ExpectedUpperComputerNo => "P1-APUC";
     protected override string ExpectedOperationCode => "AP";
+    protected override string ExpectedMesBaseUrl => "http://10.110.0.250:8081";
 }
 
 public sealed class DieCuttingCathodeModuleContractTests : DieCuttingModuleContractTestsBase<CathodeModule>
@@ -57,6 +64,7 @@ public sealed class DieCuttingCathodeModuleContractTests : DieCuttingModuleContr
     protected override string ExpectedLastIpAddress => "10.110.1.22";
     protected override string ExpectedUpperComputerNo => "P2-CPUC";
     protected override string ExpectedOperationCode => "CP";
+    protected override string ExpectedMesBaseUrl => "http://10.110.1.250:8081";
 }
 
 public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContractTestBase<TModule>
@@ -73,6 +81,7 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
     protected abstract string ExpectedLastIpAddress { get; }
     protected abstract string ExpectedUpperComputerNo { get; }
     protected abstract string ExpectedOperationCode { get; }
+    protected abstract string ExpectedMesBaseUrl { get; }
 
     protected override bool RequiresHardwareProfile => true;
     protected override bool RequiresMesUploader => true;
@@ -109,6 +118,71 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
             result.Services,
             descriptor => descriptor.ServiceType == typeof(IDevelopmentSampleContributor)
                           && descriptor.ImplementationType == typeof(DieCuttingDevelopmentSampleContributor));
+    }
+
+    [Fact]
+    public async Task DevelopmentSampleContributor_WhenExistingSecondDeviceHasLegacyMappings_ShouldPatchBatchAddressAndSeedMissingRows()
+    {
+        var configuration = CreateEnabledSeedConfiguration(resetBeforeImport: false);
+        var result = new ModuleContractFixture().RegisterModule(new TModule(), configuration);
+        var networkDevices = new InMemoryRepository<NetworkDeviceEntity>();
+        var ioMappings = new InMemoryRepository<IoMappingEntity>();
+        var taskBindings = new InMemoryRepository<PlcTaskBindingEntity>();
+        var existingDevice = NetworkDeviceEntity.Create(
+            $"{ExpectedFirstDevice[..^2]}02",
+            DeviceType.PLC,
+            ExpectedFirstIpAddress,
+            65530);
+        existingDevice.UpdateDeviceModel("Mc");
+        existingDevice.SetEnabled(false);
+        existingDevice.UpdateRemark(ExpectedDisplayName);
+        networkDevices.Add(existingDevice);
+        ioMappings.Add(CreateIoMapping(
+            existingDevice.Id,
+            "DieCutting.BatchNumber",
+            "R9660",
+            addressCount: 8,
+            dataType: "Ascii"));
+        ioMappings.Add(CreateIoMapping(
+            existingDevice.Id,
+            "DieCutting.PunchingQuantity",
+            "R2450",
+            addressCount: 2,
+            dataType: "Int32"));
+        result.Services.AddSingleton(configuration);
+        result.Services.AddSingleton<ILogService, ContractLogService>();
+        result.Services.AddSingleton<IRepository<NetworkDeviceEntity>>(networkDevices);
+        result.Services.AddSingleton<IRepository<IoMappingEntity>>(ioMappings);
+        result.Services.AddSingleton<IRepository<PlcTaskBindingEntity>>(taskBindings);
+        await using var serviceProvider = result.Services.BuildServiceProvider();
+        var contributor = serviceProvider
+            .GetServices<IDevelopmentSampleContributor>()
+            .OfType<DieCuttingDevelopmentSampleContributor>()
+            .Single();
+
+        await contributor.EnsureConfigurationSamplesAsync(TestContext.Current.CancellationToken);
+        await contributor.EnsureConfigurationSamplesAsync(TestContext.Current.CancellationToken);
+
+        var hardwareProfile = serviceProvider.GetRequiredService<IModuleHardwareProfileProvider>();
+        var cp02Mappings = ioMappings.Items
+            .Where(mapping => mapping.NetworkDeviceId == existingDevice.Id)
+            .ToArray();
+        Assert.Equal(12, networkDevices.Items.Count);
+        Assert.All(networkDevices.Items, static device => Assert.False(device.IsEnabled));
+        Assert.Equal(SeedableTemplateCount(hardwareProfile), cp02Mappings.Length);
+        Assert.Contains(cp02Mappings, static mapping =>
+            mapping.SignalKey == "DieCutting.BatchNumber"
+            && mapping.Direction == "Read"
+            && mapping.PlcAddress == "R9600");
+        Assert.Contains(cp02Mappings, static mapping =>
+            mapping.SignalKey == "DieCutting.DeviceStatus"
+            && mapping.Direction == "Read"
+            && mapping.PlcAddress == "R100");
+        Assert.Equal(
+            networkDevices.Items.Count,
+            taskBindings.Items.Count(binding =>
+                binding.TaskKey == serviceProvider.GetRequiredService<DieCuttingModuleDefinition>().RealtimeSampleUploadTaskKey
+                && binding.Enabled));
     }
 
     [Fact]
@@ -267,7 +341,7 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
     }
 
     [Fact]
-    public void RuntimeFactory_TaskCandidate_ShouldRequireOnlyMesTraceReadableSignals()
+    public void RuntimeFactory_TaskCandidate_ShouldRequireDieCuttingSnapshotSignals()
     {
         var result = new ModuleContractFixture().RegisterModule(new TModule());
         Assert.True(result.RuntimeRegistry.TryGetFactory(ExpectedModuleId, out var factory));
@@ -277,14 +351,15 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
             .Select(static signal => signal.SignalKey)
             .ToArray();
 
-        Assert.Equal(
-            [
-                "DieCutting.PunchingQuantity",
-                "DieCutting.PunchingSpeed",
-                "DieCutting.ClipNo.Mg1",
-                "DieCutting.ClipNo.Mg2"
-            ],
-            requiredSignals);
+        Assert.Contains("DieCutting.DeviceStatus", requiredSignals);
+        Assert.Contains("DieCutting.PunchingQuantity", requiredSignals);
+        Assert.Contains("DieCutting.PunchingSpeed", requiredSignals);
+        Assert.Contains("DieCutting.BatchNumber", requiredSignals);
+        Assert.Contains("DieCutting.ClipNo.Mg1", requiredSignals);
+        Assert.Contains("DieCutting.ClipNo.Mg2", requiredSignals);
+        Assert.Contains("DieCutting.OperatorCode", requiredSignals);
+        Assert.Contains("DieCutting.MoldCode", requiredSignals);
+        Assert.Contains("DieCutting.CutterCode", requiredSignals);
     }
 
     [Fact]
@@ -329,6 +404,11 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
             descriptor => descriptor.Role == ModuleParamRole.MesSignToken);
         Assert.Contains(
             result.ModuleParamRegistry.GetDescriptors(ExpectedModuleId, ModuleParamCategory.Mes),
+            descriptor => descriptor.Role == ModuleParamRole.MesBaseUrl
+                          && descriptor.Name == nameof(DieCuttingParams.Mes.服务地址)
+                          && descriptor.DefaultValue == ExpectedMesBaseUrl);
+        Assert.Contains(
+            result.ModuleParamRegistry.GetDescriptors(ExpectedModuleId, ModuleParamCategory.Mes),
             descriptor => descriptor.Role == ModuleParamRole.MesUpperComputerNo
                           && descriptor.Name == nameof(DieCuttingParams.Mes.UpperComputerNo)
                           && descriptor.DefaultValue == ExpectedUpperComputerNo);
@@ -345,6 +425,10 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
             result.ModuleParamRegistry.GetDescriptors(ExpectedModuleId, ModuleParamCategory.Mes),
             descriptor => descriptor.Name == nameof(DieCuttingParams.Mes.BatchNumberPath)
                           && descriptor.DefaultValue == "/dev/dev/get/batchNumber");
+        Assert.Contains(
+            result.ModuleParamRegistry.GetDescriptors(ExpectedModuleId, ModuleParamCategory.Mes),
+            descriptor => descriptor.Name == nameof(DieCuttingParams.Mes.EquipmentStatusPath)
+                          && descriptor.DefaultValue == "/dev/dev/realTime/status");
         Assert.DoesNotContain(
             result.ModuleParamRegistry.GetDescriptors(ExpectedModuleId, ModuleParamCategory.Cloud),
             descriptor => descriptor.Role == ModuleParamRole.CloudEnabled);
@@ -362,6 +446,19 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         Assert.Equal(string.Empty, identity.DeviceCode);
         Assert.Equal(ExpectedFirstDevice, identity.DeviceName);
         Assert.Equal(ExpectedFirstDevice, identity.UpperComputerNo);
+    }
+
+    [Fact]
+    public void HardwareProfile_ShouldOverrideBatchAddressByDevice()
+    {
+        var result = new ModuleContractFixture().RegisterModule(new TModule());
+        using var provider = result.Services.BuildServiceProvider();
+        var hardwareProfile = provider.GetRequiredService<IModuleHardwareProfileProvider>();
+        var batchTemplate = hardwareProfile.GetDefaultIoTemplate()
+            .Single(static x => x.SignalKey == "DieCutting.BatchNumber");
+
+        Assert.Equal("R9660", hardwareProfile.ResolveIoTemplateForDevice(ExpectedFirstDevice, batchTemplate).PlcAddress);
+        Assert.Equal("R9600", hardwareProfile.ResolveIoTemplateForDevice(ExpectedLastDevice, batchTemplate).PlcAddress);
     }
 
     [Fact]
@@ -464,6 +561,57 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         Assert.Contains(produce, item =>
             item.GetProperty("code").GetString() == "polePieceLength"
             && item.GetProperty("val").GetString() == string.Empty);
+    }
+
+    [Fact]
+    public async Task MesChannel_UploadEquipmentStatus_ShouldPostRealtimeStatusPayload()
+    {
+        var result = new ModuleContractFixture().RegisterModule(new TModule());
+        using var provider = result.Services.BuildServiceProvider();
+        var definition = provider.GetRequiredService<DieCuttingModuleDefinition>();
+        var httpClient = new CapturingMesHttpClient();
+        var roleProvider = new ContractModuleParamRoleProvider(ExpectedFirstDevice);
+        var channel = new DieCuttingMesChannel(
+            definition,
+            new MesRequestExecutor(
+                httpClient,
+                new ContractMesEndpointProvider(),
+                roleProvider,
+                new ContractLogService()),
+            roleProvider,
+            new ContractDieCuttingModuleParamProvider(
+                ExpectedModuleId,
+                ExpectedUpperComputerNo,
+                ExpectedOperationCode),
+            new ContractLogService(),
+            new ContractProductionTimeProvider());
+
+        var uploadResult = await channel.UploadEquipmentStatusAsync(
+            new DeviceSession
+            {
+                DeviceId = Guid.NewGuid(),
+                ProcessId = Guid.NewGuid(),
+                DeviceName = ExpectedFirstDevice,
+                ClientCode = ExpectedUpperComputerNo
+            },
+            new DieCuttingDeviceStatusSnapshot
+            {
+                CapturedAt = new DateTime(2026, 6, 24, 10, 1, 2),
+                StatusCode = 0,
+                Messages = []
+            },
+            TestContext.Current.CancellationToken);
+
+        Assert.True(uploadResult.IsSuccess, uploadResult.Message);
+        Assert.Equal("/dev/dev/realTime/status", httpClient.LastUrl);
+        using var payloadJson = JsonDocument.Parse(JsonSerializer.Serialize(httpClient.LastPayload));
+        var device = payloadJson.RootElement
+            .GetProperty("data")
+            .GetProperty("devices")
+            .EnumerateArray()
+            .Single();
+        Assert.Equal(ExpectedFirstDevice, device.GetProperty("stationNo").GetString());
+        Assert.Equal(0, device.GetProperty("status").GetInt32());
     }
 
     [Fact]
@@ -621,6 +769,129 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         Assert.Equal(65530, device.Port1);
     }
 
+    private IConfiguration CreateEnabledSeedConfiguration(bool resetBeforeImport)
+        => new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [$"Modules:{ExpectedModuleId}:DeviceSeed:Enabled"] = "true",
+                [$"Modules:{ExpectedModuleId}:DeviceSeed:ResetBeforeImport"] = resetBeforeImport.ToString()
+            })
+            .Build();
+
+    private static IoMappingEntity CreateIoMapping(
+        int deviceId,
+        string signalKey,
+        string address,
+        int addressCount,
+        string dataType)
+        => IoMappingEntity.Create(
+            deviceId,
+            signalKey,
+            address,
+            addressCount,
+            dataType,
+            "Read",
+            "连续读数据",
+            "MES采样");
+
+    private static int SeedableTemplateCount(IModuleHardwareProfileProvider hardwareProfile)
+        => hardwareProfile
+            .GetDefaultIoTemplate()
+            .Count(static template => !string.IsNullOrWhiteSpace(template.PlcAddress));
+
+    private sealed class InMemoryRepository<T> : IRepository<T>
+        where T : class, IEntity<int>, IAggregateRoot
+    {
+        private int _nextId = 1;
+
+        public List<T> Items { get; } = [];
+
+        public IQueryable<T> GetQueryable() => Items.AsQueryable();
+
+        public T Add(T entity)
+        {
+            if (entity.Id == 0)
+            {
+                SetId(entity, _nextId++);
+            }
+
+            Items.Add(entity);
+            return entity;
+        }
+
+        public void Update(T entity)
+        {
+        }
+
+        public void Delete(T entity)
+            => Items.Remove(entity);
+
+        public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(1);
+
+        public Task<int> ExecuteDeleteAsync(
+            Expression<Func<T, bool>> predicate,
+            CancellationToken cancellationToken = default)
+        {
+            var compiled = predicate.Compile();
+            var deleted = Items.RemoveAll(item => compiled(item));
+            return Task.FromResult(deleted);
+        }
+
+        public Task<T?> GetByIdAsync<TKey>(TKey id, CancellationToken cancellationToken = default)
+            where TKey : notnull
+            => Task.FromResult(Items.FirstOrDefault(item => EqualityComparer<object>.Default.Equals(item.Id, id)));
+
+        public Task<T?> GetAsync(
+            Expression<Func<T, bool>> expression,
+            Expression<Func<T, object>>[]? includes = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(Items.FirstOrDefault(expression.Compile()));
+
+        public Task<List<T>> GetListAsync(
+            Expression<Func<T, bool>> expression,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(Items.Where(expression.Compile()).ToList());
+
+        public Task<List<T>> GetListAsync(
+            Expression<Func<T, bool>> expression,
+            Expression<Func<T, object>>[]? includes = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(Items.Where(expression.Compile()).ToList());
+
+        public Task<List<T>> GetListAsync(
+            ISpecification<T>? specification = null,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<T?> GetSingleOrDefaultAsync(
+            ISpecification<T>? specification = null,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<int> GetCountAsync(
+            Expression<Func<T, bool>> expression,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(Items.Count(expression.Compile()));
+
+        public Task<int> CountAsync(
+            ISpecification<T>? specification = null,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<bool> AnyAsync(
+            ISpecification<T>? specification = null,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        private static void SetId(T entity, int id)
+        {
+            var property = typeof(BaseEntity<int>).GetProperty(nameof(BaseEntity<int>.Id))
+                ?? throw new InvalidOperationException("测试内存仓储无法定位实体 Id 属性。");
+            property.SetValue(entity, id);
+        }
+    }
+
     private sealed class ContractMesUploadDiagnosticsStore : IMesUploadDiagnosticsStore
     {
         public IReadOnlyList<MesChannelDiagnostics> GetAll() => [];
@@ -665,6 +936,7 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
                         [DieCuttingParams.Mes.OrderPath] = "/dev/dev/get/order",
                         [DieCuttingParams.Mes.BatchNumberPath] = "/dev/dev/get/batchNumber",
                         [DieCuttingParams.Mes.OutboundPath] = _outboundPath,
+                        [DieCuttingParams.Mes.EquipmentStatusPath] = "/dev/dev/realTime/status",
                         [DieCuttingParams.Mes.上传频率毫秒] = "10000",
                         [DieCuttingParams.Mes.数据新鲜度超时毫秒] = "5000"
                     },
@@ -676,6 +948,7 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
                         [DieCuttingParams.Mes.OrderPath] = ParamValueKind.String,
                         [DieCuttingParams.Mes.BatchNumberPath] = ParamValueKind.String,
                         [DieCuttingParams.Mes.OutboundPath] = ParamValueKind.String,
+                        [DieCuttingParams.Mes.EquipmentStatusPath] = ParamValueKind.String,
                         [DieCuttingParams.Mes.上传频率毫秒] = ParamValueKind.Int,
                         [DieCuttingParams.Mes.数据新鲜度超时毫秒] = ParamValueKind.Int
                     },
@@ -732,6 +1005,12 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         public Task<MesCallResult> UploadRealtimeAsync(
             DeviceSession? device,
             DieCuttingRealtimeSnapshot snapshot,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(MesCallResult.Success());
+
+        public Task<MesCallResult> UploadEquipmentStatusAsync(
+            DeviceSession? device,
+            DieCuttingDeviceStatusSnapshot snapshot,
             CancellationToken cancellationToken = default)
             => Task.FromResult(MesCallResult.Success());
     }

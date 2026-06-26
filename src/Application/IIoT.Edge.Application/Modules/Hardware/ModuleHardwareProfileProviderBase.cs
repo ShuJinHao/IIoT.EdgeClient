@@ -156,6 +156,11 @@ public abstract class ModuleHardwareProfileProviderBase : IModuleHardwareProfile
             .Select(CreateTemplateEntry)
             .ToArray();
 
+    public virtual ModuleIoTemplateEntry ResolveIoTemplateForDevice(
+        string deviceName,
+        ModuleIoTemplateEntry template)
+        => template;
+
     public ModuleHardwareValidationResult ValidatePlcConfiguration(
         string deviceName,
         string? deviceModel,

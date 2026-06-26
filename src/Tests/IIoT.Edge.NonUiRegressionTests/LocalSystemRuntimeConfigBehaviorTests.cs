@@ -55,6 +55,27 @@ public sealed class LocalSystemRuntimeConfigBehaviorTests
     }
 
     [Fact]
+    public async Task EnsureInitializedAsync_WhenCloudApiEnabledFalse_ShouldDisableSystemCloud()
+    {
+        var parameterConfigService = new MutableLocalParameterConfigService();
+        parameterConfigService.SystemConfigs.Add(new LocalSystemConfigSnapshot(
+            1,
+            "CloudApi:Enabled",
+            "false",
+            null,
+            1));
+        var service = new LocalSystemRuntimeConfigService(
+            parameterConfigService,
+            new MutableModuleParamRoleProvider { MesEnabled = true },
+            new FakeProcessIntegrationRegistry(["Homogenization"]),
+            new FakeLogService());
+
+        await service.EnsureInitializedAsync();
+
+        Assert.False(service.Current.SystemCloudEnabled);
+    }
+
+    [Fact]
     public async Task ParameterConfigChanged_WhenModuleParamsChange_ShouldRefreshCurrentSnapshot()
     {
         var parameterConfigService = new MutableLocalParameterConfigService();
@@ -93,11 +114,13 @@ public sealed class LocalSystemRuntimeConfigBehaviorTests
 
     private sealed class MutableLocalParameterConfigService : ILocalParameterConfigService
     {
+        public List<LocalSystemConfigSnapshot> SystemConfigs { get; } = [];
+
         public event EventHandler<ParameterConfigChangedEventArgs>? ParameterConfigChanged;
 
         public Task<IReadOnlyList<LocalSystemConfigSnapshot>> GetSystemConfigsAsync(
             CancellationToken cancellationToken = default)
-            => Task.FromResult<IReadOnlyList<LocalSystemConfigSnapshot>>([]);
+            => Task.FromResult<IReadOnlyList<LocalSystemConfigSnapshot>>(SystemConfigs);
 
         public Task InsertSystemConfigAsync(
             string key,

@@ -170,6 +170,8 @@
     <sys:String x:Key="Navigation_Tab_CloudParams">Cloud Parameters</sys:String>
     <sys:String x:Key="Navigation_Tab_PluginBusinessParams">Plugin Business Parameters</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_GroupTitle">Cloud API Configuration</sys:String>
+    <sys:String x:Key="Navigation_Param_CloudApi_Enabled_DisplayName">Cloud Enabled</sys:String>
+    <sys:String x:Key="Navigation_Param_CloudApi_Enabled_Description">System-level cloud upload switch. When disabled, cloud uploads, device logs, and retry gates are skipped as offline.</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_BaseUrl_DisplayName">Cloud Service URL</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_BaseUrl_Description">Cloud API base URL used by bootstrap, upload, log, and capacity endpoints.</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_ClientCode_DisplayName">Client Code</sys:String>

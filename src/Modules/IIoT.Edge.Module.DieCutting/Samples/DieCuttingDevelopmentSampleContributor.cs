@@ -19,6 +19,7 @@ public sealed class DieCuttingDevelopmentSampleContributor : DevelopmentSampleCo
     private readonly ILogService _logger;
     private readonly IRepository<NetworkDeviceEntity> _networkDevices;
     private readonly IRepository<IoMappingEntity> _ioMappings;
+    private readonly IRepository<PlcTaskBindingEntity> _taskBindings;
     private readonly DieCuttingDeviceSeedOptions _options;
 
     public DieCuttingDevelopmentSampleContributor(
@@ -26,6 +27,7 @@ public sealed class DieCuttingDevelopmentSampleContributor : DevelopmentSampleCo
         IConfiguration configuration,
         IRepository<NetworkDeviceEntity> networkDevices,
         IRepository<IoMappingEntity> ioMappings,
+        IRepository<PlcTaskBindingEntity> taskBindings,
         ILogService logger,
         IEnumerable<IModuleHardwareProfileProvider> hardwareProfiles,
         EdgeRuntimePaths? runtimePaths = null)
@@ -34,6 +36,7 @@ public sealed class DieCuttingDevelopmentSampleContributor : DevelopmentSampleCo
         _definition = definition ?? throw new ArgumentNullException(nameof(definition));
         _networkDevices = networkDevices;
         _ioMappings = ioMappings;
+        _taskBindings = taskBindings;
         _logger = logger;
         _options = BindOptions<DieCuttingDeviceSeedOptions>($"Modules:{_definition.ModuleId}:DeviceSeed");
     }
@@ -61,15 +64,17 @@ public sealed class DieCuttingDevelopmentSampleContributor : DevelopmentSampleCo
         var hardwareProfile = GetHardwareProfile();
         var importedDeviceCount = 0;
         var importedMappingCount = 0;
+        var importedTaskBindingCount = 0;
 
         foreach (var seedDevice in _definition.DefaultDevices)
         {
             var device = await EnsureDeviceAsync(seedDevice, hardwareProfile, cancellationToken).ConfigureAwait(false);
             importedDeviceCount++;
             importedMappingCount += await EnsureMappingsAsync(device, hardwareProfile, cancellationToken).ConfigureAwait(false);
+            importedTaskBindingCount += await EnsureTaskBindingAsync(device, cancellationToken).ConfigureAwait(false);
         }
 
-        _logger.Info($"[{_definition.DisplayName}][设备样本] 播种检查完成。设备 {importedDeviceCount} 台，新增 IO 映射 {importedMappingCount} 条。");
+        _logger.Info($"[{_definition.DisplayName}][设备样本] 播种检查完成。设备 {importedDeviceCount} 台，新增 IO 映射 {importedMappingCount} 条，新增任务绑定 {importedTaskBindingCount} 条。");
     }
 
     private async Task ResetDieCuttingConfigurationAsync(CancellationToken cancellationToken)
@@ -91,10 +96,18 @@ public sealed class DieCuttingDevelopmentSampleContributor : DevelopmentSampleCo
         var mappings = await _ioMappings
             .GetListAsync(x => deviceIds.Contains(x.NetworkDeviceId), cancellationToken)
             .ConfigureAwait(false);
+        var taskBindings = await _taskBindings
+            .GetListAsync(x => deviceIds.Contains(x.NetworkDeviceId), cancellationToken)
+            .ConfigureAwait(false);
 
         foreach (var mapping in mappings)
         {
             _ioMappings.Delete(mapping);
+        }
+
+        foreach (var taskBinding in taskBindings)
+        {
+            _taskBindings.Delete(taskBinding);
         }
 
         foreach (var device in targetDevices)
@@ -107,8 +120,13 @@ public sealed class DieCuttingDevelopmentSampleContributor : DevelopmentSampleCo
             await _ioMappings.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
 
+        if (taskBindings.Count > 0)
+        {
+            await _taskBindings.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+
         await _networkDevices.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-        _logger.Info($"[{_definition.DisplayName}][设备样本] 已重置 {targetDevices.Length} 台样本设备和 {mappings.Count} 条映射。");
+        _logger.Info($"[{_definition.DisplayName}][设备样本] 已重置 {targetDevices.Length} 台样本设备、{mappings.Count} 条映射和 {taskBindings.Count} 条任务绑定。");
     }
 
     private async Task<NetworkDeviceEntity> EnsureDeviceAsync(
@@ -157,11 +175,6 @@ public sealed class DieCuttingDevelopmentSampleContributor : DevelopmentSampleCo
         var existingMappings = await _ioMappings.GetListAsync(
             x => x.NetworkDeviceId == device.Id,
             cancellationToken).ConfigureAwait(false);
-        if (existingMappings.Count > 0)
-        {
-            _logger.Info($"[{_definition.DisplayName}][设备样本] 设备“{device.DeviceName}”已有 IO 映射，跳过标准点位播种。");
-            return 0;
-        }
 
         var templates = hardwareProfile.GetDefaultIoTemplate()
             .Where(static x => !string.IsNullOrWhiteSpace(x.PlcAddress))
@@ -170,14 +183,93 @@ public sealed class DieCuttingDevelopmentSampleContributor : DevelopmentSampleCo
             .ThenBy(static x => x.SignalKey, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
+        var existingByKey = BuildMappingIndex(existingMappings);
+        var changed = false;
+        var inserted = 0;
         foreach (var template in templates)
         {
-            _ioMappings.Add(CreateMappingFromTemplate(device.Id, template));
+            var deviceTemplate = hardwareProfile.ResolveIoTemplateForDevice(device.DeviceName, template);
+            if (existingByKey.TryGetValue(MappingKey(deviceTemplate), out var existing))
+            {
+                changed |= TryRefreshDeviceSpecificMapping(existing, deviceTemplate);
+                continue;
+            }
+
+            _ioMappings.Add(CreateMappingFromTemplate(device.Id, deviceTemplate));
+            inserted++;
+            changed = true;
         }
 
-        await _ioMappings.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-        _logger.Info($"[{_definition.DisplayName}][设备样本] 设备“{device.DeviceName}”首次初始化 IO 映射，已播种 {templates.Length} 条标准点位。");
-        return templates.Length;
+        if (changed)
+        {
+            await _ioMappings.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        _logger.Info($"[{_definition.DisplayName}][设备样本] 设备“{device.DeviceName}”IO 映射检查完成，新增 {inserted} 条标准点位。");
+        return inserted;
+    }
+
+    private static bool TryRefreshDeviceSpecificMapping(
+        IoMappingEntity existing,
+        ModuleIoTemplateEntry template)
+    {
+        if (!string.Equals(template.SignalKey, "DieCutting.BatchNumber", StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(template.Direction, "Read", StringComparison.OrdinalIgnoreCase)
+            || (string.Equals(existing.PlcAddress, template.PlcAddress, StringComparison.OrdinalIgnoreCase)
+                && existing.AddressCount == template.AddressCount))
+        {
+            return false;
+        }
+
+        existing.UpdateAddress(template.PlcAddress, template.AddressCount);
+        existing.UpdateSortOrder(template.SortOrder);
+        existing.UpdateMetadata(
+            template.SignalKey,
+            template.DataType,
+            template.Direction,
+            template.Category,
+            template.BusinessGroup,
+            string.IsNullOrWhiteSpace(template.Remark) ? existing.Remark : template.Remark);
+        return true;
+    }
+
+    private static string MappingKey(IoMappingEntity mapping)
+        => $"{mapping.Direction}\u001f{mapping.SignalKey}";
+
+    private static string MappingKey(ModuleIoTemplateEntry template)
+        => $"{template.Direction}\u001f{template.SignalKey}";
+
+    private static Dictionary<string, IoMappingEntity> BuildMappingIndex(IEnumerable<IoMappingEntity> mappings)
+    {
+        var index = new Dictionary<string, IoMappingEntity>(StringComparer.OrdinalIgnoreCase);
+        foreach (var mapping in mappings)
+        {
+            index.TryAdd(MappingKey(mapping), mapping);
+        }
+
+        return index;
+    }
+
+    private async Task<int> EnsureTaskBindingAsync(
+        NetworkDeviceEntity device,
+        CancellationToken cancellationToken)
+    {
+        var existing = await _taskBindings.GetAsync(
+            x => x.NetworkDeviceId == device.Id
+                 && x.TaskKey == _definition.RealtimeSampleUploadTaskKey,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (existing is not null)
+        {
+            return 0;
+        }
+
+        _taskBindings.Add(PlcTaskBindingEntity.Create(
+            device.Id,
+            _definition.RealtimeSampleUploadTaskKey,
+            enabled: true,
+            DateTimeOffset.UtcNow));
+        await _taskBindings.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return 1;
     }
 
     private static IoMappingEntity CreateMappingFromTemplate(int networkDeviceId, ModuleIoTemplateEntry template)

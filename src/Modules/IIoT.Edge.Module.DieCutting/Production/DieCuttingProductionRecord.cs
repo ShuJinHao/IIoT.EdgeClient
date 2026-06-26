@@ -13,6 +13,8 @@ public sealed class DieCuttingProductionRecord
 
     public string BatchNo { get; set; } = string.Empty;
 
+    public string ClipNo { get; set; } = string.Empty;
+
     public long Quantity { get; set; }
 
     public DateTime WindowStartAt { get; set; }
@@ -24,6 +26,14 @@ public sealed class DieCuttingProductionRecord
     public decimal? PlateLengthMm { get; set; }
 
     public decimal? PlateWidthMm { get; set; }
+
+    public string OperatorCode { get; set; } = string.Empty;
+
+    public string MoldCode { get; set; } = string.Empty;
+
+    public string CutterCode { get; set; } = string.Empty;
+
+    public string RawFieldsJson { get; set; } = string.Empty;
 
     public DateTime CreatedAtUtc { get; set; }
 }

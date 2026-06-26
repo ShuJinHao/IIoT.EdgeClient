@@ -10,6 +10,7 @@ public sealed class DieCuttingModuleDefinition
         string displayName,
         string deviceNamePrefix,
         string ipPrefix,
+        string mesBaseUrl,
         string upperComputerNo,
         string operationCode,
         string seedRemark)
@@ -18,6 +19,7 @@ public sealed class DieCuttingModuleDefinition
         ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceNamePrefix);
         ArgumentException.ThrowIfNullOrWhiteSpace(ipPrefix);
+        ArgumentException.ThrowIfNullOrWhiteSpace(mesBaseUrl);
         ArgumentException.ThrowIfNullOrWhiteSpace(upperComputerNo);
         ArgumentException.ThrowIfNullOrWhiteSpace(operationCode);
         ArgumentException.ThrowIfNullOrWhiteSpace(seedRemark);
@@ -27,6 +29,7 @@ public sealed class DieCuttingModuleDefinition
         DisplayName = displayName;
         DeviceNamePrefix = deviceNamePrefix;
         IpPrefix = ipPrefix;
+        MesBaseUrl = mesBaseUrl;
         UpperComputerNo = upperComputerNo;
         OperationCode = operationCode;
         SeedRemark = seedRemark;
@@ -43,6 +46,8 @@ public sealed class DieCuttingModuleDefinition
 
     public string IpPrefix { get; }
 
+    public string MesBaseUrl { get; }
+
     public string UpperComputerNo { get; }
 
     public string OperationCode { get; }
@@ -52,6 +57,8 @@ public sealed class DieCuttingModuleDefinition
     public IReadOnlyList<DieCuttingDeviceSeed> DefaultDevices { get; }
 
     public string RealtimeDiagnosticsChannel => $"{ModuleId}.Realtime";
+
+    public string DeviceStatusDiagnosticsChannel => $"{ModuleId}.DeviceStatus";
 
     public string RealtimeSampleUploadTaskKey => $"{ModuleId}.RealtimeSampleUpload";
 

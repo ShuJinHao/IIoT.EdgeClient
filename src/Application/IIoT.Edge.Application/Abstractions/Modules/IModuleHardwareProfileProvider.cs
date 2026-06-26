@@ -14,6 +14,10 @@ public interface IModuleHardwareProfileProvider
 
     IReadOnlyList<ModuleIoTemplateEntry> GetIoMappingCandidates();
 
+    ModuleIoTemplateEntry ResolveIoTemplateForDevice(
+        string deviceName,
+        ModuleIoTemplateEntry template);
+
     ModuleHardwareValidationResult ValidatePlcConfiguration(
         string deviceName,
         string? deviceModel,

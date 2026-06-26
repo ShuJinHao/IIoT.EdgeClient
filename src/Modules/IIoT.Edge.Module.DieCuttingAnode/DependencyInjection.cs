@@ -15,6 +15,7 @@ public sealed class DependencyInjection : DieCuttingModuleBase
             "负极模切",
             "P1-AP",
             "10.110.0",
+            "http://10.110.0.250:8081",
             "P1-APUC",
             "AP",
             "负极模切 AP"))

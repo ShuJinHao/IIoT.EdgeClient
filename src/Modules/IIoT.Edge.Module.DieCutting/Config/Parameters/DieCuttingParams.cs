@@ -96,6 +96,16 @@ public static class DieCuttingParams
         OutboundPath,
 
         /// <summary>
+        /// MES 设备状态接口路径。
+        /// </summary>
+        [ModuleParam(
+            ParamValueKind.String,
+            DefaultValue = "/dev/dev/realTime/status",
+            DisplayNameFallback = "MES设备状态路径",
+            DescriptionFallback = "模切 R100 设备状态上传接口相对路径。")]
+        EquipmentStatusPath,
+
+        /// <summary>
         /// MES 上传频率，单位毫秒。
         /// </summary>
         [ModuleParam(

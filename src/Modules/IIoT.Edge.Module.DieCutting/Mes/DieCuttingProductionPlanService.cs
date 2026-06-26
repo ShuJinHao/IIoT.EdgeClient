@@ -39,7 +39,7 @@ public sealed class DieCuttingProductionPlanService(
         var upperComputerNo = await GetUpperComputerNoAsync(cancellationToken).ConfigureAwait(false);
         return new ProductionPlanSelectionState(
             true,
-            true,
+            false,
             _currentPlan,
             string.IsNullOrWhiteSpace(upperComputerNo) ? ProductionPlanSelectionErrorCodes.MissingUpperComputerNo : string.Empty,
             _traceBatchNumber,

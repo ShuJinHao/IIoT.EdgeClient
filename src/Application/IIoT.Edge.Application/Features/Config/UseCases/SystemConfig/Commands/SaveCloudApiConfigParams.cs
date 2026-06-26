@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Abstractions.Cache;
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Common.Config;
 using IIoT.Edge.Application.Features.Config.CloudApi;
 using IIoT.Edge.Domain.Config.Aggregates;
@@ -18,7 +19,8 @@ public sealed record SaveCloudApiConfigParamsCommand(
 
 public sealed class SaveCloudApiConfigParamsHandler(
     IRepository<SystemConfigEntity> repo,
-    IEdgeCacheService cache)
+    IEdgeCacheService cache,
+    ILocalParameterConfigChangePublisher changePublisher)
     : ICommandHandler<SaveCloudApiConfigParamsCommand, Result>
 {
     public async Task<Result> Handle(
@@ -50,6 +52,7 @@ public sealed class SaveCloudApiConfigParamsHandler(
             cancellationToken);
 
         cache.Remove(ParameterCacheKeys.SystemAll);
+        changePublisher.NotifyModuleChanged();
         return Result.Success();
     }
 }

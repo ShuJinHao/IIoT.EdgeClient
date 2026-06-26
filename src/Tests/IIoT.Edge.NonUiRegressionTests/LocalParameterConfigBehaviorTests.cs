@@ -400,7 +400,7 @@ public sealed class LocalParameterConfigBehaviorTests
         private async Task<TResponse> HandleSaveCloudApiConfigParams<TResponse>(
             SaveCloudApiConfigParamsCommand command,
             CancellationToken cancellationToken)
-            => (TResponse)(object)await new SaveCloudApiConfigParamsHandler(systemRepo, cache)
+            => (TResponse)(object)await new SaveCloudApiConfigParamsHandler(systemRepo, cache, changePublisher)
                 .Handle(command, cancellationToken);
     }
 
