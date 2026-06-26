@@ -121,7 +121,23 @@ function Copy-EdgeVelopackDirectory {
     }
 
     New-Item -Path $TargetDirectory -ItemType Directory -Force | Out-Null
-    Copy-Item -Path (Join-Path $SourceDirectory '*') -Destination $TargetDirectory -Recurse -Force
+    $sourceRoot = [System.IO.Path]::GetFullPath($SourceDirectory)
+    $targetRoot = [System.IO.Path]::GetFullPath($TargetDirectory)
+
+    foreach ($directoryPath in [System.IO.Directory]::EnumerateDirectories(
+        $sourceRoot,
+        '*',
+        [System.IO.SearchOption]::AllDirectories)) {
+        $relativePath = Get-EdgeRelativePackPath -BaseDirectory $sourceRoot -PathValue $directoryPath
+        New-Item -Path (Join-Path $targetRoot $relativePath) -ItemType Directory -Force | Out-Null
+    }
+
+    foreach ($filePath in Get-EdgePackFilePaths -Directory $sourceRoot) {
+        $relativePath = Get-EdgeRelativePackPath -BaseDirectory $sourceRoot -PathValue $filePath
+        $targetFile = Join-Path $targetRoot $relativePath
+        New-Item -Path (Split-Path -Parent $targetFile) -ItemType Directory -Force | Out-Null
+        Copy-Item -LiteralPath $filePath -Destination $targetFile -Force
+    }
 }
 
 function Get-EdgeRelativePackPath {
@@ -136,6 +152,25 @@ function Get-EdgeRelativePackPath {
     return [System.IO.Path]::GetRelativePath($BaseDirectory, $PathValue).Replace('\', '/')
 }
 
+function Get-EdgePackFilePaths {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Directory,
+
+        [string]$Filter = '*'
+    )
+
+    if (-not (Test-Path $Directory)) {
+        return @()
+    }
+
+    $resolvedDirectory = [System.IO.Path]::GetFullPath($Directory)
+    return @([System.IO.Directory]::EnumerateFiles(
+        $resolvedDirectory,
+        $Filter,
+        [System.IO.SearchOption]::AllDirectories))
+}
+
 function Remove-EdgeProtectedPackFiles {
     param(
         [Parameter(Mandatory = $true)]
@@ -143,10 +178,10 @@ function Remove-EdgeProtectedPackFiles {
     )
 
     foreach ($fileName in @('launcher.accounts.json', 'launcher.update.json')) {
-        $files = Get-ChildItem -Path $PackDirectory -Recurse -File -Force -Filter $fileName -ErrorAction SilentlyContinue
+        $files = Get-EdgePackFilePaths -Directory $PackDirectory -Filter $fileName
         foreach ($file in $files) {
-            $relativePath = Get-EdgeRelativePackPath -BaseDirectory $PackDirectory -PathValue $file.FullName
-            Remove-Item -Path $file.FullName -Force
+            $relativePath = Get-EdgeRelativePackPath -BaseDirectory $PackDirectory -PathValue $file
+            Remove-Item -LiteralPath $file -Force
             Write-Host "Excluded protected site config from package staging: $relativePath"
         }
     }
@@ -158,11 +193,11 @@ function Assert-EdgePackCloudIdentityTemplatesAreEmpty {
         [string]$PackDirectory
     )
 
-    $configFiles = Get-ChildItem -Path $PackDirectory -Recurse -File -Force -Filter 'appsettings*.json' -ErrorAction SilentlyContinue
+    $configFiles = Get-EdgePackFilePaths -Directory $PackDirectory -Filter 'appsettings*.json'
     foreach ($configFile in $configFiles) {
-        $relativePath = Get-EdgeRelativePackPath -BaseDirectory $PackDirectory -PathValue $configFile.FullName
+        $relativePath = Get-EdgeRelativePackPath -BaseDirectory $PackDirectory -PathValue $configFile
         try {
-            $config = Get-Content -Raw -Encoding UTF8 -Path $configFile.FullName | ConvertFrom-Json
+            $config = Get-Content -Raw -Encoding UTF8 -LiteralPath $configFile | ConvertFrom-Json
         }
         catch {
             throw "Packaged config file could not be parsed: $relativePath"
@@ -207,9 +242,9 @@ function Assert-EdgeForbiddenPackContentMissing {
         '(^|/)excel/'
     )
 
-    $files = Get-ChildItem -Path $PackDirectory -Recurse -File -Force -ErrorAction SilentlyContinue
+    $files = Get-EdgePackFilePaths -Directory $PackDirectory
     foreach ($file in $files) {
-        $relativePath = Get-EdgeRelativePackPath -BaseDirectory $PackDirectory -PathValue $file.FullName
+        $relativePath = Get-EdgeRelativePackPath -BaseDirectory $PackDirectory -PathValue $file
         foreach ($pattern in $forbiddenPatterns) {
             if ($relativePath -match $pattern) {
                 throw "Forbidden protected runtime data or site config was found in package staging: $relativePath"

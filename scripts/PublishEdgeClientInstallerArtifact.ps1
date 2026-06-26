@@ -61,6 +61,23 @@ function Get-ArtifactSha256 {
     return (Get-FileHash -Algorithm SHA256 -Path $PathValue).Hash.ToLowerInvariant()
 }
 
+function Get-ArtifactFilePaths {
+    param(
+        [Parameter(Mandatory = $true)][string]$Directory,
+        [string]$Filter = '*'
+    )
+
+    if (-not (Test-Path $Directory)) {
+        return @()
+    }
+
+    $resolvedDirectory = [System.IO.Path]::GetFullPath($Directory)
+    return @([System.IO.Directory]::EnumerateFiles(
+        $resolvedDirectory,
+        $Filter,
+        [System.IO.SearchOption]::AllDirectories))
+}
+
 function Get-ArtifactDirectorySize {
     param([Parameter(Mandatory = $true)][string]$Directory)
 
@@ -68,13 +85,12 @@ function Get-ArtifactDirectorySize {
         return 0
     }
 
-    $measure = Get-ChildItem -Path $Directory -Recurse -File -Force -ErrorAction SilentlyContinue |
-        Measure-Object -Property Length -Sum
-    if ($null -eq $measure.Sum) {
-        return 0
+    $size = 0L
+    foreach ($filePath in Get-ArtifactFilePaths -Directory $Directory) {
+        $size += ([System.IO.FileInfo]$filePath).Length
     }
 
-    return [long]$measure.Sum
+    return $size
 }
 
 function Get-ArtifactDirectorySha256 {
@@ -86,11 +102,11 @@ function Get-ArtifactDirectorySha256 {
 
     $hasher = [System.Security.Cryptography.IncrementalHash]::CreateHash([System.Security.Cryptography.HashAlgorithmName]::SHA256)
     try {
-        $files = @(Get-ChildItem -Path $Directory -Recurse -File -Force -ErrorAction SilentlyContinue |
+        $files = @(Get-ArtifactFilePaths -Directory $Directory |
             ForEach-Object {
                 [PSCustomObject]@{
-                    File = $_
-                    RelativePath = Get-ArtifactRelativePath -BaseDirectory $Directory -PathValue $_.FullName
+                    File = [System.IO.FileInfo]$_
+                    RelativePath = Get-ArtifactRelativePath -BaseDirectory $Directory -PathValue $_
                 }
             })
         [array]::Sort($files, [System.Comparison[object]]{
@@ -175,8 +191,8 @@ function Assert-ArtifactForbiddenContentMissing {
         '(^|/)excel/'
     )
 
-    foreach ($file in Get-ChildItem -Path $Directory -Recurse -File -Force -ErrorAction SilentlyContinue) {
-        $relativePath = Get-ArtifactRelativePath -BaseDirectory $Directory -PathValue $file.FullName
+    foreach ($filePath in Get-ArtifactFilePaths -Directory $Directory) {
+        $relativePath = Get-ArtifactRelativePath -BaseDirectory $Directory -PathValue $filePath
         foreach ($pattern in $forbiddenPatterns) {
             if ($relativePath -match $pattern) {
                 throw "Forbidden site config or runtime data was found in installer artifact layout: $relativePath"
@@ -188,11 +204,11 @@ function Assert-ArtifactForbiddenContentMissing {
 function Assert-ArtifactCloudIdentityTemplatesAreEmpty {
     param([Parameter(Mandatory = $true)][string]$Directory)
 
-    $configFiles = Get-ChildItem -Path $Directory -Recurse -File -Force -Filter 'appsettings*.json' -ErrorAction SilentlyContinue
+    $configFiles = Get-ArtifactFilePaths -Directory $Directory -Filter 'appsettings*.json'
     foreach ($configFile in $configFiles) {
-        $relativePath = Get-ArtifactRelativePath -BaseDirectory $Directory -PathValue $configFile.FullName
+        $relativePath = Get-ArtifactRelativePath -BaseDirectory $Directory -PathValue $configFile
         try {
-            $config = Get-Content -Raw -Encoding UTF8 -Path $configFile.FullName | ConvertFrom-Json
+            $config = Get-Content -Raw -Encoding UTF8 -LiteralPath $configFile | ConvertFrom-Json
         }
         catch {
             throw "Artifact config file could not be parsed: $relativePath"
@@ -232,7 +248,23 @@ function Copy-ArtifactDirectory {
     }
 
     New-Item -Path $TargetDirectory -ItemType Directory -Force | Out-Null
-    Copy-Item -Path (Join-Path $SourceDirectory '*') -Destination $TargetDirectory -Recurse -Force
+    $sourceRoot = [System.IO.Path]::GetFullPath($SourceDirectory)
+    $targetRoot = [System.IO.Path]::GetFullPath($TargetDirectory)
+
+    foreach ($directoryPath in [System.IO.Directory]::EnumerateDirectories(
+        $sourceRoot,
+        '*',
+        [System.IO.SearchOption]::AllDirectories)) {
+        $relativePath = Get-ArtifactRelativePath -BaseDirectory $sourceRoot -PathValue $directoryPath
+        New-Item -Path (Join-Path $targetRoot $relativePath) -ItemType Directory -Force | Out-Null
+    }
+
+    foreach ($filePath in Get-ArtifactFilePaths -Directory $sourceRoot) {
+        $relativePath = Get-ArtifactRelativePath -BaseDirectory $sourceRoot -PathValue $filePath
+        $targetFile = Join-Path $targetRoot $relativePath
+        New-Item -Path (Split-Path -Parent $targetFile) -ItemType Directory -Force | Out-Null
+        Copy-Item -LiteralPath $filePath -Destination $targetFile -Force
+    }
 }
 
 function Read-ArtifactPluginManifest {
@@ -302,7 +334,7 @@ function Copy-ArtifactToEdgeUpdatesRoot {
     }
 
     New-Item -Path $targetDirectory -ItemType Directory -Force | Out-Null
-    Copy-Item -Path (Join-Path $ArtifactRoot '*') -Destination $targetDirectory -Recurse -Force
+    Copy-ArtifactDirectory -SourceDirectory $ArtifactRoot -TargetDirectory $targetDirectory
     Write-Host "Copied installer artifact to: $targetDirectory"
 }
 
@@ -318,7 +350,24 @@ function Copy-VelopackReleasesToEdgeUpdatesRoot {
         New-Item -Path $targetDirectory -ItemType Directory -Force | Out-Null
     }
 
-    Copy-Item -Path (Join-Path $SourceDirectory '*') -Destination $targetDirectory -Recurse -Force
+    $sourceRoot = [System.IO.Path]::GetFullPath($SourceDirectory)
+    $targetRoot = [System.IO.Path]::GetFullPath($targetDirectory)
+
+    foreach ($directoryPath in [System.IO.Directory]::EnumerateDirectories(
+        $sourceRoot,
+        '*',
+        [System.IO.SearchOption]::AllDirectories)) {
+        $relativePath = Get-ArtifactRelativePath -BaseDirectory $sourceRoot -PathValue $directoryPath
+        New-Item -Path (Join-Path $targetRoot $relativePath) -ItemType Directory -Force | Out-Null
+    }
+
+    foreach ($filePath in Get-ArtifactFilePaths -Directory $sourceRoot) {
+        $relativePath = Get-ArtifactRelativePath -BaseDirectory $sourceRoot -PathValue $filePath
+        $targetFile = Join-Path $targetRoot $relativePath
+        New-Item -Path (Split-Path -Parent $targetFile) -ItemType Directory -Force | Out-Null
+        Copy-Item -LiteralPath $filePath -Destination $targetFile -Force
+    }
+
     Write-Host "Copied Velopack releases to: $targetDirectory"
 }
 

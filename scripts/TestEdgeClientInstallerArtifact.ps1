@@ -32,16 +32,32 @@ function Get-TestSha256 {
     return (Get-FileHash -Algorithm SHA256 -Path $PathValue).Hash.ToLowerInvariant()
 }
 
+function Get-TestFilePaths {
+    param(
+        [Parameter(Mandatory = $true)][string]$Directory,
+        [string]$Filter = '*'
+    )
+
+    if (-not (Test-Path $Directory)) {
+        return @()
+    }
+
+    $resolvedDirectory = [System.IO.Path]::GetFullPath($Directory)
+    return @([System.IO.Directory]::EnumerateFiles(
+        $resolvedDirectory,
+        $Filter,
+        [System.IO.SearchOption]::AllDirectories))
+}
+
 function Get-TestDirectorySize {
     param([Parameter(Mandatory = $true)][string]$Directory)
 
-    $measure = Get-ChildItem -Path $Directory -Recurse -File -Force -ErrorAction SilentlyContinue |
-        Measure-Object -Property Length -Sum
-    if ($null -eq $measure.Sum) {
-        return 0
+    $size = 0L
+    foreach ($filePath in Get-TestFilePaths -Directory $Directory) {
+        $size += ([System.IO.FileInfo]$filePath).Length
     }
 
-    return [long]$measure.Sum
+    return $size
 }
 
 function Get-TestRelativePath {
@@ -58,11 +74,11 @@ function Get-TestDirectorySha256 {
 
     $hasher = [System.Security.Cryptography.IncrementalHash]::CreateHash([System.Security.Cryptography.HashAlgorithmName]::SHA256)
     try {
-        $files = @(Get-ChildItem -Path $Directory -Recurse -File -Force -ErrorAction SilentlyContinue |
+        $files = @(Get-TestFilePaths -Directory $Directory |
             ForEach-Object {
                 [PSCustomObject]@{
-                    File = $_
-                    RelativePath = Get-TestRelativePath -BaseDirectory $Directory -PathValue $_.FullName
+                    File = [System.IO.FileInfo]$_
+                    RelativePath = Get-TestRelativePath -BaseDirectory $Directory -PathValue $_
                 }
             })
         [array]::Sort($files, [System.Comparison[object]]{
@@ -118,8 +134,8 @@ function Assert-ForbiddenFilesMissing {
         '(^|/)excel/'
     )
 
-    foreach ($file in Get-ChildItem -Path $Directory -Recurse -File -Force -ErrorAction SilentlyContinue) {
-        $relativePath = Get-TestRelativePath -BaseDirectory $Directory -PathValue $file.FullName
+    foreach ($filePath in Get-TestFilePaths -Directory $Directory) {
+        $relativePath = Get-TestRelativePath -BaseDirectory $Directory -PathValue $filePath
         foreach ($pattern in $forbiddenPatterns) {
             if ($relativePath -match $pattern) {
                 throw "Forbidden site config or runtime data was found in installer artifact directory: $relativePath"
@@ -131,11 +147,11 @@ function Assert-ForbiddenFilesMissing {
 function Assert-CloudIdentityTemplatesAreEmpty {
     param([Parameter(Mandatory = $true)][string]$Directory)
 
-    $configFiles = Get-ChildItem -Path $Directory -Recurse -File -Force -Filter 'appsettings*.json' -ErrorAction SilentlyContinue
+    $configFiles = Get-TestFilePaths -Directory $Directory -Filter 'appsettings*.json'
     foreach ($configFile in $configFiles) {
-        $relativePath = Get-TestRelativePath -BaseDirectory $Directory -PathValue $configFile.FullName
+        $relativePath = Get-TestRelativePath -BaseDirectory $Directory -PathValue $configFile
         try {
-            $config = Get-Content -Raw -Encoding UTF8 -Path $configFile.FullName | ConvertFrom-Json
+            $config = Get-Content -Raw -Encoding UTF8 -LiteralPath $configFile | ConvertFrom-Json
         }
         catch {
             throw "Artifact config file could not be parsed: $relativePath"
