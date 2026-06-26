@@ -19,7 +19,7 @@ env:
   DOTNET_NOLOGO: true
   EDGE_RELEASE_VERSION: ${{ github.event.inputs.version || '1.0.0' }}
   EDGE_RELEASE_CHANNEL: stable
-  EDGE_PACK_ID: IIoT.EdgeClient.Homogenization
+  EDGE_PACK_ID: IIoT.EdgeClient
 
 jobs:
   validate-runtime:
