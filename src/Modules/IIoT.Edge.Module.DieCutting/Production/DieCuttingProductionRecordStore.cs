@@ -174,7 +174,8 @@ public sealed class DieCuttingProductionRecordStore
         {
             DataSource = DbPath,
             Mode = SqliteOpenMode.ReadWriteCreate,
-            Cache = SqliteCacheMode.Shared
+            Cache = SqliteCacheMode.Shared,
+            Pooling = false
         }.ToString());
 
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
