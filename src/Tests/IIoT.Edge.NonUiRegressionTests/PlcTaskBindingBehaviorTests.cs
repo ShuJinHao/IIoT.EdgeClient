@@ -45,13 +45,13 @@ public sealed class PlcTaskBindingBehaviorTests
     }
 
     [Fact]
-    public async Task GetEnabledTaskKeys_WhenProductionWithoutConfiguredDefault_ShouldEnableMissingRows()
+    public async Task GetEnabledTaskKeys_WhenProductionWithoutConfiguredDefault_ShouldDisableMissingRows()
     {
         var service = CreateService(defaultEnableAllTasks: null, environmentName: "Production");
 
         var enabledKeys = await service.Service.GetEnabledTaskKeysAsync(1, TestCandidates, AllTestMappings);
 
-        Assert.Equal(["Task.A", "Task.B"], enabledKeys.OrderBy(static x => x, StringComparer.OrdinalIgnoreCase));
+        Assert.Empty(enabledKeys);
     }
 
     [Fact]

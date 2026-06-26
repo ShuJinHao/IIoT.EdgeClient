@@ -21,7 +21,7 @@ public sealed class LocalSystemRuntimeConfigBehaviorTests
         await service.EnsureInitializedAsync();
 
         Assert.True(service.Current.MesUploadEnabled);
-        Assert.False(service.Current.CloudUploadEnabled);
+        Assert.True(service.Current.SystemCloudEnabled);
         Assert.Equal(TimeSpan.FromSeconds(60), service.Current.OnlineHeartbeatInterval);
         Assert.Equal(TimeSpan.FromSeconds(60), service.Current.CloudSyncInterval);
     }
@@ -41,17 +41,17 @@ public sealed class LocalSystemRuntimeConfigBehaviorTests
     }
 
     [Fact]
-    public async Task EnsureInitializedAsync_WhenCloudRoleEnabled_ShouldBuildCloudRuntimeSwitch()
+    public async Task EnsureInitializedAsync_WhenNoCloudUploaderRegistered_ShouldKeepSystemCloudEnabled()
     {
         var service = new LocalSystemRuntimeConfigService(
             new MutableLocalParameterConfigService(),
-            new MutableModuleParamRoleProvider { CloudEnabled = true },
-            new FakeProcessIntegrationRegistry([], ["Homogenization"]),
+            new MutableModuleParamRoleProvider { CloudEnabled = false },
+            new FakeProcessIntegrationRegistry([]),
             new FakeLogService());
 
         await service.EnsureInitializedAsync();
 
-        Assert.True(service.Current.CloudUploadEnabled);
+        Assert.True(service.Current.SystemCloudEnabled);
     }
 
     [Fact]

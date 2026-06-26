@@ -226,17 +226,24 @@ public sealed class RepositoryHygieneTests
     }
 
     [Fact]
-    public void ProductionDataQueryFacade_ShouldNotGenerateRuntimeSampleProductionRows()
+    public void HostProductionDataFallback_ShouldNotExistInRuntimeSource()
     {
         var root = FindRepositoryRoot();
-        var path = ToFullPath(
+        var facadePath = ToFullPath(
             root,
             "src/Application/IIoT.Edge.Application/Features/Production/DataView/ProductionDataQueryFacade.cs");
-        var source = File.ReadAllText(path);
+        var pagePath = ToFullPath(
+            root,
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Production/DataView/Views/DataViewPage.axaml");
+        var registrationPath = ToFullPath(
+            root,
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/PluginSystem/StandardModuleNavigationRegistration.cs");
+        var registrationSource = File.ReadAllText(registrationPath);
 
-        Assert.DoesNotContain("new Random", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("LOT-", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("dateFrom", source, StringComparison.Ordinal);
+        Assert.False(File.Exists(facadePath));
+        Assert.False(File.Exists(pagePath));
+        Assert.DoesNotContain("RegisterStandardDataView", registrationSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("typeof(DataViewPage)", registrationSource, StringComparison.Ordinal);
     }
 
     [Fact]

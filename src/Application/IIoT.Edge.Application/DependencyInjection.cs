@@ -17,7 +17,6 @@ using IIoT.Edge.Application.Features.Hardware.HardwareConfigView;
 using IIoT.Edge.Application.Features.Hardware.IOView;
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 using IIoT.Edge.Application.Features.Production.CapacityView;
-using IIoT.Edge.Application.Features.Production.DataView;
 using IIoT.Edge.Application.Features.Production.Equipment;
 using IIoT.Edge.Application.Features.Production.Planning;
 using IIoT.Edge.Application.Features.Production.Monitor;
@@ -67,7 +66,6 @@ public static class DependencyInjection
         services.AddTransient<IPlcTaskBindingService, PlcTaskBindingService>();
         services.AddTransient<IRecipeViewCrudService, RecipeViewCrudService>();
         services.AddTransient<ICapacityQueryFacade, CapacityQueryFacade>();
-        services.AddTransient<IProductionDataQueryFacade, ProductionDataQueryFacade>();
         services.AddTransient<IMonitorSnapshotQueryFacade, MonitorSnapshotQueryFacade>();
         services.AddTransient<IMonitorConfiguredDeviceLoader, MonitorConfiguredDeviceLoader>();
         services.AddTransient<IMonitorStateMachineTaskProjection, MonitorStateMachineTaskProjection>();

@@ -13,6 +13,9 @@ public enum ModuleParamRole
     MesOperationCode,
     MesSignToken,
     StationNo,
+    /// <summary>
+    /// 插件生产数据 Cloud 上传开关；不得控制系统 bootstrap、设备日志或 Cloud 补传。
+    /// </summary>
     CloudEnabled,
     DataReadLoopIntervalMs
 }

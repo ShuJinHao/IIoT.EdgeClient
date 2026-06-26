@@ -23,7 +23,7 @@ public sealed class CloudUploadGate : ICloudUploadGate
 
     public UploadGateSnapshot GetSnapshot()
     {
-        if (!_runtimeConfig.Current.CloudUploadEnabled)
+        if (!_runtimeConfig.Current.SystemCloudEnabled)
         {
             return UploadGateSnapshot.Blocked(System, "cloud_upload_disabled", "云端上传已关闭。");
         }

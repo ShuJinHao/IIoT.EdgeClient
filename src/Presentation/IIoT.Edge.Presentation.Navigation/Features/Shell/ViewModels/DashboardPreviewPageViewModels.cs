@@ -38,7 +38,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
     private DateTime? _lastMesFailureAt;
     private DateTime? _latestUploadSuccessAt;
     private DateTime? _latestUploadFailureAt;
-    private bool _cloudUploadEnabled;
+    private bool _systemCloudEnabled;
     private bool _mesUploadEnabled;
     private int _diagnosticsRefreshInFlight;
     private int _deadLetterUploadCount;
@@ -76,7 +76,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
         _diagnosticsTimer.Tick += OnDiagnosticsTimerTick;
 
         var runtimeSnapshot = _runtimeConfig.Current;
-        _cloudUploadEnabled = runtimeSnapshot.CloudUploadEnabled;
+        _systemCloudEnabled = runtimeSnapshot.SystemCloudEnabled;
         _mesUploadEnabled = runtimeSnapshot.MesUploadEnabled;
 
         _source.PropertyChanged += OnSourcePropertyChanged;
@@ -184,7 +184,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
             LastUploadFailureText,
             UploadDeadLetterText);
 
-    public bool IsUploadHealthDisabled => !_cloudUploadEnabled && !_mesUploadEnabled;
+    public bool IsUploadHealthDisabled => !_systemCloudEnabled && !_mesUploadEnabled;
 
     public bool IsUploadHealthBodyVisible => !IsUploadHealthDisabled && UploadHealthSegments.Count > 0;
 
@@ -368,13 +368,13 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
 
     private void ApplyRuntimeConfig(SystemRuntimeConfigSnapshot runtimeConfig)
     {
-        if (_cloudUploadEnabled == runtimeConfig.CloudUploadEnabled
+        if (_systemCloudEnabled == runtimeConfig.SystemCloudEnabled
             && _mesUploadEnabled == runtimeConfig.MesUploadEnabled)
         {
             return;
         }
 
-        _cloudUploadEnabled = runtimeConfig.CloudUploadEnabled;
+        _systemCloudEnabled = runtimeConfig.SystemCloudEnabled;
         _mesUploadEnabled = runtimeConfig.MesUploadEnabled;
         ResetUploadHealthTracking();
     }
@@ -404,8 +404,8 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
             return;
         }
 
-        var cloudSuccessAt = _cloudUploadEnabled ? diagnostics.Cloud.LastSuccessAt : null;
-        var cloudFailureAt = _cloudUploadEnabled ? diagnostics.Cloud.LastFailureAt : null;
+        var cloudSuccessAt = _systemCloudEnabled ? diagnostics.Cloud.LastSuccessAt : null;
+        var cloudFailureAt = _systemCloudEnabled ? diagnostics.Cloud.LastFailureAt : null;
         var mesSuccessAt = _mesUploadEnabled ? diagnostics.Mes.LastSuccessAt : null;
         var mesFailureAt = _mesUploadEnabled ? diagnostics.Mes.LastFailureAt : null;
 
@@ -518,7 +518,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
 
     private IReadOnlyList<DashboardPreviewUploadMetricItem> BuildCloudMetricItems(CloudSyncDiagnosticsSnapshot cloud)
     {
-        if (!_cloudUploadEnabled)
+        if (!_systemCloudEnabled)
         {
             return [];
         }
@@ -572,7 +572,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
 
     private DashboardPreviewChannelState ResolveCloudState(CloudSyncDiagnosticsSnapshot cloud)
     {
-        if (!_cloudUploadEnabled)
+        if (!_systemCloudEnabled)
         {
             return new(
                 GetDisabledText(),
@@ -648,13 +648,13 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
             return EdgeVisualStatus.Offline;
         }
 
-        if ((_cloudUploadEnabled && !cloudState.IsReady)
+        if ((_systemCloudEnabled && !cloudState.IsReady)
             || (_mesUploadEnabled && !mesState.IsReady))
         {
             return EdgeVisualStatus.Error;
         }
 
-        if ((_cloudUploadEnabled && HasActiveFailure(diagnostics.Cloud.LastSuccessAt, diagnostics.Cloud.LastFailureAt, diagnostics.Cloud.DeadLetters?.TotalCount ?? 0))
+        if ((_systemCloudEnabled && HasActiveFailure(diagnostics.Cloud.LastSuccessAt, diagnostics.Cloud.LastFailureAt, diagnostics.Cloud.DeadLetters?.TotalCount ?? 0))
             || (_mesUploadEnabled && HasActiveFailure(diagnostics.Mes.LastSuccessAt, diagnostics.Mes.LastFailureAt, diagnostics.Mes.DeadLetters?.TotalCount ?? 0))
             || (_mesUploadEnabled && diagnostics.Mes.RuntimeState == MesRetryRuntimeState.LastFailed))
         {
@@ -667,7 +667,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
     private int ResolveDeadLetterUploadCount(EdgeSyncDiagnosticsSnapshot diagnostics)
     {
         var deadLetters = 0;
-        if (_cloudUploadEnabled)
+        if (_systemCloudEnabled)
         {
             deadLetters += diagnostics.Cloud.DeadLetters?.TotalCount ?? 0;
         }
@@ -870,12 +870,12 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
 
     private string ResolveUploadHealthTitle()
     {
-        if (_cloudUploadEnabled && _mesUploadEnabled)
+        if (_systemCloudEnabled && _mesUploadEnabled)
         {
             return GetText("Navigation_DashboardPreview_UploadHealthCloudMes", "云端/MES 上传健康");
         }
 
-        if (_cloudUploadEnabled)
+        if (_systemCloudEnabled)
         {
             return GetText("Navigation_DashboardPreview_UploadHealthCloud", "云端上传健康");
         }

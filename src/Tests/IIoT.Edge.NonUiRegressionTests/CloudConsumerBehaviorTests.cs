@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Infrastructure.Integration.PassStation;
 using IIoT.Edge.SharedKernel.DataPipeline;
@@ -22,6 +23,7 @@ public sealed class CloudConsumerBehaviorTests
                 "云端上传已关闭。")),
             new StandardPassStationCloudUploader(new FakeCloudApiEndpointProvider(), cloudHttp),
             CreateCloudRegistry(),
+            new FakeModuleParamRoleProvider(),
             diagnostics,
             new FakeLogService());
 
@@ -51,6 +53,7 @@ public sealed class CloudConsumerBehaviorTests
                 "缺少上传令牌。")),
             new StandardPassStationCloudUploader(new FakeCloudApiEndpointProvider(), cloudHttp),
             CreateCloudRegistry(),
+            new FakeModuleParamRoleProvider(),
             diagnostics,
             new FakeLogService());
 
@@ -79,6 +82,7 @@ public sealed class CloudConsumerBehaviorTests
             new FixedCloudUploadGate(UploadGateSnapshot.Ready(ExternalSystemKind.Cloud)),
             new StandardPassStationCloudUploader(new FakeCloudApiEndpointProvider(), cloudHttp),
             CreateCloudRegistry(),
+            new FakeModuleParamRoleProvider(),
             diagnostics,
             new FakeLogService());
         var completedTime = new DateTime(2026, 6, 5, 8, 30, 0, DateTimeKind.Utc);
@@ -120,6 +124,7 @@ public sealed class CloudConsumerBehaviorTests
             new FixedCloudUploadGate(UploadGateSnapshot.Ready(ExternalSystemKind.Cloud)),
             new StandardPassStationCloudUploader(new ThrowingCloudApiEndpointProvider(), cloudHttp),
             CreateCloudRegistry(),
+            new FakeModuleParamRoleProvider(),
             diagnostics,
             new FakeLogService());
 
@@ -147,6 +152,7 @@ public sealed class CloudConsumerBehaviorTests
             new FixedCloudUploadGate(UploadGateSnapshot.Ready(ExternalSystemKind.Cloud)),
             new StandardPassStationCloudUploader(new FakeCloudApiEndpointProvider(), cloudHttp),
             new FakeProcessIntegrationRegistry(),
+            new FakeModuleParamRoleProvider(),
             new FakeCloudDiagnosticsStore(),
             new FakeLogService());
 
@@ -160,6 +166,35 @@ public sealed class CloudConsumerBehaviorTests
 
         Assert.True(result.IsSuccess);
         Assert.Equal(0, cloudHttp.PostCallCount);
+    }
+
+    [Fact]
+    public async Task ProcessWithResultAsync_WhenPluginCloudDisabled_ShouldSkipWithoutDisablingSystemCloud()
+    {
+        var cloudHttp = new FakeCloudHttpClient();
+        var diagnostics = new FakeCloudDiagnosticsStore();
+        var roleProvider = new FakeModuleParamRoleProvider();
+        roleProvider.SetCloudEnabled("OtherProcess", false);
+        var consumer = new CloudConsumer(
+            CreateOnlineDeviceService(),
+            new FixedCloudUploadGate(UploadGateSnapshot.Ready(ExternalSystemKind.Cloud)),
+            new StandardPassStationCloudUploader(new FakeCloudApiEndpointProvider(), cloudHttp),
+            CreateCloudRegistry(),
+            roleProvider,
+            diagnostics,
+            new FakeLogService());
+
+        var result = await consumer.ProcessWithResultAsync(new CellCompletedRecord
+        {
+            CellData = new TestCellData
+            {
+                Barcode = "BAR-PLUGIN-CLOUD-DISABLED"
+            }
+        });
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(0, cloudHttp.PostCallCount);
+        Assert.Equal(CloudCallOutcome.Success, diagnostics.Snapshot.LastOutcome);
     }
 
     private static FakeDeviceService CreateOnlineDeviceService()

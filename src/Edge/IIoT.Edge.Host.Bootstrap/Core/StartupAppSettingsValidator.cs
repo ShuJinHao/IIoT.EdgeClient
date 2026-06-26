@@ -28,7 +28,7 @@ internal sealed class StartupAppSettingsValidator(
 
     public void Validate(StartupValidationContext context, List<StartupDiagnosticIssue> issues)
     {
-        if (!context.CloudUploadEnabled)
+        if (!context.SystemCloudEnabled)
         {
             return;
         }

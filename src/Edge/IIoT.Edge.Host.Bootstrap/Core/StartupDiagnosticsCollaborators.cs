@@ -29,7 +29,7 @@ public sealed class StartupValidationContext
 {
     public required ConfigurationProfileSnapshot ConfigurationProfile { get; init; }
 
-    public required bool CloudUploadEnabled { get; init; }
+    public required bool SystemCloudEnabled { get; init; }
 
     public required IReadOnlyCollection<NetworkDeviceEntity> PlcDevices { get; init; }
 

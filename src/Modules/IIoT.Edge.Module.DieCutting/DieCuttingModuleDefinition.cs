@@ -64,7 +64,7 @@ public sealed class DieCuttingModuleDefinition
                 DeviceDisplayName: $"{DeviceNamePrefix}{index:D2}",
                 UpperComputerNo: UpperComputerNo,
                 Remark: SeedRemark,
-                IsEnabled: true,
+                IsEnabled: false,
                 DeviceModel: "Mc",
                 Port1: 65530,
                 ConnectTimeout: 3000))

@@ -1,5 +1,6 @@
 using Avalonia.Threading;
 using IIoT.Edge.Application.Abstractions.Auth;
+using System.Threading;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
 
@@ -17,22 +18,53 @@ internal sealed class DiagnosticsPermissionObserver(
     IDiagnosticsViewModelCallback callback)
     : IDiagnosticsPermissionObserver
 {
+    private int _isActive;
+
     public bool CanOperateDeadLetters => permissionService.IsLocalAdmin;
 
     public void Start()
-        => permissionService.PermissionStateChanged += HandlePermissionStateChanged;
-
-    public void Stop()
-        => permissionService.PermissionStateChanged -= HandlePermissionStateChanged;
-
-    private void HandlePermissionStateChanged()
     {
-        if (Dispatcher.UIThread.CheckAccess())
+        if (Interlocked.Exchange(ref _isActive, 1) == 1)
         {
-            callback.RefreshPermissionState();
             return;
         }
 
-        Dispatcher.UIThread.Post(callback.RefreshPermissionState);
+        permissionService.PermissionStateChanged += HandlePermissionStateChanged;
+    }
+
+    public void Stop()
+    {
+        if (Interlocked.Exchange(ref _isActive, 0) == 0)
+        {
+            return;
+        }
+
+        permissionService.PermissionStateChanged -= HandlePermissionStateChanged;
+    }
+
+    private void HandlePermissionStateChanged()
+    {
+        if (Volatile.Read(ref _isActive) == 0)
+        {
+            return;
+        }
+
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            RefreshIfActive();
+            return;
+        }
+
+        Dispatcher.UIThread.Post(RefreshIfActive);
+    }
+
+    private void RefreshIfActive()
+    {
+        if (Volatile.Read(ref _isActive) == 0)
+        {
+            return;
+        }
+
+        callback.RefreshPermissionState();
     }
 }

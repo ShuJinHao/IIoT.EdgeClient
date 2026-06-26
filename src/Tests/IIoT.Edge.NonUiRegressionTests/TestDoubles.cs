@@ -1682,3 +1682,67 @@ internal sealed class FakeProcessIntegrationRegistry : IProcessIntegrationRegist
 
     public IReadOnlyDictionary<string, ProcessUploaderRegistration> GetMesUploaders() => _mes;
 }
+
+internal sealed class FakeModuleParamRoleProvider : IModuleParamRoleProvider
+{
+    private readonly Dictionary<string, bool> _cloudEnabledByModule = new(StringComparer.OrdinalIgnoreCase);
+
+    public bool MesEnabled { get; set; } = true;
+    public bool CloudEnabled { get; set; } = true;
+
+    public void SetCloudEnabled(string moduleId, bool enabled)
+        => _cloudEnabledByModule[moduleId] = enabled;
+
+    public Task<ModuleParamRoleValue?> GetAsync(
+        string moduleId,
+        ModuleParamCategory category,
+        ModuleParamRole role,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult<ModuleParamRoleValue?>(null);
+
+    public Task<IReadOnlyList<ModuleParamRoleValue>> GetAllAsync(
+        ModuleParamCategory category,
+        ModuleParamRole role,
+        IReadOnlyCollection<string>? moduleIds = null,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyList<ModuleParamRoleValue>>([]);
+
+    public Task<string?> GetStringAsync(
+        string moduleId,
+        ModuleParamCategory category,
+        ModuleParamRole role,
+        string? defaultValue = null,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult(defaultValue);
+
+    public Task<string?> FirstStringAsync(
+        ModuleParamCategory category,
+        ModuleParamRole role,
+        IReadOnlyCollection<string>? moduleIds = null,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult<string?>(null);
+
+    public Task<bool> GetBoolAsync(
+        string moduleId,
+        ModuleParamCategory category,
+        ModuleParamRole role,
+        bool defaultValue = false,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult(role switch
+        {
+            ModuleParamRole.CloudEnabled => _cloudEnabledByModule.TryGetValue(moduleId, out var enabled)
+                ? enabled
+                : CloudEnabled,
+            ModuleParamRole.MesEnabled => MesEnabled,
+            _ => defaultValue
+        });
+
+    public Task<bool> AnyBoolAsync(
+        ModuleParamCategory category,
+        ModuleParamRole role,
+        IReadOnlyCollection<string>? moduleIds = null,
+        bool defaultValue = false,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult((moduleIds?.Count ?? 0) > 0
+            && (role == ModuleParamRole.CloudEnabled ? CloudEnabled : MesEnabled));
+}

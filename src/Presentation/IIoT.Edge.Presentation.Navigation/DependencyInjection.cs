@@ -10,7 +10,6 @@ using IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView;
 using IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
 using IIoT.Edge.Presentation.Navigation.Features.Hardware.PlcTaskBindingView;
 using IIoT.Edge.Presentation.Navigation.Features.Production.CapacityView;
-using IIoT.Edge.Presentation.Navigation.Features.Production.DataView;
 using IIoT.Edge.Presentation.Navigation.Features.Production.Monitor;
 using IIoT.Edge.Presentation.Navigation.Features.Shell;
 using IIoT.Edge.Presentation.Navigation.Localization;
@@ -55,7 +54,6 @@ public static class DependencyInjection
         services.AddSingleton<IMonitorStateMachineTaskItemFactory, MonitorStateMachineTaskItemFactory>();
         services.AddSingleton<IMonitorViewModelCollaboratorFactory, MonitorViewModelCollaboratorFactory>();
         services.AddSingleton<MonitorViewModel>();
-        services.AddSingleton<DataViewModel>();
         services.AddSingleton<IDiagnosticsModuleDisplayNameResolver, DiagnosticsModuleDisplayNameResolver>();
         services.AddSingleton<IDiagnosticsSummaryBuilder, DiagnosticsSummaryBuilder>();
         services.AddSingleton<IDiagnosticsRowsBuilder, DiagnosticsRowsBuilder>();
@@ -79,7 +77,6 @@ public static class DependencyInjection
         services.AddTransient<RecipeViewPage>();
         services.AddTransient<CapacityViewPage>();
         services.AddTransient<MonitorViewPage>();
-        services.AddTransient<DataViewPage>();
         services.AddTransient<DiagnosticsPage>();
 
         return services;

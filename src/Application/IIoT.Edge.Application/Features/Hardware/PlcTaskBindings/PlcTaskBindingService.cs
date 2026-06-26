@@ -325,7 +325,8 @@ public sealed class PlcTaskBindingService(
             return configured.Value;
         }
 
-        return hostEnvironment.IsProduction();
+        _ = hostEnvironment;
+        return false;
     }
 
     private sealed record TaskAvailability(

@@ -118,7 +118,7 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
 
         try
         {
-            if (_runtimeConfig.Current.CloudUploadEnabled)
+            if (_runtimeConfig.Current.SystemCloudEnabled)
             {
                 await FlushQueueToBufferAsync().ConfigureAwait(false);
             }
@@ -137,7 +137,7 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
 
     private void OnLogEntryAdded(LogEntry entry)
     {
-        if (!_runtimeConfig.Current.CloudUploadEnabled)
+        if (!_runtimeConfig.Current.SystemCloudEnabled)
         {
             return;
         }
@@ -175,7 +175,7 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
         await _syncGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            if (!_runtimeConfig.Current.CloudUploadEnabled)
+            if (!_runtimeConfig.Current.SystemCloudEnabled)
             {
                 DrainQueue();
                 return;
@@ -345,7 +345,7 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
         await _syncGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            if (!_runtimeConfig.Current.CloudUploadEnabled)
+            if (!_runtimeConfig.Current.SystemCloudEnabled)
             {
                 return true;
             }

@@ -7,7 +7,6 @@ using IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView;
 using IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
 using IIoT.Edge.Presentation.Navigation.Features.Hardware.PlcTaskBindingView;
 using IIoT.Edge.Presentation.Navigation.Features.Production.CapacityView;
-using IIoT.Edge.Presentation.Navigation.Features.Production.DataView;
 using IIoT.Edge.Presentation.Navigation.Features.Production.Monitor;
 using IIoT.Edge.SharedKernel.Enums;
 using Microsoft.Extensions.DependencyInjection;
@@ -81,15 +80,7 @@ public static class StandardModuleNavigationRegistration
 
         var viewIds = StandardModuleViewIds.Create(moduleId);
 
-        if (customDataViewType is null || customDataViewModelType is null)
-        {
-            builder.RegisterStandardDataView(
-                viewIds.DataView,
-                dataViewTitle,
-                cacheView: cacheDataView,
-                titleResourceKey: dataViewTitleResourceKey);
-        }
-        else
+        if (customDataViewType is not null && customDataViewModelType is not null)
         {
             builder.RegisterRoute(
                 viewIds.DataView,
@@ -118,26 +109,6 @@ public static class StandardModuleNavigationRegistration
             .RegisterStandardParamView(viewIds.ParamView)
             .RegisterStandardHardwareConfigView(viewIds.HardwareConfigView)
             .RegisterStandardPlcTaskBindingView(viewIds.PlcTaskBindingView);
-    }
-
-    public static IEdgeProcessModuleBuilder RegisterStandardDataView(
-        this IEdgeProcessModuleBuilder builder,
-        string viewId,
-        string? title = null,
-        int order = 1,
-        string icon = "ChartBar",
-        bool cacheView = true,
-        string titleResourceKey = "Navigation_Menu_Data")
-    {
-        title ??= "生产数据";
-        builder.RegisterRoute(
-            viewId,
-            typeof(DataViewPage),
-            typeof(DataViewModel),
-            sp => ActivatorUtilities.CreateInstance<DataViewModel>(sp, viewId, titleResourceKey, title),
-            cacheView);
-        builder.RegisterMenu(CreateMenu(title, viewId, icon, order, titleResourceKey: titleResourceKey));
-        return builder;
     }
 
     public static IEdgeProcessModuleBuilder RegisterStandardCapacityView(

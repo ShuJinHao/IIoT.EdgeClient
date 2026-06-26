@@ -121,20 +121,11 @@ public static class DieCuttingParams
     }
 
     /// <summary>
-    /// 模切 Cloud 上传参数，本插件首版不上传 Cloud。
+    /// 模切暂未注册生产数据 Cloud payload，因此本分类暂不声明插件级 Cloud 参数。
+    /// 系统日志、设备识别和 Cloud 补传不受插件参数控制。
     /// </summary>
     public enum Cloud
     {
-        /// <summary>
-        /// 是否启用云端上传，首版默认关闭。
-        /// </summary>
-        [ModuleParam(
-            ParamValueKind.Bool,
-            DefaultValue = "false",
-            Role = ModuleParamRole.CloudEnabled,
-            DisplayNameFallback = "云端上传启用",
-            DescriptionFallback = "模切只读采样首版不走 Cloud 上传链路。")]
-        启用
     }
 
     /// <summary>

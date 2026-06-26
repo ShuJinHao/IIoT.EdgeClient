@@ -288,7 +288,7 @@ public sealed class DeviceLogSyncTaskBehaviorTests
             {
                 Current = SystemRuntimeConfigSnapshot.Default with
                 {
-                    CloudUploadEnabled = false,
+                    SystemCloudEnabled = false,
                     CloudSyncInterval = TimeSpan.FromMilliseconds(50)
                 }
             },
@@ -323,7 +323,7 @@ public sealed class DeviceLogSyncTaskBehaviorTests
             new FakeDeviceService(),
             new FakeLocalSystemRuntimeConfigService
             {
-                Current = SystemRuntimeConfigSnapshot.Default with { CloudUploadEnabled = false }
+                Current = SystemRuntimeConfigSnapshot.Default with { SystemCloudEnabled = false }
             },
             bufferStore,
             new FakeLogService(),

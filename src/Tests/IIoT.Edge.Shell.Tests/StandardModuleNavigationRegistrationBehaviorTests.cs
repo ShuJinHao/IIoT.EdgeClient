@@ -21,6 +21,8 @@ public sealed class StandardModuleNavigationRegistrationBehaviorTests
             "Navigation_Menu_Data",
             supportsRecipe: false);
 
+        Assert.DoesNotContain(builder.RouteIds, viewId => viewId == "NoRecipe.DataView");
+        Assert.DoesNotContain(builder.MenuIds, viewId => viewId == "NoRecipe.DataView");
         Assert.DoesNotContain(builder.RouteIds, viewId => viewId == "NoRecipe.RecipeView");
         Assert.DoesNotContain(builder.MenuIds, viewId => viewId == "NoRecipe.RecipeView");
         Assert.Contains("NoRecipe.ParamView", builder.RouteIds);
@@ -37,8 +39,26 @@ public sealed class StandardModuleNavigationRegistrationBehaviorTests
             "数据",
             "Navigation_Menu_Data");
 
+        Assert.DoesNotContain(builder.RouteIds, viewId => viewId == "RecipeModule.DataView");
+        Assert.DoesNotContain(builder.MenuIds, viewId => viewId == "RecipeModule.DataView");
         Assert.Contains("RecipeModule.RecipeView", builder.RouteIds);
         Assert.Contains("RecipeModule.RecipeView", builder.MenuIds);
+    }
+
+    [Fact]
+    public void RegisterStandardModuleViews_WhenPluginProvidesDataView_ShouldRegisterDataRouteAndMenu()
+    {
+        var builder = new FakeProcessModuleBuilder("CustomData");
+
+        builder.RegisterStandardModuleViews(
+            "CustomData",
+            "生产数据",
+            "Navigation_Menu_Data",
+            customDataViewType: typeof(CustomDataView),
+            customDataViewModelType: typeof(CustomDataViewModel));
+
+        Assert.Contains("CustomData.DataView", builder.RouteIds);
+        Assert.Contains("CustomData.DataView", builder.MenuIds);
     }
 
     private sealed class FakeProcessModuleBuilder(string moduleId) : IEdgeProcessModuleBuilder
@@ -151,4 +171,8 @@ public sealed class StandardModuleNavigationRegistrationBehaviorTests
         {
         }
     }
+
+    private sealed class CustomDataView;
+
+    private sealed class CustomDataViewModel;
 }

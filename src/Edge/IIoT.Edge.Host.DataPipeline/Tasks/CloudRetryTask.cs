@@ -53,7 +53,7 @@ public sealed class CloudRetryTask : RetryTaskBase<CloudRetryRuntimeState, Cloud
 
     protected override ValueTask<RetryTaskAvailability> CheckAvailabilityAsync(CancellationToken cancellationToken)
     {
-        if (_runtimeConfig?.Current.CloudUploadEnabled == false)
+        if (_runtimeConfig?.Current.SystemCloudEnabled == false)
         {
             return ValueTask.FromResult(RetryTaskAvailability.Unavailable(CloudRetryRuntimeState.Idle));
         }

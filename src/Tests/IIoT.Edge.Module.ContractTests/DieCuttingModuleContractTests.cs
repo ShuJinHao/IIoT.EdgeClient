@@ -262,7 +262,7 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
             device =>
             {
                 Assert.Equal(ExpectedUpperComputerNo, device.UpperComputerNo);
-                Assert.True(device.IsEnabled);
+                Assert.False(device.IsEnabled);
             });
     }
 
@@ -345,6 +345,9 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
             result.ModuleParamRegistry.GetDescriptors(ExpectedModuleId, ModuleParamCategory.Mes),
             descriptor => descriptor.Name == nameof(DieCuttingParams.Mes.BatchNumberPath)
                           && descriptor.DefaultValue == "/dev/dev/get/batchNumber");
+        Assert.DoesNotContain(
+            result.ModuleParamRegistry.GetDescriptors(ExpectedModuleId, ModuleParamCategory.Cloud),
+            descriptor => descriptor.Role == ModuleParamRole.CloudEnabled);
         Assert.Contains(
             result.Services,
             descriptor => descriptor.ServiceType == typeof(IProductionPlanSelectionService)

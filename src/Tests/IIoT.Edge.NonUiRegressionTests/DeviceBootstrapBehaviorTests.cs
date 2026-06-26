@@ -390,7 +390,7 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
             {
                 Current = SystemRuntimeConfigSnapshot.Default with
                 {
-                    CloudUploadEnabled = false
+                    SystemCloudEnabled = false
                 }
             });
 

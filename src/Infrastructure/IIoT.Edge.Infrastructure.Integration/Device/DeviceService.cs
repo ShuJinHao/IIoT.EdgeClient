@@ -180,7 +180,7 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
         await _identifyGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            if (!_runtimeConfig.Current.CloudUploadEnabled && CurrentDevice is not null)
+            if (!_runtimeConfig.Current.SystemCloudEnabled && CurrentDevice is not null)
             {
                 MarkCloudUploadDisabled(DateTimeOffset.UtcNow);
                 return;
@@ -333,7 +333,7 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
         if (!_uploadGatePolicy.TryResolveTokenBlockReason(session, out var invalidReason))
         {
             _bootstrapEventLogger.LogSessionAccepted(successEventName, session);
-            if (_runtimeConfig.Current.CloudUploadEnabled)
+            if (_runtimeConfig.Current.SystemCloudEnabled)
             {
                 GoOnline(session, attemptedAtUtc, latencyMs);
             }

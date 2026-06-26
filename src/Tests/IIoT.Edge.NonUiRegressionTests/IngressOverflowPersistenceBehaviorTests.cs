@@ -19,10 +19,12 @@ public sealed class IngressOverflowPersistenceBehaviorTests
             {
                 Current = SystemRuntimeConfigSnapshot.Default with
                 {
-                    CloudUploadEnabled = false,
+                    SystemCloudEnabled = false,
                     MesUploadEnabled = false
                 }
             },
+            new FakeProcessIntegrationRegistry(),
+            new FakeModuleParamRoleProvider(),
             new FakeCriticalPersistenceFallbackWriter(),
             persistenceWriter: null!,
             logger: new FakeLogService());
