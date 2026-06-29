@@ -625,6 +625,39 @@ public sealed class RepositoryHygieneTests
     }
 
     [Fact]
+    public void EdgeDocs_ShouldPreserveChangeClosureAndPlcSelectionContracts()
+    {
+        var root = FindRepositoryRoot();
+        var ruleDoc = File.ReadAllText(Path.Combine(root, "docs", "客户端规则.md"));
+        var retrospectiveDoc = File.ReadAllText(Path.Combine(root, "docs", "改动复盘与规则沉淀.md"));
+        var plcSelectionDoc = File.ReadAllText(Path.Combine(root, "docs", "PLC选择与状态展示控制.md"));
+        var combinedDocs = string.Join(
+            Environment.NewLine,
+            ruleDoc,
+            retrospectiveDoc,
+            plcSelectionDoc);
+
+        Assert.Contains("改动复盘与规则沉淀.md", ruleDoc, StringComparison.Ordinal);
+        Assert.Contains("PLC选择与状态展示控制.md", ruleDoc, StringComparison.Ordinal);
+        Assert.Contains("项目滚动复盘文档", retrospectiveDoc, StringComparison.Ordinal);
+        Assert.Contains("改动范围", retrospectiveDoc, StringComparison.Ordinal);
+        Assert.Contains("规则提炼", retrospectiveDoc, StringComparison.Ordinal);
+        Assert.Contains("无新增长期规则", retrospectiveDoc, StringComparison.Ordinal);
+
+        Assert.Contains("IDeviceSelectionService", combinedDocs, StringComparison.Ordinal);
+        Assert.Contains("IoMappingEntity", combinedDocs, StringComparison.Ordinal);
+        Assert.Contains("单点读数据", combinedDocs, StringComparison.Ordinal);
+        Assert.Contains("连续读数据", combinedDocs, StringComparison.Ordinal);
+        Assert.Contains("PLC 状态表", combinedDocs, StringComparison.Ordinal);
+
+        Assert.Contains("右侧“设备运行”的设备号是统一选择入口", ruleDoc, StringComparison.Ordinal);
+        Assert.Contains("Dashboard `PLC 状态表` 必须以已配置 PLC 为基准行", plcSelectionDoc, StringComparison.Ordinal);
+        Assert.Contains("不得出现 `0 / 12` 但表格空白", plcSelectionDoc, StringComparison.Ordinal);
+        Assert.Contains("UI 改动必须真实运行或截图验收", ruleDoc, StringComparison.Ordinal);
+        Assert.Contains("build 通过不等于 UI 通过", ruleDoc, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SourceTree_ShouldNotReferenceRemovedMapperOrUnusedCentralPackages()
     {
         var root = FindRepositoryRoot();
