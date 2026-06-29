@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc;
+using IIoT.Edge.Application.Features.Production.Monitor;
 using IIoT.Edge.Presentation.Navigation.Features.Dashboard;
 using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.UI.Shared.Localization;
@@ -29,7 +30,8 @@ public partial class DashboardPreviewView : UserControl
         IDeviceSelectionService deviceSelectionService,
         ILocalSystemRuntimeConfigService runtimeConfig,
         IEdgeSyncDiagnosticsQuery diagnosticsQuery,
-        IPlcConnectionManager plcConnectionManager)
+        IPlcConnectionManager plcConnectionManager,
+        IMonitorConfiguredDeviceLoader configuredDeviceLoader)
         : this()
     {
         if (UseDesignPreviewData())
@@ -46,7 +48,8 @@ public partial class DashboardPreviewView : UserControl
             deviceSelectionService,
             runtimeConfig,
             diagnosticsQuery,
-            plcConnectionManager);
+            plcConnectionManager,
+            configuredDeviceLoader);
         _previewDataContext = _runtimeViewModel;
         DataContext = _runtimeViewModel;
         AttachedToVisualTree += async (_, _) =>

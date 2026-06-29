@@ -51,7 +51,7 @@ public sealed class LogViewModelBehaviorTests
     }
 
     [Fact]
-    public void SelectedDeviceFilter_WhenChanged_ShouldPublishSharedSelection()
+    public void SelectedDeviceFilter_WhenChangedInsideLogPage_ShouldNotPublishSharedSelection()
     {
         var store = new TestSystemLogDisplayStore();
         var selectionService = new DeviceSelectionService();
@@ -67,7 +67,8 @@ public sealed class LogViewModelBehaviorTests
             viewModel.DeviceFilters,
             static option => option.Key == "P1-AP01");
 
-        Assert.Equal("P1-AP01", selectionService.SelectedDeviceKey);
+        Assert.Equal(IDeviceSelectionService.AllFilterKey, selectionService.SelectedDeviceKey);
+        Assert.Equal("P1-AP01", viewModel.SelectedDeviceFilter?.Key);
     }
 
     [Fact]

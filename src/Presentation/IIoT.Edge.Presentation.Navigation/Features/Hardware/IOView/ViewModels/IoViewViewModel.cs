@@ -1,10 +1,12 @@
 using System.Collections.ObjectModel;
 using System.Windows.Input;
+using Avalonia.Threading;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Features.Hardware.IOView;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Presentation.Navigation.Localization;
+using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
@@ -22,6 +24,8 @@ public class IoViewViewModel : NavigationViewModelBase
     private readonly IIoViewBufferBindingCoordinator _bufferBindingCoordinator;
     private readonly IIoViewInteractionWriter _interactionWriter;
     private readonly IIoViewManualReadService _manualReadService;
+    private readonly IDeviceSelectionService _deviceSelectionService;
+    private bool _isDeviceSelectionSubscribed;
 
     public ObservableCollection<NetworkDeviceEntity> Devices { get; } = [];
 
@@ -54,13 +58,27 @@ public class IoViewViewModel : NavigationViewModelBase
             _selectedDevice = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(HasSelectedDevice));
+            OnPropertyChanged(nameof(IsDeviceSelectionRequired));
+            OnPropertyChanged(nameof(ShouldShowDeviceSelectionPrompt));
+            OnPropertyChanged(nameof(SelectedDeviceDisplayName));
+            OnPropertyChanged(nameof(HasNoSignals));
             OnPropertyChanged(nameof(ConnectionStateText));
             _manualReadCommand.RaiseCanExecuteChanged();
+
             _ = LoadMappingsAsync();
         }
     }
 
     public bool HasSelectedDevice => SelectedDevice is not null;
+
+    public bool HasDevices => Devices.Count > 0;
+
+    public bool IsDeviceSelectionRequired => SelectedDevice is null;
+
+    public bool ShouldShowDeviceSelectionPrompt => HasDevices && IsDeviceSelectionRequired;
+
+    public string SelectedDeviceDisplayName
+        => SelectedDevice?.DeviceName ?? GetText("Navigation_DeviceSelection_AllOrSummary", "全部/汇总");
 
     private bool _isConnected;
     public bool IsConnected
@@ -107,7 +125,8 @@ public class IoViewViewModel : NavigationViewModelBase
         IIoViewSignalValueUpdater signalValueUpdater,
         IIoViewBufferBindingCoordinator bufferBindingCoordinator,
         IIoViewInteractionWriter interactionWriter,
-        IIoViewManualReadService manualReadService)
+        IIoViewManualReadService manualReadService,
+        IDeviceSelectionService deviceSelectionService)
         : this(
             dataStore,
             plcConnectionManager,
@@ -121,7 +140,8 @@ public class IoViewViewModel : NavigationViewModelBase
             signalValueUpdater,
             bufferBindingCoordinator,
             interactionWriter,
-            manualReadService)
+            manualReadService,
+            deviceSelectionService)
     {
     }
 
@@ -138,6 +158,7 @@ public class IoViewViewModel : NavigationViewModelBase
         IIoViewBufferBindingCoordinator bufferBindingCoordinator,
         IIoViewInteractionWriter interactionWriter,
         IIoViewManualReadService manualReadService,
+        IDeviceSelectionService deviceSelectionService,
         string? moduleIdFilter = null)
         : this(
             dataStore,
@@ -152,7 +173,8 @@ public class IoViewViewModel : NavigationViewModelBase
             signalValueUpdater,
             bufferBindingCoordinator,
             interactionWriter,
-            manualReadService)
+            manualReadService,
+            deviceSelectionService)
     {
     }
 
@@ -169,7 +191,8 @@ public class IoViewViewModel : NavigationViewModelBase
         IIoViewSignalValueUpdater signalValueUpdater,
         IIoViewBufferBindingCoordinator bufferBindingCoordinator,
         IIoViewInteractionWriter interactionWriter,
-        IIoViewManualReadService manualReadService)
+        IIoViewManualReadService manualReadService,
+        IDeviceSelectionService deviceSelectionService)
         : base(languageService, viewId, titleResourceKey, titleFallback)
     {
         _dataStore = dataStore;
@@ -180,6 +203,7 @@ public class IoViewViewModel : NavigationViewModelBase
         _bufferBindingCoordinator = bufferBindingCoordinator;
         _interactionWriter = interactionWriter;
         _manualReadService = manualReadService;
+        _deviceSelectionService = deviceSelectionService;
 
         RefreshDevicesCommand = new AsyncCommand(LoadDevicesAsync);
         _manualReadCommand = new AsyncCommand(ManualReadSelectedDataAsync, () => SelectedDevice is not null);
@@ -187,7 +211,6 @@ public class IoViewViewModel : NavigationViewModelBase
 
     public async Task LoadDevicesAsync()
     {
-        var selectedDeviceId = SelectedDevice?.Id;
         var result = await _queryFacade.GetNetworkDevicesAsync();
 
         Devices.Clear();
@@ -200,14 +223,14 @@ public class IoViewViewModel : NavigationViewModelBase
                 Devices.Add(device);
             }
         }
+        OnPropertyChanged(nameof(HasDevices));
+        OnPropertyChanged(nameof(ShouldShowDeviceSelectionPrompt));
 
-        var nextSelected = selectedDeviceId is null
-            ? Devices.FirstOrDefault()
-            : Devices.FirstOrDefault(x => x.Id == selectedDeviceId.Value) ?? Devices.FirstOrDefault();
+        var nextSelected = ResolveDeviceFromSharedSelection();
 
         if (SelectedDevice?.Id != nextSelected?.Id)
         {
-            SelectedDevice = nextSelected;
+            ApplySelectedDeviceFromSharedSelection(nextSelected);
             return;
         }
 
@@ -312,6 +335,64 @@ public class IoViewViewModel : NavigationViewModelBase
         return true;
     }
 
+    private NetworkDeviceEntity? ResolveDeviceFromSharedSelection()
+    {
+        var selectedKey = _deviceSelectionService.SelectedDeviceKey;
+        if (string.Equals(
+                selectedKey,
+                IDeviceSelectionService.AllFilterKey,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return Devices.FirstOrDefault(device =>
+            string.Equals(device.DeviceName, selectedKey, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void ApplySelectedDeviceFromSharedSelection(NetworkDeviceEntity? device)
+    {
+        SelectedDevice = device;
+    }
+
+    private void OnSharedDeviceSelectionChanged(object? sender, EventArgs e)
+    {
+        RunOnUiThread(() => ApplySelectedDeviceFromSharedSelection(ResolveDeviceFromSharedSelection()));
+    }
+
+    private void SubscribeDeviceSelection()
+    {
+        if (_isDeviceSelectionSubscribed)
+        {
+            return;
+        }
+
+        _deviceSelectionService.SelectionChanged += OnSharedDeviceSelectionChanged;
+        _isDeviceSelectionSubscribed = true;
+    }
+
+    private void UnsubscribeDeviceSelection()
+    {
+        if (!_isDeviceSelectionSubscribed)
+        {
+            return;
+        }
+
+        _deviceSelectionService.SelectionChanged -= OnSharedDeviceSelectionChanged;
+        _isDeviceSelectionSubscribed = false;
+    }
+
+    protected virtual void RunOnUiThread(Action action)
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            action();
+            return;
+        }
+
+        Dispatcher.UIThread.Post(action, DispatcherPriority.Background);
+    }
+
     private void WriteInteractionRow(IoInteractionRowModel row)
     {
         if (SelectedDevice is null)
@@ -408,13 +489,18 @@ public class IoViewViewModel : NavigationViewModelBase
         }
 
         OnPropertyChanged(nameof(ConnectionStateText));
+        OnPropertyChanged(nameof(SelectedDeviceDisplayName));
     }
 
     public override async Task OnActivatedAsync()
-        => await LoadDevicesAsync();
+    {
+        SubscribeDeviceSelection();
+        await LoadDevicesAsync();
+    }
 
     public override Task OnDeactivatedAsync()
     {
+        UnsubscribeDeviceSelection();
         UnbindSelectedBuffer();
         return Task.CompletedTask;
     }

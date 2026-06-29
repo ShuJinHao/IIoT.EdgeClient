@@ -9,12 +9,16 @@ using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Shared;
 using IIoT.Edge.Application.Context;
+using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 using IIoT.Edge.Application.Features.Production.Equipment;
+using IIoT.Edge.Application.Features.Production.Monitor;
+using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Presentation.Navigation.Features.Dashboard;
 using IIoT.Edge.Presentation.Navigation.Features.Shell;
 using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.Presentation.Panels.Features.SysLog;
 using IIoT.Edge.SharedKernel.Context;
+using IIoT.Edge.SharedKernel.Enums;
 using Xunit;
 
 namespace IIoT.Edge.Shell.Tests;
@@ -31,7 +35,8 @@ public sealed class DashboardPreviewRuntimeViewModelTests
             new DeviceSelectionService(),
             new TestRuntimeConfigService(),
             new TestEdgeSyncDiagnosticsQuery(),
-            new TestPlcConnectionManager());
+            new TestPlcConnectionManager(),
+            new TestMonitorConfiguredDeviceLoader());
 
         ApplyDiagnostics(
             viewModel,
@@ -92,9 +97,7 @@ public sealed class DashboardPreviewRuntimeViewModelTests
             selectionService);
         store.Entries.Add(CreateEntry("ERROR", "[P1-AP01] 读取 R2450 失败：Read R2450 failed.", second: 1));
         store.Entries.Add(CreateEntry("ERROR", "[P1-AP02] 读取 R2450 失败：Read R2450 failed.", second: 2));
-        logViewModel.SelectedDeviceFilter = Assert.Single(
-            logViewModel.DeviceFilters,
-            static option => option.Key == "P1-AP01");
+        selectionService.SelectDevice("P1-AP01");
 
         var languageService = new TestAppLanguageService();
         var viewModel = new DashboardPreviewRuntimeViewModel(
@@ -103,7 +106,8 @@ public sealed class DashboardPreviewRuntimeViewModelTests
             selectionService,
             new TestRuntimeConfigService(),
             new TestEdgeSyncDiagnosticsQuery(),
-            new TestPlcConnectionManager());
+            new TestPlcConnectionManager(),
+            new TestMonitorConfiguredDeviceLoader());
 
         ApplyDiagnostics(
             viewModel,
@@ -127,7 +131,8 @@ public sealed class DashboardPreviewRuntimeViewModelTests
             new DeviceSelectionService(),
             new TestRuntimeConfigService(),
             new TestEdgeSyncDiagnosticsQuery(),
-            new TestPlcConnectionManager());
+            new TestPlcConnectionManager(),
+            new TestMonitorConfiguredDeviceLoader());
 
         ApplyDiagnostics(
             viewModel,
@@ -154,13 +159,113 @@ public sealed class DashboardPreviewRuntimeViewModelTests
         Assert.Same(item, viewModel.SelectedPlcStatusDetail);
     }
 
+    [Fact]
+    public void PlcStatusTableItems_WhenConfiguredPlcsExistWithoutRuntimeSnapshots_ShouldShowUncollectedRows()
+    {
+        var languageService = new TestAppLanguageService();
+        var viewModel = new DashboardPreviewRuntimeViewModel(
+            new DashboardViewModel(new TestEquipmentPanelService(), languageService),
+            languageService,
+            new DeviceSelectionService(),
+            new TestRuntimeConfigService(),
+            new TestEdgeSyncDiagnosticsQuery(),
+            new TestPlcConnectionManager(),
+            new TestMonitorConfiguredDeviceLoader());
+
+        ApplyDiagnostics(
+            viewModel,
+            [],
+            [
+                CreateConfiguredPlc(1, "P1-AP01"),
+                CreateConfiguredPlc(2, "P1-AP02"),
+                CreateConfiguredPlc(3, "P1-AP03")
+            ]);
+
+        Assert.Equal("0 / 3", viewModel.ConnectedDevices);
+        Assert.Contains(viewModel.ProductionSummaryItems, item =>
+            string.Equals(item.Label?.ToString(), "通讯异常", StringComparison.Ordinal)
+            && string.Equals(item.Value?.ToString(), "未采集", StringComparison.Ordinal));
+        Assert.Equal(3, viewModel.PlcStatusTableItems.Count);
+        Assert.All(viewModel.PlcStatusTableItems, item =>
+        {
+            Assert.Equal("未采集", item.StateText);
+            Assert.Equal("—", item.LatencyText);
+            Assert.Equal("—", item.LastConnectedText);
+            Assert.Equal("—", item.LastFailureText);
+            Assert.Equal("—", item.LastError);
+        });
+    }
+
+    [Fact]
+    public void PlcStatusTableItems_WhenRuntimeSnapshotExists_ShouldOverlayConfiguredBaseline()
+    {
+        var languageService = new TestAppLanguageService();
+        var viewModel = new DashboardPreviewRuntimeViewModel(
+            new DashboardViewModel(new TestEquipmentPanelService(), languageService),
+            languageService,
+            new DeviceSelectionService(),
+            new TestRuntimeConfigService(),
+            new TestEdgeSyncDiagnosticsQuery(),
+            new TestPlcConnectionManager(),
+            new TestMonitorConfiguredDeviceLoader());
+
+        ApplyDiagnostics(
+            viewModel,
+            [
+                new()
+                {
+                    NetworkDeviceId = 2,
+                    DeviceName = "P1-AP02",
+                    IsConnected = true,
+                    ConnectionState = PlcConnectionState.Connected,
+                    LatencyMs = 16,
+                    LastConnectedAtUtc = new DateTimeOffset(2026, 6, 24, 16, 24, 1, TimeSpan.Zero)
+                }
+            ],
+            [
+                CreateConfiguredPlc(1, "P1-AP01"),
+                CreateConfiguredPlc(2, "P1-AP02")
+            ]);
+
+        Assert.Equal("1 / 2", viewModel.ConnectedDevices);
+        Assert.Equal("16 ms", viewModel.PlcLatencyText);
+        Assert.Collection(
+            viewModel.PlcStatusTableItems,
+            item =>
+            {
+                Assert.Equal("P1-AP01", item.DeviceName);
+                Assert.Equal("未采集", item.StateText);
+                Assert.Equal("—", item.LatencyText);
+            },
+            item =>
+            {
+                Assert.Equal("P1-AP02", item.DeviceName);
+                Assert.Equal("已连接", item.StateText);
+                Assert.Equal("16 ms", item.LatencyText);
+            });
+        Assert.Contains(viewModel.ProductionSummaryItems, item =>
+            string.Equals(item.Label?.ToString(), "通讯异常", StringComparison.Ordinal)
+            && string.Equals(item.Value?.ToString(), "部分未采集", StringComparison.Ordinal));
+    }
+
     private static void ApplyDiagnostics(
         DashboardPreviewRuntimeViewModel viewModel,
-        IReadOnlyCollection<PlcConnectionRuntimeSnapshot> snapshots)
+        IReadOnlyCollection<PlcConnectionRuntimeSnapshot> snapshots,
+        IReadOnlyCollection<NetworkDeviceEntity>? configuredPlcs = null)
     {
         typeof(DashboardPreviewRuntimeViewModel)
             .GetMethod("ApplyDiagnostics", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .Invoke(viewModel, [CreateDiagnostics(), snapshots]);
+            .Invoke(viewModel, [CreateDiagnostics(), snapshots, configuredPlcs ?? []]);
+    }
+
+    private static NetworkDeviceEntity CreateConfiguredPlc(int id, string deviceName)
+    {
+        var entity = NetworkDeviceEntity.Create(deviceName, DeviceType.PLC, "127.0.0.1", 6000 + id);
+        typeof(NetworkDeviceEntity)
+            .BaseType!
+            .GetProperty("Id")!
+            .SetValue(entity, id);
+        return entity;
     }
 
     private static LogEntry CreateEntry(string level, string message, int second)
@@ -278,5 +383,19 @@ public sealed class DashboardPreviewRuntimeViewModelTests
         public PlcConnectionRuntimeSnapshot? GetRuntimeStatus(int networkDeviceId) => null;
 
         public IReadOnlyCollection<PlcConnectionRuntimeSnapshot> GetRuntimeStatuses() => [];
+    }
+
+    private sealed class TestMonitorConfiguredDeviceLoader : IMonitorConfiguredDeviceLoader
+    {
+        public Task<IReadOnlyList<NetworkDeviceEntity>> LoadConfiguredPlcDevicesAsync(CancellationToken ct)
+            => Task.FromResult<IReadOnlyList<NetworkDeviceEntity>>([]);
+
+        public Task<IReadOnlyDictionary<int, PlcTaskBindingDeviceDto>> LoadTaskBindingsByDeviceAsync(
+            IReadOnlyCollection<NetworkDeviceEntity> configuredPlcs,
+            CancellationToken ct)
+            => Task.FromResult<IReadOnlyDictionary<int, PlcTaskBindingDeviceDto>>(
+                new Dictionary<int, PlcTaskBindingDeviceDto>());
+
+        public bool HasRuntimeFactory(string? moduleId) => false;
     }
 }

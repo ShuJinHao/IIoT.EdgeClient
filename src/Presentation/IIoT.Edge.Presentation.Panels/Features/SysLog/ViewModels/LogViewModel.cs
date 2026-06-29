@@ -21,7 +21,6 @@ public class LogViewModel : PresentationViewModelBase
     private readonly IAppLanguageService _languageService;
     private readonly IDeviceSelectionService _deviceSelectionService;
     private LogDeviceFilterOption? _selectedDeviceFilter;
-    private bool _isApplyingSharedSelection;
 
     public override string ViewId => "Core.SysLog";
     public override string ViewTitle => "系统日志";
@@ -43,10 +42,6 @@ public class LogViewModel : PresentationViewModelBase
             _selectedDeviceFilter = value;
             OnPropertyChanged();
             RebuildDisplayedEntries();
-            if (!_isApplyingSharedSelection)
-            {
-                _deviceSelectionService.SelectDevice(value?.Key ?? AllFilterKey);
-            }
         }
     }
 
@@ -108,15 +103,7 @@ public class LogViewModel : PresentationViewModelBase
             DeviceFilters.Add(option);
         }
 
-        _isApplyingSharedSelection = true;
-        try
-        {
-            SelectedDeviceFilter = option;
-        }
-        finally
-        {
-            _isApplyingSharedSelection = false;
-        }
+        SelectedDeviceFilter = option;
     }
 
     private void RebuildDeviceFilters(string? preferredKey = null)

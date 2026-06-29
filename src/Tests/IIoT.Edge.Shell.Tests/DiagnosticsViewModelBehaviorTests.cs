@@ -8,6 +8,7 @@ using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
 using IIoT.Edge.Presentation.Navigation.Localization;
+using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.Presentation.Shell.Localization;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.UI.Shared.Avalonia.Controls;
@@ -277,6 +278,96 @@ public sealed class DiagnosticsViewModelBehaviorTests
             var mesRow = Assert.Single(viewModel.MesDeadLetters);
             Assert.Equal(DataPipelineRetryChannel.Mes, mesRow.Channel);
             Assert.Equal(202, mesRow.Id);
+        });
+
+    [Fact]
+    public Task DiagnosticsViewModel_WhenDeviceSelected_ShouldFilterDeviceRowsAndKeepGlobalDiagnostics()
+        => RunOnStaThreadAsync(async () =>
+        {
+            var startupStore = new FakeStartupDiagnosticsStore();
+            startupStore.Update(new StartupDiagnosticsReport(
+                GeneratedAt: new DateTime(2026, 6, 29, 9, 0, 0),
+                ConfigurationProfile: new ConfigurationProfileSnapshot(
+                    "Production",
+                    "LineA",
+                    "appsettings.machine.LineA.json",
+                    true,
+                    @"C:\EdgeRuntime\LineA"),
+                DiscoveredModules: ["ModuleA"],
+                EnabledModules: ["ModuleA"],
+                ActivatedModules: ["ModuleA"],
+                PluginStates: [],
+                ModuleRegistrations: [],
+                DeviceBindings:
+                [
+                    new DeviceModuleBindingSnapshot("P1-AP01", "ModuleA", true, true, true),
+                    new DeviceModuleBindingSnapshot("P1-AP02", "ModuleA", true, true, true)
+                ],
+                Issues:
+                [
+                    new StartupDiagnosticIssue("PLC_A", "P1-AP01 地址缺失", "ModuleA", "P1-AP01"),
+                    new StartupDiagnosticIssue("PLC_B", "P1-AP02 地址缺失", "ModuleA", "P1-AP02"),
+                    new StartupDiagnosticIssue("GLOBAL", "插件配置缺失", "ModuleA")
+                ]));
+            var selectionService = new DeviceSelectionService();
+            selectionService.SelectDevice("P1-AP01");
+            var viewModel = CreateViewModel(
+                startupStore,
+                new FakeEdgeSyncDiagnosticsQuery(),
+                new TestAppLanguageService(),
+                deviceSelectionService: selectionService);
+
+            await viewModel.RefreshAsync();
+
+            var binding = Assert.Single(viewModel.DeviceBindings);
+            Assert.Equal("P1-AP01", binding.DeviceName);
+            Assert.Equal(2, viewModel.Issues.Count);
+            Assert.Contains(viewModel.Issues, row => row.Message == "P1-AP01 地址缺失");
+            Assert.Contains(viewModel.Issues, row => row.Message == "插件配置缺失");
+            Assert.DoesNotContain(viewModel.Issues, row => row.Message == "P1-AP02 地址缺失");
+            Assert.Equal(2, viewModel.TotalIssueCount);
+        });
+
+    [Fact]
+    public Task DiagnosticsViewModel_WhenDeviceSelected_ShouldKeepSyncOperationsGlobal()
+        => RunOnStaThreadAsync(async () =>
+        {
+            var selectionService = new DeviceSelectionService();
+            selectionService.SelectDevice("P1-AP01");
+            var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery
+            {
+                Current = CreateReadySyncSnapshot(
+                    cloudDeadLetters: new DeadLetterDiagnosticsSnapshot(
+                        2,
+                        [],
+                        [
+                            CreateDeadLetterRecord(101, "P1-AP01"),
+                            CreateDeadLetterRecord(102, "P1-AP02")
+                        ],
+                        false,
+                        null,
+                        null),
+                    mesDeadLetters: new DeadLetterDiagnosticsSnapshot(
+                        1,
+                        [],
+                        [CreateDeadLetterRecord(202, "P1-AP02")],
+                        false,
+                        null,
+                        null))
+            };
+            var viewModel = CreateViewModel(
+                new FakeStartupDiagnosticsStore(),
+                diagnosticsQuery,
+                new TestAppLanguageService(),
+                deviceSelectionService: selectionService);
+
+            await viewModel.RefreshAsync();
+
+            Assert.Equal(2, viewModel.SyncChannels.Count);
+            Assert.Equal(2, viewModel.CloudDeadLetters.Count);
+            Assert.Single(viewModel.MesDeadLetters);
+            Assert.Contains(viewModel.CloudDeadLetters, row => row.FailedTarget == "P1-AP02");
+            Assert.Contains(viewModel.MesDeadLetters, row => row.FailedTarget == "P1-AP02");
         });
 
     [Fact]
@@ -638,8 +729,10 @@ public sealed class DiagnosticsViewModelBehaviorTests
         IAppLanguageService languageService,
         IDiagnosticsDeadLetterOperator? deadLetterOperator = null,
         IDiagnosticsDeadLetterConfirmationService? deadLetterConfirmationService = null,
-        IClientPermissionService? permissionService = null)
+        IClientPermissionService? permissionService = null,
+        IDeviceSelectionService? deviceSelectionService = null)
     {
+        deviceSelectionService ??= new DeviceSelectionService();
         var diagnosticsText = new LocalizedSyncDiagnosticsText(languageService);
         var displayNameResolver = new DiagnosticsModuleDisplayNameResolver(diagnosticsText);
         var collaboratorFactory = new DiagnosticsViewModelCollaboratorFactory(
@@ -654,10 +747,11 @@ public sealed class DiagnosticsViewModelBehaviorTests
             languageService,
             displayNameResolver,
             new DiagnosticsSummaryBuilder(languageService, diagnosticsText, displayNameResolver),
-            new DiagnosticsRowsBuilder(languageService, diagnosticsText, displayNameResolver),
+            new DiagnosticsRowsBuilder(languageService, diagnosticsText, displayNameResolver, deviceSelectionService),
             new DiagnosticsInitialSummaryFactory(languageService, diagnosticsText),
             new DiagnosticsRefreshCoordinator(),
-            collaboratorFactory);
+            collaboratorFactory,
+            deviceSelectionService);
     }
 
     private static EdgeSyncDiagnosticsSnapshot CreateReadySyncSnapshot(

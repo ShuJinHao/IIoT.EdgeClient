@@ -9,6 +9,7 @@ using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Io;
 using IIoT.Edge.Module.Homogenization.Config.Parameters;
 using IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
+using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.SharedKernel.Result;
@@ -37,6 +38,100 @@ public sealed class IoViewViewModelBehaviorTests
             Assert.Equal(
                 ["PLC-Homogenization-01", "PLC-TestProcess-01", "PLC-TestProcess-02"],
                 viewModel.Devices.Select(static x => x.DeviceName).ToArray());
+        });
+
+    [AvaloniaFact]
+    public Task LoadDevicesAsync_WhenSharedSelectionIsAll_ShouldNotAutoSelectFirstPlc()
+        => RunOnStaThreadAsync(async () =>
+        {
+            var devices = new[]
+            {
+                CreateDevice(6, "PLC-A", "TestProcess"),
+                CreateDevice(7, "PLC-B", "TestProcess")
+            };
+            var selectionService = new DeviceSelectionService();
+            var viewModel = CreateViewModel(devices, deviceSelectionService: selectionService);
+
+            await viewModel.OnActivatedAsync();
+
+            Assert.Null(viewModel.SelectedDevice);
+            Assert.False(viewModel.HasSelectedDevice);
+            Assert.False(viewModel.ManualReadCommand.CanExecute(null));
+            Assert.Equal(IDeviceSelectionService.AllFilterKey, selectionService.SelectedDeviceKey);
+        });
+
+    [AvaloniaFact]
+    public Task LoadDevicesAsync_WhenSharedSelectionMatchesDeviceName_ShouldSelectThatPlc()
+        => RunOnStaThreadAsync(async () =>
+        {
+            var deviceA = CreateDevice(8, "PLC-A", "TestProcess");
+            var deviceB = CreateDevice(9, "PLC-B", "TestProcess");
+            var selectionService = new DeviceSelectionService();
+            selectionService.SelectDevice(deviceB.DeviceName);
+            var viewModel = CreateViewModel([deviceA, deviceB], deviceSelectionService: selectionService);
+
+            await viewModel.LoadDevicesAsync();
+
+            Assert.Equal(deviceB.DeviceName, viewModel.SelectedDevice?.DeviceName);
+            Assert.Equal(deviceB.DeviceName, selectionService.SelectedDeviceKey);
+        });
+
+    [AvaloniaFact]
+    public Task LoadDevicesAsync_WhenSharedSelectionIsNotVisible_ShouldShowEmptyWithoutChangingGlobalSelection()
+        => RunOnStaThreadAsync(async () =>
+        {
+            var enabled = CreateDevice(12, "PLC-Enabled", "TestProcess");
+            var disabled = CreateDevice(13, "PLC-Disabled", "TestProcess", isEnabled: false);
+            var selectionService = new DeviceSelectionService();
+            selectionService.SelectDevice(disabled.DeviceName);
+            var viewModel = CreateViewModel([enabled, disabled], deviceSelectionService: selectionService);
+
+            await viewModel.LoadDevicesAsync();
+
+            Assert.Null(viewModel.SelectedDevice);
+            Assert.DoesNotContain(viewModel.Devices, device => device.DeviceName == disabled.DeviceName);
+            Assert.Equal(disabled.DeviceName, selectionService.SelectedDeviceKey);
+        });
+
+    [AvaloniaFact]
+    public Task SelectedDevice_WhenSetInsideIoPage_ShouldNotWriteSharedSelection()
+        => RunOnStaThreadAsync(async () =>
+        {
+            var deviceA = CreateDevice(14, "PLC-A", "TestProcess");
+            var deviceB = CreateDevice(15, "PLC-B", "TestProcess");
+            var selectionService = new DeviceSelectionService();
+            var viewModel = CreateViewModel([deviceA, deviceB], deviceSelectionService: selectionService);
+            await viewModel.LoadDevicesAsync();
+
+            viewModel.SelectedDevice = deviceB;
+
+            Assert.Equal(IDeviceSelectionService.AllFilterKey, selectionService.SelectedDeviceKey);
+            Assert.Equal(deviceB.DeviceName, viewModel.SelectedDevice?.DeviceName);
+        });
+
+    [AvaloniaFact]
+    public Task SharedSelectionChanged_WhenDeviceListAlreadyLoaded_ShouldNotReloadDevices()
+        => RunOnStaThreadAsync(async () =>
+        {
+            var deviceA = CreateDevice(16, "PLC-A", "TestProcess");
+            var deviceB = CreateDevice(17, "PLC-B", "TestProcess");
+            var selectionService = new DeviceSelectionService();
+            var facade = new FakeIoViewQueryFacade(
+                [deviceA, deviceB],
+                new Dictionary<int, List<IoMappingEntity>>());
+            var dataStore = new PlcDataStore();
+            var viewModel = new TestIoViewModel(
+                dataStore,
+                new FakePlcConnectionManager([deviceA.Id, deviceB.Id]),
+                facade,
+                null,
+                selectionService);
+            await viewModel.OnActivatedAsync();
+
+            selectionService.SelectDevice(deviceB.DeviceName);
+
+            Assert.Equal(1, facade.NetworkDeviceQueryCount);
+            Assert.Equal(deviceB.DeviceName, viewModel.SelectedDevice?.DeviceName);
         });
 
     [AvaloniaFact]
@@ -397,12 +492,14 @@ public sealed class IoViewViewModelBehaviorTests
         IReadOnlyCollection<NetworkDeviceEntity> devices,
         IReadOnlyDictionary<int, List<IoMappingEntity>>? mappings = null,
         IPlcDataStore? dataStore = null,
-        string? moduleIdFilter = null)
+        string? moduleIdFilter = null,
+        IDeviceSelectionService? deviceSelectionService = null)
         => new(
             dataStore ?? new PlcDataStore(),
             new FakePlcConnectionManager(devices.Select(static x => x.Id).ToArray()),
             new FakeIoViewQueryFacade(devices, mappings ?? new Dictionary<int, List<IoMappingEntity>>()),
-            moduleIdFilter);
+            moduleIdFilter,
+            deviceSelectionService ?? new DeviceSelectionService());
 
     private static NetworkDeviceEntity CreateDevice(
         int id,
@@ -442,7 +539,8 @@ public sealed class IoViewViewModelBehaviorTests
         IPlcDataStore dataStore,
         IPlcConnectionManager plcConnectionManager,
         IIoViewQueryFacade queryFacade,
-        string? moduleIdFilter)
+        string? moduleIdFilter,
+        IDeviceSelectionService deviceSelectionService)
         : IoViewViewModel(
             dataStore,
             plcConnectionManager,
@@ -456,7 +554,11 @@ public sealed class IoViewViewModelBehaviorTests
             new IoViewBufferBindingCoordinator(dataStore),
             new IoViewInteractionWriter(dataStore),
             new IoViewManualReadService(plcConnectionManager, dataStore),
-            moduleIdFilter);
+            deviceSelectionService,
+            moduleIdFilter)
+    {
+        protected override void RunOnUiThread(Action action) => action();
+    }
 
     private sealed class TestLanguageService : IAppLanguageService
     {
@@ -492,8 +594,13 @@ public sealed class IoViewViewModelBehaviorTests
         IReadOnlyCollection<NetworkDeviceEntity> devices,
         IReadOnlyDictionary<int, List<IoMappingEntity>> mappings) : IIoViewQueryFacade
     {
+        public int NetworkDeviceQueryCount { get; private set; }
+
         public Task<Result<List<NetworkDeviceEntity>>> GetNetworkDevicesAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult(Result.Success(devices.ToList()));
+        {
+            NetworkDeviceQueryCount++;
+            return Task.FromResult(Result.Success(devices.ToList()));
+        }
 
         public Task<Result<IoMappingPagedDto>> GetIoMappingsAsync(
             int networkDeviceId,

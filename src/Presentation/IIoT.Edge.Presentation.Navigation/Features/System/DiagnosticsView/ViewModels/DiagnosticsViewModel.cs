@@ -3,6 +3,7 @@ using System.Threading;
 using System.Windows.Input;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Presentation.Navigation.Localization;
+using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.UI.Shared.Avalonia.Controls;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
@@ -26,6 +27,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase, IDiagnostics
     private readonly IDiagnosticsViewModelRefreshApplier _refreshApplier;
     private readonly IDiagnosticsDeadLetterCommandWorkflow _deadLetterWorkflow;
     private readonly IDiagnosticsPermissionObserver _permissionObserver;
+    private readonly IDeviceSelectionService _deviceSelectionService;
     private bool _isModuleReadinessExpanded;
     private bool _isObserving;
 
@@ -38,7 +40,8 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase, IDiagnostics
         IDiagnosticsRowsBuilder rowsBuilder,
         IDiagnosticsInitialSummaryFactory initialSummaryFactory,
         IDiagnosticsRefreshCoordinator refreshCoordinator,
-        IDiagnosticsViewModelCollaboratorFactory collaboratorFactory)
+        IDiagnosticsViewModelCollaboratorFactory collaboratorFactory,
+        IDeviceSelectionService deviceSelectionService)
         : base(languageService, CoreViewIds.Diagnostics, "Navigation_Menu_CoreDiagnostics", "系统诊断")
     {
         _diagnosticsStore = diagnosticsStore;
@@ -48,6 +51,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase, IDiagnostics
         _rowsBuilder = rowsBuilder;
         _initialSummaryFactory = initialSummaryFactory;
         _refreshCoordinator = refreshCoordinator;
+        _deviceSelectionService = deviceSelectionService;
         var collaborators = collaboratorFactory.Create(new DiagnosticsViewModelCollaboratorContext(
             this,
             Tabs,
@@ -256,6 +260,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase, IDiagnostics
         }
 
         _refreshTimer.Tick += OnRefreshTimerTick;
+        _deviceSelectionService.SelectionChanged += OnDeviceSelectionChanged;
         _permissionObserver.Start();
         _refreshTimer.Start();
         _isObserving = true;
@@ -270,6 +275,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase, IDiagnostics
 
         _refreshTimer.Stop();
         _refreshTimer.Tick -= OnRefreshTimerTick;
+        _deviceSelectionService.SelectionChanged -= OnDeviceSelectionChanged;
         _permissionObserver.Stop();
         _isObserving = false;
     }
@@ -278,6 +284,11 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase, IDiagnostics
     {
         await SafeRefreshAsync();
     }
+
+    private void OnDeviceSelectionChanged(object? sender, EventArgs e)
+        => Avalonia.Threading.Dispatcher.UIThread.Post(
+            () => _ = SafeRefreshAsync(),
+            Avalonia.Threading.DispatcherPriority.Background);
 
     private async Task SafeRefreshAsync(CancellationToken ct = default)
     {

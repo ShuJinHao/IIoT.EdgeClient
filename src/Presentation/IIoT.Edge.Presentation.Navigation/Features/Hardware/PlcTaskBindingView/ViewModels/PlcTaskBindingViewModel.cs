@@ -5,30 +5,35 @@ using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 using IIoT.Edge.Presentation.Navigation.Common;
 using IIoT.Edge.Presentation.Navigation.Localization;
+using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.PlcTaskBindingView;
 
-public sealed class PlcTaskBindingViewModel : NavigationViewModelBase
+public class PlcTaskBindingViewModel : NavigationViewModelBase
 {
     private readonly IPlcTaskBindingService _bindingService;
     private readonly IClientPermissionService _permissionService;
     private readonly IPlcTaskBindingConfirmationService _confirmationService;
+    private readonly IDeviceSelectionService _deviceSelectionService;
     private readonly string _moduleId;
     private readonly AsyncCommand _saveCommand;
     private PlcTaskBindingDeviceVm? _selectedDevice;
+    private bool _isDeviceSelectionSubscribed;
 
     public PlcTaskBindingViewModel(
         IPlcTaskBindingService bindingService,
         IClientPermissionService permissionService,
         IPlcTaskBindingConfirmationService confirmationService,
-        IAppLanguageService languageService)
+        IAppLanguageService languageService,
+        IDeviceSelectionService deviceSelectionService)
         : this(
             bindingService,
             permissionService,
             confirmationService,
             languageService,
+            deviceSelectionService,
             "Hardware.PlcTaskBindingView",
             "Navigation_Title_PlcTaskBinding",
             "任务绑定",
@@ -41,6 +46,7 @@ public sealed class PlcTaskBindingViewModel : NavigationViewModelBase
         IClientPermissionService permissionService,
         IPlcTaskBindingConfirmationService confirmationService,
         IAppLanguageService languageService,
+        IDeviceSelectionService deviceSelectionService,
         string viewId,
         string titleResourceKey,
         string titleFallback,
@@ -50,6 +56,7 @@ public sealed class PlcTaskBindingViewModel : NavigationViewModelBase
         _bindingService = bindingService;
         _permissionService = permissionService;
         _confirmationService = confirmationService;
+        _deviceSelectionService = deviceSelectionService;
         _moduleId = moduleId;
 
         RefreshCommand = new AsyncCommand(LoadAsync);
@@ -71,6 +78,9 @@ public sealed class PlcTaskBindingViewModel : NavigationViewModelBase
             _selectedDevice = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(HasSelectedDevice));
+            OnPropertyChanged(nameof(IsDeviceSelectionRequired));
+            OnPropertyChanged(nameof(ShouldShowDeviceSelectionPrompt));
+            OnPropertyChanged(nameof(SelectedDeviceDisplayName));
             OnPropertyChanged(nameof(SelectedDeviceTasks));
             OnPropertyChanged(nameof(CanSave));
             _saveCommand.RaiseCanExecuteChanged();
@@ -83,6 +93,13 @@ public sealed class PlcTaskBindingViewModel : NavigationViewModelBase
 
     public bool HasSelectedDevice => SelectedDevice is not null;
 
+    public bool IsDeviceSelectionRequired => SelectedDevice is null;
+
+    public bool ShouldShowDeviceSelectionPrompt => HasDevices && IsDeviceSelectionRequired;
+
+    public string SelectedDeviceDisplayName
+        => SelectedDevice?.DeviceName ?? GetText("Navigation_DeviceSelection_AllOrSummary", "全部/汇总");
+
     public bool CanEdit => _permissionService.CanEditHardware;
 
     public bool CanSave => CanEdit && SelectedDevice is not null;
@@ -92,12 +109,21 @@ public sealed class PlcTaskBindingViewModel : NavigationViewModelBase
     public ICommand SaveCommand => _saveCommand;
 
     public override Task OnActivatedAsync()
-        => LoadAsync();
+    {
+        SubscribeDeviceSelection();
+        return LoadAsync();
+    }
+
+    public override Task OnDeactivatedAsync()
+    {
+        UnsubscribeDeviceSelection();
+        return Task.CompletedTask;
+    }
 
     private async Task LoadAsync()
         => await RunViewTaskAsync(async () =>
         {
-            await LoadCoreAsync(SelectedDevice?.NetworkDeviceId).ConfigureAwait(false);
+            await LoadCoreAsync().ConfigureAwait(false);
         }, GetText("Navigation_PlcTaskBinding_LoadFailed", "加载 PLC 任务绑定失败。"));
 
     private async Task SaveAsync()
@@ -127,11 +153,11 @@ public sealed class PlcTaskBindingViewModel : NavigationViewModelBase
                 _moduleId,
                 states).ConfigureAwait(false);
 
-            await LoadCoreAsync(selected.NetworkDeviceId).ConfigureAwait(false);
+            await LoadCoreAsync().ConfigureAwait(false);
             RunOnUiThread(() => SetStatus(GetText("Navigation_PlcTaskBinding_SaveSuccess", "任务绑定已保存。")));
         }, GetText("Navigation_PlcTaskBinding_SaveFailed", "保存 PLC 任务绑定失败。"));
 
-    private async Task LoadCoreAsync(int? selectedDeviceId)
+    private async Task LoadCoreAsync()
     {
         var devices = await _bindingService.GetModuleDeviceBindingsAsync(_moduleId).ConfigureAwait(false);
         var deviceItems = devices.Select(static x => new PlcTaskBindingDeviceVm(x)).ToArray();
@@ -140,10 +166,9 @@ public sealed class PlcTaskBindingViewModel : NavigationViewModelBase
         {
             ReplaceItems(Devices, deviceItems);
             OnPropertyChanged(nameof(HasDevices));
+            OnPropertyChanged(nameof(ShouldShowDeviceSelectionPrompt));
 
-            SelectedDevice = selectedDeviceId is null
-                ? Devices.FirstOrDefault()
-                : Devices.FirstOrDefault(x => x.NetworkDeviceId == selectedDeviceId.Value) ?? Devices.FirstOrDefault();
+            ApplySelectedDeviceFromSharedSelection(ResolveDeviceFromSharedSelection());
 
             SetStatus(Devices.Count == 0
                 ? GetText("Navigation_PlcTaskBinding_NoDevices", "当前模块暂无 PLC 设备。")
@@ -151,7 +176,62 @@ public sealed class PlcTaskBindingViewModel : NavigationViewModelBase
         });
     }
 
-    private static void RunOnUiThread(Action action)
+    private PlcTaskBindingDeviceVm? ResolveDeviceFromSharedSelection()
+    {
+        var selectedKey = _deviceSelectionService.SelectedDeviceKey;
+        if (string.Equals(
+                selectedKey,
+                IDeviceSelectionService.AllFilterKey,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return Devices.FirstOrDefault(device =>
+            string.Equals(device.DeviceName, selectedKey, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void ApplySelectedDeviceFromSharedSelection(PlcTaskBindingDeviceVm? device)
+    {
+        SelectedDevice = device;
+    }
+
+    private void OnSharedDeviceSelectionChanged(object? sender, EventArgs e)
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            ApplySelectedDeviceFromSharedSelection(ResolveDeviceFromSharedSelection());
+            return;
+        }
+
+        Dispatcher.UIThread.Post(
+            () => ApplySelectedDeviceFromSharedSelection(ResolveDeviceFromSharedSelection()),
+            DispatcherPriority.Background);
+    }
+
+    private void SubscribeDeviceSelection()
+    {
+        if (_isDeviceSelectionSubscribed)
+        {
+            return;
+        }
+
+        _deviceSelectionService.SelectionChanged += OnSharedDeviceSelectionChanged;
+        _isDeviceSelectionSubscribed = true;
+    }
+
+    private void UnsubscribeDeviceSelection()
+    {
+        if (!_isDeviceSelectionSubscribed)
+        {
+            return;
+        }
+
+        _deviceSelectionService.SelectionChanged -= OnSharedDeviceSelectionChanged;
+        _isDeviceSelectionSubscribed = false;
+    }
+
+    protected virtual void RunOnUiThread(Action action)
     {
         if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
         {
@@ -160,6 +240,12 @@ public sealed class PlcTaskBindingViewModel : NavigationViewModelBase
         }
 
         Avalonia.Threading.Dispatcher.UIThread.Post(action);
+    }
+
+    protected override void RefreshLocalization()
+    {
+        base.RefreshLocalization();
+        OnPropertyChanged(nameof(SelectedDeviceDisplayName));
     }
 }
 

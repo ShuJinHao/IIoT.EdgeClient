@@ -649,10 +649,25 @@ public sealed class RepositoryHygieneTests
         Assert.Contains("单点读数据", combinedDocs, StringComparison.Ordinal);
         Assert.Contains("连续读数据", combinedDocs, StringComparison.Ordinal);
         Assert.Contains("PLC 状态表", combinedDocs, StringComparison.Ordinal);
+        Assert.Contains("人工显示/查询筛选器", combinedDocs, StringComparison.Ordinal);
+        Assert.Contains("不得自动改全局设备号", combinedDocs, StringComparison.Ordinal);
+        Assert.Contains("未采集", combinedDocs, StringComparison.Ordinal);
+        Assert.Contains("按当前筛选结果批量", combinedDocs, StringComparison.Ordinal);
+        Assert.Contains("同步运维", combinedDocs, StringComparison.Ordinal);
+        Assert.Contains("实时监控", combinedDocs, StringComparison.Ordinal);
+        Assert.Contains("状态机", combinedDocs, StringComparison.Ordinal);
+        Assert.Contains("任务绑定", combinedDocs, StringComparison.Ordinal);
 
-        Assert.Contains("右侧“设备运行”的设备号是统一选择入口", ruleDoc, StringComparison.Ordinal);
+        Assert.Contains("右侧“设备运行”的设备号是唯一操作入口和唯一发布者", ruleDoc, StringComparison.Ordinal);
+        Assert.Contains("设备号是人工显示/查询筛选器", ruleDoc, StringComparison.Ordinal);
+        Assert.Contains("禁止调用 `SelectDevice(...)` 发布全局设备号", ruleDoc, StringComparison.Ordinal);
+        Assert.Contains("写操作只允许落到明确单个目标", ruleDoc, StringComparison.Ordinal);
         Assert.Contains("Dashboard `PLC 状态表` 必须以已配置 PLC 为基准行", plcSelectionDoc, StringComparison.Ordinal);
         Assert.Contains("不得出现 `0 / 12` 但表格空白", plcSelectionDoc, StringComparison.Ordinal);
+        Assert.Contains("页面打开、刷新、激活、加载、无数据、无快照、空态或匹配失败时，不得自动改全局设备号", plcSelectionDoc, StringComparison.Ordinal);
+        Assert.Contains("设备号永远不得作为写入、保存、删除、重试、重入队、启停、状态机执行、PLC 任务调度、Cloud/MES 同步范围或后台任务范围的参数", plcSelectionDoc, StringComparison.Ordinal);
+        Assert.Contains("启动诊断必须订阅右侧设备号产出显示集合", plcSelectionDoc, StringComparison.Ordinal);
+        Assert.Contains("同步运维保持全局展示和全局链路语义", plcSelectionDoc, StringComparison.Ordinal);
         Assert.Contains("UI 改动必须真实运行或截图验收", ruleDoc, StringComparison.Ordinal);
         Assert.Contains("build 通过不等于 UI 通过", ruleDoc, StringComparison.Ordinal);
     }
@@ -767,6 +782,28 @@ public sealed class RepositoryHygieneTests
 
         var matches = EnumerateFiles(presentationRoot, "*.cs")
             .SelectMany(path => FindForbiddenMatches(root, path, ["IRequest", "IRequestHandler"]))
+            .ToArray();
+
+        Assert.Empty(matches);
+    }
+
+    [Fact]
+    public void DeviceSelection_ShouldOnlyBePublishedByEquipmentPanel()
+    {
+        var root = FindRepositoryRoot();
+        var presentationRoot = Path.Combine(root, "src", "Presentation");
+        var allowedPublishers = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "src/Presentation/IIoT.Edge.Presentation.Panels/Features/DeviceSelection/DeviceSelectionService.cs",
+            "src/Presentation/IIoT.Edge.Presentation.Panels/Features/Equipment/ViewModels/EquipmentViewModel.cs"
+        };
+        var selectDeviceCallPattern = new Regex(@"\bSelectDevice\s*\(", RegexOptions.CultureInvariant);
+
+        var matches = EnumerateFiles(presentationRoot, "*.cs")
+            .Where(path => !allowedPublishers.Contains(ToRepositoryPath(root, path)))
+            .SelectMany(path => selectDeviceCallPattern
+                .Matches(File.ReadAllText(path))
+                .Select(match => $"{ToRepositoryPath(root, path)} publishes device selection at offset {match.Index}"))
             .ToArray();
 
         Assert.Empty(matches);

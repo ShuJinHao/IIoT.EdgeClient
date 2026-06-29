@@ -4,6 +4,7 @@ using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Common.Diagnostics;
 using IIoT.Edge.Application.Modules.Diagnostics;
 using IIoT.Edge.Presentation.Navigation.Localization;
+using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.UI.Shared.Avalonia.Controls;
 using IIoT.Edge.UI.Shared.Localization;
@@ -22,7 +23,8 @@ public interface IDiagnosticsRowsBuilder
 internal sealed class DiagnosticsRowsBuilder(
     IAppLanguageService languageService,
     LocalizedSyncDiagnosticsText diagnosticsText,
-    IDiagnosticsModuleDisplayNameResolver displayNameResolver)
+    IDiagnosticsModuleDisplayNameResolver displayNameResolver,
+    IDeviceSelectionService deviceSelectionService)
     : IDiagnosticsRowsBuilder
 {
     public DiagnosticsRowsSnapshot Build(
@@ -32,14 +34,16 @@ internal sealed class DiagnosticsRowsBuilder(
     {
         var cloudDeadLetters = BuildDeadLetters(DataPipelineRetryChannel.Cloud, syncDiagnostics.Cloud.DeadLetters?.LatestRecords);
         var mesDeadLetters = BuildDeadLetters(DataPipelineRetryChannel.Mes, syncDiagnostics.Mes.DeadLetters?.LatestRecords);
+        var issues = BuildIssues(report);
+        var visibleIssueCount = report.Issues.Count(x => ShouldIncludeDeviceScopedRow(x.DeviceName));
 
         return new DiagnosticsRowsSnapshot(
             BuildModuleRegistrations(report, moduleNameMap),
             BuildPluginStates(report),
             BuildDeviceBindings(report),
             BuildModuleReadinessRows(report, moduleNameMap),
-            BuildIssues(report),
-            report.Issues.Count,
+            issues,
+            visibleIssueCount,
             BuildMesUploadDiagnostics(syncDiagnostics),
             BuildSyncChannels(syncDiagnostics),
             cloudDeadLetters,
@@ -73,8 +77,9 @@ internal sealed class DiagnosticsRowsBuilder(
                 DiagnosticsTextNormalizer.Normalize(x.Message)))
             .ToArray();
 
-    private static IReadOnlyList<DeviceModuleBindingRow> BuildDeviceBindings(StartupDiagnosticsReport report)
+    private IReadOnlyList<DeviceModuleBindingRow> BuildDeviceBindings(StartupDiagnosticsReport report)
         => report.DeviceBindings
+            .Where(x => ShouldIncludeDeviceScopedRow(x.DeviceName))
             .Select(x => new DeviceModuleBindingRow(
                 x.DeviceName,
                 DiagnosticsTextNormalizer.Normalize(x.ModuleId),
@@ -94,6 +99,7 @@ internal sealed class DiagnosticsRowsBuilder(
             .GroupBy(x => NormalizeModuleId(x.ModuleId), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
         var bindings = report.DeviceBindings
+            .Where(x => ShouldIncludeDeviceScopedRow(x.DeviceName))
             .GroupBy(x => NormalizeModuleId(x.ModuleId), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(x => x.Key, x => x.ToArray(), StringComparer.OrdinalIgnoreCase);
         var moduleIds = pluginStates.Keys
@@ -145,6 +151,7 @@ internal sealed class DiagnosticsRowsBuilder(
     private IReadOnlyList<StartupDiagnosticIssueRow> BuildIssues(StartupDiagnosticsReport report)
     {
         var issueRows = report.Issues
+            .Where(x => ShouldIncludeDeviceScopedRow(x.DeviceName))
             .Select(x => new StartupDiagnosticIssueCandidate(
                 NormalizeIssueMessage(DiagnosticsTextNormalizer.Normalize(x.Message)),
                 EdgeVisualStatus.Error,
@@ -186,6 +193,22 @@ internal sealed class DiagnosticsRowsBuilder(
         string Message,
         EdgeVisualStatus Status,
         string LevelText);
+
+    private bool ShouldIncludeDeviceScopedRow(string? deviceName)
+    {
+        var selectedKey = deviceSelectionService.SelectedDeviceKey;
+        if (string.Equals(selectedKey, IDeviceSelectionService.AllFilterKey, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(deviceName))
+        {
+            return true;
+        }
+
+        return string.Equals(deviceName.Trim(), selectedKey, StringComparison.OrdinalIgnoreCase);
+    }
 
     private IReadOnlyList<MesChannelDiagnosticsRow> BuildMesUploadDiagnostics(
         EdgeSyncDiagnosticsSnapshot syncDiagnostics)

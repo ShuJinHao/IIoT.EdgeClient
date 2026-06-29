@@ -27,17 +27,12 @@
                     VerticalAlignment="Top"
                     Orientation="Horizontal"
                     Spacing="8">
-                    <edge:EdgeFilterComboBox
-                        Width="260"
-                        ItemsSource="{Binding Devices}"
-                        PlaceholderText="{DynamicResource Navigation_Hint_SelectDevice}"
-                        SelectedItem="{Binding SelectedDevice, Mode=TwoWay}">
-                        <edge:EdgeFilterComboBox.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding DeviceName}" />
-                            </DataTemplate>
-                        </edge:EdgeFilterComboBox.ItemTemplate>
-                    </edge:EdgeFilterComboBox>
+                    <TextBlock
+                        Classes="edge-text-page-caption"
+                        VerticalAlignment="Center">
+                        <Run Text="{DynamicResource Navigation_DeviceSelection_CurrentDevicePrefix}" />
+                        <Run Text="{Binding SelectedDeviceDisplayName}" />
+                    </TextBlock>
                     <edge:EdgeActionButton
                         Command="{Binding RefreshDevicesCommand}"
                         Content="{DynamicResource Navigation_Button_Refresh}"
@@ -47,7 +42,12 @@
                 </StackPanel>
             </Grid>
 
-            <edge:EdgeTabControl>
+            <sharedViews:EmptyStateView
+                IsVisible="{Binding ShouldShowDeviceSelectionPrompt}"
+                Message="{DynamicResource Navigation_DeviceSelection_SelectFromRightMessage}"
+                Title="{DynamicResource Navigation_Hint_SelectDevice}" />
+
+            <edge:EdgeTabControl IsVisible="{Binding HasSelectedDevice}">
                 <TabItem Header="{DynamicResource Navigation_IoView_TabInteraction}">
                     <StackPanel Spacing="12">
                         <edge:EdgeTablePanel

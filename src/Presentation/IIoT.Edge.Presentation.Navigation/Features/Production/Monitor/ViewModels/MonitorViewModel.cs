@@ -3,6 +3,7 @@ using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Context;
 using IIoT.Edge.Application.Features.Production.Monitor;
 using IIoT.Edge.Presentation.Navigation.Localization;
+using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
 using System.Collections.ObjectModel;
@@ -19,6 +20,7 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
     private readonly IMonitorViewModelSummaryFormatter _summaryFormatter;
     private readonly IMonitorStateMachineTaskItemFactory _stateMachineTaskItemFactory;
     private readonly IMonitorViewModelTabController _tabController;
+    private readonly IDeviceSelectionService _deviceSelectionService;
 
     private IReadOnlyList<DeviceMonitorSnapshot> _lastSnapshots = [];
     private string? _selectedDevice;
@@ -30,15 +32,18 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
     private string _cellQueryText = string.Empty;
     private DataTable _cellTable = new();
     private bool _refreshInFlight;
+    private bool _isDeviceSelectionSubscribed;
 
     public MonitorViewModel(
         IMonitorSnapshotQueryFacade monitorSnapshotQueryFacade,
         IAppLanguageService languageService,
-        IMonitorViewModelCollaboratorFactory collaboratorFactory)
+        IMonitorViewModelCollaboratorFactory collaboratorFactory,
+        IDeviceSelectionService deviceSelectionService)
         : this(
             monitorSnapshotQueryFacade,
             languageService,
             collaboratorFactory,
+            deviceSelectionService,
             "Production.Monitor",
             "Navigation_Title_RealtimeMonitor",
             "实时监控")
@@ -49,12 +54,14 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
         IMonitorSnapshotQueryFacade monitorSnapshotQueryFacade,
         IAppLanguageService languageService,
         IMonitorViewModelCollaboratorFactory collaboratorFactory,
+        IDeviceSelectionService deviceSelectionService,
         string viewId,
         string titleResourceKey,
         string titleFallback)
         : base(languageService, viewId, titleResourceKey, titleFallback)
     {
         _monitorSnapshotQueryFacade = monitorSnapshotQueryFacade;
+        _deviceSelectionService = deviceSelectionService;
         _diagnosticsText = new LocalizedSyncDiagnosticsText(languageService);
         Tabs = [];
         var collaborators = collaboratorFactory.Create(new MonitorViewModelCollaboratorContext(this, Tabs));
@@ -104,9 +111,23 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
 
             _selectedDevice = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(HasSelectedDevice));
+            OnPropertyChanged(nameof(IsDeviceSelectionRequired));
+            OnPropertyChanged(nameof(ShouldShowDeviceSelectionPrompt));
+            OnPropertyChanged(nameof(SelectedDeviceDisplayName));
+
             ApplySelectedSnapshot();
         }
     }
+
+    public bool HasSelectedDevice => !string.IsNullOrWhiteSpace(SelectedDevice);
+
+    public bool IsDeviceSelectionRequired => !HasSelectedDevice;
+
+    public bool ShouldShowDeviceSelectionPrompt => HasDevices && IsDeviceSelectionRequired;
+
+    public string SelectedDeviceDisplayName
+        => SelectedDevice ?? GetText("Navigation_DeviceSelection_AllOrSummary", "全部/汇总");
 
     private MonitorStatusItemVm _lastErrorItem = new(string.Empty, string.Empty);
 
@@ -227,6 +248,7 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
 
     public override async Task OnActivatedAsync()
     {
+        SubscribeDeviceSelection();
         if (!_refreshTimer.IsEnabled)
         {
             _refreshTimer.Start();
@@ -239,6 +261,7 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
 
     public override Task OnDeactivatedAsync()
     {
+        UnsubscribeDeviceSelection();
         _refreshTimer.Stop();
         return Task.CompletedTask;
     }
@@ -271,14 +294,70 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
         _lastSnapshots = snapshots;
         ReplaceItems(DeviceOptions, snapshots.Select(static snapshot => snapshot.DeviceName).Distinct());
 
-        var nextDevice = MonitorViewModelSnapshotApplier.ResolveSelectedDevice(snapshots, _selectedDevice);
-        if (!string.Equals(_selectedDevice, nextDevice, StringComparison.Ordinal))
-        {
-            _selectedDevice = nextDevice;
-            OnPropertyChanged(nameof(SelectedDevice));
-        }
+        ApplySelectedDeviceFromSharedSelection(MonitorViewModelSnapshotApplier.ResolveSelectedDevice(
+            snapshots,
+            _deviceSelectionService.SelectedDeviceKey));
 
         ApplySelectedSnapshot();
+    }
+
+    private void ApplySelectedDeviceFromSharedSelection(string? deviceName)
+    {
+        if (string.Equals(_selectedDevice, deviceName, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _selectedDevice = deviceName;
+        OnPropertyChanged(nameof(SelectedDevice));
+        OnPropertyChanged(nameof(HasSelectedDevice));
+        OnPropertyChanged(nameof(IsDeviceSelectionRequired));
+        OnPropertyChanged(nameof(ShouldShowDeviceSelectionPrompt));
+        OnPropertyChanged(nameof(SelectedDeviceDisplayName));
+    }
+
+    private void OnSharedDeviceSelectionChanged(object? sender, EventArgs e)
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            ApplySelectedDeviceFromSharedSelection(MonitorViewModelSnapshotApplier.ResolveSelectedDevice(
+                _lastSnapshots,
+                _deviceSelectionService.SelectedDeviceKey));
+            ApplySelectedSnapshot();
+            return;
+        }
+
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                ApplySelectedDeviceFromSharedSelection(MonitorViewModelSnapshotApplier.ResolveSelectedDevice(
+                    _lastSnapshots,
+                    _deviceSelectionService.SelectedDeviceKey));
+                ApplySelectedSnapshot();
+            },
+            DispatcherPriority.Background);
+    }
+
+    private void SubscribeDeviceSelection()
+    {
+        if (_isDeviceSelectionSubscribed)
+        {
+            return;
+        }
+
+        _deviceSelectionService.SelectionChanged += OnSharedDeviceSelectionChanged;
+        _isDeviceSelectionSubscribed = true;
+    }
+
+    private void UnsubscribeDeviceSelection()
+    {
+        if (!_isDeviceSelectionSubscribed)
+        {
+            return;
+        }
+
+        _deviceSelectionService.SelectionChanged -= OnSharedDeviceSelectionChanged;
+        _isDeviceSelectionSubscribed = false;
     }
 
     private void ApplySelectedSnapshot()
@@ -400,6 +479,7 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
     {
         base.RefreshLocalization();
         _tabController.RefreshLanguage();
+        OnPropertyChanged(nameof(SelectedDeviceDisplayName));
         ApplySelectedSnapshot();
     }
 
@@ -407,6 +487,7 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
     {
         OnPropertyChanged(nameof(HasDevices));
         OnPropertyChanged(nameof(IsDevicesEmpty));
+        OnPropertyChanged(nameof(ShouldShowDeviceSelectionPrompt));
         OnPropertyChanged(nameof(StepRowCount));
         OnPropertyChanged(nameof(DeviceDataRowCount));
         OnPropertyChanged(nameof(EquipmentStatusRowCount));

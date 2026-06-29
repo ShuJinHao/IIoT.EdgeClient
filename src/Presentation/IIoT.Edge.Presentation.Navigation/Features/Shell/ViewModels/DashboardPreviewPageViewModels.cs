@@ -8,6 +8,8 @@ using IIoT.Edge.Application.Abstractions.Mes;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Common.Diagnostics;
+using IIoT.Edge.Application.Features.Production.Monitor;
+using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Presentation.Navigation.Features.Dashboard;
 using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.Presentation.Panels.Features.SysLog;
@@ -30,6 +32,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
     private readonly ILocalSystemRuntimeConfigService _runtimeConfig;
     private readonly IEdgeSyncDiagnosticsQuery _diagnosticsQuery;
     private readonly IPlcConnectionManager _plcConnectionManager;
+    private readonly IMonitorConfiguredDeviceLoader _configuredDeviceLoader;
     private readonly DispatcherTimer _diagnosticsTimer;
 
     private DateTime? _lastCloudSuccessAt;
@@ -55,6 +58,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
     private EdgeVisualStatus _deviceLinksStatus = EdgeVisualStatus.Offline;
     private EdgeVisualStatus _uploadHealthStatus = EdgeVisualStatus.Offline;
     private IReadOnlyCollection<PlcConnectionRuntimeSnapshot> _lastPlcSnapshots = [];
+    private IReadOnlyCollection<NetworkDeviceEntity> _lastConfiguredPlcs = [];
     private DashboardPreviewPlcStatusItem? _selectedPlcStatusDetail;
     private bool _isPlcStatusDetailOpen;
 
@@ -64,7 +68,8 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
         IDeviceSelectionService deviceSelectionService,
         ILocalSystemRuntimeConfigService runtimeConfig,
         IEdgeSyncDiagnosticsQuery diagnosticsQuery,
-        IPlcConnectionManager plcConnectionManager)
+        IPlcConnectionManager plcConnectionManager,
+        IMonitorConfiguredDeviceLoader configuredDeviceLoader)
         : base(languageService)
     {
         _source = source;
@@ -72,6 +77,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
         _runtimeConfig = runtimeConfig;
         _diagnosticsQuery = diagnosticsQuery;
         _plcConnectionManager = plcConnectionManager;
+        _configuredDeviceLoader = configuredDeviceLoader;
         _diagnosticsTimer = new DispatcherTimer { Interval = DiagnosticsRefreshInterval };
         _diagnosticsTimer.Tick += OnDiagnosticsTimerTick;
 
@@ -254,7 +260,8 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
         {
             var diagnostics = await _diagnosticsQuery.GetCurrentAsync();
             var plcSnapshots = _plcConnectionManager.GetRuntimeStatuses();
-            await AvaloniaDispatcher.UIThread.InvokeAsync(() => ApplyDiagnostics(diagnostics, plcSnapshots));
+            var configuredPlcs = await _configuredDeviceLoader.LoadConfiguredPlcDevicesAsync(CancellationToken.None);
+            await AvaloniaDispatcher.UIThread.InvokeAsync(() => ApplyDiagnostics(diagnostics, plcSnapshots, configuredPlcs));
         }
         catch
         {
@@ -268,16 +275,14 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
 
     private void ApplyDiagnostics(
         EdgeSyncDiagnosticsSnapshot diagnostics,
-        IReadOnlyCollection<PlcConnectionRuntimeSnapshot> plcSnapshots)
+        IReadOnlyCollection<PlcConnectionRuntimeSnapshot> plcSnapshots,
+        IReadOnlyCollection<NetworkDeviceEntity> configuredPlcs)
     {
         ApplyRuntimeConfig(_runtimeConfig.Current);
 
         var cloudState = ResolveCloudState(diagnostics.Cloud);
         var mesState = ResolveMesState(diagnostics.Mes);
-        var averagePlcLatency = ResolveAverageLatency(plcSnapshots);
-        RefreshPlcStatusTable(plcSnapshots);
-        _connectedDevicesText = ResolveConnectedDevicesText(plcSnapshots);
-        _plcFaultStateText = ResolvePlcFaultStateText(plcSnapshots);
+        RefreshPlcStatusState(configuredPlcs, plcSnapshots, notify: false);
 
         _cloudStateText = cloudState.StateText;
         _cloudProbeText = cloudState.ProbeText;
@@ -285,9 +290,6 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
         _mesStateText = mesState.StateText;
         _mesProbeText = mesState.ProbeText;
         _mesStatus = mesState.Status;
-        _plcLatencyText = FormatLatency(averagePlcLatency);
-        _plcLatencyStatus = ResolveLatencyStatus(averagePlcLatency, plcSnapshots.Any(static x => x.IsConnected));
-        _deviceLinksStatus = ResolveDeviceLinksStatus(plcSnapshots);
 
         UpdateUploadHealth(diagnostics, cloudState, mesState);
 
@@ -311,34 +313,116 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
         NotifyUploadHealthChanged();
     }
 
-    private void RefreshPlcStatusTable(IReadOnlyCollection<PlcConnectionRuntimeSnapshot> plcSnapshots)
+    private void RefreshPlcStatusState(
+        IReadOnlyCollection<NetworkDeviceEntity> configuredPlcs,
+        IReadOnlyCollection<PlcConnectionRuntimeSnapshot> plcSnapshots,
+        bool notify)
     {
+        _lastConfiguredPlcs = configuredPlcs;
+        _lastPlcSnapshots = plcSnapshots;
+
         var selectedKey = _deviceSelectionService.SelectedDeviceKey;
         var isAllSelected = string.Equals(
             selectedKey,
             IDeviceSelectionService.AllFilterKey,
             StringComparison.OrdinalIgnoreCase);
-
-        _lastPlcSnapshots = plcSnapshots
-            .OrderBy(static x => x.DeviceName, StringComparer.OrdinalIgnoreCase)
+        var projections = BuildPlcStatusProjections(configuredPlcs, plcSnapshots)
+            .Where(snapshot =>
+                isAllSelected
+                || string.Equals(snapshot.DeviceName, selectedKey, StringComparison.OrdinalIgnoreCase))
             .ToArray();
+        var averagePlcLatency = ResolveAverageLatency(projections);
 
+        _connectedDevicesText = ResolveConnectedDevicesText(projections);
+        _plcFaultStateText = ResolvePlcFaultStateText(projections);
+        _plcLatencyText = FormatLatency(averagePlcLatency);
+        _plcLatencyStatus = ResolveLatencyStatus(
+            averagePlcLatency,
+            projections.Any(static x => x.RuntimeSnapshot?.IsConnected == true));
+        _deviceLinksStatus = ResolveDeviceLinksStatus(projections);
         PlcStatusTableItems.Clear();
-        foreach (var snapshot in _lastPlcSnapshots.Where(snapshot =>
-                     isAllSelected
-                     || string.Equals(snapshot.DeviceName, selectedKey, StringComparison.OrdinalIgnoreCase)))
+        foreach (var projection in projections)
         {
-            PlcStatusTableItems.Add(CreatePlcStatusItem(snapshot, !isAllSelected));
+            PlcStatusTableItems.Add(CreatePlcStatusItem(projection, !isAllSelected));
         }
 
         OnPropertyChanged(nameof(IsPlcStatusTableEmpty));
+        if (!notify)
+        {
+            return;
+        }
+
+        OnPropertyChanged(nameof(ConnectedDevices));
+        OnPropertyChanged(nameof(PlcLatencyText));
+        OnPropertyChanged(nameof(PlcLatencyStatus));
+        OnPropertyChanged(nameof(DeviceLinksStatus));
+        OnPropertyChanged(nameof(ProductionSummaryItems));
     }
 
-    private DashboardPreviewPlcStatusItem CreatePlcStatusItem(PlcConnectionRuntimeSnapshot snapshot, bool isSelected)
+    private static IReadOnlyList<DashboardPreviewPlcStatusProjection> BuildPlcStatusProjections(
+        IReadOnlyCollection<NetworkDeviceEntity> configuredPlcs,
+        IReadOnlyCollection<PlcConnectionRuntimeSnapshot> plcSnapshots)
     {
+        var snapshotsById = plcSnapshots
+            .Where(static snapshot => snapshot.NetworkDeviceId > 0)
+            .GroupBy(static snapshot => snapshot.NetworkDeviceId)
+            .ToDictionary(static group => group.Key, static group => group.First());
+        var snapshotsByName = plcSnapshots
+            .Where(static snapshot => !string.IsNullOrWhiteSpace(snapshot.DeviceName))
+            .GroupBy(static snapshot => snapshot.DeviceName.Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(static group => group.Key, static group => group.First(), StringComparer.OrdinalIgnoreCase);
+        var projections = configuredPlcs
+            .Where(static device => !string.IsNullOrWhiteSpace(device.DeviceName))
+            .Select(device =>
+            {
+                snapshotsById.TryGetValue(device.Id, out var snapshot);
+                if (snapshot is null)
+                {
+                    snapshotsByName.TryGetValue(device.DeviceName.Trim(), out snapshot);
+                }
+
+                return new DashboardPreviewPlcStatusProjection(device.Id, device.DeviceName.Trim(), snapshot);
+            })
+            .OrderBy(static projection => projection.DeviceName, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (projections.Length > 0)
+        {
+            return projections;
+        }
+
+        return plcSnapshots
+            .Where(static snapshot => !string.IsNullOrWhiteSpace(snapshot.DeviceName))
+            .Select(static snapshot => new DashboardPreviewPlcStatusProjection(
+                snapshot.NetworkDeviceId,
+                snapshot.DeviceName.Trim(),
+                snapshot))
+            .OrderBy(static projection => projection.DeviceName, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private DashboardPreviewPlcStatusItem CreatePlcStatusItem(
+        DashboardPreviewPlcStatusProjection projection,
+        bool isSelected)
+    {
+        var snapshot = projection.RuntimeSnapshot;
+        if (snapshot is null)
+        {
+            return new DashboardPreviewPlcStatusItem(
+                projection.DeviceName,
+                GetText("Navigation_DashboardPreview_PlcStateUncollected", "未采集"),
+                EdgeVisualStatus.Offline,
+                EmptyValue,
+                EmptyValue,
+                EmptyValue,
+                EmptyValue,
+                EmptyValue,
+                isSelected);
+        }
+
         var lastErrorDetail = string.IsNullOrWhiteSpace(snapshot.LastError) ? EmptyValue : snapshot.LastError.Trim();
         return new DashboardPreviewPlcStatusItem(
-            snapshot.DeviceName,
+            projection.DeviceName,
             ResolvePlcConnectionStateText(snapshot.ConnectionState),
             ResolvePlcVisualStatus(snapshot),
             snapshot.IsConnected && snapshot.LatencyMs.HasValue ? FormatLatency(snapshot.LatencyMs.Value) : EmptyValue,
@@ -688,12 +772,12 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
     {
         if (AvaloniaDispatcher.UIThread.CheckAccess())
         {
-            RefreshPlcStatusTable(_lastPlcSnapshots);
+            RefreshPlcStatusState(_lastConfiguredPlcs, _lastPlcSnapshots, notify: true);
             return;
         }
 
         AvaloniaDispatcher.UIThread.Post(
-            () => RefreshPlcStatusTable(_lastPlcSnapshots),
+            () => RefreshPlcStatusState(_lastConfiguredPlcs, _lastPlcSnapshots, notify: true),
             DispatcherPriority.Background);
     }
 
@@ -703,7 +787,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
     protected override void OnLanguageChanged()
     {
         RefreshUploadHealthSegmentLabels();
-        RefreshPlcStatusTable(_lastPlcSnapshots);
+        RefreshPlcStatusState(_lastConfiguredPlcs, _lastPlcSnapshots, notify: true);
         OnPropertyChanged(string.Empty);
         _ = RefreshDiagnosticsAsync();
     }
@@ -733,41 +817,49 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
         OnPropertyChanged(nameof(UploadHealthEmptyMessage));
     }
 
-    private EdgeVisualStatus ResolveDeviceLinksStatus(IReadOnlyCollection<PlcConnectionRuntimeSnapshot> snapshots)
+    private EdgeVisualStatus ResolveDeviceLinksStatus(IReadOnlyCollection<DashboardPreviewPlcStatusProjection> projections)
     {
-        if (snapshots.Count == 0)
+        if (projections.Count == 0)
         {
             return EdgeVisualStatus.Offline;
         }
 
-        var connected = snapshots.Count(static x => x.IsConnected);
+        var connected = projections.Count(static x => x.RuntimeSnapshot?.IsConnected == true);
         if (connected == 0)
         {
             return EdgeVisualStatus.Offline;
         }
 
-        return connected == snapshots.Count ? EdgeVisualStatus.Running : EdgeVisualStatus.Warning;
+        return connected == projections.Count ? EdgeVisualStatus.Running : EdgeVisualStatus.Warning;
     }
 
-    private string ResolveConnectedDevicesText(IReadOnlyCollection<PlcConnectionRuntimeSnapshot> snapshots)
-        => snapshots.Count == 0
-            ? Normalize(_source.ConnectedDevices)
-            : $"{snapshots.Count(static x => x.IsConnected)} / {snapshots.Count}";
+    private string ResolveConnectedDevicesText(IReadOnlyCollection<DashboardPreviewPlcStatusProjection> projections)
+        => projections.Count == 0
+            ? EmptyValue
+            : $"{projections.Count(static x => x.RuntimeSnapshot?.IsConnected == true)} / {projections.Count}";
 
-    private string ResolvePlcFaultStateText(IReadOnlyCollection<PlcConnectionRuntimeSnapshot> snapshots)
+    private string ResolvePlcFaultStateText(IReadOnlyCollection<DashboardPreviewPlcStatusProjection> projections)
     {
-        if (snapshots.Count == 0)
+        if (projections.Count == 0)
         {
             return EmptyValue;
         }
 
-        var faulted = snapshots.Count(static x => !x.IsConnected);
-        if (faulted == 0)
+        var collected = projections.Count(static x => x.RuntimeSnapshot is not null);
+        if (collected == 0)
         {
-            return GetText("Navigation_DashboardPreview_PlcHealthy", "正常");
+            return GetText("Navigation_DashboardPreview_PlcStateUncollected", "未采集");
         }
 
-        return FormatText("Navigation_DashboardPreview_PlcFaultCountFormat", "{0}/{1} 异常", faulted, snapshots.Count);
+        var faulted = projections.Count(static x => x.RuntimeSnapshot is { IsConnected: false });
+        if (faulted == 0)
+        {
+            return collected == projections.Count
+                ? GetText("Navigation_DashboardPreview_PlcHealthy", "正常")
+                : GetText("Navigation_DashboardPreview_PlcPartiallyUncollected", "部分未采集");
+        }
+
+        return FormatText("Navigation_DashboardPreview_PlcFaultCountFormat", "{0}/{1} 异常", faulted, projections.Count);
     }
 
     private EdgeVisualStatus ResolvePlcVisualStatus(PlcConnectionRuntimeSnapshot snapshot)
@@ -856,11 +948,12 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
     private string GetDisabledText()
         => GetText("Navigation_DashboardPreview_Disabled", "未启用");
 
-    private int? ResolveAverageLatency(IReadOnlyCollection<PlcConnectionRuntimeSnapshot> snapshots)
+    private int? ResolveAverageLatency(IReadOnlyCollection<DashboardPreviewPlcStatusProjection> projections)
     {
-        var values = snapshots
-            .Where(static x => x.IsConnected && x.LatencyMs.HasValue)
-            .Select(static x => x.LatencyMs!.Value)
+        var values = projections
+            .Select(static x => x.RuntimeSnapshot)
+            .Where(static x => x is { IsConnected: true, LatencyMs: not null })
+            .Select(static x => x!.LatencyMs!.Value)
             .ToArray();
 
         return values.Length == 0
@@ -920,6 +1013,11 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
         EdgeVisualStatus Status,
         bool IsEnabled,
         bool IsReady);
+
+    private sealed record DashboardPreviewPlcStatusProjection(
+        int NetworkDeviceId,
+        string DeviceName,
+        PlcConnectionRuntimeSnapshot? RuntimeSnapshot);
 }
 
 internal sealed class DashboardPreviewDesignViewModel : DashboardPreviewLocalizedViewModel

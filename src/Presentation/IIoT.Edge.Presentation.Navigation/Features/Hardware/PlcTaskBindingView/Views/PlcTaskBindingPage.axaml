@@ -11,17 +11,12 @@
             Subtitle="{Binding StatusMessage}">
             <edge:EdgeSectionHeader.ActionContent>
                 <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Edge.Size.Spacing10}">
-                <edge:EdgeFilterComboBox
-                    Width="260"
-                    ItemsSource="{Binding Devices}"
-                    PlaceholderText="{DynamicResource Navigation_Hint_SelectDevice}"
-                    SelectedItem="{Binding SelectedDevice}">
-                    <edge:EdgeFilterComboBox.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding DeviceName}" />
-                        </DataTemplate>
-                    </edge:EdgeFilterComboBox.ItemTemplate>
-                </edge:EdgeFilterComboBox>
+                <TextBlock
+                    Classes="edge-text-page-caption"
+                    VerticalAlignment="Center">
+                    <Run Text="{DynamicResource Navigation_DeviceSelection_CurrentDevicePrefix}" />
+                    <Run Text="{Binding SelectedDeviceDisplayName}" />
+                </TextBlock>
                 <edge:EdgeActionButton
                     Command="{Binding RefreshCommand}"
                     Content="{DynamicResource Navigation_Button_Refresh}"
@@ -44,11 +39,19 @@
             Spacing="12">
             <edge:EdgeStatusListItem
                 Classes="compact right-rail strip"
+                IsVisible="{Binding HasSelectedDevice}"
                 Status="Info"
                 StatusText="{DynamicResource Navigation_Hint_SelectDevice}"
                 Title="{Binding SelectedDevice.DeviceStateText}" />
 
-            <edge:EdgeTablePanel Title="{DynamicResource Navigation_Title_PlcTaskBinding}">
+            <sharedViews:EmptyStateView
+                IsVisible="{Binding ShouldShowDeviceSelectionPrompt}"
+                Message="{DynamicResource Navigation_DeviceSelection_SelectFromRightMessage}"
+                Title="{DynamicResource Navigation_Hint_SelectDevice}" />
+
+            <edge:EdgeTablePanel
+                IsVisible="{Binding HasSelectedDevice}"
+                Title="{DynamicResource Navigation_Title_PlcTaskBinding}">
                 <edge:EdgeDataGrid
                     AutoGenerateColumns="False"
                     CanUserReorderColumns="False"

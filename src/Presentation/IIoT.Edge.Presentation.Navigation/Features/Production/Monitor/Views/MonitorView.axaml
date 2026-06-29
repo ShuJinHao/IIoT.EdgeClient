@@ -33,32 +33,14 @@
                 </edge:EdgeSegmentedNav>
             </edge:EdgeCard>
 
-            <edge:EdgeFilterComboBox
+            <TextBlock
+                Classes="edge-text-page-caption"
                 Grid.Column="1"
-                MinWidth="180"
-                MaxWidth="260"
                 HorizontalAlignment="Right"
-                ItemsSource="{Binding DeviceOptions}"
-                MaxDropDownHeight="220"
-                PlaceholderText="{DynamicResource Navigation_Monitor_SelectedPlcPlaceholder}"
-                SelectedItem="{Binding SelectedDevice, Mode=TwoWay}">
-                <edge:EdgeFilterComboBox.SelectionBoxItemTemplate>
-                    <DataTemplate>
-                        <TextBlock
-                            MaxWidth="220"
-                            Text="{Binding}"
-                            TextTrimming="CharacterEllipsis" />
-                    </DataTemplate>
-                </edge:EdgeFilterComboBox.SelectionBoxItemTemplate>
-                <edge:EdgeFilterComboBox.ItemTemplate>
-                    <DataTemplate>
-                        <TextBlock
-                            MaxWidth="220"
-                            Text="{Binding}"
-                            TextTrimming="CharacterEllipsis" />
-                    </DataTemplate>
-                </edge:EdgeFilterComboBox.ItemTemplate>
-            </edge:EdgeFilterComboBox>
+                VerticalAlignment="Center">
+                <Run Text="{DynamicResource Navigation_DeviceSelection_CurrentDevicePrefix}" />
+                <Run Text="{Binding SelectedDeviceDisplayName}" />
+            </TextBlock>
         </Grid>
         <edge:EdgeScrollHost
             Grid.Row="1"
@@ -79,6 +61,20 @@
                 <StackPanel
                     IsVisible="{Binding HasDevices}"
                     Spacing="{DynamicResource Edge.Size.Spacing12}">
+                    <edge:EdgeCard
+                        MinHeight="120"
+                        HorizontalAlignment="Stretch"
+                        Elevation="Flat"
+                        IsVisible="{Binding ShouldShowDeviceSelectionPrompt}"
+                        PaddingMode="Normal"
+                        Surface="Card">
+                        <views:EmptyStateView
+                            Message="{DynamicResource Navigation_DeviceSelection_SelectFromRightMessage}"
+                            Title="{DynamicResource Navigation_Monitor_SelectedPlcPlaceholder}" />
+                    </edge:EdgeCard>
+                    <StackPanel
+                        IsVisible="{Binding HasSelectedDevice}"
+                        Spacing="{DynamicResource Edge.Size.Spacing12}">
                     <StackPanel
                         IsVisible="{Binding IsDeviceStatusTabSelected}"
                         Spacing="{DynamicResource Edge.Size.Spacing12}">
@@ -217,6 +213,7 @@
                                     Title="{DynamicResource Navigation_Monitor_StateMachineTasksEmptyTitle}" />
                             </Grid>
                         </edge:EdgeCard>
+                    </StackPanel>
                     </StackPanel>
                 </StackPanel>
             </StackPanel>
