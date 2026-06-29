@@ -273,7 +273,6 @@ EdgeClient 的交付物是 Windows 安装器、安装素材和 Velopack 更新�
 pwsh ./scripts/PublishEdgePluginRelease.ps1 `
   -ModuleId <ModuleId> `
   -CloudApiBaseUrl http://10.98.90.154:81/api/v1 `
-  -CloudToken $env:IIOT_CLOUD_RELEASE_TOKEN `
   -ReleaseNotesPath ./release-notes.md
 ```
 

@@ -14,8 +14,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$CloudApiBaseUrl,
 
-    [Parameter(Mandatory = $true)]
-    [string]$CloudToken,
+    [string]$CloudToken = '',
 
     [string]$ReleaseNotes = '',
 
@@ -32,6 +31,7 @@ Set-StrictMode -Version Latest
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot 'EdgeRuntime.Common.ps1')
+. (Join-Path $PSScriptRoot 'EdgeReleaseCredential.Common.ps1')
 
 if ($Channel -ne 'stable') {
     throw 'Production Edge plugin releases must use stable channel.'
@@ -92,10 +92,18 @@ function Invoke-EdgeScript {
 function Invoke-CloudJsonGet {
     param([Parameter(Mandatory = $true)][string]$Path)
 
+    if ([string]::IsNullOrWhiteSpace($script:CloudToken)) {
+        $script:CloudToken = Resolve-EdgeReleaseCloudToken -CloudApiBaseUrl $CloudApiBaseUrl -CloudToken $script:CloudToken
+    }
+
+    if ([string]::IsNullOrWhiteSpace($script:CloudToken)) {
+        throw 'CloudToken is required. Pass -CloudToken, set $env:IIOT_CLOUD_RELEASE_TOKEN, or run scripts/SaveEdgeReleaseToken.ps1.'
+    }
+
     $apiRoot = $CloudApiBaseUrl.TrimEnd('/')
     $uri = "$apiRoot/$($Path.TrimStart('/'))"
     return Invoke-RestMethod -Method Get -Uri $uri -Headers @{
-        Authorization = "Bearer $CloudToken"
+        Authorization = "Bearer $script:CloudToken"
     }
 }
 
@@ -231,7 +239,7 @@ function Invoke-PluginPackageUpload {
         --show-error `
         --silent `
         --request POST `
-        --header "Authorization: Bearer $CloudToken" `
+        --header "Authorization: Bearer $script:CloudToken" `
         --header "Content-Type: application/zip" `
         --limit-rate "$rateBytesPerSecond" `
         --data-binary "@$WrapperZip" `

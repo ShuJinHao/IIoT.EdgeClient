@@ -55,6 +55,7 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot 'EdgeRuntime.Common.ps1')
+. (Join-Path $PSScriptRoot 'EdgeReleaseCredential.Common.ps1')
 
 function Get-ArtifactSha256 {
     param([Parameter(Mandatory = $true)][string]$PathValue)
@@ -377,14 +378,22 @@ function Invoke-CloudJsonPost {
         [Parameter(Mandatory = $true)]$Body
     )
 
-    if ([string]::IsNullOrWhiteSpace($CloudApiBaseUrl) -or [string]::IsNullOrWhiteSpace($CloudToken)) {
-        throw "CloudApiBaseUrl and CloudToken are required when RegisterCloudCatalog is set."
+    if ([string]::IsNullOrWhiteSpace($CloudApiBaseUrl)) {
+        throw "CloudApiBaseUrl is required when RegisterCloudCatalog is set."
+    }
+
+    if ([string]::IsNullOrWhiteSpace($script:CloudToken)) {
+        $script:CloudToken = Resolve-EdgeReleaseCloudToken -CloudApiBaseUrl $CloudApiBaseUrl -CloudToken $script:CloudToken
+    }
+
+    if ([string]::IsNullOrWhiteSpace($script:CloudToken)) {
+        throw "CloudToken is required when RegisterCloudCatalog is set. Pass -CloudToken, set `$env:IIOT_CLOUD_RELEASE_TOKEN`, or run scripts/SaveEdgeReleaseToken.ps1."
     }
 
     $apiRoot = $CloudApiBaseUrl.TrimEnd('/')
     $uri = "$apiRoot/$($Path.TrimStart('/'))"
     $headers = @{
-        Authorization = "Bearer $CloudToken"
+        Authorization = "Bearer $script:CloudToken"
     }
     Invoke-RestMethod `
         -Method Post `

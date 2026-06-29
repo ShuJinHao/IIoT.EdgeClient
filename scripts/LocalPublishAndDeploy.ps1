@@ -45,6 +45,7 @@ Set-StrictMode -Version Latest
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $remote = "$DeployUser@$DeployHost"
+. (Join-Path $PSScriptRoot 'EdgeReleaseCredential.Common.ps1')
 
 if ($Channel -ne 'stable') {
     throw 'Production Edge releases must use stable channel.'
@@ -136,8 +137,12 @@ function Assert-HttpPublishConfiguration {
         throw 'CloudApiBaseUrl is required when -Transport http is used.'
     }
 
-    if ([string]::IsNullOrWhiteSpace($CloudToken)) {
-        throw 'CloudToken is required when -Transport http is used.'
+    if ([string]::IsNullOrWhiteSpace($script:CloudToken)) {
+        $script:CloudToken = Resolve-EdgeReleaseCloudToken -CloudApiBaseUrl $CloudApiBaseUrl -CloudToken $script:CloudToken
+    }
+
+    if ([string]::IsNullOrWhiteSpace($script:CloudToken)) {
+        throw 'CloudToken is required when -Transport http is used. Pass -CloudToken, set $env:IIOT_CLOUD_RELEASE_TOKEN, or run scripts/SaveEdgeReleaseToken.ps1.'
     }
 }
 
@@ -148,7 +153,7 @@ function Invoke-CloudJsonGet {
     $apiRoot = $CloudApiBaseUrl.TrimEnd('/')
     $uri = "$apiRoot/$($Path.TrimStart('/'))"
     $headers = @{
-        Authorization = "Bearer $CloudToken"
+        Authorization = "Bearer $script:CloudToken"
     }
     return Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
 }
@@ -421,7 +426,7 @@ function Invoke-EdgeHttpReleaseUpload {
         --show-error `
         --silent `
         --request POST `
-        --header "Authorization: Bearer $CloudToken" `
+        --header "Authorization: Bearer $script:CloudToken" `
         --header "Content-Type: application/zip" `
         --limit-rate "$rateBytesPerSecond" `
         --data-binary "@$BundleZip" `

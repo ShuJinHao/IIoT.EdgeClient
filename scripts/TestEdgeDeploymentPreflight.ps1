@@ -9,7 +9,7 @@ param(
 
     [string]$CloudApiBaseUrl = 'http://10.98.90.154:81/api/v1',
 
-    [string]$CloudToken = $env:IIOT_CLOUD_RELEASE_TOKEN,
+    [string]$CloudToken = '',
 
     [string]$ReleaseNotes = '',
 
@@ -25,6 +25,7 @@ Set-StrictMode -Version Latest
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $workspaceRoot = Split-Path -Parent $repoRoot
+. (Join-Path $PSScriptRoot 'EdgeReleaseCredential.Common.ps1')
 $failures = [System.Collections.Generic.List[string]]::new()
 $warnings = [System.Collections.Generic.List[string]]::new()
 
@@ -134,21 +135,24 @@ function Test-CloudAccess {
         return
     }
 
-    if ([string]::IsNullOrWhiteSpace($CloudToken)) {
-        Add-Failure 'CloudToken is required. Use $env:IIOT_CLOUD_RELEASE_TOKEN for Edge release API.'
+    try {
+        $script:CloudToken = Resolve-EdgeReleaseCloudToken -CloudApiBaseUrl $CloudApiBaseUrl -CloudToken $CloudToken
+    }
+    catch {
+        Add-Failure "Cloud token resolution failed: $($_.Exception.Message)"
+        return
+    }
+
+    if ([string]::IsNullOrWhiteSpace($script:CloudToken)) {
+        Add-Failure 'CloudToken is required. Pass -CloudToken, set $env:IIOT_CLOUD_RELEASE_TOKEN, or run scripts/SaveEdgeReleaseToken.ps1 to store it in macOS Keychain.'
         return
     }
 
     try {
-        $cloudRoot = Resolve-CloudRootUrl
-        $healthUrl = "$cloudRoot/internal/healthz"
-        $response = Invoke-WebRequest -Method Get -Uri $healthUrl -UseBasicParsing -TimeoutSec 8
-        if ($response.StatusCode -lt 200 -or $response.StatusCode -ge 300) {
-            Add-Failure "Cloud health check returned HTTP $($response.StatusCode): $healthUrl"
-        }
+        Test-EdgeReleaseCloudToken -CloudApiBaseUrl $CloudApiBaseUrl -CloudToken $script:CloudToken
     }
     catch {
-        Add-Failure "Cloud health check failed: $($_.Exception.Message)"
+        Add-Failure "Cloud release API token check failed: $($_.Exception.Message)"
     }
 }
 
@@ -261,10 +265,10 @@ function Write-NextCommand {
     Write-Host 'Recommended next command:'
     switch ($Mode) {
         'Host' {
-            Write-Host '  pwsh ./scripts/LocalPublishAndDeploy.ps1 -Channel stable -Transport http -CloudApiBaseUrl http://10.98.90.154:81/api/v1 -CloudToken $env:IIOT_CLOUD_RELEASE_TOKEN -ReleaseNotesPath ./release-notes.md -UploadRateLimitMbps 100'
+            Write-Host '  pwsh ./scripts/LocalPublishAndDeploy.ps1 -Channel stable -Transport http -CloudApiBaseUrl http://10.98.90.154:81/api/v1 -ReleaseNotesPath ./release-notes.md -UploadRateLimitMbps 100'
         }
         'Plugin' {
-            Write-Host "  pwsh ./scripts/PublishEdgePluginRelease.ps1 -ModuleId $ModuleId -CloudApiBaseUrl http://10.98.90.154:81/api/v1 -CloudToken `$env:IIOT_CLOUD_RELEASE_TOKEN -ReleaseNotesPath ./release-notes.md -UploadRateLimitMbps 100"
+            Write-Host "  pwsh ./scripts/PublishEdgePluginRelease.ps1 -ModuleId $ModuleId -CloudApiBaseUrl http://10.98.90.154:81/api/v1 -ReleaseNotesPath ./release-notes.md -UploadRateLimitMbps 100"
         }
         'GitHubHost' {
             Write-Host "  gh workflow run edge-pack-modules.yml -f version=$Version -f release_notes='<manual release notes>'"
