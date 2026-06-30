@@ -46,7 +46,8 @@ public sealed class FileEdgeUpdateConfigurationProvider : IEdgeUpdateConfigurati
             mutable.BootstrapSecret!,
             mutable.DeviceInstancePath!,
             mutable.ClientReleaseCatalogTemplate!,
-            mutable.ClientVersionReportPath!));
+            mutable.ClientVersionReportPath!,
+            mutable.RuntimeHeartbeatPath!));
     }
 
     public EdgeReleaseOptions ResolveReleaseOptions()
@@ -121,6 +122,9 @@ public sealed class FileEdgeUpdateConfigurationProvider : IEdgeUpdateConfigurati
             target.ClientVersionReportPath = FirstNotWhiteSpace(
                 ReadString(paths, "ClientVersionReport"),
                 target.ClientVersionReportPath);
+            target.RuntimeHeartbeatPath = FirstNotWhiteSpace(
+                ReadString(paths, "RuntimeHeartbeat"),
+                target.RuntimeHeartbeatPath);
         }
         catch (JsonException)
         {
@@ -149,6 +153,9 @@ public sealed class FileEdgeUpdateConfigurationProvider : IEdgeUpdateConfigurati
         target.ClientVersionReportPath = FirstNotWhiteSpace(
             Environment.GetEnvironmentVariable("CloudApi__Paths__ClientVersionReport"),
             target.ClientVersionReportPath);
+        target.RuntimeHeartbeatPath = FirstNotWhiteSpace(
+            Environment.GetEnvironmentVariable("CloudApi__Paths__RuntimeHeartbeat"),
+            target.RuntimeHeartbeatPath);
 
         if (int.TryParse(Environment.GetEnvironmentVariable("CloudApi__TimeoutSecs"), out var timeout)
             && timeout > 0)
@@ -196,6 +203,7 @@ public sealed class FileEdgeUpdateConfigurationProvider : IEdgeUpdateConfigurati
         public string? DeviceInstancePath { get; set; }
         public string? ClientReleaseCatalogTemplate { get; set; }
         public string? ClientVersionReportPath { get; set; }
+        public string? RuntimeHeartbeatPath { get; set; }
 
         public IEnumerable<string> GetMissingKeys()
         {
@@ -227,6 +235,11 @@ public sealed class FileEdgeUpdateConfigurationProvider : IEdgeUpdateConfigurati
             if (string.IsNullOrWhiteSpace(ClientVersionReportPath))
             {
                 yield return "CloudApi:Paths:ClientVersionReport";
+            }
+
+            if (string.IsNullOrWhiteSpace(RuntimeHeartbeatPath))
+            {
+                yield return "CloudApi:Paths:RuntimeHeartbeat";
             }
         }
     }

@@ -16,7 +16,8 @@ public sealed record EdgeUpdateCloudApiOptions(
     string BootstrapSecret,
     string DeviceInstancePath,
     string ClientReleaseCatalogTemplate,
-    string ClientVersionReportPath);
+    string ClientVersionReportPath,
+    string RuntimeHeartbeatPath);
 
 public sealed record EdgeUpdateConfigurationResult(
     bool Success,
@@ -226,6 +227,34 @@ public sealed record EdgeVersionReportResult(
         => new(true);
 
     public static EdgeVersionReportResult Failed(string errorMessage)
+        => new(false, errorMessage);
+}
+
+public enum EdgeRuntimeHeartbeatStatus
+{
+    Starting,
+    Running,
+    Stopping,
+    Stopped
+}
+
+public sealed record EdgeRuntimeHeartbeatReport(
+    string RuntimeInstanceId,
+    string? MachineProfile,
+    string HostVersion,
+    string HostApiVersion,
+    EdgeRuntimeHeartbeatStatus Status,
+    DateTime StartedAtUtc,
+    DateTime ReportedAtUtc);
+
+public sealed record EdgeRuntimeHeartbeatReportResult(
+    bool Success,
+    string? ErrorMessage = null)
+{
+    public static EdgeRuntimeHeartbeatReportResult Succeeded()
+        => new(true);
+
+    public static EdgeRuntimeHeartbeatReportResult Failed(string errorMessage)
         => new(false, errorMessage);
 }
 

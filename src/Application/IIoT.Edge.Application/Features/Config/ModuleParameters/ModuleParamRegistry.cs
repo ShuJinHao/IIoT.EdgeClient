@@ -36,7 +36,7 @@ public sealed class ModuleParamRegistry : IModuleParamRegistry
         var overridesByKey = (defaultOverrides ?? [])
             .ToDictionary(
                 static x => BuildOverrideKey(x.Category, x.Name),
-                static x => x.DefaultValue,
+                static x => x,
                 StringComparer.OrdinalIgnoreCase);
 
         _descriptors[moduleId] =
@@ -83,7 +83,7 @@ public sealed class ModuleParamRegistry : IModuleParamRegistry
         string moduleId,
         ModuleParamCategory category,
         Type enumType,
-        IReadOnlyDictionary<string, string> defaultOverrides)
+        IReadOnlyDictionary<string, ModuleParamDefaultOverride> defaultOverrides)
     {
         var values = Enum.GetNames(enumType);
         for (var index = 0; index < values.Length; index++)
@@ -96,9 +96,10 @@ public sealed class ModuleParamRegistry : IModuleParamRegistry
                 continue;
             }
 
-            var defaultValue = defaultOverrides.TryGetValue(BuildOverrideKey(category, name), out var overriddenDefault)
-                ? overriddenDefault
+            var defaultValue = defaultOverrides.TryGetValue(BuildOverrideKey(category, name), out var defaultOverride)
+                ? defaultOverride.DefaultValue
                 : attribute.DefaultValue;
+            var legacyDefaultValues = defaultOverride?.LegacyDefaultValues;
 
             yield return new ModuleParamDescriptor(
                 moduleId,
@@ -116,7 +117,8 @@ public sealed class ModuleParamRegistry : IModuleParamRegistry
                 attribute.DisplayNameFallback,
                 attribute.DescriptionResourceKey,
                 attribute.DescriptionFallback,
-                index + 1);
+                index + 1,
+                legacyDefaultValues);
         }
     }
 

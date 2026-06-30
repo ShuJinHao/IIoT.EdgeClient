@@ -19,7 +19,8 @@ public sealed record ModuleParamDescriptor(
     string? DisplayNameFallback,
     string? DescriptionResourceKey,
     string? DescriptionFallback,
-    int SortOrder);
+    int SortOrder,
+    IReadOnlyCollection<string>? LegacyDefaultValues = null);
 
 /// <summary>
 /// 一个插件注册的三类参数枚举。

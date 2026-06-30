@@ -48,7 +48,8 @@ public sealed class DieCuttingAnodeModuleContractTests : DieCuttingModuleContrac
     protected override string ExpectedLastIpAddress => "10.110.0.22";
     protected override string ExpectedUpperComputerNo => "P1-APUC";
     protected override string ExpectedOperationCode => "AP";
-    protected override string ExpectedMesBaseUrl => "http://10.110.0.250:8081";
+    protected override string ExpectedMesBaseUrl => "http://10.98.101.247:8080";
+    protected override string ExpectedLegacyMesBaseUrl => "http://10.110.0.250:8081";
 }
 
 public sealed class DieCuttingCathodeModuleContractTests : DieCuttingModuleContractTestsBase<CathodeModule>
@@ -64,7 +65,8 @@ public sealed class DieCuttingCathodeModuleContractTests : DieCuttingModuleContr
     protected override string ExpectedLastIpAddress => "10.110.1.22";
     protected override string ExpectedUpperComputerNo => "P2-CPUC";
     protected override string ExpectedOperationCode => "CP";
-    protected override string ExpectedMesBaseUrl => "http://10.110.1.250:8081";
+    protected override string ExpectedMesBaseUrl => "http://10.98.101.247:8080";
+    protected override string ExpectedLegacyMesBaseUrl => "http://10.110.1.250:8081";
 }
 
 public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContractTestBase<TModule>
@@ -82,6 +84,7 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
     protected abstract string ExpectedUpperComputerNo { get; }
     protected abstract string ExpectedOperationCode { get; }
     protected abstract string ExpectedMesBaseUrl { get; }
+    protected abstract string ExpectedLegacyMesBaseUrl { get; }
 
     protected override bool RequiresHardwareProfile => true;
     protected override bool RequiresMesUploader => true;
@@ -406,7 +409,9 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
             result.ModuleParamRegistry.GetDescriptors(ExpectedModuleId, ModuleParamCategory.Mes),
             descriptor => descriptor.Role == ModuleParamRole.MesBaseUrl
                           && descriptor.Name == nameof(DieCuttingParams.Mes.服务地址)
-                          && descriptor.DefaultValue == ExpectedMesBaseUrl);
+                          && descriptor.DefaultValue == ExpectedMesBaseUrl
+                          && descriptor.LegacyDefaultValues is not null
+                          && descriptor.LegacyDefaultValues.Contains(ExpectedLegacyMesBaseUrl));
         Assert.Contains(
             result.ModuleParamRegistry.GetDescriptors(ExpectedModuleId, ModuleParamCategory.Mes),
             descriptor => descriptor.Role == ModuleParamRole.MesUpperComputerNo
@@ -425,6 +430,10 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
             result.ModuleParamRegistry.GetDescriptors(ExpectedModuleId, ModuleParamCategory.Mes),
             descriptor => descriptor.Name == nameof(DieCuttingParams.Mes.BatchNumberPath)
                           && descriptor.DefaultValue == "/dev/dev/get/batchNumber");
+        Assert.Contains(
+            result.ModuleParamRegistry.GetDescriptors(ExpectedModuleId, ModuleParamCategory.Mes),
+            descriptor => descriptor.Name == nameof(DieCuttingParams.Mes.InboundPath)
+                          && descriptor.DefaultValue == "/dev/dev/electrode/getIn/check");
         Assert.Contains(
             result.ModuleParamRegistry.GetDescriptors(ExpectedModuleId, ModuleParamCategory.Mes),
             descriptor => descriptor.Name == nameof(DieCuttingParams.Mes.EquipmentStatusPath)

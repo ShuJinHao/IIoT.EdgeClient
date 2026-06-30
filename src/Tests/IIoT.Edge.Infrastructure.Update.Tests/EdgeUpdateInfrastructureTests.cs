@@ -31,13 +31,14 @@ public sealed class EdgeUpdateInfrastructureTests
                   "CloudApi": {
                     "BaseUrl": "https://cloud.example.test",
                     "TimeoutSecs": 7,
-                    "Paths": {
-                      "DeviceInstance": "/api/v1/bootstrap/device-instance",
-                      "ClientReleaseCatalogTemplate": "/api/v1/edge/client-releases/device/{deviceId}/catalog",
-                      "ClientVersionReport": "/api/v1/edge/client-releases/version-reports"
+                      "Paths": {
+                        "DeviceInstance": "/api/v1/bootstrap/device-instance",
+                        "ClientReleaseCatalogTemplate": "/api/v1/edge/client-releases/device/{deviceId}/catalog",
+                        "ClientVersionReport": "/api/v1/edge/client-releases/version-reports",
+                        "RuntimeHeartbeat": "/api/v1/edge/runtime-heartbeats"
+                      }
                     }
                   }
-                }
                 """);
 
             WithDataRoot(dataRoot, () =>
@@ -71,6 +72,7 @@ public sealed class EdgeUpdateInfrastructureTests
                 Assert.Equal("EDGE-001", result.Options!.ClientCode);
                 Assert.Equal("secret", result.Options.BootstrapSecret);
                 Assert.Equal("/api/v1/edge/client-releases/version-reports", result.Options.ClientVersionReportPath);
+                Assert.Equal("/api/v1/edge/runtime-heartbeats", result.Options.RuntimeHeartbeatPath);
                 Assert.Equal("beta", releaseOptions.Channel);
                 Assert.Equal("win-arm64", releaseOptions.TargetRuntime);
             });
@@ -557,7 +559,8 @@ public sealed class EdgeUpdateInfrastructureTests
             "secret",
             "/api/v1/bootstrap/device-instance",
             "/api/v1/edge/client-releases/device/{deviceId}/catalog",
-            "/api/v1/edge/client-releases/version-reports");
+            "/api/v1/edge/client-releases/version-reports",
+            "/api/v1/edge/runtime-heartbeats");
 
     private static EdgeReleaseCatalog Catalog(params EdgePluginReleaseComponent[] plugins)
         => new(

@@ -27,4 +27,5 @@ public interface IModuleParamRegistry
 public sealed record ModuleParamDefaultOverride(
     ModuleParamCategory Category,
     string Name,
-    string DefaultValue);
+    string DefaultValue,
+    IReadOnlyCollection<string>? LegacyDefaultValues = null);

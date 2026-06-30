@@ -635,8 +635,6 @@
     <sys:String x:Key="Navigation_Dialog_EditIoInteractionFormat">Edit Signal Interaction - {0}</sys:String>
     <sys:String x:Key="Navigation_Empty_IoMappings">The current PLC has no IO mappings configured.</sys:String>
     <sys:String x:Key="Navigation_Empty_IoInteractionRows">The current PLC has no signal interaction mappings configured.</sys:String>
-    <sys:String x:Key="Navigation_Empty_IoDataSections">The current PLC has no single-read IO mappings configured.</sys:String>
-    <sys:String x:Key="Navigation_Empty_IoArraySections">The current PLC has no continuous-read IO mappings configured.</sys:String>
     <sys:String x:Key="Navigation_Empty_IoSingleReadSections">The current PLC has no single-read mappings configured.</sys:String>
     <sys:String x:Key="Navigation_Empty_IoContinuousReadSections">The current PLC has no continuous-read mappings configured.</sys:String>
     <sys:String x:Key="Navigation_Empty_IoSingleWriteSections">The current PLC has no single-write mappings configured.</sys:String>

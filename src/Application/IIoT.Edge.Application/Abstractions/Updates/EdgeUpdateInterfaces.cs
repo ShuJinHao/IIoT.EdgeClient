@@ -44,6 +44,24 @@ public interface IEdgeVersionReporter
         CancellationToken cancellationToken = default);
 }
 
+public interface IEdgeRuntimeHeartbeatReporter
+{
+    Task<EdgeRuntimeHeartbeatReportResult> ReportAsync(
+        EdgeUpdateCloudApiOptions options,
+        EdgeUpdateDeviceSession session,
+        EdgeRuntimeHeartbeatReport report,
+        CancellationToken cancellationToken = default);
+}
+
+public interface IEdgeRuntimeHeartbeatService
+{
+    Task StartAsync(
+        EdgeUpdateTarget target,
+        CancellationToken cancellationToken = default);
+
+    Task StopAsync(CancellationToken cancellationToken = default);
+}
+
 public interface IEdgeInstalledPluginCatalog
 {
     IReadOnlyList<EdgeInstalledPlugin> LoadInstalledPlugins(EdgeUpdateTarget target);

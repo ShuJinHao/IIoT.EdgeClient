@@ -75,6 +75,7 @@ public static class DependencyInjection
         services.AddSingleton<IProductionPlanSelectionServiceResolver, ProductionPlanSelectionServiceResolver>();
         services.AddSingleton<IEdgeVersionCompatibilityPolicy, EdgeVersionCompatibilityPolicy>();
         services.AddSingleton<IEdgeReleaseService, EdgeReleaseService>();
+        services.AddSingleton<IEdgeRuntimeHeartbeatService, EdgeRuntimeHeartbeatService>();
         services.AddSingleton<IEdgeSyncDiagnosticsQuery, EdgeSyncDiagnosticsQuery>();
         services.AddSingleton<IBackgroundServiceCoordinator, BackgroundServiceCoordinator>();
         return services;

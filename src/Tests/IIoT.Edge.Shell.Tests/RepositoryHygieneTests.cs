@@ -921,9 +921,14 @@ public sealed class RepositoryHygieneTests
         var ioViewPage = File.ReadAllText(ToFullPath(
             root,
             "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Hardware/IOView/Views/IOViewPage.axaml"));
+        var ioMappingPage = File.ReadAllText(ToFullPath(
+            root,
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Hardware/HardwareConfigView/Views/IoMappingPage.axaml"));
         var zhResources = File.ReadAllText(ToFullPath(
             root,
             "src/Presentation/IIoT.Edge.Presentation.Navigation/Resources/Languages/zh-CN.axaml"));
+        var legacyDataSectionsKey = "Navigation_Empty_Io" + "DataSections";
+        var legacyArraySectionsKey = "Navigation_Empty_Io" + "ArraySections";
 
         Assert.Contains("Navigation_IoMapping_TabInteraction", ioViewPage, StringComparison.Ordinal);
         Assert.Contains("Navigation_IoMapping_TabSingleRead", ioViewPage, StringComparison.Ordinal);
@@ -938,6 +943,31 @@ public sealed class RepositoryHygieneTests
         Assert.DoesNotContain("Navigation_IoView_TabMatrix", zhResources, StringComparison.Ordinal);
         Assert.DoesNotContain(">单点读写<", zhResources, StringComparison.Ordinal);
         Assert.DoesNotContain(">连续读写<", zhResources, StringComparison.Ordinal);
+        Assert.DoesNotContain("ViewportMaxHeight=\"320\"", ioViewPage, StringComparison.Ordinal);
+        Assert.DoesNotContain("ViewportMaxHeight=\"360\"", ioViewPage, StringComparison.Ordinal);
+        Assert.DoesNotContain(legacyDataSectionsKey, ioViewPage, StringComparison.Ordinal);
+        Assert.DoesNotContain(legacyArraySectionsKey, ioViewPage, StringComparison.Ordinal);
+        Assert.DoesNotContain(legacyDataSectionsKey, ioMappingPage, StringComparison.Ordinal);
+        Assert.DoesNotContain(legacyArraySectionsKey, ioMappingPage, StringComparison.Ordinal);
+        Assert.DoesNotContain(legacyDataSectionsKey, zhResources, StringComparison.Ordinal);
+        Assert.DoesNotContain(legacyArraySectionsKey, zhResources, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Shell_ShouldUseRealIconAndAutoSizedEquipmentRail()
+    {
+        var root = FindRepositoryRoot();
+        var mainWindow = File.ReadAllText(ToFullPath(
+            root,
+            "src/Edge/IIoT.Edge.Shell/MainWindow.axaml"));
+        var installerService = File.ReadAllText(ToFullPath(
+            root,
+            "src/Edge/IIoT.Edge.Installer/InstallerService.cs"));
+
+        Assert.Contains("Icon=\"avares://IIoT.Edge.UI.Shared/Assets/images/icon.ico\"", mainWindow, StringComparison.Ordinal);
+        Assert.Contains("RowDefinitions=\"Auto,12,*\"", mainWindow, StringComparison.Ordinal);
+        Assert.DoesNotContain("MinHeight=\"260\"", mainWindow, StringComparison.Ordinal);
+        Assert.Contains("shortcut.IconLocation", installerService, StringComparison.Ordinal);
     }
 
     [Fact]

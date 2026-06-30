@@ -359,6 +359,7 @@ internal static class InstallerService
             shortcut.TargetPath = targetPath;
             shortcut.WorkingDirectory = Path.GetDirectoryName(targetPath) ?? string.Empty;
             shortcut.Description = shortcutName;
+            shortcut.IconLocation = $"{targetPath},0";
             shortcut.Save();
         }
         finally

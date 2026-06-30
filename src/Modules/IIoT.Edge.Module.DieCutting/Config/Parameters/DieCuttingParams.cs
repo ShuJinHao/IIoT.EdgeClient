@@ -86,6 +86,16 @@ public static class DieCuttingParams
         BatchNumberPath,
 
         /// <summary>
+        /// 电极段进站检测路径。
+        /// </summary>
+        [ModuleParam(
+            ParamValueKind.String,
+            DefaultValue = "/dev/dev/electrode/getIn/check",
+            DisplayNameFallback = "MES电极段进站检测路径",
+            DescriptionFallback = "电极段进站检测接口相对路径。当前模切出站上传链路不调用该接口，先作为现场接口契约参数播种。")]
+        InboundPath,
+
+        /// <summary>
         /// 模切追溯出站上传路径。
         /// </summary>
         [ModuleParam(

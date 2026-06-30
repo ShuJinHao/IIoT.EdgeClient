@@ -6,7 +6,7 @@ namespace IIoT.Edge.Application.Features.Config.SchemaReconciliation;
 public sealed class ModuleParamConfigValueStore(
     ILocalParameterConfigService parameterConfigService,
     ModuleParamCategory category,
-    string schemaId) : IConfigValueStore
+    string schemaId) : IConfigValueStore, IRepairableConfigValueStore
 {
     public string SchemaId { get; } = schemaId;
 
@@ -26,6 +26,26 @@ public sealed class ModuleParamConfigValueStore(
 
     public Task DeleteAsync(string key, CancellationToken cancellationToken = default)
         => parameterConfigService.DeleteSystemConfigAsync(key, cancellationToken);
+
+    public async Task RepairExistingAsync(ConfigSchemaItem item, CancellationToken cancellationToken = default)
+    {
+        var legacyDefaultValues = ModuleParamSchemaSource.GetLegacyDefaultValues(item);
+        if (legacyDefaultValues.Count == 0)
+        {
+            return;
+        }
+
+        var current = (await parameterConfigService.GetSystemConfigsAsync(cancellationToken).ConfigureAwait(false))
+            .FirstOrDefault(snapshot => string.Equals(snapshot.Key, item.Key, StringComparison.OrdinalIgnoreCase));
+        if (current is null
+            || string.Equals(current.Value, item.DefaultValue, StringComparison.Ordinal)
+            || !legacyDefaultValues.Contains(current.Value, StringComparer.Ordinal))
+        {
+            return;
+        }
+
+        await InsertAsync(item, cancellationToken).ConfigureAwait(false);
+    }
 
     private bool IsCategoryKey(string key)
     {

@@ -8,9 +8,12 @@
 - 健康检查：`GET /heath`
 - 获取主批计划：`GET /dev/dev/get/order`
 - 生成追溯批次号：`POST /dev/dev/get/batchNumber`
+- 电极段进站检测：`POST /dev/dev/electrode/getIn/check`
 - 模切追溯出站上传：`POST /dev/dev/electrode/exit/push`
 
 `/dev/dev/run/info` 属于设备运行信息，不作为模切追溯报表上传接口。
+
+电极段进站检测和出站上报使用同一测试 MES 基础地址 `http://10.98.101.247:8080`。当前模切出站上传链路继续调用 `POST /dev/dev/electrode/exit/push`；进站检测路径先作为插件 MES 参数播种，只有在真实业务链路接入进站检测时才调用，不得为了“看起来完整”伪造进站请求。
 
 ## 2. 正负极身份
 
@@ -50,3 +53,7 @@ MES 拒绝或接口不可达时：
 - 不阻断 Shell 启动。
 - 不阻断 PLC 采集和本地页面。
 - 不与 Cloud 上传 gate、retry、deadletter 混用。
+
+## 5. 默认参数迁移
+
+AP/CP 模切插件的 MES 默认服务地址统一为 `http://10.98.101.247:8080`。历史现场默认值 `http://10.110.0.250:8081`、`http://10.110.1.250:8081` 仅允许在本地参数值仍等于旧默认时自动迁移；如果现场已手动改成其它地址，reconciliation 必须保留人工值，不得强行覆盖。

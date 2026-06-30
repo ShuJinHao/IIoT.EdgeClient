@@ -11,6 +11,7 @@ EdgeClient 不发布 Docker 镜像，不推 Harbor，也不从 GitHub hosted run
 - 本机宿主快发：操作者本机运行 `scripts/LocalPublishAndDeploy.ps1 -Transport http`，本机编译、打包、生成 installer artifact 后通过 Cloud Human API 上传 release bundle；这是运维快发路径，不属于 GitHub CI/CD job。生产 `stable` 不允许走 `rsync/scp`。
 - 本机插件快发：只改工序插件时运行 `scripts/PublishEdgePluginRelease.ps1`，只上传独立插件 zip 并登记插件 release，不生成宿主版本。
 - 更新内容必须显式填写：本机快发传 `-ReleaseNotes` 或 `-ReleaseNotesPath`；`workflow_dispatch` 填 `release_notes`；tag 发布必须使用带正文的 annotated tag。
+- 本机构建、打包或 HTTP 上传超时必须停止诊断并优先复用已生成 artifact；不得反复从头全量构建或跳过 release notes、DB 登记、审计和保留策略。
 - 生产服务器只允许 `stable` 渠道，不保留 `ci`、`dev`、`test` 或其他测试渠道目录。
 
 正式 GitHub 打包链路固定为：

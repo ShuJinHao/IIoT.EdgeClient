@@ -801,7 +801,8 @@ public sealed class LauncherMainViewModelTests
                     "secret",
                     "/api/v1/bootstrap/device-instance",
                     "/api/v1/edge/client-releases/device/{deviceId}/catalog",
-                    "/api/v1/edge/client-releases/version-reports"))
+                    "/api/v1/edge/client-releases/version-reports",
+                    "/api/v1/edge/runtime-heartbeats"))
                 : EdgeUpdateConfigurationResult.Failed("未配置");
 
         public EdgeReleaseOptions ResolveReleaseOptions() => new("stable", "win-x64");
@@ -840,7 +841,8 @@ public sealed class LauncherMainViewModelTests
                     "secret",
                     "/api/v1/bootstrap/device-instance",
                     "/api/v1/edge/client-releases/device/{deviceId}/catalog",
-                    "/api/v1/edge/client-releases/version-reports"))
+                    "/api/v1/edge/client-releases/version-reports",
+                    "/api/v1/edge/runtime-heartbeats"))
                 : EdgeUpdateConfigurationResult.Failed("未配置");
         }
 

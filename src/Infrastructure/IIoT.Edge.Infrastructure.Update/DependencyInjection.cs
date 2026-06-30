@@ -45,6 +45,7 @@ public static class DependencyInjection
         services.AddSingleton<IEdgeUpdateDeviceSessionClient, HttpEdgeUpdateDeviceSessionClient>();
         services.AddSingleton<IEdgeUpdateCatalogClient, HttpEdgeUpdateCatalogClient>();
         services.AddSingleton<IEdgeVersionReporter, HttpEdgeVersionReporter>();
+        services.AddSingleton<IEdgeRuntimeHeartbeatReporter, HttpEdgeRuntimeHeartbeatReporter>();
         services.AddSingleton<IEdgeInstalledPluginCatalog, FileInstalledPluginCatalog>();
         services.AddSingleton<IEdgeProfileModuleConfigurationStore, FileEdgeProfileModuleConfigurationStore>();
         services.AddSingleton<IEdgePluginPackageInstaller, EdgePluginPackageInstaller>();

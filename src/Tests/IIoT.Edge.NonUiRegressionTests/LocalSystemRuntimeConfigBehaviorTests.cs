@@ -24,6 +24,7 @@ public sealed class LocalSystemRuntimeConfigBehaviorTests
         Assert.True(service.Current.SystemCloudEnabled);
         Assert.Equal(TimeSpan.FromSeconds(60), service.Current.OnlineHeartbeatInterval);
         Assert.Equal(TimeSpan.FromSeconds(60), service.Current.CloudSyncInterval);
+        Assert.Equal(TimeSpan.FromSeconds(60), service.Current.RuntimeHeartbeatInterval);
     }
 
     [Fact]
@@ -73,6 +74,28 @@ public sealed class LocalSystemRuntimeConfigBehaviorTests
         await service.EnsureInitializedAsync();
 
         Assert.False(service.Current.SystemCloudEnabled);
+    }
+
+    [Fact]
+    public async Task EnsureInitializedAsync_WhenRuntimeHeartbeatIntervalConfigured_ShouldUseIndependentInterval()
+    {
+        var parameterConfigService = new MutableLocalParameterConfigService();
+        parameterConfigService.SystemConfigs.Add(new LocalSystemConfigSnapshot(
+            1,
+            LocalSystemRuntimeConfigService.RuntimeHeartbeatIntervalSecondsKey,
+            "15",
+            null,
+            1));
+        var service = new LocalSystemRuntimeConfigService(
+            parameterConfigService,
+            new MutableModuleParamRoleProvider { MesEnabled = true },
+            new FakeProcessIntegrationRegistry(["Homogenization"]),
+            new FakeLogService());
+
+        await service.EnsureInitializedAsync();
+
+        Assert.Equal(TimeSpan.FromSeconds(15), service.Current.RuntimeHeartbeatInterval);
+        Assert.Equal(TimeSpan.FromSeconds(60), service.Current.OnlineHeartbeatInterval);
     }
 
     [Fact]

@@ -30,6 +30,7 @@ public static class CloudApiConfigParamSchema
     public const string RecipeByDeviceTemplatePath = "CloudApi:Paths:RecipeByDeviceTemplate";
     public const string ClientReleaseCatalogTemplatePath = "CloudApi:Paths:ClientReleaseCatalogTemplate";
     public const string ClientVersionReportPath = "CloudApi:Paths:ClientVersionReport";
+    public const string RuntimeHeartbeatPath = "CloudApi:Paths:RuntimeHeartbeat";
 
     public static IReadOnlyList<CloudApiConfigParamDescriptor> Descriptors { get; } = Enum
         .GetValues<CloudApiConfigParam>()
@@ -75,6 +76,7 @@ public static class CloudApiConfigParamSchema
             RecipeByDeviceTemplatePath => snapshot.RecipeByDeviceTemplatePath,
             ClientReleaseCatalogTemplatePath => snapshot.ClientReleaseCatalogTemplatePath,
             ClientVersionReportPath => snapshot.ClientVersionReportPath,
+            RuntimeHeartbeatPath => snapshot.RuntimeHeartbeatPath,
             _ => string.Empty
         };
 
@@ -117,6 +119,7 @@ public static class CloudApiConfigParamSchema
             CloudApiConfigParam.RecipeByDeviceTemplatePath => RecipeByDeviceTemplatePath,
             CloudApiConfigParam.ClientReleaseCatalogTemplatePath => ClientReleaseCatalogTemplatePath,
             CloudApiConfigParam.ClientVersionReportPath => ClientVersionReportPath,
+            CloudApiConfigParam.RuntimeHeartbeatPath => RuntimeHeartbeatPath,
             _ => throw new ArgumentOutOfRangeException(nameof(param), param, null)
         };
 }
@@ -241,7 +244,14 @@ public enum CloudApiConfigParam
         DisplayNameResourceKey = "Navigation_Param_CloudApi_ClientVersionReportPath_DisplayName",
         DisplayNameFallback = "ClientVersionReportPath",
         DescriptionResourceKey = "Navigation_Param_CloudApi_ClientVersionReportPath_Description")]
-    ClientVersionReportPath
+    ClientVersionReportPath,
+
+    [ModuleParam(
+        ParamValueKind.String,
+        DisplayNameResourceKey = "Navigation_Param_CloudApi_RuntimeHeartbeatPath_DisplayName",
+        DisplayNameFallback = "RuntimeHeartbeatPath",
+        DescriptionResourceKey = "Navigation_Param_CloudApi_RuntimeHeartbeatPath_Description")]
+    RuntimeHeartbeatPath
 }
 
 public sealed record CloudApiConfigParamDescriptor(

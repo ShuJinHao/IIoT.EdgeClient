@@ -25,4 +25,5 @@ public class CloudApiPaths
     public string RecipeByDeviceTemplate { get; set; } = string.Empty;
     public string ClientReleaseCatalogTemplate { get; set; } = string.Empty;
     public string ClientVersionReport { get; set; } = string.Empty;
+    public string RuntimeHeartbeat { get; set; } = string.Empty;
 }

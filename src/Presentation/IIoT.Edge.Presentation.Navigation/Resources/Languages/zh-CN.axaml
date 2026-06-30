@@ -635,8 +635,6 @@
     <sys:String x:Key="Navigation_Dialog_EditIoInteractionFormat">编辑信号交互 - {0}</sys:String>
     <sys:String x:Key="Navigation_Empty_IoMappings">当前 PLC 未配置 IO 映射。</sys:String>
     <sys:String x:Key="Navigation_Empty_IoInteractionRows">当前 PLC 未配置信号交互映射。</sys:String>
-    <sys:String x:Key="Navigation_Empty_IoDataSections">当前 PLC 未配置单点读数据映射。</sys:String>
-    <sys:String x:Key="Navigation_Empty_IoArraySections">当前 PLC 未配置连续读数据映射。</sys:String>
     <sys:String x:Key="Navigation_Empty_IoSingleReadSections">当前 PLC 未配置单点读映射。</sys:String>
     <sys:String x:Key="Navigation_Empty_IoContinuousReadSections">当前 PLC 未配置连续读映射。</sys:String>
     <sys:String x:Key="Navigation_Empty_IoSingleWriteSections">当前 PLC 未配置单点写映射。</sys:String>

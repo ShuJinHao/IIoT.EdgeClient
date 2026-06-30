@@ -5,9 +5,8 @@
     xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
     xmlns:sharedViews="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared">
 
-    <edge:EdgeScrollHost>
-        <StackPanel Margin="20" Spacing="16">
-            <Grid ColumnDefinitions="*,Auto">
+    <Grid Margin="20" RowDefinitions="Auto,Auto,*" RowSpacing="16">
+            <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
                 <StackPanel Spacing="4">
                     <edge:EdgeSectionHeader
                         Title="{Binding ViewTitle}"
@@ -42,11 +41,14 @@
             </Grid>
 
             <sharedViews:EmptyStateView
+                Grid.Row="1"
                 IsVisible="{Binding ShouldShowDeviceSelectionPrompt}"
                 Message="{DynamicResource Navigation_DeviceSelection_SelectFromRightMessage}"
                 Title="{DynamicResource Navigation_Hint_SelectDevice}" />
 
-            <edge:EdgeTabControl IsVisible="{Binding HasSelectedDevice}">
+            <edge:EdgeTabControl
+                Grid.Row="2"
+                IsVisible="{Binding HasSelectedDevice}">
                 <TabItem Header="{DynamicResource Navigation_IoMapping_TabInteraction}">
                     <StackPanel Spacing="12">
                         <edge:EdgeTablePanel
@@ -60,7 +62,7 @@
                                 HeadersVisibility="Column"
                                 IsReadOnly="False"
                                 ItemsSource="{Binding InteractionRows}"
-                                ViewportMaxHeight="320">
+                                ViewportMaxHeight="0">
                                 <edge:EdgeDataGrid.Columns>
                                     <edge:EdgeTextColumn Binding="{Binding BusinessGroup}" Header="{DynamicResource Navigation_Column_InteractionItem}" IsReadOnly="True" MinWidth="90" Width="110" />
                                     <edge:EdgeTextColumn Binding="{Binding PlcAddressSummary}" Header="{DynamicResource Navigation_Column_PlcSignal}" IsReadOnly="True" MinWidth="140" Width="2*" />
@@ -127,7 +129,7 @@
                                             CanUserSortColumns="False"
                                             IsReadOnly="True"
                                             ItemsSource="{Binding Signals}"
-                                            ViewportMaxHeight="360">
+                                            ViewportMaxHeight="0">
                                             <edge:EdgeDataGrid.Columns>
                                                 <edge:EdgeTextColumn Binding="{Binding MatrixColumnTitle}" Header="{DynamicResource Navigation_Column_Remark}" MinWidth="180" Width="2*" />
                                                 <edge:EdgeTextColumn Binding="{Binding PlcAddress}" Header="{DynamicResource Navigation_Column_Address}" MinWidth="120" Width="120" />
@@ -174,7 +176,7 @@
                                             CanUserSortColumns="False"
                                             IsReadOnly="True"
                                             ItemsSource="{Binding Signals}"
-                                            ViewportMaxHeight="360">
+                                            ViewportMaxHeight="0">
                                             <edge:EdgeDataGrid.Columns>
                                                 <edge:EdgeTextColumn Binding="{Binding MatrixColumnTitle}" Header="{DynamicResource Navigation_Column_Remark}" MinWidth="180" Width="2*" />
                                                 <edge:EdgeTextColumn Binding="{Binding PlcAddress}" Header="{DynamicResource Navigation_Column_Address}" MinWidth="120" Width="120" />
@@ -212,7 +214,7 @@
                                             CanUserSortColumns="False"
                                             IsReadOnly="True"
                                             ItemsSource="{Binding Signals}"
-                                            ViewportMaxHeight="360">
+                                            ViewportMaxHeight="0">
                                             <edge:EdgeDataGrid.Columns>
                                                 <edge:EdgeTextColumn Binding="{Binding MatrixColumnTitle}" Header="{DynamicResource Navigation_Column_Remark}" MinWidth="180" Width="2*" />
                                                 <edge:EdgeTextColumn Binding="{Binding PlcAddress}" Header="{DynamicResource Navigation_Column_Address}" MinWidth="120" Width="120" />
@@ -250,7 +252,7 @@
                                             CanUserSortColumns="False"
                                             IsReadOnly="True"
                                             ItemsSource="{Binding Signals}"
-                                            ViewportMaxHeight="360">
+                                            ViewportMaxHeight="0">
                                             <edge:EdgeDataGrid.Columns>
                                                 <edge:EdgeTextColumn Binding="{Binding MatrixColumnTitle}" Header="{DynamicResource Navigation_Column_Remark}" MinWidth="180" Width="2*" />
                                                 <edge:EdgeTextColumn Binding="{Binding PlcAddress}" Header="{DynamicResource Navigation_Column_Address}" MinWidth="120" Width="120" />
@@ -271,6 +273,5 @@
                     </StackPanel>
                 </TabItem>
             </edge:EdgeTabControl>
-        </StackPanel>
-    </edge:EdgeScrollHost>
+    </Grid>
 </UserControl>

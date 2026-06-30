@@ -182,6 +182,71 @@ public sealed class HttpEdgeVersionReporter : IEdgeVersionReporter
     }
 
     private static IReadOnlyList<string> GetLocalIpAddresses()
+        => EdgeUpdateLocalIpAddressProvider.GetLocalIpAddresses();
+}
+
+public sealed class HttpEdgeRuntimeHeartbeatReporter : IEdgeRuntimeHeartbeatReporter
+{
+    private readonly ICloudClientHttpTransport _transport;
+
+    public HttpEdgeRuntimeHeartbeatReporter(ICloudClientHttpTransport transport)
+    {
+        _transport = transport ?? throw new ArgumentNullException(nameof(transport));
+    }
+
+    public async Task<EdgeRuntimeHeartbeatReportResult> ReportAsync(
+        EdgeUpdateCloudApiOptions options,
+        EdgeUpdateDeviceSession session,
+        EdgeRuntimeHeartbeatReport report,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(report);
+
+        if (string.IsNullOrWhiteSpace(session.AccessToken))
+        {
+            return EdgeRuntimeHeartbeatReportResult.Failed("设备 token 为空，无法上报运行心跳。");
+        }
+
+        try
+        {
+            var url = BuildUrl(options.BaseUrl, RequireRelativePath(options.RuntimeHeartbeatPath));
+            var response = await _transport
+                .PostJsonAsync(
+                    url,
+                    new
+                    {
+                        deviceId = session.DeviceId,
+                        clientCode = session.ClientCode,
+                        runtimeInstanceId = report.RuntimeInstanceId,
+                        machineProfile = report.MachineProfile,
+                        hostVersion = report.HostVersion,
+                        hostApiVersion = report.HostApiVersion,
+                        status = report.Status.ToString(),
+                        startedAtUtc = report.StartedAtUtc,
+                        reportedAtUtc = report.ReportedAtUtc,
+                        localIpAddresses = EdgeUpdateLocalIpAddressProvider.GetLocalIpAddresses()
+                    },
+                    ResolveTimeout(options),
+                    headers => headers.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken),
+                    cancellationToken)
+                .ConfigureAwait(false);
+            return response.Success
+                ? EdgeRuntimeHeartbeatReportResult.Succeeded()
+                : EdgeRuntimeHeartbeatReportResult.Failed(
+                    response.ErrorMessage ?? $"Cloud 请求失败: HTTP {response.StatusCode}");
+        }
+        catch (Exception ex)
+        {
+            return EdgeRuntimeHeartbeatReportResult.Failed($"运行心跳上报失败: {ex.Message}");
+        }
+    }
+}
+
+internal static class EdgeUpdateLocalIpAddressProvider
+{
+    public static IReadOnlyList<string> GetLocalIpAddresses()
     {
         try
         {

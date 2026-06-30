@@ -13,6 +13,7 @@ public sealed class LocalSystemRuntimeConfigService(
     : ILocalSystemRuntimeConfigService, IDisposable
 {
     private static readonly TimeSpan DefaultInterval = TimeSpan.FromSeconds(60);
+    public const string RuntimeHeartbeatIntervalSecondsKey = "RuntimeHeartbeatIntervalSeconds";
 
     private readonly ILocalParameterConfigService _parameterConfigService = parameterConfigService;
     private readonly IModuleParamRoleProvider _moduleParamRoleProvider = moduleParamRoleProvider;
@@ -74,11 +75,13 @@ public sealed class LocalSystemRuntimeConfigService(
                     cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
             var systemCloudEnabled = await ReadSystemCloudEnabledAsync(cancellationToken).ConfigureAwait(false);
+            var runtimeHeartbeatInterval = await ReadRuntimeHeartbeatIntervalAsync(cancellationToken).ConfigureAwait(false);
             Current = new SystemRuntimeConfigSnapshot(
                 mesEnabled,
                 systemCloudEnabled,
                 DefaultInterval,
-                DefaultInterval);
+                DefaultInterval,
+                runtimeHeartbeatInterval);
         }
         finally
         {
@@ -96,5 +99,17 @@ public sealed class LocalSystemRuntimeConfigService(
         return string.IsNullOrWhiteSpace(value) || !bool.TryParse(value.Trim(), out var enabled)
             ? true
             : enabled;
+    }
+
+    private async Task<TimeSpan> ReadRuntimeHeartbeatIntervalAsync(CancellationToken cancellationToken)
+    {
+        var configs = await _parameterConfigService
+            .GetSystemConfigsAsync(cancellationToken)
+            .ConfigureAwait(false);
+        var value = configs.FirstOrDefault(static x =>
+            string.Equals(x.Key, RuntimeHeartbeatIntervalSecondsKey, StringComparison.OrdinalIgnoreCase))?.Value;
+        return int.TryParse(value?.Trim(), out var seconds) && seconds is >= 10 and <= 3600
+            ? TimeSpan.FromSeconds(seconds)
+            : DefaultInterval;
     }
 }

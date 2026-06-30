@@ -40,6 +40,12 @@ public sealed class ConfigSchemaReconciler(
             if (!existingKeySet.Contains(item.Key))
             {
                 await store.InsertAsync(item, cancellationToken).ConfigureAwait(false);
+                continue;
+            }
+
+            if (store is IRepairableConfigValueStore repairableStore)
+            {
+                await repairableStore.RepairExistingAsync(item, cancellationToken).ConfigureAwait(false);
             }
         }
 

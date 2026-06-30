@@ -20,7 +20,8 @@ public sealed record CloudApiConfigSnapshot(
     string RecipeByDeviceTemplatePath,
     string ClientReleaseCatalogTemplatePath,
     string ClientVersionReportPath,
-    bool Enabled = true);
+    bool Enabled = true,
+    string RuntimeHeartbeatPath = "");
 
 /// <summary>
 /// 云端 API 配置快照读取入口，由基础设施层从 appsettings/options 映射。

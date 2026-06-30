@@ -12,6 +12,7 @@ using IIoT.Edge.Application.Features.Config.ModuleParameters;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Tasks;
 using IIoT.Edge.Application.Abstractions.Time;
+using IIoT.Edge.Application.Abstractions.Updates;
 using IIoT.Edge.Application.Common.Tasks;
 using IIoT.Edge.Application.Common.Time;
 using IIoT.Edge.Application.Modules.Diagnostics;
@@ -160,6 +161,11 @@ public static class DependencyInjection
         AddManagedBackgroundService(services, "Device.Heartbeat",
             (sp, ct) => sp.GetRequiredService<IDeviceService>().StartAsync(ct),
             (sp, _) => sp.GetRequiredService<IDeviceService>().StopAsync());
+        AddManagedBackgroundService(services, "Cloud.RuntimeHeartbeat",
+            (sp, ct) => sp.GetRequiredService<IEdgeRuntimeHeartbeatService>().StartAsync(
+                CreateRuntimeHeartbeatTarget(configuration, runtimePaths),
+                ct),
+            (sp, ct) => sp.GetRequiredService<IEdgeRuntimeHeartbeatService>().StopAsync(ct));
         AddManagedBackgroundService(services, "MES.Heartbeat",
             (sp, ct) => sp.GetRequiredService<MesHeartbeatTask>().StartAsync(ct),
             (sp, _) => sp.GetRequiredService<MesHeartbeatTask>().StopAsync());
@@ -207,6 +213,17 @@ public static class DependencyInjection
             Environment.GetEnvironmentVariable("MediatR__LicenseKey"),
             Environment.GetEnvironmentVariable("MEDIATR_LICENSE_KEY"),
             configuration["MediatR:LicenseKey"]);
+
+    private static EdgeUpdateTarget CreateRuntimeHeartbeatTarget(
+        IConfiguration configuration,
+        EdgeRuntimePaths runtimePaths)
+    {
+        var machineProfile = configuration["Shell:MachineProfile"]?.Trim();
+        return new EdgeUpdateTarget(
+            string.IsNullOrWhiteSpace(machineProfile) ? "Default" : machineProfile,
+            runtimePaths.BaseDirectory,
+            Environment.ProcessPath ?? string.Empty);
+    }
 
     private static void AddManagedBackgroundService(IServiceCollection services, string serviceName,
         Func<IServiceProvider, CancellationToken, Task> startAsync,

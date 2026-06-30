@@ -65,14 +65,51 @@ namespace IIoT.Edge.NonUiRegressionTests;
             && item.DefaultValue == "/config/recipes/{deviceId}");
     }
 
-    private static ModuleParamRegistry CreateHomogenizationRegistry()
+    [Fact]
+    public async Task ReconcileAsync_WhenExistingModuleParamMatchesLegacyDefault_ShouldRepairOnlyLegacyValue()
+    {
+        var registry = CreateHomogenizationRegistry(
+        [
+            new ModuleParamDefaultOverride(
+                ModuleParamCategory.Mes,
+                nameof(HomogenizationMesParam.服务地址),
+                "http://10.98.101.247:8080",
+                ["http://10.110.0.250:8081"])
+        ]);
+        var mesKey = ModuleParamKeys.StorageKey("Homogenization", ModuleParamCategory.Mes, nameof(HomogenizationMesParam.服务地址));
+        var customUpperComputerNoKey = ModuleParamKeys.StorageKey("Homogenization", ModuleParamCategory.Mes, nameof(HomogenizationMesParam.UpperComputerNo));
+        var configService = new MutableLocalParameterConfigService(
+        [
+            new LocalSystemConfigSnapshot(1, mesKey, "http://10.110.0.250:8081", null, 1),
+            new LocalSystemConfigSnapshot(2, customUpperComputerNoKey, "CUSTOM-UC", null, 2)
+        ]);
+        var source = new ModuleParamSchemaSource(
+            registry,
+            ModuleParamCategory.Mes,
+            ModuleParamSchemaIds.Mes);
+        var store = new ModuleParamConfigValueStore(
+            configService,
+            ModuleParamCategory.Mes,
+            ModuleParamSchemaIds.Mes);
+        var reconciler = new ConfigSchemaReconciler([source], [store]);
+
+        await reconciler.ReconcileAsync(TestContext.Current.CancellationToken);
+
+        var configs = await configService.GetSystemConfigsAsync(TestContext.Current.CancellationToken);
+        Assert.Equal("http://10.98.101.247:8080", configs.Single(x => x.Key == mesKey).Value);
+        Assert.Equal("CUSTOM-UC", configs.Single(x => x.Key == customUpperComputerNoKey).Value);
+    }
+
+    private static ModuleParamRegistry CreateHomogenizationRegistry(
+        IReadOnlyCollection<ModuleParamDefaultOverride>? defaultOverrides = null)
     {
         var registry = new ModuleParamRegistry();
         registry.Register(
             "Homogenization",
             typeof(HomogenizationMesParam),
             typeof(HomogenizationCloudParam),
-            typeof(HomogenizationBusinessParam));
+            typeof(HomogenizationBusinessParam),
+            defaultOverrides);
         return registry;
     }
 
