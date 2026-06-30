@@ -33,15 +33,27 @@ public class IoViewViewModel : NavigationViewModelBase
 
     public ObservableCollection<IoDataSectionModel> DataSections { get; } = [];
 
-    public ObservableCollection<IoContinuousReadMatrixSectionModel> ArraySections { get; } = [];
+    public ObservableCollection<IoDataSectionModel> SingleReadSections { get; } = [];
+
+    public ObservableCollection<IoDataSectionModel> ContinuousReadSections { get; } = [];
+
+    public ObservableCollection<IoDataSectionModel> SingleWriteSections { get; } = [];
+
+    public ObservableCollection<IoDataSectionModel> ContinuousWriteSections { get; } = [];
 
     public bool HasInteractionRows => InteractionRows.Count > 0;
 
     public bool HasDataSections => DataSections.Count > 0;
 
-    public bool HasArraySections => ArraySections.Count > 0;
+    public bool HasSingleReadSections => SingleReadSections.Count > 0;
 
-    public bool HasNoSignals => !HasInteractionRows && !HasDataSections && !HasArraySections && SelectedDevice is not null;
+    public bool HasContinuousReadSections => ContinuousReadSections.Count > 0;
+
+    public bool HasSingleWriteSections => SingleWriteSections.Count > 0;
+
+    public bool HasContinuousWriteSections => ContinuousWriteSections.Count > 0;
+
+    public bool HasNoSignals => !HasInteractionRows && !HasDataSections && SelectedDevice is not null;
 
     private NetworkDeviceEntity? _selectedDevice;
     public NetworkDeviceEntity? SelectedDevice
@@ -244,7 +256,10 @@ public class IoViewViewModel : NavigationViewModelBase
     {
         InteractionRows.Clear();
         DataSections.Clear();
-        ArraySections.Clear();
+        SingleReadSections.Clear();
+        ContinuousReadSections.Clear();
+        SingleWriteSections.Clear();
+        ContinuousWriteSections.Clear();
         NotifySignalCollectionsChanged();
 
         if (SelectedDevice is null)
@@ -270,16 +285,27 @@ public class IoViewViewModel : NavigationViewModelBase
             InteractionRows.Add(row);
         }
 
-        foreach (var section in mappedSignals.DataSections)
+        foreach (var section in mappedSignals.SingleReadSections)
         {
-            DataSections.Add(section);
+            SingleReadSections.Add(section);
         }
 
-        foreach (var section in mappedSignals.ArraySections)
+        foreach (var section in mappedSignals.ContinuousReadSections)
         {
-            ArraySections.Add(section);
+            ContinuousReadSections.Add(section);
         }
 
+        foreach (var section in mappedSignals.SingleWriteSections)
+        {
+            SingleWriteSections.Add(section);
+        }
+
+        foreach (var section in mappedSignals.ContinuousWriteSections)
+        {
+            ContinuousWriteSections.Add(section);
+        }
+
+        RebuildDataSections();
         BindSelectedBuffer();
         RefreshCurrentValues();
         NotifySignalCollectionsChanged();
@@ -301,7 +327,7 @@ public class IoViewViewModel : NavigationViewModelBase
             return;
         }
 
-        _signalValueUpdater.Refresh(InteractionRows, DataSections, ArraySections, buffer);
+        _signalValueUpdater.Refresh(InteractionRows, DataSections, [], buffer);
         UpdateConnectionStatus();
     }
 
@@ -312,7 +338,7 @@ public class IoViewViewModel : NavigationViewModelBase
             return;
         }
 
-        var result = await _manualReadService.ReadAsync(SelectedDevice.Id, DataSections, ArraySections);
+        var result = await _manualReadService.ReadAsync(SelectedDevice.Id, DataSections, []);
         if (result.ShouldRefreshValues)
         {
             RefreshCurrentValues();
@@ -428,7 +454,10 @@ public class IoViewViewModel : NavigationViewModelBase
     {
         OnPropertyChanged(nameof(HasInteractionRows));
         OnPropertyChanged(nameof(HasDataSections));
-        OnPropertyChanged(nameof(HasArraySections));
+        OnPropertyChanged(nameof(HasSingleReadSections));
+        OnPropertyChanged(nameof(HasContinuousReadSections));
+        OnPropertyChanged(nameof(HasSingleWriteSections));
+        OnPropertyChanged(nameof(HasContinuousWriteSections));
         OnPropertyChanged(nameof(HasNoSignals));
     }
 
@@ -447,17 +476,9 @@ public class IoViewViewModel : NavigationViewModelBase
             row.SetTextProvider(GetText);
         }
 
-        foreach (var section in mappedSignals.DataSections)
+        foreach (var section in EnumerateDataSections(mappedSignals))
         {
-            foreach (var signal in section.Signals)
-            {
-                signal.SetTextProvider(GetText);
-            }
-        }
-
-        foreach (var section in mappedSignals.ArraySections)
-        {
-            section.SetTextProvider(GetText);
+            ApplySectionTextProvider(section);
         }
     }
 
@@ -468,15 +489,6 @@ public class IoViewViewModel : NavigationViewModelBase
         {
             section.NotifyLocalizationChanged();
             foreach (var signal in section.Signals)
-            {
-                signal.NotifyLocalizationChanged();
-            }
-        }
-
-        foreach (var section in ArraySections)
-        {
-            section.NotifyLocalizationChanged();
-            foreach (var signal in section.Columns)
             {
                 signal.NotifyLocalizationChanged();
             }
@@ -493,6 +505,32 @@ public class IoViewViewModel : NavigationViewModelBase
 
         OnPropertyChanged(nameof(ConnectionStateText));
         OnPropertyChanged(nameof(SelectedDeviceDisplayName));
+    }
+
+    private void RebuildDataSections()
+    {
+        DataSections.Clear();
+        foreach (var section in SingleReadSections
+                     .Concat(ContinuousReadSections)
+                     .Concat(SingleWriteSections)
+                     .Concat(ContinuousWriteSections))
+        {
+            DataSections.Add(section);
+        }
+    }
+
+    private static IEnumerable<IoDataSectionModel> EnumerateDataSections(IoViewMappingBuildResult mappedSignals)
+        => mappedSignals.SingleReadSections
+            .Concat(mappedSignals.ContinuousReadSections)
+            .Concat(mappedSignals.SingleWriteSections)
+            .Concat(mappedSignals.ContinuousWriteSections);
+
+    private void ApplySectionTextProvider(IoDataSectionModel section)
+    {
+        foreach (var signal in section.Signals)
+        {
+            signal.SetTextProvider(GetText);
+        }
     }
 
     public override async Task OnActivatedAsync()

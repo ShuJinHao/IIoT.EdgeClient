@@ -149,7 +149,7 @@ public class IoMappingVm : HardwareConfigEditModelBase
     }
 
     /// <summary>
-    /// 硬件配置表格中地址长度允许现场修改，用于覆盖连续读写或现场合并点位。
+    /// 硬件配置表格中地址长度允许现场修改，用于覆盖连续读、连续写或现场合并点位。
     /// </summary>
     public bool IsAddressCountEditable
         => IoMappingOptionCatalog.CanEditAddressCount(Category);

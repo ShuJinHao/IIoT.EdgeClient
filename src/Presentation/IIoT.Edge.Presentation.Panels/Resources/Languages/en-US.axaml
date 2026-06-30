@@ -39,8 +39,11 @@
     <sys:String x:Key="Panels_Label_CurrentProgram">Current Program</sys:String>
     <sys:String x:Key="Panels_Label_CurrentBatch">Current Batch</sys:String>
     <sys:String x:Key="Panels_Label_CurrentRecipe">Current Recipe</sys:String>
+    <sys:String x:Key="Panels_Label_CurrentProcess">Current Process</sys:String>
     <sys:String x:Key="Panels_Label_MesPlanSelection">Main Plan</sys:String>
     <sys:String x:Key="Panels_Label_TraceBatchNumber">Trace Batch No.</sys:String>
+    <sys:String x:Key="Panels_Status_ProcessNotConfigured">Not configured</sys:String>
+    <sys:String x:Key="Panels_Status_ProcessAmbiguous">Undetermined</sys:String>
     <sys:String x:Key="Panels_Status_MesPlanRequired">Main plan required</sys:String>
     <sys:String x:Key="Panels_Status_MesPlanSelected">Selected</sys:String>
     <sys:String x:Key="Panels_Status_TraceBatchPending">Pending</sys:String>
@@ -67,6 +70,7 @@
     <sys:String x:Key="Panels_Plan_Column_EndTime">End Time</sys:String>
     <sys:String x:Key="Panels_Empty_NoProductionPlans_Title">No main plans</sys:String>
     <sys:String x:Key="Panels_Empty_NoProductionPlans_Message">MES did not return selectable main plans.</sys:String>
+    <sys:String x:Key="Panels_Empty_NoMainBatchPlanData">No main batch plan data</sys:String>
     <sys:String x:Key="Panels_Message_LoadingProductionPlans">Querying MES main plans...</sys:String>
     <sys:String x:Key="Panels_Error_PlanServiceMissing">The current module does not provide main-plan query capability.</sys:String>
     <sys:String x:Key="Panels_Error_MesUpperComputerNoMissing">MES upper computer code is not configured.</sys:String>

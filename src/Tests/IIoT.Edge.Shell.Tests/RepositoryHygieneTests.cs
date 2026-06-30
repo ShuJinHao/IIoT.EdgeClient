@@ -648,6 +648,12 @@ public sealed class RepositoryHygieneTests
         Assert.Contains("IoMappingEntity", combinedDocs, StringComparison.Ordinal);
         Assert.Contains("单点读数据", combinedDocs, StringComparison.Ordinal);
         Assert.Contains("连续读数据", combinedDocs, StringComparison.Ordinal);
+        Assert.Contains("单点写数据", combinedDocs, StringComparison.Ordinal);
+        Assert.Contains("连续写数据", combinedDocs, StringComparison.Ordinal);
+        Assert.Contains("IO 映射与 IO 交互同源契约", combinedDocs, StringComparison.Ordinal);
+        Assert.Contains("同源、同序、同字段", combinedDocs, StringComparison.Ordinal);
+        Assert.Contains("右侧设备运行卡片信息契约", combinedDocs, StringComparison.Ordinal);
+        Assert.Contains("暂无主批计划数据", combinedDocs, StringComparison.Ordinal);
         Assert.Contains("PLC 状态表", combinedDocs, StringComparison.Ordinal);
         Assert.Contains("人工显示/查询筛选器", combinedDocs, StringComparison.Ordinal);
         Assert.Contains("不得自动改全局设备号", combinedDocs, StringComparison.Ordinal);
@@ -666,6 +672,12 @@ public sealed class RepositoryHygieneTests
         Assert.Contains("不得出现 `0 / 12` 但表格空白", plcSelectionDoc, StringComparison.Ordinal);
         Assert.Contains("页面打开、刷新、激活、加载、无数据、无快照、空态或匹配失败时，不得自动改全局设备号", plcSelectionDoc, StringComparison.Ordinal);
         Assert.Contains("设备号永远不得作为写入、保存、删除、重试、重入队、启停、状态机执行、PLC 任务调度、Cloud/MES 同步范围或后台任务范围的参数", plcSelectionDoc, StringComparison.Ordinal);
+        Assert.Contains("IO 交互与硬件 IO 映射必须强制同源、同序、同字段", ruleDoc, StringComparison.Ordinal);
+        Assert.Contains("IO 交互页必须按 IO 映射页同一五分类展示", plcSelectionDoc, StringComparison.Ordinal);
+        Assert.Contains("IO 交互各分类区域的标题文案必须与 IO 映射分类名一致", plcSelectionDoc, StringComparison.Ordinal);
+        Assert.Contains("主批计划无数据时必须显示明确空态", plcSelectionDoc, StringComparison.Ordinal);
+        Assert.Contains("优先来自当前配方/运行快照的 `ProcessName`", plcSelectionDoc, StringComparison.Ordinal);
+        Assert.Contains("不得显示“数据”这种泛化菜单名", plcSelectionDoc, StringComparison.Ordinal);
         Assert.Contains("启动诊断必须订阅右侧设备号产出显示集合", plcSelectionDoc, StringComparison.Ordinal);
         Assert.Contains("同步运维必须保留 Cloud/MES 通道总览的全局链路语义", plcSelectionDoc, StringComparison.Ordinal);
         Assert.Contains("可归属到 PLC 的死信、待传、失败和重试记录默认显示全部，选择具体 PLC 后只显示该 PLC 记录", plcSelectionDoc, StringComparison.Ordinal);
@@ -812,6 +824,23 @@ public sealed class RepositoryHygieneTests
     }
 
     [Fact]
+    public void EquipmentPanel_CurrentProcess_ShouldPreferBusinessProcessName()
+    {
+        var root = FindRepositoryRoot();
+        var source = File.ReadAllText(ToFullPath(
+            root,
+            "src/Presentation/IIoT.Edge.Presentation.Panels/Features/Equipment/ViewModels/EquipmentViewModel.cs"));
+        var processNameIndex = source.IndexOf("NormalizeDisplayText(ProcessName)", StringComparison.Ordinal);
+        var menuTitleIndex = source.IndexOf("_viewRegistry.GetAllMenus()", StringComparison.Ordinal);
+
+        Assert.True(processNameIndex >= 0, "Equipment panel must use ProcessName as the current process business name.");
+        Assert.True(menuTitleIndex >= 0, "Equipment panel fallback menu lookup should remain explicit.");
+        Assert.True(
+            processNameIndex < menuTitleIndex,
+            "Equipment panel must prefer ProcessName before falling back to menu titles such as “数据”.");
+    }
+
+    [Fact]
     public void DeviceSelection_ShouldNotExposeSecondActionableDeviceSelector()
     {
         var root = FindRepositoryRoot();
@@ -883,6 +912,32 @@ public sealed class RepositoryHygieneTests
         Assert.Contains("SelectedNetworkDeviceDisplayName", ioMappingPage, StringComparison.Ordinal);
         Assert.DoesNotContain("ItemsSource=\"{Binding IoMappingNetworkDevices", ioMappingPage, StringComparison.Ordinal);
         Assert.DoesNotContain("SelectedItem=\"{Binding SelectedNetworkDevice", ioMappingPage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void IoInteractionPage_ShouldFollowIoMappingFiveCategories()
+    {
+        var root = FindRepositoryRoot();
+        var ioViewPage = File.ReadAllText(ToFullPath(
+            root,
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Hardware/IOView/Views/IOViewPage.axaml"));
+        var zhResources = File.ReadAllText(ToFullPath(
+            root,
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Resources/Languages/zh-CN.axaml"));
+
+        Assert.Contains("Navigation_IoMapping_TabInteraction", ioViewPage, StringComparison.Ordinal);
+        Assert.Contains("Navigation_IoMapping_TabSingleRead", ioViewPage, StringComparison.Ordinal);
+        Assert.Contains("Navigation_IoMapping_TabContinuousRead", ioViewPage, StringComparison.Ordinal);
+        Assert.Contains("Navigation_IoMapping_TabSingleWrite", ioViewPage, StringComparison.Ordinal);
+        Assert.Contains("Navigation_IoMapping_TabContinuousWrite", ioViewPage, StringComparison.Ordinal);
+        Assert.DoesNotContain("Navigation_IoView_TabInteraction", ioViewPage, StringComparison.Ordinal);
+        Assert.DoesNotContain("Navigation_IoView_TabData", ioViewPage, StringComparison.Ordinal);
+        Assert.DoesNotContain("Navigation_IoView_TabMatrix", ioViewPage, StringComparison.Ordinal);
+        Assert.DoesNotContain("Navigation_IoView_TabInteraction", zhResources, StringComparison.Ordinal);
+        Assert.DoesNotContain("Navigation_IoView_TabData", zhResources, StringComparison.Ordinal);
+        Assert.DoesNotContain("Navigation_IoView_TabMatrix", zhResources, StringComparison.Ordinal);
+        Assert.DoesNotContain(">单点读写<", zhResources, StringComparison.Ordinal);
+        Assert.DoesNotContain(">连续读写<", zhResources, StringComparison.Ordinal);
     }
 
     [Fact]

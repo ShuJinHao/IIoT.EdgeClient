@@ -15,8 +15,10 @@ internal sealed class IoViewMappingBuilder : IIoViewMappingBuilder
         var readIndex = 0;
         var writeIndex = 0;
         var interactionRows = new Dictionary<string, IoInteractionRowModel>(StringComparer.OrdinalIgnoreCase);
-        var dataSections = new Dictionary<string, IoDataSectionModel>(StringComparer.OrdinalIgnoreCase);
-        var arraySections = new Dictionary<string, IoContinuousReadMatrixSectionModel>(StringComparer.OrdinalIgnoreCase);
+        var singleReadSections = new Dictionary<string, IoDataSectionModel>(StringComparer.OrdinalIgnoreCase);
+        var continuousReadSections = new Dictionary<string, IoDataSectionModel>(StringComparer.OrdinalIgnoreCase);
+        var singleWriteSections = new Dictionary<string, IoDataSectionModel>(StringComparer.OrdinalIgnoreCase);
+        var continuousWriteSections = new Dictionary<string, IoDataSectionModel>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var mapping in mappings.OrderBy(static x => x.SortOrder))
         {
@@ -50,23 +52,25 @@ internal sealed class IoViewMappingBuilder : IIoViewMappingBuilder
                 continue;
             }
 
-            if (IoMappingDisplay.IsContinuousMatrix(signal.DataType, signal.AddressCount))
-            {
-                var arraySection = GetOrCreateArraySection(arraySections, mapping, category);
-                arraySection.SortOrder = Math.Min(arraySection.SortOrder, mapping.SortOrder);
-                arraySection.Columns.Add(signal);
-                continue;
-            }
-
-            var section = GetOrCreateDataSection(dataSections, mapping, category);
+            var sections = ResolveSectionBucket(
+                category,
+                signal.Direction,
+                signal.AddressCount,
+                singleReadSections,
+                continuousReadSections,
+                singleWriteSections,
+                continuousWriteSections);
+            var section = GetOrCreateDataSection(sections, mapping, category);
             section.SortOrder = Math.Min(section.SortOrder, mapping.SortOrder);
             section.Signals.Add(signal);
         }
 
         return new IoViewMappingBuildResult(
             SortRows(interactionRows.Values),
-            SortDataSections(dataSections.Values),
-            SortArraySections(arraySections.Values));
+            SortDataSections(singleReadSections.Values),
+            SortDataSections(continuousReadSections.Values),
+            SortDataSections(singleWriteSections.Values),
+            SortDataSections(continuousWriteSections.Values));
     }
 
     private static IReadOnlyList<IoInteractionRowModel> SortRows(IEnumerable<IoInteractionRowModel> rows)
@@ -76,13 +80,6 @@ internal sealed class IoViewMappingBuilder : IIoViewMappingBuilder
             .ToArray();
 
     private static IReadOnlyList<IoDataSectionModel> SortDataSections(IEnumerable<IoDataSectionModel> sections)
-        => sections
-            .OrderBy(static x => x.SortOrder)
-            .ThenBy(static x => x.BusinessGroup, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-
-    private static IReadOnlyList<IoContinuousReadMatrixSectionModel> SortArraySections(
-        IEnumerable<IoContinuousReadMatrixSectionModel> sections)
         => sections
             .OrderBy(static x => x.SortOrder)
             .ThenBy(static x => x.BusinessGroup, StringComparer.OrdinalIgnoreCase)
@@ -129,28 +126,6 @@ internal sealed class IoViewMappingBuilder : IIoViewMappingBuilder
         return section;
     }
 
-    private static IoContinuousReadMatrixSectionModel GetOrCreateArraySection(
-        IDictionary<string, IoContinuousReadMatrixSectionModel> sections,
-        IoMappingEntity mapping,
-        string category)
-    {
-        var businessGroup = ResolveBusinessGroup(mapping, category);
-        var key = category;
-        if (sections.TryGetValue(key, out var section))
-        {
-            return section;
-        }
-
-        section = new IoContinuousReadMatrixSectionModel
-        {
-            Category = category,
-            BusinessGroup = businessGroup,
-            SortOrder = mapping.SortOrder
-        };
-        sections.Add(key, section);
-        return section;
-    }
-
     private static IoSignalModel CreateSignal(IoMappingEntity mapping, int startIndex)
     {
         return new IoSignalModel
@@ -167,13 +142,69 @@ internal sealed class IoViewMappingBuilder : IIoViewMappingBuilder
     }
 
     private static string ResolveCategory(IoMappingEntity mapping)
-        => IoMappingDisplay.ResolveCategory(mapping.Category, mapping.AddressCount);
+    {
+        var category = IoMappingDisplay.ResolveCategory(mapping.Category, mapping.AddressCount);
+        if (IoMappingOptionCatalog.IsKnownCategory(category))
+        {
+            return category;
+        }
+
+        if (string.Equals(mapping.Direction, IoMappingOptionCatalog.DirectionWrite, StringComparison.OrdinalIgnoreCase))
+        {
+            return mapping.AddressCount > 1
+                ? IoMappingDisplay.ContinuousWriteCategory
+                : IoMappingDisplay.SingleWriteCategory;
+        }
+
+        return mapping.AddressCount > 1
+            ? IoMappingDisplay.ContinuousReadCategory
+            : IoMappingDisplay.SingleReadCategory;
+    }
 
     private static string ResolveBusinessGroup(IoMappingEntity mapping, string category)
         => IoMappingDisplay.ResolveBusinessGroup(mapping.BusinessGroup, category);
+
+    private static IDictionary<string, IoDataSectionModel> ResolveSectionBucket(
+        string category,
+        string direction,
+        int addressCount,
+        IDictionary<string, IoDataSectionModel> singleReadSections,
+        IDictionary<string, IoDataSectionModel> continuousReadSections,
+        IDictionary<string, IoDataSectionModel> singleWriteSections,
+        IDictionary<string, IoDataSectionModel> continuousWriteSections)
+    {
+        if (string.Equals(category, IoMappingDisplay.SingleReadCategory, StringComparison.OrdinalIgnoreCase))
+        {
+            return singleReadSections;
+        }
+
+        if (string.Equals(category, IoMappingDisplay.ContinuousReadCategory, StringComparison.OrdinalIgnoreCase))
+        {
+            return continuousReadSections;
+        }
+
+        if (string.Equals(category, IoMappingDisplay.SingleWriteCategory, StringComparison.OrdinalIgnoreCase))
+        {
+            return singleWriteSections;
+        }
+
+        if (string.Equals(category, IoMappingDisplay.ContinuousWriteCategory, StringComparison.OrdinalIgnoreCase))
+        {
+            return continuousWriteSections;
+        }
+
+        if (string.Equals(direction, IoMappingOptionCatalog.DirectionWrite, StringComparison.OrdinalIgnoreCase))
+        {
+            return addressCount > 1 ? continuousWriteSections : singleWriteSections;
+        }
+
+        return addressCount > 1 ? continuousReadSections : singleReadSections;
+    }
 }
 
 public sealed record IoViewMappingBuildResult(
     IReadOnlyList<IoInteractionRowModel> InteractionRows,
-    IReadOnlyList<IoDataSectionModel> DataSections,
-    IReadOnlyList<IoContinuousReadMatrixSectionModel> ArraySections);
+    IReadOnlyList<IoDataSectionModel> SingleReadSections,
+    IReadOnlyList<IoDataSectionModel> ContinuousReadSections,
+    IReadOnlyList<IoDataSectionModel> SingleWriteSections,
+    IReadOnlyList<IoDataSectionModel> ContinuousWriteSections);

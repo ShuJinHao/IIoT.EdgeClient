@@ -609,9 +609,6 @@
     <sys:String x:Key="Navigation_Title_HardwareConfig">硬件配置</sys:String>
     <sys:String x:Key="Navigation_Title_PlcTaskBinding">任务绑定</sys:String>
     <sys:String x:Key="Navigation_Title_IoInteractionGroup">信号交互</sys:String>
-    <sys:String x:Key="Navigation_IoView_TabInteraction">信号交互</sys:String>
-    <sys:String x:Key="Navigation_IoView_TabData">单点读写</sys:String>
-    <sys:String x:Key="Navigation_IoView_TabMatrix">连续读写</sys:String>
     <sys:String x:Key="Navigation_Tab_NetworkDevice">网络设备</sys:String>
     <sys:String x:Key="Navigation_Tab_SerialDevice">串口设备</sys:String>
     <sys:String x:Key="Navigation_Tab_IoMapping">IO 映射</sys:String>
@@ -640,6 +637,10 @@
     <sys:String x:Key="Navigation_Empty_IoInteractionRows">当前 PLC 未配置信号交互映射。</sys:String>
     <sys:String x:Key="Navigation_Empty_IoDataSections">当前 PLC 未配置单点读数据映射。</sys:String>
     <sys:String x:Key="Navigation_Empty_IoArraySections">当前 PLC 未配置连续读数据映射。</sys:String>
+    <sys:String x:Key="Navigation_Empty_IoSingleReadSections">当前 PLC 未配置单点读映射。</sys:String>
+    <sys:String x:Key="Navigation_Empty_IoContinuousReadSections">当前 PLC 未配置连续读映射。</sys:String>
+    <sys:String x:Key="Navigation_Empty_IoSingleWriteSections">当前 PLC 未配置单点写映射。</sys:String>
+    <sys:String x:Key="Navigation_Empty_IoContinuousWriteSections">当前 PLC 未配置连续写映射。</sys:String>
     <sys:String x:Key="Navigation_Status_Connected">已连接</sys:String>
     <sys:String x:Key="Navigation_Status_Disconnected">未连接</sys:String>
     <sys:String x:Key="Navigation_Status_NoDevice">未选择设备</sys:String>

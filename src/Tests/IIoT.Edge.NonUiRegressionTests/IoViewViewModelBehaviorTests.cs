@@ -1,6 +1,7 @@
 ﻿using System.Globalization;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Application.Features.Hardware.IoMappings;
 using IIoT.Edge.Application.Features.Hardware.IOView;
 using IIoT.Edge.Application.Features.Hardware.Queries;
 using IIoT.Edge.Domain.Hardware.Aggregates;
@@ -169,7 +170,61 @@ public sealed class IoViewViewModelBehaviorTests
             Assert.Equal(0, row.HostSignal?.StartIndex);
 
             var section = Assert.Single(viewModel.DataSections);
-            Assert.Equal("实时数据", section.Title);
+            Assert.Equal(IoMappingOptionCatalog.CategorySingleRead, section.Title);
+        });
+
+    [AvaloniaFact]
+    public Task LoadMappingsAsync_WhenMappingsUseFiveCategories_ShouldExposeSameFiveIoBuckets()
+        => RunOnStaThreadAsync(async () =>
+        {
+            var device = CreateDevice(18, "PLC-TestProcess-01", "TestProcess");
+            var mappings = new Dictionary<int, List<IoMappingEntity>>
+            {
+                [device.Id] =
+                [
+                    CreateMapping(device.Id, "Signal.Interaction.Read", "D100", 1, "UInt16", "Read", IoMappingOptionCatalog.CategoryInteraction, "交互", 1),
+                    CreateMapping(device.Id, "Signal.SingleRead", "D200", 1, "UInt16", "Read", IoMappingOptionCatalog.CategorySingleRead, "单点读", 2),
+                    CreateMapping(device.Id, "Signal.ContinuousRead", "D300", 8, "Ascii", "Read", IoMappingOptionCatalog.CategoryContinuousRead, "连续读", 3),
+                    CreateMapping(device.Id, "Signal.SingleWrite", "D400", 1, "UInt16", "Write", IoMappingOptionCatalog.CategorySingleWrite, "单点写", 4),
+                    CreateMapping(device.Id, "Signal.ContinuousWrite", "D500", 4, "UInt16", "Write", IoMappingOptionCatalog.CategoryContinuousWrite, "连续写", 5)
+                ]
+            };
+            var viewModel = CreateViewModel([device], mappings);
+
+            viewModel.SelectedDevice = device;
+            await viewModel.LoadMappingsAsync();
+
+            Assert.Single(viewModel.InteractionRows);
+            Assert.Equal(IoMappingOptionCatalog.CategorySingleRead, Assert.Single(viewModel.SingleReadSections).Title);
+            Assert.Equal(IoMappingOptionCatalog.CategoryContinuousRead, Assert.Single(viewModel.ContinuousReadSections).Title);
+            Assert.Equal(IoMappingOptionCatalog.CategorySingleWrite, Assert.Single(viewModel.SingleWriteSections).Title);
+            Assert.Equal(IoMappingOptionCatalog.CategoryContinuousWrite, Assert.Single(viewModel.ContinuousWriteSections).Title);
+            Assert.Equal(4, viewModel.DataSections.Count);
+        });
+
+    [AvaloniaFact]
+    public Task LoadMappingsAsync_WhenContinuousReadIsAscii_ShouldStayInContinuousReadBucket()
+        => RunOnStaThreadAsync(async () =>
+        {
+            var device = CreateDevice(19, "PLC-TestProcess-01", "TestProcess");
+            var mappings = new Dictionary<int, List<IoMappingEntity>>
+            {
+                [device.Id] =
+                [
+                    CreateMapping(device.Id, "Signal.Barcode", "R9660", 8, "Ascii", "Read", IoMappingOptionCatalog.CategoryContinuousRead, "负极模切只读采集模块", 1)
+                ]
+            };
+            var viewModel = CreateViewModel([device], mappings);
+
+            viewModel.SelectedDevice = device;
+            await viewModel.LoadMappingsAsync();
+
+            Assert.Empty(viewModel.SingleReadSections);
+            var section = Assert.Single(viewModel.ContinuousReadSections);
+            var signal = Assert.Single(section.Signals);
+            Assert.Equal("R9660", signal.PlcAddress);
+            Assert.Equal(8, signal.AddressCount);
+            Assert.Equal("Ascii", signal.DataType);
         });
 
     [AvaloniaFact]
@@ -316,13 +371,12 @@ public sealed class IoViewViewModelBehaviorTests
             Assert.Equal("True", decodedSignals[1].DisplayValue);
             Assert.Equal("ABCD", decodedSignals[2].DisplayValue);
 
-            var matrix = Assert.Single(viewModel.ArraySections);
-            Assert.Equal("配方数组", matrix.Title);
-            Assert.Equal("12.5", matrix.Rows.Single().Values.Single().Value);
+            var floatSignal = decodedSignals.Single(static signal => signal.SignalKey == "浮点数组");
+            Assert.Equal("12.5", floatSignal.DisplayValue);
         });
 
     [AvaloniaFact]
-    public Task LoadMappingsAsync_WhenContinuousSignalsShareGroup_ShouldBuildMatrixSection()
+    public Task LoadMappingsAsync_WhenContinuousSignalsShareGroup_ShouldBuildContinuousReadSection()
         => RunOnStaThreadAsync(async () =>
         {
             var device = CreateDevice(35, "PLC-Homogenization-01", "Homogenization");
@@ -342,24 +396,20 @@ public sealed class IoViewViewModelBehaviorTests
             viewModel.SelectedDevice = device;
             await viewModel.LoadMappingsAsync();
 
-            Assert.Empty(viewModel.DataSections);
-            var matrix = Assert.Single(viewModel.ArraySections);
-            Assert.Equal("连续读数据", matrix.Title);
-            Assert.Equal(2, matrix.Columns.Count);
-            Assert.Equal(3, matrix.Rows.Count);
-            Assert.Equal("配方时间", matrix.Columns[0].MatrixColumnTitle);
-            Assert.Equal("配方温度", matrix.Columns[1].MatrixColumnTitle);
-            Assert.Contains("配方时间:10", matrix.Summary);
-            Assert.Contains("配方温度:-1", matrix.Summary);
-            Assert.DoesNotContain("Homogenization.", matrix.Summary);
-            Assert.Equal("10", matrix.Rows[0].Values[0].Value);
-            Assert.Equal("-1", matrix.Rows[0].Values[1].Value);
-            Assert.Equal("30", matrix.Rows[2].Values[0].Value);
-            Assert.Equal("26", matrix.Rows[2].Values[1].Value);
+            Assert.Empty(viewModel.SingleReadSections);
+            var section = Assert.Single(viewModel.ContinuousReadSections);
+            Assert.Same(section, Assert.Single(viewModel.DataSections));
+            Assert.Equal("连续读数据", section.Title);
+            Assert.Equal(2, section.Signals.Count);
+            Assert.Equal("配方时间", section.Signals[0].MatrixColumnTitle);
+            Assert.Equal("配方温度", section.Signals[1].MatrixColumnTitle);
+            Assert.DoesNotContain("Homogenization.", string.Join(",", section.Signals.Select(static x => x.MatrixColumnTitle)));
+            Assert.Equal("10, 20, 30", section.Signals[0].DisplayValue);
+            Assert.Equal("-1, 25, 26", section.Signals[1].DisplayValue);
         });
 
     [AvaloniaFact]
-    public Task RefreshCurrentValues_WhenContinuousSignalsUpdate_ShouldKeepMatrixRowsStable()
+    public Task RefreshCurrentValues_WhenContinuousSignalsUpdate_ShouldKeepContinuousReadSignalsStable()
         => RunOnStaThreadAsync(async () =>
         {
             var device = CreateDevice(37, "PLC-Homogenization-01", "Homogenization");
@@ -379,18 +429,16 @@ public sealed class IoViewViewModelBehaviorTests
             viewModel.SelectedDevice = device;
             await viewModel.LoadMappingsAsync();
 
-            var matrix = Assert.Single(viewModel.ArraySections);
-            var firstRow = matrix.Rows[0];
-            var firstCell = firstRow.Values[0];
+            var section = Assert.Single(viewModel.ContinuousReadSections);
+            var firstSignal = section.Signals[0];
 
             dataStore.GetBuffer(device.Id)!.UpdateReadBuffer([11, 22, 33, 44, 55, 66]);
             viewModel.RefreshCurrentValues();
 
-            Assert.Same(matrix, Assert.Single(viewModel.ArraySections));
-            Assert.Same(firstRow, matrix.Rows[0]);
-            Assert.Same(firstCell, matrix.Rows[0].Values[0]);
-            Assert.Equal("11", firstCell.Value);
-            Assert.Equal("66", matrix.Rows[2].Values[1].Value);
+            Assert.Same(section, Assert.Single(viewModel.ContinuousReadSections));
+            Assert.Same(firstSignal, section.Signals[0]);
+            Assert.Equal("11, 22, 33", firstSignal.DisplayValue);
+            Assert.Equal("66", section.Signals[1].ExpandedValues[2].Value);
         });
 
     [AvaloniaFact]
@@ -417,14 +465,13 @@ public sealed class IoViewViewModelBehaviorTests
             viewModel.SelectedDevice = device;
             await viewModel.LoadMappingsAsync();
 
-            var singleWrite = Assert.Single(viewModel.DataSections);
+            var singleWrite = Assert.Single(viewModel.SingleWriteSections);
             Assert.False(singleWrite.CanManualRead);
             Assert.Equal("42", singleWrite.Signals.Single().DisplayValue);
 
-            var continuousWrite = Assert.Single(viewModel.ArraySections);
+            var continuousWrite = Assert.Single(viewModel.ContinuousWriteSections);
             Assert.False(continuousWrite.CanManualRead);
-            Assert.Equal("10", continuousWrite.Rows[0].Values.Single().Value);
-            Assert.Equal("30", continuousWrite.Rows[2].Values.Single().Value);
+            Assert.Equal("10, 20, 30", continuousWrite.Signals.Single().DisplayValue);
         });
 
     [AvaloniaFact]

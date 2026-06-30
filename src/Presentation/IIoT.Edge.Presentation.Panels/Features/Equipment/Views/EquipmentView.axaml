@@ -2,7 +2,8 @@
     x:Class="IIoT.Edge.Presentation.Panels.Features.Equipment.EquipmentView"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
+    xmlns:sharedViews="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Views;assembly=IIoT.Edge.UI.Shared">
     <edge:EdgeCard Classes="right-rail-equipment">
         <Grid
             Classes="edge-equipment-root"
@@ -39,7 +40,7 @@
                 Grid.Row="2">
                 <Grid
                     Classes="edge-equipment-plan-root"
-                    RowDefinitions="Auto,Auto">
+                    RowDefinitions="Auto,Auto,Auto">
                     <Grid
                         Classes="edge-equipment-plan-header"
                         ColumnDefinitions="*,Auto">
@@ -58,18 +59,27 @@
                     </Grid>
 
                     <Grid
+                        Classes="edge-equipment-trace-row"
+                        Grid.Row="1"
+                        ColumnDefinitions="64,*">
+                        <TextBlock
+                            Classes="edge-equipment-plan-key"
+                            Text="{DynamicResource Panels_Label_CurrentProcess}" />
+                        <TextBlock
+                            Classes="edge-equipment-plan-value"
+                            Grid.Column="1"
+                            Text="{Binding CurrentProcessDisplayName}"
+                            ToolTip.Tip="{Binding CurrentProcessDisplayName}" />
+                    </Grid>
+
+                    <Grid
                         Classes="edge-equipment-plan-body"
-                        Grid.Row="1">
-                        <StackPanel
-                            Classes="edge-equipment-plan-empty"
-                            IsVisible="{Binding !HasSelectedProductionPlan}">
-                            <TextBlock
-                                Classes="edge-equipment-plan-title"
-                                Text="{DynamicResource Panels_Status_MesPlanRequired}" />
-                            <TextBlock
-                                Classes="edge-equipment-plan-description"
-                                Text="{DynamicResource Panels_Hint_SelectMainPlanBeforeProduction}" />
-                        </StackPanel>
+                        Grid.Row="2">
+                        <sharedViews:EmptyStateView
+                            Classes="edge-empty-state-rail"
+                            IsVisible="{Binding !HasSelectedProductionPlan}"
+                            Message="{DynamicResource Panels_Hint_SelectMainPlanBeforeProduction}"
+                            Title="{DynamicResource Panels_Empty_NoMainBatchPlanData}" />
 
                         <Grid
                             Classes="edge-equipment-plan-selected"

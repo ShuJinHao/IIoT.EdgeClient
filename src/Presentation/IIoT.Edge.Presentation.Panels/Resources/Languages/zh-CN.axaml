@@ -39,8 +39,11 @@
     <sys:String x:Key="Panels_Label_CurrentProgram">当前程序</sys:String>
     <sys:String x:Key="Panels_Label_CurrentBatch">当前批次</sys:String>
     <sys:String x:Key="Panels_Label_CurrentRecipe">当前配方</sys:String>
+    <sys:String x:Key="Panels_Label_CurrentProcess">当前工序</sys:String>
     <sys:String x:Key="Panels_Label_MesPlanSelection">主批计划</sys:String>
     <sys:String x:Key="Panels_Label_TraceBatchNumber">追溯批次号</sys:String>
+    <sys:String x:Key="Panels_Status_ProcessNotConfigured">未配置</sys:String>
+    <sys:String x:Key="Panels_Status_ProcessAmbiguous">未确定</sys:String>
     <sys:String x:Key="Panels_Status_MesPlanRequired">待选择主批计划</sys:String>
     <sys:String x:Key="Panels_Status_MesPlanSelected">已选择</sys:String>
     <sys:String x:Key="Panels_Status_TraceBatchPending">待生成</sys:String>
@@ -67,6 +70,7 @@
     <sys:String x:Key="Panels_Plan_Column_EndTime">结束时间</sys:String>
     <sys:String x:Key="Panels_Empty_NoProductionPlans_Title">暂无主批计划</sys:String>
     <sys:String x:Key="Panels_Empty_NoProductionPlans_Message">MES 当前没有返回可选择的主批计划。</sys:String>
+    <sys:String x:Key="Panels_Empty_NoMainBatchPlanData">暂无主批计划数据</sys:String>
     <sys:String x:Key="Panels_Message_LoadingProductionPlans">正在查询 MES 主批计划...</sys:String>
     <sys:String x:Key="Panels_Error_PlanServiceMissing">当前模块没有提供主批计划查询能力。</sys:String>
     <sys:String x:Key="Panels_Error_MesUpperComputerNoMissing">MES 上位机编码未配置。</sys:String>

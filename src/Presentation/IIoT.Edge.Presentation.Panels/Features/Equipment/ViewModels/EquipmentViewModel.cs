@@ -8,6 +8,7 @@ using IIoT.Edge.Application.Features.Production.Equipment;
 using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
+using IIoT.Edge.UI.Shared.Modularity;
 using IIoT.Edge.UI.Shared.PluginSystem;
 
 namespace IIoT.Edge.Presentation.Panels.Features.Equipment;
@@ -22,6 +23,7 @@ public class EquipmentViewModel : PresentationViewModelBase
     private readonly IProductionPlanSelectionPopupService _planSelectionPopupService;
     private readonly IAppLanguageService _languageService;
     private readonly IDeviceSelectionService _deviceSelectionService;
+    private readonly IViewRegistry _viewRegistry;
     private readonly AvaloniaDispatcherTimer _hwRefreshTimer;
     private int _selectedTabIndex;
     private string _recipeName = EmptyDisplayText;
@@ -56,11 +58,12 @@ public class EquipmentViewModel : PresentationViewModelBase
 
     public string RecipeName { get => _recipeName; set { _recipeName = value; OnPropertyChanged(); OnPropertyChanged(nameof(DisplayRecipeName)); } }
     public string RecipeVersion { get => _recipeVersion; set { _recipeVersion = value; OnPropertyChanged(); } }
-    public string ProcessName { get => _processName; set { _processName = value; OnPropertyChanged(); OnPropertyChanged(nameof(DisplayProcessName)); } }
+    public string ProcessName { get => _processName; set { _processName = value; OnPropertyChanged(); OnPropertyChanged(nameof(DisplayProcessName)); OnPropertyChanged(nameof(CurrentProcessDisplayName)); } }
     public bool IsRecipeActive { get => _isRecipeActive; set { _isRecipeActive = value; OnPropertyChanged(); } }
     public string CurrentBatch { get => _currentBatch; set { _currentBatch = value; OnPropertyChanged(); OnPropertyChanged(nameof(DisplayCurrentBatch)); } }
     public string DisplayRecipeName => NormalizeDisplayText(RecipeName);
     public string DisplayProcessName => NormalizeDisplayText(ProcessName);
+    public string CurrentProcessDisplayName => ResolveCurrentProcessDisplayName();
     public string DisplayCurrentBatch => NormalizeDisplayText(CurrentBatch);
     public bool IsMesPlanSelectionRequired
     {
@@ -160,7 +163,8 @@ public class EquipmentViewModel : PresentationViewModelBase
         IProductionPlanSelectionServiceResolver planSelectionServiceResolver,
         IProductionPlanSelectionPopupService planSelectionPopupService,
         IAppLanguageService languageService,
-        IDeviceSelectionService deviceSelectionService)
+        IDeviceSelectionService deviceSelectionService,
+        IViewRegistry viewRegistry)
     {
         _equipmentPanelService = equipmentPanelService;
         _recipeService = recipeService;
@@ -168,6 +172,7 @@ public class EquipmentViewModel : PresentationViewModelBase
         _planSelectionPopupService = planSelectionPopupService;
         _languageService = languageService;
         _deviceSelectionService = deviceSelectionService;
+        _viewRegistry = viewRegistry;
         SelectProductionPlanCommand = new AsyncCommand(
             () => RunViewTaskAsync(
                 SelectProductionPlanCoreAsync,
@@ -417,6 +422,43 @@ public class EquipmentViewModel : PresentationViewModelBase
         return string.IsNullOrWhiteSpace(value) || value.Trim() == "--"
             ? EmptyDisplayText
             : value;
+    }
+
+    private string ResolveCurrentProcessDisplayName()
+    {
+        var currentProcess = NormalizeDisplayText(ProcessName);
+        if (currentProcess != EmptyDisplayText)
+        {
+            return currentProcess;
+        }
+
+        var dataViewTitles = _viewRegistry.GetAllMenus()
+            .Where(static menu => menu.ViewId.EndsWith(".DataView", StringComparison.OrdinalIgnoreCase))
+            .Select(ResolveMenuTitle)
+            .Where(static title => title != EmptyDisplayText)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (dataViewTitles.Length == 1)
+        {
+            return dataViewTitles[0];
+        }
+
+        if (dataViewTitles.Length > 1)
+        {
+            return _languageService.GetString("Panels_Status_ProcessAmbiguous", "未确定");
+        }
+
+        return _languageService.GetString("Panels_Status_ProcessNotConfigured", "未配置");
+    }
+
+    private string ResolveMenuTitle(MenuInfo menu)
+    {
+        var title = string.IsNullOrWhiteSpace(menu.TitleResourceKey)
+            ? menu.Title
+            : _languageService.GetString(menu.TitleResourceKey, menu.Title);
+
+        return NormalizeDisplayText(title);
     }
 
     private string ResolveTraceBatchNumber(ProductionPlanSelectionState state)

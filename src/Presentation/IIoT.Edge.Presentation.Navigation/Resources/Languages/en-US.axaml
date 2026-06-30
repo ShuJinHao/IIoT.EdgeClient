@@ -609,9 +609,6 @@
     <sys:String x:Key="Navigation_Title_HardwareConfig">Hardware Configuration</sys:String>
     <sys:String x:Key="Navigation_Title_PlcTaskBinding">Task Binding</sys:String>
     <sys:String x:Key="Navigation_Title_IoInteractionGroup">Signal Interaction</sys:String>
-    <sys:String x:Key="Navigation_IoView_TabInteraction">Signal Interaction</sys:String>
-    <sys:String x:Key="Navigation_IoView_TabData">Single Point IO</sys:String>
-    <sys:String x:Key="Navigation_IoView_TabMatrix">Continuous IO</sys:String>
     <sys:String x:Key="Navigation_Tab_NetworkDevice">Network Devices</sys:String>
     <sys:String x:Key="Navigation_Tab_SerialDevice">Serial Devices</sys:String>
     <sys:String x:Key="Navigation_Tab_IoMapping">IO Mapping</sys:String>
@@ -640,6 +637,10 @@
     <sys:String x:Key="Navigation_Empty_IoInteractionRows">The current PLC has no signal interaction mappings configured.</sys:String>
     <sys:String x:Key="Navigation_Empty_IoDataSections">The current PLC has no single-read IO mappings configured.</sys:String>
     <sys:String x:Key="Navigation_Empty_IoArraySections">The current PLC has no continuous-read IO mappings configured.</sys:String>
+    <sys:String x:Key="Navigation_Empty_IoSingleReadSections">The current PLC has no single-read mappings configured.</sys:String>
+    <sys:String x:Key="Navigation_Empty_IoContinuousReadSections">The current PLC has no continuous-read mappings configured.</sys:String>
+    <sys:String x:Key="Navigation_Empty_IoSingleWriteSections">The current PLC has no single-write mappings configured.</sys:String>
+    <sys:String x:Key="Navigation_Empty_IoContinuousWriteSections">The current PLC has no continuous-write mappings configured.</sys:String>
     <sys:String x:Key="Navigation_Status_Connected">Connected</sys:String>
     <sys:String x:Key="Navigation_Status_Disconnected">Disconnected</sys:String>
     <sys:String x:Key="Navigation_Status_NoDevice">No device selected</sys:String>
