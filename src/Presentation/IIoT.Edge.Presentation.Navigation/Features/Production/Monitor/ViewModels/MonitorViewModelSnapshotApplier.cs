@@ -9,19 +9,13 @@ internal static class MonitorViewModelSnapshotApplier
         IReadOnlyList<DeviceMonitorSnapshot> snapshots,
         string? selectedDevice)
     {
-        if (snapshots.Count == 0
-            || string.IsNullOrWhiteSpace(selectedDevice)
+        if (string.IsNullOrWhiteSpace(selectedDevice)
             || string.Equals(selectedDevice, IDeviceSelectionService.AllFilterKey, StringComparison.OrdinalIgnoreCase))
         {
             return null;
         }
 
-        if (snapshots.Any(snapshot => string.Equals(snapshot.DeviceName, selectedDevice, StringComparison.OrdinalIgnoreCase)))
-        {
-            return selectedDevice;
-        }
-
-        return null;
+        return selectedDevice.Trim();
     }
 
     public static DeviceMonitorSnapshot? FindSelectedSnapshot(

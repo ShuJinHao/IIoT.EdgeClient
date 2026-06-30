@@ -329,7 +329,7 @@ public sealed class DiagnosticsViewModelBehaviorTests
         });
 
     [Fact]
-    public Task DiagnosticsViewModel_WhenDeviceSelected_ShouldKeepSyncOperationsGlobal()
+    public Task DiagnosticsViewModel_WhenDeviceSelected_ShouldFilterAttributableDeadLettersAndKeepGlobalChannels()
         => RunOnStaThreadAsync(async () =>
         {
             var selectionService = new DeviceSelectionService();
@@ -341,8 +341,9 @@ public sealed class DiagnosticsViewModelBehaviorTests
                         2,
                         [],
                         [
-                            CreateDeadLetterRecord(101, "P1-AP01"),
-                            CreateDeadLetterRecord(102, "P1-AP02")
+                            CreateDeadLetterRecord(101, "Cloud-A", "P1-AP01"),
+                            CreateDeadLetterRecord(102, "Cloud-B", "P1-AP02"),
+                            CreateDeadLetterRecord(103, "Cloud-Global")
                         ],
                         false,
                         null,
@@ -350,7 +351,7 @@ public sealed class DiagnosticsViewModelBehaviorTests
                     mesDeadLetters: new DeadLetterDiagnosticsSnapshot(
                         1,
                         [],
-                        [CreateDeadLetterRecord(202, "P1-AP02")],
+                        [CreateDeadLetterRecord(202, "MES-B", "P1-AP02")],
                         false,
                         null,
                         null))
@@ -365,9 +366,10 @@ public sealed class DiagnosticsViewModelBehaviorTests
 
             Assert.Equal(2, viewModel.SyncChannels.Count);
             Assert.Equal(2, viewModel.CloudDeadLetters.Count);
-            Assert.Single(viewModel.MesDeadLetters);
-            Assert.Contains(viewModel.CloudDeadLetters, row => row.FailedTarget == "P1-AP02");
-            Assert.Contains(viewModel.MesDeadLetters, row => row.FailedTarget == "P1-AP02");
+            Assert.Empty(viewModel.MesDeadLetters);
+            Assert.Contains(viewModel.CloudDeadLetters, row => row.FailedTarget == "Cloud-A");
+            Assert.Contains(viewModel.CloudDeadLetters, row => row.FailedTarget == "Cloud-Global");
+            Assert.DoesNotContain(viewModel.CloudDeadLetters, row => row.FailedTarget == "Cloud-B");
         });
 
     [Fact]
@@ -799,12 +801,14 @@ public sealed class DiagnosticsViewModelBehaviorTests
                 DeadLetters: mesDeadLetters),
             new ProductionContextPersistenceDiagnostics(0, null));
 
-    private static DeadLetterRecord CreateDeadLetterRecord(long id, string failedTarget)
+    private static DeadLetterRecord CreateDeadLetterRecord(long id, string failedTarget, string? deviceName = null)
         => new()
         {
             Id = id,
             ProcessType = "Homogenization",
-            CellDataJson = "{\"trayCode\":\"TRAY-10\"}",
+            CellDataJson = deviceName is null
+                ? "{\"trayCode\":\"TRAY-10\"}"
+                : $"{{\"trayCode\":\"TRAY-10\",\"deviceName\":\"{deviceName}\"}}",
             FailedTarget = failedTarget,
             SourceTable = "failed_records",
             SourceRecordId = id,

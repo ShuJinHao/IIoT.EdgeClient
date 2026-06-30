@@ -81,6 +81,7 @@ public class PlcTaskBindingViewModel : NavigationViewModelBase
             OnPropertyChanged(nameof(IsDeviceSelectionRequired));
             OnPropertyChanged(nameof(ShouldShowDeviceSelectionPrompt));
             OnPropertyChanged(nameof(SelectedDeviceDisplayName));
+            OnPropertyChanged(nameof(SelectedDeviceTitle));
             OnPropertyChanged(nameof(SelectedDeviceTasks));
             OnPropertyChanged(nameof(CanSave));
             _saveCommand.RaiseCanExecuteChanged();
@@ -99,6 +100,11 @@ public class PlcTaskBindingViewModel : NavigationViewModelBase
 
     public string SelectedDeviceDisplayName
         => SelectedDevice?.DeviceName ?? GetText("Navigation_DeviceSelection_AllOrSummary", "全部/汇总");
+
+    public string SelectedDeviceTitle
+        => SelectedDevice is null
+            ? GetText("Navigation_DeviceSelection_AllOrSummary", "全部/汇总")
+            : FormatText("Navigation_DeviceSelection_CurrentPlcFormat", "当前 PLC：{0}", SelectedDevice.DeviceName);
 
     public bool CanEdit => _permissionService.CanEditHardware;
 
@@ -246,6 +252,7 @@ public class PlcTaskBindingViewModel : NavigationViewModelBase
     {
         base.RefreshLocalization();
         OnPropertyChanged(nameof(SelectedDeviceDisplayName));
+        OnPropertyChanged(nameof(SelectedDeviceTitle));
     }
 }
 
@@ -271,7 +278,7 @@ public sealed class PlcTaskBindingDeviceVm
 
     public bool IsDeviceEnabled { get; }
 
-    public string DeviceStateText => IsDeviceEnabled ? "启用" : "停用";
+    public string DeviceStateText => IsDeviceEnabled ? "配置状态：已启用" : "配置状态：未启用";
 
     public ObservableCollection<PlcTaskBindingTaskVm> Tasks { get; } = [];
 }

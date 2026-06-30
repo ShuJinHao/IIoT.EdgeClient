@@ -53,7 +53,9 @@ public sealed class DieCuttingDataViewModel : PresentationViewModelBase
 
     public string EmptyTitle => GetText("DieCutting_Empty_Title", "暂无生产数据");
 
-    public string EmptyMessage => GetText("DieCutting_Empty_ProductionRecords", "当前没有真实模切生产记录。");
+    public string EmptyMessage => IsSpecificDeviceSelected()
+        ? GetText("DieCutting_Empty_SelectedDeviceProductionRecords", "当前 PLC 暂无生产数据。")
+        : GetText("DieCutting_Empty_ProductionRecords", "当前没有真实模切生产记录。");
 
     public string DeviceNameHeader => GetText("DieCutting_Column_DeviceName", "设备号");
 
@@ -114,7 +116,10 @@ public sealed class DieCuttingDataViewModel : PresentationViewModelBase
     }
 
     private void OnDeviceSelectionChanged(object? sender, EventArgs e)
-        => RunViewTaskInBackground(RefreshAsync, "刷新模切生产数据失败");
+    {
+        OnPropertyChanged(nameof(EmptyMessage));
+        RunViewTaskInBackground(RefreshAsync, "刷新模切生产数据失败");
+    }
 
     private void RefreshLocalizedText()
     {
@@ -136,6 +141,13 @@ public sealed class DieCuttingDataViewModel : PresentationViewModelBase
 
     private string GetText(string key, string fallback)
         => _languageService.GetString(key, fallback);
+
+    private bool IsSpecificDeviceSelected()
+        => !string.IsNullOrWhiteSpace(_deviceSelectionService.SelectedDeviceKey)
+           && !string.Equals(
+               _deviceSelectionService.SelectedDeviceKey,
+               IDeviceSelectionService.AllFilterKey,
+               StringComparison.OrdinalIgnoreCase);
 
     private static DieCuttingProductionRecordRow ToRow(DieCuttingProductionRecord record)
         => new(

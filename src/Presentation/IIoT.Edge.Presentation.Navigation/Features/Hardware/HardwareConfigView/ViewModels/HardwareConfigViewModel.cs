@@ -7,6 +7,7 @@ using IIoT.Edge.Application.Common.Crud;
 using IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView.Models;
 using IIoT.Edge.Application.Features.Hardware.IoMappings;
 using IIoT.Edge.Presentation.Navigation.Localization;
+using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
@@ -19,6 +20,7 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
     private readonly IHardwareConfigLoadSaveCoordinator _loadSaveCoordinator;
     private readonly IHardwareConfigDeviceSelectionCoordinator _deviceSelectionCoordinator;
     private readonly IHardwareConfigEditSession _editSession;
+    private readonly IDeviceSelectionService _deviceSelectionService;
     private readonly AsyncCommand _applyModuleTemplateCommand;
     private readonly BaseCommand _addNetworkDeviceCommand;
     private readonly BaseCommand _editNetworkDeviceCommand;
@@ -44,6 +46,7 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
     private SerialDeviceVm? _serialDeviceEditingSource;
     private IoMappingVm? _ioMappingEditingSource;
     private IoInteractionPairVm? _ioInteractionPairEditingSource;
+    private bool _isDeviceSelectionSubscribed;
 
     public IEnumerable<DeviceType> DeviceTypes => Enum.GetValues<DeviceType>();
     public IEnumerable<PlcType> PlcTypes => Enum.GetValues<PlcType>();
@@ -71,6 +74,8 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
     public ObservableCollection<IoMappingGroupVm> SingleWriteIoMappingGroups { get; } = new();
     public ObservableCollection<IoMappingGroupVm> ContinuousWriteIoMappingGroups { get; } = new();
     public bool HasNoIoMappingNetworkDevices => IoMappingNetworkDevices.Count == 0;
+    public bool HasSelectedNetworkDevice => SelectedNetworkDevice is not null;
+    public bool ShouldShowIoMappingDeviceSelectionPrompt => IoMappingNetworkDevices.Count > 0 && SelectedNetworkDevice is null;
     public bool HasNoIoMappingGroups => IoMappingGroups.Count == 0;
     public bool HasNoInteractionIoMappingGroups => InteractionIoMappingPairs.Count == 0;
     public bool HasNoSingleReadIoMappingGroups => SingleReadIoMappingGroups.Count == 0;
@@ -82,6 +87,9 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
     public IReadOnlyList<string> IoDataPointCategories => IoMappingOptionCatalog.DataPointCategories;
     public IReadOnlyList<string> IoDirections => IoMappingOptionCatalog.Directions;
     public IReadOnlyList<string> IoDataTypes => IoMappingOptionCatalog.DataTypes;
+
+    public string SelectedNetworkDeviceDisplayName
+        => SelectedNetworkDevice?.DeviceName ?? GetText("Navigation_DeviceSelection_AllOrSummary", "全部/汇总");
 
     public ObservableCollection<IoStandardSignalOptionVm> StandardIoSignals { get; } = new();
     public ObservableCollection<IoStandardSignalOptionVm> StandardDataSignals { get; } = new();
@@ -350,6 +358,9 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
             }
 
             OnPropertyChanged();
+            OnPropertyChanged(nameof(HasSelectedNetworkDevice));
+            OnPropertyChanged(nameof(ShouldShowIoMappingDeviceSelectionPrompt));
+            OnPropertyChanged(nameof(SelectedNetworkDeviceDisplayName));
             OnPropertyChanged(nameof(CanAddIoMappingForSelectedDevice));
             _deviceSelectionCoordinator.HandleSelectedNetworkDeviceChanged(this);
             _ = RefreshSelectedNetworkDeviceAsync();
@@ -442,13 +453,15 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         IAppLanguageService languageService,
         IHardwareConfigLoadSaveCoordinator loadSaveCoordinator,
         IHardwareConfigDeviceSelectionCoordinator deviceSelectionCoordinator,
-        IHardwareConfigEditSession editSession)
+        IHardwareConfigEditSession editSession,
+        IDeviceSelectionService deviceSelectionService)
         : this(
             permissionService,
             languageService,
             loadSaveCoordinator,
             deviceSelectionCoordinator,
             editSession,
+            deviceSelectionService,
             "Hardware.HardwareConfigView",
             "Navigation_Title_HardwareConfig",
             "硬件配置")
@@ -461,6 +474,7 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         IHardwareConfigLoadSaveCoordinator loadSaveCoordinator,
         IHardwareConfigDeviceSelectionCoordinator deviceSelectionCoordinator,
         IHardwareConfigEditSession editSession,
+        IDeviceSelectionService deviceSelectionService,
         string viewId,
         string titleResourceKey,
         string titleFallback)
@@ -470,6 +484,7 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         _loadSaveCoordinator = loadSaveCoordinator;
         _deviceSelectionCoordinator = deviceSelectionCoordinator;
         _editSession = editSession;
+        _deviceSelectionService = deviceSelectionService;
         _addNetworkDeviceCommand = new BaseCommand(_ => OpenAddNetworkDeviceDialog(), _ => CanEdit);
         _editNetworkDeviceCommand = new BaseCommand(
             OpenEditNetworkDeviceDialog,
@@ -540,7 +555,14 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
 
     public override async Task OnActivatedAsync()
     {
+        SubscribeDeviceSelection();
         await ExecuteBusyAsync(LoadAllAsync);
+    }
+
+    public override Task OnDeactivatedAsync()
+    {
+        UnsubscribeDeviceSelection();
+        return Task.CompletedTask;
     }
 
     private Task LoadAllAsync()
@@ -662,6 +684,58 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
 
         ReplaceCollection(IoMappingNetworkDevices, devices);
         OnPropertyChanged(nameof(HasNoIoMappingNetworkDevices));
+        OnPropertyChanged(nameof(ShouldShowIoMappingDeviceSelectionPrompt));
+    }
+
+    internal void ApplyIoMappingSelectionFromSharedSelection()
+        => SelectedNetworkDevice = ResolveNetworkDeviceFromSharedSelection();
+
+    private NetworkDeviceVm? ResolveNetworkDeviceFromSharedSelection()
+    {
+        var selectedKey = _deviceSelectionService.SelectedDeviceKey;
+        if (string.Equals(
+                selectedKey,
+                IDeviceSelectionService.AllFilterKey,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return IoMappingNetworkDevices.FirstOrDefault(device =>
+            string.Equals(device.DeviceName, selectedKey, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void OnSharedDeviceSelectionChanged(object? sender, EventArgs e)
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            ApplyIoMappingSelectionFromSharedSelection();
+            return;
+        }
+
+        Dispatcher.UIThread.Post(ApplyIoMappingSelectionFromSharedSelection, DispatcherPriority.Background);
+    }
+
+    private void SubscribeDeviceSelection()
+    {
+        if (_isDeviceSelectionSubscribed)
+        {
+            return;
+        }
+
+        _deviceSelectionService.SelectionChanged += OnSharedDeviceSelectionChanged;
+        _isDeviceSelectionSubscribed = true;
+    }
+
+    private void UnsubscribeDeviceSelection()
+    {
+        if (!_isDeviceSelectionSubscribed)
+        {
+            return;
+        }
+
+        _deviceSelectionService.SelectionChanged -= OnSharedDeviceSelectionChanged;
+        _isDeviceSelectionSubscribed = false;
     }
 
     protected override void RefreshLocalization()
@@ -670,6 +744,7 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         OnPropertyChanged(nameof(NetworkDeviceDialogTitle));
         OnPropertyChanged(nameof(SerialDeviceDialogTitle));
         OnPropertyChanged(nameof(IoMappingEditDialogTitle));
+        OnPropertyChanged(nameof(SelectedNetworkDeviceDisplayName));
     }
 
     private void OpenAddNetworkDeviceDialog()
@@ -745,11 +820,13 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         if (SelectedNetworkDevice is not null && IoMappingNetworkDevices.Contains(SelectedNetworkDevice))
         {
             OnPropertyChanged(nameof(CanAddIoMappingForSelectedDevice));
+            OnPropertyChanged(nameof(ShouldShowIoMappingDeviceSelectionPrompt));
+            OnPropertyChanged(nameof(SelectedNetworkDeviceDisplayName));
             RefreshAddCommands();
             return;
         }
 
-        SelectedNetworkDevice = IoMappingNetworkDevices.FirstOrDefault();
+        ApplyIoMappingSelectionFromSharedSelection();
     }
 
     private void OpenAddSerialDeviceDialog()

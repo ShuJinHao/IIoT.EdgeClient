@@ -74,7 +74,7 @@ public sealed class MonitorViewModelBehaviorTests
     }
 
     [Fact]
-    public async Task OnActivatedAsync_WhenSharedSelectionHasNoSnapshot_ShouldKeepGlobalSelectionAndShowEmpty()
+    public async Task OnActivatedAsync_WhenSharedSelectionHasNoSnapshot_ShouldKeepSelectedDeviceAndShowEmpty()
     {
         var selectionService = new DeviceSelectionService();
         selectionService.SelectDevice("P1-AP99");
@@ -87,7 +87,7 @@ public sealed class MonitorViewModelBehaviorTests
         await viewModel.OnActivatedAsync();
         await viewModel.OnDeactivatedAsync();
 
-        Assert.Null(viewModel.SelectedDevice);
+        Assert.Equal("P1-AP99", viewModel.SelectedDevice);
         Assert.Empty(viewModel.DeviceDataRows);
         Assert.Equal("P1-AP99", selectionService.SelectedDeviceKey);
     }

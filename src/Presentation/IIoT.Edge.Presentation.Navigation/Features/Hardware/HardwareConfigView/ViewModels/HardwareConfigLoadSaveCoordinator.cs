@@ -58,7 +58,7 @@ public sealed class HardwareConfigLoadSaveCoordinator : IHardwareConfigLoadSaveC
 
         if (viewModel.IoMappingNetworkDevices.Count > 0)
         {
-            viewModel.SelectedNetworkDevice = viewModel.IoMappingNetworkDevices[0];
+            viewModel.ApplyIoMappingSelectionFromSharedSelection();
         }
         else
         {

@@ -85,17 +85,12 @@
                 VerticalAlignment="Center"
                 Classes="edge-text-form-label"
                 Text="{DynamicResource Navigation_Tab_NetworkDevice}" />
-            <edge:EdgeFilterComboBox
+            <TextBlock
                 Grid.Column="1"
                 Margin="12,0,16,0"
-                ItemsSource="{Binding IoMappingNetworkDevices}"
-                SelectedItem="{Binding SelectedNetworkDevice}">
-                <edge:EdgeFilterComboBox.ItemTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding DeviceName}" />
-                    </DataTemplate>
-                </edge:EdgeFilterComboBox.ItemTemplate>
-            </edge:EdgeFilterComboBox>
+                VerticalAlignment="Center"
+                Classes="edge-text-page-caption"
+                Text="{Binding SelectedNetworkDeviceDisplayName}" />
             <TextBlock
                 Grid.Column="2"
                 VerticalAlignment="Center"

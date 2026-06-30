@@ -20,7 +20,7 @@ namespace IIoT.Edge.NonUiRegressionTests;
 public sealed class IoViewViewModelBehaviorTests
 {
     [AvaloniaFact]
-    public Task LoadDevicesAsync_WhenDevicesLoaded_ShouldShowEnabledPlcs()
+    public Task LoadDevicesAsync_WhenDevicesLoaded_ShouldShowConfiguredPlcs()
         => RunOnStaThreadAsync(async () =>
         {
             var devices = new[]
@@ -36,7 +36,7 @@ public sealed class IoViewViewModelBehaviorTests
             await viewModel.LoadDevicesAsync();
 
             Assert.Equal(
-                ["PLC-Homogenization-01", "PLC-TestProcess-01", "PLC-TestProcess-02"],
+                ["PLC-Homogenization-01", "PLC-TestProcess-01", "PLC-TestProcess-02", "PLC-TestProcess-Disabled"],
                 viewModel.Devices.Select(static x => x.DeviceName).ToArray());
         });
 
@@ -77,7 +77,7 @@ public sealed class IoViewViewModelBehaviorTests
         });
 
     [AvaloniaFact]
-    public Task LoadDevicesAsync_WhenSharedSelectionIsNotVisible_ShouldShowEmptyWithoutChangingGlobalSelection()
+    public Task LoadDevicesAsync_WhenSharedSelectionMatchesDisabledPlc_ShouldKeepDeviceVisibleWithoutChangingGlobalSelection()
         => RunOnStaThreadAsync(async () =>
         {
             var enabled = CreateDevice(12, "PLC-Enabled", "TestProcess");
@@ -88,8 +88,8 @@ public sealed class IoViewViewModelBehaviorTests
 
             await viewModel.LoadDevicesAsync();
 
-            Assert.Null(viewModel.SelectedDevice);
-            Assert.DoesNotContain(viewModel.Devices, device => device.DeviceName == disabled.DeviceName);
+            Assert.Equal(disabled.DeviceName, viewModel.SelectedDevice?.DeviceName);
+            Assert.Contains(viewModel.Devices, device => device.DeviceName == disabled.DeviceName);
             Assert.Equal(disabled.DeviceName, selectionService.SelectedDeviceKey);
         });
 

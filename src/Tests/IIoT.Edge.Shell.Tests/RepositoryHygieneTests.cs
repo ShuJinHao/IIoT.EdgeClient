@@ -667,7 +667,8 @@ public sealed class RepositoryHygieneTests
         Assert.Contains("页面打开、刷新、激活、加载、无数据、无快照、空态或匹配失败时，不得自动改全局设备号", plcSelectionDoc, StringComparison.Ordinal);
         Assert.Contains("设备号永远不得作为写入、保存、删除、重试、重入队、启停、状态机执行、PLC 任务调度、Cloud/MES 同步范围或后台任务范围的参数", plcSelectionDoc, StringComparison.Ordinal);
         Assert.Contains("启动诊断必须订阅右侧设备号产出显示集合", plcSelectionDoc, StringComparison.Ordinal);
-        Assert.Contains("同步运维保持全局展示和全局链路语义", plcSelectionDoc, StringComparison.Ordinal);
+        Assert.Contains("同步运维必须保留 Cloud/MES 通道总览的全局链路语义", plcSelectionDoc, StringComparison.Ordinal);
+        Assert.Contains("可归属到 PLC 的死信、待传、失败和重试记录默认显示全部，选择具体 PLC 后只显示该 PLC 记录", plcSelectionDoc, StringComparison.Ordinal);
         Assert.Contains("UI 改动必须真实运行或截图验收", ruleDoc, StringComparison.Ordinal);
         Assert.Contains("build 通过不等于 UI 通过", ruleDoc, StringComparison.Ordinal);
     }
@@ -791,7 +792,7 @@ public sealed class RepositoryHygieneTests
     public void DeviceSelection_ShouldOnlyBePublishedByEquipmentPanel()
     {
         var root = FindRepositoryRoot();
-        var presentationRoot = Path.Combine(root, "src", "Presentation");
+        var sourceRoot = Path.Combine(root, "src");
         var allowedPublishers = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "src/Presentation/IIoT.Edge.Presentation.Panels/Features/DeviceSelection/DeviceSelectionService.cs",
@@ -799,7 +800,8 @@ public sealed class RepositoryHygieneTests
         };
         var selectDeviceCallPattern = new Regex(@"\bSelectDevice\s*\(", RegexOptions.CultureInvariant);
 
-        var matches = EnumerateFiles(presentationRoot, "*.cs")
+        var matches = EnumerateFiles(sourceRoot, "*.cs")
+            .Where(path => !ToRepositoryPath(root, path).StartsWith("src/Tests/", StringComparison.OrdinalIgnoreCase))
             .Where(path => !allowedPublishers.Contains(ToRepositoryPath(root, path)))
             .SelectMany(path => selectDeviceCallPattern
                 .Matches(File.ReadAllText(path))
@@ -807,6 +809,94 @@ public sealed class RepositoryHygieneTests
             .ToArray();
 
         Assert.Empty(matches);
+    }
+
+    [Fact]
+    public void DeviceSelection_ShouldNotExposeSecondActionableDeviceSelector()
+    {
+        var root = FindRepositoryRoot();
+        var allowedSelectorOwners = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "src/Presentation/IIoT.Edge.Presentation.Panels/Features/Equipment/Views/EquipmentView.axaml"
+        };
+        var forbiddenBindings = new[]
+        {
+            "ItemsSource=\"{Binding DeviceFilters",
+            "SelectedItem=\"{Binding SelectedDeviceFilter",
+            "ItemsSource=\"{Binding IoMappingNetworkDevices",
+            "SelectedItem=\"{Binding SelectedNetworkDevice"
+        };
+
+        var matches = EnumerateFiles(Path.Combine(root, "src"), "*.axaml")
+            .Where(path => !allowedSelectorOwners.Contains(ToRepositoryPath(root, path)))
+            .SelectMany(path =>
+            {
+                var source = File.ReadAllText(path);
+                return forbiddenBindings
+                    .Where(binding => source.Contains(binding, StringComparison.Ordinal))
+                    .Select(binding => $"{ToRepositoryPath(root, path)} exposes local device selector binding '{binding}'");
+            })
+            .ToArray();
+
+        Assert.Empty(matches);
+    }
+
+    [Fact]
+    public void DeviceSelection_ShouldStayOutOfRuntimeAndIntegrationLayers()
+    {
+        var root = FindRepositoryRoot();
+        var sourceRoot = Path.Combine(root, "src");
+        var forbiddenSymbols = new[]
+        {
+            "IDeviceSelectionService",
+            "SelectedDeviceKey"
+        };
+
+        static bool IsAllowedUiContext(string repositoryPath)
+            => repositoryPath.StartsWith("src/Presentation/", StringComparison.OrdinalIgnoreCase)
+               || (repositoryPath.StartsWith("src/Modules/", StringComparison.OrdinalIgnoreCase)
+                   && repositoryPath.Contains("/Presentation/", StringComparison.OrdinalIgnoreCase));
+
+        var matches = EnumerateFiles(sourceRoot, "*.cs")
+            .Where(path => !ToRepositoryPath(root, path).StartsWith("src/Tests/", StringComparison.OrdinalIgnoreCase))
+            .Where(path => !IsAllowedUiContext(ToRepositoryPath(root, path)))
+            .SelectMany(path =>
+            {
+                var source = File.ReadAllText(path);
+                return forbiddenSymbols
+                    .Where(symbol => source.Contains(symbol, StringComparison.Ordinal))
+                    .Select(symbol => $"{ToRepositoryPath(root, path)} references UI device selection symbol '{symbol}'");
+            })
+            .ToArray();
+
+        Assert.Empty(matches);
+    }
+
+    [Fact]
+    public void HardwareIoMappingPage_ShouldNotExposeSecondActionableDeviceSelector()
+    {
+        var root = FindRepositoryRoot();
+        var ioMappingPage = File.ReadAllText(ToFullPath(
+            root,
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Hardware/HardwareConfigView/Views/IoMappingPage.axaml"));
+
+        Assert.Contains("SelectedNetworkDeviceDisplayName", ioMappingPage, StringComparison.Ordinal);
+        Assert.DoesNotContain("ItemsSource=\"{Binding IoMappingNetworkDevices", ioMappingPage, StringComparison.Ordinal);
+        Assert.DoesNotContain("SelectedItem=\"{Binding SelectedNetworkDevice", ioMappingPage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DieCuttingDataViewModel_ShouldUseSharedDeviceSelectionForProductionRows()
+    {
+        var root = FindRepositoryRoot();
+        var source = File.ReadAllText(ToFullPath(
+            root,
+            "src/Modules/IIoT.Edge.Module.DieCutting/Presentation/DieCuttingDataViewModel.cs"));
+
+        Assert.Contains("_recordStore.QueryAsync(", source, StringComparison.Ordinal);
+        Assert.Contains("_deviceSelectionService.SelectedDeviceKey", source, StringComparison.Ordinal);
+        Assert.Contains("DieCutting_Empty_SelectedDeviceProductionRecords", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("SelectedDeviceFilter", source, StringComparison.Ordinal);
     }
 
     [Fact]

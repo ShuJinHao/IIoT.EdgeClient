@@ -41,8 +41,8 @@
                 Classes="compact right-rail strip"
                 IsVisible="{Binding HasSelectedDevice}"
                 Status="Info"
-                StatusText="{DynamicResource Navigation_Hint_SelectDevice}"
-                Title="{Binding SelectedDevice.DeviceStateText}" />
+                StatusText="{Binding SelectedDevice.DeviceStateText}"
+                Title="{Binding SelectedDeviceTitle}" />
 
             <sharedViews:EmptyStateView
                 IsVisible="{Binding ShouldShowDeviceSelectionPrompt}"

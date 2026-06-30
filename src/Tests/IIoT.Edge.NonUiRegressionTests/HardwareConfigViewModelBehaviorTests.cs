@@ -10,6 +10,7 @@ using IIoT.Edge.Application.Features.Hardware.UseCases.SerialDevice.Commands;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView;
 using IIoT.Edge.SharedKernel.Enums;
+using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.UI.Shared.Localization;
 
 namespace IIoT.Edge.NonUiRegressionTests;
@@ -67,7 +68,7 @@ public sealed class HardwareConfigViewModelBehaviorTests
     });
 
     [AvaloniaFact]
-    public Task LoadAll_WhenNetworkDevicesIncludeNonPlc_ShouldExposeOnlyPlcsForIoMapping()
+    public Task LoadAll_WhenSelectionIsAll_ShouldExposePlcsWithoutAutoSelectingFirstDevice()
         => RunOnStaThreadAsync(async () =>
     {
         var service = new StubHardwareConfigCrudService
@@ -84,7 +85,30 @@ public sealed class HardwareConfigViewModelBehaviorTests
 
         var plc = Assert.Single(viewModel.IoMappingNetworkDevices);
         Assert.Equal(DeviceType.PLC, plc.DeviceType);
-        Assert.Equal("PLC-01", viewModel.SelectedNetworkDevice?.DeviceName);
+        Assert.Null(viewModel.SelectedNetworkDevice);
+        Assert.True(viewModel.ShouldShowIoMappingDeviceSelectionPrompt);
+    });
+
+    [AvaloniaFact]
+    public Task LoadAll_WhenSharedSelectionMatchesPlc_ShouldSelectThatDeviceForIoMapping()
+        => RunOnStaThreadAsync(async () =>
+    {
+        var service = new StubHardwareConfigCrudService
+        {
+            InitialNetworkDevices =
+            [
+                CreateNetworkDeviceDto(1, "PLC-01", DeviceType.PLC),
+                CreateNetworkDeviceDto(2, "PLC-02", DeviceType.PLC)
+            ]
+        };
+        var selectionService = new DeviceSelectionService();
+        selectionService.SelectDevice("PLC-02");
+        var viewModel = CreateViewModel(service, selectionService);
+
+        await viewModel.OnActivatedAsync();
+
+        Assert.Equal("PLC-02", viewModel.SelectedNetworkDevice?.DeviceName);
+        Assert.False(viewModel.ShouldShowIoMappingDeviceSelectionPrompt);
     });
 
     [AvaloniaFact]
@@ -523,7 +547,9 @@ public sealed class HardwareConfigViewModelBehaviorTests
         }
     }
 
-    private static HardwareConfigViewModel CreateViewModel(StubHardwareConfigCrudService? service = null)
+    private static HardwareConfigViewModel CreateViewModel(
+        StubHardwareConfigCrudService? service = null,
+        IDeviceSelectionService? selectionService = null)
     {
         var languageService = new TestLanguageService();
         var validationPresenter = new HardwareConfigValidationPresenter(
@@ -544,7 +570,8 @@ public sealed class HardwareConfigViewModelBehaviorTests
                 new HardwareConfigEditModelMapper(),
                 languageService),
             new HardwareConfigDeviceSelectionCoordinator(),
-            editSession);
+            editSession,
+            selectionService ?? new DeviceSelectionService());
     }
 
     private static NetworkDeviceVm CreatePlc()

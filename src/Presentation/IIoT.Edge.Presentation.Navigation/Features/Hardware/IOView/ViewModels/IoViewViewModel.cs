@@ -94,6 +94,8 @@ public class IoViewViewModel : NavigationViewModelBase
             _isConnected = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(ConnectionStateText));
+            _manualReadCommand.RaiseCanExecuteChanged();
+            RaiseInteractionWriteCanExecuteChanged();
         }
     }
 
@@ -206,7 +208,7 @@ public class IoViewViewModel : NavigationViewModelBase
         _deviceSelectionService = deviceSelectionService;
 
         RefreshDevicesCommand = new AsyncCommand(LoadDevicesAsync);
-        _manualReadCommand = new AsyncCommand(ManualReadSelectedDataAsync, () => SelectedDevice is not null);
+        _manualReadCommand = new AsyncCommand(ManualReadSelectedDataAsync, () => SelectedDevice is not null && IsConnected);
     }
 
     public async Task LoadDevicesAsync()
@@ -264,7 +266,7 @@ public class IoViewViewModel : NavigationViewModelBase
         ApplyTextProvider(mappedSignals);
         foreach (var row in mappedSignals.InteractionRows)
         {
-            row.WriteCommand ??= new BaseCommand(_ => WriteInteractionRow(row), _ => row.CanWrite);
+            row.WriteCommand ??= new BaseCommand(_ => WriteInteractionRow(row), _ => row.CanWrite && IsConnected);
             InteractionRows.Add(row);
         }
 
@@ -325,15 +327,8 @@ public class IoViewViewModel : NavigationViewModelBase
         UpdateConnectionStatus();
     }
 
-    private bool IsVisibleDevice(NetworkDeviceEntity device)
-    {
-        if (!device.IsEnabled || device.DeviceType != DeviceType.PLC)
-        {
-            return false;
-        }
-
-        return true;
-    }
+    private static bool IsVisibleDevice(NetworkDeviceEntity device)
+        => device.DeviceType == DeviceType.PLC;
 
     private NetworkDeviceEntity? ResolveDeviceFromSharedSelection()
     {
@@ -435,6 +430,14 @@ public class IoViewViewModel : NavigationViewModelBase
         OnPropertyChanged(nameof(HasDataSections));
         OnPropertyChanged(nameof(HasArraySections));
         OnPropertyChanged(nameof(HasNoSignals));
+    }
+
+    private void RaiseInteractionWriteCanExecuteChanged()
+    {
+        foreach (var row in InteractionRows)
+        {
+            (row.WriteCommand as BaseCommand)?.RaiseCanExecuteChanged();
+        }
     }
 
     private void ApplyTextProvider(IoViewMappingBuildResult mappedSignals)

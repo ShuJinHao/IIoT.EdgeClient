@@ -52,6 +52,27 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
     }
 
     [Fact]
+    public async Task OnActivatedAsync_WhenDeviceSelected_ShouldExposeCurrentDeviceTextWithoutSelectPrompt()
+    {
+        var selectionService = new DeviceSelectionService();
+        selectionService.SelectDevice("P1-AP02");
+        var viewModel = CreateViewModel(
+            new FakePlcTaskBindingService(
+            [
+                CreateDevice(1, "P1-AP01"),
+                CreateDevice(2, "P1-AP02")
+            ]),
+            selectionService);
+
+        await viewModel.OnActivatedAsync();
+        await viewModel.OnDeactivatedAsync();
+
+        Assert.Equal("当前 PLC：P1-AP02", viewModel.SelectedDeviceTitle);
+        Assert.DoesNotContain("选择设备", viewModel.SelectedDeviceTitle);
+        Assert.DoesNotContain("选择设备", viewModel.SelectedDevice?.DeviceStateText ?? string.Empty);
+    }
+
+    [Fact]
     public async Task SelectedDevice_WhenSetInsideBindingPage_ShouldNotWriteSharedSelection()
     {
         var selectionService = new DeviceSelectionService();

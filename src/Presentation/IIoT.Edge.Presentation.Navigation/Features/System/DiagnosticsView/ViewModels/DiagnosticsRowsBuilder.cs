@@ -8,6 +8,7 @@ using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.UI.Shared.Avalonia.Controls;
 using IIoT.Edge.UI.Shared.Localization;
+using System.Text.Json;
 
 using IIoT.Edge.Application.Abstractions.Cloud;
 namespace IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
@@ -373,12 +374,66 @@ internal sealed class DiagnosticsRowsBuilder(
         DataPipelineRetryChannel channel,
         IReadOnlyList<DeadLetterRecord>? records)
         => (records ?? [])
+            .Where(ShouldIncludeDeadLetter)
             .Select(x => DeadLetterRow.From(
                 channel,
                 x,
                 displayNameResolver.ResolveProcessDisplayName(x.ProcessType, null),
                 diagnosticsText.FormatTimestamp(x.CreatedAt)))
             .ToArray();
+
+    private bool ShouldIncludeDeadLetter(DeadLetterRecord record)
+    {
+        var selectedKey = deviceSelectionService.SelectedDeviceKey;
+        if (string.Equals(selectedKey, IDeviceSelectionService.AllFilterKey, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var deviceName = TryReadDeviceName(record.CellDataJson);
+        if (string.IsNullOrWhiteSpace(deviceName))
+        {
+            return true;
+        }
+
+        return string.Equals(deviceName, selectedKey, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? TryReadDeviceName(string? cellDataJson)
+    {
+        if (string.IsNullOrWhiteSpace(cellDataJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(cellDataJson);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            return TryGetStringProperty(document.RootElement, "deviceName")
+                   ?? TryGetStringProperty(document.RootElement, "DeviceName");
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static string? TryGetStringProperty(JsonElement root, string propertyName)
+    {
+        if (!root.TryGetProperty(propertyName, out var value)
+            || value.ValueKind != JsonValueKind.String)
+        {
+            return null;
+        }
+
+        var text = value.GetString();
+        return string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+    }
 
     private string GetText(string key, string fallback)
         => languageService.GetString(key, fallback);
