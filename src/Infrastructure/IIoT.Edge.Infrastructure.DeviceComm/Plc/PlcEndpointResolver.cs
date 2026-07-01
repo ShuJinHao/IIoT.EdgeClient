@@ -24,7 +24,8 @@ public sealed class PlcEndpointResolver(
         return new TcpPlcEndpoint(
             device.IpAddress,
             device.Port1,
-            device.ConnectTimeout);
+            device.ConnectTimeout,
+            ResolveMcFrameType(device, plcType));
     }
 
     private async Task<PlcEndpoint> ResolveModbusRtuEndpointAsync(
@@ -75,5 +76,21 @@ public sealed class PlcEndpointResolver(
         }
 
         return (byte)value;
+    }
+
+    private static McPlcFrameType ResolveMcFrameType(NetworkDeviceEntity device, PlcType plcType)
+    {
+        if (plcType != PlcType.Mc || string.IsNullOrWhiteSpace(device.ProtocolFrame))
+        {
+            return McPlcFrameType.E3;
+        }
+
+        if (Enum.TryParse<McPlcFrameType>(device.ProtocolFrame.Trim(), ignoreCase: true, out var frameType))
+        {
+            return frameType;
+        }
+
+        throw new InvalidOperationException(
+            $"[{device.DeviceName}] MC PLC 协议帧配置无效：{device.ProtocolFrame}，只支持 E3 或 E4。");
     }
 }

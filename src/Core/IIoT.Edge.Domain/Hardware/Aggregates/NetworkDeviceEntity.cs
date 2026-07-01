@@ -22,6 +22,7 @@ public class NetworkDeviceEntity : BaseEntity<int>, IAggregateRoot, IDeviceIdent
     public string DeviceName { get; private set; } = null!;
     public DeviceType DeviceType { get; private set; }
     public string? DeviceModel { get; private set; }
+    public string? ProtocolFrame { get; private set; }
     public string IpAddress { get; private set; } = null!;
     public int Port1 { get; private set; }
     public int? Port2 { get; private set; }
@@ -61,6 +62,9 @@ public class NetworkDeviceEntity : BaseEntity<int>, IAggregateRoot, IDeviceIdent
 
     public void UpdateDeviceModel(string? deviceModel)
         => DeviceModel = Normalize(deviceModel);
+
+    public void UpdateProtocolFrame(string? protocolFrame)
+        => ProtocolFrame = Normalize(protocolFrame);
 
     public void UpdateCommands(string? sendCmd1, string? sendCmd2)
     {

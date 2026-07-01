@@ -78,7 +78,8 @@ public class LoadHardwareConfigHandler(ISender sender)
             entity.SendCmd2,
             entity.ConnectTimeout,
             entity.IsEnabled,
-            entity.Remark);
+            entity.Remark,
+            entity.ProtocolFrame);
 
     private static SerialDeviceDto MapSerialDevice(SerialDeviceEntity entity)
         => new(
@@ -305,6 +306,7 @@ public class SaveHardwareConfigHandler(
     {
         return !string.Equals(existing.DeviceName?.Trim(), incoming.DeviceName?.Trim(), StringComparison.OrdinalIgnoreCase)
             || !string.Equals(existing.DeviceModel?.Trim(), incoming.DeviceModel?.Trim(), StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(existing.ProtocolFrame?.Trim(), incoming.ProtocolFrame?.Trim(), StringComparison.OrdinalIgnoreCase)
             || !string.Equals(existing.IpAddress?.Trim(), incoming.IpAddress?.Trim(), StringComparison.OrdinalIgnoreCase)
             || existing.Port1 != incoming.Port1
             || existing.Port2 != incoming.Port2

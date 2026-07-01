@@ -217,6 +217,11 @@ namespace IIoT.Edge.Infrastructure.Persistence.EfCore.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("port2");
 
+                    b.Property<string>("ProtocolFrame")
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("protocol_frame");
+
                     b.Property<string>("Remark")
                         .HasMaxLength(500)
                         .HasColumnType("TEXT")

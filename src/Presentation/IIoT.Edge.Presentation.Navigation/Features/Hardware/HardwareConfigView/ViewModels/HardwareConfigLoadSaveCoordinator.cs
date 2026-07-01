@@ -154,9 +154,29 @@ public sealed class HardwareConfigLoadSaveCoordinator : IHardwareConfigLoadSaveC
             || saveResult.Message.StartsWith("配置已保存", StringComparison.Ordinal))
         {
             await LoadAllAsync(viewModel);
+            PreserveSelectedNetworkDevice(viewModel, selectedNetworkDeviceId);
         }
 
         return saveResult;
+    }
+
+    private static void PreserveSelectedNetworkDevice(
+        HardwareConfigViewModel viewModel,
+        int selectedNetworkDeviceId)
+    {
+        if (selectedNetworkDeviceId <= 0)
+        {
+            return;
+        }
+
+        var reloadedDevice = viewModel.IoMappingNetworkDevices
+            .FirstOrDefault(device => device.Id == selectedNetworkDeviceId);
+        if (reloadedDevice is null)
+        {
+            return;
+        }
+
+        viewModel.SelectedNetworkDevice = reloadedDevice;
     }
 
     private async Task LoadIoMappingsAsync(HardwareConfigViewModel viewModel)

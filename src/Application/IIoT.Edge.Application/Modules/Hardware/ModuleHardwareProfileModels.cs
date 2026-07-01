@@ -45,7 +45,8 @@ public sealed record PlcIoRuntimePolicy(
 public sealed record ModulePlcDefaults(
     string? DeviceModel,
     int? ConnectTimeout,
-    int? Port1 = null);
+    int? Port1 = null,
+    string? ProtocolFrame = null);
 
 public sealed record ModuleHardwareSignalTemplate(
     string SignalKey,

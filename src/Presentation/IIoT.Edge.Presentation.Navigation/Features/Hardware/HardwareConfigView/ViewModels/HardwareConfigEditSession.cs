@@ -9,9 +9,9 @@ public interface IHardwareConfigEditSession
 {
     void OpenAddInteractionMappingDialog(HardwareConfigViewModel viewModel);
     void OpenAddDataPointMappingDialog(HardwareConfigViewModel viewModel);
-    void ConfirmAddIoMapping(HardwareConfigViewModel viewModel);
+    bool ConfirmAddIoMapping(HardwareConfigViewModel viewModel);
     void CloseAddIoMappingDialog(HardwareConfigViewModel viewModel);
-    void DeleteSelectedIoMapping(HardwareConfigViewModel viewModel);
+    bool DeleteSelectedIoMapping(HardwareConfigViewModel viewModel);
     void HandleNewIoMappingPropertyChanged(
         HardwareConfigViewModel viewModel,
         object? sender,
@@ -97,15 +97,14 @@ public sealed class HardwareConfigEditSession : IHardwareConfigEditSession
         viewModel.RaiseConfirmAddIoMappingCanExecuteChanged();
     }
 
-    public void ConfirmAddIoMapping(HardwareConfigViewModel viewModel)
+    public bool ConfirmAddIoMapping(HardwareConfigViewModel viewModel)
     {
         if (viewModel.IsInteractionPairDialog)
         {
-            ConfirmAddInteractionPair(viewModel);
-            return;
+            return ConfirmAddInteractionPair(viewModel);
         }
 
-        ConfirmAddDataPoint(viewModel);
+        return ConfirmAddDataPoint(viewModel);
     }
 
     public void CloseAddIoMappingDialog(HardwareConfigViewModel viewModel)
@@ -119,14 +118,15 @@ public sealed class HardwareConfigEditSession : IHardwareConfigEditSession
         viewModel.RaiseConfirmAddIoMappingCanExecuteChanged();
     }
 
-    public void DeleteSelectedIoMapping(HardwareConfigViewModel viewModel)
+    public bool DeleteSelectedIoMapping(HardwareConfigViewModel viewModel)
     {
         var selected = viewModel.SelectedIoMapping;
         if (selected is null)
         {
-            return;
+            return false;
         }
 
+        var removed = false;
         if (_validationPresenter.IsInteractionMapping(selected))
         {
             var interactionKey = _validationPresenter.CreateInteractionGroupKey(selected);
@@ -138,17 +138,23 @@ public sealed class HardwareConfigEditSession : IHardwareConfigEditSession
 
             foreach (var item in removeItems)
             {
-                viewModel.IoMappings.Remove(item);
+                removed |= viewModel.IoMappings.Remove(item);
             }
         }
         else
         {
-            viewModel.IoMappings.Remove(selected);
+            removed = viewModel.IoMappings.Remove(selected);
+        }
+
+        if (!removed)
+        {
+            return false;
         }
 
         viewModel.SelectedIoMapping = null;
         viewModel.RefreshIoMappingGroups();
         viewModel.RaiseDeleteIoMappingCanExecuteChanged();
+        return true;
     }
 
     public void HandleNewIoMappingPropertyChanged(
@@ -206,18 +212,18 @@ public sealed class HardwareConfigEditSession : IHardwareConfigEditSession
     public IReadOnlyCollection<IoMappingVm> BuildMappingsToSave(IEnumerable<IoMappingVm> ioMappings)
         => _mappingSaveBuilder.BuildMappingsToSave(ioMappings);
 
-    private void ConfirmAddInteractionPair(HardwareConfigViewModel viewModel)
+    private bool ConfirmAddInteractionPair(HardwareConfigViewModel viewModel)
     {
         if (viewModel.SelectedNetworkDevice is null || viewModel.NewInteractionPair is null)
         {
-            return;
+            return false;
         }
 
         var validationError = _validationPresenter.ValidateInteractionPairDraft(viewModel, viewModel.NewInteractionPair);
         if (!string.IsNullOrWhiteSpace(validationError))
         {
             viewModel.ReportError(validationError);
-            return;
+            return false;
         }
 
         var group = viewModel.SelectedStandardInteractionGroup!;
@@ -229,7 +235,7 @@ public sealed class HardwareConfigEditSession : IHardwareConfigEditSession
         if (readExists || writeExists)
         {
             viewModel.ReportError(viewModel.GetText("Navigation_Hardware_Validation_InteractionGroupExists", "该信号交互已存在映射，新增必须一次生成读写成对点位；请先删除旧映射后再重新新增。"));
-            return;
+            return false;
         }
 
         viewModel.IoMappings.Add(CreateMappingFromTemplate(
@@ -250,20 +256,21 @@ public sealed class HardwareConfigEditSession : IHardwareConfigEditSession
         viewModel.RefreshIoMappingGroups();
         CloseAddIoMappingDialog(viewModel);
         viewModel.ClearUserFeedback();
+        return true;
     }
 
-    private void ConfirmAddDataPoint(HardwareConfigViewModel viewModel)
+    private bool ConfirmAddDataPoint(HardwareConfigViewModel viewModel)
     {
         if (viewModel.SelectedNetworkDevice is null || viewModel.NewIoMapping is null)
         {
-            return;
+            return false;
         }
 
         var validationError = _validationPresenter.ValidateDraft(viewModel, viewModel.NewIoMapping);
         if (!string.IsNullOrWhiteSpace(validationError))
         {
             viewModel.ReportError(validationError);
-            return;
+            return false;
         }
 
         var standardSignal = viewModel.SelectedStandardIoSignal!;
@@ -288,6 +295,7 @@ public sealed class HardwareConfigEditSession : IHardwareConfigEditSession
         viewModel.RefreshIoMappingGroups();
         CloseAddIoMappingDialog(viewModel);
         viewModel.ClearUserFeedback();
+        return true;
     }
 
     private static IoMappingVm CreateMappingFromTemplate(

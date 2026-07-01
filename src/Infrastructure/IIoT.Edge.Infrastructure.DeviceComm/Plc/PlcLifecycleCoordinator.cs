@@ -64,19 +64,19 @@ public sealed class PlcLifecycleCoordinator
                 .FirstOrDefault();
             if (device is null)
             {
-                _logger.Warn($"[{deviceName}] Reload skipped because the device was not found.");
+                _logger.Warn($"[{deviceName}] 重载跳过：未找到设备。");
                 return;
             }
 
             await StopDeviceCoreAsync(device.Id, ct).ConfigureAwait(false);
             if (!device.IsEnabled)
             {
-                _logger.Info($"[{device.DeviceName}] Reload finished: device is disabled.");
+                _logger.Info($"[{device.DeviceName}] 重载完成：设备未启用。");
                 return;
             }
 
             await InitializeDeviceAsync(device, ct).ConfigureAwait(false);
-            _logger.Info($"[{device.DeviceName}] Reload completed and context was preserved.");
+            _logger.Info($"[{device.DeviceName}] 重载完成，运行上下文已保留。");
         }
         finally
         {
@@ -91,7 +91,7 @@ public sealed class PlcLifecycleCoordinator
         {
             ThrowIfDisposed();
             await StopDeviceCoreAsync(networkDeviceId, ct).ConfigureAwait(false);
-            _logger.Info($"[DeviceId={networkDeviceId}] Stop completed.");
+            _logger.Info($"[DeviceId={networkDeviceId}] 停止完成。");
         }
         finally
         {
@@ -134,7 +134,7 @@ public sealed class PlcLifecycleCoordinator
             }
             catch (Exception ex)
             {
-                _logger.Error($"PLC lifecycle dispose cleanup failed: {ex.Message}");
+                _logger.Error($"PLC 生命周期释放清理失败：{ex.Message}");
             }
         });
     }
@@ -179,7 +179,7 @@ public sealed class PlcLifecycleCoordinator
         catch (Exception ex)
         {
             _statusStore.MarkDisconnected(device.Id, device.DeviceName, ex.Message);
-            _logger.Error($"[{device.DeviceName}] Initialization failed: {ex.Message}");
+            _logger.Error($"[{device.DeviceName}] 初始化失败：{ex.Message}");
         }
     }
 
@@ -195,7 +195,7 @@ public sealed class PlcLifecycleCoordinator
 
         if (_runtimeRegistry.ContainsRuntime(device.Id))
         {
-            _logger.Info($"[{device.DeviceName}] Skipped initialization because the device is already running.");
+            _logger.Info($"[{device.DeviceName}] 初始化跳过：设备已在运行。");
             return;
         }
 
@@ -221,7 +221,7 @@ public sealed class PlcLifecycleCoordinator
                     catch (Exception ex)
                     {
                         _statusStore.MarkDisconnected(runtime.DeviceId, runtime.DeviceName, ex.Message);
-                        _logger.Error($"[{runtime.DeviceName}] Task failed: {ex.Message}");
+                        _logger.Error($"[{runtime.DeviceName}] 运行任务异常：{ex.Message}");
                     }
                 }, CancellationToken.None));
             }
@@ -229,11 +229,11 @@ public sealed class PlcLifecycleCoordinator
             if (IsShutdownRequested || IsDisposed || !_runtimeRegistry.TryAddRuntime(runtime))
             {
                 await CleanupDeviceRuntimeAsync(runtime, CancellationToken.None).ConfigureAwait(false);
-                _logger.Warn($"[{device.DeviceName}] Initialization was canceled before task handles could be tracked.");
+                _logger.Warn($"[{device.DeviceName}] 初始化已取消：任务句柄尚未完成登记。");
                 return;
             }
 
-            _logger.Info($"[{device.DeviceName}] Initialized and started {runtime.Tasks.Count} task(s).");
+            _logger.Info($"[{device.DeviceName}] 初始化完成，已启动 {runtime.Tasks.Count} 个任务。");
         }
         catch
         {
@@ -303,7 +303,7 @@ public sealed class PlcLifecycleCoordinator
         }
         catch (TimeoutException)
         {
-            _logger.Warn($"[{deviceName}] Timed out waiting for PLC tasks to stop within 5 seconds.");
+            _logger.Warn($"[{deviceName}] 等待 PLC 任务停止超时：5 秒内未完成。");
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -311,7 +311,7 @@ public sealed class PlcLifecycleCoordinator
         }
         catch (Exception ex)
         {
-            _logger.Error($"[{deviceName}] Error while waiting for PLC tasks to stop: {ex.Message}");
+            _logger.Error($"[{deviceName}] 等待 PLC 任务停止时发生异常：{ex.Message}");
         }
     }
 

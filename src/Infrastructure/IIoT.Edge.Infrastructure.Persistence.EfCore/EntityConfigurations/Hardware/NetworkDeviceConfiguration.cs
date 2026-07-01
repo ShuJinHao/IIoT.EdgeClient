@@ -28,6 +28,10 @@ public class NetworkDeviceConfiguration : IEntityTypeConfiguration<NetworkDevice
             .HasMaxLength(20)
             .HasColumnName("device_model");
 
+        builder.Property(x => x.ProtocolFrame)
+            .HasMaxLength(20)
+            .HasColumnName("protocol_frame");
+
         builder.Property(x => x.IpAddress)
             .IsRequired()
             .HasMaxLength(50)

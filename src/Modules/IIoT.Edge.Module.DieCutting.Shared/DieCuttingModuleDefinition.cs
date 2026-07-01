@@ -74,7 +74,8 @@ public sealed class DieCuttingModuleDefinition
                 IsEnabled: false,
                 DeviceModel: "Mc",
                 Port1: 65530,
-                ConnectTimeout: 3000))
+                ConnectTimeout: 3000,
+                ProtocolFrame: "E4"))
             .ToArray();
 }
 
@@ -91,4 +92,5 @@ public sealed record DieCuttingDeviceSeed(
     bool IsEnabled,
     string DeviceModel,
     int Port1,
-    int ConnectTimeout);
+    int ConnectTimeout,
+    string? ProtocolFrame = null);

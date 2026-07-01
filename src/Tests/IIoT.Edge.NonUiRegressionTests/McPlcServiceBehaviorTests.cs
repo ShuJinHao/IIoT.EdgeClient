@@ -77,6 +77,18 @@ public sealed class McPlcServiceBehaviorTests
     }
 
     [Fact]
+    public async Task ReadDataAsync_WhenFrameTypeIsE4_ShouldUseMcpX4ERequestHeader()
+    {
+        await using var server = new FakeMc3EServer(_ => []);
+        using var service = CreateConnectedService(server.Port, McPlcFrameType.E4);
+
+        await Assert.ThrowsAnyAsync<Exception>(() => service.ReadDataAsync<ushort>("D700", 1));
+
+        Assert.NotNull(server.LastRequest);
+        Assert.Equal(new byte[] { 0x54, 0x00 }, server.LastRequest!.Take(2).ToArray());
+    }
+
+    [Fact]
     public void PlcServiceFactory_WhenMc_ShouldCreateMcpXBackedMcService()
     {
         var factory = new PlcServiceFactory(new FakeLogService(), new ModbusAddressParser());
@@ -89,10 +101,10 @@ public sealed class McPlcServiceBehaviorTests
         Assert.IsType<McPlcService>(target);
     }
 
-    private static McPlcService CreateConnectedService(int port)
+    private static McPlcService CreateConnectedService(int port, McPlcFrameType frameType = McPlcFrameType.E3)
     {
         var service = new McPlcService();
-        service.Init(new TcpPlcEndpoint("127.0.0.1", port, 1000));
+        service.Init(new TcpPlcEndpoint("127.0.0.1", port, 1000, frameType));
         Assert.True(service.ConnectAsync().GetAwaiter().GetResult());
         return service;
     }

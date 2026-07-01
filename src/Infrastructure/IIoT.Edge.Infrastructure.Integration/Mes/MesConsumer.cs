@@ -54,16 +54,16 @@ public sealed class MesConsumer : ProcessUploaderConsumerBase<IProcessMesUploade
                 ? "mes_upload_gate_blocked"
                 : gate.ReasonCode;
             _diagnosticsStore.RecordFailure(processType, reason);
-            Logger.Warn($"[MES] 上传门控未就绪（{reason}），本次数据转入 MES 补偿队列。ProcessType={processType}");
+            Logger.Warn($"[MES] 上传门控未就绪（{reason}），本次数据转入 MES 补偿队列。工序={processType}");
             return false;
         }
 
         var device = CurrentDevice;
         if (device is null)
         {
-            const string reason = "Device is not identified yet.";
+            const string reason = "尚未识别当前设备。";
             _diagnosticsStore.RecordFailure(processType, reason);
-            Logger.Warn($"[MES] {reason} ProcessType={processType}");
+            Logger.Warn($"[MES] {reason} 工序={processType}");
             return false;
         }
 

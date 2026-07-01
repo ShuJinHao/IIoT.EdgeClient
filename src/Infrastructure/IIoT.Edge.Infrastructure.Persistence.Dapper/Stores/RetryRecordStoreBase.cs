@@ -15,6 +15,14 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
     protected abstract string ChannelName { get; }
     protected abstract string ClaimTableName { get; }
 
+    protected string ChannelDisplayName
+        => ChannelName switch
+        {
+            "Cloud" => "云端",
+            "MES" => "MES",
+            _ => ChannelName
+        };
+
     protected RetryRecordStoreBase(
         SqliteConnectionFactory connectionFactory,
         ILogService logger,
@@ -62,7 +70,7 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
 
         if (affectedRows <= 0)
         {
-            throw new InvalidOperationException($"Failed to persist the {ChannelName} retry record.");
+            throw new InvalidOperationException($"持久化 {ChannelDisplayName} 补传记录失败。");
         }
     }
 
@@ -150,7 +158,7 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
         await DeleteClaimedRowsByClaimAsync(
             ClaimTableName,
             claimToken,
-            $"No claimed {ChannelName} retry rows found for claim {claimToken}.").ConfigureAwait(false);
+            $"未找到领取标记 {claimToken} 对应的 {ChannelDisplayName} 补传记录。").ConfigureAwait(false);
     }
 
     public async Task ReleaseClaimAsync(string claimToken)
@@ -158,7 +166,7 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
         await ReleaseClaimCoreAsync(
             ClaimTableName,
             claimToken,
-            $"Failed to release {ChannelName} retry claim {claimToken}.").ConfigureAwait(false);
+            $"释放 {ChannelDisplayName} 补传领取标记 {claimToken} 失败。").ConfigureAwait(false);
     }
 
     public async Task UpdateRetryAsync(
@@ -190,7 +198,7 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
 
             if (affectedRows <= 0)
             {
-                throw new InvalidOperationException($"Failed to update retry metadata for {ChannelName} record {id}.");
+                throw new InvalidOperationException($"更新 {ChannelDisplayName} 补传记录 {id} 的重试元数据失败。");
             }
 
             await conn.ExecuteAsync(
@@ -221,7 +229,7 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
 
             if (affectedRows <= 0)
             {
-                throw new InvalidOperationException($"Failed to delete {ChannelName} retry record {id}.");
+                throw new InvalidOperationException($"删除 {ChannelName} 补传记录 {id} 失败。");
             }
 
             return affectedRows;

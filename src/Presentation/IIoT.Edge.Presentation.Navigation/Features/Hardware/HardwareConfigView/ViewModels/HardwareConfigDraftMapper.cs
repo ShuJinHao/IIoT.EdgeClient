@@ -21,7 +21,8 @@ internal static class HardwareConfigDraftMapper
             SendCmd2 = source.SendCmd2,
             ConnectTimeout = source.ConnectTimeout,
             IsEnabled = source.IsEnabled,
-            Remark = source.Remark
+            Remark = source.Remark,
+            ProtocolFrame = source.ProtocolFrame
         };
         target.DeviceModel = source.DeviceModel;
         return target;
@@ -32,6 +33,7 @@ internal static class HardwareConfigDraftMapper
         target.DeviceName = source.DeviceName;
         target.DeviceType = source.DeviceType;
         target.DeviceModel = source.DeviceModel;
+        target.ProtocolFrame = source.ProtocolFrame;
         target.IpAddress = source.IpAddress;
         target.Port1 = source.Port1;
         target.Port2 = source.Port2;

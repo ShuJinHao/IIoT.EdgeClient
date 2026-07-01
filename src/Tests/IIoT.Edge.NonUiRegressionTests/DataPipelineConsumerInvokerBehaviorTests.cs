@@ -44,7 +44,7 @@ public sealed class DataPipelineConsumerInvokerBehaviorTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_WhenActionExceedsTimeout_ShouldThrowTimeoutExceeded()
+    public async Task ExecuteAsync_WhenActionExceedsTimeout_ShouldThrowChineseTimeout()
     {
         var invoker = new DefaultDataPipelineConsumerInvoker();
 
@@ -58,7 +58,7 @@ public sealed class DataPipelineConsumerInvokerBehaviorTests
                 TimeSpan.FromMilliseconds(20),
                 CancellationToken.None));
 
-        Assert.Equal("timeout_exceeded", exception.Message);
+        Assert.Equal("处理超时。", exception.Message);
     }
 
     [Fact]

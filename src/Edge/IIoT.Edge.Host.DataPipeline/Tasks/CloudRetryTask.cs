@@ -89,7 +89,7 @@ public sealed class CloudRetryTask : RetryTaskBase<CloudRetryRuntimeState, Cloud
                 return false;
             }
 
-            Logger.Warn("[Retry-Cloud] 设备日志缓冲补传已暂停或失败。");
+            Logger.Warn("[云端补传] 设备日志缓冲补传已暂停或失败。");
         }
 
         var capacitySnapshotBefore = _diagnosticsStore.Snapshot;
@@ -102,7 +102,7 @@ public sealed class CloudRetryTask : RetryTaskBase<CloudRetryRuntimeState, Cloud
                 return false;
             }
 
-            Logger.Warn("[Retry-Cloud] 产能缓冲补传已暂停或失败。");
+            Logger.Warn("[云端补传] 产能缓冲补传已暂停或失败。");
         }
 
         return true;

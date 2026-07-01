@@ -41,7 +41,7 @@ internal sealed class ProductionContextCorruptFileQuarantine(ILogService logger)
         }
         catch (Exception moveEx)
         {
-            logger.Error($"[ContextStore] 隔离损坏运行状态失败：{moveEx.Message}");
+            logger.Error($"[运行上下文] 隔离损坏运行状态失败：{moveEx.Message}");
             return null;
         }
     }

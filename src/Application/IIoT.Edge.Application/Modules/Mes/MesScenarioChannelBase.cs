@@ -274,7 +274,7 @@ public abstract class MesScenarioChannelBase<TCellData> : IProcessMesUploader
             return relativePath.Trim();
         }
 
-        Logger.Error($"[MES] 必选场景 {scenarioName} 未配置路径，数据将保留在补偿链路。ProcessType={ProcessType}");
+        Logger.Error($"[MES] 必选场景 {scenarioName} 未配置路径，数据将保留在补偿链路。工序={ProcessType}");
         return null;
     }
 
@@ -292,7 +292,7 @@ public abstract class MesScenarioChannelBase<TCellData> : IProcessMesUploader
             return relativePath.Trim();
         }
 
-        Logger.Warn($"[MES] 可选场景 {scenarioName} 未配置路径，已跳过。ProcessType={ProcessType}");
+        Logger.Warn($"[MES] 可选场景 {scenarioName} 未配置路径，已跳过。工序={ProcessType}");
         return null;
     }
 

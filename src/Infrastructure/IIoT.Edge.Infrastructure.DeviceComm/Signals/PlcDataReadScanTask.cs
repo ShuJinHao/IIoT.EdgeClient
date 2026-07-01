@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
@@ -22,6 +23,7 @@ public sealed class PlcDataReadScanTask : IPlcTask
     private readonly PlcConnectionStatusStore? _statusStore;
     private readonly Func<CancellationToken, Task<int>> _dataReadLoopIntervalResolver;
     private readonly IReadOnlyList<PlcSignalBlock> _readBlocks;
+    private readonly bool _canPromoteConnectionFromReadData;
     private int _retryCount;
     private DateTime _lastDisconnectLogTime = DateTime.MinValue;
 
@@ -47,7 +49,7 @@ public sealed class PlcDataReadScanTask : IPlcTask
         _dataReadLoopIntervalResolver = dataReadLoopIntervalResolver
             ?? (_ => Task.FromResult(policy.NormalizeDataReadLoopInterval()));
 
-        var readMappings = (ioMappings ?? throw new ArgumentNullException(nameof(ioMappings)))
+        var scanMappings = (ioMappings ?? throw new ArgumentNullException(nameof(ioMappings)))
             .Where(static mapping => !string.IsNullOrWhiteSpace(mapping.PlcAddress))
             .Select(static mapping => new PlcIoScanMapping(
                 mapping.SignalKey,
@@ -57,6 +59,14 @@ public sealed class PlcDataReadScanTask : IPlcTask
                 mapping.Direction,
                 mapping.Category,
                 mapping.SortOrder))
+            .ToArray();
+
+        var hasInteractionMapping = scanMappings.Any(static mapping =>
+            IoMappingOptionCatalog.IsInteractionCategory(mapping.Category));
+        var hasWriteMapping = scanMappings.Any(static mapping => mapping.IsWrite);
+        _canPromoteConnectionFromReadData = !hasInteractionMapping && !hasWriteMapping;
+
+        var readMappings = scanMappings
             .Where(static mapping => mapping.IsRead && IoMappingOptionCatalog.IsReadDataCategory(mapping.Category))
             .OrderBy(static mapping => mapping.SortOrder)
             .ToArray();
@@ -86,7 +96,9 @@ public sealed class PlcDataReadScanTask : IPlcTask
     {
         if (_readBlocks.Count == 0
             || !_plcService.IsConnected
-            || (_statusStore is not null && !_statusStore.IsStableOnline(_device.Id)))
+            || (_statusStore is not null
+                && !_canPromoteConnectionFromReadData
+                && !_statusStore.IsStableOnline(_device.Id)))
         {
             return;
         }
@@ -97,7 +109,17 @@ public sealed class PlcDataReadScanTask : IPlcTask
             return;
         }
 
+        var stopwatch = Stopwatch.StartNew();
         await ReadPlcToBufferAsync(buffer).ConfigureAwait(false);
+        stopwatch.Stop();
+
+        if (_canPromoteConnectionFromReadData)
+        {
+            _statusStore?.MarkProtocolSuccess(
+                _device.Id,
+                _device.DeviceName,
+                ToLatencyMs(stopwatch.ElapsedMilliseconds));
+        }
     }
 
     private async Task TaskCoreAsync(CancellationToken ct)
@@ -212,4 +234,7 @@ public sealed class PlcDataReadScanTask : IPlcTask
 
         return result;
     }
+
+    private static int ToLatencyMs(long elapsedMilliseconds)
+        => (int)Math.Min(int.MaxValue, Math.Max(0, elapsedMilliseconds));
 }

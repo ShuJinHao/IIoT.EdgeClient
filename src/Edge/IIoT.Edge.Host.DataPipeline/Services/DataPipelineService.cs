@@ -59,13 +59,13 @@ public class DataPipelineService : IDataPipelineService
     {
         if (record is null)
         {
-            _logger.Warn("[DataPipeline] 入队失败：记录为空。");
+            _logger.Warn("[数据管道] 入队失败：记录为空。");
             return DataPipelineEnqueueResult.Rejected("null_record");
         }
 
         if (record.CellData is null)
         {
-            _logger.Warn("[DataPipeline] 入队失败：CellData 为空。");
+            _logger.Warn("[数据管道] 入队失败：CellData 为空。");
             return DataPipelineEnqueueResult.Rejected("null_cell_data");
         }
 
@@ -88,7 +88,7 @@ public class DataPipelineService : IDataPipelineService
 
         Interlocked.Increment(ref _overflowCount);
         _logger.Warn(
-            $"[DataPipeline] 队列已满，准备写入溢出补偿。工序={record.CellData.ProcessType}，待处理={PendingCount}，容量={QueueCapacity}");
+            $"[数据管道] 队列已满，准备写入溢出补偿。工序={record.CellData.ProcessType}，待处理={PendingCount}，容量={QueueCapacity}");
 
         var overflowResult = await _overflowPersistence
             .PersistOverflowAsync(record, cancellationToken)

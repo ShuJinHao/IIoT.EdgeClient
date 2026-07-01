@@ -915,6 +915,17 @@ public sealed class RepositoryHygieneTests
     }
 
     [Fact]
+    public void HardwareConfigPage_ShouldNotExposeGlobalSaveButton()
+    {
+        var root = FindRepositoryRoot();
+        var hardwareConfigPage = File.ReadAllText(ToFullPath(
+            root,
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Hardware/HardwareConfigView/Views/HardwareConfigPage.axaml"));
+
+        Assert.DoesNotContain("Command=\"{Binding SaveCommand}\"", hardwareConfigPage, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void IoInteractionPage_ShouldFollowIoMappingFiveCategories()
     {
         var root = FindRepositoryRoot();
@@ -976,12 +987,111 @@ public sealed class RepositoryHygieneTests
         var root = FindRepositoryRoot();
         var source = File.ReadAllText(ToFullPath(
             root,
-            "src/Modules/IIoT.Edge.Module.DieCutting/Presentation/DieCuttingDataViewModel.cs"));
+            "src/Modules/IIoT.Edge.Module.DieCutting.Shared/Presentation/DieCuttingDataViewModel.cs"));
 
         Assert.Contains("_recordStore.QueryAsync(", source, StringComparison.Ordinal);
         Assert.Contains("_deviceSelectionService.SelectedDeviceKey", source, StringComparison.Ordinal);
         Assert.Contains("DieCutting_Empty_SelectedDeviceProductionRecords", source, StringComparison.Ordinal);
         Assert.DoesNotContain("SelectedDeviceFilter", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ModuleProjects_ShouldDeclareExplicitPluginOrSharedRole()
+    {
+        var root = FindRepositoryRoot();
+        var modulesRoot = ToFullPath(root, "src/Modules");
+        var findings = EnumerateFiles(modulesRoot, "*.csproj")
+            .Where(path => !Path.GetFileNameWithoutExtension(path).Equals(
+                "IIoT.Edge.Module.Sdk",
+                StringComparison.OrdinalIgnoreCase))
+            .SelectMany(path =>
+            {
+                var project = XDocument.Load(path);
+                var projectName = Path.GetFileNameWithoutExtension(path);
+                var projectDirectory = Path.GetDirectoryName(path)
+                    ?? throw new InvalidOperationException($"无法定位项目目录：{path}");
+                var moduleId = GetProjectProperty(project, "PluginModuleId");
+                var isEdgePluginModule = GetProjectProperty(project, "IsEdgePluginModule");
+                var isPackable = GetProjectProperty(project, "IsPackable");
+                var hasPluginManifest = File.Exists(Path.Combine(projectDirectory, "plugin.json"));
+                var repoPath = ToRepositoryPath(root, path);
+
+                if (!string.IsNullOrWhiteSpace(moduleId))
+                {
+                    return new[]
+                    {
+                        hasPluginManifest ? null : $"{repoPath} declares PluginModuleId but is missing plugin.json",
+                        string.Equals(isEdgePluginModule, "true", StringComparison.OrdinalIgnoreCase)
+                            ? null
+                            : $"{repoPath} declares PluginModuleId but IsEdgePluginModule is not true",
+                        string.Equals(isPackable, "true", StringComparison.OrdinalIgnoreCase)
+                            ? null
+                            : $"{repoPath} declares PluginModuleId but IsPackable is not true",
+                        projectName.EndsWith(".Shared", StringComparison.OrdinalIgnoreCase)
+                            ? $"{repoPath} is a plugin entry project but is named like a shared library"
+                            : null
+                    };
+                }
+
+                return new[]
+                {
+                    projectName.EndsWith(".Shared", StringComparison.OrdinalIgnoreCase)
+                        ? null
+                        : $"{repoPath} has no PluginModuleId and must be named *.Shared",
+                    hasPluginManifest ? $"{repoPath} is a shared library but contains plugin.json" : null,
+                    string.Equals(isEdgePluginModule, "false", StringComparison.OrdinalIgnoreCase)
+                        ? null
+                        : $"{repoPath} is a shared library but IsEdgePluginModule is not false",
+                    string.Equals(isPackable, "false", StringComparison.OrdinalIgnoreCase)
+                        ? null
+                        : $"{repoPath} is a shared library but IsPackable is not false"
+                };
+            })
+            .Where(finding => !string.IsNullOrWhiteSpace(finding))
+            .Select(finding => finding!)
+            .ToArray();
+
+        Assert.Empty(findings);
+    }
+
+    [Fact]
+    public void RuntimeLogs_ShouldNotUseLegacyEnglishVisiblePrefixes()
+    {
+        var root = FindRepositoryRoot();
+        var sourceRoots = new[]
+        {
+            "src/Application",
+            "src/Infrastructure",
+            "src/Edge",
+            "src/Modules"
+        };
+        var forbiddenVisibleLogTexts = new[]
+        {
+            "[DataPipeline]",
+            "[ContextStore]",
+            "[Retry-Cloud]",
+            "[Retry-MES]",
+            "[Cloud]",
+            "[DeviceLogSync]",
+            "[RecipeSync]",
+            "[Recipe]",
+            "[CapacitySync]",
+            "[Background]",
+            "Initialized and started",
+            "task(s)",
+            "Task failed",
+            "timeout_exceeded",
+            "consumer_returned_false"
+        };
+
+        var findings = sourceRoots
+            .Select(path => ToFullPath(root, path))
+            .SelectMany(path => EnumerateFiles(path, "*.cs"))
+            .Where(path => !ToRepositoryPath(root, path).StartsWith("src/Tests/", StringComparison.OrdinalIgnoreCase))
+            .SelectMany(path => FindForbiddenMatches(root, path, forbiddenVisibleLogTexts))
+            .ToArray();
+
+        Assert.Empty(findings);
     }
 
     [Fact]
@@ -1247,6 +1357,20 @@ public sealed class RepositoryHygieneTests
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .Select(value => value!)
             .ToHashSet(StringComparer.Ordinal);
+    }
+
+    private static string? GetProjectProperty(XDocument project, string propertyName)
+    {
+        foreach (var propertyGroup in project.Root?.Elements("PropertyGroup") ?? [])
+        {
+            var value = propertyGroup.Element(propertyName)?.Value;
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value.Trim();
+            }
+        }
+
+        return null;
     }
 
     private static IEnumerable<string> FindForbiddenMatches(string root, string path, IReadOnlyList<string> forbiddenNames)

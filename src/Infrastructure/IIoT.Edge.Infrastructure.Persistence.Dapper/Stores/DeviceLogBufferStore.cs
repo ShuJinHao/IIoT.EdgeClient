@@ -94,14 +94,14 @@ public class DeviceLogBufferStore : ClaimBufferStoreBase<DeviceLogRecord>, IDevi
         await DeleteClaimedRowsByClaimAsync(
             ClaimTableName,
             claimToken,
-            $"No claimed device log rows found for claim {claimToken}.").ConfigureAwait(false);
+            $"未找到领取标记 {claimToken} 对应的设备日志记录。").ConfigureAwait(false);
     }
 
     public async Task ReleaseClaimAsync(string claimToken)
         => await ReleaseClaimCoreAsync(
             ClaimTableName,
             claimToken,
-            $"Failed to release device log claim {claimToken}.");
+            $"释放设备日志领取标记 {claimToken} 失败。");
 
     public async Task DeleteBatchAsync(IEnumerable<long> ids)
     {

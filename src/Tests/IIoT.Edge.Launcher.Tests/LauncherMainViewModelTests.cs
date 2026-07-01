@@ -538,6 +538,28 @@ public sealed class LauncherMainViewModelTests
         Assert.Equal(0, launchService.LaunchCallCount);
     }
 
+    [Fact]
+    public async Task LaunchProfileCardAsync_WhenCardWasRunningButProfileStopped_ShouldAllowRelaunch()
+    {
+        var anode = Profile("DieCuttingAnodeLine", "负极模切");
+        var launchService = new StubShellLaunchService();
+        var viewModel = new LauncherMainViewModel(
+            new StubLauncherProfileCatalog([anode]),
+            new StubLocalAccountAuthService(
+                LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
+            launchService);
+        var anodeCard = new LauncherProfileCardViewModel(anode);
+        anodeCard.SetRunning();
+
+        Assert.True(anodeCard.IsPrimaryActionEnabled);
+        Assert.Equal(LauncherProfileCardActionKind.Launch, anodeCard.ActionKind);
+
+        await viewModel.LaunchProfileCardAsync(anodeCard);
+
+        Assert.Equal(1, launchService.LaunchCallCount);
+        Assert.Equal(["DieCuttingAnodeLine"], launchService.LaunchedMachineProfiles);
+    }
+
     private static LauncherAccountRecord Account(string userName, string displayName) =>
         new(userName, displayName, "hash", true);
 

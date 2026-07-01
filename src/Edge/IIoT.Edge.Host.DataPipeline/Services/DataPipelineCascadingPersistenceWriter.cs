@@ -96,12 +96,12 @@ public sealed class DataPipelineCascadingPersistenceWriter
         try
         {
             await operations.SaveRetryAsync(record, failedTarget, errorMessage).ConfigureAwait(false);
-            _logger.Error($"[{operations.LogPrefix}] {record.CellData.DisplayLabel} 已写入 {operations.DisplayName} retry 队列。");
+            _logger.Error($"[{operations.LogPrefix}] {record.CellData.DisplayLabel} 已写入 {operations.DisplayName} 补传队列。");
             return true;
         }
         catch (Exception retryEx)
         {
-            _logger.Error($"[{operations.LogPrefix}] {record.CellData.DisplayLabel} 写入 retry 失败：{retryEx.Message}");
+            _logger.Error($"[{operations.LogPrefix}] {record.CellData.DisplayLabel} 写入补传队列失败：{retryEx.Message}");
 
             var fallbackBlockedReason = await operations.GetFallbackBlockReasonAsync(record.CellData.ProcessType).ConfigureAwait(false);
             if (!string.IsNullOrWhiteSpace(fallbackBlockedReason))
@@ -120,7 +120,7 @@ public sealed class DataPipelineCascadingPersistenceWriter
             try
             {
                 await operations.SaveFallbackAsync(record, failedTarget, errorMessage).ConfigureAwait(false);
-                _logger.Error($"[{operations.LogPrefix}] retry 不可用，{record.CellData.DisplayLabel} 已写入 {operations.DisplayName} fallback。");
+                _logger.Error($"[{operations.LogPrefix}] 补传队列不可用，{record.CellData.DisplayLabel} 已写入 {operations.DisplayName} 兜底缓存。");
                 return true;
             }
             catch (Exception fallbackEx)
@@ -132,7 +132,7 @@ public sealed class DataPipelineCascadingPersistenceWriter
                     sourceRecordId,
                     operations,
                     fallbackFailureStage,
-                    $"{operations.DisplayName} retry 写入失败：{retryEx.Message}；fallback 写入失败：{fallbackEx.Message}",
+                    $"{operations.DisplayName} 补传队列写入失败：{retryEx.Message}；兜底缓存写入失败：{fallbackEx.Message}",
                     fallbackEx).ConfigureAwait(false);
             }
         }
@@ -175,7 +175,7 @@ public sealed class DataPipelineCascadingPersistenceWriter
         => channel switch
         {
             DataPipelineRetryChannel.Cloud => new ChannelOperations(
-                "Cloud",
+                "云端",
                 "云端",
                 processType => _capacityGuard.GetCloudRetryBlockReasonAsync(processType),
                 _cloudRetryStore.SaveAsync,
@@ -217,7 +217,15 @@ public sealed class DataPipelineCascadingPersistenceWriter
     private static string BuildCapacityBlockedFailureReason(
         CapacityBlockedChannel channel,
         string blockedReason)
-        => $"capacity_blocked:{channel.ToString().ToLowerInvariant()}:{blockedReason}";
+        => $"容量受限:{FormatCapacityBlockedChannel(channel)}:{blockedReason}";
+
+    private static string FormatCapacityBlockedChannel(CapacityBlockedChannel channel)
+        => channel switch
+        {
+            CapacityBlockedChannel.Retry => "补传",
+            CapacityBlockedChannel.Fallback => "兜底",
+            _ => channel.ToString()
+        };
 
     private sealed record ChannelOperations(
         string LogPrefix,

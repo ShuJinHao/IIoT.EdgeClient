@@ -77,7 +77,7 @@ public class ProcessQueueTask : ScheduledTaskBase
                     .ConfigureAwait(false);
                 if (!success)
                 {
-                    await HandleFailureAsync(record, consumer, "consumer_returned_false").ConfigureAwait(false);
+                    await HandleFailureAsync(record, consumer, "消费者返回失败。").ConfigureAwait(false);
                 }
             }
             catch (Exception ex)
@@ -105,14 +105,14 @@ public class ProcessQueueTask : ScheduledTaskBase
         if (consumer.RetryChannel == DataPipelineRetryChannel.None)
         {
             var details =
-                $"[{record.CellData.ProcessType}] 关键消费者 {consumer.Name} 处理 {label} 失败，但未配置 RetryChannel。";
+                $"[{record.CellData.ProcessType}] 关键消费者 {consumer.Name} 处理 {label} 失败，但未配置补偿链路。";
             Logger.Error(details);
             _criticalFallbackWriter.Write("DataPipeline.ProcessQueue.InvalidRetryChannel", details);
             return;
         }
 
         Logger.Warn(
-            $"[{record.CellData.ProcessType}] {consumer.Name} 处理 {label} 失败，准备写入 {consumer.RetryChannel} 补偿链路。");
+            $"[{record.CellData.ProcessType}] {consumer.Name} 处理 {label} 失败，准备写入 {FormatRetryChannel(consumer.RetryChannel)} 补偿链路。");
 
         var sourceTable = consumer.RetryChannel switch
         {
@@ -124,7 +124,7 @@ public class ProcessQueueTask : ScheduledTaskBase
         if (string.IsNullOrWhiteSpace(sourceTable))
         {
             var unsupportedDetails =
-                $"[{record.CellData.ProcessType}] {consumer.Name} 使用了不支持的补偿链路：{consumer.RetryChannel}。";
+                $"[{record.CellData.ProcessType}] {consumer.Name} 使用了不支持的补偿链路：{FormatRetryChannel(consumer.RetryChannel)}。";
             Logger.Error(unsupportedDetails);
             _criticalFallbackWriter.Write("DataPipeline.ProcessQueue.UnsupportedRetryChannel", unsupportedDetails);
             return;
@@ -141,5 +141,14 @@ public class ProcessQueueTask : ScheduledTaskBase
     }
 
     private static string ResolveFailureMessage(Exception ex)
-        => ex is TimeoutException ? "timeout_exceeded" : ex.Message;
+        => ex is TimeoutException ? "处理超时。" : ex.Message;
+
+    private static string FormatRetryChannel(DataPipelineRetryChannel channel)
+        => channel switch
+        {
+            DataPipelineRetryChannel.Cloud => "云端",
+            DataPipelineRetryChannel.Mes => "MES",
+            DataPipelineRetryChannel.None => "未配置",
+            _ => channel.ToString()
+        };
 }

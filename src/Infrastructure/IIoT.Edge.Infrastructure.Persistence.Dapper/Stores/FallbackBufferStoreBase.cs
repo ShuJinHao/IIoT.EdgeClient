@@ -17,6 +17,14 @@ public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TE
 
     protected abstract string RetryTableName { get; }
 
+    protected string ChannelDisplayName
+        => ChannelName switch
+        {
+            "Cloud" => "云端",
+            "MES" => "MES",
+            _ => ChannelName
+        };
+
     protected FallbackBufferStoreBase(
         SqliteConnectionFactory connectionFactory,
         ILogService logger,
@@ -48,7 +56,7 @@ public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TE
 
         if (affectedRows <= 0)
         {
-            throw new InvalidOperationException($"Failed to persist the {ChannelName} fallback record.");
+            throw new InvalidOperationException($"持久化 {ChannelDisplayName} 兜底记录失败。");
         }
     }
 
@@ -94,7 +102,7 @@ public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TE
 
             if (inserted <= 0)
             {
-                throw new InvalidOperationException($"Failed to move {ChannelName} fallback records into the retry store.");
+                throw new InvalidOperationException($"移动 {ChannelDisplayName} 兜底记录到补传表失败。");
             }
 
             var deleted = await conn.ExecuteAsync(
@@ -105,7 +113,7 @@ public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TE
 
             if (deleted <= 0)
             {
-                throw new InvalidOperationException($"Failed to delete moved {ChannelName} fallback records.");
+                throw new InvalidOperationException($"删除已移动的 {ChannelDisplayName} 兜底记录失败。");
             }
 
             return deleted;
@@ -124,7 +132,7 @@ public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TE
             $"DELETE FROM {TableName} WHERE Id IN @Ids",
             new { Ids = idList },
             requireAffectedRows: true,
-            failureMessage: $"Failed to delete {ChannelName} fallback records.").ConfigureAwait(false);
+            failureMessage: $"删除 {ChannelDisplayName} 兜底记录失败。").ConfigureAwait(false);
     }
 
     public Task<int> GetCountAsync()

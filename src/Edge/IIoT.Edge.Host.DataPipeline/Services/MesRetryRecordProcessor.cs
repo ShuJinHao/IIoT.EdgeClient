@@ -11,7 +11,7 @@ namespace IIoT.Edge.Host.DataPipeline.Services;
 internal sealed class MesRetryRecordProcessor : RetryRecordProcessorBase<MesRetryRuntimeState>, IMesRetryRecordProcessor
 {
     private static readonly DataPipelineDeadLetterChannel DeadLetterChannel = new(
-        LogPrefix: "Retry-MES",
+        LogPrefix: "MES补传",
         DeadLetterName: "MES",
         CriticalSource: "Retry.MesDeadLetterPersistFailed");
 
@@ -79,10 +79,10 @@ internal sealed class MesRetryRecordProcessor : RetryRecordProcessorBase<MesRetr
             }
             catch (Exception releaseEx)
             {
-                Logger.Error($"[Retry-MES] 释放 retry 领取标记 {claimedBatch.ClaimToken} 失败：{releaseEx.Message}");
+                Logger.Error($"[MES补传] 释放补传领取标记 {claimedBatch.ClaimToken} 失败：{releaseEx.Message}");
             }
 
-            Logger.Error($"[Retry-MES] retry 批次执行异常：{ex.Message}");
+            Logger.Error($"[MES补传] 补传批次执行异常：{ex.Message}");
             return MesRetryProcessResult.Failed;
         }
 
@@ -99,8 +99,8 @@ internal sealed class MesRetryRecordProcessor : RetryRecordProcessorBase<MesRetr
             return await HandleDeserializeFailureAsync(
                 record,
                 "failed_mes_records",
-                $"MES retry 记录反序列化失败，工序：{record.ProcessType}。",
-                "MES retry 记录反序列化失败，且死信持久化也失败。").ConfigureAwait(false);
+                $"MES 补传记录反序列化失败，工序：{record.ProcessType}。",
+                "MES 补传记录反序列化失败，且死信持久化也失败。").ConfigureAwait(false);
         }
 
         var completedRecord = new CellCompletedRecord { CellData = cellData };
@@ -116,14 +116,14 @@ internal sealed class MesRetryRecordProcessor : RetryRecordProcessorBase<MesRetr
         }
         catch (TimeoutException)
         {
-            await HandleRetryFailureAsync(record, "timeout_exceeded").ConfigureAwait(false);
+            await HandleRetryFailureAsync(record, "处理超时。").ConfigureAwait(false);
             return false;
         }
 
         if (success)
         {
             await RetryStore.DeleteAsync(record.Id).ConfigureAwait(false);
-            Logger.Info($"[Retry-MES] {cellData.DisplayLabel} 补传成功，记录已删除。");
+            Logger.Info($"[MES补传] {cellData.DisplayLabel} 补传成功，记录已删除。");
             return true;
         }
 

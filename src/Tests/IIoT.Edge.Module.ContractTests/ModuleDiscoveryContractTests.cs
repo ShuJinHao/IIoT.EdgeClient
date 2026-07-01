@@ -166,20 +166,20 @@ public sealed class ModuleDiscoveryContractTests
             repoRoot,
             "src",
             "Modules",
-            "IIoT.Edge.Module.DieCutting",
+            "IIoT.Edge.Module.DieCutting.Shared",
             "plugin.json")));
         Assert.True(File.Exists(Path.Combine(
             repoRoot,
             "src",
             "Modules",
-            "IIoT.Edge.Module.DieCutting",
+            "IIoT.Edge.Module.DieCutting.Shared",
             "Production",
             "DieCuttingStationRuntimeFactory.cs")));
         Assert.True(File.Exists(Path.Combine(
             repoRoot,
             "src",
             "Modules",
-            "IIoT.Edge.Module.DieCutting",
+            "IIoT.Edge.Module.DieCutting.Shared",
             "Samples",
             "DieCuttingDevelopmentSampleContributor.cs")));
         Assert.True(File.Exists(Path.Combine(

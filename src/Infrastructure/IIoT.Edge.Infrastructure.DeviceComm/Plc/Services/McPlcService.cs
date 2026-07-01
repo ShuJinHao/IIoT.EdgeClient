@@ -54,7 +54,7 @@ public sealed class McPlcService : IPlcService, IDisposable
         catch (TimeoutException ex)
         {
             Disconnect();
-            throw new TimeoutException($"Connect to MC PLC {_endpoint!.Host}:{_port} timed out after {_endpoint.ConnectTimeout.TotalSeconds:0}s.", ex);
+            throw new TimeoutException($"连接 MC PLC {_endpoint!.Host}:{_port} 超时，超时时间 {_endpoint.ConnectTimeout.TotalSeconds:0} 秒。", ex);
         }
         catch
         {
@@ -82,11 +82,11 @@ public sealed class McPlcService : IPlcService, IDisposable
         }
         catch (TimeoutException ex)
         {
-            throw new TimeoutException($"Read {address} timed out after {OperationTimeout.TotalSeconds:0}s.", ex);
+            throw new TimeoutException($"读取地址 {address} 超时，超时时间 {OperationTimeout.TotalSeconds:0} 秒。", ex);
         }
         catch (Exception ex) when (ex is not TimeoutException)
         {
-            throw new InvalidOperationException($"Read {address} failed.", ex);
+            throw new InvalidOperationException($"读取地址 {address} 失败。", ex);
         }
         finally
         {
@@ -106,11 +106,11 @@ public sealed class McPlcService : IPlcService, IDisposable
         }
         catch (TimeoutException ex)
         {
-            throw new TimeoutException($"Write {address} timed out after {OperationTimeout.TotalSeconds:0}s.", ex);
+            throw new TimeoutException($"写入地址 {address} 超时，超时时间 {OperationTimeout.TotalSeconds:0} 秒。", ex);
         }
         catch (Exception ex) when (ex is not TimeoutException)
         {
-            throw new InvalidOperationException($"Write {address} failed.", ex);
+            throw new InvalidOperationException($"写入地址 {address} 失败。", ex);
         }
         finally
         {
@@ -171,7 +171,7 @@ public sealed class McPlcService : IPlcService, IDisposable
             password: null,
             isAscii: false,
             isUdp: false,
-            requestFrame: RequestFrame.E3,
+            requestFrame: ResolveRequestFrame(_endpoint.McFrameType),
             timeoutMilliseconds: ResolveTimeoutMilliseconds(_endpoint.ConnectTimeout));
     }
 
@@ -179,7 +179,7 @@ public sealed class McPlcService : IPlcService, IDisposable
     {
         if (_endpoint is null || string.IsNullOrWhiteSpace(_endpoint.Host))
         {
-            throw new InvalidOperationException("MC PLC endpoint is not initialized.");
+            throw new InvalidOperationException("MC PLC 端点未初始化。");
         }
     }
 
@@ -187,7 +187,7 @@ public sealed class McPlcService : IPlcService, IDisposable
     {
         if (!IsConnected || _mcProtocol is null)
         {
-            throw new InvalidOperationException("PLC is not connected.");
+            throw new InvalidOperationException("PLC 未连接。");
         }
 
         return _mcProtocol;
@@ -203,6 +203,14 @@ public sealed class McPlcService : IPlcService, IDisposable
 
         return (ushort)Math.Min(milliseconds, ushort.MaxValue);
     }
+
+    private static RequestFrame ResolveRequestFrame(McPlcFrameType frameType)
+        => frameType switch
+        {
+            McPlcFrameType.E3 => RequestFrame.E3,
+            McPlcFrameType.E4 => RequestFrame.E4,
+            _ => throw new NotSupportedException($"不支持的 MC PLC 协议帧：{frameType}")
+        };
 
     private static Task<List<T>> ReadSupportedAsync<T>(McpX protocol, McDeviceAddress address, ushort length)
         => typeof(T) switch
@@ -245,7 +253,7 @@ public sealed class McPlcService : IPlcService, IDisposable
             .WaitAsync(OperationTimeout);
 
     private static NotSupportedException UnsupportedType<T>()
-        => new($"Unsupported type: {typeof(T).Name}");
+        => new($"不支持的数据类型：{typeof(T).Name}");
 }
 
 internal readonly record struct McDeviceAddress(Prefix Prefix, string Address);

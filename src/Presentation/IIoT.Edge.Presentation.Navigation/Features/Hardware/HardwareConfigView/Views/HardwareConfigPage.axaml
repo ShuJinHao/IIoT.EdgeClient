@@ -6,19 +6,10 @@
     xmlns:pages="clr-namespace:IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView">
 
     <Grid RowDefinitions="Auto,*" Margin="20">
-        <Grid ColumnDefinitions="*,Auto">
+        <Grid ColumnDefinitions="*">
             <edge:EdgeSectionHeader
                 Title="{Binding ViewTitle}"
                 Subtitle="{Binding StatusMessage}" />
-
-            <edge:EdgeActionButton
-                Grid.Column="1"
-                VerticalAlignment="Top"
-                Command="{Binding SaveCommand}"
-                Content="{DynamicResource Navigation_Button_Save}"
-                Icon="{StaticResource Edge.Icon.Save}"
-                Kind="Primary"
-                Size="Compact" />
         </Grid>
 
         <edge:EdgeTabControl

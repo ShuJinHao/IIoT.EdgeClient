@@ -64,7 +64,7 @@ public class CapacitySyncTask : ICapacitySyncTask
             _loopTask = Task.Run(() => SyncLoopAsync(_cts.Token), CancellationToken.None);
         }
 
-        _logger.Info($"[CapacitySync] 已启动，间隔：{(int)_runtimeConfig.Current.CloudSyncInterval.TotalSeconds}s");
+        _logger.Info($"[产能同步] 已启动，间隔：{(int)_runtimeConfig.Current.CloudSyncInterval.TotalSeconds}s");
         return Task.CompletedTask;
     }
 
@@ -121,7 +121,7 @@ public class CapacitySyncTask : ICapacitySyncTask
             await ExecuteOnceAsync();
         }
 
-        _logger.Info("[CapacitySync] 已停止。");
+        _logger.Info("[产能同步] 已停止。");
     }
 
     private async Task ExecuteOnceAsync()
@@ -140,7 +140,7 @@ public class CapacitySyncTask : ICapacitySyncTask
             }
             catch (Exception ex)
             {
-                _logger.Error($"[CapacitySync] 同步失败：{ex.Message}");
+                _logger.Error($"[产能同步] 同步失败：{ex.Message}");
             }
         }
         finally
@@ -202,16 +202,16 @@ public class CapacitySyncTask : ICapacitySyncTask
         if (result.IsSuccess)
         {
             _logger.Info(
-                $"[CapacitySync] [{plcName}] {slotLabel} 已同步。总数：{totalCount}，OK：{okCount}，NG：{ngCount}");
+                $"[产能同步] [{plcName}] {slotLabel} 已同步。总数：{totalCount}，OK：{okCount}，NG：{ngCount}");
         }
         else if (IsUploadPaused(result))
         {
             _logger.Warn(
-                $"[CapacitySync] [{plcName}] {slotLabel} 等待云端恢复，原因：{result.ReasonCode}");
+                $"[产能同步] [{plcName}] {slotLabel} 等待云端恢复，原因：{result.ReasonCode}");
         }
         else
         {
-            _logger.Warn($"[CapacitySync] [{plcName}] {slotLabel} 同步失败。");
+            _logger.Warn($"[产能同步] [{plcName}] {slotLabel} 同步失败。");
         }
 
         return result.IsSuccess;
@@ -262,12 +262,12 @@ public class CapacitySyncTask : ICapacitySyncTask
                             if (IsUploadPaused(result))
                             {
                                 _logger.Warn(
-                                    $"[Retry-Cloud] 产能补传已暂停，等待云端恢复：{slotLabel}（{result.ReasonCode}）");
+                                    $"[云端补传] 产能补传已暂停，等待云端恢复：{slotLabel}（{result.ReasonCode}）");
                             }
                             else
                             {
                                 _logger.Warn(
-                                    $"[Retry-Cloud] 产能补传失败：{slotLabel}");
+                                    $"[云端补传] 产能补传失败：{slotLabel}");
                             }
                             return false;
                         }
@@ -282,7 +282,7 @@ public class CapacitySyncTask : ICapacitySyncTask
                     }
 
                     _logger.Info(
-                        $"[Retry-Cloud] 产能补传批次 {claimedBatch.ClaimToken} 已完成，行数：{claimedBatch.Summaries.Count}");
+                        $"[云端补传] 产能补传批次 {claimedBatch.ClaimToken} 已完成，行数：{claimedBatch.Summaries.Count}");
                 }
                 catch (Exception ex)
                 {
@@ -295,11 +295,11 @@ public class CapacitySyncTask : ICapacitySyncTask
                         catch (Exception releaseEx)
                         {
                             _logger.Error(
-                                $"[Retry-Cloud] 释放产能补传领取标记 {claimedBatch.ClaimToken} 失败：{releaseEx.Message}");
+                                $"[云端补传] 释放产能补传领取标记 {claimedBatch.ClaimToken} 失败：{releaseEx.Message}");
                         }
                     }
 
-                    _logger.Error($"[Retry-Cloud] 产能补传异常：{ex.Message}");
+                    _logger.Error($"[云端补传] 产能补传异常：{ex.Message}");
                     return false;
                 }
             }

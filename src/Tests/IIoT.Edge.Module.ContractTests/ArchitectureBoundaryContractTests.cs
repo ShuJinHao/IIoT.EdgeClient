@@ -85,7 +85,7 @@ public sealed class ArchitectureBoundaryContractTests
             "src/Shared/IIoT.Edge.UI.Shared/IIoT.Edge.UI.Shared.csproj",
             "src/Presentation/IIoT.Edge.Presentation.Navigation/IIoT.Edge.Presentation.Navigation.csproj"
         };
-        var dieCuttingSharedCoreReference = "src/Modules/IIoT.Edge.Module.DieCutting/IIoT.Edge.Module.DieCutting.csproj";
+        var dieCuttingSharedCoreReference = "src/Modules/IIoT.Edge.Module.DieCutting.Shared/IIoT.Edge.Module.DieCutting.Shared.csproj";
         var dieCuttingEntryProjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "src/Modules/IIoT.Edge.Module.DieCuttingAnode/IIoT.Edge.Module.DieCuttingAnode.csproj",

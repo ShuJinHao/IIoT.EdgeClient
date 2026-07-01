@@ -5,13 +5,11 @@ using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.SharedKernel.Repository;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Hosting;
 
 namespace IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 
 public sealed class PlcTaskBindingService(
     IConfiguration configuration,
-    IHostEnvironment hostEnvironment,
     IStationRuntimeRegistry runtimeRegistry,
     IReadRepository<NetworkDeviceEntity> networkDevices,
     IRepository<IoMappingEntity> ioMappings,
@@ -118,7 +116,7 @@ public sealed class PlcTaskBindingService(
             static candidate => candidate.Key,
             candidate => normalizedStates.TryGetValue(candidate.Key, out var submittedEnabled)
                 ? submittedEnabled
-                : EvaluateTaskAvailability(candidate, device.DeviceModel, signalBindings).CanRun && ResolveDefaultEnabled(),
+                : EvaluateTaskAvailability(candidate, device.DeviceModel, signalBindings).CanRun && ResolveDefaultEnabled(candidate),
             StringComparer.OrdinalIgnoreCase);
         var invalidEnabledTasks = candidates
             .Select(candidate => new CandidateAvailability(
@@ -235,7 +233,7 @@ public sealed class PlcTaskBindingService(
         string? deviceModel)
         => rowByKey.TryGetValue(candidate.Key, out var row)
             ? row.Enabled
-            : ResolveDefaultEnabled() && EvaluateTaskAvailability(candidate, deviceModel, signalBindings).CanRun;
+            : ResolveDefaultEnabled(candidate) && EvaluateTaskAvailability(candidate, deviceModel, signalBindings).CanRun;
 
     private TaskAvailability EvaluateTaskAvailability(
         TaskCandidate candidate,
@@ -317,15 +315,19 @@ public sealed class PlcTaskBindingService(
     private static string NormalizeDeviceModel(string? deviceModel)
         => string.IsNullOrWhiteSpace(deviceModel) ? "未配置" : deviceModel.Trim();
 
-    private bool ResolveDefaultEnabled()
+    private bool ResolveDefaultEnabled(TaskCandidate candidate)
     {
+        if (candidate.DefaultEnabled)
+        {
+            return true;
+        }
+
         var configured = configuration.GetValue<bool?>(DefaultEnableAllTasksKey);
         if (configured.HasValue)
         {
             return configured.Value;
         }
 
-        _ = hostEnvironment;
         return false;
     }
 

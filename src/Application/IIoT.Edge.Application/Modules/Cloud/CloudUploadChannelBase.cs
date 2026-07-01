@@ -101,7 +101,7 @@ public abstract class CloudUploadChannelBase<TCellData, TPayload>
             {
                 var result = CloudCallResult.Failure(CloudCallOutcome.Exception, "unexpected_process_type");
                 var message = $"云端上传器 {UploaderName} 收到不匹配的工序数据：{record.CellData.ProcessType}。";
-                Logger.Error($"[Cloud] {message}");
+                Logger.Error($"[云端] {message}");
                 await OnUploadFailedAsync(context, records, result, message, cancellationToken).ConfigureAwait(false);
                 return result;
             }
@@ -143,7 +143,7 @@ public abstract class CloudUploadChannelBase<TCellData, TPayload>
             if (!result.IsSuccess)
             {
                 var message = $"云端上传失败，工序 {ProcessType}，数量 1，结果 {result.Outcome}，原因 {result.ReasonCode}。";
-                Logger.Error($"[Cloud] {message}");
+                Logger.Error($"[云端] {message}");
                 await OnUploadFailedAsync(context, singleRecord, result, message, cancellationToken).ConfigureAwait(false);
                 return result;
             }
@@ -173,7 +173,7 @@ public abstract class CloudUploadChannelBase<TCellData, TPayload>
         if (!result.IsSuccess)
         {
             var message = $"云端批量上传失败，工序 {ProcessType}，数量 {records.Count}，结果 {result.Outcome}，原因 {result.ReasonCode}。";
-            Logger.Error($"[Cloud] {message}");
+            Logger.Error($"[云端] {message}");
             await OnUploadFailedAsync(context, records, result, message, cancellationToken).ConfigureAwait(false);
             return result;
         }

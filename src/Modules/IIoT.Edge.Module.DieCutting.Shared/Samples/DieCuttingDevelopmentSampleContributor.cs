@@ -134,16 +134,27 @@ public sealed class DieCuttingDevelopmentSampleContributor : DevelopmentSampleCo
         IModuleHardwareProfileProvider hardwareProfile,
         CancellationToken cancellationToken)
     {
+        var defaults = hardwareProfile.GetDefaultPlcSettings();
+        var protocolFrame = string.IsNullOrWhiteSpace(seedDevice.ProtocolFrame)
+            ? defaults.ProtocolFrame
+            : seedDevice.ProtocolFrame;
         var existingDevice = await _networkDevices.GetAsync(
             x => x.DeviceName == seedDevice.DeviceName,
             cancellationToken: cancellationToken).ConfigureAwait(false);
         if (existingDevice is not null)
         {
+            if (string.IsNullOrWhiteSpace(existingDevice.ProtocolFrame)
+                && !string.IsNullOrWhiteSpace(protocolFrame))
+            {
+                existingDevice.UpdateProtocolFrame(protocolFrame);
+                await _networkDevices.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+                _logger.Info($"[{_definition.DisplayName}][设备样本] 已为设备“{seedDevice.DeviceName}”补充 PLC 协议帧 {protocolFrame}。");
+            }
+
             _logger.Info($"[{_definition.DisplayName}][设备样本] 设备“{seedDevice.DeviceName}”已存在，跳过设备写入。");
             return existingDevice;
         }
 
-        var defaults = hardwareProfile.GetDefaultPlcSettings();
         var device = NetworkDeviceEntity.Create(
             seedDevice.DeviceName,
             DeviceType.PLC,
@@ -157,6 +168,7 @@ public sealed class DieCuttingDevelopmentSampleContributor : DevelopmentSampleCo
             device.Port1,
             device.Port2,
             seedDevice.ConnectTimeout > 0 ? seedDevice.ConnectTimeout : defaults.ConnectTimeout ?? 3000);
+        device.UpdateProtocolFrame(protocolFrame);
         device.SetEnabled(seedDevice.IsEnabled);
         device.UpdateRemark(seedDevice.Remark);
 

@@ -53,7 +53,7 @@ internal sealed class IngressOverflowPersistence : IIngressOverflowPersistence
             if (consumer.RetryChannel == DataPipelineRetryChannel.None)
             {
                 var details =
-                    $"[DataPipeline] 队列溢出时跳过关键消费者 {consumer.Name}，原因：未配置 RetryChannel。ProcessType={record.CellData.ProcessType}。";
+                    $"[数据管道] 队列溢出时跳过关键消费者 {consumer.Name}，原因：未配置补传通道。工序={record.CellData.ProcessType}。";
                 _logger.Error(details);
                 _criticalFallbackWriter.Write("DataPipeline.Overflow.InvalidRetryChannel", details);
                 continue;
@@ -62,7 +62,7 @@ internal sealed class IngressOverflowPersistence : IIngressOverflowPersistence
             if (await IsChannelDisabledAsync(record, consumer.RetryChannel).ConfigureAwait(false))
             {
                 _logger.Warn(
-                    $"[DataPipeline] 队列溢出时跳过已屏蔽外部通道 {consumer.Name}，工序={record.CellData.ProcessType}。");
+                    $"[数据管道] 队列溢出时跳过已屏蔽外部通道 {consumer.Name}，工序={record.CellData.ProcessType}。");
                 continue;
             }
 
@@ -76,7 +76,7 @@ internal sealed class IngressOverflowPersistence : IIngressOverflowPersistence
         if (_bestEffortConsumerCount > 0)
         {
             _logger.Warn(
-                $"[DataPipeline] 队列溢出时跳过 {_bestEffortConsumerCount} 个非关键消费者，工序={record.CellData.ProcessType}。");
+                $"[数据管道] 队列溢出时跳过 {_bestEffortConsumerCount} 个非关键消费者，工序={record.CellData.ProcessType}。");
         }
 
         return DataPipelineEnqueueResult.OverflowPersisted(persistedTargetCount, _bestEffortConsumerCount);
@@ -89,7 +89,7 @@ internal sealed class IngressOverflowPersistence : IIngressOverflowPersistence
         if (consumer.RetryChannel is not DataPipelineRetryChannel.Cloud and not DataPipelineRetryChannel.Mes)
         {
             var details =
-                $"[DataPipeline] 队列溢出时发现不支持的补偿链路：{consumer.RetryChannel}，消费者={consumer.Name}。";
+                $"[数据管道] 队列溢出时发现不支持的补偿链路：{FormatRetryChannel(consumer.RetryChannel)}，消费者={consumer.Name}。";
             _logger.Error(details);
             _criticalFallbackWriter.Write("DataPipeline.Overflow.UnsupportedRetryChannel", details);
             return false;
@@ -99,7 +99,7 @@ internal sealed class IngressOverflowPersistence : IIngressOverflowPersistence
                 record,
                 consumer.RetryChannel,
                 consumer.Name,
-                "queue_overflow",
+                "数据管道队列溢出。",
                 "ingress_overflow",
                 DeadLetterStage.FallbackPersist)
             .ConfigureAwait(false);
@@ -115,6 +115,15 @@ internal sealed class IngressOverflowPersistence : IIngressOverflowPersistence
             _ => false
         };
     }
+
+    private static string FormatRetryChannel(DataPipelineRetryChannel channel)
+        => channel switch
+        {
+            DataPipelineRetryChannel.Cloud => "云端",
+            DataPipelineRetryChannel.Mes => "MES",
+            DataPipelineRetryChannel.None => "未配置",
+            _ => channel.ToString()
+        };
 
     private async Task<bool> IsPluginCloudDisabledAsync(string processType)
     {

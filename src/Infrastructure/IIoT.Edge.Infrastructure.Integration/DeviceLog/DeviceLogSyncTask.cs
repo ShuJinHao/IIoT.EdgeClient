@@ -70,7 +70,7 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
             _loopTask = Task.Run(() => SyncLoopAsync(linkedCts.Token), CancellationToken.None);
         }
 
-        _logger.Info($"[DeviceLogSync] 已启动，间隔：{(int)_runtimeConfig.Current.CloudSyncInterval.TotalSeconds}s");
+        _logger.Info($"[设备日志同步] 已启动，间隔：{(int)_runtimeConfig.Current.CloudSyncInterval.TotalSeconds}s");
         return Task.CompletedTask;
     }
 
@@ -129,10 +129,10 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
         }
         catch (Exception ex)
         {
-            _logger.Error($"[DeviceLogSync] 停止前刷新失败：{ex.Message}");
+            _logger.Error($"[设备日志同步] 停止前刷新失败：{ex.Message}");
         }
 
-        _logger.Info("[DeviceLogSync] 已停止。");
+        _logger.Info("[设备日志同步] 已停止。");
     }
 
     private void OnLogEntryAdded(LogEntry entry)
@@ -198,7 +198,7 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
         }
         catch (Exception ex)
         {
-            _logger.Error($"[DeviceLogSync] 执行失败：{ex.Message}");
+            _logger.Error($"[设备日志同步] 执行失败：{ex.Message}");
         }
         finally
         {
@@ -225,7 +225,7 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
                     await _bufferStore.ReleaseClaimAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
                     if (result.Outcome is CloudCallOutcome.SkippedUploadNotReady or CloudCallOutcome.UnauthorizedAfterRetry)
                     {
-                        _logger.Warn($"[DeviceLogSync] 补传已暂停，等待云端恢复。结果：{result.Outcome}，原因：{result.ReasonCode}");
+                        _logger.Warn($"[设备日志同步] 补传已暂停，等待云端恢复。结果：{result.Outcome}，原因：{result.ReasonCode}");
                     }
 
                     return false;
@@ -249,11 +249,11 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
                     catch (Exception releaseEx)
                     {
                         _logger.Error(
-                            $"[DeviceLogSync] Failed to release device log claim {claimedBatch.ClaimToken}: {releaseEx.Message}");
+                            $"[设备日志同步] 释放设备日志补传领取标记 {claimedBatch.ClaimToken} 失败：{releaseEx.Message}");
                     }
                 }
 
-                _logger.Error($"[DeviceLogSync] 缓冲日志补传失败：{ex.Message}");
+                _logger.Error($"[设备日志同步] 缓冲日志补传失败：{ex.Message}");
                 return false;
             }
         }

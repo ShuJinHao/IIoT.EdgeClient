@@ -31,16 +31,16 @@ public sealed class BackgroundServiceCoordinator : IBackgroundServiceCoordinator
 
             foreach (var service in _services)
             {
-                _logger.Info($"[Background] Starting {service.ServiceName}...");
+                _logger.Info($"[后台服务] 正在启动 {service.ServiceName}。");
                 try
                 {
                     await service.StartAsync(cancellationToken);
                     _startedServices.Add(service);
-                    _logger.Info($"[Background] Started {service.ServiceName}.");
+                    _logger.Info($"[后台服务] 已启动 {service.ServiceName}。");
                 }
                 catch (Exception ex)
                 {
-                    _logger.Error($"[Background] Failed to start {service.ServiceName}: {ex.Message}");
+                    _logger.Error($"[后台服务] 启动 {service.ServiceName} 失败：{ex.Message}");
                     await StopStartedServicesCoreAsync(cancellationToken);
                     throw;
                 }
@@ -75,13 +75,13 @@ public sealed class BackgroundServiceCoordinator : IBackgroundServiceCoordinator
             var service = _startedServices[index];
             try
             {
-                _logger.Info($"[Background] Stopping {service.ServiceName}...");
+                _logger.Info($"[后台服务] 正在停止 {service.ServiceName}。");
                 await service.StopAsync(cancellationToken);
-                _logger.Info($"[Background] Stopped {service.ServiceName}.");
+                _logger.Info($"[后台服务] 已停止 {service.ServiceName}。");
             }
             catch (Exception ex)
             {
-                _logger.Error($"[Background] Failed to stop {service.ServiceName}: {ex.Message}");
+                _logger.Error($"[后台服务] 停止 {service.ServiceName} 失败：{ex.Message}");
             }
         }
 

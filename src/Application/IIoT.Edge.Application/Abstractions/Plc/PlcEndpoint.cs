@@ -10,12 +10,22 @@ public abstract record PlcEndpoint(int ConnectTimeoutMs)
 }
 
 /// <summary>
+/// 三菱 MC 协议帧类型。
+/// </summary>
+public enum McPlcFrameType
+{
+    E3,
+    E4
+}
+
+/// <summary>
 /// 基于 TCP 的 PLC 通信端点。
 /// </summary>
 public sealed record TcpPlcEndpoint(
     string Host,
     int Port,
-    int ConnectTimeoutMs = 3000) : PlcEndpoint(ConnectTimeoutMs);
+    int ConnectTimeoutMs = 3000,
+    McPlcFrameType McFrameType = McPlcFrameType.E3) : PlcEndpoint(ConnectTimeoutMs);
 
 /// <summary>
 /// 基于串口的 PLC 通信端点，供 Modbus RTU 使用。

@@ -211,7 +211,7 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
             ContractTestPathHelper.FindRepoRoot(),
             "src",
             "Modules",
-            "IIoT.Edge.Module.DieCutting",
+            "IIoT.Edge.Module.DieCutting.Shared",
             "plugin.json");
 
         Assert.False(
@@ -350,6 +350,7 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         Assert.True(result.RuntimeRegistry.TryGetFactory(ExpectedModuleId, out var factory));
 
         var candidate = Assert.Single(factory.GetTaskCandidates());
+        Assert.True(candidate.DefaultEnabled);
         var requiredSignals = candidate.RequiredSignals
             .Select(static signal => signal.SignalKey)
             .ToArray();

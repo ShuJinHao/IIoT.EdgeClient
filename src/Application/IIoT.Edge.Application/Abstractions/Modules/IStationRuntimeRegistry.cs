@@ -22,7 +22,8 @@ public sealed record TaskCandidate(
     string DisplayName,
     IReadOnlyList<TaskRequiredSignal> RequiredSignals,
     bool IsHeartbeatLike = false,
-    IReadOnlyList<string>? SupportedDeviceModels = null)
+    IReadOnlyList<string>? SupportedDeviceModels = null,
+    bool DefaultEnabled = false)
 {
     public bool SupportsDeviceModel(string? deviceModel)
     {

@@ -16,7 +16,7 @@ internal sealed class MesRetryHousekeepingService
             logger,
             retryStore,
             diagnosticsStore,
-            "Retry-MES",
+            "MES补传",
             "MES 心跳已恢复，弃置记录已重置为可补传。",
             MesRetryRuntimeState.Idle,
             MesRetryRuntimeState.Backoff)

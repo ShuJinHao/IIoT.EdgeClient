@@ -22,7 +22,8 @@ public record NetworkDeviceDto(
     string? SendCmd2,
     int ConnectTimeout,
     bool IsEnabled,
-    string? Remark
+    string? Remark,
+    string? ProtocolFrame = null
 );
 
 /// <summary>
@@ -64,6 +65,7 @@ public class SaveNetworkDevicesHandler(
         entity.Rename(dto.DeviceName);
         entity.ChangeType(dto.DeviceType);
         entity.UpdateDeviceModel(dto.DeviceModel);
+        entity.UpdateProtocolFrame(NormalizeProtocolFrame(dto));
         entity.UpdateEndpoint(dto.IpAddress, dto.Port1, dto.Port2, dto.ConnectTimeout);
         entity.UpdateCommands(dto.SendCmd1, dto.SendCmd2);
         entity.SetEnabled(dto.IsEnabled);
@@ -76,11 +78,37 @@ public class SaveNetworkDevicesHandler(
         {
             var entity = Create(dto);
             Apply(entity, dto);
-            return null;
+            return ValidateProtocolFrame(dto);
         }
         catch (ArgumentException ex)
         {
             return ex.Message;
         }
     }
+
+    private static string? ValidateProtocolFrame(NetworkDeviceDto dto)
+    {
+        if (!IsMcPlc(dto) || string.IsNullOrWhiteSpace(dto.ProtocolFrame))
+        {
+            return null;
+        }
+
+        return IsSupportedMcFrame(dto.ProtocolFrame)
+            ? null
+            : "MC PLC 协议帧只支持 E3 或 E4。";
+    }
+
+    private static string? NormalizeProtocolFrame(NetworkDeviceDto dto)
+        => IsMcPlc(dto) ? Normalize(dto.ProtocolFrame) : null;
+
+    private static bool IsMcPlc(NetworkDeviceDto dto)
+        => dto.DeviceType == DeviceType.PLC
+           && string.Equals(dto.DeviceModel?.Trim(), PlcType.Mc.ToString(), StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsSupportedMcFrame(string value)
+        => string.Equals(value.Trim(), nameof(IIoT.Edge.Application.Abstractions.Plc.McPlcFrameType.E3), StringComparison.OrdinalIgnoreCase)
+           || string.Equals(value.Trim(), nameof(IIoT.Edge.Application.Abstractions.Plc.McPlcFrameType.E4), StringComparison.OrdinalIgnoreCase);
+
+    private static string? Normalize(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToUpperInvariant();
 }

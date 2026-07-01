@@ -31,6 +31,7 @@ public sealed class DieCuttingStationRuntimeFactory : IStationRuntimeFactory
         TaskCandidates =
         [
             PlcTaskCandidateBuilder.Create(_definition.RealtimeSampleUploadTaskKey, $"{_definition.DisplayName}采样上传")
+            .DefaultEnabled()
             .RequiresRead(Enum.GetValues<DieCuttingPlcSignals.SingleRead>())
             .RequiresRead(Enum.GetValues<DieCuttingPlcSignals.ContinuousRead>())
             .Build()

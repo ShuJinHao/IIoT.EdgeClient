@@ -645,6 +645,7 @@
     <sys:String x:Key="Navigation_Column_DeviceName">设备名称</sys:String>
     <sys:String x:Key="Navigation_Column_DeviceType">设备类型</sys:String>
     <sys:String x:Key="Navigation_Column_DeviceModel">设备型号</sys:String>
+    <sys:String x:Key="Navigation_Column_ProtocolFrame">协议帧</sys:String>
     <sys:String x:Key="Navigation_Column_IpAddress">IP 地址</sys:String>
     <sys:String x:Key="Navigation_Column_Port1">端口1</sys:String>
     <sys:String x:Key="Navigation_Column_Port2">端口2</sys:String>

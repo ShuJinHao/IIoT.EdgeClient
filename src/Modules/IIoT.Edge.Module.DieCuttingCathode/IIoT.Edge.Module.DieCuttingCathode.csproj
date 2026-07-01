@@ -13,7 +13,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\IIoT.Edge.Module.DieCutting\IIoT.Edge.Module.DieCutting.csproj" />
+    <ProjectReference Include="..\IIoT.Edge.Module.DieCutting.Shared\IIoT.Edge.Module.DieCutting.Shared.csproj" />
   </ItemGroup>
 
   <ItemGroup>

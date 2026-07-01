@@ -121,10 +121,10 @@ internal sealed class CloudRetryRecordProcessor : RetryRecordProcessorBase<Cloud
             }
             catch (Exception releaseEx)
             {
-                Logger.Error($"[Retry-Cloud] 释放 retry 领取标记 {claimedBatch.ClaimToken} 失败：{releaseEx.Message}");
+            Logger.Error($"[云端补传] 释放补传领取标记 {claimedBatch.ClaimToken} 失败：{releaseEx.Message}");
             }
 
-            Logger.Error($"[Retry-Cloud] retry 批次执行异常：{ex.Message}");
+            Logger.Error($"[云端补传] 补传批次执行异常：{ex.Message}");
             return CloudRetryProcessResult.Failed;
         }
     }
@@ -146,8 +146,8 @@ internal sealed class CloudRetryRecordProcessor : RetryRecordProcessorBase<Cloud
                 await HandleDeserializeFailureAsync(
                     source,
                     "failed_cloud_records",
-                    $"Cloud retry 记录反序列化失败，工序：{source.ProcessType}。",
-                    "Cloud retry 记录反序列化失败，且死信持久化也失败。").ConfigureAwait(false);
+                    $"云端补传记录反序列化失败，工序：{source.ProcessType}。",
+                    "云端补传记录反序列化失败，且死信持久化也失败。").ConfigureAwait(false);
                 continue;
             }
 
@@ -174,10 +174,10 @@ internal sealed class CloudRetryRecordProcessor : RetryRecordProcessorBase<Cloud
         {
             foreach (var source in validSourceRecords)
             {
-                await HandleRetryFailureAsync(source, "timeout_exceeded").ConfigureAwait(false);
+                await HandleRetryFailureAsync(source, "处理超时。").ConfigureAwait(false);
             }
 
-            Logger.Warn($"[Retry-Cloud] {processType} 批量补传超时，数量：{validSourceRecords.Count}。");
+            Logger.Warn($"[云端补传] {processType} 批量补传超时，数量：{validSourceRecords.Count}。");
             return CloudRetryProcessResult.Continue;
         }
 
@@ -188,14 +188,14 @@ internal sealed class CloudRetryRecordProcessor : RetryRecordProcessorBase<Cloud
                 await RetryStore.DeleteAsync(source.Id).ConfigureAwait(false);
             }
 
-            Logger.Info($"[Retry-Cloud] {processType} 批量补传成功，数量：{validSourceRecords.Count}。");
+            Logger.Info($"[云端补传] {processType} 批量补传成功，数量：{validSourceRecords.Count}。");
             return CloudRetryProcessResult.Continue;
         }
 
         if (ShouldPauseForRecovery(result))
         {
             await ReleaseClaimAndPauseAsync(claimToken).ConfigureAwait(false);
-            Logger.Warn($"[Retry-Cloud] {processType} 批量补传已暂停，结果：{result.Outcome}，原因：{result.ReasonCode}。");
+            Logger.Warn($"[云端补传] {processType} 批量补传已暂停，结果：{result.Outcome}，原因：{result.ReasonCode}。");
             return CloudRetryProcessResult.PauseForRecovery;
         }
 
@@ -204,7 +204,7 @@ internal sealed class CloudRetryRecordProcessor : RetryRecordProcessorBase<Cloud
             await HandleRetryFailureAsync(source, $"Cloud 批量补传失败（{result.ReasonCode}）。").ConfigureAwait(false);
         }
 
-        Logger.Warn($"[Retry-Cloud] {processType} 批量补传失败，数量：{validSourceRecords.Count}。");
+        Logger.Warn($"[云端补传] {processType} 批量补传失败，数量：{validSourceRecords.Count}。");
         return CloudRetryProcessResult.Continue;
     }
 
@@ -231,8 +231,8 @@ internal sealed class CloudRetryRecordProcessor : RetryRecordProcessorBase<Cloud
             await HandleDeserializeFailureAsync(
                 record,
                 "failed_cloud_records",
-                $"Cloud retry 记录反序列化失败，工序：{record.ProcessType}。",
-                "Cloud retry 记录反序列化失败，且死信持久化也失败。").ConfigureAwait(false);
+                $"云端补传记录反序列化失败，工序：{record.ProcessType}。",
+                "云端补传记录反序列化失败，且死信持久化也失败。").ConfigureAwait(false);
             return CloudRetryProcessResult.Continue;
         }
 
@@ -248,20 +248,20 @@ internal sealed class CloudRetryRecordProcessor : RetryRecordProcessorBase<Cloud
         }
         catch (TimeoutException)
         {
-            await HandleRetryFailureAsync(record, "timeout_exceeded").ConfigureAwait(false);
+            await HandleRetryFailureAsync(record, "处理超时。").ConfigureAwait(false);
             return CloudRetryProcessResult.Continue;
         }
 
         if (result.IsSuccess)
         {
             await RetryStore.DeleteAsync(record.Id).ConfigureAwait(false);
-            Logger.Info($"[Retry-Cloud] {cellData.DisplayLabel} 补传成功，记录已删除。");
+            Logger.Info($"[云端补传] {cellData.DisplayLabel} 补传成功，记录已删除。");
             return CloudRetryProcessResult.Continue;
         }
 
         if (ShouldPauseForRecovery(result))
         {
-            Logger.Warn($"[Retry-Cloud] {cellData.DisplayLabel} 补传已暂停，结果：{result.Outcome}，原因：{result.ReasonCode}。");
+            Logger.Warn($"[云端补传] {cellData.DisplayLabel} 补传已暂停，结果：{result.Outcome}，原因：{result.ReasonCode}。");
             return CloudRetryProcessResult.PauseForRecovery;
         }
 

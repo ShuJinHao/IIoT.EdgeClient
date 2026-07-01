@@ -637,22 +637,67 @@ public sealed class PlcIoScanTaskBehaviorTests
     }
 
     [Fact]
-    public async Task PlcDataReadScanTask_WhenTransportConnectedButStatusNotStable_ShouldNotRead()
+    public async Task PlcDataReadScanTask_WhenPureReadOnlyAndStatusNotStable_ShouldReadAndPromoteConnection()
+    {
+        var plcService = new ScriptedPlcService();
+        plcService.ConnectOutcomes.Enqueue(true);
+        plcService.ReadOutcomes.Enqueue(new ushort[] { 11 });
+        plcService.ReadOutcomes.Enqueue(new ushort[] { 12 });
+        await plcService.ConnectAsync();
+
+        var dataStore = new PlcDataStore();
+        dataStore.Register(19, readSize: 0, writeSize: 0);
+        var statusStore = new PlcConnectionStatusStore();
+        statusStore.MarkConnecting(19, "PLC-DATA-READONLY");
+
+        var dataReadScan = new PlcDataReadScanTask(
+            plcService,
+            dataStore,
+            CreateDevice(19, "PLC-DATA-READONLY"),
+            [CreateIoMapping(19, "Read", "D300", 1, category: IoMappingOptionCatalog.CategorySingleRead)],
+            new FakeLogService(),
+            SignalBlockPlanner,
+            statusStore);
+
+        await dataReadScan.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(plcService.IsConnected);
+        Assert.Equal(1, plcService.ReadAsyncCallCount);
+        var firstSnapshot = statusStore.GetSnapshot(19);
+        Assert.NotNull(firstSnapshot);
+        Assert.False(firstSnapshot!.IsConnected);
+        Assert.Equal(PlcConnectionState.Connecting, firstSnapshot.ConnectionState);
+
+        await dataReadScan.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, plcService.ReadAsyncCallCount);
+        var secondSnapshot = statusStore.GetSnapshot(19);
+        Assert.NotNull(secondSnapshot);
+        Assert.True(secondSnapshot!.IsConnected);
+        Assert.Equal(PlcConnectionState.Connected, secondSnapshot.ConnectionState);
+        Assert.NotNull(secondSnapshot.LatencyMs);
+    }
+
+    [Fact]
+    public async Task PlcDataReadScanTask_WhenInteractionMappingExistsAndStatusNotStable_ShouldKeepStableOnlineGate()
     {
         var plcService = new ScriptedPlcService();
         plcService.ConnectOutcomes.Enqueue(true);
         await plcService.ConnectAsync();
 
         var dataStore = new PlcDataStore();
-        dataStore.Register(19, readSize: 0, writeSize: 0);
+        dataStore.Register(20, readSize: 0, writeSize: 0);
         var statusStore = new PlcConnectionStatusStore();
-        statusStore.MarkConnecting(19, "PLC-DATA-GATED");
+        statusStore.MarkConnecting(20, "PLC-DATA-GATED");
 
         var dataReadScan = new PlcDataReadScanTask(
             plcService,
             dataStore,
-            CreateDevice(19, "PLC-DATA-GATED"),
-            [CreateIoMapping(19, "Read", "D300", 1, category: IoMappingOptionCatalog.CategorySingleRead)],
+            CreateDevice(20, "PLC-DATA-GATED"),
+            [
+                CreateIoMapping(20, "Read", "D300", 1, category: IoMappingOptionCatalog.CategorySingleRead),
+                CreateIoMapping(20, "Read", "D700", 1, category: IoMappingOptionCatalog.CategoryInteraction)
+            ],
             new FakeLogService(),
             SignalBlockPlanner,
             statusStore);

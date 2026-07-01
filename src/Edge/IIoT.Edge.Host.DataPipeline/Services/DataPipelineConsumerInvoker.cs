@@ -1,7 +1,7 @@
 namespace IIoT.Edge.Host.DataPipeline.Services;
 
 /// <summary>
-/// 默认消费者调用器：内部超时统一转换为 timeout_exceeded，外部取消保持原始取消语义。
+/// 默认消费者调用器：内部超时统一转换为中文超时错误，外部取消保持原始取消语义。
 /// </summary>
 public sealed class DefaultDataPipelineConsumerInvoker : IDataPipelineConsumerInvoker
 {
@@ -28,7 +28,7 @@ public sealed class DefaultDataPipelineConsumerInvoker : IDataPipelineConsumerIn
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeoutCts.IsCancellationRequested)
         {
-            throw new TimeoutException("timeout_exceeded");
+            throw new TimeoutException("处理超时。");
         }
     }
 }

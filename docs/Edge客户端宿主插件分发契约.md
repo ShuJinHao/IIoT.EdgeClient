@@ -73,6 +73,16 @@ install-root/
 
 旧的 `layout.zip`、`runtimeDirectory`、`runtime/Modules`、每工序一份宿主目录模型全部废弃，不得在新代码、脚本或文档中继续作为生产契约。
 
+### 3.1 插件工程和共享库工程角色
+
+仓库中的 `src/Modules` 必须让工程角色从名称和项目属性上可见：
+
+- 插件入口工程：目录/工程名为 `IIoT.Edge.Module.<Process>` 或 `IIoT.Edge.Module.<Process><Variant>`，必须声明 `PluginModuleId`、`IsEdgePluginModule=true`、`IsPackable=true`，并携带 `plugin.json`。只有这类工程允许进入插件 catalog、独立插件包和 Launcher 工序卡片。
+- 共享库工程：目录/工程名必须以 `.Shared` 结尾，必须声明 `IsEdgePluginModule=false`、`IsPackable=false`，不得携带 `plugin.json`，不得被发布脚本当成插件打包。
+- 同一工序存在正极、负极等独立插件时，共用实现只能放在 `.Shared` 工程中；共享工程可以保留业务命名空间，但工程名、打包属性和仓库卫生测试必须明确它不是插件入口。
+
+禁止再出现没有 `PluginModuleId` 但名称像插件入口的模块工程。此类工程会误导部署、Launcher、catalog 和人工排查，必须通过仓库卫生测试拦截。
+
 ## 4. Catalog v2 契约
 
 云端客户端版本 catalog 使用 v2 JSON，返回“宿主组件 + 插件组件”的版本仓库视图。客户端基于 `versions[]` 和本机已安装版本计算当前版本、目标版本、可回退版本和兼容状态；云端不得再返回 v1 派生字段或扁平列表。

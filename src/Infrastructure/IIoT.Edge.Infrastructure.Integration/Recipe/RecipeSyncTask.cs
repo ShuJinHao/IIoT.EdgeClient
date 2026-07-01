@@ -28,7 +28,7 @@ public sealed class RecipeSyncTask : IBackgroundTask
 
     public async Task StartAsync(CancellationToken ct)
     {
-        _logger.Info($"[RecipeSync] 已启动，间隔：{_syncInterval.TotalSeconds:0}s");
+        _logger.Info($"[配方同步] 已启动，间隔：{_syncInterval.TotalSeconds:0}s");
 
         while (!ct.IsCancellationRequested)
         {
@@ -44,7 +44,7 @@ public sealed class RecipeSyncTask : IBackgroundTask
             await ExecuteOnceAsync().ConfigureAwait(false);
         }
 
-        _logger.Info("[RecipeSync] 已停止。");
+        _logger.Info("[配方同步] 已停止。");
     }
 
     public Task StopAsync(CancellationToken ct) => Task.CompletedTask;
@@ -61,12 +61,12 @@ public sealed class RecipeSyncTask : IBackgroundTask
             var synced = await _recipeService.PullFromCloudAsync().ConfigureAwait(false);
             if (synced)
             {
-                _logger.Info("[RecipeSync] 云端配方缓存已刷新。");
+                _logger.Info("[配方同步] 云端配方缓存已刷新。");
             }
         }
         catch (Exception ex)
         {
-            _logger.Error($"[RecipeSync] 云端配方同步失败：{ex.Message}");
+            _logger.Error($"[配方同步] 云端配方同步失败：{ex.Message}");
         }
     }
 }

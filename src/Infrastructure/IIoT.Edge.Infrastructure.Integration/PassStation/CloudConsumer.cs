@@ -88,7 +88,7 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
                     CloudCallOutcome.SkippedUploadNotReady,
                     gate.ReasonCode);
                 _logger.Warn(
-                    $"[Cloud] 上传门控已阻塞（{gate.ReasonCode}），{group.Count()} 条记录转入 retry 队列。");
+                    $"[云端] 上传门控已阻塞（{gate.ReasonCode}），{group.Count()} 条记录转入补传队列。");
                 _diagnosticsStore.RecordResult(group.Key, blockedResult);
                 return blockedResult;
             }
@@ -99,7 +99,7 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
                 var unidentifiedResult = CloudCallResult.Failure(
                     CloudCallOutcome.SkippedUploadNotReady,
                     EdgeUploadBlockReason.DeviceUnidentified.ToReasonCode());
-                _logger.Warn("[Cloud] 设备尚未识别，记录转入 retry 队列。");
+                _logger.Warn("[云端] 设备尚未识别，记录转入补传队列。");
                 _diagnosticsStore.RecordResult(group.Key, unidentifiedResult);
                 return unidentifiedResult;
             }
@@ -113,7 +113,7 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
             if (!result.IsSuccess)
             {
                 _logger.Error(
-                    $"[Cloud] 工序 {group.Key} 上传失败，数量：{groupRecords.Count}，结果：{result.Outcome}，原因：{result.ReasonCode}。");
+                    $"[云端] 工序 {group.Key} 上传失败，数量：{groupRecords.Count}，结果：{result.Outcome}，原因：{result.ReasonCode}。");
                 return result;
             }
         }

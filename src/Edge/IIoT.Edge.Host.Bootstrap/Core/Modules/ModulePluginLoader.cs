@@ -28,24 +28,24 @@ public sealed class ModulePluginLoader : IModulePluginLoader
         if (moduleType is null)
         {
             throw new InvalidOperationException(
-                $"Plugin '{descriptor.ModuleId}' entry type '{descriptor.EntryTypeName}' was not found in '{descriptor.AssemblyName}'.");
+                $"插件 '{descriptor.ModuleId}' 的入口类型 '{descriptor.EntryTypeName}' 未在程序集 '{descriptor.AssemblyName}' 中找到。");
         }
 
         if (!typeof(IEdgeProcessModule).IsAssignableFrom(moduleType))
         {
             throw new InvalidOperationException(
-                $"Plugin '{descriptor.ModuleId}' entry type '{descriptor.EntryTypeName}' must implement {nameof(IEdgeProcessModule)}.");
+                $"插件 '{descriptor.ModuleId}' 的入口类型 '{descriptor.EntryTypeName}' 必须实现 {nameof(IEdgeProcessModule)}。");
         }
 
         if (moduleType.GetConstructor(Type.EmptyTypes) is null)
         {
             throw new InvalidOperationException(
-                $"Plugin '{descriptor.ModuleId}' entry type '{descriptor.EntryTypeName}' must expose a public parameterless constructor.");
+                $"插件 '{descriptor.ModuleId}' 的入口类型 '{descriptor.EntryTypeName}' 必须提供公开无参构造函数。");
         }
 
         var instance = Activator.CreateInstance(moduleType)
             ?? throw new InvalidOperationException(
-                $"Failed to create plugin '{descriptor.ModuleId}' from '{descriptor.EntryTypeName}'.");
+                $"无法根据入口类型 '{descriptor.EntryTypeName}' 创建插件 '{descriptor.ModuleId}'。");
 
         return (IEdgeProcessModule)instance;
     }

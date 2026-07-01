@@ -68,12 +68,12 @@ public sealed class DeadLetterMaintenanceService : IDeadLetterMaintenanceService
         }
         catch (Exception ex)
         {
-            _logger.Error($"[{stores.LogPrefix}] 死信 {id} 已写入 retry 队列，但删除死信记录失败，请现场确认：{ex.Message}");
-            return DeadLetterOperationResult.Failure($"{stores.DisplayName}死信已写入 retry 队列，但删除死信记录失败，请现场确认：{ex.Message}");
+            _logger.Error($"[{stores.LogPrefix}] 死信 {id} 已写入补传队列，但删除死信记录失败，请现场确认：{ex.Message}");
+            return DeadLetterOperationResult.Failure($"{stores.DisplayName}死信已写入补传队列，但删除死信记录失败，请现场确认：{ex.Message}");
         }
 
-        _logger.Warn($"[{stores.LogPrefix}] 死信 {id} 已由人工操作重新写入 retry 队列。");
-        return DeadLetterOperationResult.Success($"{stores.DisplayName}死信已重新写入 retry 队列。");
+        _logger.Warn($"[{stores.LogPrefix}] 死信 {id} 已由人工操作重新写入补传队列。");
+        return DeadLetterOperationResult.Success($"{stores.DisplayName}死信已重新写入补传队列。");
     }
 
     public async Task<DeadLetterOperationResult> DeleteAsync(DataPipelineRetryChannel channel, long id)

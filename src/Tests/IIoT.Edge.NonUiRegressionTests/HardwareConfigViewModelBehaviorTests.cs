@@ -18,8 +18,8 @@ namespace IIoT.Edge.NonUiRegressionTests;
 public sealed class HardwareConfigViewModelBehaviorTests
 {
     [AvaloniaFact]
-    public Task AddNetworkDevice_WhenConfirmed_ShouldAddDraftInsteadOfInlineRow()
-        => RunOnStaThreadAsync(() =>
+    public Task AddNetworkDevice_WhenConfirmed_ShouldSaveImmediately()
+        => RunOnStaThreadAsync(async () =>
     {
         var viewModel = CreateViewModel();
 
@@ -33,18 +33,51 @@ public sealed class HardwareConfigViewModelBehaviorTests
         viewModel.EditingNetworkDevice.IpAddress = "192.168.1.10";
         viewModel.EditingNetworkDevice.Port1 = 102;
         viewModel.ConfirmNetworkDeviceDialogCommand.Execute(null);
+        await WaitUntilAsync(() => viewModel.NetworkDevices.Count == 1 && !viewModel.IsNetworkDeviceDialogOpen);
 
         var added = Assert.Single(viewModel.NetworkDevices);
         Assert.Equal("PLC-01", added.DeviceName);
         Assert.False(viewModel.IsNetworkDeviceDialogOpen);
-        return Task.CompletedTask;
+    });
+
+    [AvaloniaFact]
+    public Task AddNetworkDevice_WhenSaveFails_ShouldReloadPersistedSnapshot()
+        => RunOnStaThreadAsync(async () =>
+    {
+        var service = new StubHardwareConfigCrudService
+        {
+            InitialNetworkDevices =
+            [
+                CreateNetworkDeviceDto(1, "PLC-01", DeviceType.PLC)
+            ],
+            SaveResult = CrudOperationResult.Failure("数据库保存失败。")
+        };
+        var viewModel = CreateViewModel(service);
+        await viewModel.OnActivatedAsync();
+
+        viewModel.AddNetworkDeviceCommand.Execute(null);
+        viewModel.EditingNetworkDevice!.DeviceName = "PLC-FAIL";
+        viewModel.EditingNetworkDevice.IpAddress = "192.168.1.20";
+        viewModel.EditingNetworkDevice.Port1 = 102;
+        viewModel.ConfirmNetworkDeviceDialogCommand.Execute(null);
+
+        await WaitUntilAsync(() => viewModel.HasError
+                                   && viewModel.NetworkDevices.Count == 1
+                                   && viewModel.NetworkDevices[0].DeviceName == "PLC-01");
+
+        var current = Assert.Single(viewModel.NetworkDevices);
+        Assert.Equal("PLC-01", current.DeviceName);
+        Assert.False(viewModel.IsNetworkDeviceDialogOpen);
+        Assert.Contains("数据库保存失败", viewModel.ErrorMessage);
     });
 
     [AvaloniaFact]
     public Task EditIoMapping_WhenConfirmed_ShouldUpdateSelectedMapping()
-        => RunOnStaThreadAsync(() =>
+        => RunOnStaThreadAsync(async () =>
     {
-        var viewModel = CreateViewModel();
+        var service = new StubHardwareConfigCrudService();
+        var viewModel = CreateViewModel(service);
+        SelectPersistedPlc(viewModel);
         var mapping = CreateMapping(
             "Homogenization.RealtimeTemperature",
             "D300",
@@ -61,10 +94,10 @@ public sealed class HardwareConfigViewModelBehaviorTests
         Assert.NotNull(viewModel.EditingIoMapping);
         viewModel.EditingIoMapping!.PlcAddress = "D301";
         viewModel.ConfirmEditIoMappingCommand.Execute(null);
+        await WaitUntilAsync(() => service.SavedMappings.Any(x => x.PlcAddress == "D301"));
 
-        Assert.Equal("D301", mapping.PlcAddress);
+        Assert.Contains(viewModel.IoMappings, x => x.PlcAddress == "D301");
         Assert.False(viewModel.IsEditIoMappingDialogOpen);
-        return Task.CompletedTask;
     });
 
     [AvaloniaFact]
@@ -113,10 +146,11 @@ public sealed class HardwareConfigViewModelBehaviorTests
 
     [AvaloniaFact]
     public Task AddInteraction_WhenStandardGroupSelected_ShouldAddReadAndWriteTogether()
-        => RunOnStaThreadAsync(() =>
+        => RunOnStaThreadAsync(async () =>
     {
-        var viewModel = CreateViewModel();
-        viewModel.SelectedNetworkDevice = CreatePlc();
+        var service = new StubHardwareConfigCrudService();
+        var viewModel = CreateViewModel(service);
+        SelectPersistedPlc(viewModel);
         viewModel.StandardInteractionGroups.Add(new IoStandardSignalGroupOptionVm(
             "扫码进站",
             [
@@ -150,21 +184,22 @@ public sealed class HardwareConfigViewModelBehaviorTests
         viewModel.NewInteractionPair.WriteAddressCount = 3;
         viewModel.NewInteractionPair.Remark = "成对备注";
         viewModel.ConfirmAddIoMappingCommand.Execute(null);
+        await WaitUntilAsync(() => service.SavedMappings.Count == 2);
 
         Assert.Equal(2, viewModel.IoMappings.Count);
         Assert.Contains(viewModel.IoMappings, x => x.SignalKey == "Homogenization.Interaction.Inbound" && x.Direction == "Read" && x.AddressCount == 2);
         Assert.Contains(viewModel.IoMappings, x => x.SignalKey == "Homogenization.Interaction.Inbound" && x.Direction == "Write" && x.AddressCount == 3);
         Assert.All(viewModel.IoMappings, x => Assert.Equal("扫码进站", x.BusinessGroup));
         Assert.All(viewModel.IoMappings, x => Assert.Equal("成对备注", x.Remark));
-        return Task.CompletedTask;
     });
 
     [AvaloniaFact]
     public Task AddInteraction_WhenEnumCandidateHasNoSeedMetadata_ShouldRequireManualAddresses()
-        => RunOnStaThreadAsync(() =>
+        => RunOnStaThreadAsync(async () =>
     {
-        var viewModel = CreateViewModel();
-        viewModel.SelectedNetworkDevice = CreatePlc();
+        var service = new StubHardwareConfigCrudService();
+        var viewModel = CreateViewModel(service);
+        SelectPersistedPlc(viewModel);
         viewModel.StandardInteractionGroups.Add(new IoStandardSignalGroupOptionVm(
             "手工地址测试",
             [
@@ -201,19 +236,20 @@ public sealed class HardwareConfigViewModelBehaviorTests
         viewModel.NewInteractionPair.ReadPlcAddress = "D300";
         viewModel.NewInteractionPair.WritePlcAddress = "D200";
         viewModel.ConfirmAddIoMappingCommand.Execute(null);
+        await WaitUntilAsync(() => service.SavedMappings.Count == 2);
 
         Assert.Equal(2, viewModel.IoMappings.Count);
         Assert.Contains(viewModel.IoMappings, x => x.SignalKey == "Test.Interaction.Manual" && x.Direction == "Read" && x.PlcAddress == "D300");
         Assert.Contains(viewModel.IoMappings, x => x.SignalKey == "Test.Interaction.Manual" && x.Direction == "Write" && x.PlcAddress == "D200");
-        return Task.CompletedTask;
     });
 
     [AvaloniaFact]
     public Task AddDataPoint_WhenStandardDataPointSelected_ShouldGenerateSingleReadMapping()
-        => RunOnStaThreadAsync(() =>
+        => RunOnStaThreadAsync(async () =>
     {
-        var viewModel = CreateViewModel();
-        viewModel.SelectedNetworkDevice = CreatePlc();
+        var service = new StubHardwareConfigCrudService();
+        var viewModel = CreateViewModel(service);
+        SelectPersistedPlc(viewModel);
         viewModel.StandardDataSignals.Add(new IoStandardSignalOptionVm(new ModuleIoTemplateEntry(
             "Homogenization.RealtimeTemperature",
             "D301",
@@ -232,6 +268,7 @@ public sealed class HardwareConfigViewModelBehaviorTests
         viewModel.NewIoMapping.Direction = IoMappingOptionCatalog.DirectionWrite;
 
         viewModel.ConfirmAddIoMappingCommand.Execute(null);
+        await WaitUntilAsync(() => service.SavedMappings.Count == 1);
 
         var mapping = Assert.Single(viewModel.IoMappings);
         Assert.Equal("Homogenization.RealtimeTemperature", mapping.SignalKey);
@@ -239,15 +276,15 @@ public sealed class HardwareConfigViewModelBehaviorTests
         Assert.Equal("实时数据", mapping.BusinessGroup);
         Assert.Equal("Read", mapping.Direction);
         Assert.Equal(1, mapping.AddressCount);
-        return Task.CompletedTask;
     });
 
     [AvaloniaFact]
     public Task AddDataPoint_WhenSingleWriteSelected_ShouldKeepEditableCount()
-        => RunOnStaThreadAsync(() =>
+        => RunOnStaThreadAsync(async () =>
     {
-        var viewModel = CreateViewModel();
-        viewModel.SelectedNetworkDevice = CreatePlc();
+        var service = new StubHardwareConfigCrudService();
+        var viewModel = CreateViewModel(service);
+        SelectPersistedPlc(viewModel);
         viewModel.StandardDataSignals.Add(new IoStandardSignalOptionVm(new ModuleIoTemplateEntry(
             "Homogenization.Debug.SingleWrite",
             "D200",
@@ -264,20 +301,21 @@ public sealed class HardwareConfigViewModelBehaviorTests
         Assert.NotNull(viewModel.NewIoMapping);
         viewModel.NewIoMapping!.AddressCount = 9;
         viewModel.ConfirmAddIoMappingCommand.Execute(null);
+        await WaitUntilAsync(() => service.SavedMappings.Count == 1);
 
         var mapping = Assert.Single(viewModel.IoMappings);
         Assert.Equal(IoMappingOptionCatalog.CategorySingleWrite, mapping.Category);
         Assert.Equal(IoMappingOptionCatalog.DirectionWrite, mapping.Direction);
         Assert.Equal(9, mapping.AddressCount);
-        return Task.CompletedTask;
     });
 
     [AvaloniaFact]
     public Task EditInteractionPair_WhenConfirmed_ShouldUpdateReadAndWriteTogether()
-        => RunOnStaThreadAsync(() =>
+        => RunOnStaThreadAsync(async () =>
     {
-        var viewModel = CreateViewModel();
-        viewModel.SelectedNetworkDevice = CreatePlc();
+        var service = new StubHardwareConfigCrudService();
+        var viewModel = CreateViewModel(service);
+        SelectPersistedPlc(viewModel);
         var read = CreateMapping("Homogenization.Interaction.Heartbeat", "D700", "Read", "心跳");
         var write = CreateMapping("Homogenization.Interaction.Heartbeat", "D600", "Write", "心跳");
         viewModel.IoMappings.Add(read);
@@ -303,25 +341,22 @@ public sealed class HardwareConfigViewModelBehaviorTests
         viewModel.EditingInteractionPair.WriteDataType = IoMappingOptionCatalog.DataTypeInt32;
         viewModel.EditingInteractionPair.Remark = "现场调整";
         viewModel.ConfirmEditIoMappingCommand.Execute(null);
+        await WaitUntilAsync(() => service.SavedMappings.Any(x => x.PlcAddress == "D710")
+                                   && service.SavedMappings.Any(x => x.PlcAddress == "D610"));
 
-        Assert.Equal("D710", read.PlcAddress);
-        Assert.Equal(2, read.AddressCount);
-        Assert.Equal(IoMappingOptionCatalog.DataTypeUInt16, read.DataType);
-        Assert.Equal("D610", write.PlcAddress);
-        Assert.Equal(3, write.AddressCount);
-        Assert.Equal(IoMappingOptionCatalog.DataTypeInt32, write.DataType);
-        Assert.Equal("现场调整", read.Remark);
-        Assert.Equal("现场调整", write.Remark);
+        Assert.Contains(viewModel.IoMappings, x => x.PlcAddress == "D710" && x.AddressCount == 2 && x.DataType == IoMappingOptionCatalog.DataTypeUInt16);
+        Assert.Contains(viewModel.IoMappings, x => x.PlcAddress == "D610" && x.AddressCount == 3 && x.DataType == IoMappingOptionCatalog.DataTypeInt32);
+        Assert.All(viewModel.IoMappings, x => Assert.Equal("现场调整", x.Remark));
         Assert.False(viewModel.IsEditIoMappingDialogOpen);
-        return Task.CompletedTask;
     });
 
     [AvaloniaFact]
     public Task AddDataPoint_WhenContinuousWriteSelected_ShouldKeepEditableCount()
-        => RunOnStaThreadAsync(() =>
+        => RunOnStaThreadAsync(async () =>
     {
-        var viewModel = CreateViewModel();
-        viewModel.SelectedNetworkDevice = CreatePlc();
+        var service = new StubHardwareConfigCrudService();
+        var viewModel = CreateViewModel(service);
+        SelectPersistedPlc(viewModel);
         viewModel.StandardDataSignals.Add(new IoStandardSignalOptionVm(new ModuleIoTemplateEntry(
             "Homogenization.Debug.ContinuousWrite",
             "D220",
@@ -339,12 +374,12 @@ public sealed class HardwareConfigViewModelBehaviorTests
         Assert.True(viewModel.NewIoMapping!.IsAddressCountEditable);
         viewModel.NewIoMapping.AddressCount = 12;
         viewModel.ConfirmAddIoMappingCommand.Execute(null);
+        await WaitUntilAsync(() => service.SavedMappings.Count == 1);
 
         var mapping = Assert.Single(viewModel.IoMappings);
         Assert.Equal(IoMappingOptionCatalog.CategoryContinuousWrite, mapping.Category);
         Assert.Equal(IoMappingOptionCatalog.DirectionWrite, mapping.Direction);
         Assert.Equal(12, mapping.AddressCount);
-        return Task.CompletedTask;
     });
 
     [AvaloniaFact]
@@ -352,7 +387,7 @@ public sealed class HardwareConfigViewModelBehaviorTests
         => RunOnStaThreadAsync(() =>
     {
         var viewModel = CreateViewModel();
-        viewModel.SelectedNetworkDevice = CreatePlc();
+        SelectPersistedPlc(viewModel);
         viewModel.StandardDataSignals.Add(new IoStandardSignalOptionVm(new ModuleIoTemplateEntry(
             "Homogenization.RealtimeTemperature",
             "D301",
@@ -386,7 +421,7 @@ public sealed class HardwareConfigViewModelBehaviorTests
         => RunOnStaThreadAsync(() =>
     {
         var viewModel = CreateViewModel();
-        viewModel.SelectedNetworkDevice = CreatePlc();
+        SelectPersistedPlc(viewModel);
         viewModel.StandardDataSignals.Add(new IoStandardSignalOptionVm(new ModuleIoTemplateEntry(
             "Homogenization.DeviceStatus",
             "D711",
@@ -418,7 +453,7 @@ public sealed class HardwareConfigViewModelBehaviorTests
         => RunOnStaThreadAsync(() =>
     {
         var viewModel = CreateViewModel();
-        viewModel.SelectedNetworkDevice = CreatePlc();
+        SelectPersistedPlc(viewModel);
         viewModel.StandardDataSignals.Add(new IoStandardSignalOptionVm(new ModuleIoTemplateEntry(
             "Homogenization.DeviceStatus",
             "D711",
@@ -451,7 +486,7 @@ public sealed class HardwareConfigViewModelBehaviorTests
     {
         var service = new StubHardwareConfigCrudService();
         var viewModel = CreateViewModel(service);
-        viewModel.SelectedNetworkDevice = CreatePlc();
+        SelectPersistedPlc(viewModel);
         var mapping = CreateMapping(
             "Homogenization.Debug.SingleWrite",
             "D200",
@@ -474,10 +509,11 @@ public sealed class HardwareConfigViewModelBehaviorTests
 
     [AvaloniaFact]
     public Task DeleteIoPoint_WhenInteractionSelected_ShouldDeleteWholeBusinessGroup()
-        => RunOnStaThreadAsync(() =>
+        => RunOnStaThreadAsync(async () =>
     {
-        var viewModel = CreateViewModel();
-        viewModel.SelectedNetworkDevice = CreatePlc();
+        var service = new StubHardwareConfigCrudService();
+        var viewModel = CreateViewModel(service);
+        SelectPersistedPlc(viewModel);
         var read = CreateMapping("Homogenization.Interaction.Recipe", "D703", "Read", "工艺参数上传");
         var write = CreateMapping("Homogenization.Interaction.Recipe", "D603", "Write", "工艺参数上传");
         var data = CreateMapping("Homogenization.RealtimeTemperature", "D301", "Read", "实时数据", IoMappingOptionCatalog.CategorySingleRead);
@@ -487,18 +523,19 @@ public sealed class HardwareConfigViewModelBehaviorTests
 
         viewModel.SelectedIoMapping = read;
         viewModel.DeleteIoMappingCommand.Execute(null);
+        await WaitUntilAsync(() => service.SavedMappings.Count == 1);
 
         var remain = Assert.Single(viewModel.IoMappings);
         Assert.Equal("Homogenization.RealtimeTemperature", remain.SignalKey);
-        return Task.CompletedTask;
     });
 
     [AvaloniaFact]
     public Task DeleteIoPoint_WhenLegacyInteractionSelected_ShouldDeleteWholeLegacyGroup()
-        => RunOnStaThreadAsync(() =>
+        => RunOnStaThreadAsync(async () =>
     {
-        var viewModel = CreateViewModel();
-        viewModel.SelectedNetworkDevice = CreatePlc();
+        var service = new StubHardwareConfigCrudService();
+        var viewModel = CreateViewModel(service);
+        SelectPersistedPlc(viewModel);
         var legacy = CreateMapping("TEST", "D801", "Write", "111");
         var data = CreateMapping("Homogenization.RealtimeTemperature", "D301", "Read", "实时数据", IoMappingOptionCatalog.CategorySingleRead);
         viewModel.IoMappings.Add(legacy);
@@ -506,19 +543,19 @@ public sealed class HardwareConfigViewModelBehaviorTests
 
         viewModel.SelectedIoMapping = legacy;
         viewModel.DeleteIoMappingCommand.Execute(null);
+        await WaitUntilAsync(() => service.SavedMappings.Count == 1);
 
         var remain = Assert.Single(viewModel.IoMappings);
         Assert.Equal("Homogenization.RealtimeTemperature", remain.SignalKey);
-        return Task.CompletedTask;
     });
 
     [AvaloniaFact]
-    public Task Save_WhenInteractionDeleted_ShouldSubmitOnlyRemainingMappings()
+    public Task DeleteInteraction_WhenConfirmed_ShouldSubmitOnlyRemainingMappings()
         => RunOnStaThreadAsync(async () =>
     {
         var service = new StubHardwareConfigCrudService();
         var viewModel = CreateViewModel(service);
-        viewModel.SelectedNetworkDevice = CreatePlc();
+        SelectPersistedPlc(viewModel);
         var read = CreateMapping("Homogenization.Interaction.Outbound", "D702", "Read", "出料上传");
         var write = CreateMapping("Homogenization.Interaction.Outbound", "D602", "Write", "出料上传");
         var data = CreateMapping("Homogenization.RealtimeTemperature", "D301", "Read", "实时数据", IoMappingOptionCatalog.CategorySingleRead);
@@ -528,7 +565,6 @@ public sealed class HardwareConfigViewModelBehaviorTests
 
         viewModel.SelectedIoMapping = read;
         viewModel.DeleteIoMappingCommand.Execute(null);
-        viewModel.SaveCommand.Execute(null);
         await WaitUntilAsync(() => service.SavedMappings.Count > 0);
 
         var saved = Assert.Single(service.SavedMappings);
@@ -545,6 +581,15 @@ public sealed class HardwareConfigViewModelBehaviorTests
             cts.Token.ThrowIfCancellationRequested();
             await Task.Delay(10, cts.Token);
         }
+    }
+
+    private static NetworkDeviceVm SelectPersistedPlc(HardwareConfigViewModel viewModel)
+    {
+        var plc = CreatePlc();
+        viewModel.NetworkDevices.Add(plc);
+        viewModel.RefreshIoMappingNetworkDevices();
+        viewModel.SelectedNetworkDevice = plc;
+        return plc;
     }
 
     private static HardwareConfigViewModel CreateViewModel(
@@ -579,7 +624,12 @@ public sealed class HardwareConfigViewModelBehaviorTests
         {
             Id = 7,
             DeviceName = "PLC-Homogenization-01",
-            DeviceType = DeviceType.PLC
+            DeviceType = DeviceType.PLC,
+            DeviceModel = PlcType.Mc.ToString(),
+            IpAddress = "192.168.1.10",
+            Port1 = 102,
+            ConnectTimeout = 3000,
+            IsEnabled = true
         };
 
     private static NetworkDeviceDto CreateNetworkDeviceDto(
@@ -621,17 +671,40 @@ public sealed class HardwareConfigViewModelBehaviorTests
 
     private sealed class StubHardwareConfigCrudService : IHardwareConfigCrudService
     {
+        private List<NetworkDeviceDto>? _networkDevices;
+        private List<SerialDeviceDto>? _serialDevices;
+        private readonly Dictionary<int, List<IoMappingDto>> _ioMappingsByDeviceId = new();
+
         public IReadOnlyCollection<NetworkDeviceDto> InitialNetworkDevices { get; init; } = [];
 
         public IReadOnlyCollection<SerialDeviceDto> InitialSerialDevices { get; init; } = [];
 
+        public IReadOnlyCollection<NetworkDeviceDto> SavedNetworkDevices { get; private set; } = [];
+
+        public IReadOnlyCollection<SerialDeviceDto> SavedSerialDevices { get; private set; } = [];
+
         public IReadOnlyCollection<IoMappingDto> SavedMappings { get; private set; } = [];
 
+        public CrudOperationResult SaveResult { get; init; } = CrudOperationResult.Success("测试");
+
         public Task<HardwareConfigInitResult> LoadAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult(new HardwareConfigInitResult(InitialNetworkDevices.ToList(), InitialSerialDevices.ToList()));
+        {
+            _networkDevices ??= InitialNetworkDevices.ToList();
+            _serialDevices ??= InitialSerialDevices.ToList();
+
+            return Task.FromResult(new HardwareConfigInitResult(
+                _networkDevices.ToList(),
+                _serialDevices.ToList()));
+        }
 
         public Task<IoMappingPageResult> LoadIoMappingsAsync(int networkDeviceId, CancellationToken cancellationToken = default)
-            => Task.FromResult(new IoMappingPageResult([], 0));
+        {
+            var mappings = _ioMappingsByDeviceId.TryGetValue(networkDeviceId, out var items)
+                ? items.ToList()
+                : [];
+
+            return Task.FromResult(new IoMappingPageResult(mappings, mappings.Count));
+        }
 
         public Task<ModuleTemplateInfoResult> GetModuleTemplateInfoAsync(
             NetworkDeviceDto? selectedNetworkDevice,
@@ -650,8 +723,22 @@ public sealed class HardwareConfigViewModelBehaviorTests
             IReadOnlyCollection<IoMappingDto> ioMappings,
             CancellationToken cancellationToken = default)
         {
+            if (!SaveResult.IsSuccess)
+            {
+                return Task.FromResult(SaveResult);
+            }
+
+            _networkDevices = networkDevices.ToList();
+            _serialDevices = serialDevices.ToList();
+            SavedNetworkDevices = _networkDevices.ToArray();
+            SavedSerialDevices = _serialDevices.ToArray();
             SavedMappings = ioMappings.ToArray();
-            return Task.FromResult(CrudOperationResult.Success("测试"));
+            if (selectedNetworkDeviceId > 0)
+            {
+                _ioMappingsByDeviceId[selectedNetworkDeviceId] = ioMappings.ToList();
+            }
+
+            return Task.FromResult(SaveResult);
         }
     }
 

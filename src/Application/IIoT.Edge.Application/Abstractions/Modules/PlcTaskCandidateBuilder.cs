@@ -10,6 +10,7 @@ public sealed class PlcTaskCandidateBuilder
     private readonly List<TaskRequiredSignal> _requiredSignals = [];
     private readonly List<string> _supportedDeviceModels = [];
     private bool _isHeartbeatLike;
+    private bool _defaultEnabled;
 
     private PlcTaskCandidateBuilder(string key, string displayName)
     {
@@ -27,6 +28,12 @@ public sealed class PlcTaskCandidateBuilder
     public PlcTaskCandidateBuilder HeartbeatLike()
     {
         _isHeartbeatLike = true;
+        return this;
+    }
+
+    public PlcTaskCandidateBuilder DefaultEnabled()
+    {
+        _defaultEnabled = true;
         return this;
     }
 
@@ -85,7 +92,8 @@ public sealed class PlcTaskCandidateBuilder
             _displayName,
             [.. _requiredSignals],
             _isHeartbeatLike,
-            _supportedDeviceModels.Count == 0 ? null : _supportedDeviceModels.ToArray());
+            _supportedDeviceModels.Count == 0 ? null : _supportedDeviceModels.ToArray(),
+            _defaultEnabled);
 
     private static string ResolveReadSignalKey<TSignalKey>(TSignalKey signal)
         where TSignalKey : struct, Enum

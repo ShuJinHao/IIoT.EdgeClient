@@ -140,7 +140,7 @@ public sealed class ProcessQueueTaskBehaviorTests
         await task.ExecuteOnceAsync();
 
         var retry = Assert.Single(cloudRetryStore.PendingRecords);
-        Assert.Equal("timeout_exceeded", retry.ErrorMessage);
+        Assert.Equal("处理超时。", retry.ErrorMessage);
     }
 
     [Fact]
@@ -184,7 +184,7 @@ public sealed class ProcessQueueTaskBehaviorTests
         Assert.Equal(1, cloudRetryStore.SaveCallCount);
         Assert.Single(fallbackStore.Records);
         Assert.Equal("Cloud", fallbackStore.Records[0].FailedTarget);
-        Assert.Contains(logger.Entries, x => x.Message.Contains("云端 fallback", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, x => x.Message.Contains("云端 兜底缓存", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -289,7 +289,7 @@ public sealed class ProcessQueueTaskBehaviorTests
 
         var deadLetter = Assert.Single(cloudDeadLetterStore.Records);
         Assert.Equal(nameof(DeadLetterStage.CapacityBlocked), deadLetter.FailureStage);
-        Assert.Equal("capacity_blocked:retry:total", deadLetter.FailureReason);
+        Assert.Equal("容量受限:补传:total", deadLetter.FailureReason);
         Assert.Single(cloudRetryStore.PendingRecords);
         Assert.True(diagnosticsStore.Snapshot.IsCapacityBlocked);
         Assert.Equal(CapacityBlockedChannel.Retry, diagnosticsStore.Snapshot.BlockedChannel);
@@ -368,7 +368,7 @@ public sealed class ProcessQueueTaskBehaviorTests
 
         await testProcessTask.ExecuteOnceAsync();
 
-        Assert.Contains(cloudDeadLetterStore.Records, x => x.FailureReason == "capacity_blocked:retry:process_type");
+        Assert.Contains(cloudDeadLetterStore.Records, x => x.FailureReason == "容量受限:补传:process_type");
         Assert.Equal(2, cloudRetryStore.PendingRecords.Count);
         Assert.Contains(cloudRetryStore.PendingRecords, x => x.ProcessType == "OtherProcess");
     }
@@ -430,7 +430,7 @@ public sealed class ProcessQueueTaskBehaviorTests
 
         var deadLetter = Assert.Single(cloudDeadLetterStore.Records);
         Assert.Equal(nameof(DeadLetterStage.CapacityBlocked), deadLetter.FailureStage);
-        Assert.Equal("capacity_blocked:fallback:total", deadLetter.FailureReason);
+        Assert.Equal("容量受限:兜底:total", deadLetter.FailureReason);
         Assert.Single(fallbackStore.Records);
     }
 
@@ -475,7 +475,7 @@ public sealed class ProcessQueueTaskBehaviorTests
         Assert.Equal(1, mesRetryStore.SaveCallCount);
         Assert.Single(mesFallbackStore.Records);
         Assert.Equal("MES", mesFallbackStore.Records[0].FailedTarget);
-        Assert.Contains(logger.Entries, x => x.Message.Contains("MES fallback", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, x => x.Message.Contains("MES 兜底缓存", StringComparison.Ordinal));
     }
 
     [Fact]

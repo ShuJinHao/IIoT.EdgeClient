@@ -645,6 +645,7 @@
     <sys:String x:Key="Navigation_Column_DeviceName">Device Name</sys:String>
     <sys:String x:Key="Navigation_Column_DeviceType">Device Type</sys:String>
     <sys:String x:Key="Navigation_Column_DeviceModel">Device Model</sys:String>
+    <sys:String x:Key="Navigation_Column_ProtocolFrame">Protocol Frame</sys:String>
     <sys:String x:Key="Navigation_Column_IpAddress">IP Address</sys:String>
     <sys:String x:Key="Navigation_Column_Port1">Port 1</sys:String>
     <sys:String x:Key="Navigation_Column_Port2">Port 2</sys:String>

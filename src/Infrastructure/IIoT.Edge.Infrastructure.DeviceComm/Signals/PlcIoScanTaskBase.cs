@@ -333,7 +333,7 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
 
         return endpoint switch
         {
-            TcpPlcEndpoint tcp => new TcpPlcEndpoint(tcp.Host, tcp.Port, timeoutMs),
+            TcpPlcEndpoint tcp => new TcpPlcEndpoint(tcp.Host, tcp.Port, timeoutMs, tcp.McFrameType),
             SerialPlcEndpoint serial => new SerialPlcEndpoint(
                 serial.PortName,
                 serial.BaudRate,

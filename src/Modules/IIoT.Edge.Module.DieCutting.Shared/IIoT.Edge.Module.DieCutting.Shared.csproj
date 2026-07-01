@@ -7,7 +7,9 @@
     <UseWPF>false</UseWPF>
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
     <IsPackable>false</IsPackable>
-    <PackageId>IIoT.Edge.Module.DieCutting</PackageId>
+    <IsEdgePluginModule>false</IsEdgePluginModule>
+    <RootNamespace>IIoT.Edge.Module.DieCutting</RootNamespace>
+    <PackageId>IIoT.Edge.Module.DieCutting.Shared</PackageId>
   </PropertyGroup>
 
   <ItemGroup>

@@ -38,7 +38,7 @@ public abstract class DeadLetterStoreBase : DapperRepositoryBase<DeadLetterRecor
 
         if (affectedRows <= 0)
         {
-            throw new InvalidOperationException($"Failed to persist dead-letter record into {TableName}.");
+            throw new InvalidOperationException($"持久化死信记录到 {TableName} 失败。");
         }
     }
 

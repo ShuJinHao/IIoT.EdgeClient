@@ -43,6 +43,7 @@
                     <edge:EdgeTextColumn Binding="{Binding DeviceName}" Header="{DynamicResource Navigation_Column_DeviceName}" MinWidth="180" Width="2*" />
                     <edge:EdgeTextColumn Binding="{Binding DeviceType}" Header="{DynamicResource Navigation_Column_DeviceType}" MinWidth="120" Width="120" />
                     <edge:EdgeTextColumn Binding="{Binding DeviceModel}" Header="{DynamicResource Navigation_Column_DeviceModel}" MinWidth="130" Width="130" />
+                    <edge:EdgeTextColumn Binding="{Binding ProtocolFrame}" Header="{DynamicResource Navigation_Column_ProtocolFrame}" MinWidth="90" Width="90" />
                     <edge:EdgeTextColumn Binding="{Binding IpAddress}" Header="{DynamicResource Navigation_Column_IpAddress}" MinWidth="140" Width="140" />
                     <edge:EdgeTextColumn Binding="{Binding Port1}" Header="{DynamicResource Navigation_Column_Port1}" MinWidth="80" Width="80" />
                     <edge:EdgeCheckColumn Binding="{Binding IsEnabled}" Header="{DynamicResource Navigation_Column_Enable}" MinWidth="80" Width="80" />
@@ -78,6 +79,16 @@
                         <edge:EdgeFilterComboBox
                             ItemsSource="{Binding EditingNetworkDevice.AvailableModels}"
                             SelectedItem="{Binding EditingNetworkDevice.DeviceModel, Mode=TwoWay}" />
+                    </edge:EdgeFieldRow>
+                    <edge:EdgeFieldRow
+                        Classes="dialog-form"
+                        Grid.Row="1"
+                        Grid.Column="2"
+                        IsVisible="{Binding EditingNetworkDevice.IsMcPlc}"
+                        Label="{DynamicResource Navigation_Column_ProtocolFrame}">
+                        <edge:EdgeFilterComboBox
+                            ItemsSource="{Binding EditingNetworkDevice.AvailableProtocolFrames}"
+                            SelectedItem="{Binding EditingNetworkDevice.ProtocolFrame, Mode=TwoWay}" />
                     </edge:EdgeFieldRow>
                     <edge:EdgeFieldRow Classes="dialog-form" Grid.Row="2" Label="{DynamicResource Navigation_Column_IpAddress}">
                         <edge:EdgeTextBox Text="{Binding EditingNetworkDevice.IpAddress}" />

@@ -24,22 +24,22 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
     private readonly AsyncCommand _applyModuleTemplateCommand;
     private readonly BaseCommand _addNetworkDeviceCommand;
     private readonly BaseCommand _editNetworkDeviceCommand;
-    private readonly BaseCommand _confirmNetworkDeviceDialogCommand;
+    private readonly AsyncCommand<object?> _confirmNetworkDeviceDialogCommand;
     private readonly BaseCommand _cancelNetworkDeviceDialogCommand;
-    private readonly BaseCommand _deleteNetworkDeviceCommand;
+    private readonly AsyncCommand<object?> _deleteNetworkDeviceCommand;
     private readonly BaseCommand _addSerialDeviceCommand;
     private readonly BaseCommand _editSerialDeviceCommand;
-    private readonly BaseCommand _confirmSerialDeviceDialogCommand;
+    private readonly AsyncCommand<object?> _confirmSerialDeviceDialogCommand;
     private readonly BaseCommand _cancelSerialDeviceDialogCommand;
-    private readonly BaseCommand _deleteSerialDeviceCommand;
+    private readonly AsyncCommand<object?> _deleteSerialDeviceCommand;
     private readonly BaseCommand _openAddInteractionMappingDialogCommand;
     private readonly BaseCommand _openAddDataPointMappingDialogCommand;
     private readonly BaseCommand _openEditIoMappingDialogCommand;
-    private readonly BaseCommand _confirmAddIoMappingCommand;
-    private readonly BaseCommand _confirmEditIoMappingCommand;
+    private readonly AsyncCommand<object?> _confirmAddIoMappingCommand;
+    private readonly AsyncCommand<object?> _confirmEditIoMappingCommand;
     private readonly BaseCommand _cancelAddIoMappingDialogCommand;
     private readonly BaseCommand _cancelEditIoMappingDialogCommand;
-    private readonly BaseCommand _deleteIoMappingCommand;
+    private readonly AsyncCommand<object?> _deleteIoMappingCommand;
     private readonly AsyncCommand _saveCommand;
     private bool _hasModuleTemplate;
     private NetworkDeviceVm? _networkDeviceEditingSource;
@@ -489,22 +489,24 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         _editNetworkDeviceCommand = new BaseCommand(
             OpenEditNetworkDeviceDialog,
             parameter => CanEdit && parameter is NetworkDeviceVm);
-        _confirmNetworkDeviceDialogCommand = new BaseCommand(
-            _ => ConfirmNetworkDeviceDialog(),
-            _ => CanEdit && IsNetworkDeviceDialogOpen && EditingNetworkDevice is not null);
+        _confirmNetworkDeviceDialogCommand = new AsyncCommand<object?>(
+            _ => ExecuteBusyAsync(ConfirmNetworkDeviceDialogAsync),
+            _ => CanEdit && !IsBusy && IsNetworkDeviceDialogOpen && EditingNetworkDevice is not null);
         _cancelNetworkDeviceDialogCommand = new BaseCommand(_ => CloseNetworkDeviceDialog());
-        _deleteNetworkDeviceCommand = new BaseCommand(
-            DeleteNetworkDevice,
-            parameter => CanEdit && parameter is NetworkDeviceVm);
+        _deleteNetworkDeviceCommand = new AsyncCommand<object?>(
+            parameter => ExecuteBusyAsync(() => DeleteNetworkDeviceAsync(parameter)),
+            parameter => CanEdit && !IsBusy && parameter is NetworkDeviceVm);
         _addSerialDeviceCommand = new BaseCommand(_ => OpenAddSerialDeviceDialog(), _ => CanEdit);
         _editSerialDeviceCommand = new BaseCommand(
             OpenEditSerialDeviceDialog,
             parameter => CanEdit && parameter is SerialDeviceVm);
-        _confirmSerialDeviceDialogCommand = new BaseCommand(
-            _ => ConfirmSerialDeviceDialog(),
-            _ => CanEdit && IsSerialDeviceDialogOpen && EditingSerialDevice is not null);
+        _confirmSerialDeviceDialogCommand = new AsyncCommand<object?>(
+            _ => ExecuteBusyAsync(ConfirmSerialDeviceDialogAsync),
+            _ => CanEdit && !IsBusy && IsSerialDeviceDialogOpen && EditingSerialDevice is not null);
         _cancelSerialDeviceDialogCommand = new BaseCommand(_ => CloseSerialDeviceDialog());
-        _deleteSerialDeviceCommand = (BaseCommand)CreateDeleteCommand(SerialDevices, () => CanEdit);
+        _deleteSerialDeviceCommand = new AsyncCommand<object?>(
+            parameter => ExecuteBusyAsync(() => DeleteSerialDeviceAsync(parameter)),
+            parameter => CanEdit && !IsBusy && parameter is SerialDeviceVm);
         _openAddInteractionMappingDialogCommand = new BaseCommand(
             _ => _editSession.OpenAddInteractionMappingDialog(this),
             _ => CanAddIoMappingForSelectedDevice);
@@ -514,17 +516,17 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         _openEditIoMappingDialogCommand = new BaseCommand(
             _ => OpenEditIoMappingDialog(),
             _ => CanEdit && (SelectedIoMapping is not null || SelectedInteractionPair is not null));
-        _confirmAddIoMappingCommand = new BaseCommand(
-            _ => _editSession.ConfirmAddIoMapping(this),
-            _ => CanEdit && IsAddIoMappingDialogOpen && (NewIoMapping is not null || NewInteractionPair is not null));
-        _confirmEditIoMappingCommand = new BaseCommand(
-            _ => ConfirmEditIoMappingDialog(),
-            _ => CanEdit && IsEditIoMappingDialogOpen && (EditingIoMapping is not null || EditingInteractionPair is not null));
+        _confirmAddIoMappingCommand = new AsyncCommand<object?>(
+            _ => ExecuteBusyAsync(ConfirmAddIoMappingAsync),
+            _ => CanEdit && !IsBusy && IsAddIoMappingDialogOpen && (NewIoMapping is not null || NewInteractionPair is not null));
+        _confirmEditIoMappingCommand = new AsyncCommand<object?>(
+            _ => ExecuteBusyAsync(ConfirmEditIoMappingDialogAsync),
+            _ => CanEdit && !IsBusy && IsEditIoMappingDialogOpen && (EditingIoMapping is not null || EditingInteractionPair is not null));
         _cancelAddIoMappingDialogCommand = new BaseCommand(_ => _editSession.CloseAddIoMappingDialog(this));
         _cancelEditIoMappingDialogCommand = new BaseCommand(_ => CloseEditIoMappingDialog());
-        _deleteIoMappingCommand = new BaseCommand(
-            _ => _editSession.DeleteSelectedIoMapping(this),
-            _ => CanEdit && SelectedIoMapping is not null);
+        _deleteIoMappingCommand = new AsyncCommand<object?>(
+            _ => ExecuteBusyAsync(DeleteSelectedIoMappingAsync),
+            _ => CanEdit && !IsBusy && SelectedIoMapping is not null);
         _applyModuleTemplateCommand = (AsyncCommand)CreateBusyCommand(
             ApplyModuleTemplateAsync,
             () => CanApplyModuleTemplate);
@@ -579,6 +581,51 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
 
     private Task<CrudOperationResult> SaveAsync()
         => _loadSaveCoordinator.SaveAsync(this);
+
+    private async Task<bool> PersistDraftChangesAsync()
+    {
+        var result = await _loadSaveCoordinator.SaveAsync(this);
+        ApplyOperationFeedback(result);
+
+        var persisted = result.IsSuccess
+                        || result.Message.StartsWith("配置已保存", StringComparison.Ordinal);
+        if (!persisted)
+        {
+            await _loadSaveCoordinator.LoadAllAsync(this);
+        }
+
+        return persisted;
+    }
+
+    private void ApplyOperationFeedback(CrudOperationResult result)
+    {
+        if (result.IsSuccess)
+        {
+            if (!string.IsNullOrWhiteSpace(result.Message))
+            {
+                SetStatus(result.Message);
+            }
+
+            return;
+        }
+
+        var validationMessage = string.Join(
+            Environment.NewLine,
+            result.ValidationIssues
+                .Select(issue => issue.Message)
+                .Where(message => !string.IsNullOrWhiteSpace(message))
+                .Distinct());
+
+        if (!string.IsNullOrWhiteSpace(validationMessage))
+        {
+            SetError(validationMessage);
+            return;
+        }
+
+        SetError(string.IsNullOrWhiteSpace(result.Message)
+            ? GetDefaultOperationFailedMessage()
+            : result.Message);
+    }
 
     private void OnSelectedNetworkDevicePropertyChanged(object? sender, PropertyChangedEventArgs e)
         => _deviceSelectionCoordinator.HandleSelectedNetworkDevicePropertyChanged(this, e);
@@ -773,13 +820,14 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         _confirmNetworkDeviceDialogCommand.RaiseCanExecuteChanged();
     }
 
-    private void ConfirmNetworkDeviceDialog()
+    private async Task ConfirmNetworkDeviceDialogAsync()
     {
         if (EditingNetworkDevice is null)
         {
             return;
         }
 
+        var closeDialog = true;
         if (_networkDeviceEditingSource is null)
         {
             NetworkDevices.Add(HardwareConfigDraftMapper.CloneNetworkDevice(EditingNetworkDevice));
@@ -790,8 +838,16 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         }
 
         RefreshIoMappingDeviceSelection();
-        CloseNetworkDeviceDialog();
-        ClearUserFeedback();
+        var persisted = await PersistDraftChangesAsync();
+        if (!persisted)
+        {
+            closeDialog = true;
+        }
+
+        if (closeDialog)
+        {
+            CloseNetworkDeviceDialog();
+        }
     }
 
     private void CloseNetworkDeviceDialog()
@@ -803,15 +859,20 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         _confirmNetworkDeviceDialogCommand.RaiseCanExecuteChanged();
     }
 
-    private void DeleteNetworkDevice(object? parameter)
+    private async Task DeleteNetworkDeviceAsync(object? parameter)
     {
         if (parameter is not NetworkDeviceVm selected)
         {
             return;
         }
 
-        NetworkDevices.Remove(selected);
+        if (!NetworkDevices.Remove(selected))
+        {
+            return;
+        }
+
         RefreshIoMappingDeviceSelection();
+        await PersistDraftChangesAsync();
     }
 
     private void RefreshIoMappingDeviceSelection()
@@ -852,7 +913,7 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         _confirmSerialDeviceDialogCommand.RaiseCanExecuteChanged();
     }
 
-    private void ConfirmSerialDeviceDialog()
+    private async Task ConfirmSerialDeviceDialogAsync()
     {
         if (EditingSerialDevice is null)
         {
@@ -868,8 +929,8 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
             HardwareConfigDraftMapper.CopySerialDevice(EditingSerialDevice, _serialDeviceEditingSource);
         }
 
+        await PersistDraftChangesAsync();
         CloseSerialDeviceDialog();
-        ClearUserFeedback();
     }
 
     private void CloseSerialDeviceDialog()
@@ -905,7 +966,42 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
         _confirmEditIoMappingCommand.RaiseCanExecuteChanged();
     }
 
-    private void ConfirmEditIoMappingDialog()
+    private async Task ConfirmAddIoMappingAsync()
+    {
+        if (!_editSession.ConfirmAddIoMapping(this))
+        {
+            return;
+        }
+
+        await PersistDraftChangesAsync();
+    }
+
+    private async Task DeleteSelectedIoMappingAsync()
+    {
+        if (!_editSession.DeleteSelectedIoMapping(this))
+        {
+            return;
+        }
+
+        await PersistDraftChangesAsync();
+    }
+
+    private async Task DeleteSerialDeviceAsync(object? parameter)
+    {
+        if (parameter is not SerialDeviceVm selected)
+        {
+            return;
+        }
+
+        if (!SerialDevices.Remove(selected))
+        {
+            return;
+        }
+
+        await PersistDraftChangesAsync();
+    }
+
+    private async Task ConfirmEditIoMappingDialogAsync()
     {
         if (EditingInteractionPair is not null && _ioInteractionPairEditingSource is not null)
         {
@@ -918,8 +1014,8 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
 
             HardwareConfigDraftMapper.CopyInteractionPair(EditingInteractionPair, _ioInteractionPairEditingSource);
             RefreshIoMappingGroups();
+            await PersistDraftChangesAsync();
             CloseEditIoMappingDialog();
-            ClearUserFeedback();
             return;
         }
 
@@ -937,8 +1033,8 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
 
         HardwareConfigDraftMapper.CopyIoMapping(EditingIoMapping, _ioMappingEditingSource);
         RefreshIoMappingGroups();
+        await PersistDraftChangesAsync();
         CloseEditIoMappingDialog();
-        ClearUserFeedback();
     }
 
     private void CloseEditIoMappingDialog()

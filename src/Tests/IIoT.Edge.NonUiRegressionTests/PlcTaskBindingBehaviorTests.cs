@@ -26,8 +26,6 @@ using IIoT.Edge.SharedKernel.Repository;
 using IIoT.Edge.SharedKernel.Specification;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.FileProviders;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 namespace IIoT.Edge.NonUiRegressionTests;
@@ -45,9 +43,9 @@ public sealed class PlcTaskBindingBehaviorTests
     }
 
     [Fact]
-    public async Task GetEnabledTaskKeys_WhenProductionWithoutConfiguredDefault_ShouldDisableMissingRows()
+    public async Task GetEnabledTaskKeys_WhenNoConfiguredDefault_ShouldDisableMissingRows()
     {
-        var service = CreateService(defaultEnableAllTasks: null, environmentName: "Production");
+        var service = CreateService(defaultEnableAllTasks: null);
 
         var enabledKeys = await service.Service.GetEnabledTaskKeysAsync(1, TestCandidates, AllTestMappings);
 
@@ -55,26 +53,68 @@ public sealed class PlcTaskBindingBehaviorTests
     }
 
     [Fact]
-    public async Task GetEnabledTaskKeys_WhenDevelopmentWithoutConfiguredDefault_ShouldDisableMissingRows()
+    public async Task GetEnabledTaskKeys_WhenCandidateDefaultEnabled_ShouldEnableRunnableMissingRow()
     {
-        var service = CreateService(defaultEnableAllTasks: null, environmentName: "Development");
+        var service = CreateService(defaultEnableAllTasks: null);
+        var candidates = new[]
+        {
+            new TaskCandidate(
+                "Task.Default",
+                "默认启用任务",
+                [new TaskRequiredSignal("Signal.Business", "Read")],
+                DefaultEnabled: true)
+        };
 
-        var enabledKeys = await service.Service.GetEnabledTaskKeysAsync(1, TestCandidates, AllTestMappings);
+        var enabledKeys = await service.Service.GetEnabledTaskKeysAsync(1, candidates, AllTestMappings);
+
+        Assert.Equal(["Task.Default"], enabledKeys);
+    }
+
+    [Fact]
+    public async Task GetEnabledTaskKeys_WhenCandidateDefaultEnabledButIoMissing_ShouldKeepDisabled()
+    {
+        var service = CreateService(defaultEnableAllTasks: null);
+        var candidates = new[]
+        {
+            new TaskCandidate(
+                "Task.Default",
+                "默认启用任务",
+                [new TaskRequiredSignal("Signal.Missing", "Read")],
+                DefaultEnabled: true)
+        };
+
+        var enabledKeys = await service.Service.GetEnabledTaskKeysAsync(1, candidates, AllTestMappings);
+
+        Assert.Empty(enabledKeys);
+    }
+
+    [Fact]
+    public async Task GetEnabledTaskKeys_WhenCandidateDefaultEnabledButSavedDisabled_ShouldUseSavedRow()
+    {
+        var harness = CreateService(defaultEnableAllTasks: null);
+        harness.Bindings.Add(PlcTaskBindingEntity.Create(1, "Task.Default", enabled: false, DateTimeOffset.UtcNow));
+        var candidates = new[]
+        {
+            new TaskCandidate(
+                "Task.Default",
+                "默认启用任务",
+                [new TaskRequiredSignal("Signal.Business", "Read")],
+                DefaultEnabled: true)
+        };
+
+        var enabledKeys = await harness.Service.GetEnabledTaskKeysAsync(1, candidates, AllTestMappings);
 
         Assert.Empty(enabledKeys);
     }
 
     [Theory]
-    [InlineData("Production", false, 0)]
-    [InlineData("Development", true, 2)]
-    public async Task GetEnabledTaskKeys_WhenConfiguredDefaultExists_ShouldOverrideEnvironment(
-        string environmentName,
+    [InlineData(false, 0)]
+    [InlineData(true, 2)]
+    public async Task GetEnabledTaskKeys_WhenConfiguredDefaultExists_ShouldUseConfiguredValue(
         bool configuredDefault,
         int expectedEnabledCount)
     {
-        var service = CreateService(
-            defaultEnableAllTasks: configuredDefault,
-            environmentName: environmentName);
+        var service = CreateService(defaultEnableAllTasks: configuredDefault);
 
         var enabledKeys = await service.Service.GetEnabledTaskKeysAsync(1, TestCandidates, AllTestMappings);
 
@@ -244,6 +284,15 @@ public sealed class PlcTaskBindingBehaviorTests
             Assert.NotNull(healthySnapshot);
             Assert.False(healthySnapshot!.IsConnected);
             Assert.NotEqual(PlcConnectionState.Faulted, healthySnapshot.ConnectionState);
+            Assert.Contains(
+                logger.Entries,
+                entry => entry.Level == "Info"
+                         && entry.Message.Contains("[PLC-B] 初始化完成，已启动", StringComparison.Ordinal)
+                         && entry.Message.Contains("个任务", StringComparison.Ordinal));
+            Assert.DoesNotContain(
+                logger.Entries,
+                entry => entry.Message.Contains("Initialized and started", StringComparison.Ordinal)
+                         || entry.Message.Contains("task(s)", StringComparison.Ordinal));
         }
         finally
         {
@@ -333,7 +382,6 @@ public sealed class PlcTaskBindingBehaviorTests
 
     private static BindingServiceHarness CreateService(
         bool? defaultEnableAllTasks,
-        string environmentName = "Production",
         bool seedIoMappings = true)
     {
         var settings = new Dictionary<string, string?>();
@@ -357,7 +405,6 @@ public sealed class PlcTaskBindingBehaviorTests
 
         var service = new PlcTaskBindingService(
             configuration,
-            new FakeHostEnvironment(environmentName),
             runtimeRegistry,
             networkDevices,
             ioMappings,
@@ -441,17 +488,6 @@ public sealed class PlcTaskBindingBehaviorTests
         InMemoryRepository<PlcTaskBindingEntity> Bindings,
         FakeLogService Logger);
 
-    private sealed class FakeHostEnvironment(string environmentName) : IHostEnvironment
-    {
-        public string EnvironmentName { get; set; } = environmentName;
-
-        public string ApplicationName { get; set; } = "IIoT.Edge.Tests";
-
-        public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
-
-        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
-    }
-
     private sealed class FakeStationRuntimeRegistry(IStationRuntimeFactory factory) : IStationRuntimeRegistry
     {
         public void Register(IStationRuntimeFactory runtimeFactory)
@@ -497,19 +533,34 @@ public sealed class PlcTaskBindingBehaviorTests
 
     private sealed class FakeLogService : ILogService
     {
+        public List<LogEntry> Entries { get; } = [];
+
         public List<string> Warnings { get; } = [];
 
-        public event Action<LogEntry> EntryAdded
+        public event Action<LogEntry>? EntryAdded;
+
+        public void Debug(string message) => Add("Debug", message);
+        public void Info(string message) => Add("Info", message);
+        public void Warn(string message)
         {
-            add { }
-            remove { }
+            Warnings.Add(message);
+            Add("Warn", message);
         }
 
-        public void Debug(string message) { }
-        public void Info(string message) { }
-        public void Warn(string message) => Warnings.Add(message);
-        public void Error(string message) { }
-        public void Fatal(string message) { }
+        public void Error(string message) => Add("Error", message);
+        public void Fatal(string message) => Add("Fatal", message);
+
+        private void Add(string level, string message)
+        {
+            var entry = new LogEntry
+            {
+                Level = level,
+                Message = message,
+                Time = DateTime.UtcNow
+            };
+            Entries.Add(entry);
+            EntryAdded?.Invoke(entry);
+        }
     }
 
     private sealed class FakeProductionTimeProvider : IProductionTimeProvider

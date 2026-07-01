@@ -263,9 +263,9 @@ public sealed class LauncherProfileCardViewModel : BaseNotifyPropertyChanged
             LauncherProfileCardState.Running,
             "Info",
             "Launcher_ProfileCard_StatusRunning",
-            "Launcher_ProfileCard_ActionRunning",
-            LauncherProfileCardActionKind.None,
-            false,
+            "Launcher_ProfileCard_ActionLaunch",
+            LauncherProfileCardActionKind.Launch,
+            true,
             "Launcher_ProfileCard_DetailRunning");
     }
 

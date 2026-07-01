@@ -11,7 +11,7 @@ internal sealed class MesFallbackRecoveryService
     : FallbackRecoveryServiceBase<MesFallbackRecord>, IMesFallbackRecoveryService
 {
     private static readonly DataPipelineDeadLetterChannel DeadLetterChannel = new(
-        LogPrefix: "Retry-MES",
+        LogPrefix: "MES补传",
         DeadLetterName: "MES",
         CriticalSource: "Retry.MesDeadLetterPersistFailed");
 

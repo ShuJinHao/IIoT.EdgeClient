@@ -57,7 +57,7 @@ internal abstract class FallbackRecoveryServiceBase<TFallbackRecord> : RetryDead
                     SourceTable,
                     fallback.Id,
                     DeadLetterStage.FallbackRecoverDeserialize,
-                    $"{ChannelName} fallback 记录反序列化失败，工序：{fallback.ProcessType}。").ConfigureAwait(false);
+                    $"{ChannelDisplayName}兜底记录反序列化失败，工序：{fallback.ProcessType}。").ConfigureAwait(false);
 
                 if (persisted)
                 {
@@ -73,7 +73,7 @@ internal abstract class FallbackRecoveryServiceBase<TFallbackRecord> : RetryDead
                 if (!string.IsNullOrWhiteSpace(retryBlockedReason))
                 {
                     Logger.Warn(
-                        $"[{DeadLetterChannelMetadata.LogPrefix}] {ChannelName} fallback 记录 {fallback.Id} 因 retry 容量阻塞继续保留，原因：{retryBlockedReason}。");
+                        $"[{DeadLetterChannelMetadata.LogPrefix}] {ChannelDisplayName}兜底记录 {fallback.Id} 因补传容量阻塞继续保留，原因：{retryBlockedReason}。");
                     continue;
                 }
 
@@ -81,7 +81,7 @@ internal abstract class FallbackRecoveryServiceBase<TFallbackRecord> : RetryDead
             }
             catch (Exception ex)
             {
-                Logger.Error($"[{DeadLetterChannelMetadata.LogPrefix}] 恢复 {ChannelName} fallback 记录 {fallback.Id} 失败：{ex.Message}");
+                Logger.Error($"[{DeadLetterChannelMetadata.LogPrefix}] 恢复 {ChannelDisplayName}兜底记录 {fallback.Id} 失败：{ex.Message}");
             }
         }
 
@@ -93,7 +93,7 @@ internal abstract class FallbackRecoveryServiceBase<TFallbackRecord> : RetryDead
         if (recoveredIds.Count > 0)
         {
             await FallbackStore.MovePendingToRetryAsync(recoveredIds).ConfigureAwait(false);
-            Logger.Info($"[{DeadLetterChannelMetadata.LogPrefix}] 已将 {recoveredIds.Count} 条 {ChannelName} fallback 记录恢复到 retry 主表。");
+            Logger.Info($"[{DeadLetterChannelMetadata.LogPrefix}] 已将 {recoveredIds.Count} 条 {ChannelDisplayName}兜底记录恢复到补传主表。");
         }
 
         await RefreshFallbackCapacityStatusAsync().ConfigureAwait(false);
@@ -102,4 +102,12 @@ internal abstract class FallbackRecoveryServiceBase<TFallbackRecord> : RetryDead
     protected abstract Task<string?> GetRetryBlockReasonAsync(string processType);
 
     protected abstract Task RefreshFallbackCapacityStatusAsync();
+
+    private string ChannelDisplayName
+        => ChannelName switch
+        {
+            "Cloud" => "云端",
+            "MES" => "MES",
+            _ => ChannelName
+        };
 }

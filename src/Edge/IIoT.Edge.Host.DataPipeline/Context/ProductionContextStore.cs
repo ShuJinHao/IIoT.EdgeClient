@@ -146,7 +146,7 @@ public class ProductionContextStore : IProductionContextStore
     {
         if (!File.Exists(_persistPath))
         {
-            _logger.Info("[ContextStore] 未找到持久化文件，使用空运行状态。");
+            _logger.Info("[运行上下文] 未找到持久化文件，使用空运行状态。");
             RefreshPersistenceDiagnostics();
             return;
         }
@@ -168,7 +168,7 @@ public class ProductionContextStore : IProductionContextStore
                 }
             }
 
-            _logger.Info($"[ContextStore] 已恢复 {list.Count} 个设备运行上下文。");
+            _logger.Info($"[运行上下文] 已恢复 {list.Count} 个设备运行上下文。");
 
             lock (_lock)
             {
@@ -196,7 +196,7 @@ public class ProductionContextStore : IProductionContextStore
         }
         catch (Exception ex)
         {
-            _logger.Error($"[ContextStore] 加载运行状态失败：{ex.Message}");
+            _logger.Error($"[运行上下文] 加载运行状态失败：{ex.Message}");
         }
         finally
         {
@@ -225,7 +225,7 @@ public class ProductionContextStore : IProductionContextStore
             catch (Exception ex)
             {
                 _logger.Error(
-                    $"[ContextStore] 写入临时文件 {Path.GetFileName(tempPath)} 失败：{ex.Message}。{CleanupTempFile(tempPath)}");
+                    $"[运行上下文] 写入临时文件 {Path.GetFileName(tempPath)} 失败：{ex.Message}。{CleanupTempFile(tempPath)}");
                 return;
             }
 
@@ -236,15 +236,15 @@ public class ProductionContextStore : IProductionContextStore
             catch (Exception ex)
             {
                 _logger.Error(
-                    $"[ContextStore] 替换持久化文件 {Path.GetFileName(_persistPath)} 失败：{ex.Message}。{CleanupTempFile(tempPath)}");
+                    $"[运行上下文] 替换持久化文件 {Path.GetFileName(_persistPath)} 失败：{ex.Message}。{CleanupTempFile(tempPath)}");
                 return;
             }
 
-            _logger.Info($"[ContextStore] 已保存 {contexts.Count} 个设备运行上下文。");
+            _logger.Info($"[运行上下文] 已保存 {contexts.Count} 个设备运行上下文。");
         }
         catch (Exception ex)
         {
-            _logger.Error($"[ContextStore] 保存运行状态失败：{ex.Message}");
+            _logger.Error($"[运行上下文] 保存运行状态失败：{ex.Message}");
         }
     }
 
@@ -274,14 +274,14 @@ public class ProductionContextStore : IProductionContextStore
         if (quarantinedPath is not null)
         {
             _logger.Error(
-                $"[ContextStore] 持久化运行状态已损坏，已隔离到 {Path.GetFileName(quarantinedPath)}。{ex.Message}");
+                $"[运行上下文] 持久化运行状态已损坏，已隔离到 {Path.GetFileName(quarantinedPath)}。{ex.Message}");
         }
         else
         {
-            _logger.Error($"[ContextStore] 持久化运行状态已损坏，且无法完成隔离：{ex.Message}");
+            _logger.Error($"[运行上下文] 持久化运行状态已损坏，且无法完成隔离：{ex.Message}");
         }
 
-        _logger.Warn("[ContextStore] 持久化文件无法恢复，已使用空运行状态启动。");
+        _logger.Warn("[运行上下文] 持久化文件无法恢复，已使用空运行状态启动。");
         RefreshPersistenceDiagnostics();
     }
 
@@ -293,7 +293,7 @@ public class ProductionContextStore : IProductionContextStore
         }
         catch (Exception ex)
         {
-            _logger.Warn($"[ContextStore] 刷新持久化诊断失败：{ex.Message}");
+            _logger.Warn($"[运行上下文] 刷新持久化诊断失败：{ex.Message}");
         }
     }
 

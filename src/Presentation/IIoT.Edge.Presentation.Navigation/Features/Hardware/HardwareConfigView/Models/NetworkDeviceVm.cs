@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.SharedKernel.Enums;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView.Models;
@@ -31,6 +32,7 @@ public class NetworkDeviceVm : HardwareConfigEditModelBase
             OnPropertyChanged();
             OnPropertyChanged(nameof(AvailableModels));
             DeviceModel = null;
+            ProtocolFrame = null;
         }
     }
 
@@ -38,8 +40,37 @@ public class NetworkDeviceVm : HardwareConfigEditModelBase
     public string? DeviceModel
     {
         get => _deviceModel;
-        set { _deviceModel = value; OnPropertyChanged(); }
+        set
+        {
+            _deviceModel = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsMcPlc));
+            OnPropertyChanged(nameof(AvailableProtocolFrames));
+            if (!IsMcPlc)
+            {
+                ProtocolFrame = null;
+            }
+            else if (string.IsNullOrWhiteSpace(ProtocolFrame))
+            {
+                ProtocolFrame = McPlcFrameType.E3.ToString();
+            }
+        }
     }
+
+    private string? _protocolFrame;
+    public string? ProtocolFrame
+    {
+        get => _protocolFrame;
+        set { _protocolFrame = value; OnPropertyChanged(); }
+    }
+
+    public bool IsMcPlc
+        => DeviceType == DeviceType.PLC
+           && string.Equals(DeviceModel?.Trim(), PlcType.Mc.ToString(), StringComparison.OrdinalIgnoreCase);
+
+    public IEnumerable<string> AvailableProtocolFrames => IsMcPlc
+        ? Enum.GetNames<McPlcFrameType>()
+        : Array.Empty<string>();
 
     public IEnumerable<string> AvailableModels => DeviceType switch
     {
@@ -109,4 +140,3 @@ public class NetworkDeviceVm : HardwareConfigEditModelBase
         set { _remark = value; OnPropertyChanged(); }
     }
 }
-

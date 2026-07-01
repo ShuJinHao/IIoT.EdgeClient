@@ -40,6 +40,7 @@ public sealed class EdgeDbMigrationBehaviorTests
 
             var networkColumns = await LoadColumnsAsync(connection, "hw_network_device");
             Assert.DoesNotContain("module_id", networkColumns);
+            Assert.Contains("protocol_frame", networkColumns);
         }
         finally
         {
@@ -185,6 +186,24 @@ public sealed class EdgeDbMigrationBehaviorTests
                 ('20260416060225_AddNetworkDeviceModuleId', '10.0.0'),
                 ('20260423143000_AddIoMappingDisplayFields', '10.0.0'),
                 ('20260603090000_RemoveHardwareConfigBindingFields', '10.0.0');
+
+            CREATE TABLE "hw_network_device" (
+                "id" INTEGER NOT NULL CONSTRAINT "PK_hw_network_device" PRIMARY KEY AUTOINCREMENT,
+                "device_name" TEXT NOT NULL,
+                "device_type" TEXT NOT NULL,
+                "device_model" TEXT NULL,
+                "ip_address" TEXT NOT NULL,
+                "port1" INTEGER NOT NULL,
+                "port2" INTEGER NULL,
+                "send_cmd1" TEXT NULL,
+                "send_cmd2" TEXT NULL,
+                "connect_timeout" INTEGER NOT NULL DEFAULT 3000,
+                "is_enabled" INTEGER NOT NULL DEFAULT 1,
+                "remark" TEXT NULL
+            );
+
+            CREATE INDEX "ix_hw_network_device_ip"
+                ON "hw_network_device" ("ip_address");
 
             CREATE TABLE "hw_io_mapping" (
                 "id" INTEGER NOT NULL CONSTRAINT "PK_hw_io_mapping" PRIMARY KEY AUTOINCREMENT,

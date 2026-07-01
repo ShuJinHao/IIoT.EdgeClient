@@ -156,7 +156,7 @@ public class CapacityBufferStore : ClaimBufferStoreBase<CapacityRecord>, ICapaci
 
             if (ids.Count == 0)
             {
-                throw new InvalidOperationException($"No claimed capacity rows found for claim {claimToken}.");
+                throw new InvalidOperationException($"未找到领取标记 {claimToken} 对应的产能记录。");
             }
 
             await conn.ExecuteAsync(
@@ -175,7 +175,7 @@ public class CapacityBufferStore : ClaimBufferStoreBase<CapacityRecord>, ICapaci
         => await ReleaseClaimCoreAsync(
             ClaimTableName,
             claimToken,
-            $"Failed to release capacity claim {claimToken}.");
+            $"释放产能领取标记 {claimToken} 失败。");
 
     public async Task ClearAllAsync()
     {

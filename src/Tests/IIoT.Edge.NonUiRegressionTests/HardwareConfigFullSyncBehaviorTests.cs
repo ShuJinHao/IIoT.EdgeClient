@@ -180,6 +180,68 @@ public sealed class HardwareConfigFullSyncBehaviorTests
     }
 
     [Fact]
+    public async Task SaveNetworkDevicesHandler_WhenMcProtocolFrameSubmitted_ShouldPersistNormalizedFrame()
+    {
+        var repo = new InMemoryRepository<NetworkDeviceEntity>();
+        var handler = new SaveNetworkDevicesHandler(repo);
+
+        var result = await handler.Handle(
+            new SaveNetworkDevicesCommand(
+                [
+                    new NetworkDeviceDto(
+                        0,
+                        "PLC-MC",
+                        DeviceType.PLC,
+                        "Mc",
+                        "192.168.0.10",
+                        65530,
+                        null,
+                        null,
+                        null,
+                        3000,
+                        true,
+                        null,
+                        "e4")
+                ]),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        var device = Assert.Single(repo.Items);
+        Assert.Equal("E4", device.ProtocolFrame);
+    }
+
+    [Fact]
+    public async Task SaveNetworkDevicesHandler_WhenMcProtocolFrameInvalid_ShouldRejectSubmission()
+    {
+        var repo = new InMemoryRepository<NetworkDeviceEntity>();
+        var handler = new SaveNetworkDevicesHandler(repo);
+
+        var result = await handler.Handle(
+            new SaveNetworkDevicesCommand(
+                [
+                    new NetworkDeviceDto(
+                        0,
+                        "PLC-MC",
+                        DeviceType.PLC,
+                        "Mc",
+                        "192.168.0.10",
+                        65530,
+                        null,
+                        null,
+                        null,
+                        3000,
+                        true,
+                        null,
+                        "E5")
+                ]),
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.StartsWith("MC PLC 协议帧只支持 E3 或 E4。", result.ErrorMessage);
+        Assert.Empty(repo.Items);
+    }
+
+    [Fact]
     public async Task SaveSerialDevicesHandler_WhenDeviceMissingFromSubmission_ShouldDeleteItAndPreserveExtendedFields()
     {
         var repo = new InMemoryRepository<SerialDeviceEntity>(
@@ -431,6 +493,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
         var entity = NetworkDeviceEntity.Create(name, DeviceType.PLC, ipAddress, port1);
         entity.WithId(id);
         entity.UpdateDeviceModel("S7");
+        entity.UpdateProtocolFrame(null);
         entity.UpdateEndpoint(ipAddress, port1, null, 3000);
         entity.Enable();
         return entity;
@@ -651,6 +714,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
             var clone = NetworkDeviceEntity.Create(entity.DeviceName, entity.DeviceType, entity.IpAddress, entity.Port1);
             clone.WithId(entity.Id);
             clone.UpdateDeviceModel(entity.DeviceModel);
+            clone.UpdateProtocolFrame(entity.ProtocolFrame);
             clone.UpdateEndpoint(entity.IpAddress, entity.Port1, entity.Port2, entity.ConnectTimeout);
             clone.UpdateCommands(entity.SendCmd1, entity.SendCmd2);
             clone.SetEnabled(entity.IsEnabled);
