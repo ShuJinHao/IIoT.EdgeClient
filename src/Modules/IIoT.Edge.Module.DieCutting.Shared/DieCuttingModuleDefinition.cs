@@ -5,6 +5,9 @@ namespace IIoT.Edge.Module.DieCutting;
 /// </summary>
 public sealed class DieCuttingModuleDefinition
 {
+    public const int DefaultPlcPort = 65531;
+    public const int LegacyDefaultPlcPort = 65530;
+
     public DieCuttingModuleDefinition(
         string moduleId,
         string displayName,
@@ -33,6 +36,7 @@ public sealed class DieCuttingModuleDefinition
         UpperComputerNo = upperComputerNo;
         OperationCode = operationCode;
         SeedRemark = seedRemark;
+        LegacyMesBaseUrls = ResolveLegacyMesBaseUrls(moduleId);
         DefaultDevices = BuildLineDevices();
     }
 
@@ -54,6 +58,8 @@ public sealed class DieCuttingModuleDefinition
 
     public string SeedRemark { get; }
 
+    public IReadOnlyCollection<string> LegacyMesBaseUrls { get; }
+
     public IReadOnlyList<DieCuttingDeviceSeed> DefaultDevices { get; }
 
     public string RealtimeDiagnosticsChannel => $"{ModuleId}.Realtime";
@@ -73,10 +79,18 @@ public sealed class DieCuttingModuleDefinition
                 Remark: SeedRemark,
                 IsEnabled: false,
                 DeviceModel: "Mc",
-                Port1: 65530,
+                Port1: DefaultPlcPort,
                 ConnectTimeout: 3000,
                 ProtocolFrame: "E4"))
             .ToArray();
+
+    private static IReadOnlyCollection<string> ResolveLegacyMesBaseUrls(string moduleId)
+        => moduleId switch
+        {
+            "DieCuttingAnode" => ["http://10.110.0.250:8081"],
+            "DieCuttingCathode" => ["http://10.110.1.250:8081"],
+            _ => []
+        };
 }
 
 /// <summary>

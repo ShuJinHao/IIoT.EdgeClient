@@ -143,12 +143,29 @@ public sealed class DieCuttingDevelopmentSampleContributor : DevelopmentSampleCo
             cancellationToken: cancellationToken).ConfigureAwait(false);
         if (existingDevice is not null)
         {
+            var changed = false;
             if (string.IsNullOrWhiteSpace(existingDevice.ProtocolFrame)
                 && !string.IsNullOrWhiteSpace(protocolFrame))
             {
                 existingDevice.UpdateProtocolFrame(protocolFrame);
-                await _networkDevices.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+                changed = true;
                 _logger.Info($"[{_definition.DisplayName}][设备样本] 已为设备“{seedDevice.DeviceName}”补充 PLC 协议帧 {protocolFrame}。");
+            }
+
+            if (ShouldRepairLegacyDefaultPort(existingDevice, seedDevice))
+            {
+                existingDevice.UpdateEndpoint(
+                    existingDevice.IpAddress,
+                    seedDevice.Port1,
+                    existingDevice.Port2,
+                    existingDevice.ConnectTimeout);
+                changed = true;
+                _logger.Info($"[{_definition.DisplayName}][设备样本] 已将设备“{seedDevice.DeviceName}”旧默认端口 {DieCuttingModuleDefinition.LegacyDefaultPlcPort} 修正为 {seedDevice.Port1}。");
+            }
+
+            if (changed)
+            {
+                await _networkDevices.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             }
 
             _logger.Info($"[{_definition.DisplayName}][设备样本] 设备“{seedDevice.DeviceName}”已存在，跳过设备写入。");
@@ -159,7 +176,9 @@ public sealed class DieCuttingDevelopmentSampleContributor : DevelopmentSampleCo
             seedDevice.DeviceName,
             DeviceType.PLC,
             seedDevice.IpAddress,
-            seedDevice.Port1 > 0 ? seedDevice.Port1 : defaults.Port1 ?? 65530);
+            seedDevice.Port1 > 0
+                ? seedDevice.Port1
+                : defaults.Port1 ?? DieCuttingModuleDefinition.DefaultPlcPort);
         device.UpdateDeviceModel(string.IsNullOrWhiteSpace(seedDevice.DeviceModel)
             ? defaults.DeviceModel
             : seedDevice.DeviceModel);
@@ -178,6 +197,11 @@ public sealed class DieCuttingDevelopmentSampleContributor : DevelopmentSampleCo
         _logger.Info($"[{_definition.DisplayName}][设备样本] 已写入设备“{device.DeviceName}”。");
         return device;
     }
+
+    private static bool ShouldRepairLegacyDefaultPort(NetworkDeviceEntity existingDevice, DieCuttingDeviceSeed seedDevice)
+        => existingDevice.Port1 == DieCuttingModuleDefinition.LegacyDefaultPlcPort
+           && seedDevice.Port1 == DieCuttingModuleDefinition.DefaultPlcPort
+           && string.Equals(existingDevice.IpAddress, seedDevice.IpAddress, StringComparison.OrdinalIgnoreCase);
 
     private async Task<int> EnsureMappingsAsync(
         NetworkDeviceEntity device,

@@ -667,6 +667,8 @@ public sealed class PlcIoScanTaskBehaviorTests
         Assert.NotNull(firstSnapshot);
         Assert.False(firstSnapshot!.IsConnected);
         Assert.Equal(PlcConnectionState.Connecting, firstSnapshot.ConnectionState);
+        Assert.NotNull(firstSnapshot.LastAttemptAtUtc);
+        Assert.NotNull(firstSnapshot.LastReadAtUtc);
 
         await dataReadScan.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
 
@@ -675,6 +677,9 @@ public sealed class PlcIoScanTaskBehaviorTests
         Assert.NotNull(secondSnapshot);
         Assert.True(secondSnapshot!.IsConnected);
         Assert.Equal(PlcConnectionState.Connected, secondSnapshot.ConnectionState);
+        Assert.NotNull(secondSnapshot.LastConnectedAtUtc);
+        Assert.NotNull(secondSnapshot.LastReadAtUtc);
+        Assert.NotNull(secondSnapshot.StateChangedAtUtc);
         Assert.NotNull(secondSnapshot.LatencyMs);
     }
 

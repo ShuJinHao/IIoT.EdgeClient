@@ -19,6 +19,7 @@ using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.Presentation.Panels.Features.SysLog;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.Enums;
+using IIoT.Edge.UI.Shared.Avalonia.Controls;
 using Xunit;
 
 namespace IIoT.Edge.Shell.Tests;
@@ -160,6 +161,80 @@ public sealed class DashboardPreviewRuntimeViewModelTests
     }
 
     [Fact]
+    public void PlcStatusTableItems_WhenConnectedWithoutError_ShouldOpenRuntimeDetail()
+    {
+        var languageService = new TestAppLanguageService();
+        var viewModel = new DashboardPreviewRuntimeViewModel(
+            new DashboardViewModel(new TestEquipmentPanelService(), languageService),
+            languageService,
+            new DeviceSelectionService(),
+            new TestRuntimeConfigService(),
+            new TestEdgeSyncDiagnosticsQuery(),
+            new TestPlcConnectionManager(),
+            new TestMonitorConfiguredDeviceLoader());
+
+        ApplyDiagnostics(
+            viewModel,
+            [
+                new()
+                {
+                    NetworkDeviceId = 1,
+                    DeviceName = "P1-AP01",
+                    IsConnected = true,
+                    ConnectionState = PlcConnectionState.Connected,
+                    LatencyMs = 12,
+                    LastAttemptAtUtc = new DateTimeOffset(2026, 6, 24, 16, 24, 0, TimeSpan.Zero),
+                    LastConnectedAtUtc = new DateTimeOffset(2026, 6, 24, 16, 24, 1, TimeSpan.Zero),
+                    LastReadAtUtc = new DateTimeOffset(2026, 6, 24, 16, 24, 2, TimeSpan.Zero)
+                }
+            ],
+            [CreateConfiguredPlc(1, "P1-AP01")]);
+
+        var item = Assert.Single(viewModel.PlcStatusTableItems);
+        Assert.Equal("暂无运行错误", item.LastErrorDetail);
+        Assert.Equal("127.0.0.1:6001", item.EndpointText);
+        Assert.Equal("Mc", item.DeviceModelText);
+        Assert.Equal("E4", item.ProtocolFrameText);
+
+        viewModel.ShowPlcStatusDetailCommand.Execute(item);
+
+        Assert.True(viewModel.IsPlcStatusDetailOpen);
+        Assert.Same(item, viewModel.SelectedPlcStatusDetail);
+    }
+
+    [Fact]
+    public void PlcStatusTableItems_WhenConnectingSnapshotTimesOut_ShouldShowConnectionTimeout()
+    {
+        var languageService = new TestAppLanguageService();
+        var viewModel = new DashboardPreviewRuntimeViewModel(
+            new DashboardViewModel(new TestEquipmentPanelService(), languageService),
+            languageService,
+            new DeviceSelectionService(),
+            new TestRuntimeConfigService(),
+            new TestEdgeSyncDiagnosticsQuery(),
+            new TestPlcConnectionManager(),
+            new TestMonitorConfiguredDeviceLoader());
+
+        ApplyDiagnostics(
+            viewModel,
+            [
+                new()
+                {
+                    NetworkDeviceId = 1,
+                    DeviceName = "P1-AP01",
+                    IsConnected = false,
+                    ConnectionState = PlcConnectionState.Connecting,
+                    LastAttemptAtUtc = DateTimeOffset.UtcNow.AddMinutes(-1)
+                }
+            ],
+            [CreateConfiguredPlc(1, "P1-AP01")]);
+
+        var item = Assert.Single(viewModel.PlcStatusTableItems);
+        Assert.Equal("连接超时", item.StateText);
+        Assert.Equal(EdgeVisualStatus.Error, item.Status);
+    }
+
+    [Fact]
     public void PlcStatusTableItems_WhenConfiguredPlcsExistWithoutRuntimeSnapshots_ShouldShowUncollectedRows()
     {
         var languageService = new TestAppLanguageService();
@@ -261,6 +336,8 @@ public sealed class DashboardPreviewRuntimeViewModelTests
     private static NetworkDeviceEntity CreateConfiguredPlc(int id, string deviceName)
     {
         var entity = NetworkDeviceEntity.Create(deviceName, DeviceType.PLC, "127.0.0.1", 6000 + id);
+        entity.UpdateDeviceModel("Mc");
+        entity.UpdateProtocolFrame("E4");
         typeof(NetworkDeviceEntity)
             .BaseType!
             .GetProperty("Id")!

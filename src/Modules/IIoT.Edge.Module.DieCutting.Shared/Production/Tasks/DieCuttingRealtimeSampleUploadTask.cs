@@ -19,6 +19,8 @@ namespace IIoT.Edge.Module.DieCutting.Production.Tasks;
 /// </summary>
 internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
 {
+    private static readonly TimeSpan RealtimeLogInterval = TimeSpan.FromMinutes(1);
+
     private readonly DieCuttingModuleDefinition _definition;
     private readonly DieCuttingSignalCodec _codec;
     private readonly DieCuttingContext _context;
@@ -29,6 +31,14 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
     private readonly IModuleParamProvider<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business> _parameters;
     private readonly DieCuttingModuleOptions _moduleOptions;
     private int _taskLoopInterval;
+    private bool _configurationLogged;
+    private bool _legacyMesBaseUrlWarned;
+    private string? _lastRealtimeLogKey;
+    private DateTimeOffset _lastRealtimeLogAt;
+    private MesCallOutcome? _lastRealtimeOutcome;
+    private string? _lastDeviceStatusLogKey;
+    private DateTimeOffset _lastDeviceStatusLogAt;
+    private MesCallOutcome? _lastDeviceStatusOutcome;
 
     /// <summary>
     /// 创建模切实时采样上传任务。
@@ -72,6 +82,9 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
         var freshnessTimeoutMs = NormalizeInterval(
             parameterSnapshot.Mes<int>(DieCuttingParams.Mes.数据新鲜度超时毫秒),
             _moduleOptions.Runtime.DataFreshnessTimeoutMs);
+
+        LogConfigurationIfNeeded(parameterSnapshot, freshnessTimeoutMs);
+        WarnIfLegacyMesBaseUrl(parameterSnapshot);
 
         if (!parameterSnapshot.Mes<bool>(DieCuttingParams.Mes.启用))
         {
@@ -225,6 +238,7 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
         _context.LastRealtimeSnapshot = snapshot;
         _context.Set($"Runtime.Tasks.{TaskName}.LastUploadOutcome", result.Outcome.ToString());
         _context.Set($"Runtime.Tasks.{TaskName}.LastUploadMessage", result.Message);
+        LogRealtimeResult(snapshot, result);
         return Task.CompletedTask;
     }
 
@@ -253,6 +267,7 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
 
         _context.Set($"Runtime.Tasks.{TaskName}.LastDeviceStatusOutcome", result.Outcome.ToString());
         _context.Set($"Runtime.Tasks.{TaskName}.LastDeviceStatusMessage", result.Message);
+        LogDeviceStatusResult(result);
     }
 
     private DeviceSession CreateDeviceSession(DieCuttingDeviceIdentity identity)
@@ -271,4 +286,136 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
         var normalizedFallback = fallback <= 0 ? 1000 : fallback;
         return Math.Max(500, value <= 0 ? normalizedFallback : value);
     }
+
+    private void LogConfigurationIfNeeded(
+        ModuleParamSnapshot<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business> parameters,
+        int freshnessTimeoutMs)
+    {
+        if (_configurationLogged)
+        {
+            return;
+        }
+
+        var mesBaseUrl = SanitizeMesBaseUrl(parameters.Mes<string>(DieCuttingParams.Mes.服务地址));
+        var outboundPath = NormalizeLogText(parameters.Mes<string>(DieCuttingParams.Mes.OutboundPath));
+        var statusPath = NormalizeLogText(parameters.Mes<string>(DieCuttingParams.Mes.EquipmentStatusPath));
+        Logger.Info(
+            $"[{_context.DeviceName}] 模切采样任务配置：MES地址={mesBaseUrl}，出站路径={outboundPath}，设备状态路径={statusPath}，上传周期={_taskLoopInterval}ms，数据新鲜度={freshnessTimeoutMs}ms。");
+        _configurationLogged = true;
+    }
+
+    private void WarnIfLegacyMesBaseUrl(
+        ModuleParamSnapshot<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business> parameters)
+    {
+        if (_legacyMesBaseUrlWarned)
+        {
+            return;
+        }
+
+        var mesBaseUrl = parameters.Mes<string>(DieCuttingParams.Mes.服务地址);
+        if (!_definition.LegacyMesBaseUrls.Contains(mesBaseUrl?.Trim() ?? string.Empty, StringComparer.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        Logger.Warn(
+            $"[{_context.DeviceName}] 检测到模切 MES 服务地址仍为历史默认值 {SanitizeMesBaseUrl(mesBaseUrl)}，请确认参数已迁移到 {_definition.MesBaseUrl}。");
+        _legacyMesBaseUrlWarned = true;
+    }
+
+    private void LogRealtimeResult(DieCuttingRealtimeSnapshot? snapshot, MesCallResult result)
+    {
+        var key = $"{result.Outcome}|{result.Message}";
+        var now = DateTimeOffset.UtcNow;
+        if (!ShouldLogOutcome(key, result.Outcome, now, ref _lastRealtimeLogKey, ref _lastRealtimeLogAt, ref _lastRealtimeOutcome))
+        {
+            return;
+        }
+
+        var message = snapshot is null
+            ? $"[{_context.DeviceName}] 模切采样结果：{result.Message}"
+            : $"[{_context.DeviceName}] 模切采样结果：{result.Message} 批次={NormalizeLogText(snapshot.PunchingLotNumber)}，产量={snapshot.PunchingQuantity}，冲切速度={snapshot.PunchingSpeed}，弹夹={NormalizeLogText(snapshot.ClipNo)}。";
+        WriteOutcomeLog(result.Outcome, message);
+    }
+
+    private void LogDeviceStatusResult(MesCallResult result)
+    {
+        var key = $"{result.Outcome}|{result.Message}";
+        var now = DateTimeOffset.UtcNow;
+        if (!ShouldLogOutcome(
+                key,
+                result.Outcome,
+                now,
+                ref _lastDeviceStatusLogKey,
+                ref _lastDeviceStatusLogAt,
+                ref _lastDeviceStatusOutcome))
+        {
+            return;
+        }
+
+        WriteOutcomeLog(result.Outcome, $"[{_context.DeviceName}] 模切设备状态上传结果：{result.Message}");
+    }
+
+    private static bool ShouldLogOutcome(
+        string key,
+        MesCallOutcome outcome,
+        DateTimeOffset now,
+        ref string? lastKey,
+        ref DateTimeOffset lastLoggedAt,
+        ref MesCallOutcome? lastOutcome)
+    {
+        var isRecovery = lastOutcome is { } previous
+                         && previous is not MesCallOutcome.Success and not MesCallOutcome.Disabled
+                         && outcome is MesCallOutcome.Success or MesCallOutcome.Disabled;
+        var shouldLog = isRecovery
+                        || !string.Equals(lastKey, key, StringComparison.Ordinal)
+                        || now - lastLoggedAt >= RealtimeLogInterval;
+
+        lastOutcome = outcome;
+        if (!shouldLog)
+        {
+            return false;
+        }
+
+        lastKey = key;
+        lastLoggedAt = now;
+        return true;
+    }
+
+    private void WriteOutcomeLog(MesCallOutcome outcome, string message)
+    {
+        switch (outcome)
+        {
+            case MesCallOutcome.Success:
+            case MesCallOutcome.Disabled:
+                Logger.Info(message);
+                break;
+            case MesCallOutcome.InvalidContext:
+                Logger.Warn(message);
+                break;
+            default:
+                Logger.Error(message);
+                break;
+        }
+    }
+
+    private static string SanitizeMesBaseUrl(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "未配置";
+        }
+
+        var normalized = value.Trim();
+        if (Uri.TryCreate(normalized, UriKind.Absolute, out var uri))
+        {
+            return uri.GetLeftPart(UriPartial.Authority);
+        }
+
+        var sensitiveIndex = normalized.IndexOfAny(['?', '#']);
+        return sensitiveIndex >= 0 ? normalized[..sensitiveIndex] : normalized;
+    }
+
+    private static string NormalizeLogText(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "空" : value.Trim();
 }

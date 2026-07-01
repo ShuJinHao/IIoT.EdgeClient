@@ -14,6 +14,7 @@ public sealed class PlcConnectionStatusStore
     {
         lock (_stateLock)
         {
+            var now = DateTimeOffset.UtcNow;
             if (_snapshots.TryGetValue(networkDeviceId, out var existing))
             {
                 _snapshots[networkDeviceId] = existing with
@@ -28,7 +29,9 @@ public sealed class PlcConnectionStatusStore
                 NetworkDeviceId = networkDeviceId,
                 DeviceName = deviceName,
                 IsConnected = false,
-                ConnectionState = PlcConnectionState.Connecting
+                ConnectionState = PlcConnectionState.Connecting,
+                LastAttemptAtUtc = now,
+                StateChangedAtUtc = now
             };
         }
     }
@@ -37,6 +40,7 @@ public sealed class PlcConnectionStatusStore
     {
         lock (_stateLock)
         {
+            var now = DateTimeOffset.UtcNow;
             var existing = GetOrCreateSnapshot(networkDeviceId, deviceName);
             _protocolSuccessCounts[networkDeviceId] = 0;
             _snapshots[networkDeviceId] = existing with
@@ -44,6 +48,8 @@ public sealed class PlcConnectionStatusStore
                 DeviceName = deviceName,
                 IsConnected = false,
                 ConnectionState = PlcConnectionState.Connecting,
+                LastAttemptAtUtc = now,
+                StateChangedAtUtc = ResolveStateChangedAt(existing, PlcConnectionState.Connecting, false, now),
                 LatencyMs = null
             };
         }
@@ -53,6 +59,7 @@ public sealed class PlcConnectionStatusStore
     {
         lock (_stateLock)
         {
+            var now = DateTimeOffset.UtcNow;
             var existing = GetOrCreateSnapshot(networkDeviceId, deviceName);
             _protocolSuccessCounts[networkDeviceId] = RequiredProtocolSuccessCount;
             _snapshots[networkDeviceId] = existing with
@@ -60,7 +67,9 @@ public sealed class PlcConnectionStatusStore
                 DeviceName = deviceName,
                 IsConnected = true,
                 ConnectionState = PlcConnectionState.Connected,
-                LastConnectedAtUtc = DateTimeOffset.UtcNow,
+                LastAttemptAtUtc = now,
+                LastConnectedAtUtc = now,
+                StateChangedAtUtc = ResolveStateChangedAt(existing, PlcConnectionState.Connected, true, now),
                 LastError = null,
                 LatencyMs = latencyMs
             };
@@ -71,6 +80,7 @@ public sealed class PlcConnectionStatusStore
     {
         lock (_stateLock)
         {
+            var now = DateTimeOffset.UtcNow;
             var existing = GetOrCreateSnapshot(networkDeviceId, deviceName);
             var currentCount = _protocolSuccessCounts.TryGetValue(networkDeviceId, out var count)
                 ? count
@@ -79,16 +89,20 @@ public sealed class PlcConnectionStatusStore
             _protocolSuccessCounts[networkDeviceId] = currentCount;
 
             var isStableOnline = currentCount >= RequiredProtocolSuccessCount;
+            var nextState = isStableOnline
+                ? PlcConnectionState.Connected
+                : PlcConnectionState.Connecting;
             _snapshots[networkDeviceId] = existing with
             {
                 DeviceName = deviceName,
                 IsConnected = isStableOnline,
-                ConnectionState = isStableOnline
-                    ? PlcConnectionState.Connected
-                    : PlcConnectionState.Connecting,
+                ConnectionState = nextState,
+                LastAttemptAtUtc = now,
+                LastReadAtUtc = now,
                 LastConnectedAtUtc = isStableOnline
-                    ? DateTimeOffset.UtcNow
+                    ? now
                     : existing.LastConnectedAtUtc,
+                StateChangedAtUtc = ResolveStateChangedAt(existing, nextState, isStableOnline, now),
                 LastError = isStableOnline ? null : existing.LastError,
                 LatencyMs = isStableOnline ? latencyMs : null
             };
@@ -112,18 +126,21 @@ public sealed class PlcConnectionStatusStore
     {
         lock (_stateLock)
         {
+            var now = DateTimeOffset.UtcNow;
             var existing = GetOrCreateSnapshot(networkDeviceId, deviceName);
             _protocolSuccessCounts[networkDeviceId] = 0;
+            var nextState = string.IsNullOrWhiteSpace(error)
+                ? PlcConnectionState.Disconnected
+                : PlcConnectionState.Retrying;
             _snapshots[networkDeviceId] = existing with
             {
                 DeviceName = deviceName,
                 IsConnected = false,
-                ConnectionState = string.IsNullOrWhiteSpace(error)
-                    ? PlcConnectionState.Disconnected
-                    : PlcConnectionState.Retrying,
+                ConnectionState = nextState,
                 LastFailureAtUtc = string.IsNullOrWhiteSpace(error)
                     ? existing.LastFailureAtUtc
-                    : DateTimeOffset.UtcNow,
+                    : now,
+                StateChangedAtUtc = ResolveStateChangedAt(existing, nextState, false, now),
                 LastError = string.IsNullOrWhiteSpace(error)
                     ? existing.LastError
                     : error,
@@ -136,6 +153,7 @@ public sealed class PlcConnectionStatusStore
     {
         lock (_stateLock)
         {
+            var now = DateTimeOffset.UtcNow;
             var existing = GetOrCreateSnapshot(networkDeviceId, deviceName);
             _protocolSuccessCounts[networkDeviceId] = 0;
             _snapshots[networkDeviceId] = existing with
@@ -143,7 +161,8 @@ public sealed class PlcConnectionStatusStore
                 DeviceName = deviceName,
                 IsConnected = false,
                 ConnectionState = PlcConnectionState.Faulted,
-                LastFailureAtUtc = DateTimeOffset.UtcNow,
+                LastFailureAtUtc = now,
+                StateChangedAtUtc = ResolveStateChangedAt(existing, PlcConnectionState.Faulted, false, now),
                 LastError = error,
                 LatencyMs = null
             };
@@ -182,7 +201,18 @@ public sealed class PlcConnectionStatusStore
             NetworkDeviceId = networkDeviceId,
             DeviceName = deviceName,
             IsConnected = false,
-            ConnectionState = PlcConnectionState.Connecting
+            ConnectionState = PlcConnectionState.Connecting,
+            LastAttemptAtUtc = DateTimeOffset.UtcNow,
+            StateChangedAtUtc = DateTimeOffset.UtcNow
         };
     }
+
+    private static DateTimeOffset ResolveStateChangedAt(
+        PlcConnectionRuntimeSnapshot existing,
+        PlcConnectionState nextState,
+        bool nextConnected,
+        DateTimeOffset now)
+        => existing.ConnectionState != nextState || existing.IsConnected != nextConnected
+            ? now
+            : existing.StateChangedAtUtc ?? now;
 }

@@ -140,9 +140,16 @@
     <sys:String x:Key="Navigation_DashboardPreview_PlcLatency">Latency</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_PlcLastError">Last Error</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_PlcLastConnected">Last Link</sys:String>
+    <sys:String x:Key="Navigation_DashboardPreview_PlcLastAttempt">Last Attempt</sys:String>
+    <sys:String x:Key="Navigation_DashboardPreview_PlcLastRead">Last Read</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_PlcLastFailure">Last Fail</sys:String>
+    <sys:String x:Key="Navigation_DashboardPreview_PlcEndpoint">Endpoint</sys:String>
+    <sys:String x:Key="Navigation_DashboardPreview_PlcDeviceModel">Model</sys:String>
+    <sys:String x:Key="Navigation_DashboardPreview_PlcProtocolFrame">Frame</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_PlcDetails">Details</sys:String>
-    <sys:String x:Key="Navigation_DashboardPreview_PlcDetailTitle">PLC Error Details</sys:String>
+    <sys:String x:Key="Navigation_DashboardPreview_PlcDetailTitle">PLC Runtime Details</sys:String>
+    <sys:String x:Key="Navigation_DashboardPreview_PlcErrorDetail">Error Details</sys:String>
+    <sys:String x:Key="Navigation_DashboardPreview_PlcNoError">No runtime error</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_Close">Close</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_NoPlcStatusTitle">No PLC status</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_NoPlcStatusSource">Waiting for PLC runtime snapshots.</sys:String>
@@ -152,6 +159,7 @@
     <sys:String x:Key="Navigation_DashboardPreview_PlcPartiallyUncollected">Partially uncollected</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_PlcStateUnknown">Unknown</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_PlcStateConnecting">Connecting</sys:String>
+    <sys:String x:Key="Navigation_DashboardPreview_PlcStateConnectionTimeout">Connection Timeout</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_PlcStateConnected">Connected</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_PlcStateRetrying">Retrying</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_PlcStateDisconnected">Disconnected</sys:String>

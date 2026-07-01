@@ -22,9 +22,15 @@ public sealed record PlcConnectionRuntimeSnapshot : IDeviceIdentifiable
 
     public PlcConnectionState ConnectionState { get; init; } = PlcConnectionState.Unknown;
 
+    public DateTimeOffset? LastAttemptAtUtc { get; init; }
+
     public DateTimeOffset? LastConnectedAtUtc { get; init; }
 
+    public DateTimeOffset? LastReadAtUtc { get; init; }
+
     public DateTimeOffset? LastFailureAtUtc { get; init; }
+
+    public DateTimeOffset? StateChangedAtUtc { get; init; }
 
     public string? LastError { get; init; }
 

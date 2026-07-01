@@ -26,6 +26,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
     private const int UploadHealthSegmentLimit = 6;
     private const int LatencyWarningThresholdMs = 5000;
     private static readonly TimeSpan DiagnosticsRefreshInterval = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan PlcConnectingDisplayTimeout = TimeSpan.FromSeconds(15);
 
     private readonly DashboardViewModel _source;
     private readonly IDeviceSelectionService _deviceSelectionService;
@@ -381,7 +382,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
                     snapshotsByName.TryGetValue(device.DeviceName.Trim(), out snapshot);
                 }
 
-                return new DashboardPreviewPlcStatusProjection(device.Id, device.DeviceName.Trim(), snapshot);
+                return new DashboardPreviewPlcStatusProjection(device.Id, device.DeviceName.Trim(), device, snapshot);
             })
             .OrderBy(static projection => projection.DeviceName, StringComparer.OrdinalIgnoreCase)
             .ToArray();
@@ -396,6 +397,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
             .Select(static snapshot => new DashboardPreviewPlcStatusProjection(
                 snapshot.NetworkDeviceId,
                 snapshot.DeviceName.Trim(),
+                null,
                 snapshot))
             .OrderBy(static projection => projection.DeviceName, StringComparer.OrdinalIgnoreCase)
             .ToArray();
@@ -414,6 +416,11 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
                 EdgeVisualStatus.Offline,
                 EmptyValue,
                 EmptyValue,
+                GetText("Navigation_DashboardPreview_PlcNoError", "暂无运行错误"),
+                FormatEndpoint(projection.ConfiguredDevice),
+                Normalize(projection.ConfiguredDevice?.DeviceModel),
+                Normalize(projection.ConfiguredDevice?.ProtocolFrame),
+                EmptyValue,
                 EmptyValue,
                 EmptyValue,
                 EmptyValue,
@@ -423,19 +430,26 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
         var lastErrorDetail = string.IsNullOrWhiteSpace(snapshot.LastError) ? EmptyValue : snapshot.LastError.Trim();
         return new DashboardPreviewPlcStatusItem(
             projection.DeviceName,
-            ResolvePlcConnectionStateText(snapshot.ConnectionState),
+            ResolvePlcConnectionStateText(snapshot),
             ResolvePlcVisualStatus(snapshot),
             snapshot.IsConnected && snapshot.LatencyMs.HasValue ? FormatLatency(snapshot.LatencyMs.Value) : EmptyValue,
             SummarizePlcError(snapshot.LastError),
-            lastErrorDetail,
+            lastErrorDetail == EmptyValue
+                ? GetText("Navigation_DashboardPreview_PlcNoError", "暂无运行错误")
+                : lastErrorDetail,
+            FormatEndpoint(projection.ConfiguredDevice),
+            Normalize(projection.ConfiguredDevice?.DeviceModel),
+            Normalize(projection.ConfiguredDevice?.ProtocolFrame),
+            FormatTimestamp(snapshot.LastAttemptAtUtc),
             FormatTimestamp(snapshot.LastConnectedAtUtc),
+            FormatTimestamp(snapshot.LastReadAtUtc),
             FormatTimestamp(snapshot.LastFailureAtUtc),
             isSelected);
     }
 
     private void ShowPlcStatusDetail(object? parameter)
     {
-        if (parameter is not DashboardPreviewPlcStatusItem item || !item.HasLastErrorDetail)
+        if (parameter is not DashboardPreviewPlcStatusItem item)
         {
             return;
         }
@@ -863,7 +877,9 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
     }
 
     private EdgeVisualStatus ResolvePlcVisualStatus(PlcConnectionRuntimeSnapshot snapshot)
-        => snapshot.ConnectionState switch
+        => IsConnectingTimedOut(snapshot)
+            ? EdgeVisualStatus.Error
+            : snapshot.ConnectionState switch
         {
             PlcConnectionState.Connected when snapshot.IsConnected => EdgeVisualStatus.Running,
             PlcConnectionState.Connecting or PlcConnectionState.Retrying => EdgeVisualStatus.Warning,
@@ -871,8 +887,14 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
             _ => EdgeVisualStatus.Offline
         };
 
-    private string ResolvePlcConnectionStateText(PlcConnectionState state)
-        => state switch
+    private string ResolvePlcConnectionStateText(PlcConnectionRuntimeSnapshot snapshot)
+    {
+        if (IsConnectingTimedOut(snapshot))
+        {
+            return GetText("Navigation_DashboardPreview_PlcStateConnectionTimeout", "连接超时");
+        }
+
+        return snapshot.ConnectionState switch
         {
             PlcConnectionState.Connecting => GetText("Navigation_DashboardPreview_PlcStateConnecting", "连接中"),
             PlcConnectionState.Connected => GetText("Navigation_DashboardPreview_PlcStateConnected", "已连接"),
@@ -881,6 +903,19 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
             PlcConnectionState.Faulted => GetText("Navigation_DashboardPreview_PlcStateFaulted", "异常"),
             _ => GetText("Navigation_DashboardPreview_PlcStateUnknown", "未知")
         };
+    }
+
+    private static bool IsConnectingTimedOut(PlcConnectionRuntimeSnapshot snapshot)
+    {
+        if (snapshot.IsConnected || snapshot.ConnectionState != PlcConnectionState.Connecting)
+        {
+            return false;
+        }
+
+        var lastAttempt = snapshot.LastAttemptAtUtc ?? snapshot.StateChangedAtUtc;
+        return lastAttempt.HasValue
+            && DateTimeOffset.UtcNow - lastAttempt.Value > PlcConnectingDisplayTimeout;
+    }
 
     private EdgeVisualStatus ResolveLatencyStatus(int? latencyMs, bool isReady)
     {
@@ -994,6 +1029,11 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
             ? timestamp.Value.ToLocalTime().ToString("HH:mm:ss")
             : EmptyValue;
 
+    private static string FormatEndpoint(NetworkDeviceEntity? device)
+        => device is null
+            ? EmptyValue
+            : $"{device.IpAddress}:{device.Port1}";
+
     private static DateTime? Latest(params DateTime?[] timestamps)
     {
         var values = timestamps
@@ -1017,6 +1057,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
     private sealed record DashboardPreviewPlcStatusProjection(
         int NetworkDeviceId,
         string DeviceName,
+        NetworkDeviceEntity? ConfiguredDevice,
         PlcConnectionRuntimeSnapshot? RuntimeSnapshot);
 }
 
@@ -1100,8 +1141,8 @@ internal sealed class DashboardPreviewDesignViewModel : DashboardPreviewLocalize
 
     public ObservableCollection<DashboardPreviewPlcStatusItem> PlcStatusTableItems { get; } =
     [
-        new("P1-AP01", "已连接", EdgeVisualStatus.Running, "24 ms", "—", "—", "15:04:03", "—", false),
-        new("P1-AP02", "重试中", EdgeVisualStatus.Warning, "—", "读取失败", "Read R2450 failed.", "—", "15:04:17", false)
+        new("P1-AP01", "已连接", EdgeVisualStatus.Running, "24 ms", "—", "暂无运行错误", "10.110.1.11:65531", "Mc", "E4", "15:04:01", "15:04:03", "15:04:03", "—", false),
+        new("P1-AP02", "重试中", EdgeVisualStatus.Warning, "—", "读取失败", "Read R2450 failed.", "10.110.1.12:65531", "Mc", "E4", "15:04:12", "—", "—", "15:04:17", false)
     ];
 
     public ObservableCollection<DashboardPreviewUploadChannelItem> UploadChannelItems { get; } = [];
@@ -1189,7 +1230,12 @@ internal sealed record DashboardPreviewPlcStatusItem(
     string LatencyText,
     string LastError,
     string LastErrorDetail,
+    string EndpointText,
+    string DeviceModelText,
+    string ProtocolFrameText,
+    string LastAttemptText,
     string LastConnectedText,
+    string LastReadText,
     string LastFailureText,
     bool IsSelected)
 {

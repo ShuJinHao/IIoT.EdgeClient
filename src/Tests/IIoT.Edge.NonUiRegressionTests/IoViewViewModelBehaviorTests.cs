@@ -345,11 +345,14 @@ public sealed class IoViewViewModelBehaviorTests
                     CreateMapping(device.Id, "有符号数", "D100", 1, "Int16", "Read", "实时数据", "解码", 1),
                     CreateMapping(device.Id, "布尔量", "D101", 1, "Bool", "Read", "实时数据", "解码", 2),
                     CreateMapping(device.Id, "条码", "D102", 4, "Ascii", "Read", "条码数据", "进站条码", 3),
-                    CreateMapping(device.Id, "浮点数组", "D106", 2, "Float", "Read", "配方数组", "配方", 4)
+                    CreateMapping(device.Id, "浮点数组", "D106", 2, "Float", "Read", "配方数组", "配方", 4),
+                    CreateMapping(device.Id, "实际产量", "D108", 2, "Int32", "Read", "实时数据", "解码", 5),
+                    CreateMapping(device.Id, "无符号累计", "D110", 2, "UInt32", "Read", "实时数据", "解码", 6),
+                    CreateMapping(device.Id, "双字状态", "D112", 2, "DWord", "Read", "实时数据", "解码", 7)
                 ]
             };
             var dataStore = new PlcDataStore();
-            dataStore.Register(device.Id, readSize: 16, writeSize: 0);
+            dataStore.Register(device.Id, readSize: 20, writeSize: 0);
             dataStore.GetBuffer(device.Id)!.UpdateReadBuffer(
             [
                 0xFFFF,
@@ -359,7 +362,13 @@ public sealed class IoViewViewModelBehaviorTests
                 0,
                 0,
                 0x0000,
-                0x4148
+                0x4148,
+                54621,
+                15,
+                0xFFFF,
+                0x0001,
+                0x0001,
+                0x0001
             ]);
             var viewModel = CreateViewModel([device], mappings, dataStore);
 
@@ -373,6 +382,18 @@ public sealed class IoViewViewModelBehaviorTests
 
             var floatSignal = decodedSignals.Single(static signal => signal.SignalKey == "浮点数组");
             Assert.Equal("12.5", floatSignal.DisplayValue);
+
+            var int32Signal = decodedSignals.Single(static signal => signal.SignalKey == "实际产量");
+            Assert.Equal("1037661", int32Signal.DisplayValue);
+            Assert.Equal(1037661, int32Signal.Value);
+
+            var uint32Signal = decodedSignals.Single(static signal => signal.SignalKey == "无符号累计");
+            Assert.Equal("131071", uint32Signal.DisplayValue);
+            Assert.Equal(131071, uint32Signal.Value);
+
+            var dwordSignal = decodedSignals.Single(static signal => signal.SignalKey == "双字状态");
+            Assert.Equal("65537", dwordSignal.DisplayValue);
+            Assert.Equal(65537, dwordSignal.Value);
         });
 
     [AvaloniaFact]

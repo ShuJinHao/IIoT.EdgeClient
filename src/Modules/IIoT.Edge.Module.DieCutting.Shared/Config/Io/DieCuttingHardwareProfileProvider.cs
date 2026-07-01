@@ -45,7 +45,7 @@ public sealed class DieCuttingHardwareProfileProvider
     protected override string ModuleDisplayName => $"{_definition.DisplayName}只读采集模块";
 
     public override ModulePlcDefaults GetDefaultPlcSettings()
-        => new(PlcType.Mc.ToString(), 3000, 65530, "E4");
+        => new(PlcType.Mc.ToString(), 3000, DieCuttingModuleDefinition.DefaultPlcPort, "E4");
 
     public override PlcIoRuntimePolicy GetIoRuntimePolicy()
         => new(

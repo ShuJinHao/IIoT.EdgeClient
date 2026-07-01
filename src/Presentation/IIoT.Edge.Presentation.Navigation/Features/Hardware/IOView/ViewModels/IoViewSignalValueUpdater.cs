@@ -147,9 +147,23 @@ internal sealed class IoViewSignalValueUpdater : IIoViewSignalValueUpdater
             return 0;
         }
 
-        return string.Equals(dataType, "Int16", StringComparison.OrdinalIgnoreCase)
-            ? unchecked((short)words[0])
-            : words[0];
+        var normalizedType = (dataType ?? string.Empty).Trim();
+        if (string.Equals(normalizedType, "Int16", StringComparison.OrdinalIgnoreCase))
+        {
+            return unchecked((short)words[0]);
+        }
+
+        if (IsInt32Type(normalizedType) && words.Count >= 2)
+        {
+            return CombineToInt32(words[1], words[0]);
+        }
+
+        if (IsUInt32Type(normalizedType) && words.Count >= 2)
+        {
+            return unchecked((int)CombineToUInt32(words[1], words[0]));
+        }
+
+        return words[0];
     }
 
     private static IReadOnlyList<string> DecodeWords(string dataType, IReadOnlyList<ushort> words)
@@ -181,8 +195,43 @@ internal sealed class IoViewSignalValueUpdater : IIoViewSignalValueUpdater
             return words.Select(static word => unchecked((short)word).ToString(CultureInfo.InvariantCulture)).ToArray();
         }
 
+        if (IsInt32Type(normalizedType))
+        {
+            var values = new List<string>();
+            for (var index = 0; index + 1 < words.Count; index += 2)
+            {
+                values.Add(CombineToInt32(words[index + 1], words[index]).ToString(CultureInfo.InvariantCulture));
+            }
+
+            return values;
+        }
+
+        if (IsUInt32Type(normalizedType))
+        {
+            var values = new List<string>();
+            for (var index = 0; index + 1 < words.Count; index += 2)
+            {
+                values.Add(CombineToUInt32(words[index + 1], words[index]).ToString(CultureInfo.InvariantCulture));
+            }
+
+            return values;
+        }
+
         return words.Select(static word => word.ToString(CultureInfo.InvariantCulture)).ToArray();
     }
+
+    private static bool IsInt32Type(string dataType)
+        => string.Equals(dataType, "Int32", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsUInt32Type(string dataType)
+        => string.Equals(dataType, "UInt32", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(dataType, "DWord", StringComparison.OrdinalIgnoreCase);
+
+    private static int CombineToInt32(ushort high, ushort low)
+        => unchecked((int)CombineToUInt32(high, low));
+
+    private static uint CombineToUInt32(ushort high, ushort low)
+        => ((uint)high << 16) | low;
 
     private static void SyncExpandedValues(
         ObservableCollection<IoSignalValueModel> target,

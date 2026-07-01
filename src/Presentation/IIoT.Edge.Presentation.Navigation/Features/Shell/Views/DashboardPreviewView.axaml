@@ -223,7 +223,6 @@
                                                     Command="{Binding DataContext.ShowPlcStatusDetailCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                     CommandParameter="{Binding}"
                                                     Content="{DynamicResource Navigation_DashboardPreview_PlcDetails}"
-                                                    IsEnabled="{Binding HasLastErrorDetail}"
                                                     Kind="Ghost"
                                                     Role="Cell"
                                                     Size="Compact"
@@ -385,7 +384,7 @@
                 MinWidth="460"
                 Title="{DynamicResource Navigation_DashboardPreview_PlcDetailTitle}"
                 VerticalAlignment="Center">
-                <Grid RowDefinitions="Auto,Auto,Auto,*" RowSpacing="{DynamicResource Edge.Size.Spacing8}">
+                <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,*" RowSpacing="{DynamicResource Edge.Size.Spacing8}">
                     <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
                         <TextBlock
                             Classes="edge-summary-card-label"
@@ -413,14 +412,90 @@
                         ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
                         <TextBlock
                             Classes="edge-summary-card-label"
+                            Text="{DynamicResource Navigation_DashboardPreview_PlcEndpoint}" />
+                        <TextBlock
+                            Grid.Column="1"
+                            Classes="edge-summary-card-value"
+                            Text="{Binding SelectedPlcStatusDetail.EndpointText}" />
+                    </Grid>
+                    <Grid
+                        Grid.Row="3"
+                        ColumnDefinitions="Auto,*"
+                        ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
+                        <TextBlock
+                            Classes="edge-summary-card-label"
+                            Text="{DynamicResource Navigation_DashboardPreview_PlcDeviceModel}" />
+                        <TextBlock
+                            Grid.Column="1"
+                            Classes="edge-summary-card-value"
+                            Text="{Binding SelectedPlcStatusDetail.DeviceModelText}" />
+                    </Grid>
+                    <Grid
+                        Grid.Row="4"
+                        ColumnDefinitions="Auto,*"
+                        ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
+                        <TextBlock
+                            Classes="edge-summary-card-label"
+                            Text="{DynamicResource Navigation_DashboardPreview_PlcProtocolFrame}" />
+                        <TextBlock
+                            Grid.Column="1"
+                            Classes="edge-summary-card-value"
+                            Text="{Binding SelectedPlcStatusDetail.ProtocolFrameText}" />
+                    </Grid>
+                    <Grid
+                        Grid.Row="5"
+                        ColumnDefinitions="Auto,*"
+                        ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
+                        <TextBlock
+                            Classes="edge-summary-card-label"
+                            Text="{DynamicResource Navigation_DashboardPreview_PlcLastAttempt}" />
+                        <TextBlock
+                            Grid.Column="1"
+                            Classes="edge-summary-card-value"
+                            Text="{Binding SelectedPlcStatusDetail.LastAttemptText}" />
+                    </Grid>
+                    <Grid
+                        Grid.Row="6"
+                        ColumnDefinitions="Auto,*"
+                        ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
+                        <TextBlock
+                            Classes="edge-summary-card-label"
+                            Text="{DynamicResource Navigation_DashboardPreview_PlcLastConnected}" />
+                        <TextBlock
+                            Grid.Column="1"
+                            Classes="edge-summary-card-value"
+                            Text="{Binding SelectedPlcStatusDetail.LastConnectedText}" />
+                    </Grid>
+                    <Grid
+                        Grid.Row="7"
+                        ColumnDefinitions="Auto,*"
+                        ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
+                        <TextBlock
+                            Classes="edge-summary-card-label"
+                            Text="{DynamicResource Navigation_DashboardPreview_PlcLastRead}" />
+                        <TextBlock
+                            Grid.Column="1"
+                            Classes="edge-summary-card-value"
+                            Text="{Binding SelectedPlcStatusDetail.LastReadText}" />
+                    </Grid>
+                    <Grid
+                        Grid.Row="8"
+                        ColumnDefinitions="Auto,*"
+                        ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
+                        <TextBlock
+                            Classes="edge-summary-card-label"
                             Text="{DynamicResource Navigation_DashboardPreview_PlcLastFailure}" />
                         <TextBlock
                             Grid.Column="1"
                             Classes="edge-summary-card-value"
                             Text="{Binding SelectedPlcStatusDetail.LastFailureText}" />
                     </Grid>
+                    <TextBlock
+                        Grid.Row="9"
+                        Classes="edge-summary-card-label"
+                        Text="{DynamicResource Navigation_DashboardPreview_PlcErrorDetail}" />
                     <edge:EdgeScrollHost
-                        Grid.Row="3"
+                        Grid.Row="10"
                         MaxHeight="220"
                         VerticalScrollBarVisibility="Auto">
                         <TextBlock

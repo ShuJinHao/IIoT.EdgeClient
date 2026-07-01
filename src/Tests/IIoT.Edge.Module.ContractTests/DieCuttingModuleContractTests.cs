@@ -27,6 +27,7 @@ using IIoT.Edge.SharedKernel.Specification;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using System.Linq.Expressions;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -132,9 +133,9 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         var ioMappings = new InMemoryRepository<IoMappingEntity>();
         var taskBindings = new InMemoryRepository<PlcTaskBindingEntity>();
         var existingDevice = NetworkDeviceEntity.Create(
-            $"{ExpectedFirstDevice[..^2]}02",
+            ExpectedDeviceName(2),
             DeviceType.PLC,
-            ExpectedFirstIpAddress,
+            ExpectedIpAddress(2),
             65530);
         existingDevice.UpdateDeviceModel("Mc");
         existingDevice.SetEnabled(false);
@@ -181,11 +182,45 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
             mapping.SignalKey == "DieCutting.DeviceStatus"
             && mapping.Direction == "Read"
             && mapping.PlcAddress == "R100");
+        Assert.Equal(65531, existingDevice.Port1);
         Assert.Equal(
             networkDevices.Items.Count,
             taskBindings.Items.Count(binding =>
                 binding.TaskKey == serviceProvider.GetRequiredService<DieCuttingModuleDefinition>().RealtimeSampleUploadTaskKey
                 && binding.Enabled));
+    }
+
+    [Fact]
+    public async Task DevelopmentSampleContributor_WhenExistingSeedDeviceUsesCustomPort_ShouldKeepCustomPort()
+    {
+        var configuration = CreateEnabledSeedConfiguration(resetBeforeImport: false);
+        var result = new ModuleContractFixture().RegisterModule(new TModule(), configuration);
+        var networkDevices = new InMemoryRepository<NetworkDeviceEntity>();
+        var ioMappings = new InMemoryRepository<IoMappingEntity>();
+        var taskBindings = new InMemoryRepository<PlcTaskBindingEntity>();
+        var existingDevice = NetworkDeviceEntity.Create(
+            ExpectedDeviceName(2),
+            DeviceType.PLC,
+            ExpectedIpAddress(2),
+            65000);
+        existingDevice.UpdateDeviceModel("Mc");
+        existingDevice.SetEnabled(false);
+        existingDevice.UpdateRemark(ExpectedDisplayName);
+        networkDevices.Add(existingDevice);
+        result.Services.AddSingleton(configuration);
+        result.Services.AddSingleton<ILogService, ContractLogService>();
+        result.Services.AddSingleton<IRepository<NetworkDeviceEntity>>(networkDevices);
+        result.Services.AddSingleton<IRepository<IoMappingEntity>>(ioMappings);
+        result.Services.AddSingleton<IRepository<PlcTaskBindingEntity>>(taskBindings);
+        await using var serviceProvider = result.Services.BuildServiceProvider();
+        var contributor = serviceProvider
+            .GetServices<IDevelopmentSampleContributor>()
+            .OfType<DieCuttingDevelopmentSampleContributor>()
+            .Single();
+
+        await contributor.EnsureConfigurationSamplesAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(65000, existingDevice.Port1);
     }
 
     [Fact]
@@ -380,6 +415,55 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
             new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
         Assert.Empty(tasks);
+    }
+
+    [Fact]
+    public async Task RealtimeSampleUploadTask_WhenPlcDisconnected_ShouldWriteChineseDiagnosticsLog()
+    {
+        var logEntries = new List<LogEntry>();
+        var logService = new ContractLogService();
+        logService.EntryAdded += entry => logEntries.Add(entry);
+
+        var runtime = CreateRealtimeSampleTask(
+            logService,
+            new DisconnectedPlcConnectionManager(),
+            new ContractDieCuttingModuleParamProvider(ExpectedModuleId, ExpectedUpperComputerNo, ExpectedOperationCode));
+        using var provider = runtime.Provider;
+
+        await InvokeTaskCoreOnceAsync(runtime.Task);
+
+        Assert.Contains(logEntries, entry =>
+            entry.Message.Contains("模切采样任务配置", StringComparison.Ordinal)
+            && entry.Message.Contains("MES地址=http://10.98.101.247:8080", StringComparison.Ordinal)
+            && entry.Message.Contains("上传周期=10000ms", StringComparison.Ordinal));
+        Assert.Contains(logEntries, entry =>
+            entry.Message.Contains("PLC 未连接，模切采样上传暂停", StringComparison.Ordinal));
+        Assert.DoesNotContain(logEntries, ContainsSensitiveMesCredentialText);
+    }
+
+    [Fact]
+    public async Task RealtimeSampleUploadTask_WhenLegacyMesBaseUrlConfigured_ShouldWarnWithoutCredentialText()
+    {
+        var logEntries = new List<LogEntry>();
+        var logService = new ContractLogService();
+        logService.EntryAdded += entry => logEntries.Add(entry);
+
+        var runtime = CreateRealtimeSampleTask(
+            logService,
+            new DisconnectedPlcConnectionManager(),
+            new ContractDieCuttingModuleParamProvider(
+                ExpectedModuleId,
+                ExpectedUpperComputerNo,
+                ExpectedOperationCode,
+                mesBaseUrl: ExpectedLegacyMesBaseUrl));
+        using var provider = runtime.Provider;
+
+        await InvokeTaskCoreOnceAsync(runtime.Task);
+
+        Assert.Contains(logEntries, entry =>
+            entry.Message.Contains("历史默认值", StringComparison.Ordinal)
+            && entry.Message.Contains(ExpectedLegacyMesBaseUrl, StringComparison.Ordinal));
+        Assert.DoesNotContain(logEntries, ContainsSensitiveMesCredentialText);
     }
 
     [Fact]
@@ -776,7 +860,61 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         Assert.Equal(deviceName, device.DeviceCode);
         Assert.Equal(deviceName, device.DeviceDisplayName);
         Assert.Equal(ipAddress, device.IpAddress);
-        Assert.Equal(65530, device.Port1);
+        Assert.Equal(65531, device.Port1);
+    }
+
+    private (IPlcTask Task, ServiceProvider Provider) CreateRealtimeSampleTask(
+        ILogService logService,
+        IPlcConnectionManager plcConnectionManager,
+        IModuleParamProvider<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business> parameters)
+    {
+        var result = new ModuleContractFixture().RegisterModule(new TModule());
+        Assert.True(result.RuntimeRegistry.TryGetFactory(ExpectedModuleId, out var factory));
+
+        var services = new ServiceCollection();
+        foreach (var descriptor in result.Services)
+        {
+            ((ICollection<ServiceDescriptor>)services).Add(descriptor);
+        }
+
+        ConfigureRuntimeServices(services);
+        services.AddSingleton(logService);
+        services.AddSingleton(plcConnectionManager);
+        services.AddSingleton(parameters);
+
+        var provider = services.BuildServiceProvider();
+        var tasks = factory.CreateTasks(
+            provider,
+            new PlcBuffer(128, 16),
+            new DieCuttingContext
+            {
+                DeviceName = ExpectedFirstDevice,
+                NetworkDeviceId = 1
+            },
+            factory.GetTaskCandidates().Select(static x => x.Key).ToHashSet(StringComparer.OrdinalIgnoreCase));
+
+        return (Assert.Single(tasks), provider);
+    }
+
+    private static async Task InvokeTaskCoreOnceAsync(IPlcTask task)
+    {
+        var method = task.GetType().GetMethod("DoCoreAsync", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        await Assert.IsAssignableFrom<Task>(method!.Invoke(task, []));
+    }
+
+    private static bool ContainsSensitiveMesCredentialText(LogEntry entry)
+        => entry.Message.Contains("token", StringComparison.OrdinalIgnoreCase)
+           || entry.Message.Contains("sign=", StringComparison.OrdinalIgnoreCase)
+           || entry.Message.Contains("密钥", StringComparison.OrdinalIgnoreCase);
+
+    private string ExpectedDeviceName(int index)
+        => $"{ExpectedFirstDevice[..^2]}{index:D2}";
+
+    private string ExpectedIpAddress(int index)
+    {
+        var lastDotIndex = ExpectedFirstIpAddress.LastIndexOf('.');
+        return $"{ExpectedFirstIpAddress[..(lastDotIndex + 1)]}{10 + index}";
     }
 
     private IConfiguration CreateEnabledSeedConfiguration(bool resetBeforeImport)
@@ -916,17 +1054,20 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         private readonly string _moduleId;
         private readonly string _upperComputerNo;
         private readonly string _operationCode;
+        private readonly string _mesBaseUrl;
         private readonly string _outboundPath;
 
         public ContractDieCuttingModuleParamProvider(
             string moduleId,
             string upperComputerNo,
             string operationCode,
+            string mesBaseUrl = "http://10.98.101.247:8080",
             string outboundPath = "/dev/dev/electrode/exit/push")
         {
             _moduleId = moduleId;
             _upperComputerNo = upperComputerNo;
             _operationCode = operationCode;
+            _mesBaseUrl = mesBaseUrl;
             _outboundPath = outboundPath;
         }
 
@@ -941,6 +1082,7 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
                     new Dictionary<DieCuttingParams.Mes, string?>
                     {
                         [DieCuttingParams.Mes.启用] = "true",
+                        [DieCuttingParams.Mes.服务地址] = _mesBaseUrl,
                         [DieCuttingParams.Mes.UpperComputerNo] = _upperComputerNo,
                         [DieCuttingParams.Mes.OperationCode] = _operationCode,
                         [DieCuttingParams.Mes.OrderPath] = "/dev/dev/get/order",
@@ -953,6 +1095,7 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
                     new Dictionary<DieCuttingParams.Mes, ParamValueKind>
                     {
                         [DieCuttingParams.Mes.启用] = ParamValueKind.Bool,
+                        [DieCuttingParams.Mes.服务地址] = ParamValueKind.String,
                         [DieCuttingParams.Mes.UpperComputerNo] = ParamValueKind.String,
                         [DieCuttingParams.Mes.OperationCode] = ParamValueKind.String,
                         [DieCuttingParams.Mes.OrderPath] = ParamValueKind.String,
@@ -1206,6 +1349,46 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
                 NetworkDeviceId = networkDeviceId,
                 DeviceName = "Contract-PLC",
                 IsConnected = true
+            };
+
+        public IReadOnlyCollection<PlcConnectionRuntimeSnapshot> GetRuntimeStatuses() => [];
+
+        public void Dispose()
+        {
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class DisconnectedPlcConnectionManager : IPlcConnectionManager
+    {
+        public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
+
+        public Task StopAsync(CancellationToken ct = default) => Task.CompletedTask;
+
+        public Task ReloadAsync(string deviceName, CancellationToken ct = default) => Task.CompletedTask;
+
+        public Task StopDeviceAsync(int networkDeviceId, CancellationToken ct = default) => Task.CompletedTask;
+
+        public void RegisterTasks(string deviceName, Func<IPlcBuffer, ProductionContext, List<IPlcTask>> factory)
+        {
+        }
+
+        public IPlcService? GetPlc(int networkDeviceId) => null;
+
+        public ProductionContext? GetContext(string deviceName) => null;
+
+        public void MarkRuntimeFault(int networkDeviceId, string deviceName, string error)
+        {
+        }
+
+        public PlcConnectionRuntimeSnapshot? GetRuntimeStatus(int networkDeviceId)
+            => new()
+            {
+                NetworkDeviceId = networkDeviceId,
+                DeviceName = "Contract-PLC",
+                IsConnected = false,
+                ConnectionState = PlcConnectionState.Disconnected
             };
 
         public IReadOnlyCollection<PlcConnectionRuntimeSnapshot> GetRuntimeStatuses() => [];

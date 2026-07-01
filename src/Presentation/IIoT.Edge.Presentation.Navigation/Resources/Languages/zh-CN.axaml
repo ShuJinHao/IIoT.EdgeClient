@@ -140,9 +140,16 @@
     <sys:String x:Key="Navigation_DashboardPreview_PlcLatency">延迟</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_PlcLastError">最近错误</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_PlcLastConnected">最后连接</sys:String>
+    <sys:String x:Key="Navigation_DashboardPreview_PlcLastAttempt">最近尝试</sys:String>
+    <sys:String x:Key="Navigation_DashboardPreview_PlcLastRead">最近读取</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_PlcLastFailure">最后失败</sys:String>
+    <sys:String x:Key="Navigation_DashboardPreview_PlcEndpoint">通讯地址</sys:String>
+    <sys:String x:Key="Navigation_DashboardPreview_PlcDeviceModel">设备型号</sys:String>
+    <sys:String x:Key="Navigation_DashboardPreview_PlcProtocolFrame">协议帧</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_PlcDetails">详情</sys:String>
-    <sys:String x:Key="Navigation_DashboardPreview_PlcDetailTitle">PLC 错误详情</sys:String>
+    <sys:String x:Key="Navigation_DashboardPreview_PlcDetailTitle">PLC 运行详情</sys:String>
+    <sys:String x:Key="Navigation_DashboardPreview_PlcErrorDetail">错误详情</sys:String>
+    <sys:String x:Key="Navigation_DashboardPreview_PlcNoError">暂无运行错误</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_Close">关闭</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_NoPlcStatusTitle">暂无 PLC 状态</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_NoPlcStatusSource">等待 PLC 运行快照。</sys:String>
@@ -152,6 +159,7 @@
     <sys:String x:Key="Navigation_DashboardPreview_PlcPartiallyUncollected">部分未采集</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_PlcStateUnknown">未知</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_PlcStateConnecting">连接中</sys:String>
+    <sys:String x:Key="Navigation_DashboardPreview_PlcStateConnectionTimeout">连接超时</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_PlcStateConnected">已连接</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_PlcStateRetrying">重试中</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_PlcStateDisconnected">未连接</sys:String>

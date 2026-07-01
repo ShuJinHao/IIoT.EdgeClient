@@ -52,7 +52,7 @@ public abstract class DieCuttingModuleBase : EdgeProcessModuleBase<DieCuttingCel
                 ModuleParamCategory.Mes,
                 nameof(DieCuttingParams.Mes.服务地址),
                 _definition.MesBaseUrl,
-                GetLegacyMesBaseUrls(_definition.ModuleId)),
+                _definition.LegacyMesBaseUrls),
             new ModuleParamDefaultOverride(
                 ModuleParamCategory.Mes,
                 nameof(DieCuttingParams.Mes.UpperComputerNo),
@@ -140,12 +140,4 @@ public abstract class DieCuttingModuleBase : EdgeProcessModuleBase<DieCuttingCel
                 ? expanded
                 : Path.Combine(AppContext.BaseDirectory, expanded));
     }
-
-    private static IReadOnlyCollection<string> GetLegacyMesBaseUrls(string moduleId)
-        => moduleId switch
-        {
-            "DieCuttingAnode" => ["http://10.110.0.250:8081"],
-            "DieCuttingCathode" => ["http://10.110.1.250:8081"],
-            _ => []
-        };
 }
