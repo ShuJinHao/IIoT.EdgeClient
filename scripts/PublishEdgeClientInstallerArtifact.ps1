@@ -387,7 +387,7 @@ function Invoke-CloudJsonPost {
     }
 
     if ([string]::IsNullOrWhiteSpace($script:CloudToken)) {
-        throw "CloudToken is required when RegisterCloudCatalog is set. Pass -CloudToken, set `$env:IIOT_CLOUD_RELEASE_TOKEN`, or run scripts/SaveEdgeReleaseToken.ps1."
+        throw "CloudToken is required when RegisterCloudCatalog is set. Pass -CloudToken, set `$env:IIOT_CLOUD_RELEASE_TOKEN`, set `$env:IIOT_EDGE_RELEASE_API_KEY`, or run scripts/SaveEdgeReleaseApiKey.ps1."
     }
 
     $apiRoot = $CloudApiBaseUrl.TrimEnd('/')

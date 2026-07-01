@@ -144,7 +144,7 @@ function Test-CloudAccess {
     }
 
     if ([string]::IsNullOrWhiteSpace($script:CloudToken)) {
-        Add-Failure 'CloudToken is required. Pass -CloudToken, set $env:IIOT_CLOUD_RELEASE_TOKEN, or run scripts/SaveEdgeReleaseToken.ps1 to store it in macOS Keychain.'
+        Add-Failure 'CloudToken is required. Pass -CloudToken, set $env:IIOT_CLOUD_RELEASE_TOKEN, set $env:IIOT_EDGE_RELEASE_API_KEY, or run scripts/SaveEdgeReleaseApiKey.ps1 to store the Edge Release API key in macOS Keychain.'
         return
     }
 

@@ -2,6 +2,7 @@ $EdgeReleaseAccessTokenService = 'iiot-edge-release-access-token'
 $EdgeReleaseRefreshTokenService = 'iiot-edge-release-refresh-token'
 $EdgeReleaseAccessTokenExpiresAtService = 'iiot-edge-release-access-token-expires-at'
 $EdgeReleaseRefreshTokenExpiresAtService = 'iiot-edge-release-refresh-token-expires-at'
+$EdgeReleaseApiKeyService = 'iiot-edge-release-api-key'
 $EdgeReleaseKeychainAccount = 'IIoT.EdgeClient'
 
 function Get-EdgeReleaseKeychainSecret {
@@ -133,12 +134,21 @@ function Refresh-EdgeReleaseCloudSession {
     )
 
     $apiRoot = Get-EdgeReleaseApiRoot -CloudApiBaseUrl $CloudApiBaseUrl
-    $response = Invoke-WebRequest `
-        -Method Post `
-        -Uri "$apiRoot/human/identity/refresh" `
-        -Headers @{ 'X-IIoT-Refresh-Token' = $RefreshToken } `
-        -UseBasicParsing `
-        -TimeoutSec 30
+    try {
+        $response = Invoke-WebRequest `
+            -Method Post `
+            -Uri "$apiRoot/human/identity/refresh" `
+            -Headers @{ 'X-IIoT-Refresh-Token' = $RefreshToken } `
+            -UseBasicParsing `
+            -TimeoutSec 30
+    }
+    catch {
+        if ($_.Exception.Response -and [int]$_.Exception.Response.StatusCode -eq 401) {
+            throw 'Human refresh token was rejected by Cloud. It is usually revoked by the active-session limit; use scripts/SaveEdgeReleaseApiKey.ps1 to store an Edge Release API key for stable deployments.'
+        }
+
+        throw
+    }
 
     $session = ConvertTo-EdgeReleaseSession -Response $response
     Save-EdgeReleaseCloudSession `
@@ -148,6 +158,36 @@ function Refresh-EdgeReleaseCloudSession {
         -RefreshTokenExpiresAt $session.RefreshTokenExpiresAt
 
     return $session.AccessToken
+}
+
+function Get-EdgeReleaseApiKeyToken {
+    param(
+        [Parameter(Mandatory = $true)][string]$CloudApiBaseUrl,
+        [Parameter(Mandatory = $true)][string]$ApiKey
+    )
+
+    $apiRoot = Get-EdgeReleaseApiRoot -CloudApiBaseUrl $CloudApiBaseUrl
+    try {
+        $response = Invoke-RestMethod `
+            -Method Post `
+            -Uri "$apiRoot/machine/edge-release/token" `
+            -Headers @{ 'X-IIoT-Edge-Release-Key' = $ApiKey } `
+            -TimeoutSec 30
+    }
+    catch {
+        if ($_.Exception.Response -and [int]$_.Exception.Response.StatusCode -eq 401) {
+            throw 'Edge Release API key was rejected by Cloud. The key is invalid, revoked, expired, or missing ClientRelease.Publish permission.'
+        }
+
+        throw
+    }
+
+    $token = [string]$response.accessToken
+    if ([string]::IsNullOrWhiteSpace($token)) {
+        throw 'Cloud machine token response did not include accessToken.'
+    }
+
+    return $token
 }
 
 function Test-EdgeReleaseTokenExpiry {
@@ -180,6 +220,17 @@ function Resolve-EdgeReleaseCloudToken {
 
     if (-not [string]::IsNullOrWhiteSpace($env:IIOT_CLOUD_RELEASE_TOKEN)) {
         return $env:IIOT_CLOUD_RELEASE_TOKEN
+    }
+
+    $apiKey = if (-not [string]::IsNullOrWhiteSpace($env:IIOT_EDGE_RELEASE_API_KEY)) {
+        $env:IIOT_EDGE_RELEASE_API_KEY
+    }
+    else {
+        Get-EdgeReleaseKeychainSecret -Service $EdgeReleaseApiKeyService
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($apiKey)) {
+        return Get-EdgeReleaseApiKeyToken -CloudApiBaseUrl $CloudApiBaseUrl -ApiKey $apiKey
     }
 
     $accessToken = Get-EdgeReleaseKeychainSecret -Service $EdgeReleaseAccessTokenService
