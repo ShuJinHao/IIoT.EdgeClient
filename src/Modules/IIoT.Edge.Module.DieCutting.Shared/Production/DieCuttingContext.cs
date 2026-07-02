@@ -22,6 +22,8 @@ public sealed class DieCuttingContext : ProductionContext
 
     public string? LastOutboundFingerprint { get; set; }
 
+    public string? LastProductionRecordFingerprint { get; set; }
+
     public string? LastDeviceStatusFingerprint { get; set; }
 
     /// <summary>

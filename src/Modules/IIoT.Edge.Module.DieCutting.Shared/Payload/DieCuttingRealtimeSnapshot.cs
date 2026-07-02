@@ -51,6 +51,11 @@ public sealed class DieCuttingRealtimeSnapshot
     public decimal PunchingSpeed { get; set; }
 
     /// <summary>
+    /// 放卷长度。
+    /// </summary>
+    public long UnwindingLength { get; set; }
+
+    /// <summary>
     /// 产量单位，固定 PCS。
     /// </summary>
     public string PunchingUom { get; set; } = "PCS";
@@ -133,6 +138,8 @@ public sealed class DieCuttingRealtimeSnapshot
         => string.Join(
             "\u001f",
             PunchingQuantity,
+            PunchingSpeed,
+            UnwindingLength,
             BatchNumber,
             ClipNoMg1,
             ClipNoMg2,

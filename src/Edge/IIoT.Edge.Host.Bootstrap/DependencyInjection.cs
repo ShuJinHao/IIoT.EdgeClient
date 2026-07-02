@@ -200,6 +200,7 @@ public static class DependencyInjection
         services.AddSingleton<IStartupAsyncDiagnosticValidator, StartupPlcConfigurationValidator>();
         services.AddSingleton<IStartupDiagnosticsReportBuilder, StartupDiagnosticsReportBuilder>();
         services.AddSingleton<IPlcRuntimeTaskBinder, PlcRuntimeTaskBinder>();
+        services.AddSingleton<IPlcRuntimeApplyService, PlcRuntimeApplyService>();
         services.AddSingleton<IAppRuntimeStateCoordinator, AppRuntimeStateCoordinator>();
         services.AddSingleton<IAppLifecycleCoordinator, AppLifecycleManager>();
         services.AddSingleton<AppLifecycleManager>(sp =>

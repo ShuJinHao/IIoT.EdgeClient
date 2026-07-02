@@ -44,6 +44,32 @@ namespace IIoT.Edge.Shell.Tests;
 public sealed class ModuleRuntimeRegistrationTests
 {
     [Fact]
+    public void StartupModuleRegistrationValidator_WhenModuleIsMesOnly_ShouldNotRequireCloudUploader()
+    {
+        var module = new DiagnosticProcessModule("MesOnlyModule", "MesOnlyProcess", requiresCloud: false, requiresMes: true);
+        var (validator, context) = CreateRegistrationValidatorContext(module, registerMesUploader: true);
+        var issues = new List<StartupDiagnosticIssue>();
+
+        validator.Validate(context, issues);
+
+        Assert.DoesNotContain(issues, issue => issue.Code == "CLOUD_UPLOADER_MISSING");
+        Assert.DoesNotContain(issues, issue => issue.Code == "MES_UPLOADER_MISSING");
+    }
+
+    [Fact]
+    public void StartupModuleRegistrationValidator_WhenModuleRequiresMesUploader_ShouldReportMissingMesUploader()
+    {
+        var module = new DiagnosticProcessModule("MesOnlyModule", "MesOnlyProcess", requiresCloud: false, requiresMes: true);
+        var (validator, context) = CreateRegistrationValidatorContext(module, registerMesUploader: false);
+        var issues = new List<StartupDiagnosticIssue>();
+
+        validator.Validate(context, issues);
+
+        Assert.DoesNotContain(issues, issue => issue.Code == "CLOUD_UPLOADER_MISSING");
+        Assert.Contains(issues, issue => issue.Code == "MES_UPLOADER_MISSING");
+    }
+
+    [Fact]
     public void ConfiguredCatalog_WhenNoModulesSectionExists_ShouldNotEnableDiscoveredModules()
     {
         var pluginRoot = CreatePluginRuntimeRoot();
@@ -61,6 +87,41 @@ public sealed class ModuleRuntimeRegistrationTests
         {
             DeleteDirectory(pluginRoot);
         }
+    }
+
+    private static (StartupModuleRegistrationValidator Validator, StartupValidationContext Context)
+        CreateRegistrationValidatorContext(
+            DiagnosticProcessModule module,
+            bool registerMesUploader)
+    {
+        var cellDataRegistry = new CellDataRegistry(new CellDataTypeRegistry());
+        cellDataRegistry.Register<DiagnosticCellData>(module.ProcessType);
+        var runtimeRegistry = new StationRuntimeRegistry();
+        runtimeRegistry.Register(new DiagnosticRuntimeFactory(module.ModuleId));
+        var integrationRegistry = new ProcessIntegrationRegistry();
+        if (registerMesUploader)
+        {
+            integrationRegistry.RegisterMesUploader(module.ProcessType, ProcessUploadMode.Single);
+        }
+
+        var context = new StartupValidationContext
+        {
+            ConfigurationProfile = new ConfigurationProfileSnapshot(
+                "Test",
+                "TestProfile",
+                "appsettings.machine.Test.json",
+                IsMachineProfileLoaded: true,
+                RuntimeDataRoot: "/tmp/test"),
+            SystemCloudEnabled = false,
+            PlcDevices = [],
+            ModulesById = new Dictionary<string, IEdgeProcessModule>(StringComparer.OrdinalIgnoreCase)
+            {
+                [module.ModuleId] = module
+            },
+            DiscoveredModulesById = new Dictionary<string, ModulePluginDescriptor>(StringComparer.OrdinalIgnoreCase),
+            HardwareProfilesByModuleId = new Dictionary<string, IModuleHardwareProfileProvider>(StringComparer.OrdinalIgnoreCase)
+        };
+        return (new StartupModuleRegistrationValidator(cellDataRegistry, runtimeRegistry, integrationRegistry), context);
     }
 
     [Fact]
@@ -1284,6 +1345,46 @@ public sealed class ModuleRuntimeRegistrationTests
     {
         public Task ReconcileAsync(CancellationToken cancellationToken = default)
             => Task.CompletedTask;
+    }
+
+    private sealed class DiagnosticProcessModule(
+        string moduleId,
+        string processType,
+        bool requiresCloud,
+        bool requiresMes) : IEdgeProcessModule
+    {
+        public string ModuleId { get; } = moduleId;
+
+        public string ProcessType { get; } = processType;
+
+        public string DisplayName => ModuleId;
+
+        public bool RequiresCloudUploader { get; } = requiresCloud;
+
+        public bool RequiresMesUploader { get; } = requiresMes;
+
+        public void Configure(IEdgeProcessModuleBuilder builder)
+        {
+        }
+    }
+
+    private sealed class DiagnosticRuntimeFactory(string moduleId) : IStationRuntimeFactory
+    {
+        public string ModuleId { get; } = moduleId;
+
+        public IReadOnlyCollection<TaskCandidate> GetTaskCandidates() => [];
+
+        public List<IPlcTask> CreateTasks(
+            IServiceProvider serviceProvider,
+            IPlcBuffer buffer,
+            ProductionContext context,
+            IReadOnlySet<string> enabledTaskKeys)
+            => [];
+    }
+
+    private sealed class DiagnosticCellData : CellDataBase
+    {
+        public override string ProcessType => "Diagnostic";
     }
 
     private sealed class ThrowingStartupAsyncDiagnosticValidator(Exception exception) : IStartupAsyncDiagnosticValidator

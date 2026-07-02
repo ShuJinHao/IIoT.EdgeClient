@@ -113,31 +113,7 @@ public static class DieCuttingParams
             DefaultValue = "/dev/dev/realTime/status",
             DisplayNameFallback = "MES设备状态路径",
             DescriptionFallback = "模切 R100 设备状态上传接口相对路径。")]
-        EquipmentStatusPath,
-
-        /// <summary>
-        /// MES 上传频率，单位毫秒。
-        /// </summary>
-        [ModuleParam(
-            ParamValueKind.Int,
-            DefaultValue = "10000",
-            Unit = "ms",
-            MinValue = "1000",
-            DisplayNameFallback = "MES上传频率",
-            DescriptionFallback = "模切采样快照上传 MES 的周期。")]
-        上传频率毫秒,
-
-        /// <summary>
-        /// PLC 数据新鲜度超时，单位毫秒。
-        /// </summary>
-        [ModuleParam(
-            ParamValueKind.Int,
-            DefaultValue = "5000",
-            Unit = "ms",
-            MinValue = "1000",
-            DisplayNameFallback = "数据新鲜度超时",
-            DescriptionFallback = "PLC 只读数据超过该时间未刷新时不上报 MES，避免旧值伪装成新采样。")]
-        数据新鲜度超时毫秒
+        EquipmentStatusPath
     }
 
     /// <summary>
@@ -163,7 +139,7 @@ public static class DieCuttingParams
             MinValue = "500",
             Role = ModuleParamRole.DataReadLoopIntervalMs,
             DisplayNameFallback = "PLC采集频率",
-            DescriptionFallback = "DeviceComm 只读数据扫描任务每轮间隔，运行时读取本地参数快照，不依赖在线 Cloud。")]
+            DescriptionFallback = "PLC 只读数据扫描和模切采样处理共用的每轮间隔。采集后有变化才上传 MES，不依赖在线 Cloud。")]
         采集频率毫秒
     }
 }

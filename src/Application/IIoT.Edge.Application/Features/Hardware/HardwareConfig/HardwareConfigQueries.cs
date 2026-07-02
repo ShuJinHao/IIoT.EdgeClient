@@ -136,7 +136,8 @@ public class LoadIoMappingsHandler(ISender sender)
 public class SaveHardwareConfigHandler(
     ISender sender,
     IClientPermissionService permissionService,
-    IPlcConnectionManager plcConnectionManager)
+    IPlcConnectionManager plcConnectionManager,
+    IPlcRuntimeApplyService plcRuntimeApplyService)
     : IRequestHandler<SaveHardwareConfigCommand, CrudOperationResult>
 {
     public async Task<CrudOperationResult> Handle(SaveHardwareConfigCommand request, CancellationToken ct)
@@ -251,7 +252,24 @@ public class SaveHardwareConfigHandler(
         {
             try
             {
-                await plcConnectionManager.ReloadAsync(target.DeviceName, ct);
+                if (target.DeviceId.HasValue)
+                {
+                    await plcRuntimeApplyService
+                        .ApplyDeviceRuntimeAsync(
+                            target.DeviceId.Value,
+                            "硬件配置或 IO 映射保存",
+                            ct)
+                        .ConfigureAwait(false);
+                }
+                else
+                {
+                    await plcRuntimeApplyService
+                        .ApplyDeviceRuntimeAsync(
+                            target.DeviceName,
+                            "硬件配置或 IO 映射保存",
+                            ct)
+                        .ConfigureAwait(false);
+                }
             }
             catch (Exception ex)
             {

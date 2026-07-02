@@ -66,7 +66,7 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
         _plcConnectionManager = plcConnectionManager;
         _parameters = parameters;
         _moduleOptions = moduleOptions.Value;
-        _taskLoopInterval = NormalizeInterval(_moduleOptions.Runtime.UploadLoopIntervalMs, 10000);
+        _taskLoopInterval = NormalizeInterval(_moduleOptions.Runtime.DataReadLoopIntervalMs, 1000);
     }
 
     public override string TaskName => _definition.RealtimeSampleUploadTaskKey;
@@ -77,20 +77,14 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
     {
         var parameterSnapshot = await _parameters.GetAsync(TaskCancellationToken).ConfigureAwait(false);
         _taskLoopInterval = NormalizeInterval(
-            parameterSnapshot.Mes<int>(DieCuttingParams.Mes.上传频率毫秒),
-            _moduleOptions.Runtime.UploadLoopIntervalMs);
-        var freshnessTimeoutMs = NormalizeInterval(
-            parameterSnapshot.Mes<int>(DieCuttingParams.Mes.数据新鲜度超时毫秒),
+            parameterSnapshot.Business<int>(DieCuttingParams.Business.采集频率毫秒),
+            _moduleOptions.Runtime.DataReadLoopIntervalMs);
+        var freshnessTimeoutMs = ResolveFreshnessTimeout(
+            _taskLoopInterval,
             _moduleOptions.Runtime.DataFreshnessTimeoutMs);
 
         LogConfigurationIfNeeded(parameterSnapshot, freshnessTimeoutMs);
         WarnIfLegacyMesBaseUrl(parameterSnapshot);
-
-        if (!parameterSnapshot.Mes<bool>(DieCuttingParams.Mes.启用))
-        {
-            await RecordResultAsync(null, MesCallResult.Disabled("MES 上传已关闭，模切采样上传暂停。")).ConfigureAwait(false);
-            return;
-        }
 
         var connectionResult = EnsurePlcConnected();
         if (!connectionResult.IsSuccess)
@@ -111,19 +105,34 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
         var snapshot = _codec.CaptureRealtimeSnapshot(identity, windowStartAt);
         var statusSnapshot = _codec.CaptureDeviceStatusSnapshot();
         var deviceSession = CreateDeviceSession(identity);
-        var outboundChanged = HasOutboundChanged(snapshot);
+        var outboundFingerprint = snapshot.CreateOutboundFingerprint();
+        var outboundChanged = HasOutboundChanged(outboundFingerprint);
+        var productionRecordChanged = HasProductionRecordChanged(outboundFingerprint);
         var statusChanged = HasDeviceStatusChanged(statusSnapshot);
         MesCallResult outboundResult;
 
+        if (productionRecordChanged && await StoreProductionRecordAsync(snapshot).ConfigureAwait(false))
+        {
+            _context.LastProductionRecordFingerprint = outboundFingerprint;
+        }
+
+        if (!parameterSnapshot.Mes<bool>(DieCuttingParams.Mes.启用))
+        {
+            var disabledMessage = productionRecordChanged
+                ? "MES 上传已关闭，已完成本地模切采样和生产记录更新。"
+                : "MES 上传已关闭，模切采样快照未变化。";
+            await RecordResultAsync(snapshot, MesCallResult.Disabled(disabledMessage)).ConfigureAwait(false);
+            return;
+        }
+
         if (outboundChanged)
         {
-            await StoreProductionRecordAsync(snapshot).ConfigureAwait(false);
             outboundResult = await _mesChannel
                 .UploadRealtimeAsync(deviceSession, snapshot, TaskCancellationToken)
                 .ConfigureAwait(false);
             if (outboundResult.IsSuccess)
             {
-                _context.LastOutboundFingerprint = snapshot.CreateOutboundFingerprint();
+                _context.LastOutboundFingerprint = outboundFingerprint;
                 _context.NextWindowStartAt = snapshot.WindowCompleteAt;
             }
         }
@@ -191,7 +200,7 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
         return MesCallResult.InvalidContext("PLC 未连接，模切采样上传暂停。");
     }
 
-    private async Task StoreProductionRecordAsync(DieCuttingRealtimeSnapshot snapshot)
+    private async Task<bool> StoreProductionRecordAsync(DieCuttingRealtimeSnapshot snapshot)
     {
         try
         {
@@ -215,10 +224,12 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
                     CreatedAtUtc = DateTime.UtcNow
                 },
                 TaskCancellationToken).ConfigureAwait(false);
+            return true;
         }
         catch (Exception ex)
         {
             Logger.Error($"[{_context.DeviceName}] 模切生产数据本地保存失败: {ex.Message}");
+            return false;
         }
     }
 
@@ -242,10 +253,16 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
         return Task.CompletedTask;
     }
 
-    private bool HasOutboundChanged(DieCuttingRealtimeSnapshot snapshot)
+    private bool HasOutboundChanged(string fingerprint)
         => !string.Equals(
             _context.LastOutboundFingerprint,
-            snapshot.CreateOutboundFingerprint(),
+            fingerprint,
+            StringComparison.Ordinal);
+
+    private bool HasProductionRecordChanged(string fingerprint)
+        => !string.Equals(
+            _context.LastProductionRecordFingerprint,
+            fingerprint,
             StringComparison.Ordinal);
 
     private bool HasDeviceStatusChanged(DieCuttingDeviceStatusSnapshot snapshot)
@@ -287,6 +304,11 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
         return Math.Max(500, value <= 0 ? normalizedFallback : value);
     }
 
+    private static int ResolveFreshnessTimeout(int taskLoopIntervalMs, int configured)
+        => Math.Max(
+            Math.Max(taskLoopIntervalMs * 3, 3000),
+            configured <= 0 ? 0 : configured);
+
     private void LogConfigurationIfNeeded(
         ModuleParamSnapshot<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business> parameters,
         int freshnessTimeoutMs)
@@ -300,7 +322,7 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
         var outboundPath = NormalizeLogText(parameters.Mes<string>(DieCuttingParams.Mes.OutboundPath));
         var statusPath = NormalizeLogText(parameters.Mes<string>(DieCuttingParams.Mes.EquipmentStatusPath));
         Logger.Info(
-            $"[{_context.DeviceName}] 模切采样任务配置：MES地址={mesBaseUrl}，出站路径={outboundPath}，设备状态路径={statusPath}，上传周期={_taskLoopInterval}ms，数据新鲜度={freshnessTimeoutMs}ms。");
+            $"[{_context.DeviceName}] 模切采样任务配置：MES地址={mesBaseUrl}，出站路径={outboundPath}，设备状态路径={statusPath}，采集处理周期={_taskLoopInterval}ms，新鲜度保护={freshnessTimeoutMs}ms；采集后关键数据变化才上传 MES。");
         _configurationLogged = true;
     }
 
@@ -334,7 +356,7 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
 
         var message = snapshot is null
             ? $"[{_context.DeviceName}] 模切采样结果：{result.Message}"
-            : $"[{_context.DeviceName}] 模切采样结果：{result.Message} 批次={NormalizeLogText(snapshot.PunchingLotNumber)}，产量={snapshot.PunchingQuantity}，冲切速度={snapshot.PunchingSpeed}，弹夹={NormalizeLogText(snapshot.ClipNo)}。";
+            : $"[{_context.DeviceName}] 模切采样结果：{result.Message} 批次={NormalizeLogText(snapshot.PunchingLotNumber)}，产量={snapshot.PunchingQuantity}，冲切速度={snapshot.PunchingSpeed}，放卷长度={snapshot.UnwindingLength}，弹夹={NormalizeLogText(snapshot.ClipNo)}。";
         WriteOutcomeLog(result.Outcome, message);
     }
 

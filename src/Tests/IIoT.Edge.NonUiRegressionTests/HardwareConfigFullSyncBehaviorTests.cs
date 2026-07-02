@@ -482,7 +482,8 @@ public sealed class HardwareConfigFullSyncBehaviorTests
         => new(
             sender,
             new StubPermissionService { CanEditHardware = true },
-            plcManager);
+            plcManager,
+            new FakePlcRuntimeApplyService(sender, plcManager));
 
     private static NetworkDeviceEntity CreateNetworkDevice(
         int id,
@@ -823,5 +824,35 @@ public sealed class HardwareConfigFullSyncBehaviorTests
         }
 
         public bool HasPermission(string permission) => CanEditHardware;
+    }
+
+    private sealed class FakePlcRuntimeApplyService(
+        HardwareConfigSender sender,
+        FakePlcConnectionManager plcManager) : IPlcRuntimeApplyService
+    {
+        public Task ApplyDeviceRuntimeAsync(
+            int networkDeviceId,
+            string reason,
+            CancellationToken cancellationToken = default)
+        {
+            var deviceName = ResolveSubmittedDeviceName(networkDeviceId)
+                             ?? sender.ExistingNetworkDevices.FirstOrDefault(x => x.Id == networkDeviceId)?.DeviceName
+                             ?? $"DeviceId={networkDeviceId}";
+            return plcManager.ReloadAsync(deviceName, cancellationToken);
+        }
+
+        public Task ApplyDeviceRuntimeAsync(
+            string deviceName,
+            string reason,
+            CancellationToken cancellationToken = default)
+            => plcManager.ReloadAsync(deviceName, cancellationToken);
+
+        private string? ResolveSubmittedDeviceName(int networkDeviceId)
+            => sender.Requests
+                .OfType<SaveNetworkDevicesCommand>()
+                .LastOrDefault()
+                ?.Devices
+                .FirstOrDefault(x => x.Id == networkDeviceId)
+                ?.DeviceName;
     }
 }

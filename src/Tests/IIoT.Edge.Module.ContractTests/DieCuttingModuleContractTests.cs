@@ -8,10 +8,12 @@ using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Application.Features.Production.Planning;
 using IIoT.Edge.Application.Modules;
+using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Module.DieCutting;
 using IIoT.Edge.Module.DieCutting.Config;
+using IIoT.Edge.Module.DieCutting.Config.Io;
 using IIoT.Edge.Module.DieCutting.Config.Parameters;
 using IIoT.Edge.Module.DieCutting.Mes;
 using IIoT.Edge.Module.DieCutting.Payload;
@@ -435,7 +437,7 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         Assert.Contains(logEntries, entry =>
             entry.Message.Contains("模切采样任务配置", StringComparison.Ordinal)
             && entry.Message.Contains("MES地址=http://10.98.101.247:8080", StringComparison.Ordinal)
-            && entry.Message.Contains("上传周期=10000ms", StringComparison.Ordinal));
+            && entry.Message.Contains("采集处理周期=1000ms", StringComparison.Ordinal));
         Assert.Contains(logEntries, entry =>
             entry.Message.Contains("PLC 未连接，模切采样上传暂停", StringComparison.Ordinal));
         Assert.DoesNotContain(logEntries, ContainsSensitiveMesCredentialText);
@@ -464,6 +466,42 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
             entry.Message.Contains("历史默认值", StringComparison.Ordinal)
             && entry.Message.Contains(ExpectedLegacyMesBaseUrl, StringComparison.Ordinal));
         Assert.DoesNotContain(logEntries, ContainsSensitiveMesCredentialText);
+    }
+
+    [Fact]
+    public async Task RealtimeSampleUploadTask_WhenMesDisabled_ShouldStillCaptureLocalProductionData()
+    {
+        var logService = new ContractLogService();
+        var recordStore = new InMemoryDieCuttingProductionRecordStore();
+        var mesChannel = new CountingDieCuttingMesChannel(ExpectedModuleId);
+        var runtime = CreateRealtimeSampleRuntime(
+            logService,
+            new ContractPlcConnectionManager(),
+            new ContractDieCuttingModuleParamProvider(
+                ExpectedModuleId,
+                ExpectedUpperComputerNo,
+                ExpectedOperationCode,
+                mesEnabled: false),
+            recordStore,
+            mesChannel);
+        using var provider = runtime.Provider;
+        SeedRealtimeSignals(runtime.Buffer);
+
+        await InvokeTaskCoreOnceAsync(runtime.Task);
+        await InvokeTaskCoreOnceAsync(runtime.Task);
+
+        var records = await recordStore.QueryAsync(
+            ExpectedModuleId,
+            ExpectedFirstDevice,
+            cancellationToken: TestContext.Current.CancellationToken);
+        var record = Assert.Single(records);
+        Assert.Equal("BATCH-1", record.BatchNo);
+        Assert.Equal(100, record.Quantity);
+        Assert.Equal(12.5m, record.PunchingSpeed);
+        Assert.Equal(3456, runtime.Context.LastRealtimeSnapshot?.UnwindingLength);
+        Assert.Contains("MES 上传已关闭", runtime.Context.LastRealtimeResult);
+        Assert.Equal(0, mesChannel.RealtimeUploadCount);
+        Assert.Equal(0, mesChannel.DeviceStatusUploadCount);
     }
 
     [Fact]
@@ -540,6 +578,19 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         Assert.Equal(string.Empty, identity.DeviceCode);
         Assert.Equal(ExpectedFirstDevice, identity.DeviceName);
         Assert.Equal(ExpectedFirstDevice, identity.UpperComputerNo);
+    }
+
+    [Fact]
+    public void RealtimeSnapshotFingerprint_WhenSpeedOrUnwindingLengthChanges_ShouldChange()
+    {
+        var baseline = CreateFingerprintSnapshot();
+        var speedChanged = CreateFingerprintSnapshot();
+        speedChanged.PunchingSpeed += 1;
+        var unwindingChanged = CreateFingerprintSnapshot();
+        unwindingChanged.UnwindingLength += 1;
+
+        Assert.NotEqual(baseline.CreateOutboundFingerprint(), speedChanged.CreateOutboundFingerprint());
+        Assert.NotEqual(baseline.CreateOutboundFingerprint(), unwindingChanged.CreateOutboundFingerprint());
     }
 
     [Fact]
@@ -863,10 +914,43 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         Assert.Equal(65531, device.Port1);
     }
 
+    private static DieCuttingRealtimeSnapshot CreateFingerprintSnapshot()
+        => new()
+        {
+            PunchingQuantity = 100,
+            PunchingSpeed = 12.5m,
+            UnwindingLength = 3456,
+            BatchNumber = "BATCH-1",
+            ClipNoMg1 = "MG1",
+            ClipNoMg2 = "MG2",
+            Mg1ReceivingActual = 10,
+            Mg2ReceivingActual = 20,
+            OkSheetQuantity = 30,
+            OperatorCode = "OP",
+            MoldCode = "MOLD",
+            CutterCode = "CUTTER"
+        };
+
     private (IPlcTask Task, ServiceProvider Provider) CreateRealtimeSampleTask(
         ILogService logService,
         IPlcConnectionManager plcConnectionManager,
         IModuleParamProvider<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business> parameters)
+    {
+        var runtime = CreateRealtimeSampleRuntime(
+            logService,
+            plcConnectionManager,
+            parameters,
+            recordStore: null,
+            mesChannel: null);
+        return (runtime.Task, runtime.Provider);
+    }
+
+    private RealtimeSampleRuntime CreateRealtimeSampleRuntime(
+        ILogService logService,
+        IPlcConnectionManager plcConnectionManager,
+        IModuleParamProvider<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business> parameters,
+        IDieCuttingProductionRecordStore? recordStore,
+        IDieCuttingMesScenarioChannel? mesChannel)
     {
         var result = new ModuleContractFixture().RegisterModule(new TModule());
         Assert.True(result.RuntimeRegistry.TryGetFactory(ExpectedModuleId, out var factory));
@@ -881,19 +965,95 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         services.AddSingleton(logService);
         services.AddSingleton(plcConnectionManager);
         services.AddSingleton(parameters);
+        if (recordStore is not null)
+        {
+            services.AddSingleton(recordStore);
+        }
+
+        if (mesChannel is not null)
+        {
+            services.AddSingleton(mesChannel);
+        }
 
         var provider = services.BuildServiceProvider();
+        var buffer = new PlcBuffer(128, 16);
+        var context = new DieCuttingContext
+        {
+            DeviceName = ExpectedFirstDevice,
+            NetworkDeviceId = 1
+        };
         var tasks = factory.CreateTasks(
             provider,
-            new PlcBuffer(128, 16),
-            new DieCuttingContext
-            {
-                DeviceName = ExpectedFirstDevice,
-                NetworkDeviceId = 1
-            },
+            buffer,
+            context,
             factory.GetTaskCandidates().Select(static x => x.Key).ToHashSet(StringComparer.OrdinalIgnoreCase));
 
-        return (Assert.Single(tasks), provider);
+        return new RealtimeSampleRuntime(Assert.Single(tasks), provider, buffer, context);
+    }
+
+    private static void SeedRealtimeSignals(PlcBuffer buffer)
+    {
+        foreach (var signalKey in DieCuttingSignalCodec.RequiredSignalKeys)
+        {
+            buffer.UpdateReadSignal(signalKey, [0]);
+        }
+
+        SetReadInt16(buffer, DieCuttingPlcSignals.SingleRead.设备状态, 1);
+        SetReadInt32(buffer, DieCuttingPlcSignals.SingleRead.实际产量, 100);
+        SetReadInt32(buffer, DieCuttingPlcSignals.SingleRead.冲切速度, 1_250_000);
+        SetReadInt32(buffer, DieCuttingPlcSignals.SingleRead.放卷长度, 3456);
+        SetReadUInt16(buffer, DieCuttingPlcSignals.SingleRead.收料片数MG1实际, 10);
+        SetReadUInt16(buffer, DieCuttingPlcSignals.SingleRead.收料片数MG2实际, 20);
+        SetReadInt32(buffer, DieCuttingPlcSignals.SingleRead.弹夹OK级片数量, 30);
+        SetReadAscii(buffer, DieCuttingPlcSignals.ContinuousRead.批次号, "BATCH-1", 8);
+        SetReadAscii(buffer, DieCuttingPlcSignals.ContinuousRead.弹夹号MG1, "MG1", 11);
+        SetReadAscii(buffer, DieCuttingPlcSignals.ContinuousRead.操作员工号, "OP", 5);
+        SetReadAscii(buffer, DieCuttingPlcSignals.ContinuousRead.模具编号, "MOLD", 5);
+        SetReadAscii(buffer, DieCuttingPlcSignals.ContinuousRead.切刀编号, "CUTTER", 5);
+    }
+
+    private static void SetReadUInt16(
+        PlcBuffer buffer,
+        DieCuttingPlcSignals.SingleRead key,
+        ushort value)
+        => buffer.UpdateReadSignal(EnumPlcSignalMetadata.GetRead(key).SignalKey, [value]);
+
+    private static void SetReadInt16(
+        PlcBuffer buffer,
+        DieCuttingPlcSignals.SingleRead key,
+        short value)
+        => SetReadUInt16(buffer, key, unchecked((ushort)value));
+
+    private static void SetReadInt32(
+        PlcBuffer buffer,
+        DieCuttingPlcSignals.SingleRead key,
+        int value)
+        => buffer.UpdateReadSignal(
+            EnumPlcSignalMetadata.GetRead(key).SignalKey,
+            [unchecked((ushort)value), unchecked((ushort)(value >> 16))]);
+
+    private static void SetReadAscii(
+        PlcBuffer buffer,
+        DieCuttingPlcSignals.ContinuousRead key,
+        string value,
+        int wordCount)
+    {
+        var bytes = Encoding.ASCII.GetBytes(value);
+        var words = new ushort[wordCount];
+        for (var index = 0; index < bytes.Length && index / 2 < words.Length; index++)
+        {
+            var wordIndex = index / 2;
+            if (index % 2 == 0)
+            {
+                words[wordIndex] = bytes[index];
+            }
+            else
+            {
+                words[wordIndex] |= (ushort)(bytes[index] << 8);
+            }
+        }
+
+        buffer.UpdateReadSignal(EnumPlcSignalMetadata.GetRead(key).SignalKey, words);
     }
 
     private static async Task InvokeTaskCoreOnceAsync(IPlcTask task)
@@ -907,6 +1067,12 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         => entry.Message.Contains("token", StringComparison.OrdinalIgnoreCase)
            || entry.Message.Contains("sign=", StringComparison.OrdinalIgnoreCase)
            || entry.Message.Contains("密钥", StringComparison.OrdinalIgnoreCase);
+
+    private sealed record RealtimeSampleRuntime(
+        IPlcTask Task,
+        ServiceProvider Provider,
+        PlcBuffer Buffer,
+        DieCuttingContext Context);
 
     private string ExpectedDeviceName(int index)
         => $"{ExpectedFirstDevice[..^2]}{index:D2}";
@@ -1048,6 +1214,80 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         public void RecordFailure(string processType, string failureReason) { }
     }
 
+    private sealed class InMemoryDieCuttingProductionRecordStore : IDieCuttingProductionRecordStore
+    {
+        private readonly List<DieCuttingProductionRecord> _records = [];
+
+        public Task AddAsync(DieCuttingProductionRecord record, CancellationToken cancellationToken = default)
+        {
+            _records.Add(record);
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<DieCuttingProductionRecord>> QueryAsync(
+            string moduleId,
+            string? deviceName = null,
+            int limit = 200,
+            CancellationToken cancellationToken = default)
+        {
+            var rows = _records
+                .Where(record => string.Equals(record.ModuleId, moduleId, StringComparison.OrdinalIgnoreCase))
+                .Where(record => string.IsNullOrWhiteSpace(deviceName)
+                                 || string.Equals(record.DeviceName, deviceName, StringComparison.OrdinalIgnoreCase))
+                .Take(limit)
+                .ToArray();
+            return Task.FromResult<IReadOnlyList<DieCuttingProductionRecord>>(rows);
+        }
+    }
+
+    private sealed class CountingDieCuttingMesChannel : IDieCuttingMesScenarioChannel
+    {
+        public CountingDieCuttingMesChannel(string processType)
+        {
+            ProcessType = processType;
+        }
+
+        public string ProcessType { get; }
+        public ProcessUploadMode UploadMode => ProcessUploadMode.Single;
+        public int RealtimeUploadCount { get; private set; }
+        public int DeviceStatusUploadCount { get; private set; }
+
+        public Task<MesCallResult> UploadAsync(
+            ProcessUploadContext context,
+            IReadOnlyList<IIoT.Edge.SharedKernel.DataPipeline.CellCompletedRecord> records,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(MesCallResult.Success());
+
+        public Task<MesCallResult<DieCuttingMainPlan>> GetMainPlanAsync(
+            DieCuttingMainPlanRequest request,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(MesCallResult<DieCuttingMainPlan>.Success(new DieCuttingMainPlan([])));
+
+        public Task<MesCallResult<DieCuttingTraceBatchResult>> GenerateTraceBatchNumberAsync(
+            DieCuttingTraceBatchRequest request,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(MesCallResult<DieCuttingTraceBatchResult>.Success(
+                new DieCuttingTraceBatchResult("TRACE-TEST", default)));
+
+        public Task<MesCallResult> UploadRealtimeAsync(
+            DeviceSession? device,
+            DieCuttingRealtimeSnapshot snapshot,
+            CancellationToken cancellationToken = default)
+        {
+            RealtimeUploadCount++;
+            return Task.FromResult(MesCallResult.Success());
+        }
+
+        public Task<MesCallResult> UploadEquipmentStatusAsync(
+            DeviceSession? device,
+            DieCuttingDeviceStatusSnapshot snapshot,
+            CancellationToken cancellationToken = default)
+        {
+            DeviceStatusUploadCount++;
+            return Task.FromResult(MesCallResult.Success());
+        }
+    }
+
     private sealed class ContractDieCuttingModuleParamProvider
         : IModuleParamProvider<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business>
     {
@@ -1062,14 +1302,18 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
             string upperComputerNo,
             string operationCode,
             string mesBaseUrl = "http://10.98.101.247:8080",
-            string outboundPath = "/dev/dev/electrode/exit/push")
+            string outboundPath = "/dev/dev/electrode/exit/push",
+            bool mesEnabled = true)
         {
             _moduleId = moduleId;
             _upperComputerNo = upperComputerNo;
             _operationCode = operationCode;
             _mesBaseUrl = mesBaseUrl;
             _outboundPath = outboundPath;
+            MesEnabled = mesEnabled;
         }
+
+        private bool MesEnabled { get; }
 
         public Task<ModuleParamSnapshot<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business>> GetAsync(
             CancellationToken cancellationToken = default)
@@ -1081,16 +1325,14 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
                     new Dictionary<DieCuttingParams.Mes, string>(),
                     new Dictionary<DieCuttingParams.Mes, string?>
                     {
-                        [DieCuttingParams.Mes.启用] = "true",
+                        [DieCuttingParams.Mes.启用] = MesEnabled ? "true" : "false",
                         [DieCuttingParams.Mes.服务地址] = _mesBaseUrl,
                         [DieCuttingParams.Mes.UpperComputerNo] = _upperComputerNo,
                         [DieCuttingParams.Mes.OperationCode] = _operationCode,
                         [DieCuttingParams.Mes.OrderPath] = "/dev/dev/get/order",
                         [DieCuttingParams.Mes.BatchNumberPath] = "/dev/dev/get/batchNumber",
                         [DieCuttingParams.Mes.OutboundPath] = _outboundPath,
-                        [DieCuttingParams.Mes.EquipmentStatusPath] = "/dev/dev/realTime/status",
-                        [DieCuttingParams.Mes.上传频率毫秒] = "10000",
-                        [DieCuttingParams.Mes.数据新鲜度超时毫秒] = "5000"
+                        [DieCuttingParams.Mes.EquipmentStatusPath] = "/dev/dev/realTime/status"
                     },
                     new Dictionary<DieCuttingParams.Mes, ParamValueKind>
                     {
@@ -1101,9 +1343,7 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
                         [DieCuttingParams.Mes.OrderPath] = ParamValueKind.String,
                         [DieCuttingParams.Mes.BatchNumberPath] = ParamValueKind.String,
                         [DieCuttingParams.Mes.OutboundPath] = ParamValueKind.String,
-                        [DieCuttingParams.Mes.EquipmentStatusPath] = ParamValueKind.String,
-                        [DieCuttingParams.Mes.上传频率毫秒] = ParamValueKind.Int,
-                        [DieCuttingParams.Mes.数据新鲜度超时毫秒] = ParamValueKind.Int
+                        [DieCuttingParams.Mes.EquipmentStatusPath] = ParamValueKind.String
                     },
                     warn: null),
                 new ModuleParamGroup<DieCuttingParams.Cloud>(

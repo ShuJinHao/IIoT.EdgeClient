@@ -1,5 +1,6 @@
 using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Presentation.Navigation.Features.Hardware.PlcTaskBindingView;
@@ -102,23 +103,28 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
             CreateDevice(1, "P1-AP01"),
             CreateDevice(2, "P1-AP02")
         ]);
-        var viewModel = CreateViewModel(service, selectionService);
+        var runtimeApplyService = new FakePlcRuntimeApplyService();
+        var viewModel = CreateViewModel(service, selectionService, runtimeApplyService);
         await viewModel.OnActivatedAsync();
 
         Assert.True(viewModel.SaveCommand.CanExecute(null));
         viewModel.SaveCommand.Execute(null);
         await service.WaitForSaveAsync();
+        await runtimeApplyService.WaitForApplyAsync();
         await viewModel.OnDeactivatedAsync();
 
         Assert.Equal(2, service.LastSavedNetworkDeviceId);
+        Assert.Equal(2, runtimeApplyService.LastAppliedNetworkDeviceId);
         Assert.Single(service.SaveCalls);
     }
 
     private static PlcTaskBindingViewModel CreateViewModel(
         IPlcTaskBindingService service,
-        IDeviceSelectionService selectionService)
+        IDeviceSelectionService selectionService,
+        IPlcRuntimeApplyService? runtimeApplyService = null)
         => new TestPlcTaskBindingViewModel(
             service,
+            runtimeApplyService ?? new FakePlcRuntimeApplyService(),
             new FakeClientPermissionService(),
             new FakeConfirmationService(),
             new TestAppLanguageService(),
@@ -151,6 +157,7 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
 
     private sealed class TestPlcTaskBindingViewModel(
         IPlcTaskBindingService bindingService,
+        IPlcRuntimeApplyService runtimeApplyService,
         IClientPermissionService permissionService,
         IPlcTaskBindingConfirmationService confirmationService,
         TestAppLanguageService languageService,
@@ -161,6 +168,7 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
         string moduleId)
         : PlcTaskBindingViewModel(
             bindingService,
+            runtimeApplyService,
             permissionService,
             confirmationService,
             languageService,
@@ -214,6 +222,37 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
             => PlcTaskBindingValidationResult.Success();
 
         public Task WaitForSaveAsync() => _saveCompletion.Task;
+    }
+
+    private sealed class FakePlcRuntimeApplyService : IPlcRuntimeApplyService
+    {
+        private readonly TaskCompletionSource _applyCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int? LastAppliedNetworkDeviceId { get; private set; }
+
+        public string? LastAppliedDeviceName { get; private set; }
+
+        public Task ApplyDeviceRuntimeAsync(
+            int networkDeviceId,
+            string reason,
+            CancellationToken cancellationToken = default)
+        {
+            LastAppliedNetworkDeviceId = networkDeviceId;
+            _applyCompletion.TrySetResult();
+            return Task.CompletedTask;
+        }
+
+        public Task ApplyDeviceRuntimeAsync(
+            string deviceName,
+            string reason,
+            CancellationToken cancellationToken = default)
+        {
+            LastAppliedDeviceName = deviceName;
+            _applyCompletion.TrySetResult();
+            return Task.CompletedTask;
+        }
+
+        public Task WaitForApplyAsync() => _applyCompletion.Task;
     }
 
     private sealed class FakeClientPermissionService : IClientPermissionService

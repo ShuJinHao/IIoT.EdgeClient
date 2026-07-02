@@ -46,6 +46,7 @@ internal sealed class DieCuttingSignalCodec
         var batchNumber = ReadText(DieCuttingPlcSignals.ContinuousRead.批次号);
         var mg1ClipNo = ReadText(DieCuttingPlcSignals.ContinuousRead.弹夹号MG1);
         var mg2ClipNo = ReadText(DieCuttingPlcSignals.ContinuousRead.弹夹号MG2);
+        var unwindingLength = _singleReadSignals.ReadInt32(DieCuttingPlcSignals.SingleRead.放卷长度);
         var punchingQuantity = _singleReadSignals.ReadInt32(DieCuttingPlcSignals.SingleRead.实际产量);
         var punchingSpeed = decimal.Round(
             _singleReadSignals.ReadInt32(DieCuttingPlcSignals.SingleRead.冲切速度) / 100000m,
@@ -69,6 +70,7 @@ internal sealed class DieCuttingSignalCodec
             ClipNoMg2 = mg2ClipNo,
             PunchingQuantity = punchingQuantity,
             PunchingSpeed = punchingSpeed,
+            UnwindingLength = unwindingLength,
             PunchingUom = "PCS",
             PunchingDeviceCode = identity.DeviceCode,
             PunchingDeviceName = identity.DeviceName,
@@ -87,6 +89,7 @@ internal sealed class DieCuttingSignalCodec
                 punchingSpeed,
                 plateLength,
                 plateWidth,
+                unwindingLength,
                 mg1Set,
                 mg1Actual,
                 mg2Set,
@@ -135,6 +138,7 @@ internal sealed class DieCuttingSignalCodec
         decimal punchingSpeed,
         decimal? plateLength,
         decimal? plateWidth,
+        long unwindingLength,
         int mg1Set,
         int mg1Actual,
         int mg2Set,
@@ -142,7 +146,7 @@ internal sealed class DieCuttingSignalCodec
         long okSheetQuantity)
         =>
         [
-            Item("unwindingLength", "放卷长度", _singleReadSignals.ReadInt32(DieCuttingPlcSignals.SingleRead.放卷长度)),
+            Item("unwindingLength", "放卷长度", unwindingLength),
             Item("moldLifeSetting", "模具寿命设定", _singleReadSignals.ReadInt32(DieCuttingPlcSignals.SingleRead.模具寿命设定)),
             Item("cutterLifeSetting", "切刀寿命设定", _singleReadSignals.ReadInt32(DieCuttingPlcSignals.SingleRead.切刀寿命设定)),
             Item("punchingQuantity", "实际产量", punchingQuantity),

@@ -175,7 +175,8 @@ public sealed class ConfigPermissionGuardBehaviorTests
         var handler = new SaveHardwareConfigHandler(
             sender,
             new StubPermissionService { CanEditHardware = true },
-            plcManager);
+            plcManager,
+            new FakePlcRuntimeApplyService(sender, plcManager));
 
         var result = await handler.Handle(
             new SaveHardwareConfigCommand(
@@ -459,5 +460,31 @@ public sealed class ConfigPermissionGuardBehaviorTests
         }
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class FakePlcRuntimeApplyService(
+        CountingSender sender,
+        FakePlcConnectionManager plcManager) : IPlcRuntimeApplyService
+    {
+        public Task ApplyDeviceRuntimeAsync(
+            int networkDeviceId,
+            string reason,
+            CancellationToken cancellationToken = default)
+        {
+            var deviceName = sender.Requests
+                .OfType<SaveNetworkDevicesCommand>()
+                .LastOrDefault()
+                ?.Devices
+                .FirstOrDefault(x => x.Id == networkDeviceId)
+                ?.DeviceName
+                ?? $"DeviceId={networkDeviceId}";
+            return plcManager.ReloadAsync(deviceName, cancellationToken);
+        }
+
+        public Task ApplyDeviceRuntimeAsync(
+            string deviceName,
+            string reason,
+            CancellationToken cancellationToken = default)
+            => plcManager.ReloadAsync(deviceName, cancellationToken);
     }
 }

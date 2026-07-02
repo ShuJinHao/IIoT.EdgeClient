@@ -12,11 +12,30 @@
         ShowContentWhenEmpty="True"
         Title="{Binding ViewTitle}">
         <edge:EdgeTablePanel.StatusContent>
-            <edge:EdgeNoticeBar Status="Info">
-                <TextBlock
-                    Classes="edge-notice-message"
-                    Text="{Binding StatusMessage}" />
-            </edge:EdgeNoticeBar>
+            <StackPanel Spacing="8">
+                <edge:EdgeNoticeBar Status="Info">
+                    <TextBlock
+                        Classes="edge-notice-message"
+                        Text="{Binding RuntimeStatusText}"
+                        TextWrapping="Wrap" />
+                </edge:EdgeNoticeBar>
+                <edge:EdgeNoticeBar
+                    IsVisible="{Binding HasRuntimeSnapshot}"
+                    Status="Info">
+                    <TextBlock
+                        Classes="edge-notice-message"
+                        Text="{Binding RuntimeSnapshotText}"
+                        TextWrapping="Wrap" />
+                </edge:EdgeNoticeBar>
+                <edge:EdgeNoticeBar
+                    IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                    Status="Info">
+                    <TextBlock
+                        Classes="edge-notice-message"
+                        Text="{Binding StatusMessage}"
+                        TextWrapping="Wrap" />
+                </edge:EdgeNoticeBar>
+            </StackPanel>
         </edge:EdgeTablePanel.StatusContent>
 
         <edge:EdgeDataGrid

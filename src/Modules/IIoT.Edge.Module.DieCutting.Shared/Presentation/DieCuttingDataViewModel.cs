@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using Avalonia.Threading;
+using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Module.DieCutting.Config;
 using IIoT.Edge.Module.DieCutting.Production;
 using IIoT.Edge.Presentation.Navigation.PluginSystem;
@@ -16,6 +17,7 @@ public sealed class DieCuttingDataViewModel : PresentationViewModelBase
     private const string EmptyValue = "—";
     private readonly DieCuttingModuleDefinition _definition;
     private readonly IDieCuttingProductionRecordStore _recordStore;
+    private readonly IProductionContextStore _contextStore;
     private readonly IDeviceSelectionService _deviceSelectionService;
     private readonly IAppLanguageService _languageService;
     private readonly DispatcherTimer _timer;
@@ -23,12 +25,14 @@ public sealed class DieCuttingDataViewModel : PresentationViewModelBase
     public DieCuttingDataViewModel(
         DieCuttingModuleDefinition definition,
         IDieCuttingProductionRecordStore recordStore,
+        IProductionContextStore contextStore,
         IDeviceSelectionService deviceSelectionService,
         IAppLanguageService languageService,
         IOptions<DieCuttingModuleOptions> moduleOptions)
     {
         _definition = definition;
         _recordStore = recordStore;
+        _contextStore = contextStore;
         _deviceSelectionService = deviceSelectionService;
         _languageService = languageService;
         _timer = new DispatcherTimer
@@ -38,7 +42,11 @@ public sealed class DieCuttingDataViewModel : PresentationViewModelBase
         };
         _timer.Tick += (_, _) => RunViewTaskInBackground(RefreshAsync, "刷新模切生产数据失败");
         _deviceSelectionService.SelectionChanged += OnDeviceSelectionChanged;
-        _languageService.LanguageChanged += (_, _) => RefreshLocalizedText();
+        _languageService.LanguageChanged += (_, _) =>
+        {
+            RefreshLocalizedText();
+            RunViewTaskInBackground(RefreshAsync, "刷新模切生产数据失败");
+        };
     }
 
     public override string ViewId => StandardModuleViewIds.Create(_definition.ModuleId).DataView;
@@ -81,6 +89,12 @@ public sealed class DieCuttingDataViewModel : PresentationViewModelBase
 
     public string CutterCodeHeader => GetText("DieCutting_Column_CutterCode", "切刀编号");
 
+    public string RuntimeStatusText { get; private set; } = string.Empty;
+
+    public string RuntimeSnapshotText { get; private set; } = string.Empty;
+
+    public bool HasRuntimeSnapshot => !string.IsNullOrWhiteSpace(RuntimeSnapshotText);
+
     public override Task OnActivatedAsync()
     {
         if (!_timer.IsEnabled)
@@ -99,16 +113,23 @@ public sealed class DieCuttingDataViewModel : PresentationViewModelBase
 
     private async Task RefreshAsync()
     {
+        var selectedDevice = _deviceSelectionService.SelectedDeviceKey;
         var rows = await _recordStore.QueryAsync(
             _definition.ModuleId,
-            _deviceSelectionService.SelectedDeviceKey,
+            selectedDevice,
             cancellationToken: CancellationToken.None).ConfigureAwait(false);
+        var runtimeState = BuildRuntimeState(selectedDevice);
 
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
             ReplaceItems(Records, rows.Select(ToRow));
+            RuntimeStatusText = runtimeState.StatusText;
+            RuntimeSnapshotText = runtimeState.SnapshotText;
             OnPropertyChanged(nameof(IsRecordsEmpty));
             OnPropertyChanged(nameof(HasRecords));
+            OnPropertyChanged(nameof(RuntimeStatusText));
+            OnPropertyChanged(nameof(RuntimeSnapshotText));
+            OnPropertyChanged(nameof(HasRuntimeSnapshot));
             SetStatus(rows.Count == 0
                 ? EmptyMessage
                 : string.Format(CultureInfo.CurrentCulture, "共 {0} 条模切生产记录。", rows.Count));
@@ -137,6 +158,8 @@ public sealed class DieCuttingDataViewModel : PresentationViewModelBase
         OnPropertyChanged(nameof(OperatorCodeHeader));
         OnPropertyChanged(nameof(MoldCodeHeader));
         OnPropertyChanged(nameof(CutterCodeHeader));
+        OnPropertyChanged(nameof(RuntimeStatusText));
+        OnPropertyChanged(nameof(RuntimeSnapshotText));
     }
 
     private string GetText(string key, string fallback)
@@ -148,6 +171,62 @@ public sealed class DieCuttingDataViewModel : PresentationViewModelBase
                _deviceSelectionService.SelectedDeviceKey,
                IDeviceSelectionService.AllFilterKey,
                StringComparison.OrdinalIgnoreCase);
+
+    private RuntimeState BuildRuntimeState(string? selectedDevice)
+    {
+        if (string.IsNullOrWhiteSpace(selectedDevice)
+            || string.Equals(
+                selectedDevice,
+                IDeviceSelectionService.AllFilterKey,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return new RuntimeState(
+                GetText("DieCutting_Runtime_AllStatus", "全部/汇总模式显示本地生产记录；请选择右侧 PLC 查看实时采集状态。"),
+                string.Empty);
+        }
+
+        var context = _contextStore
+            .GetAll()
+            .OfType<DieCuttingContext>()
+            .FirstOrDefault(x => string.Equals(x.DeviceName, selectedDevice, StringComparison.OrdinalIgnoreCase));
+        if (context is null)
+        {
+            return new RuntimeState(
+                string.Format(
+                    CultureInfo.CurrentCulture,
+                    GetText("DieCutting_Runtime_NoContext", "当前 PLC“{0}”暂无模切采样运行上下文，请检查任务绑定是否已应用。"),
+                    selectedDevice),
+                string.Empty);
+        }
+
+        var lastAt = context.LastRealtimeAt.HasValue
+            ? FormatTime(context.LastRealtimeAt.Value)
+            : EmptyValue;
+        var result = FormatText(context.LastRealtimeResult);
+        var statusText = string.Format(
+            CultureInfo.CurrentCulture,
+            GetText("DieCutting_Runtime_LastResult", "最近处理：{0}，结果：{1}"),
+            lastAt,
+            result);
+
+        var snapshot = context.LastRealtimeSnapshot;
+        if (snapshot is null)
+        {
+            return new RuntimeState(
+                statusText,
+                GetText("DieCutting_Runtime_NoSnapshot", "当前还没有模切采样快照。"));
+        }
+
+        var snapshotText = string.Format(
+            CultureInfo.CurrentCulture,
+            GetText("DieCutting_Runtime_Snapshot", "批次={0}，产量={1}，冲切速度={2}，放卷长度={3}，弹夹={4}"),
+            FormatText(snapshot.PunchingLotNumber),
+            snapshot.PunchingQuantity.ToString(CultureInfo.InvariantCulture),
+            snapshot.PunchingSpeed.ToString("0.#####", CultureInfo.InvariantCulture),
+            snapshot.UnwindingLength.ToString(CultureInfo.InvariantCulture),
+            FormatText(snapshot.ClipNo));
+        return new RuntimeState(statusText, snapshotText);
+    }
 
     private static DieCuttingProductionRecordRow ToRow(DieCuttingProductionRecord record)
         => new(
@@ -175,6 +254,8 @@ public sealed class DieCuttingDataViewModel : PresentationViewModelBase
 
     private static int NormalizeRefreshInterval(int configured)
         => Math.Max(500, configured <= 0 ? 1000 : configured);
+
+    private sealed record RuntimeState(string StatusText, string SnapshotText);
 }
 
 public sealed record DieCuttingProductionRecordRow(

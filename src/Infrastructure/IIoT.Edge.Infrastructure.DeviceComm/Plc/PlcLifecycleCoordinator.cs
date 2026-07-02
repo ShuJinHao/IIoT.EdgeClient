@@ -233,7 +233,14 @@ public sealed class PlcLifecycleCoordinator
                 return;
             }
 
-            _logger.Info($"[{device.DeviceName}] 初始化完成，已启动 {runtime.Tasks.Count} 个任务。");
+            var taskNames = runtime.Tasks
+                .Select(static task => ToVisibleTaskName(task.TaskName))
+                .ToArray();
+            _logger.Info($"[{device.DeviceName}] 初始化完成，已启动 {runtime.Tasks.Count} 个任务：{string.Join("、", taskNames)}。");
+            if (runtime.Tasks.All(static task => IsBasePlcTask(task.TaskName)))
+            {
+                _logger.Warn($"[{device.DeviceName}] 当前仅启动 PLC 基础任务，未挂载业务采集任务，请检查任务绑定和 IO 必需点位。");
+            }
         }
         catch
         {
@@ -259,6 +266,30 @@ public sealed class PlcLifecycleCoordinator
         {
             _statusStore.MarkDisconnected(device.Id, device.DeviceName);
         }
+    }
+
+    private static bool IsBasePlcTask(string taskName)
+        => taskName.StartsWith("PlcIoScan_", StringComparison.OrdinalIgnoreCase)
+           || taskName.StartsWith("PlcDataReadScan_", StringComparison.OrdinalIgnoreCase);
+
+    private static string ToVisibleTaskName(string taskName)
+    {
+        if (taskName.StartsWith("PlcIoScan_", StringComparison.OrdinalIgnoreCase))
+        {
+            return "PLC交互扫描";
+        }
+
+        if (taskName.StartsWith("PlcDataReadScan_", StringComparison.OrdinalIgnoreCase))
+        {
+            return "PLC只读采集";
+        }
+
+        if (taskName.Contains("RealtimeSampleUpload", StringComparison.OrdinalIgnoreCase))
+        {
+            return "模切采样上传";
+        }
+
+        return taskName;
     }
 
     private async Task CleanupDeviceRuntimeAsync(PlcDeviceRuntimeHandle runtime, CancellationToken ct)

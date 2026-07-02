@@ -16,8 +16,13 @@ public sealed class IoDataSectionModel : BaseNotifyPropertyChanged
 
     public string Title => IoMappingDisplay.BuildSectionTitle(Category, BusinessGroup);
 
+    public string DisplayTitle => $"{Title} ({Signals.Count})";
+
     public ObservableCollection<IoSignalModel> Signals { get; } = [];
 
     public void NotifyLocalizationChanged()
-        => OnPropertyChanged(nameof(Title));
+    {
+        OnPropertyChanged(nameof(Title));
+        OnPropertyChanged(nameof(DisplayTitle));
+    }
 }

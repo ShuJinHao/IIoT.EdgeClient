@@ -50,6 +50,7 @@
                 Grid.Row="2"
                 IsVisible="{Binding HasSelectedDevice}">
                 <TabItem Header="{DynamicResource Navigation_IoMapping_TabInteraction}">
+                    <edge:EdgeScrollHost Variant="Panel">
                     <StackPanel Spacing="12">
                         <edge:EdgeTablePanel
                             IsVisible="{Binding HasInteractionRows}"
@@ -61,8 +62,7 @@
                                 CanUserSortColumns="False"
                                 HeadersVisibility="Column"
                                 IsReadOnly="False"
-                                ItemsSource="{Binding InteractionRows}"
-                                ViewportMaxHeight="0">
+                                ItemsSource="{Binding InteractionRows}">
                                 <edge:EdgeDataGrid.Columns>
                                     <edge:EdgeTextColumn Binding="{Binding BusinessGroup}" Header="{DynamicResource Navigation_Column_InteractionItem}" IsReadOnly="True" MinWidth="90" Width="110" />
                                     <edge:EdgeTextColumn Binding="{Binding PlcAddressSummary}" Header="{DynamicResource Navigation_Column_PlcSignal}" IsReadOnly="True" MinWidth="140" Width="2*" />
@@ -101,9 +101,11 @@
                             Message="{DynamicResource Navigation_Empty_IoInteractionRows}"
                             Title="{DynamicResource Navigation_IoMapping_TabInteraction}" />
                     </StackPanel>
+                    </edge:EdgeScrollHost>
                 </TabItem>
 
                 <TabItem Header="{DynamicResource Navigation_IoMapping_TabSingleRead}">
+                    <edge:EdgeScrollHost Variant="Panel">
                     <StackPanel Spacing="12">
                         <ItemsControl
                             IsVisible="{Binding HasSingleReadSections}"
@@ -112,7 +114,7 @@
                                 <DataTemplate>
                                     <edge:EdgeTablePanel
                                         Margin="0,0,0,14"
-                                        Title="{Binding Title}">
+                                        Title="{Binding DisplayTitle}">
                                         <edge:EdgeTablePanel.ActionContent>
                                             <edge:EdgeActionButton
                                                 Command="{Binding DataContext.ManualReadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
@@ -128,8 +130,7 @@
                                             CanUserResizeColumns="True"
                                             CanUserSortColumns="False"
                                             IsReadOnly="True"
-                                            ItemsSource="{Binding Signals}"
-                                            ViewportMaxHeight="0">
+                                            ItemsSource="{Binding Signals}">
                                             <edge:EdgeDataGrid.Columns>
                                                 <edge:EdgeTextColumn Binding="{Binding MatrixColumnTitle}" Header="{DynamicResource Navigation_Column_Remark}" MinWidth="180" Width="2*" />
                                                 <edge:EdgeTextColumn Binding="{Binding PlcAddress}" Header="{DynamicResource Navigation_Column_Address}" MinWidth="120" Width="120" />
@@ -148,9 +149,11 @@
                             Message="{DynamicResource Navigation_Empty_IoSingleReadSections}"
                             Title="{DynamicResource Navigation_IoMapping_TabSingleRead}" />
                     </StackPanel>
+                    </edge:EdgeScrollHost>
                 </TabItem>
 
                 <TabItem Header="{DynamicResource Navigation_IoMapping_TabContinuousRead}">
+                    <edge:EdgeScrollHost Variant="Panel">
                     <StackPanel Spacing="12">
                         <ItemsControl
                             IsVisible="{Binding HasContinuousReadSections}"
@@ -159,7 +162,7 @@
                                 <DataTemplate>
                                     <edge:EdgeTablePanel
                                         Margin="0,0,0,14"
-                                        Title="{Binding Title}">
+                                        Title="{Binding DisplayTitle}">
                                         <edge:EdgeTablePanel.ActionContent>
                                             <edge:EdgeActionButton
                                                 Command="{Binding DataContext.ManualReadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
@@ -175,8 +178,7 @@
                                             CanUserResizeColumns="True"
                                             CanUserSortColumns="False"
                                             IsReadOnly="True"
-                                            ItemsSource="{Binding Signals}"
-                                            ViewportMaxHeight="0">
+                                            ItemsSource="{Binding Signals}">
                                             <edge:EdgeDataGrid.Columns>
                                                 <edge:EdgeTextColumn Binding="{Binding MatrixColumnTitle}" Header="{DynamicResource Navigation_Column_Remark}" MinWidth="180" Width="2*" />
                                                 <edge:EdgeTextColumn Binding="{Binding PlcAddress}" Header="{DynamicResource Navigation_Column_Address}" MinWidth="120" Width="120" />
@@ -195,9 +197,11 @@
                             Message="{DynamicResource Navigation_Empty_IoContinuousReadSections}"
                             Title="{DynamicResource Navigation_IoMapping_TabContinuousRead}" />
                     </StackPanel>
+                    </edge:EdgeScrollHost>
                 </TabItem>
 
                 <TabItem Header="{DynamicResource Navigation_IoMapping_TabSingleWrite}">
+                    <edge:EdgeScrollHost Variant="Panel">
                     <StackPanel Spacing="12">
                         <ItemsControl
                             IsVisible="{Binding HasSingleWriteSections}"
@@ -206,15 +210,14 @@
                                 <DataTemplate>
                                     <edge:EdgeTablePanel
                                         Margin="0,0,0,14"
-                                        Title="{Binding Title}">
+                                        Title="{Binding DisplayTitle}">
                                         <edge:EdgeDataGrid
                                             AutoGenerateColumns="False"
                                             CanUserReorderColumns="False"
                                             CanUserResizeColumns="True"
                                             CanUserSortColumns="False"
                                             IsReadOnly="True"
-                                            ItemsSource="{Binding Signals}"
-                                            ViewportMaxHeight="0">
+                                            ItemsSource="{Binding Signals}">
                                             <edge:EdgeDataGrid.Columns>
                                                 <edge:EdgeTextColumn Binding="{Binding MatrixColumnTitle}" Header="{DynamicResource Navigation_Column_Remark}" MinWidth="180" Width="2*" />
                                                 <edge:EdgeTextColumn Binding="{Binding PlcAddress}" Header="{DynamicResource Navigation_Column_Address}" MinWidth="120" Width="120" />
@@ -233,9 +236,11 @@
                             Message="{DynamicResource Navigation_Empty_IoSingleWriteSections}"
                             Title="{DynamicResource Navigation_IoMapping_TabSingleWrite}" />
                     </StackPanel>
+                    </edge:EdgeScrollHost>
                 </TabItem>
 
                 <TabItem Header="{DynamicResource Navigation_IoMapping_TabContinuousWrite}">
+                    <edge:EdgeScrollHost Variant="Panel">
                     <StackPanel Spacing="12">
                         <ItemsControl
                             IsVisible="{Binding HasContinuousWriteSections}"
@@ -244,15 +249,14 @@
                                 <DataTemplate>
                                     <edge:EdgeTablePanel
                                         Margin="0,0,0,14"
-                                        Title="{Binding Title}">
+                                        Title="{Binding DisplayTitle}">
                                         <edge:EdgeDataGrid
                                             AutoGenerateColumns="False"
                                             CanUserReorderColumns="False"
                                             CanUserResizeColumns="True"
                                             CanUserSortColumns="False"
                                             IsReadOnly="True"
-                                            ItemsSource="{Binding Signals}"
-                                            ViewportMaxHeight="0">
+                                            ItemsSource="{Binding Signals}">
                                             <edge:EdgeDataGrid.Columns>
                                                 <edge:EdgeTextColumn Binding="{Binding MatrixColumnTitle}" Header="{DynamicResource Navigation_Column_Remark}" MinWidth="180" Width="2*" />
                                                 <edge:EdgeTextColumn Binding="{Binding PlcAddress}" Header="{DynamicResource Navigation_Column_Address}" MinWidth="120" Width="120" />
@@ -271,6 +275,7 @@
                             Message="{DynamicResource Navigation_Empty_IoContinuousWriteSections}"
                             Title="{DynamicResource Navigation_IoMapping_TabContinuousWrite}" />
                     </StackPanel>
+                    </edge:EdgeScrollHost>
                 </TabItem>
             </edge:EdgeTabControl>
     </Grid>

@@ -29,11 +29,19 @@ internal sealed class StartupModuleRegistrationValidator(
                     module.ModuleId));
             }
 
-            if (!integrationRegistry.HasCloudUploader(module.ProcessType))
+            if (module.RequiresCloudUploader && !integrationRegistry.HasCloudUploader(module.ProcessType))
             {
                 issues.Add(StartupDiagnosticIssueFactory.Create(
                     "CLOUD_UPLOADER_MISSING",
                     $"模块“{module.ModuleId}”缺少工序类型“{module.ProcessType}”的云端上传器注册。",
+                    module.ModuleId));
+            }
+
+            if (module.RequiresMesUploader && !integrationRegistry.HasMesUploader(module.ProcessType))
+            {
+                issues.Add(StartupDiagnosticIssueFactory.Create(
+                    "MES_UPLOADER_MISSING",
+                    $"模块“{module.ModuleId}”缺少工序类型“{module.ProcessType}”的 MES 上传器注册。",
                     module.ModuleId));
             }
         }

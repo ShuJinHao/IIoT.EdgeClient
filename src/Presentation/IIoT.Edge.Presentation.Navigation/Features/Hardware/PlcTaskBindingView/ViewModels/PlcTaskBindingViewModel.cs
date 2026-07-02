@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Windows.Input;
 using Avalonia.Threading;
 using IIoT.Edge.Application.Abstractions.Auth;
+using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 using IIoT.Edge.Presentation.Navigation.Common;
 using IIoT.Edge.Presentation.Navigation.Localization;
@@ -14,6 +15,7 @@ namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.PlcTaskBindingView
 public class PlcTaskBindingViewModel : NavigationViewModelBase
 {
     private readonly IPlcTaskBindingService _bindingService;
+    private readonly IPlcRuntimeApplyService _runtimeApplyService;
     private readonly IClientPermissionService _permissionService;
     private readonly IPlcTaskBindingConfirmationService _confirmationService;
     private readonly IDeviceSelectionService _deviceSelectionService;
@@ -24,12 +26,14 @@ public class PlcTaskBindingViewModel : NavigationViewModelBase
 
     public PlcTaskBindingViewModel(
         IPlcTaskBindingService bindingService,
+        IPlcRuntimeApplyService runtimeApplyService,
         IClientPermissionService permissionService,
         IPlcTaskBindingConfirmationService confirmationService,
         IAppLanguageService languageService,
         IDeviceSelectionService deviceSelectionService)
         : this(
             bindingService,
+            runtimeApplyService,
             permissionService,
             confirmationService,
             languageService,
@@ -43,6 +47,7 @@ public class PlcTaskBindingViewModel : NavigationViewModelBase
 
     public PlcTaskBindingViewModel(
         IPlcTaskBindingService bindingService,
+        IPlcRuntimeApplyService runtimeApplyService,
         IClientPermissionService permissionService,
         IPlcTaskBindingConfirmationService confirmationService,
         IAppLanguageService languageService,
@@ -54,6 +59,7 @@ public class PlcTaskBindingViewModel : NavigationViewModelBase
         : base(languageService, viewId, titleResourceKey, titleFallback)
     {
         _bindingService = bindingService;
+        _runtimeApplyService = runtimeApplyService;
         _permissionService = permissionService;
         _confirmationService = confirmationService;
         _deviceSelectionService = deviceSelectionService;
@@ -158,9 +164,14 @@ public class PlcTaskBindingViewModel : NavigationViewModelBase
                 selected.NetworkDeviceId,
                 _moduleId,
                 states).ConfigureAwait(false);
+            await _runtimeApplyService
+                .ApplyDeviceRuntimeAsync(
+                    selected.NetworkDeviceId,
+                    "任务绑定保存")
+                .ConfigureAwait(false);
 
             await LoadCoreAsync().ConfigureAwait(false);
-            RunOnUiThread(() => SetStatus(GetText("Navigation_PlcTaskBinding_SaveSuccess", "任务绑定已保存。")));
+            RunOnUiThread(() => SetStatus(GetText("Navigation_PlcTaskBinding_SaveSuccess", "任务绑定已保存并已应用到当前 PLC。")));
         }, GetText("Navigation_PlcTaskBinding_SaveFailed", "保存 PLC 任务绑定失败。"));
 
     private async Task LoadCoreAsync()

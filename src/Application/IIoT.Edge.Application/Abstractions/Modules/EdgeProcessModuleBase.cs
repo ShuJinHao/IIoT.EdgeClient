@@ -11,6 +11,10 @@ public abstract class EdgeProcessModuleBase<TCellData> : IEdgeProcessModule
 
     public abstract string DisplayName { get; }
 
+    public bool RequiresCloudUploader => CloudUploadMode.HasValue;
+
+    public bool RequiresMesUploader => MesUploadMode.HasValue;
+
     protected virtual ProcessUploadMode? CloudUploadMode => null;
 
     protected virtual ProcessUploadMode? MesUploadMode => null;

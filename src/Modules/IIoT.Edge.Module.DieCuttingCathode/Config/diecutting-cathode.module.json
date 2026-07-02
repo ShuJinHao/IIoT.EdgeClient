@@ -7,7 +7,6 @@
         },
         "Runtime": {
           "DataReadLoopIntervalMs": 1000,
-          "UploadLoopIntervalMs": 10000,
           "DataFreshnessTimeoutMs": 5000
         },
         "MesIdentity": {
