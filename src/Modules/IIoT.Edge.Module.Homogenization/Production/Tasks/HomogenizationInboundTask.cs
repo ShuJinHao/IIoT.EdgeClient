@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
@@ -7,9 +8,10 @@ using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Io;
 using IIoT.Edge.Module.Homogenization.Config.Parameters;
-using IIoT.Edge.Module.Homogenization.Mes;
+using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Resources;
 using IIoT.Edge.Module.Homogenization.Production;
+using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using Microsoft.Extensions.Options;
 
 using IIoT.Edge.Application.Abstractions.Mes;
@@ -21,7 +23,7 @@ namespace IIoT.Edge.Module.Homogenization.Production.Tasks;
 internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
 {
     private readonly IDeviceService _deviceService;
-    private readonly IHomogenizationMesScenarioChannel _mesChannel;
+    private readonly IDataPipelineService _dataPipelineService;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
     private readonly IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> _parameters;
     private readonly IHomogenizationProductionGate _productionGate;
@@ -35,7 +37,7 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
         HomogenizationSignalCodec codec,
         HomogenizationContext context,
         IDeviceService deviceService,
-        IHomogenizationMesScenarioChannel mesChannel,
+        IDataPipelineService dataPipelineService,
         IMesUploadDiagnosticsStore diagnosticsStore,
         IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> parameters,
         IHomogenizationProductionGate productionGate,
@@ -46,7 +48,7 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
         : base(buffer, interaction, codec, context, logger, productionTime, codeOptions, moduleOptions)
     {
         _deviceService = deviceService;
-        _mesChannel = mesChannel;
+        _dataPipelineService = dataPipelineService;
         _diagnosticsStore = diagnosticsStore;
         _parameters = parameters;
         _productionGate = productionGate;
@@ -87,6 +89,15 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
             return;
         }
 
+        var gateResult = await _productionGate.EnsureReadyAsync(ModuleContext, cancellationToken).ConfigureAwait(false);
+        if (!gateResult.IsSuccess)
+        {
+            _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Inbound, gateResult.Message);
+            RecordInboundResult(trayCode, gateResult.Message);
+            Interaction.ReplyResult(trigger, gateResult);
+            return;
+        }
+
         var duplicateMessage = await ResolveDuplicateTrayMessageAsync(
             _parameters,
             HomogenizationTrayCodeStage.Inbound,
@@ -100,26 +111,33 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
             return;
         }
 
-        var gateResult = await _productionGate.EnsureReadyAsync(ModuleContext, cancellationToken).ConfigureAwait(false);
-        if (!gateResult.IsSuccess)
+        var cellData = new HomogenizationCellData
         {
-            _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Inbound, gateResult.Message);
-            RecordInboundResult(trayCode, gateResult.Message);
-            Interaction.ReplyResult(trigger, gateResult);
-            return;
-        }
+            RecordKind = HomogenizationCellData.RecordKindInbound,
+            TrayCode = trayCode.Trim(),
+            DeviceName = ModuleContext.DeviceName,
+            DeviceCode = _deviceService.CurrentDevice?.ClientCode ?? ModuleContext.DeviceName,
+            PlcDeviceId = ModuleContext.NetworkDeviceId,
+            CompletedTime = ProductionTime.BusinessNow,
+            RuntimeStatus = "进站待上传",
+            UploadTargets = DataPipelineUploadTargets.Mes
+        };
 
-        var result = await _mesChannel
-            .UploadInboundAsync(_deviceService.CurrentDevice, trayCode, cancellationToken)
+        var enqueueResult = await _dataPipelineService
+            .EnqueueAsync(CreatePipelineRecord(cellData), cancellationToken)
             .ConfigureAwait(false);
+        var result = ToMesQueueResult(
+            enqueueResult,
+            "进站已进入 MES 上传队列。",
+            "进站已接收，数据已进入溢出持久化。",
+            "进站未接收，数据管道拒绝入队");
 
         if (result.IsSuccess)
         {
-            _diagnosticsStore.RecordSuccess(CodeOptions.Mes.Channels.Inbound);
             ModuleContext.MarkProcessedTray(
                 HomogenizationTrayCodeStage.Inbound,
                 trayCode,
-                "进站已通过",
+                "进站已接收",
                 ProductionTime.BusinessNow);
         }
         else

@@ -4,6 +4,7 @@ using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.SharedKernel.DataPipeline;
+using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 
 namespace IIoT.Edge.Host.DataPipeline.Services;
 
@@ -56,6 +57,11 @@ internal sealed class IngressOverflowPersistence : IIngressOverflowPersistence
                     $"[数据管道] 队列溢出时跳过关键消费者 {consumer.Name}，原因：未配置补传通道。工序={record.CellData.ProcessType}。";
                 _logger.Error(details);
                 _criticalFallbackWriter.Write("DataPipeline.Overflow.InvalidRetryChannel", details);
+                continue;
+            }
+
+            if (!IsTargetChannel(record, consumer.RetryChannel))
+            {
                 continue;
             }
 
@@ -123,6 +129,14 @@ internal sealed class IngressOverflowPersistence : IIngressOverflowPersistence
             DataPipelineRetryChannel.Mes => "MES",
             DataPipelineRetryChannel.None => "未配置",
             _ => channel.ToString()
+        };
+
+    private static bool IsTargetChannel(CellCompletedRecord record, DataPipelineRetryChannel channel)
+        => channel switch
+        {
+            DataPipelineRetryChannel.Cloud => record.CellData.UploadTargets.HasFlag(DataPipelineUploadTargets.Cloud),
+            DataPipelineRetryChannel.Mes => record.CellData.UploadTargets.HasFlag(DataPipelineUploadTargets.Mes),
+            _ => false
         };
 
     private async Task<bool> IsPluginCloudDisabledAsync(string processType)

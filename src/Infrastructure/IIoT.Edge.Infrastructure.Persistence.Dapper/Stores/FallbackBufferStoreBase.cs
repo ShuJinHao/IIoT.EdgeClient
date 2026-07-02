@@ -4,6 +4,7 @@ using IIoT.Edge.Infrastructure.Persistence.Dapper.Connection;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Repository;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
+using System.Data;
 
 namespace IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
 
@@ -38,12 +39,15 @@ public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TE
     {
         var cellData = record.CellData;
         var cellDataJson = _cellDataJsonSerializer.Serialize(cellData);
+        var context = CreateContextRow(record);
 
         var sql = $@"
             INSERT INTO {TableName}
-                (ProcessType, CellDataJson, FailedTarget, ErrorMessage, CreatedAt)
+                (ProcessType, CellDataJson, FailedTarget, ErrorMessage, CreatedAt,
+                 NetworkDeviceId, DeviceName, ModuleId, TaskKey, PlanSessionId, MainPlanCode, TraceBatchNumber)
             VALUES
-                (@ProcessType, @CellDataJson, @FailedTarget, @ErrorMessage, @CreatedAt)";
+                (@ProcessType, @CellDataJson, @FailedTarget, @ErrorMessage, @CreatedAt,
+                 @NetworkDeviceId, @DeviceName, @ModuleId, @TaskKey, @PlanSessionId, @MainPlanCode, @TraceBatchNumber)";
 
         var affectedRows = await SafeExecuteAsync(sql, new
         {
@@ -51,7 +55,14 @@ public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TE
             CellDataJson = cellDataJson,
             FailedTarget = failedTarget,
             ErrorMessage = errorMessage,
-            CreatedAt = DateTime.UtcNow.ToString("O")
+            CreatedAt = DateTime.UtcNow.ToString("O"),
+            context.NetworkDeviceId,
+            context.DeviceName,
+            context.ModuleId,
+            context.TaskKey,
+            context.PlanSessionId,
+            context.MainPlanCode,
+            context.TraceBatchNumber
         }).ConfigureAwait(false);
 
         if (affectedRows <= 0)
@@ -81,7 +92,8 @@ public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TE
             var inserted = await conn.ExecuteAsync(
                 $@"
                 INSERT INTO {RetryTableName}
-                    (ProcessType, CellDataJson, FailedTarget, ErrorMessage, RetryCount, NextRetryTime, CreatedAt)
+                    (ProcessType, CellDataJson, FailedTarget, ErrorMessage, RetryCount, NextRetryTime, CreatedAt,
+                     NetworkDeviceId, DeviceName, ModuleId, TaskKey, PlanSessionId, MainPlanCode, TraceBatchNumber)
                 SELECT
                     ProcessType,
                     CellDataJson,
@@ -89,7 +101,14 @@ public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TE
                     ErrorMessage,
                     0,
                     @NextRetryTime,
-                    CreatedAt
+                    CreatedAt,
+                    NetworkDeviceId,
+                    DeviceName,
+                    ModuleId,
+                    TaskKey,
+                    PlanSessionId,
+                    MainPlanCode,
+                    TraceBatchNumber
                 FROM {TableName}
                 WHERE Id IN @Ids",
                 new
@@ -137,4 +156,26 @@ public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TE
 
     public Task<int> GetCountAsync()
         => SafeCountAsync($"SELECT COUNT(*) FROM {TableName}");
+
+    protected override Task AfterInitializeTableAsync(IDbConnection connection)
+        => EnsureDataPipelineContextColumnsAsync(connection, TableName);
+
+    private static DataPipelineContextRow CreateContextRow(CellCompletedRecord record)
+        => new(
+            record.ResolveNetworkDeviceId(),
+            record.ResolveDeviceName(),
+            record.ModuleId,
+            record.TaskKey,
+            record.PlanSessionId,
+            record.MainPlanCode,
+            record.TraceBatchNumber);
+
+    private sealed record DataPipelineContextRow(
+        int? NetworkDeviceId,
+        string DeviceName,
+        string ModuleId,
+        string TaskKey,
+        string PlanSessionId,
+        string MainPlanCode,
+        string TraceBatchNumber);
 }

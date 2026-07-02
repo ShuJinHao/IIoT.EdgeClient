@@ -46,5 +46,19 @@ public static class CloudIdempotencyKeyBuilder
     }
 
     private static string SerializeCellData(CellCompletedRecord record)
-        => JsonSerializer.Serialize(record.CellData, record.CellData.GetType(), JsonOptions);
+    {
+        var payload = new
+        {
+            record.NetworkDeviceId,
+            DeviceName = record.ResolveDeviceName(),
+            record.ModuleId,
+            record.TaskKey,
+            record.PlanSessionId,
+            record.MainPlanCode,
+            record.TraceBatchNumber,
+            CellDataJson = JsonSerializer.Serialize(record.CellData, record.CellData.GetType(), JsonOptions)
+        };
+
+        return JsonSerializer.Serialize(payload, payload.GetType(), JsonOptions);
+    }
 }

@@ -17,7 +17,8 @@ public sealed class DataPipelineDeadLetterWriter : IDataPipelineDeadLetterWriter
         string sourceTable,
         long sourceRecordId,
         DeadLetterStage stage,
-        string failureReason)
+        string failureReason,
+        FailedCellRecord? sourceRecord = null)
     {
         try
         {
@@ -30,10 +31,20 @@ public sealed class DataPipelineDeadLetterWriter : IDataPipelineDeadLetterWriter
                 SourceRecordId = sourceRecordId,
                 FailureStage = stage.ToString(),
                 FailureReason = failureReason,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                NetworkDeviceId = sourceRecord?.NetworkDeviceId,
+                DeviceName = sourceRecord?.DeviceName ?? string.Empty,
+                ModuleId = sourceRecord?.ModuleId ?? string.Empty,
+                TaskKey = sourceRecord?.TaskKey ?? string.Empty,
+                PlanSessionId = sourceRecord?.PlanSessionId ?? string.Empty,
+                MainPlanCode = sourceRecord?.MainPlanCode ?? string.Empty,
+                TraceBatchNumber = sourceRecord?.TraceBatchNumber ?? string.Empty
             }).ConfigureAwait(false);
 
-            logger.Fatal($"[{channel.LogPrefix}] {processType} 记录 {sourceRecordId} 已进入 {channel.DeadLetterName} 死信表。");
+            var deviceName = string.IsNullOrWhiteSpace(sourceRecord?.DeviceName)
+                ? "未知"
+                : sourceRecord.DeviceName;
+            logger.Fatal($"[PLC-{deviceName}][{channel.DeadLetterName}] 工序={processType} 记录 {sourceRecordId} 已进入死信表。");
             return true;
         }
         catch (Exception ex)

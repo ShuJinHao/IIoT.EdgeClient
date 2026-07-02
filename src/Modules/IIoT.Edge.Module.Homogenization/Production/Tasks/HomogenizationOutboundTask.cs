@@ -12,6 +12,7 @@ using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Resources;
 using IIoT.Edge.Module.Homogenization.Production;
 using IIoT.Edge.SharedKernel.DataPipeline;
+using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using Microsoft.Extensions.Options;
 
 using IIoT.Edge.Application.Abstractions.Mes;
@@ -83,6 +84,15 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
     private async Task ProcessTriggerAsync(CancellationToken cancellationToken)
     {
         const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.出料上传;
+        var gateResult = await _productionGate.EnsureReadyAsync(ModuleContext, cancellationToken).ConfigureAwait(false);
+        if (!gateResult.IsSuccess)
+        {
+            RecordOutboundResult(gateResult.Message);
+            _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Outbound, gateResult.Message);
+            Interaction.ReplyResult(trigger, gateResult);
+            return;
+        }
+
         var cellData = BuildRecord();
         if (!_validator.TryValidate(cellData, out var error))
         {
@@ -106,17 +116,19 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
             return;
         }
 
-        var gateResult = await _productionGate.EnsureReadyAsync(ModuleContext, cancellationToken).ConfigureAwait(false);
-        if (!gateResult.IsSuccess)
-        {
-            RecordOutbound(cellData, gateResult.Message);
-            _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Outbound, gateResult.Message);
-            Interaction.ReplyResult(trigger, gateResult);
-            return;
-        }
-
         var enqueueResult = await _dataPipelineService
-            .EnqueueAsync(new CellCompletedRecord { CellData = cellData }, cancellationToken)
+            .EnqueueAsync(new CellCompletedRecord
+            {
+                CellData = cellData,
+                NetworkDeviceId = ModuleContext.NetworkDeviceId,
+                DeviceName = ModuleContext.DeviceName,
+                ModuleId = DependencyInjection.ModuleKey,
+                TaskKey = TaskName,
+                PlanSessionId = ModuleContext.PlanSessionId ?? string.Empty,
+                MainPlanCode = ModuleContext.SelectedProductionPlan?.MainPlanCode ?? string.Empty,
+                TraceBatchNumber = ModuleContext.TraceBatchNumber ?? string.Empty,
+                CreatedAtUtc = DateTime.UtcNow
+            }, cancellationToken)
             .ConfigureAwait(false);
 
         if (!enqueueResult.IsDurablyAccepted)
@@ -148,9 +160,12 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
         var outbound = Codec.CaptureOutboundReadings();
         return new HomogenizationCellData
         {
+            RecordKind = HomogenizationCellData.RecordKindOutbound,
             TrayCode = Codec.ReadTrayCode(),
             DeviceName = ModuleContext.DeviceName,
             DeviceCode = _deviceService.CurrentDevice?.ClientCode ?? ModuleContext.DeviceName,
+            PlcDeviceId = ModuleContext.NetworkDeviceId,
+            UploadTargets = DataPipelineUploadTargets.All,
             InboundTime = ModuleContext.LastInboundAt,
             CompletedTime = ProductionTime.BusinessNow,
             RuntimeStatus = HomogenizationText.Get("Homogenization_Outbound_PendingUpload", "出料待上传"),
@@ -178,6 +193,12 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
         ModuleContext.LastOutboundAt = cellData.CompletedTime ?? ProductionTime.BusinessNow;
         ModuleContext.LastOutboundResult = result;
         ModuleContext.RecordOutbound(cellData);
+    }
+
+    private void RecordOutboundResult(string result)
+    {
+        ModuleContext.LastOutboundAt = ProductionTime.BusinessNow;
+        ModuleContext.LastOutboundResult = result;
     }
 
     private static string FormatRejectedResult(DataPipelineEnqueueResult enqueueResult)

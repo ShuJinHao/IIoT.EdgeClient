@@ -252,7 +252,23 @@ public sealed class HomogenizationMesChannel
         HomogenizationCellData cellData,
         CellCompletedRecord record,
         CancellationToken cancellationToken)
-        => UploadOutboundAsync(device, cellData, cancellationToken);
+        => cellData.RecordKind switch
+        {
+            HomogenizationCellData.RecordKindInbound => UploadInboundAsync(
+                device,
+                cellData.TrayCode,
+                cancellationToken),
+            HomogenizationCellData.RecordKindRealtime => cellData.RealtimeSnapshot is null
+                ? Task.FromResult(MesCallResult.InvalidContext("实时数据快照不能为空。"))
+                : UploadRealtimeAsync(device, cellData.RealtimeSnapshot, cancellationToken),
+            HomogenizationCellData.RecordKindRecipe => cellData.RecipeSnapshot is null
+                ? Task.FromResult(MesCallResult.InvalidContext("配方快照不能为空。"))
+                : UploadRecipeAsync(device, cellData.RecipeSnapshot, cancellationToken),
+            HomogenizationCellData.RecordKindEquipmentStatus => cellData.EquipmentStatusSnapshot is null
+                ? Task.FromResult(MesCallResult.InvalidContext("设备状态快照不能为空。"))
+                : UploadEquipmentStatusAsync(device, cellData.EquipmentStatusSnapshot, cancellationToken),
+            _ => UploadOutboundAsync(device, cellData, cancellationToken)
+        };
 
     private async Task<string?> GetMesPathAsync(
         HomogenizationParams.Mes pathKey,

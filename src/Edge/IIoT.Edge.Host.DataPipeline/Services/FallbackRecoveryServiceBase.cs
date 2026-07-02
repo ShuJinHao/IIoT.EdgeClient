@@ -57,7 +57,8 @@ internal abstract class FallbackRecoveryServiceBase<TFallbackRecord> : RetryDead
                     SourceTable,
                     fallback.Id,
                     DeadLetterStage.FallbackRecoverDeserialize,
-                    $"{ChannelDisplayName}兜底记录反序列化失败，工序：{fallback.ProcessType}。").ConfigureAwait(false);
+                    $"{ChannelDisplayName}兜底记录反序列化失败，工序：{fallback.ProcessType}。",
+                    CreateSourceRecord(fallback)).ConfigureAwait(false);
 
                 if (persisted)
                 {
@@ -73,7 +74,7 @@ internal abstract class FallbackRecoveryServiceBase<TFallbackRecord> : RetryDead
                 if (!string.IsNullOrWhiteSpace(retryBlockedReason))
                 {
                     Logger.Warn(
-                        $"[{DeadLetterChannelMetadata.LogPrefix}] {ChannelDisplayName}兜底记录 {fallback.Id} 因补传容量阻塞继续保留，原因：{retryBlockedReason}。");
+                        $"[PLC-{fallback.DeviceName}][{DeadLetterChannelMetadata.LogPrefix}] {ChannelDisplayName}兜底记录 {fallback.Id} 因补传容量阻塞继续保留，原因：{retryBlockedReason}。");
                     continue;
                 }
 
@@ -81,7 +82,7 @@ internal abstract class FallbackRecoveryServiceBase<TFallbackRecord> : RetryDead
             }
             catch (Exception ex)
             {
-                Logger.Error($"[{DeadLetterChannelMetadata.LogPrefix}] 恢复 {ChannelDisplayName}兜底记录 {fallback.Id} 失败：{ex.Message}");
+                Logger.Error($"[PLC-{fallback.DeviceName}][{DeadLetterChannelMetadata.LogPrefix}] 恢复 {ChannelDisplayName}兜底记录 {fallback.Id} 失败：{ex.Message}");
             }
         }
 
@@ -109,5 +110,21 @@ internal abstract class FallbackRecoveryServiceBase<TFallbackRecord> : RetryDead
             "Cloud" => "云端",
             "MES" => "MES",
             _ => ChannelName
+        };
+
+    private static FailedCellRecord CreateSourceRecord(TFallbackRecord fallback)
+        => new()
+        {
+            Id = fallback.Id,
+            ProcessType = fallback.ProcessType,
+            CellDataJson = fallback.CellDataJson,
+            FailedTarget = fallback.FailedTarget,
+            NetworkDeviceId = fallback.NetworkDeviceId,
+            DeviceName = fallback.DeviceName,
+            ModuleId = fallback.ModuleId,
+            TaskKey = fallback.TaskKey,
+            PlanSessionId = fallback.PlanSessionId,
+            MainPlanCode = fallback.MainPlanCode,
+            TraceBatchNumber = fallback.TraceBatchNumber
         };
 }

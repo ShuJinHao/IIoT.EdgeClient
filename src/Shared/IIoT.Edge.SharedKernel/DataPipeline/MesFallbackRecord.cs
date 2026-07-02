@@ -8,4 +8,11 @@ public class MesFallbackRecord : IFallbackRecord
     public string FailedTarget { get; set; } = string.Empty;
     public string ErrorMessage { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
+    public int? NetworkDeviceId { get; set; }
+    public string DeviceName { get; set; } = string.Empty;
+    public string ModuleId { get; set; } = string.Empty;
+    public string TaskKey { get; set; } = string.Empty;
+    public string PlanSessionId { get; set; } = string.Empty;
+    public string MainPlanCode { get; set; } = string.Empty;
+    public string TraceBatchNumber { get; set; } = string.Empty;
 }

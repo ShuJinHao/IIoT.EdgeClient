@@ -96,12 +96,12 @@ public sealed class DataPipelineCascadingPersistenceWriter
         try
         {
             await operations.SaveRetryAsync(record, failedTarget, errorMessage).ConfigureAwait(false);
-            _logger.Error($"[{operations.LogPrefix}] {record.CellData.DisplayLabel} 已写入 {operations.DisplayName} 补传队列。");
+            _logger.Error($"[PLC-{record.ResolveDeviceName()}][{operations.LogPrefix}] {record.CellData.DisplayLabel} 已写入 {operations.DisplayName} 补传队列。");
             return true;
         }
         catch (Exception retryEx)
         {
-            _logger.Error($"[{operations.LogPrefix}] {record.CellData.DisplayLabel} 写入补传队列失败：{retryEx.Message}");
+            _logger.Error($"[PLC-{record.ResolveDeviceName()}][{operations.LogPrefix}] {record.CellData.DisplayLabel} 写入补传队列失败：{retryEx.Message}");
 
             var fallbackBlockedReason = await operations.GetFallbackBlockReasonAsync(record.CellData.ProcessType).ConfigureAwait(false);
             if (!string.IsNullOrWhiteSpace(fallbackBlockedReason))
@@ -120,7 +120,7 @@ public sealed class DataPipelineCascadingPersistenceWriter
             try
             {
                 await operations.SaveFallbackAsync(record, failedTarget, errorMessage).ConfigureAwait(false);
-                _logger.Error($"[{operations.LogPrefix}] 补传队列不可用，{record.CellData.DisplayLabel} 已写入 {operations.DisplayName} 兜底缓存。");
+                _logger.Error($"[PLC-{record.ResolveDeviceName()}][{operations.LogPrefix}] 补传队列不可用，{record.CellData.DisplayLabel} 已写入 {operations.DisplayName} 兜底缓存。");
                 return true;
             }
             catch (Exception fallbackEx)
@@ -158,7 +158,7 @@ public sealed class DataPipelineCascadingPersistenceWriter
                     stage,
                     failureReason))
                 .ConfigureAwait(false);
-            _logger.Fatal($"[{operations.LogPrefix}] {record.CellData.DisplayLabel} 已进入 {operations.DisplayName} 死信。");
+            _logger.Fatal($"[PLC-{record.ResolveDeviceName()}][{operations.LogPrefix}] {record.CellData.DisplayLabel} 已进入 {operations.DisplayName} 死信。");
             return true;
         }
         catch (Exception deadLetterEx)
@@ -211,7 +211,14 @@ public sealed class DataPipelineCascadingPersistenceWriter
             SourceRecordId = sourceRecordId,
             FailureStage = stage.ToString(),
             FailureReason = failureReason,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            NetworkDeviceId = record.ResolveNetworkDeviceId(),
+            DeviceName = record.ResolveDeviceName(),
+            ModuleId = record.ModuleId,
+            TaskKey = record.TaskKey,
+            PlanSessionId = record.PlanSessionId,
+            MainPlanCode = record.MainPlanCode,
+            TraceBatchNumber = record.TraceBatchNumber
         };
 
     private static string BuildCapacityBlockedFailureReason(

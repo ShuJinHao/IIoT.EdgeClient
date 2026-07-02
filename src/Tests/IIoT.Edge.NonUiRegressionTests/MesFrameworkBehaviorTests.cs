@@ -85,6 +85,34 @@ public sealed class MesFrameworkBehaviorTests
     }
 
     [Fact]
+    public async Task MesConsumer_WhenRecordTargetsCloudOnly_ShouldSkipMesUploader()
+    {
+        var uploader = new FakeMesUploader(TestProcessCellData.ProcessTypeKey);
+        var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
+        var consumer = new MesConsumer(
+            CreateOnlineDeviceService(),
+            CreateReadyMesGate(),
+            [uploader],
+            CreateMesRegistry(),
+            diagnosticsStore,
+            new FakeLogService());
+
+        var success = await consumer.ProcessAsync(new CellCompletedRecord
+        {
+            CellData = new TestProcessCellData
+            {
+                Barcode = "MES-SKIP-CLOUD-ONLY",
+                WorkOrderNo = "MES-WO-01",
+                UploadTargets = DataPipelineUploadTargets.Cloud
+            }
+        });
+
+        Assert.True(success);
+        Assert.Equal(0, uploader.UploadCallCount);
+        Assert.Null(diagnosticsStore.Get(TestProcessCellData.ProcessTypeKey));
+    }
+
+    [Fact]
     public async Task MesConsumer_WhenUploaderReturnsDisabled_ShouldTreatAsSuccessWithoutRetry()
     {
         var uploader = new FakeMesUploader(TestProcessCellData.ProcessTypeKey);

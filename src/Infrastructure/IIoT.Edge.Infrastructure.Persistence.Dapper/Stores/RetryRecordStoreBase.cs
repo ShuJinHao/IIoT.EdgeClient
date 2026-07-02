@@ -4,6 +4,7 @@ using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Connection;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
+using System.Data;
 
 namespace IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
 
@@ -39,24 +40,35 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
     {
         var cellData = record.CellData;
         var cellDataJson = _cellDataJsonSerializer.Serialize(cellData);
-        await SaveRawAsync(cellData.ProcessType, cellDataJson, failedTarget, errorMessage).ConfigureAwait(false);
+        await SaveRawCoreAsync(cellData.ProcessType, cellDataJson, failedTarget, errorMessage, record).ConfigureAwait(false);
     }
 
-    public async Task SaveRawAsync(
+    public Task SaveRawAsync(
         string processType,
         string cellDataJson,
         string failedTarget,
         string errorMessage)
+        => SaveRawCoreAsync(processType, cellDataJson, failedTarget, errorMessage, sourceRecord: null);
+
+    private async Task SaveRawCoreAsync(
+        string processType,
+        string cellDataJson,
+        string failedTarget,
+        string errorMessage,
+        CellCompletedRecord? sourceRecord)
     {
         var nowUtc = DateTime.UtcNow;
+        var context = CreateContextRow(sourceRecord);
 
         var sql = $@"
             INSERT INTO {TableName}
                 (ProcessType, CellDataJson, FailedTarget, ErrorMessage,
-                 RetryCount, NextRetryTime, CreatedAt)
+                 RetryCount, NextRetryTime, CreatedAt,
+                 NetworkDeviceId, DeviceName, ModuleId, TaskKey, PlanSessionId, MainPlanCode, TraceBatchNumber)
             VALUES
                 (@ProcessType, @CellDataJson, @FailedTarget, @ErrorMessage,
-                 0, @NextRetryTime, @CreatedAt)";
+                 0, @NextRetryTime, @CreatedAt,
+                 @NetworkDeviceId, @DeviceName, @ModuleId, @TaskKey, @PlanSessionId, @MainPlanCode, @TraceBatchNumber)";
 
         var affectedRows = await SafeExecuteAsync(sql, new
         {
@@ -65,7 +77,14 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
             FailedTarget = failedTarget,
             ErrorMessage = errorMessage,
             NextRetryTime = nowUtc.AddSeconds(30).ToString("O"),
-            CreatedAt = nowUtc.ToString("O")
+            CreatedAt = nowUtc.ToString("O"),
+            context.NetworkDeviceId,
+            context.DeviceName,
+            context.ModuleId,
+            context.TaskKey,
+            context.PlanSessionId,
+            context.MainPlanCode,
+            context.TraceBatchNumber
         });
 
         if (affectedRows <= 0)
@@ -86,7 +105,14 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
                 ErrorMessage,
                 RetryCount,
                 NextRetryTime,
-                CreatedAt
+                CreatedAt,
+                NetworkDeviceId,
+                DeviceName,
+                ModuleId,
+                TaskKey,
+                PlanSessionId,
+                MainPlanCode,
+                TraceBatchNumber
             FROM {TableName}
             WHERE NextRetryTime <= @Now
             ORDER BY NextRetryTime ASC
@@ -134,7 +160,14 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
                     r.ErrorMessage,
                     r.RetryCount,
                     r.NextRetryTime,
-                    r.CreatedAt
+                    r.CreatedAt,
+                    r.NetworkDeviceId,
+                    r.DeviceName,
+                    r.ModuleId,
+                    r.TaskKey,
+                    r.PlanSessionId,
+                    r.MainPlanCode,
+                    r.TraceBatchNumber
                 FROM {TableName} r
                 INNER JOIN {ClaimTableName} c ON c.RecordId = r.Id
                 WHERE c.ClaimToken = @ClaimToken
@@ -257,6 +290,50 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
             Now = DateTime.UtcNow.ToString("O"),
             MaxTime = AbandonedRetryTimeUtc.ToString("O")
         });
+    }
+
+    protected override async Task AfterInitializeTableAsync(IDbConnection connection)
+    {
+        await EnsureDataPipelineContextColumnsAsync(connection, TableName).ConfigureAwait(false);
+        await connection.ExecuteAsync(
+                $"CREATE INDEX IF NOT EXISTS idx_{TableName}_device_created ON {TableName} (NetworkDeviceId, CreatedAt);",
+                commandTimeout: CommandTimeout)
+            .ConfigureAwait(false);
+        await connection.ExecuteAsync(
+                $"CREATE INDEX IF NOT EXISTS idx_{TableName}_plan_session ON {TableName} (PlanSessionId);",
+                commandTimeout: CommandTimeout)
+            .ConfigureAwait(false);
+    }
+
+    private static DataPipelineContextRow CreateContextRow(CellCompletedRecord? sourceRecord)
+        => sourceRecord is null
+            ? DataPipelineContextRow.Empty
+            : new DataPipelineContextRow(
+                sourceRecord.ResolveNetworkDeviceId(),
+                sourceRecord.ResolveDeviceName(),
+                sourceRecord.ModuleId,
+                sourceRecord.TaskKey,
+                sourceRecord.PlanSessionId,
+                sourceRecord.MainPlanCode,
+                sourceRecord.TraceBatchNumber);
+
+    private sealed record DataPipelineContextRow(
+        int? NetworkDeviceId,
+        string DeviceName,
+        string ModuleId,
+        string TaskKey,
+        string PlanSessionId,
+        string MainPlanCode,
+        string TraceBatchNumber)
+    {
+        public static DataPipelineContextRow Empty { get; } = new(
+            null,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty);
     }
 
     public async Task<int> DeleteExpiredAbandonedAsync(DateTime olderThanUtc)

@@ -103,7 +103,7 @@ internal sealed class MesRetryRecordProcessor : RetryRecordProcessorBase<MesRetr
                 "MES 补传记录反序列化失败，且死信持久化也失败。").ConfigureAwait(false);
         }
 
-        var completedRecord = new CellCompletedRecord { CellData = cellData };
+        var completedRecord = CreateCompletedRecord(record, cellData);
         bool success;
         try
         {
@@ -123,12 +123,26 @@ internal sealed class MesRetryRecordProcessor : RetryRecordProcessorBase<MesRetr
         if (success)
         {
             await RetryStore.DeleteAsync(record.Id).ConfigureAwait(false);
-            Logger.Info($"[MES补传] {cellData.DisplayLabel} 补传成功，记录已删除。");
+            Logger.Info($"[PLC-{record.DeviceName}][MES补传] {cellData.DisplayLabel} 补传成功，记录已删除。");
             return true;
         }
 
         await HandleRetryFailureAsync(record, "消费者返回失败。").ConfigureAwait(false);
         return false;
     }
+
+    private static CellCompletedRecord CreateCompletedRecord(FailedCellRecord record, CellDataBase cellData)
+        => new()
+        {
+            CellData = cellData,
+            NetworkDeviceId = record.NetworkDeviceId,
+            DeviceName = record.DeviceName,
+            ModuleId = record.ModuleId,
+            TaskKey = record.TaskKey,
+            PlanSessionId = record.PlanSessionId,
+            MainPlanCode = record.MainPlanCode,
+            TraceBatchNumber = record.TraceBatchNumber,
+            CreatedAtUtc = DateTime.SpecifyKind(record.CreatedAt, DateTimeKind.Utc)
+        };
 
 }

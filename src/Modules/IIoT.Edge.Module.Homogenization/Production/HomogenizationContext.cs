@@ -111,6 +111,11 @@ public sealed class HomogenizationContext : ProductionContext
     public ProductionPlanOption? SelectedProductionPlan { get; set; }
 
     /// <summary>
+    /// 本次软件启动后选择主批计划生成的运行会话号；不跨进程复用。
+    /// </summary>
+    public string? PlanSessionId { get; set; }
+
+    /// <summary>
     /// 当前主批计划生成得到的 MES 追溯批次号。没有该值时，MES 启用状态下不允许进入生产上传链路。
     /// </summary>
     public string? TraceBatchNumber { get; set; }

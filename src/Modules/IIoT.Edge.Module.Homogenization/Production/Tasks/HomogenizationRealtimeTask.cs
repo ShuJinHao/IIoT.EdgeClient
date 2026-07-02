@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
@@ -6,10 +7,11 @@ using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Io;
 using IIoT.Edge.Module.Homogenization.Config.Parameters;
-using IIoT.Edge.Module.Homogenization.Mes;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Production;
 using IIoT.Edge.Module.Sdk.Base;
+using IIoT.Edge.SharedKernel.DataPipeline;
+using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using Microsoft.Extensions.Options;
 
 using IIoT.Edge.Application.Abstractions.Mes;
@@ -22,7 +24,7 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
 {
     private readonly HomogenizationContext _context;
     private readonly IDeviceService _deviceService;
-    private readonly IHomogenizationMesScenarioChannel _mesChannel;
+    private readonly IDataPipelineService _dataPipelineService;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
     private readonly IHomogenizationProductionGate _productionGate;
     private readonly HomogenizationCodeOptions _codeOptions;
@@ -37,7 +39,7 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
         HomogenizationSignalCodec codec,
         HomogenizationContext context,
         IDeviceService deviceService,
-        IHomogenizationMesScenarioChannel mesChannel,
+        IDataPipelineService dataPipelineService,
         IMesUploadDiagnosticsStore diagnosticsStore,
         IHomogenizationProductionGate productionGate,
         ILogService logger,
@@ -47,7 +49,7 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
     {
         _context = context;
         _deviceService = deviceService;
-        _mesChannel = mesChannel;
+        _dataPipelineService = dataPipelineService;
         _diagnosticsStore = diagnosticsStore;
         _productionGate = productionGate;
         _codeOptions = codeOptions.Value;
@@ -84,9 +86,23 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
             return gateResult;
         }
 
-        return await _mesChannel
-            .UploadRealtimeAsync(_deviceService.CurrentDevice, snapshot, cancellationToken)
+        var cellData = new HomogenizationCellData
+        {
+            RecordKind = HomogenizationCellData.RecordKindRealtime,
+            DeviceName = _context.DeviceName,
+            DeviceCode = _deviceService.CurrentDevice?.ClientCode ?? _context.DeviceName,
+            PlcDeviceId = _context.NetworkDeviceId,
+            CompletedTime = snapshot.CapturedAt,
+            RuntimeStatus = "实时数据待上传",
+            RealtimeSnapshot = snapshot,
+            UploadTargets = DataPipelineUploadTargets.Mes
+        };
+
+        var enqueueResult = await _dataPipelineService
+            .EnqueueAsync(CreateCompletedRecord(cellData), cancellationToken)
             .ConfigureAwait(false);
+
+        return ToQueueResult(enqueueResult);
     }
 
     protected override Task OnSnapshotUploadedAsync(
@@ -94,11 +110,7 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
         MesCallResult result,
         CancellationToken cancellationToken)
     {
-        if (result.IsSuccess)
-        {
-            _diagnosticsStore.RecordSuccess(_codeOptions.Mes.Channels.Realtime);
-        }
-        else
+        if (!result.IsSuccess)
         {
             _diagnosticsStore.RecordFailure(_codeOptions.Mes.Channels.Realtime, result.Message);
         }
@@ -108,4 +120,33 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
         _context.LastRealtimeSnapshot = snapshot;
         return Task.CompletedTask;
     }
+
+    private static MesCallResult ToQueueResult(DataPipelineEnqueueResult enqueueResult)
+    {
+        if (enqueueResult.IsDurablyAccepted)
+        {
+            return MesCallResult.Success(enqueueResult.WasOverflow
+                ? "实时数据已接收，数据已进入溢出持久化。"
+                : "实时数据已进入 MES 上传队列。");
+        }
+
+        var reason = string.IsNullOrWhiteSpace(enqueueResult.ReasonCode)
+            ? "unknown"
+            : enqueueResult.ReasonCode;
+        return MesCallResult.TransportFailure($"实时数据未接收，数据管道拒绝入队（{reason}）。");
+    }
+
+    private CellCompletedRecord CreateCompletedRecord(HomogenizationCellData cellData)
+        => new()
+        {
+            CellData = cellData,
+            NetworkDeviceId = _context.NetworkDeviceId,
+            DeviceName = _context.DeviceName,
+            ModuleId = DependencyInjection.ModuleKey,
+            TaskKey = TaskName,
+            PlanSessionId = _context.PlanSessionId ?? string.Empty,
+            MainPlanCode = _context.SelectedProductionPlan?.MainPlanCode ?? string.Empty,
+            TraceBatchNumber = _context.TraceBatchNumber ?? string.Empty,
+            CreatedAtUtc = DateTime.UtcNow
+        };
 }

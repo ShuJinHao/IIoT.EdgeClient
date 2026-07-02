@@ -1,13 +1,14 @@
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Consumers;
 using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Application.Abstractions.Cloud;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Common.Device;
 using IIoT.Edge.SharedKernel.DataPipeline;
+using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 
-using IIoT.Edge.Application.Abstractions.Cloud;
 namespace IIoT.Edge.Infrastructure.Integration.PassStation;
 
 public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
@@ -60,7 +61,15 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
             return CloudCallResult.Success();
         }
 
-        foreach (var group in records.GroupBy(x => x.CellData.ProcessType, StringComparer.OrdinalIgnoreCase))
+        var cloudRecords = records
+            .Where(x => x.CellData.UploadTargets.HasFlag(DataPipelineUploadTargets.Cloud))
+            .ToList();
+        if (cloudRecords.Count == 0)
+        {
+            return CloudCallResult.Success();
+        }
+
+        foreach (var group in cloudRecords.GroupBy(x => x.CellData.ProcessType, StringComparer.OrdinalIgnoreCase))
         {
             if (!_processIntegrationRegistry.TryGetCloudUploader(group.Key, out var registration))
             {
@@ -84,27 +93,29 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
 
             if (!gate.CanUpload)
             {
+                var blockedDevice = ResolveLogDeviceName(group);
                 var blockedResult = CloudCallResult.Failure(
                     CloudCallOutcome.SkippedUploadNotReady,
                     gate.ReasonCode);
                 _logger.Warn(
-                    $"[云端] 上传门控已阻塞（{gate.ReasonCode}），{group.Count()} 条记录转入补传队列。");
+                    $"[PLC-{blockedDevice}][云端] 上传门控已阻塞（{gate.ReasonCode}），{group.Count()} 条记录转入补传队列。");
                 _diagnosticsStore.RecordResult(group.Key, blockedResult);
                 return blockedResult;
             }
 
-            var device = _deviceService.CurrentDevice;
+            var groupRecords = group.ToList();
+            var device = ResolveUploadDevice(groupRecords, _deviceService.CurrentDevice);
             if (device is null)
             {
+                var unidentifiedDevice = ResolveLogDeviceName(groupRecords);
                 var unidentifiedResult = CloudCallResult.Failure(
                     CloudCallOutcome.SkippedUploadNotReady,
                     EdgeUploadBlockReason.DeviceUnidentified.ToReasonCode());
-                _logger.Warn("[云端] 设备尚未识别，记录转入补传队列。");
+                _logger.Warn($"[PLC-{unidentifiedDevice}][云端] 设备尚未识别，记录转入补传队列。");
                 _diagnosticsStore.RecordResult(group.Key, unidentifiedResult);
                 return unidentifiedResult;
             }
 
-            var groupRecords = group.ToList();
             var context = new ProcessUploadContext(device);
             var result = registration.UploadMode == ProcessUploadMode.Batch
                 ? await _standardUploader.UploadAsync(context, group.Key, groupRecords, cancellationToken).ConfigureAwait(false)
@@ -113,7 +124,7 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
             if (!result.IsSuccess)
             {
                 _logger.Error(
-                    $"[云端] 工序 {group.Key} 上传失败，数量：{groupRecords.Count}，结果：{result.Outcome}，原因：{result.ReasonCode}。");
+                    $"[PLC-{ResolveLogDeviceName(groupRecords)}][云端] 工序 {group.Key} 上传失败，数量：{groupRecords.Count}，结果：{result.Outcome}，原因：{result.ReasonCode}。");
                 return result;
             }
         }
@@ -151,5 +162,36 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
         }
 
         return CloudCallResult.Success();
+    }
+
+    private static DeviceSession? ResolveUploadDevice(
+        IReadOnlyList<CellCompletedRecord> records,
+        DeviceSession? currentDevice)
+    {
+        if (currentDevice is null)
+        {
+            return null;
+        }
+
+        var deviceNames = records
+            .Select(record => record.ResolveDeviceName())
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return deviceNames.Count == 1
+            ? currentDevice with { DeviceName = deviceNames[0] }
+            : currentDevice;
+    }
+
+    private static string ResolveLogDeviceName(IEnumerable<CellCompletedRecord> records)
+    {
+        var deviceNames = records
+            .Select(record => record.ResolveDeviceName())
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return deviceNames.Count == 1 ? deviceNames[0] : "多PLC";
     }
 }

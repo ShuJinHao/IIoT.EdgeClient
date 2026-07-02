@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
@@ -6,8 +7,10 @@ using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Io;
 using IIoT.Edge.Module.Homogenization.Config.Parameters;
+using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Production;
 using IIoT.Edge.Module.Sdk.Base;
+using IIoT.Edge.SharedKernel.DataPipeline;
 using Microsoft.Extensions.Options;
 
 using IIoT.Edge.Application.Abstractions.Mes;
@@ -77,6 +80,37 @@ internal abstract class HomogenizationTaskBase : PlcTaskBase
     {
         var stageName = stage == HomogenizationTrayCodeStage.Inbound ? "进站" : "出站";
         return $"托盘码重复，已按业务 NG 拒绝{stageName}：{trayCode.Trim()}。";
+    }
+
+    protected CellCompletedRecord CreatePipelineRecord(HomogenizationCellData cellData)
+        => new()
+        {
+            CellData = cellData,
+            NetworkDeviceId = ModuleContext.NetworkDeviceId,
+            DeviceName = ModuleContext.DeviceName,
+            ModuleId = DependencyInjection.ModuleKey,
+            TaskKey = TaskName,
+            PlanSessionId = ModuleContext.PlanSessionId ?? string.Empty,
+            MainPlanCode = ModuleContext.SelectedProductionPlan?.MainPlanCode ?? string.Empty,
+            TraceBatchNumber = ModuleContext.TraceBatchNumber ?? string.Empty,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+
+    protected static MesCallResult ToMesQueueResult(
+        DataPipelineEnqueueResult enqueueResult,
+        string acceptedMessage,
+        string overflowMessage,
+        string rejectedPrefix)
+    {
+        if (enqueueResult.IsDurablyAccepted)
+        {
+            return MesCallResult.Success(enqueueResult.WasOverflow ? overflowMessage : acceptedMessage);
+        }
+
+        var reason = string.IsNullOrWhiteSpace(enqueueResult.ReasonCode)
+            ? "unknown"
+            : enqueueResult.ReasonCode;
+        return MesCallResult.TransportFailure($"{rejectedPrefix}（{reason}）。");
     }
 
     protected async Task<string?> ResolveDuplicateTrayMessageAsync(
@@ -201,11 +235,7 @@ internal abstract class HomogenizationTaskBase : PlcTaskBase
         var snapshot = captureSnapshot();
         beforeUpload?.Invoke(snapshot);
         var result = await uploadAsync(snapshot, TaskCancellationToken).ConfigureAwait(false);
-        if (result.IsSuccess)
-        {
-            diagnosticsStore.RecordSuccess(channel);
-        }
-        else
+        if (!result.IsSuccess)
         {
             diagnosticsStore.RecordFailure(channel, result.Message);
         }

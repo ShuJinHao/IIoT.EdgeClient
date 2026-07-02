@@ -63,7 +63,8 @@ public class ProcessQueueTask : ScheduledTaskBase
     private async Task ProcessOneAsync(CellCompletedRecord record, CancellationToken cancellationToken)
     {
         var label = record.CellData.DisplayLabel;
-        Logger.Info($"[{record.CellData.ProcessType}] 开始处理 {label}。");
+        var deviceName = record.ResolveDeviceName();
+        Logger.Info($"[PLC-{deviceName}][数据管道] 工序={record.CellData.ProcessType} 开始处理 {label}。");
 
         foreach (var consumer in _consumers)
         {
@@ -86,7 +87,7 @@ public class ProcessQueueTask : ScheduledTaskBase
             }
         }
 
-        Logger.Info($"[{record.CellData.ProcessType}] {label} 处理链路已完成。");
+        Logger.Info($"[PLC-{deviceName}][数据管道] 工序={record.CellData.ProcessType} {label} 处理链路已完成。");
     }
 
     private async Task HandleFailureAsync(
@@ -95,24 +96,25 @@ public class ProcessQueueTask : ScheduledTaskBase
         string errorMessage)
     {
         var label = record.CellData.DisplayLabel;
+        var deviceName = record.ResolveDeviceName();
 
         if (consumer.FailureMode == ConsumerFailureMode.BestEffort)
         {
-            Logger.Warn($"[{record.CellData.ProcessType}] {consumer.Name} 处理 {label} 失败：{errorMessage}（非关键消费者，继续后续链路）。");
+            Logger.Warn($"[PLC-{deviceName}][数据管道] 工序={record.CellData.ProcessType} {consumer.Name} 处理 {label} 失败：{errorMessage}（非关键消费者，继续后续链路）。");
             return;
         }
 
         if (consumer.RetryChannel == DataPipelineRetryChannel.None)
         {
             var details =
-                $"[{record.CellData.ProcessType}] 关键消费者 {consumer.Name} 处理 {label} 失败，但未配置补偿链路。";
+                $"[PLC-{deviceName}][数据管道] 工序={record.CellData.ProcessType} 关键消费者 {consumer.Name} 处理 {label} 失败，但未配置补偿链路。";
             Logger.Error(details);
             _criticalFallbackWriter.Write("DataPipeline.ProcessQueue.InvalidRetryChannel", details);
             return;
         }
 
         Logger.Warn(
-            $"[{record.CellData.ProcessType}] {consumer.Name} 处理 {label} 失败，准备写入 {FormatRetryChannel(consumer.RetryChannel)} 补偿链路。");
+            $"[PLC-{deviceName}][数据管道] 工序={record.CellData.ProcessType} {consumer.Name} 处理 {label} 失败，准备写入 {FormatRetryChannel(consumer.RetryChannel)} 补偿链路。");
 
         var sourceTable = consumer.RetryChannel switch
         {
@@ -124,7 +126,7 @@ public class ProcessQueueTask : ScheduledTaskBase
         if (string.IsNullOrWhiteSpace(sourceTable))
         {
             var unsupportedDetails =
-                $"[{record.CellData.ProcessType}] {consumer.Name} 使用了不支持的补偿链路：{FormatRetryChannel(consumer.RetryChannel)}。";
+                $"[PLC-{deviceName}][数据管道] 工序={record.CellData.ProcessType} {consumer.Name} 使用了不支持的补偿链路：{FormatRetryChannel(consumer.RetryChannel)}。";
             Logger.Error(unsupportedDetails);
             _criticalFallbackWriter.Write("DataPipeline.ProcessQueue.UnsupportedRetryChannel", unsupportedDetails);
             return;

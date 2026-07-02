@@ -481,7 +481,8 @@ public sealed class RetryTaskBehaviorTests
             string sourceTable,
             long sourceRecordId,
             DeadLetterStage stage,
-            string failureReason)
+            string failureReason,
+            FailedCellRecord? sourceRecord = null)
         {
             CallCount++;
             LastProcessType = processType;

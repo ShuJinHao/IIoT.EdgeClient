@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Mes;
 using IIoT.Edge.Application.Abstractions.Modules;
@@ -96,7 +97,8 @@ public sealed class DieCuttingStationRuntimeFactory : IStationRuntimeFactory
                 buffer,
                 codec,
                 dieCuttingContext,
-                serviceProvider.GetRequiredService<IDieCuttingMesScenarioChannel>(),
+                serviceProvider.GetRequiredService<IDataPipelineService>(),
+                serviceProvider.GetRequiredService<IDieCuttingProductionGate>(),
                 serviceProvider.GetRequiredService<IDieCuttingProductionRecordStore>(),
                 serviceProvider.GetRequiredService<IMesUploadDiagnosticsStore>(),
                 serviceProvider.GetRequiredService<IPlcConnectionManager>(),

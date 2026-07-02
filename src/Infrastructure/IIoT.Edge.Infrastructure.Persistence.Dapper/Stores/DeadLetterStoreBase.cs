@@ -2,6 +2,7 @@ using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Connection;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Repository;
 using IIoT.Edge.SharedKernel.DataPipeline;
+using System.Data;
 
 namespace IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
 
@@ -19,10 +20,12 @@ public abstract class DeadLetterStoreBase : DapperRepositoryBase<DeadLetterRecor
         var sql = $@"
             INSERT INTO {TableName}
                 (ProcessType, CellDataJson, FailedTarget, SourceTable, SourceRecordId,
-                 FailureStage, FailureReason, CreatedAt)
+                 FailureStage, FailureReason, CreatedAt,
+                 NetworkDeviceId, DeviceName, ModuleId, TaskKey, PlanSessionId, MainPlanCode, TraceBatchNumber)
             VALUES
                 (@ProcessType, @CellDataJson, @FailedTarget, @SourceTable, @SourceRecordId,
-                 @FailureStage, @FailureReason, @CreatedAt)";
+                 @FailureStage, @FailureReason, @CreatedAt,
+                 @NetworkDeviceId, @DeviceName, @ModuleId, @TaskKey, @PlanSessionId, @MainPlanCode, @TraceBatchNumber)";
 
         var affectedRows = await SafeExecuteAsync(sql, new
         {
@@ -33,7 +36,14 @@ public abstract class DeadLetterStoreBase : DapperRepositoryBase<DeadLetterRecor
             record.SourceRecordId,
             record.FailureStage,
             record.FailureReason,
-            CreatedAt = record.CreatedAt.ToString("O")
+            CreatedAt = record.CreatedAt.ToString("O"),
+            record.NetworkDeviceId,
+            record.DeviceName,
+            record.ModuleId,
+            record.TaskKey,
+            record.PlanSessionId,
+            record.MainPlanCode,
+            record.TraceBatchNumber
         });
 
         if (affectedRows <= 0)
@@ -84,4 +94,7 @@ public abstract class DeadLetterStoreBase : DapperRepositoryBase<DeadLetterRecor
             throw new InvalidOperationException($"未找到要删除的死信记录：{TableName}/{id}。");
         }
     }
+
+    protected override Task AfterInitializeTableAsync(IDbConnection connection)
+        => EnsureDataPipelineContextColumnsAsync(connection, TableName);
 }

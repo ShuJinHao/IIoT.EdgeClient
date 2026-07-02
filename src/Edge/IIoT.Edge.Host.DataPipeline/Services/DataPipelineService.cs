@@ -81,8 +81,9 @@ public class DataPipelineService : IDataPipelineService
                 null => "Unknown"
             };
 
+            var deviceName = record.ResolveDeviceName();
             _logger.Info(
-                $"[{cellData.DeviceCode}] {cellData.ProcessType} 已进入 DataPipeline。结果={result}，待处理={PendingCount}");
+                $"[PLC-{deviceName}][数据管道] 工序={cellData.ProcessType} 已入队，结果={result}，待处理={PendingCount}。");
             return DataPipelineEnqueueResult.Accepted();
         }
 

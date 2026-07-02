@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
@@ -6,8 +6,9 @@ using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Io;
 using IIoT.Edge.Module.Homogenization.Config.Parameters;
-using IIoT.Edge.Module.Homogenization.Mes;
+using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Production;
+using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using Microsoft.Extensions.Options;
 
 using IIoT.Edge.Application.Abstractions.Mes;
@@ -18,8 +19,7 @@ namespace IIoT.Edge.Module.Homogenization.Production.Tasks;
 /// </summary>
 internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
 {
-    private readonly IDeviceService _deviceService;
-    private readonly IHomogenizationMesScenarioChannel _mesChannel;
+    private readonly IDataPipelineService _dataPipelineService;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
     private readonly IHomogenizationProductionGate _productionGate;
 
@@ -31,8 +31,7 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
         HomogenizationPlcHandshakeAccessor interaction,
         HomogenizationSignalCodec codec,
         HomogenizationContext context,
-        IDeviceService deviceService,
-        IHomogenizationMesScenarioChannel mesChannel,
+        IDataPipelineService dataPipelineService,
         IMesUploadDiagnosticsStore diagnosticsStore,
         IHomogenizationProductionGate productionGate,
         ILogService logger,
@@ -41,8 +40,7 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
         IOptions<HomogenizationCodeOptions> codeOptions)
         : base(buffer, interaction, codec, context, logger, productionTime, codeOptions, moduleOptions)
     {
-        _deviceService = deviceService;
-        _mesChannel = mesChannel;
+        _dataPipelineService = dataPipelineService;
         _diagnosticsStore = diagnosticsStore;
         _productionGate = productionGate;
     }
@@ -65,7 +63,7 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
             _productionGate,
             _diagnosticsStore,
             Codec.CaptureRecipeSnapshot,
-            (snapshot, ct) => _mesChannel.UploadRecipeAsync(_deviceService.CurrentDevice, snapshot, ct),
+            EnqueueRecipeAsync,
             message =>
             {
                 ModuleContext.LastRecipeAt = ProductionTime.BusinessNow;
@@ -77,5 +75,32 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
                 ModuleContext.LastRecipeResult = result.Message;
                 ModuleContext.LastRecipeSnapshot = snapshot;
             }).ConfigureAwait(false);
+    }
+
+    private async Task<MesCallResult> EnqueueRecipeAsync(
+        HomogenizationRecipeSnapshot snapshot,
+        CancellationToken cancellationToken)
+    {
+        var cellData = new HomogenizationCellData
+        {
+            RecordKind = HomogenizationCellData.RecordKindRecipe,
+            DeviceName = ModuleContext.DeviceName,
+            DeviceCode = ModuleContext.DeviceName,
+            PlcDeviceId = ModuleContext.NetworkDeviceId,
+            CompletedTime = snapshot.CapturedAt,
+            RuntimeStatus = "配方待上传",
+            RecipeSnapshot = snapshot,
+            UploadTargets = DataPipelineUploadTargets.Mes
+        };
+
+        var enqueueResult = await _dataPipelineService
+            .EnqueueAsync(CreatePipelineRecord(cellData), cancellationToken)
+            .ConfigureAwait(false);
+
+        return ToMesQueueResult(
+            enqueueResult,
+            "配方已进入 MES 上传队列。",
+            "配方已接收，数据已进入溢出持久化。",
+            "配方未接收，数据管道拒绝入队");
     }
 }

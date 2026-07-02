@@ -20,5 +20,6 @@ public interface IDataPipelineDeadLetterWriter
         string sourceTable,
         long sourceRecordId,
         DeadLetterStage stage,
-        string failureReason);
+        string failureReason,
+        FailedCellRecord? sourceRecord = null);
 }

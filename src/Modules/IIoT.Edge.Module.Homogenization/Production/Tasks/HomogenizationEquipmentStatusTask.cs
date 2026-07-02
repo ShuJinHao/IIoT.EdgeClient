@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
@@ -6,9 +6,9 @@ using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Io;
 using IIoT.Edge.Module.Homogenization.Config.Parameters;
-using IIoT.Edge.Module.Homogenization.Mes;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Production;
+using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using Microsoft.Extensions.Options;
 
 using IIoT.Edge.Application.Abstractions.Mes;
@@ -19,8 +19,7 @@ namespace IIoT.Edge.Module.Homogenization.Production.Tasks;
 /// </summary>
 internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
 {
-    private readonly IDeviceService _deviceService;
-    private readonly IHomogenizationMesScenarioChannel _mesChannel;
+    private readonly IDataPipelineService _dataPipelineService;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
     private readonly IHomogenizationProductionGate _productionGate;
 
@@ -32,8 +31,7 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
         HomogenizationPlcHandshakeAccessor interaction,
         HomogenizationSignalCodec codec,
         HomogenizationContext context,
-        IDeviceService deviceService,
-        IHomogenizationMesScenarioChannel mesChannel,
+        IDataPipelineService dataPipelineService,
         IMesUploadDiagnosticsStore diagnosticsStore,
         IHomogenizationProductionGate productionGate,
         ILogService logger,
@@ -42,8 +40,7 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
         IOptions<HomogenizationCodeOptions> codeOptions)
         : base(buffer, interaction, codec, context, logger, productionTime, codeOptions, moduleOptions)
     {
-        _deviceService = deviceService;
-        _mesChannel = mesChannel;
+        _dataPipelineService = dataPipelineService;
         _diagnosticsStore = diagnosticsStore;
         _productionGate = productionGate;
     }
@@ -66,7 +63,7 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
             _productionGate,
             _diagnosticsStore,
             () => Codec.CaptureEquipmentStatusSnapshot(CodeOptions.Mes),
-            (snapshot, ct) => _mesChannel.UploadEquipmentStatusAsync(_deviceService.CurrentDevice, snapshot, ct),
+            EnqueueEquipmentStatusAsync,
             message =>
             {
                 ModuleContext.LastEquipmentStatusAt = ProductionTime.BusinessNow;
@@ -79,6 +76,33 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
                 ModuleContext.LastEquipmentStatusSnapshot = snapshot;
             },
             WriteCloudDeviceStatusLog).ConfigureAwait(false);
+    }
+
+    private async Task<MesCallResult> EnqueueEquipmentStatusAsync(
+        HomogenizationEquipmentStatusSnapshot snapshot,
+        CancellationToken cancellationToken)
+    {
+        var cellData = new HomogenizationCellData
+        {
+            RecordKind = HomogenizationCellData.RecordKindEquipmentStatus,
+            DeviceName = ModuleContext.DeviceName,
+            DeviceCode = ModuleContext.DeviceName,
+            PlcDeviceId = ModuleContext.NetworkDeviceId,
+            CompletedTime = snapshot.CapturedAt,
+            RuntimeStatus = "设备状态待上传",
+            EquipmentStatusSnapshot = snapshot,
+            UploadTargets = DataPipelineUploadTargets.Mes
+        };
+
+        var enqueueResult = await _dataPipelineService
+            .EnqueueAsync(CreatePipelineRecord(cellData), cancellationToken)
+            .ConfigureAwait(false);
+
+        return ToMesQueueResult(
+            enqueueResult,
+            "设备状态已进入 MES 上传队列。",
+            "设备状态已接收，数据已进入溢出持久化。",
+            "设备状态未接收，数据管道拒绝入队");
     }
 
     private void WriteCloudDeviceStatusLog(HomogenizationEquipmentStatusSnapshot snapshot)

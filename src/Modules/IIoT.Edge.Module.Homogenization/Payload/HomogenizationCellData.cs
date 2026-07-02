@@ -7,15 +7,29 @@ namespace IIoT.Edge.Module.Homogenization.Payload;
 /// </summary>
 public sealed class HomogenizationCellData : CellDataBase
 {
+    public const string RecordKindInbound = "Inbound";
+    public const string RecordKindOutbound = "Outbound";
+    public const string RecordKindRealtime = "Realtime";
+    public const string RecordKindRecipe = "Recipe";
+    public const string RecordKindEquipmentStatus = "EquipmentStatus";
+
     /// <summary>
     /// 工序类型固定为匀浆模块，用于 DataPipeline 路由和补偿反序列化。
     /// </summary>
     public override string ProcessType => DependencyInjection.ModuleKey;
 
     /// <summary>
-    /// UI、日志和补偿诊断中展示的记录名，匀浆以托盘码作为主标识。
+    /// UI、日志和补偿诊断中展示的记录名，匀浆出入站以托盘码作为主标识，实时/配方/状态以 PLC 设备号加类型标识。
     /// </summary>
-    public override string DisplayLabel => TrayCode;
+    public override string DisplayLabel
+        => !string.IsNullOrWhiteSpace(TrayCode)
+            ? TrayCode
+            : $"{DeviceName}-{RecordKind}";
+
+    /// <summary>
+    /// 记录类型，用于 MES 消费端把同一工序的不同上传接口分发到进站、出站、实时、配方或设备状态。
+    /// </summary>
+    public string RecordKind { get; set; } = RecordKindOutbound;
 
     /// <summary>
     /// 托盘码，来自 PLC 扫码地址，是 MES 进站和出料上传的主业务标识。

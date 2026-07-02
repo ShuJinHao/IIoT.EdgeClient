@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Mes;
@@ -22,6 +23,7 @@ using IIoT.Edge.Module.DieCutting.Presentation.Views;
 using IIoT.Edge.Module.DieCutting.Production;
 using IIoT.Edge.Module.DieCutting.Samples;
 using IIoT.Edge.SharedKernel.Context;
+using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.Domain;
 using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.SharedKernel.Repository;
@@ -435,7 +437,7 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         await InvokeTaskCoreOnceAsync(runtime.Task);
 
         Assert.Contains(logEntries, entry =>
-            entry.Message.Contains("模切采样任务配置", StringComparison.Ordinal)
+            entry.Message.Contains("[模切采样] 任务配置", StringComparison.Ordinal)
             && entry.Message.Contains("MES地址=http://10.98.101.247:8080", StringComparison.Ordinal)
             && entry.Message.Contains("采集处理周期=1000ms", StringComparison.Ordinal));
         Assert.Contains(logEntries, entry =>
@@ -502,6 +504,75 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         Assert.Contains("MES 上传已关闭", runtime.Context.LastRealtimeResult);
         Assert.Equal(0, mesChannel.RealtimeUploadCount);
         Assert.Equal(0, mesChannel.DeviceStatusUploadCount);
+    }
+
+    [Fact]
+    public async Task RealtimeSampleUploadTask_WhenMesEnabledWithoutMainPlan_ShouldNotStoreLocalRecordOrEnqueueUpload()
+    {
+        var logService = new ContractLogService();
+        var recordStore = new InMemoryDieCuttingProductionRecordStore();
+        var pipeline = new CapturingDataPipelineService();
+        var runtime = CreateRealtimeSampleRuntime(
+            logService,
+            new ContractPlcConnectionManager(),
+            new ContractDieCuttingModuleParamProvider(ExpectedModuleId, ExpectedUpperComputerNo, ExpectedOperationCode),
+            recordStore,
+            mesChannel: null,
+            pipeline);
+        using var provider = runtime.Provider;
+        SeedRealtimeSignals(runtime.Buffer);
+
+        await InvokeTaskCoreOnceAsync(runtime.Task);
+
+        var records = await recordStore.QueryAsync(
+            ExpectedModuleId,
+            ExpectedFirstDevice,
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Empty(records);
+        Assert.Empty(pipeline.Records);
+        Assert.Contains("请先选择主批计划", runtime.Context.LastRealtimeResult, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RealtimeSampleUploadTask_WhenMainPlanSelected_ShouldEnqueueUploadWithPlcAndPlanContext()
+    {
+        var logService = new ContractLogService();
+        var recordStore = new InMemoryDieCuttingProductionRecordStore();
+        var pipeline = new CapturingDataPipelineService();
+        var httpClient = new CapturingMesHttpClient
+        {
+            PostResponse = """{"code":200,"msg":"OK","data":{"batchNumber":"TRACE-PLAN-001"}}"""
+        };
+        var runtime = CreateRealtimeSampleRuntime(
+            logService,
+            new ContractPlcConnectionManager(),
+            new ContractDieCuttingModuleParamProvider(ExpectedModuleId, ExpectedUpperComputerNo, ExpectedOperationCode),
+            recordStore,
+            mesChannel: null,
+            pipeline,
+            httpClient);
+        using var provider = runtime.Provider;
+        var planService = provider.GetRequiredService<DieCuttingProductionPlanService>();
+        await planService.SelectPlanAsync(CreatePlanOption("MP-001"), TestContext.Current.CancellationToken);
+        SeedRealtimeSignals(runtime.Buffer);
+
+        await InvokeTaskCoreOnceAsync(runtime.Task);
+
+        var outbound = Assert.Single(
+            pipeline.Records,
+            record => Assert.IsType<DieCuttingCellData>(record.CellData).RecordKind == DieCuttingCellData.RecordKinds.RealtimeOutbound);
+        var cellData = Assert.IsType<DieCuttingCellData>(outbound.CellData);
+        var definition = provider.GetRequiredService<DieCuttingModuleDefinition>();
+        Assert.Equal(1, outbound.NetworkDeviceId);
+        Assert.Equal(ExpectedFirstDevice, outbound.DeviceName);
+        Assert.Equal(ExpectedModuleId, outbound.ModuleId);
+        Assert.Equal(definition.RealtimeSampleUploadTaskKey, outbound.TaskKey);
+        Assert.False(string.IsNullOrWhiteSpace(outbound.PlanSessionId));
+        Assert.Equal("MP-001", outbound.MainPlanCode);
+        Assert.Equal("TRACE-PLAN-001", outbound.TraceBatchNumber);
+        Assert.Equal(outbound.NetworkDeviceId, cellData.PlcDeviceId);
+        Assert.Equal(DieCuttingCellData.RecordKinds.RealtimeOutbound, cellData.RecordKind);
+        Assert.Contains("MES 上传队列", runtime.Context.LastRealtimeResult, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -950,7 +1021,9 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         IPlcConnectionManager plcConnectionManager,
         IModuleParamProvider<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business> parameters,
         IDieCuttingProductionRecordStore? recordStore,
-        IDieCuttingMesScenarioChannel? mesChannel)
+        IDieCuttingMesScenarioChannel? mesChannel,
+        IDataPipelineService? dataPipelineService = null,
+        IMesHttpClient? mesHttpClient = null)
     {
         var result = new ModuleContractFixture().RegisterModule(new TModule());
         Assert.True(result.RuntimeRegistry.TryGetFactory(ExpectedModuleId, out var factory));
@@ -973,6 +1046,16 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         if (mesChannel is not null)
         {
             services.AddSingleton(mesChannel);
+        }
+
+        if (dataPipelineService is not null)
+        {
+            services.AddSingleton(dataPipelineService);
+        }
+
+        if (mesHttpClient is not null)
+        {
+            services.AddSingleton(mesHttpClient);
         }
 
         var provider = services.BuildServiceProvider();
@@ -1067,6 +1150,30 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         => entry.Message.Contains("token", StringComparison.OrdinalIgnoreCase)
            || entry.Message.Contains("sign=", StringComparison.OrdinalIgnoreCase)
            || entry.Message.Contains("密钥", StringComparison.OrdinalIgnoreCase);
+
+    private static ProductionPlanOption CreatePlanOption(string mainPlanCode)
+        => new(
+            Id: mainPlanCode,
+            MainPlanCode: mainPlanCode,
+            WorkOrderCode: string.Empty,
+            ErpOrderCode: string.Empty,
+            ProductCode: "PRODUCT-1",
+            ProductName: "测试产品",
+            PlanStatus: "RUNNING",
+            ProcessCode: string.Empty,
+            ProcessName: string.Empty,
+            LineCode: string.Empty,
+            LineName: string.Empty,
+            PlannedQuantity: string.Empty,
+            CompletedQuantity: string.Empty,
+            Unit: string.Empty,
+            ProductModel: string.Empty,
+            StartTime: string.Empty,
+            EndTime: string.Empty,
+            Fields: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["orderNo"] = mainPlanCode
+            });
 
     private sealed record RealtimeSampleRuntime(
         IPlcTask Task,
@@ -1238,6 +1345,39 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
                 .ToArray();
             return Task.FromResult<IReadOnlyList<DieCuttingProductionRecord>>(rows);
         }
+    }
+
+    private sealed class CapturingDataPipelineService : IDataPipelineService
+    {
+        public List<CellCompletedRecord> Records { get; } = [];
+
+        public int PendingCount => Records.Count;
+        public int OverflowCount => 0;
+        public int SpillCount => 0;
+
+        public ValueTask<DataPipelineEnqueueResult> EnqueueAsync(
+            CellCompletedRecord record,
+            CancellationToken cancellationToken = default)
+        {
+            Records.Add(record);
+            return ValueTask.FromResult(DataPipelineEnqueueResult.Accepted());
+        }
+
+        public bool TryDequeue(out CellCompletedRecord? record)
+        {
+            if (Records.Count == 0)
+            {
+                record = null;
+                return false;
+            }
+
+            record = Records[0];
+            Records.RemoveAt(0);
+            return true;
+        }
+
+        public ValueTask<bool> WaitToReadAsync(CancellationToken cancellationToken = default)
+            => ValueTask.FromResult(Records.Count > 0);
     }
 
     private sealed class CountingDieCuttingMesChannel : IDieCuttingMesScenarioChannel

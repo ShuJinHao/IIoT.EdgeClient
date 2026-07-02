@@ -2,6 +2,7 @@ using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Application.Abstractions.Mes;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Signals;
@@ -10,7 +11,6 @@ using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Io;
 using IIoT.Edge.Module.Homogenization.Config.Parameters;
-using IIoT.Edge.Module.Homogenization.Mes;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Production.Tasks;
 using IIoT.Edge.Module.Sdk.Signals;
@@ -18,7 +18,6 @@ using IIoT.Edge.SharedKernel.Context;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
-using IIoT.Edge.Application.Abstractions.Mes;
 namespace IIoT.Edge.Module.Homogenization.Production;
 
 /// <summary>
@@ -163,7 +162,6 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
         var codec = new HomogenizationSignalCodec(singleReadSignals, continuousReadSignals, productionTime);
         var tasks = new List<IPlcTask>();
         IDeviceService? deviceService = null;
-        IHomogenizationMesScenarioChannel? mesChannel = null;
         IMesUploadDiagnosticsStore? diagnosticsStore = null;
         IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>? moduleParameters = null;
         IDataPipelineService? dataPipelineService = null;
@@ -171,9 +169,6 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
 
         IDeviceService GetDeviceService()
             => deviceService ??= serviceProvider.GetRequiredService<IDeviceService>();
-
-        IHomogenizationMesScenarioChannel GetMesChannel()
-            => mesChannel ??= serviceProvider.GetRequiredService<IHomogenizationMesScenarioChannel>();
 
         IMesUploadDiagnosticsStore GetDiagnosticsStore()
             => diagnosticsStore ??= serviceProvider.GetRequiredService<IMesUploadDiagnosticsStore>();
@@ -195,7 +190,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 codec,
                 homogenizationContext,
                 GetDeviceService(),
-                GetMesChannel(),
+                GetDataPipelineService(),
                 GetDiagnosticsStore(),
                 GetModuleParameters(),
                 GetProductionGate(),
@@ -231,8 +226,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 interaction,
                 codec,
                 homogenizationContext,
-                GetDeviceService(),
-                GetMesChannel(),
+                GetDataPipelineService(),
                 GetDiagnosticsStore(),
                 GetProductionGate(),
                 logger,
@@ -248,8 +242,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 interaction,
                 codec,
                 homogenizationContext,
-                GetDeviceService(),
-                GetMesChannel(),
+                GetDataPipelineService(),
                 GetDiagnosticsStore(),
                 GetProductionGate(),
                 logger,
@@ -276,7 +269,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 codec,
                 homogenizationContext,
                 GetDeviceService(),
-                GetMesChannel(),
+                GetDataPipelineService(),
                 GetDiagnosticsStore(),
                 GetProductionGate(),
                 logger,

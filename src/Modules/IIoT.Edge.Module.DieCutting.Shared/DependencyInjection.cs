@@ -82,6 +82,7 @@ public abstract class DieCuttingModuleBase : EdgeProcessModuleBase<DieCuttingCel
         builder.Services.AddSingleton<DieCuttingProductionPlanService>();
         builder.Services.AddSingleton<IProductionPlanSelectionService>(sp =>
             sp.GetRequiredService<DieCuttingProductionPlanService>());
+        builder.Services.AddSingleton<IDieCuttingProductionGate, DieCuttingProductionGate>();
         var fallbackDatabaseDirectory = ResolveFallbackDatabaseDirectory(builder.Configuration);
         builder.Services.AddSingleton<DieCuttingProductionRecordStore>(sp =>
         {

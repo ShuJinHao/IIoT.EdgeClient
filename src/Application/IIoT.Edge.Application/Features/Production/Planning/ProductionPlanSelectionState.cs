@@ -7,7 +7,8 @@ public sealed record ProductionPlanSelectionState(
     string Message,
     string? TraceBatchNumber = null,
     DateTime? TraceBatchGeneratedAt = null,
-    string? TraceBatchError = null)
+    string? TraceBatchError = null,
+    string? PlanSessionId = null)
 {
     public bool HasSelectedPlan => CurrentPlan is not null;
 

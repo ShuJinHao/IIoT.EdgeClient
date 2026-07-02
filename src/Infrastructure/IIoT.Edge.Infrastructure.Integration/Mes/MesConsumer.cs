@@ -1,11 +1,12 @@
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Application.Abstractions.Mes;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Infrastructure.Integration;
 using IIoT.Edge.SharedKernel.DataPipeline;
+using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 
-using IIoT.Edge.Application.Abstractions.Mes;
 namespace IIoT.Edge.Infrastructure.Integration.Mes;
 
 public sealed class MesConsumer : ProcessUploaderConsumerBase<IProcessMesUploader, MesCallResult>, IMesConsumer
@@ -35,6 +36,11 @@ public sealed class MesConsumer : ProcessUploaderConsumerBase<IProcessMesUploade
 
     public async Task<bool> ProcessAsync(CellCompletedRecord record, CancellationToken cancellationToken = default)
     {
+        if (!record.CellData.UploadTargets.HasFlag(DataPipelineUploadTargets.Mes))
+        {
+            return true;
+        }
+
         var processType = record.CellData.ProcessType;
         var isRegistered = _processIntegrationRegistry.HasMesUploader(processType);
         if (!isRegistered)
@@ -50,20 +56,21 @@ public sealed class MesConsumer : ProcessUploaderConsumerBase<IProcessMesUploade
 
         if (!gate.CanUpload)
         {
+            var deviceName = record.ResolveDeviceName();
             var reason = string.IsNullOrWhiteSpace(gate.ReasonCode)
                 ? "mes_upload_gate_blocked"
                 : gate.ReasonCode;
             _diagnosticsStore.RecordFailure(processType, reason);
-            Logger.Warn($"[MES] 上传门控未就绪（{reason}），本次数据转入 MES 补偿队列。工序={processType}");
+            Logger.Warn($"[PLC-{deviceName}][MES] 上传门控未就绪（{reason}），本次数据转入 MES 补偿队列。工序={processType}");
             return false;
         }
 
-        var device = CurrentDevice;
+        var device = ResolveUploadDevice(record, CurrentDevice);
         if (device is null)
         {
             const string reason = "尚未识别当前设备。";
             _diagnosticsStore.RecordFailure(processType, reason);
-            Logger.Warn($"[MES] {reason} 工序={processType}");
+            Logger.Warn($"[PLC-{record.ResolveDeviceName()}][MES] {reason} 工序={processType}");
             return false;
         }
 
@@ -76,6 +83,7 @@ public sealed class MesConsumer : ProcessUploaderConsumerBase<IProcessMesUploade
         {
             const string reason = "uploader_not_found";
             _diagnosticsStore.RecordFailure(processType, reason);
+            Logger.Error($"[PLC-{record.ResolveDeviceName()}][MES] 工序 {processType} 已注册上传器，但未找到可用实现。");
             return false;
         }
 
@@ -86,12 +94,26 @@ public sealed class MesConsumer : ProcessUploaderConsumerBase<IProcessMesUploade
         if (result.IsSuccess)
         {
             _diagnosticsStore.RecordSuccess(processType);
+            Logger.Info($"[PLC-{device.DeviceName}][MES] 工序 {processType} 上传成功。");
             return true;
         }
 
         _diagnosticsStore.RecordFailure(processType, result.Message);
         Logger.Error(
-            $"[MES] Upload failed for process type {processType}. Outcome:{result.Outcome}, Message:{result.Message}");
+            $"[PLC-{device.DeviceName}][MES] 工序 {processType} 上传失败，结果：{result.Outcome}，原因：{result.Message}");
         return false;
+    }
+
+    private static DeviceSession? ResolveUploadDevice(CellCompletedRecord record, DeviceSession? currentDevice)
+    {
+        if (currentDevice is null)
+        {
+            return null;
+        }
+
+        var deviceName = record.ResolveDeviceName();
+        return string.IsNullOrWhiteSpace(deviceName)
+            ? currentDevice
+            : currentDevice with { DeviceName = deviceName };
     }
 }

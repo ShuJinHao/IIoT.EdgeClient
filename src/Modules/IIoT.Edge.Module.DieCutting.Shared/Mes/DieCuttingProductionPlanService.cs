@@ -23,6 +23,7 @@ public sealed class DieCuttingProductionPlanService(
     private string? _traceBatchNumber;
     private DateTime? _traceBatchGeneratedAt;
     private string? _traceBatchError;
+    private string? _planSessionId;
 
     public string ProcessType => _definition.ProcessType;
 
@@ -39,12 +40,13 @@ public sealed class DieCuttingProductionPlanService(
         var upperComputerNo = await GetUpperComputerNoAsync(cancellationToken).ConfigureAwait(false);
         return new ProductionPlanSelectionState(
             true,
-            false,
+            true,
             _currentPlan,
             string.IsNullOrWhiteSpace(upperComputerNo) ? ProductionPlanSelectionErrorCodes.MissingUpperComputerNo : string.Empty,
             _traceBatchNumber,
             _traceBatchGeneratedAt,
-            _traceBatchError);
+            _traceBatchError,
+            _planSessionId);
     }
 
     public async Task<IReadOnlyList<ProductionPlanOption>> LoadPlansAsync(CancellationToken cancellationToken = default)
@@ -78,6 +80,7 @@ public sealed class DieCuttingProductionPlanService(
         _traceBatchNumber = null;
         _traceBatchGeneratedAt = null;
         _traceBatchError = null;
+        _planSessionId = null;
 
         if (string.IsNullOrWhiteSpace(option.MainPlanCode))
         {
@@ -120,6 +123,7 @@ public sealed class DieCuttingProductionPlanService(
         _traceBatchNumber = batchNumber.Trim();
         _traceBatchGeneratedAt = _productionTime.BusinessNow;
         _traceBatchError = null;
+        _planSessionId = Guid.NewGuid().ToString("N");
     }
 
     private static string ResolveTraceBatchError(string? message)

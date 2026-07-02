@@ -36,12 +36,47 @@ public abstract class DapperRepositoryBase<TEntity> : ITableInitializer
         try
         {
             await connection.ExecuteAsync(CreateTableSql).ConfigureAwait(false);
+            await AfterInitializeTableAsync(connection).ConfigureAwait(false);
             Logger.Info($"[Dapper] 表 {TableName} 初始化完成（{DbName}.db）");
         }
         catch (Exception ex)
         {
             throw LogAndWrapAccessFailure("表初始化失败", ex);
         }
+    }
+
+    protected virtual Task AfterInitializeTableAsync(IDbConnection connection)
+        => Task.CompletedTask;
+
+    protected async Task EnsureColumnAsync(
+        IDbConnection connection,
+        string tableName,
+        string columnName,
+        string definition)
+    {
+        var columns = await connection.QueryAsync<TableColumnInfo>(
+                $"PRAGMA table_info('{tableName}')")
+            .ConfigureAwait(false);
+        if (columns.Any(column => string.Equals(column.name, columnName, StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        await connection.ExecuteAsync(
+                $"ALTER TABLE {tableName} ADD COLUMN {columnName} {definition}",
+                commandTimeout: CommandTimeout)
+            .ConfigureAwait(false);
+    }
+
+    protected async Task EnsureDataPipelineContextColumnsAsync(IDbConnection connection, string tableName)
+    {
+        await EnsureColumnAsync(connection, tableName, "NetworkDeviceId", "INTEGER NULL").ConfigureAwait(false);
+        await EnsureColumnAsync(connection, tableName, "DeviceName", "TEXT NOT NULL DEFAULT ''").ConfigureAwait(false);
+        await EnsureColumnAsync(connection, tableName, "ModuleId", "TEXT NOT NULL DEFAULT ''").ConfigureAwait(false);
+        await EnsureColumnAsync(connection, tableName, "TaskKey", "TEXT NOT NULL DEFAULT ''").ConfigureAwait(false);
+        await EnsureColumnAsync(connection, tableName, "PlanSessionId", "TEXT NOT NULL DEFAULT ''").ConfigureAwait(false);
+        await EnsureColumnAsync(connection, tableName, "MainPlanCode", "TEXT NOT NULL DEFAULT ''").ConfigureAwait(false);
+        await EnsureColumnAsync(connection, tableName, "TraceBatchNumber", "TEXT NOT NULL DEFAULT ''").ConfigureAwait(false);
     }
 
     protected IDbConnection GetConnection() => ConnectionFactory.Create(DbName);
@@ -218,6 +253,11 @@ public abstract class DapperRepositoryBase<TEntity> : ITableInitializer
 
     private static bool IsBusyOrLocked(SqliteException ex)
         => ex.SqliteErrorCode is 5 or 6;
+
+    private sealed class TableColumnInfo
+    {
+        public string name { get; set; } = string.Empty;
+    }
 
     private static void SafeRollback(IDbTransaction transaction)
     {

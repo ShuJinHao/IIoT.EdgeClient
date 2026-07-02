@@ -164,7 +164,14 @@ public sealed class DieCuttingMesChannel
         DieCuttingCellData cellData,
         CellCompletedRecord record,
         CancellationToken cancellationToken)
-        => Task.FromResult(MesCallResult.Disabled("模切首版为采样上传，不走 DataPipeline 出料补传。"));
+    {
+        if (string.Equals(cellData.RecordKind, DieCuttingCellData.RecordKinds.DeviceStatus, StringComparison.OrdinalIgnoreCase))
+        {
+            return UploadEquipmentStatusAsync(device, CreateDeviceStatusSnapshot(cellData), cancellationToken);
+        }
+
+        return UploadRealtimeAsync(device, CreateRealtimeSnapshot(cellData), cancellationToken);
+    }
 
     private IReadOnlyList<object> BuildPunchingProduce(DieCuttingRealtimeSnapshot snapshot)
         =>
@@ -212,6 +219,43 @@ public sealed class DieCuttingMesChannel
         var snapshot = await _parameters.GetAsync(cancellationToken).ConfigureAwait(false);
         return snapshot.Mes<string>(pathKey);
     }
+
+    private static DieCuttingRealtimeSnapshot CreateRealtimeSnapshot(DieCuttingCellData cellData)
+        => new()
+        {
+            CapturedAt = cellData.CapturedAt,
+            WindowStartAt = cellData.WindowStartAt,
+            WindowCompleteAt = cellData.WindowCompleteAt,
+            BatchNumber = cellData.BatchNumber,
+            ClipNo = cellData.ClipNo,
+            ClipNoMg1 = cellData.ClipNoMg1,
+            ClipNoMg2 = cellData.ClipNoMg2,
+            PunchingDeviceCode = cellData.PunchingDeviceCode,
+            PunchingDeviceName = cellData.PunchingDeviceName,
+            PunchingQuantity = cellData.PunchingQuantity,
+            PunchingUom = cellData.PunchingUom,
+            PunchingSpeed = cellData.PunchingSpeed,
+            UnwindingLength = cellData.UnwindingLength,
+            Mg1ReceivingSet = cellData.Mg1ReceivingSet,
+            Mg1ReceivingActual = cellData.Mg1ReceivingActual,
+            Mg2ReceivingSet = cellData.Mg2ReceivingSet,
+            Mg2ReceivingActual = cellData.Mg2ReceivingActual,
+            OkSheetQuantity = cellData.OkSheetQuantity,
+            PlateLengthMm = cellData.PlateLengthMm,
+            PlateWidthMm = cellData.PlateWidthMm,
+            OperatorCode = cellData.OperatorCode,
+            MoldCode = cellData.MoldCode,
+            CutterCode = cellData.CutterCode,
+            RawItems = cellData.RawItems
+        };
+
+    private static DieCuttingDeviceStatusSnapshot CreateDeviceStatusSnapshot(DieCuttingCellData cellData)
+        => new()
+        {
+            CapturedAt = cellData.CompletedTime ?? DateTime.Now,
+            StatusCode = cellData.StatusCode ?? (short)0,
+            Messages = cellData.StatusMessages
+        };
 }
 
 /// <summary>

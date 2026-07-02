@@ -54,7 +54,8 @@ internal abstract class RetryDeadLetterServiceBase
         string sourceTable,
         long sourceRecordId,
         DeadLetterStage stage,
-        string failureReason)
+        string failureReason,
+        FailedCellRecord? sourceRecord = null)
         => await _deadLetterWriter.TryPersistAsync(
             _deadLetterStore.SaveAsync,
             _criticalFallbackWriter,
@@ -66,5 +67,6 @@ internal abstract class RetryDeadLetterServiceBase
             sourceTable,
             sourceRecordId,
             stage,
-            failureReason).ConfigureAwait(false);
+            failureReason,
+            sourceRecord).ConfigureAwait(false);
 }

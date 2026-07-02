@@ -47,5 +47,40 @@ public class FailedCellRecord
     public int RetryCount { get; set; }
     public DateTime NextRetryTime { get; set; }
     public DateTime CreatedAt { get; set; }
+
+    /// <summary>
+    /// 原始 PLC 网络设备数据库 Id。用于补传、死信和同步运维按 PLC 追溯。
+    /// </summary>
+    public int? NetworkDeviceId { get; set; }
+
+    /// <summary>
+    /// 原始 PLC 设备号。
+    /// </summary>
+    public string DeviceName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 原始模块 Id。
+    /// </summary>
+    public string ModuleId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 原始 PLC 业务任务 key。
+    /// </summary>
+    public string TaskKey { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 原始主批计划会话 Id。
+    /// </summary>
+    public string PlanSessionId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 原始主批计划号。
+    /// </summary>
+    public string MainPlanCode { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 原始追溯批次号。
+    /// </summary>
+    public string TraceBatchNumber { get; set; } = string.Empty;
 }
 

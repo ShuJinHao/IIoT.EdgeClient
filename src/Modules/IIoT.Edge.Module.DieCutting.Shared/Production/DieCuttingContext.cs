@@ -42,6 +42,11 @@ public sealed class DieCuttingContext : ProductionContext
     public ProductionPlanOption? SelectedProductionPlan { get; set; }
 
     /// <summary>
+    /// 本次软件启动后选择主批计划生成的运行会话号；不跨进程复用。
+    /// </summary>
+    public string? PlanSessionId { get; set; }
+
+    /// <summary>
     /// 当前主批计划对应的 MES 追溯批次号。
     /// </summary>
     public string? TraceBatchNumber { get; set; }

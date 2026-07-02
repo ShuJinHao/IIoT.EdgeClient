@@ -9,4 +9,18 @@ public interface IFallbackRecord
     string CellDataJson { get; }
 
     string FailedTarget { get; }
+
+    int? NetworkDeviceId { get; }
+
+    string DeviceName { get; }
+
+    string ModuleId { get; }
+
+    string TaskKey { get; }
+
+    string PlanSessionId { get; }
+
+    string MainPlanCode { get; }
+
+    string TraceBatchNumber { get; }
 }

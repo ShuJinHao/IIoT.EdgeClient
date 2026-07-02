@@ -1,19 +1,25 @@
 using IIoT.Edge.Application.Abstractions.Mes;
-using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.Application.Features.Production.Planning;
+using IIoT.Edge.Module.DieCutting.Mes;
 
-namespace IIoT.Edge.Module.Homogenization.Production;
+namespace IIoT.Edge.Module.DieCutting.Production;
 
 /// <summary>
-/// 匀浆生产门禁。MES 未启用时不拦截；MES 启用时必须已有主批计划和追溯批次号。
+/// 模切生产门禁。MES 未启用时不拦截；MES 启用时必须已有本次启动选择的主批计划和追溯批次号。
 /// </summary>
-public sealed class HomogenizationProductionGate(IProductionPlanSelectionService planSelectionService)
-    : IHomogenizationProductionGate
+internal interface IDieCuttingProductionGate
 {
-    private readonly IProductionPlanSelectionService _planSelectionService = planSelectionService;
+    Task<MesCallResult> EnsureReadyAsync(
+        DieCuttingContext context,
+        CancellationToken cancellationToken = default);
+}
+
+internal sealed class DieCuttingProductionGate(DieCuttingProductionPlanService planSelectionService)
+    : IDieCuttingProductionGate
+{
+    private readonly DieCuttingProductionPlanService _planSelectionService = planSelectionService;
 
     public async Task<MesCallResult> EnsureReadyAsync(
-        HomogenizationContext context,
+        DieCuttingContext context,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(context);

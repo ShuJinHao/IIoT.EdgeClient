@@ -3,6 +3,7 @@ using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Infrastructure.Integration.PassStation;
 using IIoT.Edge.SharedKernel.DataPipeline;
+using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using IIoT.Edge.Application.Abstractions.Cloud;
 using IIoT.Edge.Application.Abstractions.Shared;
 
@@ -112,6 +113,32 @@ public sealed class CloudConsumerBehaviorTests
         Assert.Equal(completedTime, item.CompletedTime);
         Assert.Equal("BAR-CLOUD-STANDARD", item.Payload.GetProperty("barcode").GetString());
         Assert.Equal("待上传", item.Payload.GetProperty("runtimeStatus").GetString());
+    }
+
+    [Fact]
+    public async Task ProcessWithResultAsync_WhenRecordTargetsMesOnly_ShouldSkipCloudUploader()
+    {
+        var cloudHttp = new FakeCloudHttpClient();
+        var consumer = new CloudConsumer(
+            CreateOnlineDeviceService(),
+            new FixedCloudUploadGate(UploadGateSnapshot.Ready(ExternalSystemKind.Cloud)),
+            new StandardPassStationCloudUploader(new FakeCloudApiEndpointProvider(), cloudHttp),
+            CreateCloudRegistry(),
+            new FakeModuleParamRoleProvider(),
+            new FakeCloudDiagnosticsStore(),
+            new FakeLogService());
+
+        var result = await consumer.ProcessWithResultAsync(new CellCompletedRecord
+        {
+            CellData = new TestCellData
+            {
+                Barcode = "BAR-MES-ONLY",
+                UploadTargets = DataPipelineUploadTargets.Mes
+            }
+        });
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(0, cloudHttp.PostCallCount);
     }
 
     [Fact]

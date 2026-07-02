@@ -1,6 +1,18 @@
 namespace IIoT.Edge.SharedKernel.DataPipeline.CellData;
 
 /// <summary>
+/// 数据管道记录需要投递的目标通道。
+/// </summary>
+[Flags]
+public enum DataPipelineUploadTargets
+{
+    None = 0,
+    Mes = 1,
+    Cloud = 2,
+    All = Mes | Cloud
+}
+
+/// <summary>
 /// 电芯生产数据基类。
 /// 统一定义通用上下文字段，供各工序子类扩展。
 /// </summary>
@@ -40,4 +52,9 @@ public abstract class CellDataBase
     /// 任务完成时间，供入库与产能统计使用。
     /// </summary>
     public DateTime? CompletedTime { get; set; }
+
+    /// <summary>
+    /// 本记录应进入哪些上传通道。默认同时进入 MES 和 Cloud；仅 MES 的实时/状态类记录必须显式改为 <see cref="DataPipelineUploadTargets.Mes"/>。
+    /// </summary>
+    public DataPipelineUploadTargets UploadTargets { get; set; } = DataPipelineUploadTargets.All;
 }
